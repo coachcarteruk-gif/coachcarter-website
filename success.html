@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoachCarter — Payment Confirmed</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --orange: #f47c20;
+  --orange-dk: #d96710;
+  --orange-lt: #fff4ec;
+  --black: #1a1208;
+  --muted: #9a8570;
+  --rule: #e8ddd0;
+  --bg: #faf8f5;
+  --white: #ffffff;
+  --green: #1a9e5c;
+  --font-head: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Lato', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--black);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.card {
+  background: var(--white);
+  border: 1px solid var(--rule);
+  border-radius: 24px;
+  padding: 64px 48px;
+  text-align: center;
+  max-width: 600px;
+  width: 100%;
+}
+
+.icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--green);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  margin: 0 auto 32px;
+}
+
+h1 {
+  font-family: var(--font-head);
+  font-size: 2rem;
+  font-weight: 800;
+  margin-bottom: 16px;
+}
+
+p {
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.details {
+  background: var(--bg);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 32px;
+  text-align: left;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.95rem;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  color: var(--muted);
+}
+
+.detail-value {
+  font-weight: 700;
+  color: var(--black);
+}
+
+.next-box {
+  background: var(--orange-lt);
+  border: 1px solid rgba(244,124,32,0.2);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.next-box h3 {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  color: var(--orange-dk);
+  margin-bottom: 12px;
+}
+
+.next-box p {
+  margin-bottom: 0;
+  font-size: 1rem;
+}
+
+.btn {
+  display: inline-block;
+  background: var(--orange);
+  color: white;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 16px 32px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.btn:hover {
+  background: var(--orange-dk);
+}
+
+.loading {
+  color: var(--muted);
+  font-style: italic;
+}
+
+@media (max-width: 600px) {
+  .card {
+    padding: 40px 24px;
+  }
+  h1 {
+    font-size: 1.6rem;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="card" id="loading-state">
+  <div class="loading">Confirming your payment...</div>
+</div>
+
+<div class="card" id="success-state" style="display: none;">
+  <div class="icon">✓</div>
+  <h1>Payment confirmed</h1>
+  <p>Thank you for choosing CoachCarter. We've received your payment and are preparing your booking.</p>
+
+  <div class="details">
+    <div class="detail-row">
+      <span class="detail-label">Reference</span>
+      <span class="detail-value" id="ref">—</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Package</span>
+      <span class="detail-value" id="package">—</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Amount</span>
+      <span class="detail-value" id="amount">—</span>
+    </div>
+  </div>
+
+  <div class="next-box" id="next-steps">
+    <h3>What happens next</h3>
+    <p>We're verifying your details. You'll receive an email within 5 minutes with your next steps.</p>
+  </div>
+
+  <a href="/" class="btn">Return to website</a>
+</div>
+
+<script>
+// Get session_id from URL
+const urlParams = new URLSearchParams(window.location.search);
+const sessionId = urlParams.get('session_id');
+
+if (!sessionId) {
+  document.getElementById('loading-state').innerHTML = '<p>Invalid session. Please contact us if you completed a payment.</p>';
+} else {
+  // Verify session with backend
+  fetch(`/verify-session?session_id=${sessionId}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById('loading-state').style.display = 'none';
+        document.getElementById('success-state').style.display = 'block';
+
+        document.getElementById('ref').textContent = data.booking_ref;
+        document.getElementById('package').textContent = data.package_name;
+        document.getElementById('amount').textContent = '£' + data.amount;
+
+        // Custom next steps based on package
+        if (data.package_type === 'pass_guarantee') {
+          document.getElementById('next-steps').innerHTML = `
+            <h3>Your 18-week programme</h3>
+            <p>We're verifying your licence and test details. Check your email in 5 minutes for your availability form link.</p>
+          `;
+        }
+      } else {
+        throw new Error('Verification failed');
+      }
+    })
+    .catch(err => {
+      document.getElementById('loading-state').innerHTML = `
+        <p>Something went wrong confirming your payment.</p>
+        <p>Don't worry — if you completed payment, we have your details. Contact us at hello@coachcarter.com</p>
+      `;
+    });
+}
+</script>
+
+</body>
+</html>

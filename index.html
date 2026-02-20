@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoachCarter — Learn to Drive</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --orange:     #f47c20;
+  --orange-dk:  #d96710;
+  --orange-lt:  #fff4ec;
+  --orange-mid: rgba(244,124,32,0.12);
+  --black:      #1a1208;
+  --ink:        #2d2010;
+  --text:       #4a3820;
+  --muted:      #9a8570;
+  --rule:       #e8ddd0;
+  --bg:         #faf8f5;
+  --white:      #ffffff;
+  --surface:    #f3ede4;
+  --green:      #1a9e5c;
+  --font-head:  'Bricolage Grotesque', sans-serif;
+  --font-body:  'Lato', sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(250,248,245,0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 48px;
+  height: 68px;
+}
+
+.nav-logo {
+  font-family: var(--font-head);
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--black);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+.nav-logo span { color: var(--orange); }
+
+.nav-links {
+  display: flex;
+  gap: 28px;
+  list-style: none;
+}
+.nav-links a {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--orange); }
+
+.nav-cta {
+  background: var(--orange);
+  color: var(--white);
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.88rem;
+  padding: 10px 24px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.15s;
+  cursor: pointer;
+  border: none;
+}
+.nav-cta:hover { background: var(--orange-dk); transform: translateY(-1px); }
+
+.hero {
+  padding: 100px 48px 80px;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+
+.hero-left {}
+
+.hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--orange);
+  margin-bottom: 24px;
+}
+.hero-tag::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--orange);
+}
+
+.hero h1 {
+  font-family: var(--font-head);
+  font-size: clamp(2.8rem, 5vw, 4.2rem);
+  font-weight: 800;
+  color: var(--black);
+  line-height: 1.0;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+}
+
+.hero h1 em {
+  font-style: normal;
+  color: var(--orange);
+}
+
+.hero-sub {
+  font-size: 1.05rem;
+  color: var(--muted);
+  line-height: 1.75;
+  font-weight: 300;
+  margin-bottom: 40px;
+  max-width: 440px;
+}
+
+.hero-badges {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--white);
+  border: 1px solid var(--rule);
+  border-radius: 100px;
+  padding: 8px 16px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.hero-badge .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--orange);
+}
+
+.hero-right {
+  background: var(--black);
+  border-radius: 24px;
+  padding: 48px;
+  color: var(--white);
+  position: relative;
+  overflow: hidden;
+}
+.hero-right::before {
+  content: '';
+  position: absolute;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(244,124,32,0.2), transparent 70%);
+  top: -60px; right: -60px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  position: relative;
+}
+
+.stat-item {}
+.stat-num {
+  font-family: var(--font-head);
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--orange);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.stat-label {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.5);
+  font-weight: 300;
+  line-height: 1.4;
+}
+
+.stat-divider {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin: 4px 0;
+}
+
+.hero-right-cta {
+  display: block;
+  margin-top: 36px;
+  background: var(--orange);
+  color: var(--white);
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 16px;
+  border-radius: 10px;
+  text-align: center;
+  text-decoration: none;
+  transition: background 0.2s;
+  position: relative;
+  cursor: pointer;
+  border: none;
+}
+.hero-right-cta:hover { background: var(--orange-dk); }
+
+.section-wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 48px;
+}
+
+.section-intro {
+  text-align: center;
+  margin-bottom: 64px;
+}
+
+.section-tag-line {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.section-tag-line::before,
+.section-tag-line::after {
+  content: '';
+  height: 1px;
+  width: 40px;
+  background: var(--rule);
+}
+
+.section-title {
+  font-family: var(--font-head);
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+  color: var(--black);
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  margin-bottom: 16px;
+}
+
+.section-sub {
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 300;
+  max-width: 500px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+.payg-section {
+  padding: 100px 0 60px;
+  border-top: 1px solid var(--rule);
+}
+
+.payg-card {
+  background: var(--white);
+  border: 1px solid var(--rule);
+  border-radius: 20px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.payg-left {
+  padding: 56px;
+  border-right: 1px solid var(--rule);
+}
+
+.payg-tag {
+  display: inline-block;
+  background: var(--orange-mid);
+  color: var(--orange);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 5px 12px;
+  border-radius: 4px;
+  margin-bottom: 24px;
+}
+
+.payg-left h2 {
+  font-family: var(--font-head);
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--black);
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  margin-bottom: 16px;
+}
+
+.payg-price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+.payg-price-num {
+  font-family: var(--font-head);
+  font-size: 3.5rem;
+  font-weight: 800;
+  color: var(--orange);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.payg-price-unit {
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 300;
+}
+
+.payg-left p {
+  font-size: 0.95rem;
+  color: var(--muted);
+  line-height: 1.75;
+  margin-bottom: 32px;
+  font-weight: 300;
+}
+
+.payg-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payg-feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: var(--ink);
+  font-weight: 400;
+}
+.payg-feature::before {
+  content: '✓';
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--orange-mid);
+  color: var(--orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.payg-right {
+  padding: 56px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+}
+
+.payg-right h3 {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--black);
+  margin-bottom: 4px;
+}
+
+.mini-stat {
+  background: var(--white);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.mini-stat-icon {
+  font-size: 1.5rem;
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  background: var(--orange-lt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.mini-stat-text {}
+.mini-stat-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+.mini-stat-sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 300;
+}
+
+.packages-section {
+  padding: 100px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.pkg-calculator {
+  background: var(--black);
+  border-radius: 20px;
+  padding: 48px;
+  margin-bottom: 48px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.pkg-calc-left h3 {
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 8px;
+}
+.pkg-calc-left p {
+  font-size: 0.88rem;
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 32px;
+  font-weight: 300;
+}
+
+.pkg-slider-wrap {}
+.pkg-slider-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+.pkg-slider-label span:first-child {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.4);
+}
+.pkg-slider-val {
+  font-family: var(--font-head);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--orange);
+}
+
+input[type=range].pkg-range {
+  width: 100%;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+input[type=range].pkg-range::-webkit-slider-track {
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+input[type=range].pkg-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--orange);
+  margin-top: -9px;
+  box-shadow: 0 0 12px rgba(244,124,32,0.5);
+}
+
+.pkg-steps {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.25);
+  margin-top: 4px;
+}
+
+.pkg-calc-right {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 36px;
+}
+
+.pkg-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.pkg-result-row:last-of-type { border-bottom: none; }
+
+.pkg-result-label {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.4);
+}
+.pkg-result-val {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--white);
+}
+.pkg-result-val.orange { color: var(--orange); }
+.pkg-result-val.saving { color: #4ade80; font-size: 0.95rem; }
+
+.pkg-result-total {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  text-align: center;
+}
+.pkg-result-total-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 8px;
+}
+.pkg-result-total-num {
+  font-family: var(--font-head);
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--orange);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.pkg-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.pkg-card {
+  background: var(--white);
+  border: 2px solid var(--rule);
+  border-radius: 16px;
+  padding: 28px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s;
+  position: relative;
+}
+.pkg-card:hover {
+  border-color: var(--orange);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(244,124,32,0.12);
+}
+.pkg-card.active {
+  border-color: var(--orange);
+  background: var(--orange-lt);
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px rgba(244,124,32,0.18);
+}
+.pkg-card.popular::before {
+  content: 'Best Value';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--orange);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 12px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+.pkg-hrs {
+  font-family: var(--font-head);
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--black);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+.pkg-hrs-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 16px;
+}
+.pkg-discount {
+  display: inline-block;
+  background: var(--orange-mid);
+  color: var(--orange);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 100px;
+  margin-bottom: 14px;
+}
+.pkg-card.active .pkg-discount {
+  background: var(--orange);
+  color: white;
+}
+.pkg-total-price {
+  font-family: var(--font-head);
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--black);
+  margin-bottom: 2px;
+}
+.pkg-per-hr {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.guarantee-section {
+  padding: 100px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.guarantee-card {
+  background: var(--black);
+  border-radius: 28px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  position: relative;
+}
+
+.guarantee-card::before {
+  content: '';
+  position: absolute;
+  width: 500px; height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(244,124,32,0.12), transparent 70%);
+  top: -100px; left: -100px;
+  pointer-events: none;
+}
+
+.guarantee-left {
+  padding: 64px;
+  position: relative;
+}
+
+.guarantee-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(244,124,32,0.12);
+  border: 1px solid rgba(244,124,32,0.3);
+  border-radius: 100px;
+  padding: 8px 18px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--orange);
+  margin-bottom: 28px;
+}
+.guarantee-stamp::before {
+  content: '★';
+  font-size: 0.8rem;
+}
+
+.guarantee-left h2 {
+  font-family: var(--font-head);
+  font-size: clamp(2rem, 3.5vw, 3rem);
+  font-weight: 800;
+  color: var(--white);
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  margin-bottom: 24px;
+}
+.guarantee-left h2 em {
+  font-style: normal;
+  color: var(--orange);
+}
+
+.guarantee-left p {
+  font-size: 0.95rem;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.75;
+  font-weight: 300;
+  margin-bottom: 40px;
+}
+
+.guarantee-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 36px;
+}
+.guarantee-price-num {
+  font-family: var(--font-head);
+  font-size: 4rem;
+  font-weight: 800;
+  color: var(--orange);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.guarantee-price-unit {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.4);
+}
+
+.btn-guarantee {
+  display: inline-block;
+  background: var(--orange);
+  color: white;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 16px 36px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.15s;
+  cursor: pointer;
+  border: none;
+}
+.btn-guarantee:hover { background: var(--orange-dk); transform: translateY(-2px); }
+
+.guarantee-right {
+  padding: 64px 56px;
+  border-left: 1px solid rgba(255,255,255,0.06);
+  position: relative;
+}
+
+.guarantee-right h3 {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 28px;
+}
+
+.guarantee-items {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.guarantee-item {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.guarantee-item-icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: rgba(244,124,32,0.1);
+  border: 1px solid rgba(244,124,32,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.guarantee-item-text h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 3px;
+}
+.guarantee-item-text p {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.5;
+  font-weight: 300;
+}
+
+.guarantee-banner {
+  background: rgba(244,124,32,0.08);
+  border: 1px solid rgba(244,124,32,0.2);
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center;
+}
+.guarantee-banner-icon { font-size: 2rem; margin-bottom: 10px; }
+.guarantee-banner-title {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 6px;
+}
+.guarantee-banner-sub {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.5;
+  font-weight: 300;
+}
+
+.compare-section {
+  padding: 100px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--white);
+  margin-top: 48px;
+}
+
+.compare-table th {
+  padding: 20px 24px;
+  text-align: center;
+  font-family: var(--font-head);
+  font-size: 0.95rem;
+  font-weight: 700;
+  background: var(--bg);
+  color: var(--black);
+  border-bottom: 2px solid var(--rule);
+}
+.compare-table th:first-child { text-align: left; }
+.compare-table th.highlight {
+  background: var(--black);
+  color: var(--orange);
+}
+
+.compare-table td {
+  padding: 16px 24px;
+  font-size: 0.88rem;
+  color: var(--text);
+  border-bottom: 1px solid var(--rule);
+  text-align: center;
+  vertical-align: middle;
+}
+.compare-table td:first-child {
+  text-align: left;
+  font-weight: 700;
+  color: var(--ink);
+}
+.compare-table td.highlight {
+  background: rgba(244,124,32,0.03);
+  font-weight: 700;
+  color: var(--orange);
+}
+.compare-table tr:last-child td { border-bottom: none; }
+.compare-table tr:hover td { background: var(--bg); }
+.compare-table tr:hover td.highlight { background: rgba(244,124,32,0.06); }
+
+.check { color: var(--green); font-size: 1rem; }
+.cross { color: #ccc; font-size: 1rem; }
+.partial { color: var(--orange); font-size: 0.8rem; font-weight: 700; }
+
+.cta-section {
+  padding: 100px 0;
+  border-top: 1px solid var(--rule);
+  text-align: center;
+}
+
+.cta-section h2 {
+  font-family: var(--font-head);
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: 800;
+  color: var(--black);
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  margin-bottom: 16px;
+}
+.cta-section h2 em { font-style: normal; color: var(--orange); }
+.cta-section p {
+  font-size: 1rem;
+  color: var(--muted);
+  margin-bottom: 40px;
+  font-weight: 300;
+}
+
+.cta-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.btn-lg {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 16px 40px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: none;
+}
+.btn-lg.primary {
+  background: var(--orange);
+  color: white;
+}
+.btn-lg.primary:hover { background: var(--orange-dk); transform: translateY(-2px); }
+.btn-lg.secondary {
+  background: var(--white);
+  color: var(--black);
+  border: 1px solid var(--rule);
+}
+.btn-lg.secondary:hover { border-color: var(--orange); color: var(--orange); }
+
+footer {
+  background: var(--black);
+  color: rgba(255,255,255,0.35);
+  text-align: center;
+  padding: 32px 48px;
+  font-size: 0.8rem;
+}
+footer a { color: var(--orange); text-decoration: none; }
+
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.65s ease, transform 0.65s ease;
+}
+.reveal.visible { opacity: 1; transform: none; }
+
+@media (max-width: 900px) {
+  nav { padding: 0 20px; }
+  .hero { grid-template-columns: 1fr; padding: 80px 20px 60px; gap: 40px; }
+  .payg-card { grid-template-columns: 1fr; }
+  .payg-left { border-right: none; border-bottom: 1px solid var(--rule); }
+  .pkg-calculator { grid-template-columns: 1fr; }
+  .pkg-grid { grid-template-columns: repeat(3, 1fr); }
+  .guarantee-card { grid-template-columns: 1fr; }
+  .guarantee-right { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); }
+  .section-wrap { padding: 0 20px; }
+  .nav-links { display: none; }
+}
+
+@media (max-width: 560px) {
+  .pkg-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="nav-logo">Coach<span>Carter</span></a>
+  <ul class="nav-links">
+    <li><a href="#payg">Pay As You Go</a></li>
+    <li><a href="#packages">Bulk Packages</a></li>
+    <li><a href="#guarantee">Pass Guarantee</a></li>
+  </ul>
+  <button class="nav-cta" onclick="startCheckout('payg')">Book a Lesson</button>
+</nav>
+
+<div class="hero">
+  <div class="hero-left reveal">
+    <div class="hero-tag">CoachCarter Driving School</div>
+    <h1>Your licence.<br><em>Your way.</em></h1>
+    <p class="hero-sub">Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.</p>
+    <div class="hero-badges">
+      <div class="hero-badge"><div class="dot"></div> DVSA Approved</div>
+      <div class="hero-badge"><div class="dot"></div> Pass Guarantee Available</div>
+      <div class="hero-badge"><div class="dot"></div> Flexible Scheduling</div>
+    </div>
+  </div>
+  <div class="hero-right reveal">
+    <div class="stat-grid">
+      <div class="stat-item">
+        <div class="stat-num">£60</div>
+        <div class="stat-label">Per hour,<br>pay as you go</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">15%</div>
+        <div class="stat-label">Max discount on<br>bulk packages</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div class="stat-num">£2,400</div>
+        <div class="stat-label">Full Pass Guarantee<br>programme</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">18wk</div>
+        <div class="stat-label">Structured programme<br>to test day</div>
+      </div>
+    </div>
+    <button class="hero-right-cta" onclick="scrollToPackages()">View all options →</button>
+  </div>
+</div>
+
+<section class="payg-section" id="payg">
+  <div class="section-wrap">
+    <div class="section-intro reveal">
+      <div class="section-tag-line">Option 1</div>
+      <h2 class="section-title">Pay As You Go</h2>
+      <p class="section-sub">Maximum flexibility. Book when you need, cancel when life happens. Perfect if you're just starting out or have an unpredictable schedule.</p>
+    </div>
+
+    <div class="payg-card reveal">
+      <div class="payg-left">
+        <div class="payg-tag">Most Flexible</div>
+        <h2>One lesson<br>at a time.</h2>
+        <div class="payg-price">
+          <span class="payg-price-num">£60</span>
+          <span class="payg-price-unit">per hour</span>
+        </div>
+        <p>No commitment, no upfront cost. Book your first lesson and go from there. Every lesson is with a qualified CoachCarter instructor and tailored to where you are in your learning journey.</p>
+        <ul class="payg-features">
+          <li class="payg-feature">Qualified ADI instructor every time</li>
+          <li class="payg-feature">Book online or by phone</li>
+          <li class="payg-feature">Lesson length to suit you</li>
+          <li class="payg-feature">Progress tracked between lessons</li>
+          <li class="payg-feature">Upgrade to a package anytime</li>
+        </ul>
+      </div>
+      <div class="payg-right">
+        <h3>Why choose pay as you go?</h3>
+        <div class="mini-stat">
+          <div class="mini-stat-icon">🗓️</div>
+          <div class="mini-stat-text">
+            <div class="mini-stat-title">No lock-in</div>
+            <div class="mini-stat-sub">Book one lesson at a time — no commitment required</div>
+          </div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-icon">🎯</div>
+          <div class="mini-stat-text">
+            <div class="mini-stat-title">Tailored pace</div>
+            <div class="mini-stat-sub">Learn at a speed that works for you, not a fixed schedule</div>
+          </div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-icon">⬆️</div>
+          <div class="mini-stat-text">
+            <div class="mini-stat-title">Easy to upgrade</div>
+            <div class="mini-stat-sub">Move onto a bulk package whenever you're ready to save</div>
+          </div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-icon">💳</div>
+          <div class="mini-stat-text">
+            <div class="mini-stat-title">Pay lesson by lesson</div>
+            <div class="mini-stat-sub">Keep full control of your spending as you go</div>
+          </div>
+        </div>
+        <button class="btn-lg primary" style="margin-top:12px;width:100%;" onclick="startCheckout('payg')">Book £60 lesson →</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="packages-section" id="packages">
+  <div class="section-wrap">
+    <div class="section-intro reveal">
+      <div class="section-tag-line">Option 2</div>
+      <h2 class="section-title">Bulk Hour Packages</h2>
+      <p class="section-sub">Buy more hours up front and save up to 15%. The more committed you are, the better the deal.</p>
+    </div>
+
+    <div class="pkg-calculator reveal">
+      <div class="pkg-calc-left">
+        <h3>Find your saving</h3>
+        <p>Slide to choose your package and see exactly what you'll pay.</p>
+        <div class="pkg-slider-wrap">
+          <div class="pkg-slider-label">
+            <span>Hours in package</span>
+            <span class="pkg-slider-val" id="pkg-hrs-display">30 hrs</span>
+          </div>
+          <input type="range" class="pkg-range" id="pkg-slider" min="0" max="4" step="1" value="2" oninput="updatePkg(this.value)">
+          <div class="pkg-steps">
+            <span>10hrs</span><span>20hrs</span><span>30hrs</span><span>40hrs</span><span>50hrs</span>
+          </div>
+        </div>
+      </div>
+      <div class="pkg-calc-right">
+        <div class="pkg-result-row">
+          <span class="pkg-result-label">Standard price</span>
+          <span class="pkg-result-val" id="pkg-std-price">£1,800</span>
+        </div>
+        <div class="pkg-result-row">
+          <span class="pkg-result-label">Your discount</span>
+          <span class="pkg-result-val orange" id="pkg-discount-pct">10%</span>
+        </div>
+        <div class="pkg-result-row">
+          <span class="pkg-result-label">You save</span>
+          <span class="pkg-result-val saving" id="pkg-saving">£180</span>
+        </div>
+        <div class="pkg-result-row">
+          <span class="pkg-result-label">Price per hour</span>
+          <span class="pkg-result-val orange" id="pkg-per-hr">£54</span>
+        </div>
+        <div class="pkg-result-total">
+          <div class="pkg-result-total-label">Total package price</div>
+          <div class="pkg-result-total-num" id="pkg-total">£1,620</div>
+        </div>
+        <button class="btn-lg primary" style="margin-top:20px;width:100%;" onclick="startCheckout('bulk', currentPkgIndex)">Buy this package →</button>
+      </div>
+    </div>
+
+    <div class="pkg-grid reveal">
+      <div class="pkg-card" onclick="selectPkg(0, this)">
+        <div class="pkg-hrs">10</div>
+        <div class="pkg-hrs-label">hours</div>
+        <div class="pkg-discount">5% off</div>
+        <div class="pkg-total-price">£570</div>
+        <div class="pkg-per-hr">£57 / hr</div>
+      </div>
+      <div class="pkg-card" onclick="selectPkg(1, this)">
+        <div class="pkg-hrs">20</div>
+        <div class="pkg-hrs-label">hours</div>
+        <div class="pkg-discount">7.5% off</div>
+        <div class="pkg-total-price">£1,110</div>
+        <div class="pkg-per-hr">£55.50 / hr</div>
+      </div>
+      <div class="pkg-card active" onclick="selectPkg(2, this)">
+        <div class="pkg-hrs">30</div>
+        <div class="pkg-hrs-label">hours</div>
+        <div class="pkg-discount">10% off</div>
+        <div class="pkg-total-price">£1,620</div>
+        <div class="pkg-per-hr">£54 / hr</div>
+      </div>
+      <div class="pkg-card" onclick="selectPkg(3, this)">
+        <div class="pkg-hrs">40</div>
+        <div class="pkg-hrs-label">hours</div>
+        <div class="pkg-discount">12.5% off</div>
+        <div class="pkg-total-price">£2,100</div>
+        <div class="pkg-per-hr">£52.50 / hr</div>
+      </div>
+      <div class="pkg-card popular" onclick="selectPkg(4, this)">
+        <div class="pkg-hrs">50</div>
+        <div class="pkg-hrs-label">hours</div>
+        <div class="pkg-discount">15% off</div>
+        <div class="pkg-total-price">£2,550</div>
+        <div class="pkg-per-hr">£51 / hr</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="guarantee-section" id="guarantee">
+  <div class="section-wrap">
+    <div class="section-intro reveal">
+      <div class="section-tag-line">Option 3</div>
+      <h2 class="section-title">The Pass Guarantee</h2>
+      <p class="section-sub">Our most complete programme. Everything included, your test booked, and if you don't pass — we do it all again for free.</p>
+    </div>
+
+    <div class="guarantee-card reveal">
+      <div class="guarantee-left">
+        <div class="guarantee-stamp">Pass Guaranteed</div>
+        <h2>18 weeks to<br>your <em>driving licence.</em></h2>
+        <p>A fully structured programme that takes you from zero to test-ready in 18 weeks. Your theory and practical tests are booked for you, your progress is tracked every step of the way, and we stand behind your success with our money-back guarantee.</p>
+        <div class="guarantee-price">
+          <span class="guarantee-price-num">£2,400</span>
+          <span class="guarantee-price-unit">all-in</span>
+        </div>
+        <button class="btn-guarantee" onclick="startCheckout('guarantee')">Start your programme →</button>
+      </div>
+
+      <div class="guarantee-right">
+        <h3>What's included</h3>
+        <div class="guarantee-items">
+          <div class="guarantee-item">
+            <div class="guarantee-item-icon">📅</div>
+            <div class="guarantee-item-text">
+              <h4>18-Week Structured Programme</h4>
+              <p>A clear week-by-week curriculum designed to build your skills progressively and get you test-ready on schedule.</p>
+            </div>
+          </div>
+          <div class="guarantee-item">
+            <div class="guarantee-item-icon">📝</div>
+            <div class="guarantee-item-text">
+              <h4>Theory Test Booked For You</h4>
+              <p>We handle your theory test booking at the right point in your programme — no faff, no admin, just turn up and pass.</p>
+            </div>
+          </div>
+          <div class="guarantee-item">
+            <div class="guarantee-item-icon">🚗</div>
+            <div class="guarantee-item-text">
+              <h4>Practical Test Booked For You</h4>
+              <p>Your driving test is scheduled and confirmed as part of the programme, timed perfectly with your progress.</p>
+            </div>
+          </div>
+          <div class="guarantee-item">
+            <div class="guarantee-item-icon">📊</div>
+            <div class="guarantee-item-text">
+              <h4>Progress Tracking Throughout</h4>
+              <p>Regular assessments and feedback at every stage so you always know where you are and what's coming next.</p>
+            </div>
+          </div>
+        </div>
+        <div class="guarantee-banner">
+          <div class="guarantee-banner-icon">🛡️</div>
+          <div class="guarantee-banner-title">Don't pass? We do it again. Free.</div>
+          <div class="guarantee-banner-sub">If you don't pass your practical test, we'll put you through the full programme again at no additional cost. No excuses, no small print.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="compare-section" id="compare">
+  <div class="section-wrap">
+    <div class="section-intro reveal">
+      <div class="section-tag-line">Side by Side</div>
+      <h2 class="section-title">Which option is right for you?</h2>
+      <p class="section-sub">Every learner is different. Here's a quick guide to help you decide.</p>
+    </div>
+
+    <table class="compare-table reveal">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Pay As You Go</th>
+          <th>Bulk Package</th>
+          <th class="highlight">Pass Guarantee</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Price per hour</td>
+          <td>£60</td>
+          <td>£51–£57</td>
+          <td class="highlight">Included</td>
+        </tr>
+        <tr>
+          <td>Upfront cost</td>
+          <td>None</td>
+          <td>£570–£2,550</td>
+          <td class="highlight">£2,400</td>
+        </tr>
+        <tr>
+          <td>Tests booked for you</td>
+          <td><span class="cross">✕</span></td>
+          <td><span class="cross">✕</span></td>
+          <td class="highlight"><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>Structured programme</td>
+          <td><span class="cross">✕</span></td>
+          <td><span class="cross">✕</span></td>
+          <td class="highlight"><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>Pass guarantee</td>
+          <td><span class="cross">✕</span></td>
+          <td><span class="cross">✕</span></td>
+          <td class="highlight"><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>Progress tracking</td>
+          <td><span class="partial">Basic</span></td>
+          <td><span class="partial">Basic</span></td>
+          <td class="highlight"><span class="check">Full</span></td>
+        </tr>
+        <tr>
+          <td>Flexible scheduling</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td class="highlight"><span class="partial">Structured</span></td>
+        </tr>
+        <tr>
+          <td>Best for</td>
+          <td style="font-size:0.8rem;color:var(--muted)">Trying it out / uncertain schedule</td>
+          <td style="font-size:0.8rem;color:var(--muted)">Committed learners who want to save</td>
+          <td class="highlight" style="font-size:0.8rem">Best outcome, zero risk</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="cta-section" id="cta">
+  <div class="section-wrap reveal">
+    <h2>Ready to get<br>your <em>licence</em>?</h2>
+    <p>Book your first lesson or get in touch — we'll help you pick the right option and get started.</p>
+    <div class="cta-buttons">
+      <button class="btn-lg primary" onclick="startCheckout('payg')">Book a lesson now</button>
+      <a href="mailto:hello@coachcarter.com" class="btn-lg secondary">Talk to us first</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>© 2025 CoachCarter Driving School · <a href="#">Privacy</a> · <a href="#">Terms</a> · All prices include VAT where applicable.</p>
+</footer>
+
+<script>
+// PACKAGE DATA
+const PACKAGES = [
+  { hrs: 10, discount: 0.05, price: 570 },
+  { hrs: 20, discount: 0.075, price: 1110 },
+  { hrs: 30, discount: 0.10, price: 1620 },
+  { hrs: 40, discount: 0.125, price: 2100 },
+  { hrs: 50, discount: 0.15, price: 2550 },
+];
+const BASE_RATE = 60;
+let currentPkgIndex = 2;
+
+function fmt(n) {
+  return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function updatePkg(idx) {
+  idx = parseInt(idx);
+  currentPkgIndex = idx;
+  const pkg = PACKAGES[idx];
+  const std = pkg.hrs * BASE_RATE;
+  const saving = std - pkg.price;
+  const perHr = pkg.price / pkg.hrs;
+
+  document.getElementById('pkg-hrs-display').textContent = pkg.hrs + ' hrs';
+  document.getElementById('pkg-std-price').textContent = fmt(std);
+  document.getElementById('pkg-discount-pct').textContent = (pkg.discount * 100) + '%';
+  document.getElementById('pkg-saving').textContent = '−' + fmt(saving);
+  document.getElementById('pkg-per-hr').textContent = fmt(perHr);
+  document.getElementById('pkg-total').textContent = fmt(pkg.price);
+
+  document.querySelectorAll('.pkg-card').forEach((card, i) => {
+    card.classList.toggle('active', i === idx);
+  });
+}
+
+function selectPkg(idx, card) {
+  document.getElementById('pkg-slider').value = idx;
+  updatePkg(idx);
+}
+
+function scrollToPackages() {
+  document.getElementById('packages').scrollIntoView({ behavior: 'smooth' });
+}
+
+// STRIPE CHECKOUT INTEGRATION
+async function startCheckout(type, pkgIndex = null) {
+  // Show loading state on button
+  const btn = event.target;
+  const originalText = btn.textContent;
+  btn.textContent = 'Loading...';
+  btn.disabled = true;
+
+  try {
+    let lineItems, metadata, customFields;
+
+    if (type === 'payg') {
+      // Single lesson
+      lineItems = [{
+        price_data: {
+          currency: 'gbp',
+          unit_amount: 6000, // £60 in pence
+          product_data: {
+            name: 'Driving Lesson — Pay As You Go',
+            description: 'Single 1-hour lesson with CoachCarter'
+          }
+        },
+        quantity: 1
+      }];
+      metadata = { package_type: 'payg' };
+      customFields = [
+        {
+          key: 'provisional_licence',
+          label: { type: 'custom', custom: 'Provisional licence number' },
+          type: 'text',
+          optional: false
+        }
+      ];
+    } else if (type === 'bulk') {
+      // Bulk package
+      const pkg = PACKAGES[pkgIndex || currentPkgIndex];
+      lineItems = [{
+        price_data: {
+          currency: 'gbp',
+          unit_amount: pkg.price * 100,
+          product_data: {
+            name: `${pkg.hrs} Hour Package`,
+            description: `${pkg.hrs} hours of driving instruction — ${(pkg.discount * 100)}% off`
+          }
+        },
+        quantity: 1
+      }];
+      metadata = { 
+        package_type: 'bulk',
+        hours: pkg.hrs,
+        discount: pkg.discount
+      };
+      customFields = [
+        {
+          key: 'provisional_licence',
+          label: { type: 'custom', custom: 'Provisional licence number' },
+          type: 'text',
+          optional: false
+        }
+      ];
+    } else if (type === 'guarantee') {
+      // Pass Guarantee
+      lineItems = [{
+        price_data: {
+          currency: 'gbp',
+          unit_amount: 240000, // £2,400 in pence
+          product_data: {
+            name: '18-Week Pass Guarantee Programme',
+            description: 'Full structured programme with test booking and pass guarantee'
+          }
+        },
+        quantity: 1
+      }];
+      metadata = { package_type: 'pass_guarantee' };
+      customFields = [
+        {
+          key: 'provisional_licence',
+          label: { type: 'custom', custom: 'Provisional licence number' },
+          type: 'text',
+          optional: false
+        },
+        {
+          key: 'has_test_booked',
+          label: { type: 'custom', custom: 'Do you already have a practical test booked?' },
+          type: 'dropdown',
+          dropdown: {
+            options: [
+              { label: 'No, I need you to book it', value: 'needs_test' },
+              { label: 'Yes, I have a test date', value: 'has_test' },
+              { label: "I'm not sure / need help", value: 'unsure' }
+            ]
+          }
+        },
+        {
+          key: 'dvsa_reference',
+          label: { type: 'custom', custom: 'DVSA reference number (if you have a test booked)' },
+          type: 'text',
+          optional: true
+        },
+        {
+          key: 'test_centre_preference',
+          label: { type: 'custom', custom: 'Preferred test centre (town/area)' },
+          type: 'text',
+          optional: true
+        }
+      ];
+    }
+
+    // Create checkout session
+    const response = await fetch('/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        line_items: lineItems,
+        metadata: metadata,
+        custom_fields: customFields,
+        success_url: window.location.origin + '/success?session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: window.location.origin + '/pricing'
+      })
+    });
+
+    if (!response.ok) throw new Error('Failed to create checkout');
+
+    const { url } = await response.json();
+    window.location.href = url;
+
+  } catch (err) {
+    console.error('Checkout error:', err);
+    btn.textContent = originalText;
+    btn.disabled = false;
+    alert('Something went wrong. Please try again or contact us directly.');
+  }
+}
+
+// Init
+updatePkg(2);
+
+// SCROLL REVEAL
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) e.target.classList.add('visible');
+  });
+}, { threshold: 0.08 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoachCarter — Your Availability</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --orange:     #f47c20;
+  --orange-dk:  #d96710;
+  --orange-lt:  #fff4ec;
+  --orange-mid: rgba(244,124,32,0.12);
+  --black:      #1a1208;
+  --ink:        #2d2010;
+  --text:       #4a3820;
+  --muted:      #9a8570;
+  --rule:       #e8ddd0;
+  --bg:         #faf8f5;
+  --white:      #ffffff;
+  --surface:    #f3ede4;
+  --green:      #1a9e5c;
+  --red:        #dc2626;
+  --font-head:  'Bricolage Grotesque', sans-serif;
+  --font-body:  'Lato', sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+header {
+  background: var(--white);
+  border-bottom: 1px solid var(--rule);
+  padding: 24px 48px;
+}
+
+.logo {
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--black);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+.logo span { color: var(--orange); }
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 48px;
+}
+
+.progress-steps {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 48px;
+}
+
+.step {
+  flex: 1;
+  height: 4px;
+  background: var(--rule);
+  border-radius: 2px;
+}
+.step.active { background: var(--orange); }
+.step.completed { background: var(--green); }
+
+.page-header {
+  margin-bottom: 40px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--orange);
+  margin-bottom: 16px;
+}
+.tag::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--orange);
+}
+
+h1 {
+  font-family: var(--font-head);
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  font-weight: 800;
+  color: var(--black);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin-bottom: 12px;
+}
+
+.subtitle {
+  font-size: 1.05rem;
+  color: var(--muted);
+  font-weight: 300;
+  max-width: 600px;
+}
+
+.info-card {
+  background: var(--orange-lt);
+  border: 1px solid var(--orange-mid);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 40px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.info-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--orange);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.info-content h3 {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--black);
+  margin-bottom: 4px;
+}
+
+.info-content p {
+  font-size: 0.9rem;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.availability-section, .priority-section, .notes-section {
+  background: var(--white);
+  border: 1px solid var(--rule);
+  border-radius: 20px;
+  padding: 40px;
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-family: var(--font-head);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--black);
+  margin-bottom: 8px;
+}
+
+.section-desc {
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin-bottom: 32px;
+}
+
+.time-grid {
+  display: grid;
+  grid-template-columns: 100px repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.time-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 12px;
+}
+
+.day-header {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--black);
+  padding: 12px 4px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+
+.slot-cell {
+  aspect-ratio: 1;
+  border: 2px solid var(--rule);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.slot-cell:hover {
+  border-color: var(--orange);
+  background: var(--orange-lt);
+}
+
+.slot-cell.selected {
+  background: var(--orange);
+  border-color: var(--orange);
+}
+
+.slot-cell.selected::after {
+  content: '✓';
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.slot-cell.preferred {
+  background: var(--orange-dk);
+  border-color: var(--orange-dk);
+}
+
+.legend {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.legend-box {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--rule);
+  border-radius: 6px;
+}
+.legend-box.available {
+  background: var(--orange);
+  border-color: var(--orange);
+}
+.legend-box.preferred {
+  background: var(--orange-dk);
+  border-color: var(--orange-dk);
+}
+
+.priority-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.priority-btn {
+  padding: 16px 20px;
+  border: 2px solid var(--rule);
+  border-radius: 12px;
+  background: var(--white);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+  font-family: inherit;
+}
+
+.priority-btn:hover {
+  border-color: var(--orange);
+}
+
+.priority-btn.active {
+  background: var(--orange-lt);
+  border-color: var(--orange);
+}
+
+.priority-btn h4 {
+  font-family: var(--font-head);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--black);
+  margin-bottom: 4px;
+}
+
+.priority-btn p {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 16px;
+  border: 2px solid var(--rule);
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  resize: vertical;
+  margin-top: 16px;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--orange);
+}
+
+.submit-section {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.btn-primary {
+  background: var(--orange);
+  color: white;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 16px 40px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  background: var(--orange-dk);
+  transform: translateY(-2px);
+}
+
+.btn-primary:disabled {
+  background: var(--muted);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.selection-summary {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.selection-summary strong {
+  color: var(--orange);
+  font-family: var(--font-head);
+}
+
+.success-card {
+  background: var(--white);
+  border: 1px solid var(--rule);
+  border-radius: 20px;
+  padding: 64px 48px;
+  text-align: center;
+  display: none;
+}
+
+.success-card.visible {
+  display: block;
+}
+
+.success-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--green);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  margin: 0 auto 24px;
+}
+
+.success-card h2 {
+  font-family: var(--font-head);
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--black);
+  margin-bottom: 12px;
+}
+
+.success-card p {
+  font-size: 1rem;
+  color: var(--muted);
+  max-width: 500px;
+  margin: 0 auto 32px;
+  line-height: 1.7;
+}
+
+.next-steps {
+  background: var(--bg);
+  border-radius: 16px;
+  padding: 32px;
+  text-align: left;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.next-steps h3 {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--black);
+  margin-bottom: 16px;
+}
+
+.next-steps ol {
+  padding-left: 20px;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+
+.next-steps li {
+  margin-bottom: 8px;
+}
+
+.error-message {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  padding: 16px 20px;
+  color: var(--red);
+  font-size: 0.9rem;
+  margin-bottom: 24px;
+  display: none;
+}
+
+.error-message.visible {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .container { padding: 24px; }
+  .time-grid {
+    grid-template-columns: 60px repeat(7, 1fr);
+    gap: 4px;
+  }
+  .day-header { font-size: 0.7rem; padding: 8px 2px; }
+  .availability-section, .priority-section, .notes-section { padding: 24px; }
+  .submit-section { flex-direction: column; align-items: stretch; }
+  .btn-primary { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="#" class="logo">Coach<span>Carter</span></a>
+</header>
+
+<div class="container">
+  <div class="progress-steps">
+    <div class="step completed"></div>
+    <div class="step completed"></div>
+    <div class="step active"></div>
+    <div class="step"></div>
+  </div>
+
+  <div id="availability-form">
+    <div class="page-header">
+      <div class="tag">Step 3 of 4</div>
+      <h1>When are you typically available?</h1>
+      <p class="subtitle">Select all the time slots that usually work for you. We'll use this to find your instructor and propose specific lesson times.</p>
+    </div>
+
+    <div class="info-card">
+      <div class="info-icon">📅</div>
+      <div class="info-content">
+        <h3>Your programme: 18-week Pass Guarantee</h3>
+        <p>Reference: <strong id="booking-ref">Loading...</strong><br>
+        We'll confirm your exact start date once we've verified your test status.</p>
+      </div>
+    </div>
+
+    <div class="error-message" id="error-message">
+      Something went wrong. Please try again or contact us directly.
+    </div>
+
+    <div class="availability-section">
+      <h2 class="section-title">Weekly Availability</h2>
+      <p class="section-desc">Click once to mark as <strong>available</strong>. Click again to mark as <strong>preferred</strong> (we'll prioritise these).</p>
+
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-box"></div>
+          <span>Not available</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-box available"></div>
+          <span>Available</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-box preferred"></div>
+          <span>Preferred</span>
+        </div>
+      </div>
+
+      <div class="time-grid" id="timeGrid"></div>
+    </div>
+
+    <div class="priority-section">
+      <h2 class="section-title">Lesson Frequency Preference</h2>
+      <p class="section-desc">How would you prefer to structure your lessons?</p>
+
+      <div class="priority-options">
+        <button type="button" class="priority-btn" data-value="intensive">
+          <h4>Intensive</h4>
+          <p>2-3 lessons per week, finish faster</p>
+        </button>
+        <button type="button" class="priority-btn active" data-value="standard">
+          <h4>Standard</h4>
+          <p>1-2 lessons per week, steady progress</p>
+        </button>
+        <button type="button" class="priority-btn" data-value="flexible">
+          <h4>Flexible</h4>
+          <p>Varies week to week, fits around shifts</p>
+        </button>
+      </div>
+    </div>
+
+    <div class="notes-section">
+      <h2 class="section-title">Anything else we should know?</h2>
+      <p class="section-desc">Specific constraints, preferred instructor type, or other scheduling notes.</p>
+
+      <textarea id="notes" placeholder="e.g., "I can do any time on Fridays", "School pickup at 3pm so mornings only", "Prefer female instructor"..."></textarea>
+    </div>
+
+    <div class="submit-section">
+      <div class="selection-summary">
+        <span id="slot-count">0 slots</span> selected · 
+        <span id="pref-count">0 preferred</span>
+      </div>
+      <button type="submit" class="btn-primary" id="submitBtn" disabled>
+        Submit Availability →
+      </button>
+    </div>
+  </div>
+
+  <div class="success-card" id="success-card">
+    <div class="success-icon">✓</div>
+    <h2>Availability received</h2>
+    <p>We've captured your preferences and will be in touch within 24 hours with your confirmed lesson schedule.</p>
+
+    <div class="next-steps">
+      <h3>What happens next:</h3>
+      <ol>
+        <li>We review your availability against instructor schedules</li>
+        <li>We propose specific lesson slots (within 24 hours)</li>
+        <li>You confirm or request adjustments</li>
+        <li>First lesson locked in, instructor introduced</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<script>
+// Parse URL params
+const urlParams = new URLSearchParams(window.location.search);
+const bookingRef = urlParams.get('ref');
+const email = urlParams.get('email');
+
+// Validate
+if (!bookingRef || !email) {
+  document.getElementById('availability-form').innerHTML = `
+    <div style="text-align:center;padding:64px 24px;">
+      <h1 style="font-family:var(--font-head);font-size:1.8rem;margin-bottom:16px;">Invalid link</h1>
+      <p style="color:var(--muted);">Please use the link from your email or contact us directly.</p>
+    </div>
+  `;
+} else {
+  document.getElementById('booking-ref').textContent = bookingRef;
+}
+
+const timeSlots = [
+  { label: 'Early', time: '7am – 9am' },
+  { label: 'Morning', time: '9am – 12pm' },
+  { label: 'Afternoon', time: '12pm – 3pm' },
+  { label: 'Late', time: '3pm – 6pm' },
+  { label: 'Evening', time: '6pm – 8pm' }
+];
+
+const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const state = {
+  slots: {},
+  frequency: 'standard',
+  notes: ''
+};
+
+function initGrid() {
+  const grid = document.getElementById('timeGrid');
+
+  grid.appendChild(document.createElement('div'));
+  days.forEach(day => {
+    const div = document.createElement('div');
+    div.className = 'day-header';
+    div.textContent = day;
+    grid.appendChild(div);
+  });
+
+  timeSlots.forEach((slot, slotIdx) => {
+    const label = document.createElement('div');
+    label.className = 'time-label';
+    label.innerHTML = `<div>${slot.label}<br><span style="font-weight:400;color:var(--muted)">${slot.time}</span></div>`;
+    grid.appendChild(label);
+
+    days.forEach((day, dayIdx) => {
+      const cell = document.createElement('div');
+      cell.className = 'slot-cell';
+      cell.dataset.key = `${day}-${slotIdx}`;
+      cell.title = `${day} ${slot.time}`;
+      cell.addEventListener('click', () => toggleSlot(cell));
+      grid.appendChild(cell);
+    });
+  });
+}
+
+function toggleSlot(cell) {
+  const key = cell.dataset.key;
+  const current = state.slots[key];
+
+  if (!current) {
+    state.slots[key] = 'available';
+    cell.className = 'slot-cell selected';
+  } else if (current === 'available') {
+    state.slots[key] = 'preferred';
+    cell.className = 'slot-cell selected preferred';
+  } else {
+    state.slots[key] = null;
+    cell.className = 'slot-cell';
+  }
+
+  updateSummary();
+}
+
+function updateSummary() {
+  const available = Object.values(state.slots).filter(s => s === 'available').length;
+  const preferred = Object.values(state.slots).filter(s => s === 'preferred').length;
+  const total = available + preferred;
+
+  document.getElementById('slot-count').textContent = `${total} slot${total !== 1 ? 's' : ''}`;
+  document.getElementById('pref-count').textContent = `${preferred} preferred`;
+  document.getElementById('submitBtn').disabled = total < 3;
+}
+
+document.querySelectorAll('.priority-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.priority-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.frequency = btn.dataset.value;
+  });
+});
+
+document.getElementById('notes').addEventListener('input', (e) => {
+  state.notes = e.target.value;
+});
+
+document.getElementById('submitBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('submitBtn');
+  btn.classList.add('loading');
+  btn.textContent = 'Submitting...';
+
+  const payload = {
+    booking_reference: bookingRef,
+    email: email,
+    availability: state.slots,
+    frequency_preference: state.frequency,
+    notes: state.notes
+  };
+
+  try {
+    const response = await fetch('/api/availability', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error('Submission failed');
+
+    document.getElementById('availability-form').style.display = 'none';
+    document.getElementById('success-card').classList.add('visible');
+
+    document.querySelectorAll('.step')[2].classList.remove('active');
+    document.querySelectorAll('.step')[2].classList.add('completed');
+    document.querySelectorAll('.step')[3].classList.add('active');
+
+  } catch (err) {
+    document.getElementById('error-message').classList.add('visible');
+    btn.classList.remove('loading');
+    btn.textContent = 'Submit Availability →';
+  }
+});
+
+initGrid();
+</script>
+
+</body>
+</html>
