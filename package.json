@@ -1,0 +1,16 @@
+{
+  "name": "coachcarter-website",
+  "version": "1.0.0",
+  "description": "CoachCarter Driving School - Stripe integrated booking system",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "stripe": "^14.0.0",
+    "nodemailer": "^6.9.0"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
