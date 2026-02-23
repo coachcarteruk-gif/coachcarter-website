@@ -59,3 +59,4 @@ In Vercel dashboard, add these:
 2. Test card: `4242 4242 4242 4242`, any future date, any CVC
 3. Check emails arrive
 4. Check Slack notifications (if configured)
+Live site deployed
