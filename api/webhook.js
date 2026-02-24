@@ -62,15 +62,17 @@ async function handleCheckoutComplete(session) {
   };
 
   bookings.set(bookingRef, booking);
+  console.log('✅ Booking created:', bookingRef, 'for', customerEmail);
 
   // Send emails
-  await sendCustomerConfirmation(booking);
-  await notifyStaff(booking);
+  //await sendCustomerConfirmation(booking);
+  //await notifyStaff(booking);
+  console.log('📧 Emails would be sent to:', customerEmail, 'and staff');
 
   // Delayed availability email for Pass Guarantee
-  if (isPassGuarantee) {
-    setTimeout(() => sendAvailabilityFormLink(booking), 5 * 60 * 1000);
-  }
+  //if (isPassGuarantee) {
+  //  setTimeout(() => sendAvailabilityFormLink(booking), 5 * 60 * 1000);
+  //}
 }
 
 async function sendCustomerConfirmation(booking) {
