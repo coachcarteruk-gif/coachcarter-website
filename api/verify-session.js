@@ -1,7 +1,5 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-const bookings = new Map(); // Same store
-
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
@@ -13,42 +11,45 @@ module.exports = async (req, res) => {
   try {
     const { session_id } = req.query;
 
-    const session = await stripe.checkout.sessions.retrieve(session_id);
+    if (!session_id) {
+      return res.status(400).json({ success: false, error: 'Missing session_id' });
+    }
+
+    // Retrieve session from Stripe with line items expanded
+    const session = await stripe.checkout.sessions.retrieve(session_id, {
+      expand: ['line_items']
+    });
 
     if (session.payment_status !== 'paid') {
       return res.json({ success: false, error: 'Payment not completed' });
     }
 
-    // Find booking by session ID (in production, query your DB)
-    let booking = null;
-    for (const [ref, b] of bookings) {
-      if (b.stripe_session_id === session_id) {
-        booking = b;
-        break;
-      }
+    // Extract data directly from Stripe session - no Map needed!
+    const lineItem = session.line_items?.data[0];
+    const packageName = lineItem?.description || 'Driving Package';
+    const amount = (session.amount_total / 100).toFixed(2);
+    
+    // Get package type from metadata or determine from amount/description
+    let packageType = session.metadata?.package_type || 'standard';
+    
+    // Determine package type from description if not in metadata
+    if (packageName.toLowerCase().includes('pass guarantee')) {
+      packageType = 'pass_guarantee';
+    } else if (packageName.toLowerCase().includes('hour') || packageName.toLowerCase().includes('bulk')) {
+      packageType = 'bulk';
+    } else if (packageName.toLowerCase().includes('single') || packageName.toLowerCase().includes('payg')) {
+      packageType = 'payg';
     }
 
-    if (!booking) {
-      return res.json({ 
-        success: true, 
-        pending: true,
-        message: 'Payment confirmed, booking being processed'
-      });
-    }
-
-    const packageNames = {
-      'payg': 'Pay As You Go — Single Lesson',
-      'bulk': `${booking.metadata?.hours || ''} Hour Package`,
-      'pass_guarantee': '18-Week Pass Guarantee'
-    };
-
+    // Return the data your frontend expects
     res.json({
       success: true,
-      booking_ref: booking.booking_reference,
-      package_name: packageNames[booking.package_type] || booking.package_type,
-      package_type: booking.package_type,
-      amount: booking.amount_paid
+      booking_ref: session.id.slice(-8).toUpperCase(), // Last 8 chars of session ID
+      package_name: packageName,
+      package_type: packageType,
+      amount: amount
     });
+    
   } catch (err) {
     console.error('Error verifying session:', err);
     res.status(500).json({ success: false, error: err.message });
