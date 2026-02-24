@@ -125,7 +125,7 @@ async function sendConfirmationToCustomer(email, bookingRef) {
   await transporter.sendMail({
     from: 'CoachCarter <bookings@coachcarter.uk>',
     to: email,
-    subject: 'Availability received — We'll propose slots within 24 hours',
+    subject: "Availability received — We'll propose slots within 24 hours",
     html: `
       <h1>Got it.</h1>
       <p>We've captured your availability preferences.</p>
