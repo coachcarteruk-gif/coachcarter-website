@@ -75,29 +75,39 @@ async function notifyStaffOfAvailability({ bookingRef, email, availableSlots, pr
     `
   });
 
-  // Slack
+    // Slack
   if (process.env.SLACK_WEBHOOK_URL) {
-    await fetch(process.env.SLACK_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: `📅 Availability received — ${bookingRef}`,
-        blocks: [
-          {
-            type: 'section',
-            text: { type: 'mrkdwn', text: `*${bookingRef}* submitted availability` }
-          },
-          {
-            type: 'section',
-            fields: [
-              { type: 'mrkdwn', text: `*Slots:*\n${availableSlots + preferredSlots} (${preferredSlots} preferred)` },
-              { type: 'mrkdwn', text: `*Frequency:*\n${frequency_preference}` },
-              { type: 'mrkdwn', text: `*Notes:*\n${notes || 'None'}` }
+    try {
+      // Check if fetch is available (Node 18+ has it built-in)
+      if (typeof fetch !== 'undefined') {
+        await fetch(process.env.SLACK_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: `📅 Availability received — ${bookingRef}`,
+            blocks: [
+              {
+                type: 'section',
+                text: { type: 'mrkdwn', text: `*${bookingRef}* submitted availability` }
+              },
+              {
+                type: 'section',
+                fields: [
+                  { type: 'mrkdwn', text: `*Slots:*\n${availableSlots + preferredSlots} (${preferredSlots} preferred)` },
+                  { type: 'mrkdwn', text: `*Frequency:*\n${frequency_preference}` },
+                  { type: 'mrkdwn', text: `*Notes:*\n${notes || 'None'}` }
+                ]
+              }
             ]
-          }
-        ]
-      })
-    });
+          })
+        });
+      } else {
+        console.log('Fetch not available, skipping Slack notification');
+      }
+    } catch (slackErr) {
+      console.log('Slack notification failed:', slackErr.message);
+      // Don't fail the whole request if Slack fails
+    }
   }
 }
 
