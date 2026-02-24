@@ -24,27 +24,33 @@ module.exports = async (req, res) => {
       return res.json({ success: false, error: 'Payment not completed' });
     }
 
-    // Extract data directly from Stripe session - no Map needed!
+    // Get metadata from session (this is what you send from index.html)
+    const metadata = session.metadata || {};
+    const packageType = metadata.package_type || 'standard';
+    
+    // Get line item for display name
     const lineItem = session.line_items?.data[0];
-    const packageName = lineItem?.description || 'Driving Package';
-    const amount = (session.amount_total / 100).toFixed(2);
     
-    // Get package type from metadata or determine from amount/description
-    let packageType = session.metadata?.package_type || 'standard';
-    
-    // Determine package type from description if not in metadata
-    if (packageName.toLowerCase().includes('pass guarantee')) {
-      packageType = 'pass_guarantee';
-    } else if (packageName.toLowerCase().includes('hour') || packageName.toLowerCase().includes('bulk')) {
-      packageType = 'bulk';
-    } else if (packageName.toLowerCase().includes('single') || packageName.toLowerCase().includes('payg')) {
-      packageType = 'payg';
+    // Determine package name based on metadata
+    let packageName;
+    if (packageType === 'payg') {
+      packageName = 'Pay As You Go — Single Lesson';
+    } else if (packageType === 'bulk') {
+      const hours = metadata.hours || 'Custom';
+      packageName = `${hours} Hour Package`;
+    } else if (packageType === 'pass_guarantee') {
+      packageName = '18-Week Pass Guarantee';
+    } else {
+      packageName = lineItem?.description || 'Driving Package';
     }
+
+    // Calculate amount
+    const amount = (session.amount_total / 100).toFixed(2);
 
     // Return the data your frontend expects
     res.json({
       success: true,
-      booking_ref: session.id.slice(-8).toUpperCase(), // Last 8 chars of session ID
+      booking_ref: session.id.slice(-8).toUpperCase(),
       package_name: packageName,
       package_type: packageType,
       amount: amount
