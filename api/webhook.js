@@ -70,8 +70,8 @@ async function handleCheckoutComplete(session) {
 
   // Delayed availability email for Pass Guarantee
   if (isPassGuarantee) {
-    setTimeout(() => sendAvailabilityFormLink(booking), 5 * 60 * 1000);
-  }
+  await sendAvailabilityFormLink(booking);
+}
 }
 
 async function sendCustomerConfirmation(booking) {
