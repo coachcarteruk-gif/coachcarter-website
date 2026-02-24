@@ -95,8 +95,8 @@ async function sendCustomerConfirmation(booking) {
     </ol>
 
     ${booking.claimed_test_status === 'has_test' ? 
-      '<p><strong>Your test date:</strong> We'll verify this with DVSA and reverse-engineer your start date.</p>' :
-      '<p><strong>Your test:</strong> We'll book this for week 16-18 of your programme.</p>'
+      "<p><strong>Your test date:</strong> We'll verify this with DVSA and reverse-engineer your start date.</p>" :
+      "<p><strong>Your test:</strong> We'll book this for week 16-18 of your programme.</p>" :
     }
 
     <p>Questions? Reply to this email.</p>
@@ -106,7 +106,7 @@ async function sendCustomerConfirmation(booking) {
     <strong>Package:</strong> ${booking.package_type}<br>
     <strong>Amount paid:</strong> £${booking.amount_paid}</p>
 
-    <p>We'll be in touch within 24 hours to schedule your first lesson.</p>
+    "<p>We'll be in touch within 24 hours to schedule your first lesson.</p>"
 
     <p>Questions? Reply to this email.</p>
   `;
