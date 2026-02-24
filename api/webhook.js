@@ -96,7 +96,7 @@ async function sendCustomerConfirmation(booking) {
 
     ${booking.claimed_test_status === 'has_test' ? 
       "<p><strong>Your test date:</strong> We'll verify this with DVSA and reverse-engineer your start date.</p>" :
-      "<p><strong>Your test:</strong> We'll book this for week 16-18 of your programme.</p>" :
+      "<p><strong>Your test:</strong> We'll book this for week 16-18 of your programme.</p>"
     }
 
     <p>Questions? Reply to this email.</p>
