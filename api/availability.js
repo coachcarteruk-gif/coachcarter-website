@@ -50,6 +50,12 @@ module.exports = async (req, res) => {
 };
 
 async function notifyStaffOfAvailability({ bookingRef, email, availableSlots, preferredSlots, frequency_preference, notes }) {
+  console.log('Starting email send...');
+  console.log('SMTP_HOST:', process.env.SMTP_HOST);
+  console.log('SMTP_PORT:', process.env.SMTP_PORT);
+  console.log('SMTP_USER:', process.env.SMTP_USER);
+  console.log('STAFF_EMAIL:', process.env.STAFF_EMAIL);
+  
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT),
@@ -57,10 +63,23 @@ async function notifyStaffOfAvailability({ bookingRef, email, availableSlots, pr
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
+    },
+    tls: {
+      rejectUnauthorized: false
     }
   });
 
-  await transporter.sendMail({
+  // Verify connection
+  console.log('Verifying transporter...');
+  try {
+    await transporter.verify();
+    console.log('Transporter verified successfully');
+  } catch (verifyErr) {
+    console.error('Transporter verification failed:', verifyErr);
+  }
+
+  console.log('Sending staff email...');
+  const staffResult = await transporter.sendMail({
     from: 'CoachCarter System <system@coachcarter.uk>',
     to: process.env.STAFF_EMAIL,
     subject: `📅 Availability received — ${bookingRef}`,
@@ -74,11 +93,11 @@ async function notifyStaffOfAvailability({ bookingRef, email, availableSlots, pr
       <p><a href="https://coachcarter.uk/admin.html">View in dashboard →</a></p>
     `
   });
+  console.log('Staff email result:', staffResult);
 
-    // Slack
+  // Slack
   if (process.env.SLACK_WEBHOOK_URL) {
     try {
-      // Check if fetch is available (Node 18+ has it built-in)
       if (typeof fetch !== 'undefined') {
         await fetch(process.env.SLACK_WEBHOOK_URL, {
           method: 'POST',
@@ -101,12 +120,9 @@ async function notifyStaffOfAvailability({ bookingRef, email, availableSlots, pr
             ]
           })
         });
-      } else {
-        console.log('Fetch not available, skipping Slack notification');
       }
     } catch (slackErr) {
       console.log('Slack notification failed:', slackErr.message);
-      // Don't fail the whole request if Slack fails
     }
   }
 }
@@ -119,6 +135,9 @@ async function sendConfirmationToCustomer(email, bookingRef) {
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
+    },
+    tls: {
+      rejectUnauthorized: false
     }
   });
 
