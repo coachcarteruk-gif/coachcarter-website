@@ -194,7 +194,7 @@ if (!sessionId) {
   document.getElementById('loading-state').innerHTML = '<p>Invalid session. Please contact us if you completed a payment.</p>';
 } else {
   // Verify session with backend
-  fetch(`/verify-session?session_id=${sessionId}`)
+  fetch(`/api/verify-session?session_id=${sessionId}`)
     .then(res => res.json())
     .then(data => {
       if (data.success) {
