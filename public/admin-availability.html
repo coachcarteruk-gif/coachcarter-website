@@ -92,6 +92,19 @@ header {
   overflow: hidden;
 }
 
+.table-header {
+  display: grid;
+  grid-template-columns: 150px 1fr 200px 120px 100px;
+  gap: 16px;
+  padding: 16px 24px;
+  background: var(--bg);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
 .submission-row {
   display: grid;
   grid-template-columns: 150px 1fr 200px 120px 100px;
@@ -141,8 +154,24 @@ header {
 }
 
 .status.pending { background: #fef3c7; color: #92400e; }
+.status.contacted { background: #dbeafe; color: #1e40af; }
 .status.scheduled { background: #d1fae5; color: #065f46; }
 .status.completed { background: #e5e7eb; color: #374151; }
+
+.action-btn {
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  background: var(--white);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+}
+
+.action-btn:hover {
+  border-color: var(--orange);
+  color: var(--orange);
+}
 
 .empty-state {
   text-align: center;
@@ -164,14 +193,93 @@ header {
   border-radius: 8px;
 }
 
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal.active {
+  display: flex;
+}
+
+.modal-content {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.modal-title {
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.detail-row {
+  display: flex;
+  margin-bottom: 16px;
+}
+
+.detail-label {
+  width: 150px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.detail-value {
+  flex: 1;
+}
+
+.status-select {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  font-family: inherit;
+}
+
 @media (max-width: 1024px) {
-  .submission-row {
+  .table-header, .submission-row {
     grid-template-columns: 120px 1fr 150px;
   }
+  .table-header > *:nth-child(4),
+  .table-header > *:nth-child(5),
   .submission-row > *:nth-child(4),
   .submission-row > *:nth-child(5) {
     display: none;
   }
+}
+
+@media (max-width: 640px) {
+  .container { padding: 24px; }
+  header { padding: 16px 24px; }
 }
 </style>
 </head>
@@ -198,12 +306,34 @@ header {
     </div>
   </div>
 
-  <div class="submissions-list" id="submissions-container">
-    <div class="loading">Loading availability submissions...</div>
+  <div class="submissions-list">
+    <div class="table-header">
+      <div>Reference</div>
+      <div>Customer</div>
+      <div>Slots</div>
+      <div>Status</div>
+      <div>Actions</div>
+    </div>
+    <div id="submissions-container">
+      <div class="loading">Loading availability submissions...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for details -->
+<div class="modal" id="detail-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Submission Details</div>
+      <button class="close-btn" onclick="closeModal()">&times;</button>
+    </div>
+    <div id="modal-body"></div>
   </div>
 </div>
 
 <script>
+let submissions = [];
+
 async function loadSubmissions() {
   const container = document.getElementById('submissions-container');
   
@@ -215,8 +345,9 @@ async function loadSubmissions() {
       throw new Error('Invalid response');
     }
 
-    updateStats(data.submissions);
-    renderSubmissions(data.submissions);
+    submissions = data.submissions;
+    updateStats();
+    renderSubmissions();
     
   } catch (error) {
     console.error('Error loading submissions:', error);
@@ -224,7 +355,7 @@ async function loadSubmissions() {
   }
 }
 
-function updateStats(submissions) {
+function updateStats() {
   document.getElementById('total-submissions').textContent = submissions.length;
   
   const pending = submissions.filter(s => s.status === 'pending').length;
@@ -236,7 +367,7 @@ function updateStats(submissions) {
   document.getElementById('this-week-count').textContent = thisWeek;
 }
 
-function renderSubmissions(submissions) {
+function renderSubmissions() {
   const container = document.getElementById('submissions-container');
   
   if (submissions.length === 0) {
@@ -259,18 +390,89 @@ function renderSubmissions(submissions) {
         ${preferredCount} preferred, ${availableCount} available
         ${sub.frequency_preference ? `<br><small>${sub.frequency_preference}</small>` : ''}
       </div>
-      <div><span class="status ${sub.status}">${sub.status}</span></div>
       <div>
-        <button onclick="viewDetails(${sub.id})" style="padding:6px 12px;border:1px solid var(--rule);background:white;border-radius:6px;cursor:pointer;">View</button>
+        <select class="status-select" onchange="updateStatus(${sub.id}, this.value)">
+          <option value="pending" ${sub.status === 'pending' ? 'selected' : ''}>Pending</option>
+          <option value="contacted" ${sub.status === 'contacted' ? 'selected' : ''}>Contacted</option>
+          <option value="scheduled" ${sub.status === 'scheduled' ? 'selected' : ''}>Scheduled</option>
+          <option value="completed" ${sub.status === 'completed' ? 'selected' : ''}>Completed</option>
+        </select>
+      </div>
+      <div>
+        <button class="action-btn" onclick="viewDetails(${sub.id})">View</button>
       </div>
     </div>
   `}).join('');
 }
 
 function viewDetails(id) {
-  // Fetch individual details or show modal
-  alert('View details for submission #' + id);
+  const sub = submissions.find(s => s.id === id);
+  if (!sub) return;
+
+  const modalBody = document.getElementById('modal-body');
+  modalBody.innerHTML = `
+    <div class="detail-row">
+      <div class="detail-label">Reference:</div>
+      <div class="detail-value">${sub.booking_reference || 'N/A'}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Email:</div>
+      <div class="detail-value">${sub.customer_email}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Submitted:</div>
+      <div class="detail-value">${new Date(sub.submitted_at).toLocaleString()}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Preferred Days:</div>
+      <div class="detail-value">${sub.preferred_days?.join(', ') || 'None'}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Available Days:</div>
+      <div class="detail-value">${sub.available_days?.join(', ') || 'None'}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Frequency:</div>
+      <div class="detail-value">${sub.frequency_preference || 'Not specified'}</div>
+    </div>
+    ${sub.additional_notes ? `
+    <div class="detail-row">
+      <div class="detail-label">Notes:</div>
+      <div class="detail-value">${sub.additional_notes}</div>
+    </div>
+    ` : ''}
+  `;
+  
+  document.getElementById('detail-modal').classList.add('active');
 }
+
+function closeModal() {
+  document.getElementById('detail-modal').classList.remove('active');
+}
+
+async function updateStatus(id, newStatus) {
+  try {
+    const response = await fetch('/api/update-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: newStatus })
+    });
+
+    if (!response.ok) throw new Error('Failed to update');
+    
+    const sub = submissions.find(s => s.id === id);
+    if (sub) sub.status = newStatus;
+    
+  } catch (error) {
+    alert('Failed to update status: ' + error.message);
+    loadSubmissions(); // Refresh to reset
+  }
+}
+
+// Close modal on outside click
+document.getElementById('detail-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'detail-modal') closeModal();
+});
 
 // Load on page load
 document.addEventListener('DOMContentLoaded', loadSubmissions);
