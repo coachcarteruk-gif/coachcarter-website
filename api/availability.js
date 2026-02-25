@@ -1,7 +1,7 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// Same in-memory store (replace with DB in production)
-const bookings = new Map();
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -22,25 +22,44 @@ module.exports = async (req, res) => {
   try {
     const { booking_reference, email, availability, frequency_preference, notes } = req.body;
 
-    // In production, verify against your database
-    // For now, just process the submission
-
     // Count slots
     const availableSlots = Object.values(availability).filter(v => v === 'available').length;
     const preferredSlots = Object.values(availability).filter(v => v === 'preferred').length;
 
-    // Notify staff
-    await notifyStaffOfAvailability({
-      bookingRef: booking_reference,
-      email,
-      availableSlots,
-      preferredSlots,
-      frequency_preference,
-      notes
+    // Send staff notification
+    await resend.emails.send({
+      from: 'CoachCarter <system@coachcarter.uk>',
+      to: process.env.STAFF_EMAIL,
+      subject: `📅 Availability received — ${booking_reference}`,
+      html: `
+        <h2>Availability Submitted</h2>
+        <p><strong>Reference:</strong> ${booking_reference}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Slots selected:</strong> ${availableSlots + preferredSlots} total (${preferredSlots} preferred)</p>
+        <p><strong>Frequency:</strong> ${frequency_preference}</p>
+        <p><strong>Notes:</strong> ${notes || 'None'}</p>
+        <p><a href="https://coachcarter.uk/admin.html">View in dashboard →</a></p>
+      `
     });
 
-    // Confirm to customer
-    await sendConfirmationToCustomer(email, booking_reference);
+    // Send customer confirmation
+    await resend.emails.send({
+      from: 'CoachCarter <bookings@coachcarter.uk>',
+      to: email,
+      subject: "Availability received — We'll propose slots within 24 hours",
+      html: `
+        <h1>Got it.</h1>
+        <p>We've captured your availability preferences.</p>
+        <h2>What happens next:</h2>
+        <ol>
+          <li>We review your slots against instructor schedules</li>
+          <li>We propose specific lesson times (within 24 hours)</li>
+          <li>You confirm or request adjustments</li>
+          <li>First lesson locked in, instructor introduced</li>
+        </ol>
+        <p>Reference: ${booking_reference}</p>
+      `
+    });
 
     res.json({ success: true });
   } catch (err) {
@@ -48,114 +67,3 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-async function notifyStaffOfAvailability({ bookingRef, email, availableSlots, preferredSlots, frequency_preference, notes }) {
-  console.log('Starting email send...');
-  console.log('SMTP_HOST:', process.env.SMTP_HOST);
-  console.log('SMTP_PORT:', process.env.SMTP_PORT);
-  console.log('SMTP_USER:', process.env.SMTP_USER);
-  console.log('STAFF_EMAIL:', process.env.STAFF_EMAIL);
-  
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT),
-    secure: process.env.SMTP_PORT === '465',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    },
-    tls: {
-      rejectUnauthorized: false
-    }
-  });
-
-  // Verify connection
-  console.log('Verifying transporter...');
-  try {
-    await transporter.verify();
-    console.log('Transporter verified successfully');
-  } catch (verifyErr) {
-    console.error('Transporter verification failed:', verifyErr);
-  }
-
-  console.log('Sending staff email...');
-  const staffResult = await transporter.sendMail({
-    from: 'CoachCarter System <system@coachcarter.uk>',
-    to: process.env.STAFF_EMAIL,
-    subject: `📅 Availability received — ${bookingRef}`,
-    html: `
-      <h2>Availability Submitted</h2>
-      <p><strong>Reference:</strong> ${bookingRef}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Slots selected:</strong> ${availableSlots + preferredSlots} total (${preferredSlots} preferred)</p>
-      <p><strong>Frequency:</strong> ${frequency_preference}</p>
-      <p><strong>Notes:</strong> ${notes || 'None'}</p>
-      <p><a href="https://coachcarter.uk/admin.html">View in dashboard →</a></p>
-    `
-  });
-  console.log('Staff email result:', staffResult);
-
-  // Slack
-  if (process.env.SLACK_WEBHOOK_URL) {
-    try {
-      if (typeof fetch !== 'undefined') {
-        await fetch(process.env.SLACK_WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: `📅 Availability received — ${bookingRef}`,
-            blocks: [
-              {
-                type: 'section',
-                text: { type: 'mrkdwn', text: `*${bookingRef}* submitted availability` }
-              },
-              {
-                type: 'section',
-                fields: [
-                  { type: 'mrkdwn', text: `*Slots:*\n${availableSlots + preferredSlots} (${preferredSlots} preferred)` },
-                  { type: 'mrkdwn', text: `*Frequency:*\n${frequency_preference}` },
-                  { type: 'mrkdwn', text: `*Notes:*\n${notes || 'None'}` }
-                ]
-              }
-            ]
-          })
-        });
-      }
-    } catch (slackErr) {
-      console.log('Slack notification failed:', slackErr.message);
-    }
-  }
-}
-
-async function sendConfirmationToCustomer(email, bookingRef) {
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT),
-    secure: process.env.SMTP_PORT === '465',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    },
-    tls: {
-      rejectUnauthorized: false
-    }
-  });
-
-  await transporter.sendMail({
-    from: 'CoachCarter <bookings@coachcarter.uk>',
-    to: email,
-    subject: "Availability received — We'll propose slots within 24 hours",
-    html: `
-      <h1>Got it.</h1>
-      <p>We've captured your availability preferences.</p>
-      <h2>What happens next:</h2>
-      <ol>
-        <li>We review your slots against instructor schedules</li>
-        <li>We propose specific lesson times (within 24 hours)</li>
-        <li>You confirm or request adjustments</li>
-        <li>First lesson locked in, instructor introduced</li>
-      </ol>
-      <p>Reference: ${bookingRef}</p>
-    `
-  });
-}
