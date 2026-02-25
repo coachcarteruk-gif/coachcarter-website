@@ -1,9 +1,11 @@
 const { Resend } = require('resend');
+const { neon } = require('@neondatabase/serverless');
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 module.exports = async (req, res) => {
+  // CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -22,9 +24,46 @@ module.exports = async (req, res) => {
   try {
     const { booking_reference, email, availability, frequency_preference, notes } = req.body;
 
+    // Connect to database
+    const sql = neon(process.env.POSTGRES_URL);
+
     // Count slots
     const availableSlots = Object.values(availability).filter(v => v === 'available').length;
     const preferredSlots = Object.values(availability).filter(v => v === 'preferred').length;
+
+    // Convert availability object to arrays for database
+    const preferredDays = Object.entries(availability)
+      .filter(([key, value]) => value === 'preferred')
+      .map(([key]) => key);
+
+    const availableDays = Object.entries(availability)
+      .filter(([key, value]) => value === 'available')
+      .map(([key]) => key);
+
+    // Save to database
+    const result = await sql(
+      `INSERT INTO availability_submissions (
+        customer_email,
+        booking_reference,
+        preferred_days,
+        available_days,
+        frequency_preference,
+        additional_notes,
+        status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *`,
+      [
+        email,
+        booking_reference,
+        preferredDays,
+        availableDays,
+        frequency_preference || null,
+        notes || null,
+        'pending'
+      ]
+    );
+
+    const submission = result[0];
 
     // Send staff notification
     await resend.emails.send({
@@ -61,7 +100,8 @@ module.exports = async (req, res) => {
       `
     });
 
-    res.json({ success: true });
+    res.json({ success: true, submissionId: submission.id });
+
   } catch (err) {
     console.error('Error processing availability:', err);
     res.status(500).json({ error: err.message });
