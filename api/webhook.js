@@ -37,7 +37,6 @@ async function handleCheckoutComplete(session) {
   const testStatus = session.custom_fields?.find(f => f.key === 'has_test_booked')?.dropdown?.value;
   const testReference = session.custom_fields?.find(f => f.key === 'dvsa_reference')?.text?.value;
   const testCentre = session.custom_fields?.find(f => f.key === 'test_centre_preference')?.text?.value;
-  const preferredStart = session.custom_fields?.find(f => f.key === 'preferred_start_date')?.text?.value;
 
   const customerEmail = session.customer_details.email;
   const customerName = session.customer_details.name;
@@ -63,7 +62,6 @@ async function handleCheckoutComplete(session) {
     claimed_test_status: testStatus,
     claimed_test_reference: testReference,
     claimed_test_centre: testCentre,
-    preferred_start_date: preferredStart,
     package_type: packageType,
     package_name: metadata.package_name || getPackageDisplayName(packageType),
     total_hours: metadata.total_hours || 'N/A',
