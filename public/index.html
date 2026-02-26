@@ -990,6 +990,126 @@ input[type=range].pkg-range::-webkit-slider-thumb {
 .programme-link-secondary:hover {
   color: var(--accent);
 } 
+  /* COMPARE SECTION FIXES */
+.compare-section {
+  padding: 100px 0 60px;
+  border-top: 1px solid var(--border);
+}
+
+.compare-table {
+  width: 100%;
+  max-width: 900px;
+  margin: 48px auto 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--white);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 20px 24px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.compare-table th {
+  background: var(--surface);
+  font-family: var(--font-head);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary);
+  border-bottom: 2px solid var(--border);
+}
+
+.compare-table th:first-child,
+.compare-table td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.compare-table th.highlight {
+  background: var(--primary);
+  color: var(--accent);
+}
+
+.compare-table td {
+  font-size: 0.95rem;
+  color: var(--primary);
+}
+
+.compare-table tr:last-child td {
+  border-bottom: none;
+}
+
+.compare-table tr:hover td {
+  background: var(--surface);
+}
+
+.compare-table tr:hover td.highlight {
+  background: rgba(245,131,33,0.06);
+}
+
+.check { 
+  color: var(--green); 
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.cross { 
+  color: #d0d0d0; 
+  font-size: 1.2rem;
+}
+
+.partial { 
+  color: var(--accent); 
+  font-size: 0.85rem; 
+  font-weight: 700;
+}
+
+.best-for {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 500;
+  display: inline-block;
+  padding: 6px 14px;
+  background: var(--surface);
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+td.highlight .best-for {
+  background: rgba(245,131,33,0.12);
+  color: var(--accent-dk);
+}
+
+/* CTA SECTION SPACING */
+.cta-section {
+  padding: 120px 48px;
+  text-align: center;
+  border-top: 1px solid var(--border);
+  margin-top: 60px;
+  position: relative;
+}
+
+.cta-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 0 0 3px 3px;
+}
+
+.cta-section h2 {
+  font-family: var(--font-head);
+  font-size: clamp(2rem, 4vw, 3.2rem);
 </style>
 </head>
 <body>
@@ -1348,11 +1468,11 @@ input[type=range].pkg-range::-webkit-slider-thumb {
           <td class="highlight"><span class="partial">Structured</span></td>
         </tr>
         <tr>
-          <td>Best for</td>
-          <td style="font-size:0.8rem;color:var(--muted)">Trying it out / uncertain schedule</td>
-          <td style="font-size:0.8rem;color:var(--muted)">Committed learners who want to save</td>
-          <td class="highlight" style="font-size:0.8rem">Best outcome, zero risk</td>
-        </tr>
+  <td>Best for</td>
+  <td><span class="best-for">Trying it out</span></td>
+  <td><span class="best-for">Committed learners</span></td>
+  <td class="highlight"><span class="best-for">Best outcome, zero risk</span></td>
+</tr>
       </tbody>
     </table>
   </div>
