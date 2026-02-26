@@ -24,12 +24,9 @@ module.exports = async (req, res) => {
       return res.json({ success: false, error: 'Payment not completed' });
     }
 
-    // Get metadata from session (this is what you send from index.html)
+    // Get metadata from session
     const metadata = session.metadata || {};
     const packageType = metadata.package_type || 'standard';
-    
-    // Get line item for display name
-    const lineItem = session.line_items?.data[0];
     
     // Determine package name based on metadata
     let packageName;
@@ -40,8 +37,16 @@ module.exports = async (req, res) => {
       packageName = `${hours} Hour Package`;
     } else if (packageType === 'pass_guarantee') {
       packageName = '18-Week Pass Guarantee';
+    } else if (packageType === 'core_only') {
+      packageName = 'Core Programme — 18 Week Guarantee';
+    } else if (packageType === 'core_plus_1') {
+      packageName = 'Core + 1 Retake Cover';
+    } else if (packageType === 'core_plus_2') {
+      packageName = 'Core + 2 Retake Cover';
+    } else if (packageType === 'core_plus_lifetime') {
+      packageName = 'Core + Lifetime Cover';
     } else {
-      packageName = lineItem?.description || 'Driving Package';
+      packageName = metadata.package_name || 'Driving Package';
     }
 
     // Calculate amount
