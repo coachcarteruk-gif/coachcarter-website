@@ -1619,7 +1619,7 @@ async function startCalculatorCheckout() {
       estimated_profit: calculateProfit(tierName).toString()
     };
 
-    customFields = [
+        customFields = [
       {
         key: 'provisional_licence',
         label: { type: 'custom', custom: 'Provisional licence number' },
@@ -1640,13 +1640,7 @@ async function startCalculatorCheckout() {
       },
       {
         key: 'dvsa_reference',
-        label: { type: 'custom', custom: 'DVSA reference number (if you have a test booked)' },
-        type: 'text',
-        optional: true
-      },
-      {
-        key: 'preferred_start_date',
-        label: { type: 'custom', custom: 'Preferred Start Date (optional)' },
+        label: { type: 'custom', custom: 'DVSA reference or preferred start date' },
         type: 'text',
         optional: true
       }
