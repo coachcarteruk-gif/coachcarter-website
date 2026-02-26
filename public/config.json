@@ -1,6 +1,6 @@
 {
   "pricing": {
-    "payg_hourly": 50,
+    "payg_hourly": 60,
     "core_programme": 2400,
     "retake_1": 200,
     "retake_2": 350,
@@ -10,31 +10,31 @@
         "hrs": 10,
         "price": 570,
         "discount": 0.05,
-        "per_hour": "57.00"
+        "per_hour": 57
       },
       {
         "hrs": 20,
         "price": 1110,
         "discount": 0.075,
-        "per_hour": "55.50"
+        "per_hour": 55.5
       },
       {
         "hrs": 30,
         "price": 1620,
         "discount": 0.1,
-        "per_hour": "54.00"
+        "per_hour": 54
       },
       {
         "hrs": 40,
         "price": 2100,
         "discount": 0.125,
-        "per_hour": "52.50"
+        "per_hour": 52.5
       },
       {
         "hrs": 50,
         "price": 2550,
         "discount": 0.15,
-        "per_hour": "51.00"
+        "per_hour": 51
       }
     ]
   },
@@ -71,6 +71,6 @@
       }
     ]
   },
-  "last_updated": "2026-02-26T20:52:11.448Z",
+  "last_updated": "2026-02-26T21:09:16.244Z",
   "version": "1.0"
 }
