@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Driving Journey — CoachCarter</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary:    #272727;
+  --accent:     #f58321;
+  --accent-dk:  #e07518;
+  --accent-lt:  #fff4ec;
+  --accent-mid: rgba(245,131,33,0.12);
+  --muted:      #797879;
+  --border:     #e0e0e0;
+  --bg:         #ffffff;
+  --surface:    #f9f9f9;
+  --font-head:  'Bricolage Grotesque', sans-serif;
+  --font-body:  'Lato', sans-serif;
+
+  --t1-mid:  #2d9455;
+  --t1-lt:   #edf7f2;
+  --t2-mid:  #f58321;
+  --t2-lt:   #fff4ec;
+  --t3-mid:  #2d5a9e;
+  --t3-lt:   #eef1f8;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--primary);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ── NAV ── */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 48px;
+  height: 68px;
+}
+.nav-logo {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--primary);
+  text-decoration: none;
+  letter-spacing: -0.02em;
+}
+.nav-logo span { color: var(--accent); }
+.nav-links { display: flex; gap: 28px; list-style: none; }
+.nav-links a {
+  font-size: 0.88rem; font-weight: 700; color: var(--muted);
+  text-decoration: none; letter-spacing: 0.02em;
+  text-transform: uppercase; transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--accent); }
+.nav-cta {
+  background: var(--accent); color: #fff;
+  font-family: var(--font-head); font-weight: 700; font-size: 0.88rem;
+  padding: 10px 24px; border-radius: 6px; text-decoration: none;
+  border: none; cursor: pointer; transition: background 0.2s, transform 0.15s;
+}
+.nav-cta:hover { background: var(--accent-dk); transform: translateY(-1px); }
+
+/* ── HERO ── */
+.hero {
+  padding: 100px 48px 80px;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+.hero-tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--accent); margin-bottom: 24px;
+}
+.hero-tag::before {
+  content: ''; display: block; width: 24px; height: 2px; background: var(--accent);
+}
+.hero h1 {
+  font-family: var(--font-head); font-size: clamp(2.8rem, 5vw, 4.2rem);
+  font-weight: 800; color: var(--primary); line-height: 1.0;
+  letter-spacing: -0.03em; margin-bottom: 24px;
+}
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero-sub {
+  font-size: 1.05rem; color: var(--muted); line-height: 1.75;
+  font-weight: 300; margin-bottom: 40px; max-width: 440px;
+}
+.hero-badges { display: flex; gap: 12px; flex-wrap: wrap; }
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: #fff; border: 1px solid var(--border); border-radius: 100px;
+  padding: 8px 16px; font-size: 0.8rem; font-weight: 700; color: var(--primary);
+}
+.hero-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+.hero-right {
+  background: var(--primary); border-radius: 24px;
+  padding: 48px; color: #fff; position: relative; overflow: hidden;
+}
+.hero-right::before {
+  content: ''; position: absolute; width: 300px; height: 300px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(245,131,33,0.2), transparent 70%);
+  top: -60px; right: -60px; pointer-events: none;
+}
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; position: relative; }
+.stat-num {
+  font-family: var(--font-head); font-size: 2.2rem; font-weight: 800;
+  color: var(--accent); letter-spacing: -0.02em; line-height: 1; margin-bottom: 6px;
+}
+.stat-label { font-size: 0.78rem; color: rgba(255,255,255,0.5); font-weight: 300; line-height: 1.4; }
+.stat-divider { grid-column: 1/-1; height: 1px; background: rgba(255,255,255,0.08); margin: 4px 0; }
+
+/* ── SECTION HELPERS ── */
+.section-wrap { max-width: 1200px; margin: 0 auto; padding: 0 48px; }
+.section-intro { text-align: center; margin-bottom: 64px; }
+.section-tag-line {
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--accent);
+  display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px;
+}
+.section-tag-line::before, .section-tag-line::after {
+  content: ''; height: 1px; width: 40px; background: var(--border);
+}
+.section-title {
+  font-family: var(--font-head); font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800; color: var(--primary); letter-spacing: -0.025em;
+  line-height: 1.05; margin-bottom: 16px;
+}
+.section-sub {
+  font-size: 1rem; color: var(--muted); font-weight: 300;
+  max-width: 500px; margin: 0 auto; line-height: 1.7;
+}
+
+/* ── PHILOSOPHY ── */
+.philosophy-banner {
+  background: var(--accent-lt);
+  border-top: 1px solid rgba(245,131,33,0.2);
+  border-bottom: 1px solid rgba(245,131,33,0.2);
+  padding: 44px 48px;
+  text-align: center;
+}
+.philosophy-banner blockquote {
+  font-family: var(--font-head); font-size: clamp(1.2rem, 2.5vw, 1.65rem);
+  font-weight: 700; color: var(--primary); letter-spacing: -0.02em; margin-bottom: 8px;
+}
+.philosophy-banner blockquote em { font-style: normal; color: var(--accent); }
+.philosophy-banner p { font-size: 0.9rem; color: var(--muted); font-weight: 300; }
+
+/* ── TIERS ── */
+.tiers-section { padding: 100px 0; border-top: 1px solid var(--border); }
+
+.tier-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 20px;
+  overflow: hidden; margin-bottom: 32px;
+  opacity: 0; transform: translateY(24px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.tier-card.visible { opacity: 1; transform: translateY(0); }
+.tier-card:nth-child(2) { transition-delay: 0.1s; }
+.tier-card:nth-child(3) { transition-delay: 0.2s; }
+
+.tier-bar { height: 5px; }
+.t1 .tier-bar { background: var(--t1-mid); }
+.t2 .tier-bar { background: var(--t2-mid); }
+.t3 .tier-bar { background: var(--t3-mid); }
+
+.tier-header {
+  padding: 40px 48px 32px;
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 32px; align-items: start;
+  border-bottom: 1px solid var(--border);
+}
+.tier-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 14px;
+}
+.tier-eyebrow::before { content: ''; display: block; width: 16px; height: 2px; }
+.t1 .tier-eyebrow, .t1 .tier-eyebrow::before { color: var(--t1-mid); background: var(--t1-mid); }
+.t2 .tier-eyebrow { color: var(--t2-mid); }
+.t2 .tier-eyebrow::before { background: var(--t2-mid); }
+.t3 .tier-eyebrow { color: var(--t3-mid); }
+.t3 .tier-eyebrow::before { background: var(--t3-mid); }
+
+.tier-title {
+  font-family: var(--font-head); font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+  font-weight: 800; color: var(--primary); letter-spacing: -0.025em;
+  line-height: 1.05; margin-bottom: 12px;
+}
+.tier-promise {
+  font-size: 0.95rem; color: var(--muted); line-height: 1.7;
+  max-width: 520px; font-weight: 300;
+}
+
+.tier-hours-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px 28px;
+  text-align: center; white-space: nowrap; flex-shrink: 0;
+}
+.hours-num {
+  font-family: var(--font-head); font-size: 2.4rem; font-weight: 800;
+  color: var(--primary); letter-spacing: -0.03em; line-height: 1; display: block;
+}
+.hours-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-top: 4px; }
+.hours-range { font-size: 0.75rem; color: var(--muted); margin-top: 12px; line-height: 1.6; font-weight: 300; }
+
+.tier-body {
+  padding: 40px 48px; background: var(--surface);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
+}
+.body-section h3 {
+  font-family: var(--font-head); font-size: 0.78rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 16px;
+}
+
+.skill-list, .pass-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+
+.skill-list li, .pass-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  font-size: 0.9rem; line-height: 1.5; color: var(--primary);
+  background: #fff; border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 14px;
+}
+.skill-icon, .check-icon {
+  font-size: 0.6rem; font-weight: 900;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px; color: #fff;
+}
+.t1 .skill-icon, .t1 .check-icon { background: var(--t1-mid); }
+.t2 .skill-icon, .t2 .check-icon { background: var(--t2-mid); }
+.t3 .skill-icon, .t3 .check-icon { background: var(--t3-mid); }
+
+.tier-weeks {
+  padding: 20px 48px; border-top: 1px solid var(--border); background: #fff;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.weeks-label {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--muted); white-space: nowrap;
+}
+.week-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.week-pill {
+  font-size: 0.75rem; font-weight: 700; padding: 4px 12px;
+  border-radius: 100px; border: 1px solid;
+}
+.t1 .week-pill { color: var(--t1-mid); border-color: rgba(45,148,85,0.25); background: var(--t1-lt); }
+.t2 .week-pill { color: var(--t2-mid); border-color: rgba(245,131,33,0.25); background: var(--t2-lt); }
+.t3 .week-pill { color: var(--t3-mid); border-color: rgba(45,90,158,0.25); background: var(--t3-lt); }
+
+/* ── TIMELINE ── */
+.timeline-section { padding: 100px 0; background: var(--primary); }
+.timeline-section .section-tag-line { color: rgba(255,255,255,0.4); }
+.timeline-section .section-tag-line::before,
+.timeline-section .section-tag-line::after { background: rgba(255,255,255,0.1); }
+.timeline-section .section-title { color: #fff; }
+.timeline-section .section-sub { color: rgba(255,255,255,0.45); }
+
+.timeline { max-width: 700px; margin: 0 auto; position: relative; padding-left: 28px; }
+.timeline::before {
+  content: ''; position: absolute; left: 0; top: 10px; bottom: 10px;
+  width: 2px; background: rgba(255,255,255,0.08); border-radius: 1px;
+}
+
+.tl-item {
+  position: relative; padding: 0 0 28px 28px;
+  opacity: 0; transform: translateX(-16px);
+  transition: opacity 0.55s ease, transform 0.55s ease;
+}
+.tl-item.visible { opacity: 1; transform: translateX(0); }
+.tl-item:nth-child(1)  { transition-delay: 0.00s; }
+.tl-item:nth-child(2)  { transition-delay: 0.07s; }
+.tl-item:nth-child(3)  { transition-delay: 0.14s; }
+.tl-item:nth-child(4)  { transition-delay: 0.21s; }
+.tl-item:nth-child(5)  { transition-delay: 0.28s; }
+.tl-item:nth-child(6)  { transition-delay: 0.35s; }
+.tl-item:nth-child(7)  { transition-delay: 0.42s; }
+.tl-item:nth-child(8)  { transition-delay: 0.49s; }
+.tl-item:nth-child(9)  { transition-delay: 0.56s; }
+.tl-item:nth-child(10) { transition-delay: 0.63s; }
+.tl-item:nth-child(11) { transition-delay: 0.70s; }
+
+.tl-dot {
+  position: absolute; left: -28px; top: 4px;
+  width: 12px; height: 12px; border-radius: 50%;
+  transform: translateX(-5px);
+}
+.tl-dot.tier1 { background: var(--t1-mid); }
+.tl-dot.tier2 { background: var(--accent); }
+.tl-dot.tier3 { background: var(--t3-mid); }
+.tl-dot.review {
+  background: var(--accent); width: 16px; height: 16px;
+  transform: translateX(-7px); top: 2px;
+  box-shadow: 0 0 0 3px rgba(245,131,33,0.25);
+}
+.tl-dot.finish {
+  background: var(--accent); width: 18px; height: 18px;
+  transform: translateX(-8px); top: 1px;
+  box-shadow: 0 0 0 4px rgba(245,131,33,0.2);
+}
+
+.tl-week {
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 4px;
+}
+.tier1 ~ .tl-week  { color: var(--t1-mid); }
+.tier2 ~ .tl-week  { color: var(--accent); }
+.tier3 ~ .tl-week  { color: var(--t3-mid); }
+.review ~ .tl-week,
+.finish ~ .tl-week { color: var(--accent); }
+
+.tl-content { font-size: 0.92rem; color: rgba(255,255,255,0.65); line-height: 1.6; font-weight: 300; }
+.tl-content strong { color: #fff; font-weight: 700; }
+
+.tl-tag {
+  display: inline-block; font-size: 0.62rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 2px 8px; border-radius: 4px; margin-left: 8px;
+  vertical-align: middle; background: var(--accent-mid);
+  color: var(--accent); border: 1px solid rgba(245,131,33,0.3);
+}
+
+/* ── CTA ── */
+.cta-section { padding: 100px 48px; text-align: center; border-top: 1px solid var(--border); }
+.cta-section h2 {
+  font-family: var(--font-head); font-size: clamp(2rem, 4vw, 3rem); font-weight: 800;
+  letter-spacing: -0.025em; line-height: 1.05; margin-bottom: 16px;
+}
+.cta-section h2 em { font-style: normal; color: var(--accent); }
+.cta-section p { font-size: 1rem; color: var(--muted); font-weight: 300; margin-bottom: 40px; }
+.cta-buttons { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.btn-lg {
+  display: inline-block; font-family: var(--font-head); font-weight: 700;
+  font-size: 1rem; padding: 16px 36px; border-radius: 10px;
+  text-decoration: none; border: none; cursor: pointer; transition: all 0.2s;
+}
+.btn-lg.primary { background: var(--accent); color: #fff; }
+.btn-lg.primary:hover { background: var(--accent-dk); transform: translateY(-2px); }
+.btn-lg.secondary { background: #fff; color: var(--primary); border: 1px solid var(--border); }
+.btn-lg.secondary:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
+
+/* ── FOOTER ── */
+footer {
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 28px 48px; text-align: center; font-size: 0.82rem; color: var(--muted);
+}
+footer a { color: var(--muted); text-decoration: underline; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  nav { padding: 0 20px; }
+  .nav-links { display: none; }
+  .hero { grid-template-columns: 1fr; padding: 80px 20px 60px; gap: 40px; }
+  .tier-header { grid-template-columns: 1fr; padding: 28px 24px 24px; }
+  .tier-body { grid-template-columns: 1fr; padding: 24px; gap: 24px; }
+  .tier-weeks { padding: 16px 24px; }
+  .section-wrap { padding: 0 20px; }
+  .philosophy-banner { padding: 32px 20px; }
+  .cta-section { padding: 80px 20px; }
+  footer { padding: 20px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">Coach<span>Carter</span></a>
+  <ul class="nav-links">
+    <li><a href="#tiers">The Three Tiers</a></li>
+    <li><a href="#timeline">Your Journey</a></li>
+    <li><a href="/#guarantee">Pass Guarantee</a></li>
+  </ul>
+  <a href="/#guarantee" class="nav-cta">Book Now</a>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-left">
+    <div class="hero-tag">Your Driving Journey</div>
+    <h1>From first drive<br>to <em>test ready.</em></h1>
+    <p class="hero-sub">Our 18-week structured programme builds real skills and real confidence — in the right order, at the right pace. Here's exactly how we get you there.</p>
+    <div class="hero-badges">
+      <div class="hero-badge"><div class="dot"></div> 3 Clear Tiers</div>
+      <div class="hero-badge"><div class="dot"></div> 18-Week Programme</div>
+      <div class="hero-badge"><div class="dot"></div> Progress Tracked</div>
+    </div>
+  </div>
+  <div class="hero-right">
+    <div class="stat-grid">
+      <div class="stat-item">
+        <div class="stat-num">3</div>
+        <div class="stat-label">Structured tiers,<br>each with a clear goal</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">18</div>
+        <div class="stat-label">Weeks to your<br>driving test</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div class="stat-num">~25</div>
+        <div class="stat-label">Typical hours<br>across all tiers</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">100%</div>
+        <div class="stat-label">Structured — nothing<br>left to chance</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PHILOSOPHY -->
+<div class="philosophy-banner">
+  <blockquote>Every lesson is built around one question: <em>"I'd like to do something — is it safe to?"</em></blockquote>
+  <p>Skills + judgement + risk awareness, taught in the right order.</p>
+</div>
+
+<!-- TIERS -->
+<section class="tiers-section" id="tiers">
+  <div class="section-wrap">
+    <div class="section-intro reveal">
+      <div class="section-tag-line">The Programme</div>
+      <h2 class="section-title">Three tiers, one journey</h2>
+      <p class="section-sub">Each tier has a clear purpose, a pass criteria, and a transformation we can measure. You only move on when you're genuinely ready.</p>
+    </div>
+
+    <!-- T1 -->
+    <div class="tier-card t1 reveal">
+      <div class="tier-bar"></div>
+      <div class="tier-header">
+        <div>
+          <div class="tier-eyebrow">Tier 1 · Weeks 1–6</div>
+          <h2 class="tier-title">Road Fundamentals</h2>
+          <p class="tier-promise">By the end of Tier 1 you'll be driving independently around simple junctions and residential areas — with the safe habits baked in from day one.</p>
+        </div>
+        <div class="tier-hours-box">
+          <span class="hours-num">~9 hrs</span>
+          <span class="hours-label">Typical</span>
+          <div class="hours-range">Fast learner: 4–6 hrs<br>More time needed: 10–14 hrs</div>
+        </div>
+      </div>
+      <div class="tier-body">
+        <div class="body-section">
+          <h3>What You'll Learn</h3>
+          <ul class="skill-list">
+            <li><span class="skill-icon">→</span>Moving off, slowing down, and stopping safely</li>
+            <li><span class="skill-icon">→</span>Steering with awareness — mirrors before you move</li>
+            <li><span class="skill-icon">→</span>Mirror checks at the right moments</li>
+            <li><span class="skill-icon">→</span>The MICE junction routine (Mirrors, Indicator, Control, Evaluate)</li>
+            <li><span class="skill-icon">→</span>Choosing the right speed for every situation</li>
+            <li><span class="skill-icon">→</span>Meeting traffic and basic lane position</li>
+          </ul>
+        </div>
+        <div class="body-section">
+          <h3>How You'll Know You've Passed</h3>
+          <ul class="pass-list">
+            <li class="pass-item"><span class="check-icon">✓</span>Habitually moves off with appropriate checks</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Habitually slows and stops safely</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Habitually steers with mirror checks</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Habitually uses MICE correctly at junctions</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Habitually chooses the correct speed</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tier-weeks">
+        <span class="weeks-label">Weekly focus</span>
+        <div class="week-pills">
+          <span class="week-pill">Wk 1 — Moving &amp; Stopping</span>
+          <span class="week-pill">Wk 2/3 — Mirrors &amp; MICE</span>
+          <span class="week-pill">Wk 4/5 — Junctions</span>
+          <span class="week-pill">Wk 5/6 — Lane &amp; Speed · Review</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- T2 -->
+    <div class="tier-card t2 reveal">
+      <div class="tier-bar"></div>
+      <div class="tier-header">
+        <div>
+          <div class="tier-eyebrow">Tier 2 · Weeks 7–13</div>
+          <h2 class="tier-title">Road Confidence</h2>
+          <p class="tier-promise">By the end of Tier 2 you'll confidently handle all road scenarios — roundabouts, faster roads, manoeuvres — keeping yourself and others safe throughout.</p>
+        </div>
+        <div class="tier-hours-box">
+          <span class="hours-num">~10 hrs</span>
+          <span class="hours-label">Typical</span>
+          <div class="hours-range">Fast learner: 4–6 hrs<br>More time needed: 10–12 hrs</div>
+        </div>
+      </div>
+      <div class="tier-body">
+        <div class="body-section">
+          <h3>What You'll Learn</h3>
+          <ul class="skill-list">
+            <li><span class="skill-icon">→</span>Roundabouts — safe entry, lane discipline, and exits</li>
+            <li><span class="skill-icon">→</span>Faster roads (40, 50, 60mph) and following distance</li>
+            <li><span class="skill-icon">→</span>Reversing manoeuvres — slow, aware, and accurate</li>
+            <li><span class="skill-icon">→</span>Traffic lights and pedestrian crossings</li>
+            <li><span class="skill-icon">→</span>Crossroads and Y-junctions</li>
+            <li><span class="skill-icon">→</span>Spiral roundabouts and complex lane choice</li>
+          </ul>
+        </div>
+        <div class="body-section">
+          <h3>How You'll Know You've Passed</h3>
+          <ul class="pass-list">
+            <li class="pass-item"><span class="check-icon">✓</span>Habitually moves, steers &amp; stops with appropriate checks</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Habitually chooses the correct speed</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Habitually keeps the car safe during reversing</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Habitually uses correct MICE at all junctions and roundabouts</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Habitually makes go/stop decisions in good time</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tier-weeks">
+        <span class="weeks-label">Weekly focus</span>
+        <div class="week-pills">
+          <span class="week-pill">Wk 7/8 — Roundabouts &amp; Faster Roads</span>
+          <span class="week-pill">Wk 9/10 — Manoeuvres &amp; Crossings</span>
+          <span class="week-pill">Wk 10/11 — Complex Junctions · Review</span>
+          <span class="week-pill">Wk 12/13 — Refinement</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- T3 -->
+    <div class="tier-card t3 reveal">
+      <div class="tier-bar"></div>
+      <div class="tier-header">
+        <div>
+          <div class="tier-eyebrow">Tier 3 · Weeks 12–18</div>
+          <h2 class="tier-title">Road Independence</h2>
+          <p class="tier-promise">By the end of Tier 3 you'll drive safely without input from anyone — no habits that create risk, and mock tests passed under 3 minors.</p>
+        </div>
+        <div class="tier-hours-box">
+          <span class="hours-num">~6 hrs</span>
+          <span class="hours-label">Typical</span>
+          <div class="hours-range">Fast learner: 3–5 hrs<br>More time needed: 7–9 hrs</div>
+        </div>
+      </div>
+      <div class="tier-body">
+        <div class="body-section">
+          <h3>What You'll Learn</h3>
+          <ul class="skill-list">
+            <li><span class="skill-icon">→</span>Driving independently — every decision made by you</li>
+            <li><span class="skill-icon">→</span>Lane changing and motorway-standard discipline</li>
+            <li><span class="skill-icon">→</span>Parking — safe and consistently accurate</li>
+            <li><span class="skill-icon">→</span>Emergency stops and independent moving off</li>
+            <li><span class="skill-icon">→</span>Understanding and self-correcting driving faults</li>
+            <li><span class="skill-icon">→</span>Mock tests on real test routes</li>
+          </ul>
+        </div>
+        <div class="body-section">
+          <h3>How You'll Know You're Test Ready</h3>
+          <ul class="pass-list">
+            <li class="pass-item"><span class="check-icon">✓</span>Passing mock tests consistently</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Passing with under 6 minor faults</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Passing with under 3 minor faults</li>
+            <li class="pass-item"><span class="check-icon">✓</span>No habitual faults present</li>
+            <li class="pass-item"><span class="check-icon">✓</span>Speed, position and MICE all consistently correct</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tier-weeks">
+        <span class="weeks-label">Weekly focus</span>
+        <div class="week-pills">
+          <span class="week-pill">Wk 12/13 — Into Tier 3</span>
+          <span class="week-pill">Wk 14/15 — Mock Tests</span>
+          <span class="week-pill">Wk 16/17 — Under 6 Minors</span>
+          <span class="week-pill">Wk 18 — Under 3 Minors · Test Ready</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- TIMELINE -->
+<section class="timeline-section" id="timeline">
+  <div class="section-wrap">
+    <div class="section-intro">
+      <div class="section-tag-line">Week by Week</div>
+      <h2 class="section-title">Your 18-Week Journey</h2>
+      <p class="section-sub">Every learner moves at their own pace — this is the typical path from your first lesson to test day.</p>
+    </div>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-dot tier1"></div>
+        <div class="tl-week">Week 1</div>
+        <div class="tl-content"><strong>Moving, Slowing, Stopping &amp; Steering</strong> — the foundations everything else is built on.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot tier1"></div>
+        <div class="tl-week">Weeks 2–3</div>
+        <div class="tl-content"><strong>Mirror Comprehension + MICE</strong> — understanding what to check, when, and why.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot tier1"></div>
+        <div class="tl-week">Weeks 4–5</div>
+        <div class="tl-content"><strong>Junction Approach + Decision Making</strong> — reading the road and making confident choices.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot review"></div>
+        <div class="tl-week">Weeks 5–6 <span class="tl-tag">Tier 1 Review</span></div>
+        <div class="tl-content"><strong>Meeting Traffic + Lane Position</strong> — consolidating everything before your Tier 1 sign-off.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot tier2"></div>
+        <div class="tl-week">Weeks 7–8</div>
+        <div class="tl-content"><strong>Roundabouts + Faster Roads</strong> — building speed and spatial awareness in more complex environments.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot tier2"></div>
+        <div class="tl-week">Weeks 9–10</div>
+        <div class="tl-content"><strong>Manoeuvres + Crossings</strong> — slow-speed control, reversing, and pedestrian awareness.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot review"></div>
+        <div class="tl-week">Weeks 10–11 <span class="tl-tag">Tier 2 Review</span></div>
+        <div class="tl-content"><strong>Complex Junctions + Spiral Roundabouts</strong> — the most demanding scenarios before your Tier 2 sign-off.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot tier3"></div>
+        <div class="tl-week">Weeks 12–13</div>
+        <div class="tl-content"><strong>Into Tier 3 — Independent Driving</strong> — targeting individual weak points, driving without prompts.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot tier3"></div>
+        <div class="tl-week">Weeks 14–15</div>
+        <div class="tl-content"><strong>Mock Tests on Test Routes</strong> — real conditions, real feedback, measurable progress.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot tier3"></div>
+        <div class="tl-week">Weeks 16–17</div>
+        <div class="tl-content"><strong>Passing Mocks Under 6 Minors</strong> — consistency under pressure on the routes that matter.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot finish"></div>
+        <div class="tl-week">Week 18 <span class="tl-tag">Test Ready</span></div>
+        <div class="tl-content"><strong>Passing Mocks Under 3 Minors</strong> — when you're consistently here, you're ready. Test booked, confidence earned.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2>Ready to start<br>your <em>journey?</em></h2>
+  <p>Every driver begins at Tier 1. Every driver progresses at their own pace. Every driver we pass is genuinely ready.</p>
+  <div class="cta-buttons">
+  <a href="/#guarantee" class="btn-lg primary">Choose Your Protection Level →</a>
+  <a href="/#packages" class="btn-lg secondary">Explore Other Options</a>
+</div>
+  </div>
+</section>
+
+<footer>
+  <p>© 2025 CoachCarter Driving School · <a href="#">Privacy</a> · <a href="#">Terms</a> · All prices include VAT where applicable.</p>
+</footer>
+
+<script>
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.tier-card, .tl-item, .reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
