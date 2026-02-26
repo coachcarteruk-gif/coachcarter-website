@@ -7,16 +7,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
 <style>
 :root {
-  --orange: #f47c20;
-  --orange-dk: #d96710;
-  --orange-lt: #fff4ec;
-  --black: #1a1208;
-  --ink: #2d2010;
-  --text: #4a3820;
-  --muted: #9a8570;
-  --rule: #e8ddd0;
-  --bg: #faf8f5;
+  --primary: #272727;
+  --accent: #f58321;
+  --bg-warm: #d8c2af;
+  --muted: #797879;
   --white: #ffffff;
+  --bg-light: #f5f0eb;
+  --border: #c4b5a8;
   --green: #1a9e5c;
   --red: #dc2626;
   --font-head: 'Bricolage Grotesque', sans-serif;
@@ -26,15 +23,15 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--bg-light);
+  color: var(--primary);
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.6;
 }
 
 header {
-  background: var(--black);
+  background: var(--primary);
   color: white;
   padding: 24px 48px;
   display: flex;
@@ -49,9 +46,9 @@ header {
   letter-spacing: -0.02em;
 }
 
-.logo span { color: var(--orange); }
+.logo span { color: var(--accent); }
 
-.user { font-size: 0.9rem; color: var(--muted); }
+.user { font-size: 0.9rem; color: var(--bg-warm); }
 
 .container {
   max-width: 1400px;
@@ -68,7 +65,7 @@ header {
 
 .stat-card {
   background: var(--white);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 24px;
 }
@@ -77,7 +74,7 @@ header {
   font-family: var(--font-head);
   font-size: 2.5rem;
   font-weight: 800;
-  color: var(--orange);
+  color: var(--accent);
 }
 
 .stat-label {
@@ -96,7 +93,7 @@ header {
 
 .filter-btn {
   padding: 10px 20px;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   background: var(--white);
   border-radius: 8px;
   cursor: pointer;
@@ -106,14 +103,14 @@ header {
 }
 
 .filter-btn:hover, .filter-btn.active {
-  background: var(--orange);
+  background: var(--accent);
   color: white;
-  border-color: var(--orange);
+  border-color: var(--accent);
 }
 
 .bookings-table {
   background: var(--white);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;
 }
@@ -123,12 +120,12 @@ header {
   grid-template-columns: 120px 1fr 150px 150px 120px 100px;
   gap: 16px;
   padding: 16px 24px;
-  background: var(--bg);
+  background: var(--bg-warm);
   font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--muted);
+  color: var(--primary);
 }
 
 .booking-row {
@@ -136,18 +133,18 @@ header {
   grid-template-columns: 120px 1fr 150px 150px 120px 100px;
   gap: 16px;
   padding: 20px 24px;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
   align-items: center;
 }
 
 .booking-row:hover {
-  background: var(--bg);
+  background: var(--bg-light);
 }
 
 .ref {
   font-family: var(--font-head);
   font-weight: 700;
-  color: var(--black);
+  color: var(--primary);
 }
 
 .customer {
@@ -157,7 +154,7 @@ header {
 
 .customer-name {
   font-weight: 700;
-  color: var(--black);
+  color: var(--primary);
 }
 
 .customer-email {
@@ -169,7 +166,7 @@ header {
   font-size: 0.9rem;
 }
 
-.package.pass { color: var(--orange); font-weight: 700; }
+.package.pass { color: var(--accent); font-weight: 700; }
 
 .status {
   display: inline-block;
@@ -188,7 +185,7 @@ header {
 .amount {
   font-family: var(--font-head);
   font-weight: 700;
-  color: var(--black);
+  color: var(--primary);
 }
 
 .actions {
@@ -198,7 +195,7 @@ header {
 
 .action-btn {
   padding: 8px 12px;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   background: var(--white);
   border-radius: 6px;
   cursor: pointer;
@@ -207,8 +204,8 @@ header {
 }
 
 .action-btn:hover {
-  border-color: var(--orange);
-  color: var(--orange);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .empty-state {
@@ -244,7 +241,7 @@ header {
 <body>
 
 <header>
-  <div class="logo">Coach<span>Carter</span> <span style="font-size:0.9rem;font-weight:400;color:var(--muted)">Staff Dashboard</span></div>
+  <div class="logo">Coach<span>Carter</span> <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Staff Dashboard</span></div>
   <div class="user">admin@coachcarter.uk</div>
 </header>
 
@@ -384,7 +381,7 @@ function viewBooking(ref) {
 }
 
 function verifyDVSA(ref) {
-  window.open('https://www.gov.uk/check-driving-test', '_blank');
+  window.open('https://www.gov.uk/check-driving-test ', '_blank');
 }
 
 // Filter buttons
