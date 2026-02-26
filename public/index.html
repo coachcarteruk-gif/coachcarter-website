@@ -966,6 +966,30 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   width: 100%;
   margin-top: 12px;
 }
+ .programme-link {
+  color: var(--accent);
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.programme-link:hover {
+  color: var(--accent-dk);
+}
+
+.programme-link-wrapper {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.programme-link-secondary {
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+
+.programme-link-secondary:hover {
+  color: var(--accent);
+} 
 </style>
 </head>
 <body>
@@ -1171,7 +1195,7 @@ input[type=range].pkg-range::-webkit-slider-thumb {
     <div class="section-intro reveal">
       <div class="section-tag-line">Option 3</div>
       <h2 class="section-title">The Pass Guarantee</h2>
-      <p class="section-sub">18 weeks to your driving licence — or we keep going until you pass. Choose your protection level.</p>
+      <p class="section-sub">18 weeks to your driving licence — or we keep going until you pass. <a href="learner-journey.html" class="programme-link">See exactly how the programme works →</a></p>
     </div>
 
     <div class="calculator-container reveal">
@@ -1257,7 +1281,8 @@ input[type=range].pkg-range::-webkit-slider-thumb {
 
       <button class="cta-button" onclick="startCalculatorCheckout()">Continue to Booking →</button>
 
-      <p class="guarantee-note">✓ 68% of students pass first time. Choose the protection that feels right for you.</p>
+      <p class="guarantee-note">✓ In 2024 car practical test pass rate was 47%. Choose the protection that feels right for you.</p>
+      <p class="programme-link-wrapper"><a href="learner-journey.html" class="programme-link-secondary">Learn about the 18-week programme structure</a></p>
     </div>
   </div>
 </section>
