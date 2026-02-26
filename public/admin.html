@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CoachCarter — Staff Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz ,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
 <style>
 :root {
   --primary: #272727;
@@ -401,6 +401,202 @@ textarea {
   font-family: var(--font-head);
 }
 
+/* GUARANTEE CALCULATOR STYLES */
+.guarantee-calc {
+  background: var(--primary);
+  border-radius: 16px;
+  padding: 32px;
+  margin-top: 24px;
+  color: white;
+}
+
+.guarantee-calc h3 {
+  font-family: var(--font-head);
+  font-size: 1.2rem;
+  margin-bottom: 24px;
+  color: var(--accent);
+}
+
+.guarantee-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.guarantee-base {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.guarantee-base h4 {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  margin-bottom: 16px;
+  color: rgba(255,255,255,0.8);
+}
+
+.guarantee-input-group {
+  margin-bottom: 16px;
+}
+
+.guarantee-input-group label {
+  color: rgba(255,255,255,0.6);
+  font-size: 0.75rem;
+  margin-bottom: 6px;
+}
+
+.guarantee-input-group input {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  font-size: 1.5rem;
+  font-family: var(--font-head);
+  font-weight: 700;
+  padding: 12px 16px 12px 32px;
+  border-radius: 8px;
+  width: 100%;
+}
+
+.guarantee-input-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(255,255,255,0.15);
+}
+
+.guarantee-addons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.addon-edit-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.addon-edit-card h5 {
+  font-family: var(--font-head);
+  font-size: 0.95rem;
+  color: white;
+  margin: 0;
+}
+
+.addon-edit-card .addon-desc {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.5);
+  margin-top: 2px;
+}
+
+.addon-price-input {
+  position: relative;
+}
+
+.addon-price-input input {
+  width: 100px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  padding: 8px 12px 8px 24px;
+  border-radius: 6px;
+  font-family: var(--font-head);
+  font-weight: 700;
+  text-align: right;
+}
+
+.addon-price-input::before {
+  content: '+£';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.addon-total {
+  text-align: right;
+  min-width: 100px;
+}
+
+.addon-total-label {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.addon-total-value {
+  font-family: var(--font-head);
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.guarantee-preview {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 24px;
+  margin-top: 24px;
+}
+
+.guarantee-preview h4 {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  margin-bottom: 16px;
+  color: rgba(255,255,255,0.8);
+}
+
+.preview-tiers {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.tier-preview {
+  text-align: center;
+  padding: 16px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tier-preview.active {
+  border-color: var(--accent);
+  background: rgba(245,131,33,0.1);
+}
+
+.tier-name {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.tier-price {
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: white;
+}
+
+.tier-breakdown {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.5);
+  margin-top: 4px;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -473,6 +669,12 @@ textarea {
   .booking-row > *:nth-child(6) {
     display: none;
   }
+  .guarantee-grid {
+    grid-template-columns: 1fr;
+  }
+  .preview-tiers {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 640px) {
@@ -488,6 +690,13 @@ textarea {
   .bulk-table td {
     padding: 12px 8px;
     font-size: 0.85rem;
+  }
+  .addon-edit-card {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .preview-tiers {
+    grid-template-columns: 1fr;
   }
 }
 </style>
@@ -555,26 +764,12 @@ textarea {
     
     <div class="editor-section">
       <h2>Pricing</h2>
-      <div class="form-grid">
+      
+      <!-- PAYG Rate -->
+      <div class="form-grid" style="margin-bottom: 24px;">
         <div class="form-group price-input">
           <label>PAYG Hourly Rate (Anchor Price)</label>
           <input type="number" id="paygHourly" value="60" onchange="updateAllCalculations()">
-        </div>
-        <div class="form-group price-input">
-          <label>Core Programme</label>
-          <input type="number" id="coreProgramme" value="2400">
-        </div>
-        <div class="form-group price-input">
-          <label>+1 Retake Cover</label>
-          <input type="number" id="retake1" value="200">
-        </div>
-        <div class="form-group price-input">
-          <label>+2 Retake Cover</label>
-          <input type="number" id="retake2" value="350">
-        </div>
-        <div class="form-group price-input">
-          <label>Lifetime Cover</label>
-          <input type="number" id="retakeLifetime" value="500">
         </div>
       </div>
 
@@ -598,6 +793,105 @@ textarea {
           <!-- Populated by JS -->
         </tbody>
       </table>
+    </div>
+
+    <!-- PASS GUARANTEE CALCULATOR SECTION -->
+    <div class="editor-section">
+      <h2>Pass Guarantee Pricing</h2>
+      
+      <div class="calc-note">
+        <strong>💡 Interconnected pricing:</strong> Changing the Core Programme price updates all addon totals. Changing an addon price updates its total. All values stay in sync.
+      </div>
+
+      <div class="guarantee-calc">
+        <h3>🛡️ Guarantee Calculator</h3>
+        
+        <div class="guarantee-grid">
+          <!-- Core Programme -->
+          <div class="guarantee-base">
+            <h4>Core Programme (Base)</h4>
+            <div class="guarantee-input-group price-input">
+              <label>Core Price</label>
+              <input type="number" id="coreProgramme" value="2400" onchange="calculateFromCore()">
+            </div>
+            <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin-top: 12px;">
+              This is the base price for the 18-week programme. All addon totals are calculated from this value.
+            </p>
+          </div>
+
+          <!-- Addons -->
+          <div class="guarantee-addons">
+            <div class="addon-edit-card">
+              <div>
+                <h5>+1 Retake Cover</h5>
+                <div class="addon-desc">2nd attempt protection</div>
+              </div>
+              <div class="addon-price-input">
+                <input type="number" id="retake1" value="200" onchange="calculateFromAddon(1)">
+              </div>
+              <div class="addon-total">
+                <div class="addon-total-label">Total</div>
+                <div class="addon-total-value" id="total-retake1">£2,600</div>
+              </div>
+            </div>
+
+            <div class="addon-edit-card">
+              <div>
+                <h5>+2 Retake Cover</h5>
+                <div class="addon-desc">2nd & 3rd attempt protection</div>
+              </div>
+              <div class="addon-price-input">
+                <input type="number" id="retake2" value="350" onchange="calculateFromAddon(2)">
+              </div>
+              <div class="addon-total">
+                <div class="addon-total-label">Total</div>
+                <div class="addon-total-value" id="total-retake2">£2,750</div>
+              </div>
+            </div>
+
+            <div class="addon-edit-card">
+              <div>
+                <h5>Lifetime Cover</h5>
+                <div class="addon-desc">Unlimited retakes until pass</div>
+              </div>
+              <div class="addon-price-input">
+                <input type="number" id="retakeLifetime" value="500" onchange="calculateFromAddon(3)">
+              </div>
+              <div class="addon-total">
+                <div class="addon-total-label">Total</div>
+                <div class="addon-total-value" id="total-retakeLifetime">£2,900</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Preview -->
+        <div class="guarantee-preview">
+          <h4>Live Price Preview (Customer View)</h4>
+          <div class="preview-tiers">
+            <div class="tier-preview" id="tier-core">
+              <div class="tier-name">Core Only</div>
+              <div class="tier-price" id="preview-tier-core">£2,400</div>
+              <div class="tier-breakdown">Base programme</div>
+            </div>
+            <div class="tier-preview" id="tier-plus1">
+              <div class="tier-name">+1 Retake</div>
+              <div class="tier-price" id="preview-tier-plus1">£2,600</div>
+              <div class="tier-breakdown" id="breakdown-plus1">+£200</div>
+            </div>
+            <div class="tier-preview" id="tier-plus2">
+              <div class="tier-name">+2 Retakes</div>
+              <div class="tier-price" id="preview-tier-plus2">£2,750</div>
+              <div class="tier-breakdown" id="breakdown-plus2">+£350</div>
+            </div>
+            <div class="tier-preview" id="tier-lifetime">
+              <div class="tier-name">Lifetime</div>
+              <div class="tier-price" id="preview-tier-lifetime">£2,900</div>
+              <div class="tier-breakdown" id="breakdown-lifetime">+£500</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="editor-section">
@@ -626,7 +920,7 @@ textarea {
       </div>
 
       <div class="preview-box">
-        <h3>Live Preview</h3>
+        <h3>Summary Preview</h3>
         <div class="preview-grid">
           <div class="preview-item">
             <span>PAYG Rate:</span>
@@ -704,6 +998,7 @@ function populateForm() {
   document.getElementById('guaranteePromise').value = c.guarantee_promise;
   
   renderBulkTable(p.bulk_packages);
+  updateGuaranteePreview();
 }
 
 function renderBulkTable(packages) {
@@ -750,7 +1045,7 @@ function renderBulkTable(packages) {
   document.getElementById('anchorRateDisplay').textContent = hourlyRate;
 }
 
-// CALCULATION FUNCTIONS
+// BULK PACKAGE CALCULATION FUNCTIONS
 
 function calculateFromDiscount(index) {
   const hours = parseInt(document.querySelector(`tr[data-index="${index}"]`).dataset.hours);
@@ -807,6 +1102,68 @@ function updateSavings(index, actualPrice) {
   row.cells[4].style.color = savings > 0 ? 'var(--green)' : 'var(--muted)';
 }
 
+// PASS GUARANTEE INTERCONNECTED CALCULATIONS
+
+function calculateFromCore() {
+  // When core price changes, update all addon totals
+  const core = parseInt(document.getElementById('coreProgramme').value) || 2400;
+  
+  // Get current addon prices
+  const r1 = parseInt(document.getElementById('retake1').value) || 0;
+  const r2 = parseInt(document.getElementById('retake2').value) || 0;
+  const rLife = parseInt(document.getElementById('retakeLifetime').value) || 0;
+  
+  // Update all total displays
+  document.getElementById('total-retake1').textContent = '£' + (core + r1).toLocaleString();
+  document.getElementById('total-retake2').textContent = '£' + (core + r2).toLocaleString();
+  document.getElementById('total-retakeLifetime').textContent = '£' + (core + rLife).toLocaleString();
+  
+  updateGuaranteePreview();
+  updatePreview();
+}
+
+function calculateFromAddon(addonNum) {
+  // When addon price changes, update its total (core + addon)
+  const core = parseInt(document.getElementById('coreProgramme').value) || 2400;
+  
+  let addonPrice, totalElementId;
+  
+  if (addonNum === 1) {
+    addonPrice = parseInt(document.getElementById('retake1').value) || 0;
+    totalElementId = 'total-retake1';
+  } else if (addonNum === 2) {
+    addonPrice = parseInt(document.getElementById('retake2').value) || 0;
+    totalElementId = 'total-retake2';
+  } else if (addonNum === 3) {
+    addonPrice = parseInt(document.getElementById('retakeLifetime').value) || 0;
+    totalElementId = 'total-retakeLifetime';
+  }
+  
+  const total = core + addonPrice;
+  document.getElementById(totalElementId).textContent = '£' + total.toLocaleString();
+  
+  updateGuaranteePreview();
+  updatePreview();
+}
+
+function updateGuaranteePreview() {
+  const core = parseInt(document.getElementById('coreProgramme').value) || 2400;
+  const r1 = parseInt(document.getElementById('retake1').value) || 0;
+  const r2 = parseInt(document.getElementById('retake2').value) || 0;
+  const rLife = parseInt(document.getElementById('retakeLifetime').value) || 0;
+  
+  // Update tier preview cards
+  document.getElementById('preview-tier-core').textContent = '£' + core.toLocaleString();
+  document.getElementById('preview-tier-plus1').textContent = '£' + (core + r1).toLocaleString();
+  document.getElementById('preview-tier-plus2').textContent = '£' + (core + r2).toLocaleString();
+  document.getElementById('preview-tier-lifetime').textContent = '£' + (core + rLife).toLocaleString();
+  
+  // Update breakdown text
+  document.getElementById('breakdown-plus1').textContent = '+£' + r1.toLocaleString();
+  document.getElementById('breakdown-plus2').textContent = '+£' + r2.toLocaleString();
+  document.getElementById('breakdown-lifetime').textContent = '+£' + rLife.toLocaleString();
+}
+
 function updateAllCalculations() {
   hourlyRate = parseInt(document.getElementById('paygHourly').value) || 60;
   document.getElementById('anchorRateDisplay').textContent = hourlyRate;
@@ -817,6 +1174,9 @@ function updateAllCalculations() {
     const index = row.dataset.index;
     calculateFromDiscount(index);
   });
+  
+  // Update guarantee calculations
+  calculateFromCore();
   
   updatePreview();
 }
@@ -983,7 +1343,7 @@ function viewBooking(ref) {
 }
 
 function verifyDVSA(ref) {
-  window.open('https://www.gov.uk/check-driving-test', '_blank');
+  window.open('https://www.gov.uk/check-driving-test ', '_blank');
 }
 
 document.querySelectorAll('.filter-btn').forEach(btn => {
