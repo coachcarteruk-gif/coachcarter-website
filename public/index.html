@@ -4,6 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CoachCarter — Learn to Drive</title>
+
+<script>
+  // Maintenance mode check - runs immediately before page renders
+  fetch('/api/check-maintenance')
+    .then(res => res.json())
+    .then(data => {
+      if (data.maintenance === true) {
+        window.location.replace('/maintenance.html');
+      }
+    })
+    .catch(() => {
+      // If API fails, show site anyway
+    });
+</script>
+
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
