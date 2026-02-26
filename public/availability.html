@@ -9,29 +9,28 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --orange:     #f47c20;
-  --orange-dk:  #d96710;
-  --orange-lt:  #fff4ec;
-  --orange-mid: rgba(244,124,32,0.12);
-  --black:      #1a1208;
-  --ink:        #2d2010;
-  --text:       #4a3820;
-  --muted:      #9a8570;
-  --rule:       #e8ddd0;
-  --bg:         #faf8f5;
-  --white:      #ffffff;
-  --surface:    #f3ede4;
-  --green:      #1a9e5c;
-  --red:        #dc2626;
-  --font-head:  'Bricolage Grotesque', sans-serif;
-  --font-body:  'Lato', sans-serif;
+  --primary:      #272727;
+  --accent:       #f58321;
+  --accent-dk:    #e07518;
+  --accent-lt:    #fff4ec;
+  --accent-mid:   rgba(245,131,33,0.12);
+  --bg-warm:      #d8c2af;
+  --muted:        #797879;
+  --bg:           #ffffff;
+  --white:        #ffffff;
+  --surface:      #f9f9f9;
+  --border:       #e0e0e0;
+  --green:        #1a9e5c;
+  --red:          #dc2626;
+  --font-head:    'Bricolage Grotesque', sans-serif;
+  --font-body:    'Lato', sans-serif;
 }
 
 html { scroll-behavior: smooth; }
 
 body {
   background: var(--bg);
-  color: var(--text);
+  color: var(--primary);
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.6;
@@ -40,7 +39,7 @@ body {
 
 header {
   background: var(--white);
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
   padding: 24px 48px;
 }
 
@@ -48,11 +47,11 @@ header {
   font-family: var(--font-head);
   font-size: 1.5rem;
   font-weight: 800;
-  color: var(--black);
+  color: var(--primary);
   letter-spacing: -0.02em;
   text-decoration: none;
 }
-.logo span { color: var(--orange); }
+.logo span { color: var(--accent); }
 
 .container {
   max-width: 900px;
@@ -69,10 +68,10 @@ header {
 .step {
   flex: 1;
   height: 4px;
-  background: var(--rule);
+  background: var(--border);
   border-radius: 2px;
 }
-.step.active { background: var(--orange); }
+.step.active { background: var(--accent); }
 .step.completed { background: var(--green); }
 
 .page-header {
@@ -87,7 +86,7 @@ header {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--orange);
+  color: var(--accent);
   margin-bottom: 16px;
 }
 .tag::before {
@@ -95,14 +94,14 @@ header {
   display: block;
   width: 24px;
   height: 2px;
-  background: var(--orange);
+  background: var(--accent);
 }
 
 h1 {
   font-family: var(--font-head);
   font-size: clamp(2rem, 4vw, 2.8rem);
   font-weight: 800;
-  color: var(--black);
+  color: var(--primary);
   letter-spacing: -0.025em;
   line-height: 1.1;
   margin-bottom: 12px;
@@ -116,8 +115,8 @@ h1 {
 }
 
 .info-card {
-  background: var(--orange-lt);
-  border: 1px solid var(--orange-mid);
+  background: var(--accent-lt);
+  border: 1px solid var(--accent-mid);
   border-radius: 16px;
   padding: 20px 24px;
   margin-bottom: 40px;
@@ -130,7 +129,7 @@ h1 {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: var(--orange);
+  background: var(--accent);
   color: white;
   display: flex;
   align-items: center;
@@ -143,19 +142,19 @@ h1 {
   font-family: var(--font-head);
   font-size: 1rem;
   font-weight: 700;
-  color: var(--black);
+  color: var(--primary);
   margin-bottom: 4px;
 }
 
 .info-content p {
   font-size: 0.9rem;
-  color: var(--text);
+  color: var(--primary);
   line-height: 1.6;
 }
 
 .availability-section, .priority-section, .notes-section {
   background: var(--white);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 40px;
   margin-bottom: 24px;
@@ -165,7 +164,7 @@ h1 {
   font-family: var(--font-head);
   font-size: 1.3rem;
   font-weight: 700;
-  color: var(--black);
+  color: var(--primary);
   margin-bottom: 8px;
 }
 
@@ -198,15 +197,15 @@ h1 {
   text-align: center;
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--black);
+  color: var(--primary);
   padding: 12px 4px;
-  background: var(--bg);
+  background: var(--surface);
   border-radius: 8px;
 }
 
 .slot-cell {
   aspect-ratio: 1;
-  border: 2px solid var(--rule);
+  border: 2px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s;
@@ -217,13 +216,13 @@ h1 {
 }
 
 .slot-cell:hover {
-  border-color: var(--orange);
-  background: var(--orange-lt);
+  border-color: var(--accent);
+  background: var(--accent-lt);
 }
 
 .slot-cell.selected {
-  background: var(--orange);
-  border-color: var(--orange);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .slot-cell.selected::after {
@@ -234,8 +233,8 @@ h1 {
 }
 
 .slot-cell.preferred {
-  background: var(--orange-dk);
-  border-color: var(--orange-dk);
+  background: var(--accent-dk);
+  border-color: var(--accent-dk);
 }
 
 .legend {
@@ -250,22 +249,22 @@ h1 {
   align-items: center;
   gap: 10px;
   font-size: 0.85rem;
-  color: var(--text);
+  color: var(--primary);
 }
 
 .legend-box {
   width: 24px;
   height: 24px;
-  border: 2px solid var(--rule);
+  border: 2px solid var(--border);
   border-radius: 6px;
 }
 .legend-box.available {
-  background: var(--orange);
-  border-color: var(--orange);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 .legend-box.preferred {
-  background: var(--orange-dk);
-  border-color: var(--orange-dk);
+  background: var(--accent-dk);
+  border-color: var(--accent-dk);
 }
 
 .priority-options {
@@ -277,7 +276,7 @@ h1 {
 
 .priority-btn {
   padding: 16px 20px;
-  border: 2px solid var(--rule);
+  border: 2px solid var(--border);
   border-radius: 12px;
   background: var(--white);
   cursor: pointer;
@@ -287,19 +286,19 @@ h1 {
 }
 
 .priority-btn:hover {
-  border-color: var(--orange);
+  border-color: var(--accent);
 }
 
 .priority-btn.active {
-  background: var(--orange-lt);
-  border-color: var(--orange);
+  background: var(--accent-lt);
+  border-color: var(--accent);
 }
 
 .priority-btn h4 {
   font-family: var(--font-head);
   font-size: 0.95rem;
   font-weight: 700;
-  color: var(--black);
+  color: var(--primary);
   margin-bottom: 4px;
 }
 
@@ -312,7 +311,7 @@ textarea {
   width: 100%;
   min-height: 120px;
   padding: 16px;
-  border: 2px solid var(--rule);
+  border: 2px solid var(--border);
   border-radius: 12px;
   font-family: var(--font-body);
   font-size: 1rem;
@@ -322,7 +321,7 @@ textarea {
 
 textarea:focus {
   outline: none;
-  border-color: var(--orange);
+  border-color: var(--accent);
 }
 
 .submit-section {
@@ -334,7 +333,7 @@ textarea:focus {
 }
 
 .btn-primary {
-  background: var(--orange);
+  background: var(--accent);
   color: white;
   font-family: var(--font-head);
   font-weight: 700;
@@ -347,7 +346,7 @@ textarea:focus {
 }
 
 .btn-primary:hover {
-  background: var(--orange-dk);
+  background: var(--accent-dk);
   transform: translateY(-2px);
 }
 
@@ -368,13 +367,13 @@ textarea:focus {
 }
 
 .selection-summary strong {
-  color: var(--orange);
+  color: var(--accent);
   font-family: var(--font-head);
 }
 
 .success-card {
   background: var(--white);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 64px 48px;
   text-align: center;
@@ -402,7 +401,7 @@ textarea:focus {
   font-family: var(--font-head);
   font-size: 1.8rem;
   font-weight: 800;
-  color: var(--black);
+  color: var(--primary);
   margin-bottom: 12px;
 }
 
@@ -415,7 +414,7 @@ textarea:focus {
 }
 
 .next-steps {
-  background: var(--bg);
+  background: var(--surface);
   border-radius: 16px;
   padding: 32px;
   text-align: left;
@@ -427,13 +426,13 @@ textarea:focus {
   font-family: var(--font-head);
   font-size: 1rem;
   font-weight: 700;
-  color: var(--black);
+  color: var(--primary);
   margin-bottom: 16px;
 }
 
 .next-steps ol {
   padding-left: 20px;
-  color: var(--text);
+  color: var(--primary);
   font-size: 0.95rem;
   line-height: 1.8;
 }
