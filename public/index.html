@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CoachCarter — Maintenance</title>
+<title>CoachCarter</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -71,6 +71,8 @@ p {
   background: #d96710;
 }
 
+#live-site { display: none; }
+
 @media (max-width: 480px) {
   .logo { font-size: 1.5rem; }
   h1 { font-size: 1.25rem; }
@@ -78,16 +80,34 @@ p {
 </style>
 </head>
 <body>
-  <div class="container">
+  <!-- MAINTENANCE MODE (shown by default) -->
+  <div id="maintenance-mode" class="container">
     <div class="logo">Coach<span>Carter</span></div>
     <div class="tagline">Driving School</div>
-    
     <div class="icon">🔧</div>
-    
     <h1>Site Under Maintenance</h1>
     <p>We're currently making some improvements to serve you better. We'll be back online shortly.</p>
-    
     <a href="mailto:fraser@coachcarter.uk" class="email">fraser@coachcarter.uk</a>
   </div>
+
+  <!-- LIVE SITE (hidden by default) -->
+  <div id="live-site">
+    <!-- Your real homepage content goes here -->
+    <div class="container">
+      <div class="logo">Coach<span>Carter</span></div>
+      <div class="tagline">Driving School</div>
+      <h1>Your licence. Your way.</h1>
+      <p>Professional driving lessons in your area.</p>
+      <a href="/booking.html" class="email">Book Now</a>
+    </div>
+  </div>
+
+<script>
+// Check for secret bypass in URL
+if (window.location.hash === '#admin') {
+  document.getElementById('maintenance-mode').style.display = 'none';
+  document.getElementById('live-site').style.display = 'block';
+}
+</script>
 </body>
 </html>
