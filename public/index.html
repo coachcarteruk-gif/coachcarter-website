@@ -1494,6 +1494,92 @@ td.highlight .best-for {
 </footer>
 
 <script>
+  // CONFIG SYSTEM
+let SITE_CONFIG = {};
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/config.json?t=' + Date.now());
+    SITE_CONFIG = await res.json();
+    applyConfig();
+  } catch (err) {
+    console.error('Failed to load config:', err);
+    // Keep defaults if config fails to load
+  }
+}
+
+function applyConfig() {
+  if (!SITE_CONFIG.pricing || !SITE_CONFIG.copy) return;
+  
+  const p = SITE_CONFIG.pricing;
+  const c = SITE_CONFIG.copy;
+  
+  // Update PAYG prices
+  const paygPriceEl = document.querySelector('.payg-price-num');
+  if (paygPriceEl) paygPriceEl.textContent = '£' + p.payg_hourly;
+  
+  // Update hero stats
+  const heroStats = document.querySelectorAll('.hero-right .stat-num');
+  if (heroStats[0]) heroStats[0].textContent = '£' + p.payg_hourly;
+  if (heroStats[2]) heroStats[2].textContent = '£' + p.core_programme.toLocaleString();
+  if (heroStats[3]) heroStats[3].textContent = c.programme_duration.replace(' weeks', 'wk');
+  
+  // Update Core Programme price in calculator
+  const basePriceEl = document.querySelector('.base-price-amount');
+  if (basePriceEl) basePriceEl.textContent = '£' + p.core_programme.toLocaleString();
+  
+  // Update addon prices (these are used in the calculator logic)
+  if (typeof addonPrices !== 'undefined') {
+    addonPrices = { 1: p.retake_1, 2: p.retake_2, 3: p.retake_lifetime };
+  }
+  
+  // Update basePrice variable if it exists
+  if (typeof basePrice !== 'undefined') {
+    basePrice = p.core_programme;
+  }
+  
+  // Update bulk packages
+  if (p.bulk_packages && typeof PACKAGES !== 'undefined') {
+    // Clear and repopulate PACKAGES array
+    PACKAGES.length = 0;
+    p.bulk_packages.forEach(pkg => {
+      PACKAGES.push({
+        hrs: pkg.hrs,
+        price: pkg.price,
+        discount: pkg.discount
+      });
+    });
+    // Refresh the package display
+    if (typeof updatePkg === 'function') {
+      updatePkg(currentPkgIndex || 2);
+    }
+  }
+  
+  // Update copy/text content
+  const headlineEl = document.querySelector('.hero h1');
+  if (headlineEl && c.headline) {
+    headlineEl.innerHTML = c.headline.replace('.', '.<br><em>') + '</em>';
+  }
+  
+  const subheadEl = document.querySelector('.hero-sub');
+  if (subheadEl && c.subheadline) {
+    subheadEl.textContent = c.subheadline;
+  }
+  
+  const guaranteeNote = document.querySelector('.guarantee-note');
+  if (guaranteeNote && c.pass_rate) {
+    guaranteeNote.innerHTML = `✓ ${c.pass_rate} of students pass first time. Choose the protection that feels right for you.`;
+  }
+  
+  // Update guarantee section subheadline if it exists
+  const guaranteeSub = document.querySelector('#guarantee .section-sub');
+  if (guaranteeSub && c.guarantee_promise) {
+    guaranteeSub.textContent = c.guarantee_promise + '. Choose your protection level.';
+  }
+}
+
+// Load config immediately
+loadConfig();
 // PACKAGE DATA
 const PACKAGES = [
   { hrs: 10, discount: 0.05, price: 570 },
@@ -1726,7 +1812,7 @@ async function startCalculatorCheckout() {
     lineItems.push({
       price_data: {
         currency: 'gbp',
-        unit_amount: 240000, // £2,400 in pence
+                unit_amount: basePrice * 100, // in pence
         product_data: {
           name: 'Core Programme — 18 Week Guarantee',
           description: '18 weeks minimum, 18+ hours, test booked, instructor performance-paid'
@@ -1751,7 +1837,7 @@ async function startCalculatorCheckout() {
       lineItems.push({
         price_data: {
           currency: 'gbp',
-          unit_amount: 20000, // £200 in pence
+                    unit_amount: addonPrices[1] * 100, // in pence
           product_data: {
             name: '+1 Retake Cover',
             description: '+10 hours + test if first attempt failed'
@@ -1769,7 +1855,7 @@ async function startCalculatorCheckout() {
       lineItems.push({
         price_data: {
           currency: 'gbp',
-          unit_amount: 35000, // £350 in pence
+                    unit_amount: addonPrices[2] * 100, // in pence
           product_data: {
             name: '+2 Retake Cover',
             description: '+10 hours + test for 2nd & 3rd fails'
@@ -1787,7 +1873,7 @@ async function startCalculatorCheckout() {
       lineItems.push({
         price_data: {
           currency: 'gbp',
-          unit_amount: 50000, // £500 in pence
+                   unit_amount: addonPrices[3] * 100, // in pence
           product_data: {
             name: 'Lifetime Retake Cover',
             description: 'Unlimited 10hr+test retakes until you pass'
