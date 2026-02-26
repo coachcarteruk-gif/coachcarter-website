@@ -9,11 +9,13 @@
 :root {
   --primary: #272727;
   --accent: #f58321;
+  --accent-dk: #e07518;
+  --accent-lt: #fff4ec;
   --bg-warm: #d8c2af;
   --muted: #797879;
   --white: #ffffff;
-  --bg-light: #ffffff;  /* WHITE BACKGROUND */
-  --border: #e0e0e0;    /* LIGHTER GREY BORDER */
+  --bg-light: #ffffff;
+  --border: #e0e0e0;
   --green: #1a9e5c;
   --red: #dc2626;
   --font-head: 'Bricolage Grotesque', sans-serif;
@@ -56,6 +58,55 @@ header {
   padding: 48px;
 }
 
+/* TABS */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 32px;
+  border-bottom: 2px solid var(--border);
+}
+
+.tab {
+  padding: 16px 32px;
+  background: none;
+  border: none;
+  font-family: var(--font-head);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+}
+
+.tab:hover {
+  color: var(--primary);
+}
+
+.tab.active {
+  color: var(--accent);
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* STATS */
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -84,6 +135,7 @@ header {
   letter-spacing: 0.05em;
 }
 
+/* FILTERS */
 .filters {
   display: flex;
   gap: 12px;
@@ -108,6 +160,7 @@ header {
   border-color: var(--accent);
 }
 
+/* TABLE */
 .bookings-table {
   background: var(--white);
   border: 1px solid var(--border);
@@ -120,7 +173,7 @@ header {
   grid-template-columns: 120px 1fr 150px 150px 120px 100px;
   gap: 16px;
   padding: 16px 24px;
-  background: #f5f5f5;  /* LIGHT GREY instead of beige */
+  background: #f5f5f5;
   font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -214,6 +267,220 @@ header {
   color: var(--muted);
 }
 
+/* CONTENT EDITOR STYLES */
+.editor-section {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+}
+
+.editor-section h2 {
+  font-family: var(--font-head);
+  font-size: 1.3rem;
+  margin-bottom: 24px;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-section h2::before {
+  content: '';
+  width: 4px;
+  height: 24px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+input[type="text"],
+input[type="number"],
+textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: var(--font-body);
+  transition: border-color 0.2s;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.price-input {
+  position: relative;
+}
+
+.price-input::before {
+  content: '£';
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.price-input input {
+  padding-left: 28px;
+}
+
+textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+/* Preview Box */
+.preview-box {
+  background: var(--accent-lt);
+  border-radius: 12px;
+  padding: 24px;
+  margin-top: 24px;
+}
+
+.preview-box h3 {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  margin-bottom: 16px;
+  color: var(--accent-dk);
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.preview-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(245,131,33,0.2);
+  font-size: 0.95rem;
+}
+
+.preview-item:last-child {
+  border-bottom: none;
+}
+
+.preview-item strong {
+  color: var(--primary);
+  font-family: var(--font-head);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: white;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 14px 28px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background: var(--accent-dk);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--white);
+  color: var(--primary);
+  border: 2px solid var(--border);
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.status-msg {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  display: none;
+}
+
+.status-msg.success {
+  display: block;
+  background: #dcfce7;
+  color: var(--green);
+  border: 1px solid #86efac;
+}
+
+.status-msg.error {
+  display: block;
+  background: #fee2e2;
+  color: var(--red);
+  border: 1px solid #fca5a5;
+}
+
+.bulk-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.bulk-table th,
+.bulk-table td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.bulk-table th {
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  background: #f5f5f5;
+}
+
+.bulk-table input {
+  width: 100px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+
 @media (max-width: 1024px) {
   .table-header, .booking-row {
     grid-template-columns: 100px 1fr 120px;
@@ -235,6 +502,8 @@ header {
     grid-template-columns: 1fr;
     gap: 8px;
   }
+  .tabs { flex-wrap: wrap; }
+  .tab { padding: 12px 20px; font-size: 0.9rem; }
 }
 </style>
 </head>
@@ -242,56 +511,304 @@ header {
 
 <header>
   <div style="display: flex; align-items: center; gap: 12px;">
-  <img src="Logo.png" alt="CoachCarter" style="height: 36px; width: auto;">
-  <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Staff Dashboard</span>
-</div>
+    <img src="Logo.png" alt="CoachCarter" style="height: 36px; width: auto;">
+    <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Staff Dashboard</span>
+  </div>
   <div class="user">admin@coachcarter.uk</div>
 </header>
 
 <div class="container">
-  <div class="stats">
-    <div class="stat-card">
-      <div class="stat-value" id="total-bookings">0</div>
-      <div class="stat-label">Total Bookings</div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('bookings')">📋 Bookings</button>
+    <button class="tab" onclick="switchTab('content')">✏️ Edit Content</button>
+  </div>
+
+  <!-- BOOKINGS TAB -->
+  <div id="bookingsTab" class="tab-content active">
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-value" id="total-bookings">0</div>
+        <div class="stat-label">Total Bookings</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="pending-verification">0</div>
+        <div class="stat-label">Pending Verification</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="pending-scheduling">0</div>
+        <div class="stat-label">Pending Scheduling</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="pass-guarantees">0</div>
+        <div class="stat-label">Pass Guarantees</div>
+      </div>
     </div>
-    <div class="stat-card">
-      <div class="stat-value" id="pending-verification">0</div>
-      <div class="stat-label">Pending Verification</div>
+
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all">All Bookings</button>
+      <button class="filter-btn" data-filter="pending-verification">Needs Verification</button>
+      <button class="filter-btn" data-filter="pending-scheduling">Needs Scheduling</button>
+      <button class="filter-btn" data-filter="pass-guarantee">Pass Guarantee</button>
     </div>
-    <div class="stat-card">
-      <div class="stat-value" id="pending-scheduling">0</div>
-      <div class="stat-label">Pending Scheduling</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value" id="pass-guarantees">0</div>
-      <div class="stat-label">Pass Guarantees</div>
+
+    <div class="bookings-table">
+      <div class="table-header">
+        <div>Reference</div>
+        <div>Customer</div>
+        <div>Package</div>
+        <div>Status</div>
+        <div>Amount</div>
+        <div>Actions</div>
+      </div>
+      <div id="bookings-list">
+        <div class="empty-state">Loading bookings...</div>
+      </div>
     </div>
   </div>
 
-  <div class="filters">
-    <button class="filter-btn active" data-filter="all">All Bookings</button>
-    <button class="filter-btn" data-filter="pending-verification">Needs Verification</button>
-    <button class="filter-btn" data-filter="pending-scheduling">Needs Scheduling</button>
-    <button class="filter-btn" data-filter="pass-guarantee">Pass Guarantee</button>
+  <!-- CONTENT EDITOR TAB -->
+  <div id="contentTab" class="tab-content">
+    
+    <!-- Pricing Section -->
+    <div class="editor-section">
+      <h2>Pricing</h2>
+      <div class="form-grid">
+        <div class="form-group price-input">
+          <label>PAYG Hourly Rate</label>
+          <input type="number" id="paygHourly" value="60">
+        </div>
+        <div class="form-group price-input">
+          <label>Core Programme</label>
+          <input type="number" id="coreProgramme" value="2400">
+        </div>
+        <div class="form-group price-input">
+          <label>+1 Retake Cover</label>
+          <input type="number" id="retake1" value="200">
+        </div>
+        <div class="form-group price-input">
+          <label>+2 Retake Cover</label>
+          <input type="number" id="retake2" value="350">
+        </div>
+        <div class="form-group price-input">
+          <label>Lifetime Cover</label>
+          <input type="number" id="retakeLifetime" value="500">
+        </div>
+      </div>
+
+      <h3 style="margin-top: 32px; margin-bottom: 16px; font-family: var(--font-head); font-size: 1.1rem;">Bulk Packages</h3>
+      <table class="bulk-table">
+        <thead>
+          <tr>
+            <th>Hours</th>
+            <th>Price (£)</th>
+            <th>Discount (%)</th>
+            <th>Per Hour (£)</th>
+          </tr>
+        </thead>
+        <tbody id="bulkTableBody">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Content Section -->
+    <div class="editor-section">
+      <h2>Website Copy</h2>
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label>Main Headline</label>
+          <input type="text" id="headline" value="Your licence. Your way.">
+        </div>
+        <div class="form-group full-width">
+          <label>Subheadline</label>
+          <textarea id="subheadline">Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.</textarea>
+        </div>
+        <div class="form-group">
+          <label>Pass Rate</label>
+          <input type="text" id="passRate" value="68%">
+        </div>
+        <div class="form-group">
+          <label>Programme Duration</label>
+          <input type="text" id="duration" value="18 weeks">
+        </div>
+        <div class="form-group full-width">
+          <label>Guarantee Promise</label>
+          <input type="text" id="guaranteePromise" value="18 weeks to your driving licence — or we keep going until you pass">
+        </div>
+      </div>
+
+      <div class="preview-box">
+        <h3>Live Preview</h3>
+        <div class="preview-grid">
+          <div class="preview-item">
+            <span>PAYG Rate:</span>
+            <strong id="previewPayg">£60/hr</strong>
+          </div>
+          <div class="preview-item">
+            <span>Core Programme:</span>
+            <strong id="previewCore">£2,400</strong>
+          </div>
+          <div class="preview-item">
+            <span>With +1 Retake:</span>
+            <strong id="previewRetake1">£2,600</strong>
+          </div>
+          <div class="preview-item">
+            <span>With Lifetime:</span>
+            <strong id="previewLifetime">£2,900</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div style="display: flex; gap: 12px; margin-bottom: 48px;">
+      <button class="btn" onclick="saveConfig()">💾 Save Changes</button>
+      <button class="btn btn-secondary" onclick="downloadConfig()">⬇️ Download config.json</button>
+      <button class="btn btn-secondary" onclick="loadConfig()">🔄 Reset to Saved</button>
+    </div>
+
+    <div id="saveStatus" class="status-msg"></div>
+
   </div>
 
-  <div class="bookings-table">
-    <div class="table-header">
-      <div>Reference</div>
-      <div>Customer</div>
-      <div>Package</div>
-      <div>Status</div>
-      <div>Amount</div>
-      <div>Actions</div>
-    </div>
-    <div id="bookings-list">
-      <div class="empty-state">Loading bookings...</div>
-    </div>
-  </div>
 </div>
 
 <script>
-// Demo data - in production, fetch from your API
+// TAB SWITCHING
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  
+  event.target.classList.add('active');
+  document.getElementById(tab + 'Tab').classList.add('active');
+  
+  if (tab === 'content') {
+    loadConfig();
+  }
+}
+
+// CONFIG SYSTEM
+let currentConfig = {};
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/config.json?t=' + Date.now());
+    currentConfig = await res.json();
+    populateForm();
+    updatePreview();
+  } catch (err) {
+    showStatus('Error loading config: ' + err.message, 'error');
+  }
+}
+
+function populateForm() {
+  const p = currentConfig.pricing;
+  const c = currentConfig.copy;
+  
+  // Pricing
+  document.getElementById('paygHourly').value = p.payg_hourly;
+  document.getElementById('coreProgramme').value = p.core_programme;
+  document.getElementById('retake1').value = p.retake_1;
+  document.getElementById('retake2').value = p.retake_2;
+  document.getElementById('retakeLifetime').value = p.retake_lifetime;
+  
+  // Bulk packages
+  const tbody = document.getElementById('bulkTableBody');
+  tbody.innerHTML = p.bulk_packages.map((pkg, i) => `
+    <tr>
+      <td>${pkg.hrs} hrs</td>
+      <td><input type="number" id="bulkPrice${i}" value="${pkg.price}" onchange="updateBulkPerHour(${i})"></td>
+      <td><input type="number" id="bulkDiscount${i}" value="${(pkg.discount * 100).toFixed(1)}" step="0.1" onchange="updateBulkPerHour(${i})"></td>
+      <td id="bulkPerHour${i}">£${pkg.per_hour}</td>
+    </tr>
+  `).join('');
+  
+  // Copy
+  document.getElementById('headline').value = c.headline;
+  document.getElementById('subheadline').value = c.subheadline;
+  document.getElementById('passRate').value = c.pass_rate;
+  document.getElementById('duration').value = c.programme_duration;
+  document.getElementById('guaranteePromise').value = c.guarantee_promise;
+}
+
+function updateBulkPerHour(index) {
+  const price = parseInt(document.getElementById(`bulkPrice${index}`).value) || 0;
+  const hrs = currentConfig.pricing.bulk_packages[index].hrs;
+  const perHour = (price / hrs).toFixed(2);
+  document.getElementById(`bulkPerHour${index}`).textContent = '£' + perHour;
+  updatePreview();
+}
+
+function updatePreview() {
+  const payg = parseInt(document.getElementById('paygHourly').value) || 60;
+  const core = parseInt(document.getElementById('coreProgramme').value) || 2400;
+  const r1 = parseInt(document.getElementById('retake1').value) || 200;
+  const rLife = parseInt(document.getElementById('retakeLifetime').value) || 500;
+  
+  document.getElementById('previewPayg').textContent = '£' + payg + '/hr';
+  document.getElementById('previewCore').textContent = '£' + core.toLocaleString();
+  document.getElementById('previewRetake1').textContent = '£' + (core + r1).toLocaleString();
+  document.getElementById('previewLifetime').textContent = '£' + (core + rLife).toLocaleString();
+}
+
+function gatherFormData() {
+  const p = currentConfig.pricing;
+  const c = currentConfig.copy;
+  
+  p.payg_hourly = parseInt(document.getElementById('paygHourly').value) || 60;
+  p.core_programme = parseInt(document.getElementById('coreProgramme').value) || 2400;
+  p.retake_1 = parseInt(document.getElementById('retake1').value) || 200;
+  p.retake_2 = parseInt(document.getElementById('retake2').value) || 350;
+  p.retake_lifetime = parseInt(document.getElementById('retakeLifetime').value) || 500;
+  
+  p.bulk_packages.forEach((pkg, i) => {
+    pkg.price = parseInt(document.getElementById(`bulkPrice${i}`).value) || pkg.price;
+    pkg.discount = parseFloat(document.getElementById(`bulkDiscount${i}`).value) / 100 || pkg.discount;
+    pkg.per_hour = (pkg.price / pkg.hrs).toFixed(2);
+  });
+  
+  c.headline = document.getElementById('headline').value;
+  c.subheadline = document.getElementById('subheadline').value;
+  c.pass_rate = document.getElementById('passRate').value;
+  c.programme_duration = document.getElementById('duration').value;
+  c.guarantee_promise = document.getElementById('guaranteePromise').value;
+  
+  currentConfig.last_updated = new Date().toISOString();
+}
+
+function saveConfig() {
+  gatherFormData();
+  downloadConfig();
+  showStatus('Config ready! Download and commit to deploy changes.', 'success');
+}
+
+function downloadConfig() {
+  const dataStr = JSON.stringify(currentConfig, null, 2);
+  const blob = new Blob([dataStr], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'config.json';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function showStatus(msg, type) {
+  const status = document.getElementById('saveStatus');
+  status.textContent = msg;
+  status.className = 'status-msg ' + type;
+  setTimeout(() => status.className = 'status-msg', 6000);
+}
+
+// Live preview updates
+document.querySelectorAll('#contentTab input, #contentTab textarea').forEach(input => {
+  input.addEventListener('input', updatePreview);
+});
+
+// BOOKINGS DEMO (existing functionality)
 const demoBookings = [
   {
     ref: 'CC-2847',
@@ -336,8 +853,8 @@ const demoBookings = [
 
 function renderBookings(filter = 'all') {
   const list = document.getElementById('bookings-list');
-
   let filtered = demoBookings;
+  
   if (filter === 'pending-verification') {
     filtered = demoBookings.filter(b => b.status === 'PAID_PENDING_VERIFICATION');
   } else if (filter === 'pending-scheduling') {
@@ -363,7 +880,7 @@ function renderBookings(filter = 'all') {
       <div class="amount">£${booking.amount}</div>
       <div class="actions">
         <button class="action-btn" onclick="viewBooking('${booking.ref}')">View</button>
-        ${booking.testStatus === 'has_test' ? '<button class="action-btn" onclick="verifyDVSA(\'${booking.ref}\')">Verify DVSA</button>' : ''}
+        ${booking.testStatus === 'has_test' ? `<button class="action-btn" onclick="verifyDVSA('${booking.ref}')">Verify DVSA</button>` : ''}
       </div>
     </div>
   `).join('');
@@ -384,7 +901,7 @@ function viewBooking(ref) {
 }
 
 function verifyDVSA(ref) {
-  window.open('https://www.gov.uk/check-driving-test ', '_blank');
+  window.open('https://www.gov.uk/check-driving-test', '_blank');
 }
 
 // Filter buttons
@@ -396,7 +913,7 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
   });
 });
 
-// Initial render
+// Initial load
 renderBookings();
 </script>
 
