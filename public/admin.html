@@ -58,7 +58,6 @@ header {
   padding: 48px;
 }
 
-/* TABS */
 .tabs {
   display: flex;
   gap: 8px;
@@ -79,14 +78,8 @@ header {
   transition: color 0.2s;
 }
 
-.tab:hover {
-  color: var(--primary);
-}
-
-.tab.active {
-  color: var(--accent);
-}
-
+.tab:hover { color: var(--primary); }
+.tab.active { color: var(--accent); }
 .tab.active::after {
   content: '';
   position: absolute;
@@ -98,15 +91,9 @@ header {
   border-radius: 3px 3px 0 0;
 }
 
-.tab-content {
-  display: none;
-}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
 
-.tab-content.active {
-  display: block;
-}
-
-/* STATS */
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -135,7 +122,6 @@ header {
   letter-spacing: 0.05em;
 }
 
-/* FILTERS */
 .filters {
   display: flex;
   gap: 12px;
@@ -160,7 +146,6 @@ header {
   border-color: var(--accent);
 }
 
-/* TABLE */
 .bookings-table {
   background: var(--white);
   border: 1px solid var(--border);
@@ -178,7 +163,6 @@ header {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--primary);
 }
 
 .booking-row {
@@ -190,9 +174,7 @@ header {
   align-items: center;
 }
 
-.booking-row:hover {
-  background: var(--bg-light);
-}
+.booking-row:hover { background: var(--bg-light); }
 
 .ref {
   font-family: var(--font-head);
@@ -200,25 +182,11 @@ header {
   color: var(--primary);
 }
 
-.customer {
-  display: flex;
-  flex-direction: column;
-}
+.customer { display: flex; flex-direction: column; }
+.customer-name { font-weight: 700; color: var(--primary); }
+.customer-email { font-size: 0.85rem; color: var(--muted); }
 
-.customer-name {
-  font-weight: 700;
-  color: var(--primary);
-}
-
-.customer-email {
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-.package {
-  font-size: 0.9rem;
-}
-
+.package { font-size: 0.9rem; }
 .package.pass { color: var(--accent); font-weight: 700; }
 
 .status {
@@ -228,7 +196,6 @@ header {
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .status.pending { background: #fef3c7; color: #92400e; }
@@ -241,10 +208,7 @@ header {
   color: var(--primary);
 }
 
-.actions {
-  display: flex;
-  gap: 8px;
-}
+.actions { display: flex; gap: 8px; }
 
 .action-btn {
   padding: 8px 12px;
@@ -267,7 +231,6 @@ header {
   color: var(--muted);
 }
 
-/* CONTENT EDITOR STYLES */
 .editor-section {
   background: var(--white);
   border: 1px solid var(--border);
@@ -280,7 +243,6 @@ header {
   font-family: var(--font-head);
   font-size: 1.3rem;
   margin-bottom: 24px;
-  color: var(--primary);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -300,13 +262,8 @@ header {
   gap: 20px;
 }
 
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group.full-width {
-  grid-column: 1 / -1;
-}
+.form-group { margin-bottom: 16px; }
+.form-group.full-width { grid-column: 1 / -1; }
 
 label {
   display: block;
@@ -330,16 +287,12 @@ textarea {
   transition: border-color 0.2s;
 }
 
-input:focus,
-textarea:focus {
+input:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
 
-.price-input {
-  position: relative;
-}
-
+.price-input { position: relative; }
 .price-input::before {
   content: '£';
   position: absolute;
@@ -349,17 +302,71 @@ textarea:focus {
   color: var(--muted);
   font-weight: 700;
 }
-
-.price-input input {
-  padding-left: 28px;
-}
+.price-input input { padding-left: 28px; }
 
 textarea {
   min-height: 80px;
   resize: vertical;
 }
 
-/* Preview Box */
+.bulk-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.bulk-table th,
+.bulk-table td {
+  text-align: left;
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.bulk-table th {
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  background: #f5f5f5;
+}
+
+.bulk-table input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+}
+
+.bulk-table input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--accent-lt);
+}
+
+.bulk-table td.price-cell {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.bulk-table tr:hover { background: #f9f9f9; }
+
+.calc-note {
+  background: var(--accent-lt);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 20px 0;
+  font-size: 0.9rem;
+  color: var(--accent-dk);
+}
+
+.calc-note strong {
+  font-family: var(--font-head);
+}
+
 .preview-box {
   background: var(--accent-lt);
   border-radius: 12px;
@@ -388,16 +395,12 @@ textarea {
   font-size: 0.95rem;
 }
 
-.preview-item:last-child {
-  border-bottom: none;
-}
-
+.preview-item:last-child { border-bottom: none; }
 .preview-item strong {
   color: var(--primary);
   font-family: var(--font-head);
 }
 
-/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -452,33 +455,10 @@ textarea {
   border: 1px solid #fca5a5;
 }
 
-.bulk-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 12px;
-}
-
-.bulk-table th,
-.bulk-table td {
-  text-align: left;
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.9rem;
-}
-
-.bulk-table th {
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  background: #f5f5f5;
-}
-
-.bulk-table input {
-  width: 100px;
-  padding: 8px 12px;
-  font-size: 0.9rem;
+.locked {
+  background: #f5f5f5 !important;
+  color: var(--muted) !important;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1024px) {
@@ -504,6 +484,11 @@ textarea {
   }
   .tabs { flex-wrap: wrap; }
   .tab { padding: 12px 20px; font-size: 0.9rem; }
+  .bulk-table th,
+  .bulk-table td {
+    padding: 12px 8px;
+    font-size: 0.85rem;
+  }
 }
 </style>
 </head>
@@ -519,13 +504,11 @@ textarea {
 
 <div class="container">
 
-  <!-- TABS -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('bookings')">📋 Bookings</button>
     <button class="tab" onclick="switchTab('content')">✏️ Edit Content</button>
   </div>
 
-  <!-- BOOKINGS TAB -->
   <div id="bookingsTab" class="tab-content active">
     <div class="stats">
       <div class="stat-card">
@@ -568,16 +551,14 @@ textarea {
     </div>
   </div>
 
-  <!-- CONTENT EDITOR TAB -->
   <div id="contentTab" class="tab-content">
     
-    <!-- Pricing Section -->
     <div class="editor-section">
       <h2>Pricing</h2>
       <div class="form-grid">
         <div class="form-group price-input">
-          <label>PAYG Hourly Rate</label>
-          <input type="number" id="paygHourly" value="60">
+          <label>PAYG Hourly Rate (Anchor Price)</label>
+          <input type="number" id="paygHourly" value="60" onchange="updateAllCalculations()">
         </div>
         <div class="form-group price-input">
           <label>Core Programme</label>
@@ -597,14 +578,20 @@ textarea {
         </div>
       </div>
 
+      <div class="calc-note">
+        <strong>💡 How bulk pricing works:</strong> All calculations are based on the PAYG hourly rate (£<span id="anchorRateDisplay">60</span>/hr). 
+        Edit any value below (Discount %, Total Price, or Price/Hour) and the others auto-calculate.
+      </div>
+
       <h3 style="margin-top: 32px; margin-bottom: 16px; font-family: var(--font-head); font-size: 1.1rem;">Bulk Packages</h3>
       <table class="bulk-table">
         <thead>
           <tr>
             <th>Hours</th>
-            <th>Price (£)</th>
-            <th>Discount (%)</th>
-            <th>Per Hour (£)</th>
+            <th>Discount %</th>
+            <th>Total Price (£)</th>
+            <th>Price Per Hour (£)</th>
+            <th>You Save</th>
           </tr>
         </thead>
         <tbody id="bulkTableBody">
@@ -613,7 +600,6 @@ textarea {
       </table>
     </div>
 
-    <!-- Content Section -->
     <div class="editor-section">
       <h2>Website Copy</h2>
       <div class="form-grid">
@@ -662,11 +648,10 @@ textarea {
       </div>
     </div>
 
-    <!-- Actions -->
     <div style="display: flex; gap: 12px; margin-bottom: 48px;">
       <button class="btn" onclick="saveConfig()">💾 Save Changes</button>
       <button class="btn btn-secondary" onclick="downloadConfig()">⬇️ Download config.json</button>
-      <button class="btn btn-secondary" onclick="loadConfig()">🔄 Reset to Saved</button>
+      <button class="btn btn-secondary" onclick="loadConfig()">🔄 Reset</button>
     </div>
 
     <div id="saveStatus" class="status-msg"></div>
@@ -676,7 +661,9 @@ textarea {
 </div>
 
 <script>
-// TAB SWITCHING
+let currentConfig = {};
+let hourlyRate = 60;
+
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -689,15 +676,12 @@ function switchTab(tab) {
   }
 }
 
-// CONFIG SYSTEM
-let currentConfig = {};
-
 async function loadConfig() {
   try {
     const res = await fetch('/config.json?t=' + Date.now());
     currentConfig = await res.json();
     populateForm();
-    updatePreview();
+    updateAllCalculations();
   } catch (err) {
     showStatus('Error loading config: ' + err.message, 'error');
   }
@@ -707,37 +691,133 @@ function populateForm() {
   const p = currentConfig.pricing;
   const c = currentConfig.copy;
   
-  // Pricing
   document.getElementById('paygHourly').value = p.payg_hourly;
   document.getElementById('coreProgramme').value = p.core_programme;
   document.getElementById('retake1').value = p.retake_1;
   document.getElementById('retake2').value = p.retake_2;
   document.getElementById('retakeLifetime').value = p.retake_lifetime;
   
-  // Bulk packages
-  const tbody = document.getElementById('bulkTableBody');
-  tbody.innerHTML = p.bulk_packages.map((pkg, i) => `
-    <tr>
-      <td>${pkg.hrs} hrs</td>
-      <td><input type="number" id="bulkPrice${i}" value="${pkg.price}" onchange="updateBulkPerHour(${i})"></td>
-      <td><input type="number" id="bulkDiscount${i}" value="${(pkg.discount * 100).toFixed(1)}" step="0.1" onchange="updateBulkPerHour(${i})"></td>
-      <td id="bulkPerHour${i}">£${pkg.per_hour}</td>
-    </tr>
-  `).join('');
-  
-  // Copy
   document.getElementById('headline').value = c.headline;
   document.getElementById('subheadline').value = c.subheadline;
   document.getElementById('passRate').value = c.pass_rate;
   document.getElementById('duration').value = c.programme_duration;
   document.getElementById('guaranteePromise').value = c.guarantee_promise;
+  
+  renderBulkTable(p.bulk_packages);
 }
 
-function updateBulkPerHour(index) {
-  const price = parseInt(document.getElementById(`bulkPrice${index}`).value) || 0;
-  const hrs = currentConfig.pricing.bulk_packages[index].hrs;
-  const perHour = (price / hrs).toFixed(2);
-  document.getElementById(`bulkPerHour${index}`).textContent = '£' + perHour;
+function renderBulkTable(packages) {
+  const tbody = document.getElementById('bulkTableBody');
+  hourlyRate = parseInt(document.getElementById('paygHourly').value) || 60;
+  
+  tbody.innerHTML = packages.map((pkg, i) => {
+    const standardPrice = pkg.hrs * hourlyRate;
+    const savings = standardPrice - pkg.price;
+    
+    return `
+      <tr data-index="${i}" data-hours="${pkg.hrs}">
+        <td><strong>${pkg.hrs} hrs</strong></td>
+        <td>
+          <input type="number" 
+                 id="discount-${i}" 
+                 value="${(pkg.discount * 100).toFixed(1)}" 
+                 step="0.1"
+                 onchange="calculateFromDiscount(${i})"
+                 placeholder="%">
+        </td>
+        <td>
+          <input type="number" 
+                 id="total-${i}" 
+                 value="${pkg.price}"
+                 onchange="calculateFromTotal(${i})"
+                 placeholder="£">
+        </td>
+        <td class="price-cell">
+          <input type="number" 
+                 id="perhour-${i}" 
+                 value="${pkg.per_hour}"
+                 step="0.01"
+                 onchange="calculateFromPerHour(${i})"
+                 placeholder="£/hr">
+        </td>
+        <td style="color: var(--green); font-weight: 600;">
+          −£${savings}
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
+  document.getElementById('anchorRateDisplay').textContent = hourlyRate;
+}
+
+// CALCULATION FUNCTIONS
+
+function calculateFromDiscount(index) {
+  const hours = parseInt(document.querySelector(`tr[data-index="${index}"]`).dataset.hours);
+  const discount = parseFloat(document.getElementById(`discount-${index}`).value) || 0;
+  
+  const standardPrice = hours * hourlyRate;
+  const newPrice = Math.round(standardPrice * (1 - discount / 100));
+  const perHour = (newPrice / hours).toFixed(2);
+  
+  document.getElementById(`total-${index}`).value = newPrice;
+  document.getElementById(`perhour-${index}`).value = perHour;
+  
+  updateSavings(index, newPrice);
+  updatePreview();
+}
+
+function calculateFromTotal(index) {
+  const hours = parseInt(document.querySelector(`tr[data-index="${index}"]`).dataset.hours);
+  const total = parseInt(document.getElementById(`total-${index}`).value) || 0;
+  
+  const standardPrice = hours * hourlyRate;
+  const discount = ((standardPrice - total) / standardPrice * 100).toFixed(1);
+  const perHour = (total / hours).toFixed(2);
+  
+  document.getElementById(`discount-${index}`).value = discount;
+  document.getElementById(`perhour-${index}`).value = perHour;
+  
+  updateSavings(index, total);
+  updatePreview();
+}
+
+function calculateFromPerHour(index) {
+  const hours = parseInt(document.querySelector(`tr[data-index="${index}"]`).dataset.hours);
+  const perHour = parseFloat(document.getElementById(`perhour-${index}`).value) || 0;
+  
+  const total = Math.round(perHour * hours);
+  const standardPrice = hours * hourlyRate;
+  const discount = ((standardPrice - total) / standardPrice * 100).toFixed(1);
+  
+  document.getElementById(`total-${index}`).value = total;
+  document.getElementById(`discount-${index}`).value = discount;
+  
+  updateSavings(index, total);
+  updatePreview();
+}
+
+function updateSavings(index, actualPrice) {
+  const hours = parseInt(document.querySelector(`tr[data-index="${index}"]`).dataset.hours);
+  const standardPrice = hours * hourlyRate;
+  const savings = standardPrice - actualPrice;
+  
+  const row = document.querySelector(`tr[data-index="${index}"]`);
+  row.cells[4].textContent = `−£${savings}`;
+  row.cells[4].style.color = savings > 0 ? 'var(--green)' : 'var(--muted)';
+}
+
+function updateAllCalculations() {
+  hourlyRate = parseInt(document.getElementById('paygHourly').value) || 60;
+  document.getElementById('anchorRateDisplay').textContent = hourlyRate;
+  
+  // Recalculate all bulk packages based on current discount percentages
+  const rows = document.querySelectorAll('#bulkTableBody tr');
+  rows.forEach(row => {
+    const index = row.dataset.index;
+    calculateFromDiscount(index);
+  });
+  
   updatePreview();
 }
 
@@ -763,10 +843,12 @@ function gatherFormData() {
   p.retake_2 = parseInt(document.getElementById('retake2').value) || 350;
   p.retake_lifetime = parseInt(document.getElementById('retakeLifetime').value) || 500;
   
-  p.bulk_packages.forEach((pkg, i) => {
-    pkg.price = parseInt(document.getElementById(`bulkPrice${i}`).value) || pkg.price;
-    pkg.discount = parseFloat(document.getElementById(`bulkDiscount${i}`).value) / 100 || pkg.discount;
-    pkg.per_hour = (pkg.price / pkg.hrs).toFixed(2);
+  // Gather bulk packages from table
+  const rows = document.querySelectorAll('#bulkTableBody tr');
+  rows.forEach((row, i) => {
+    p.bulk_packages[i].price = parseInt(document.getElementById(`total-${i}`).value) || p.bulk_packages[i].price;
+    p.bulk_packages[i].discount = parseFloat(document.getElementById(`discount-${i}`).value) / 100 || p.bulk_packages[i].discount;
+    p.bulk_packages[i].per_hour = parseFloat(document.getElementById(`perhour-${i}`).value) || p.bulk_packages[i].per_hour;
   });
   
   c.headline = document.getElementById('headline').value;
@@ -803,12 +885,12 @@ function showStatus(msg, type) {
   setTimeout(() => status.className = 'status-msg', 6000);
 }
 
-// Live preview updates
-document.querySelectorAll('#contentTab input, #contentTab textarea').forEach(input => {
+// Live preview for non-bulk fields
+document.querySelectorAll('#contentTab input:not([id^="discount-"]):not([id^="total-"]):not([id^="perhour-"]), #contentTab textarea').forEach(input => {
   input.addEventListener('input', updatePreview);
 });
 
-// BOOKINGS DEMO (existing functionality)
+// DEMO BOOKINGS (existing)
 const demoBookings = [
   {
     ref: 'CC-2847',
@@ -904,7 +986,6 @@ function verifyDVSA(ref) {
   window.open('https://www.gov.uk/check-driving-test', '_blank');
 }
 
-// Filter buttons
 document.querySelectorAll('.filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -913,7 +994,6 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
   });
 });
 
-// Initial load
 renderBookings();
 </script>
 
