@@ -923,6 +923,49 @@ input[type=range].pkg-range::-webkit-slider-thumb {
 @media (max-width: 560px) {
   .pkg-grid { grid-template-columns: 1fr 1fr; }
 }
+  .btn-lg {
+  display: inline-block;
+  background: var(--accent);
+  color: white;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 16px 40px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: none;
+  text-align: center;
+}
+
+.btn-lg:hover {
+  background: var(--accent-dk);
+  transform: translateY(-2px);
+}
+
+.btn-lg.primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-lg.secondary {
+  background: var(--white);
+  color: var(--primary);
+  border: 1px solid var(--border);
+}
+
+.btn-lg.secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Full width buttons in cards */
+.payg-right .btn-lg,
+.pkg-calc-right .btn-lg {
+  width: 100%;
+  margin-top: 12px;
+}
 </style>
 </head>
 <body>
@@ -1029,7 +1072,7 @@ input[type=range].pkg-range::-webkit-slider-thumb {
             <div class="mini-stat-sub">Keep full control of your spending as you go</div>
           </div>
         </div>
-        <button class="btn-lg primary" style="margin-top:12px;width:100%;" onclick="startCheckout('payg')">Book £60 lesson →</button>
+        <button class="btn-lg primary" onclick="startCheckout('payg')">Book £60 lesson →</button>
       </div>
     </div>
   </div>
@@ -1079,7 +1122,7 @@ input[type=range].pkg-range::-webkit-slider-thumb {
           <div class="pkg-result-total-label">Total package price</div>
           <div class="pkg-result-total-num" id="pkg-total">£1,620</div>
         </div>
-        <button class="btn-lg primary" style="margin-top:20px;width:100%;" onclick="startCheckout('bulk', currentPkgIndex)">Buy this package →</button>
+        <button class="btn-lg primary" onclick="startCheckout('bulk', currentPkgIndex)">Buy this package →</button>
       </div>
     </div>
 
