@@ -6,11 +6,36 @@
     "retake_2": 350,
     "retake_lifetime": 500,
     "bulk_packages": [
-      {"hrs": 10, "price": 570, "discount": 0.05, "per_hour": 57},
-      {"hrs": 20, "price": 1110, "discount": 0.075, "per_hour": 55.50},
-      {"hrs": 30, "price": 1620, "discount": 0.10, "per_hour": 54},
-      {"hrs": 40, "price": 2100, "discount": 0.125, "per_hour": 52.50},
-      {"hrs": 50, "price": 2550, "discount": 0.15, "per_hour": 51}
+      {
+        "hrs": 10,
+        "price": 570,
+        "discount": 0.05,
+        "per_hour": 57
+      },
+      {
+        "hrs": 20,
+        "price": 1110,
+        "discount": 0.075,
+        "per_hour": 55.5
+      },
+      {
+        "hrs": 30,
+        "price": 1620,
+        "discount": 0.1,
+        "per_hour": 54
+      },
+      {
+        "hrs": 40,
+        "price": 2100,
+        "discount": 0.125,
+        "per_hour": 52.5
+      },
+      {
+        "hrs": 50,
+        "price": 2550,
+        "discount": 0.15,
+        "per_hour": 51
+      }
     ]
   },
   "copy": {
@@ -31,7 +56,7 @@
         "promise": "By the end of Tier 1 you'll be driving independently around simple junctions and residential areas — with the safe habits baked in from day one."
       },
       {
-        "id": "t2", 
+        "id": "t2",
         "name": "Road Confidence",
         "weeks": "7-13",
         "typical_hours": 10,
@@ -39,7 +64,7 @@
       },
       {
         "id": "t3",
-        "name": "Road Independence", 
+        "name": "Road Independence",
         "weeks": "12-18",
         "typical_hours": 6,
         "promise": "By the end of Tier 3 you'll drive safely without input from anyone — no habits that create risk, and mock tests passed under 3 minors."
