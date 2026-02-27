@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CoachCarter — Site Configuration</title>
+<title>CoachCarter — Config Editor</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -176,7 +176,6 @@ textarea {
   font-family: var(--font-head);
 }
 
-/* Pricing Tables */
 .bulk-table {
   width: 100%;
   border-collapse: collapse;
@@ -222,7 +221,6 @@ textarea {
 
 .bulk-table tr:hover { background: #f9f9f9; }
 
-/* Guarantee Calculator */
 .guarantee-calc {
   background: var(--primary);
   border-radius: 16px;
@@ -418,7 +416,6 @@ textarea {
   margin-top: 4px;
 }
 
-/* Content Sections */
 .content-grid {
   display: grid;
   gap: 32px;
@@ -497,7 +494,6 @@ textarea {
   background: var(--accent-lt);
 }
 
-/* Preview Box */
 .preview-box {
   background: var(--accent-lt);
   border-radius: 12px;
@@ -533,7 +529,6 @@ textarea {
   font-family: var(--font-head);
 }
 
-/* Action Buttons */
 .actions-bar {
   display: flex;
   gap: 12px;
@@ -641,11 +636,11 @@ textarea {
 <header>
   <div style="display: flex; align-items: center; gap: 12px;">
     <img src="/Logo.png" alt="CoachCarter" style="height: 36px; width: auto;">
-    <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Site Configuration</span>
+    <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Config Editor</span>
   </div>
   <nav>
     <a href="/admin/dashboard.html">📋 Bookings</a>
-    <a href="/admin/config.html" class="active">⚙️ Site Config</a>
+    <a href="/admin/editor.html" class="active">✏️ Editor</a>
     <a href="/" target="_blank">🌐 View Site →</a>
   </nav>
   <div class="user" style="font-size: 0.9rem; color: var(--bg-warm);">admin@coachcarter.uk</div>
@@ -653,8 +648,8 @@ textarea {
 
 <div class="container">
 
-  <h1 class="section-title">Site Configuration</h1>
-  <p class="section-desc">Manage pricing, content, and business settings. Changes are saved to config.json and deployed to the live site.</p>
+  <h1 class="section-title">Config Editor</h1>
+  <p class="section-desc">Edit pricing and content. Download config.json, then replace the file in your repository and deploy.</p>
 
   <div id="saveStatus" class="status-msg"></div>
 
@@ -1380,7 +1375,7 @@ function saveConfig() {
   gatherFormData();
   downloadConfig();
   document.getElementById('lastSaved').textContent = 'Last saved: ' + new Date().toLocaleTimeString();
-  showStatus('✅ Config downloaded! Commit config.json to deploy changes.', 'success');
+  showStatus('✅ Config downloaded! Replace /public/config.json and deploy.', 'success');
 }
 
 function downloadConfig() {
