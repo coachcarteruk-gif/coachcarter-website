@@ -2,32 +2,69 @@
   "pricing": {
     "payg_hourly": 60,
     "core_programme": 2400,
-    "core_hours": 30,
+    "core_hours": 18,
     "retake_1": 200,
     "retake_2": 350,
     "retake_lifetime": 500,
     "bulk_packages": [
-      { "hrs": 10, "discount": 0.05, "price": 570, "per_hour": 57 },
-      { "hrs": 20, "discount": 0.075, "price": 1110, "per_hour": 55.50 },
-      { "hrs": 30, "discount": 0.10, "price": 1620, "per_hour": 54 },
-      { "hrs": 40, "discount": 0.125, "price": 2100, "per_hour": 52.50 },
-      { "hrs": 50, "discount": 0.15, "price": 2550, "per_hour": 51 }
+      {
+        "hrs": 10,
+        "discount": 0.05,
+        "price": 570,
+        "per_hour": 57
+      },
+      {
+        "hrs": 20,
+        "discount": 0.075,
+        "price": 1110,
+        "per_hour": 55.5
+      },
+      {
+        "hrs": 30,
+        "discount": 0.1,
+        "price": 1620,
+        "per_hour": 54
+      },
+      {
+        "hrs": 40,
+        "discount": 0.125,
+        "price": 2100,
+        "per_hour": 52.5
+      },
+      {
+        "hrs": 50,
+        "discount": 0.15,
+        "price": 2550,
+        "per_hour": 51
+      }
     ]
   },
   "content": {
     "hero": {
-      "headline": "Your licence. Your way.",
-      "subheadline": "Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.",
+      "headline": "Your licence, secured",
+      "subheadline": "Choose how you want to learn. From flexible pay-per-lesson to our 18-week pass programme. Choose from our range of test fail insurance covers",
       "stats": [
-        { "value": "£60", "label": "Per hour, pay as you go" },
-        { "value": "15%", "label": "Max discount on bulk packages" },
-        { "value": "£2,400", "label": "Full Pass Guarantee programme" },
-        { "value": "18wk", "label": "Structured programme to test day" }
+        {
+          "value": "£60",
+          "label": "Per hour, pay as you go"
+        },
+        {
+          "value": "15%",
+          "label": "Max discount on bulk packages"
+        },
+        {
+          "value": "£2,400",
+          "label": "Full Pass Guarantee programme"
+        },
+        {
+          "value": "18wk",
+          "label": "Structured programme to test day"
+        }
       ]
     },
     "sections": {
       "payg": {
-        "title": "Pay As You Go",
+        "title": "Pay Per Lesson",
         "subtitle": "Maximum flexibility. Book when you need, cancel when life happens."
       },
       "packages": {
@@ -36,7 +73,7 @@
       },
       "guarantee": {
         "title": "The Pass Guarantee",
-        "subtitle": "18 weeks to your driving licence — or we keep going until you pass."
+        "subtitle": "18 weeks to your driving licence - choose your guarantee level"
       }
     },
     "features": {
@@ -49,7 +86,7 @@
       ],
       "core": [
         "18-week structured programme",
-        "~30 hours with expert instructor",
+        "Instructor paid when you pass",
         "Theory & practical test booked for you",
         "Progress tracking throughout",
         "1 attempt included"
@@ -58,17 +95,17 @@
     "cta": {
       "primary": "Book a Lesson",
       "secondary": "Talk to us first",
-      "payg_button": "Book £60 lesson →",
+      "payg_button": "Book First lesson →",
       "package_button": "Buy this package →",
       "guarantee_button": "Continue to Booking →"
     },
     "business": {
       "pass_rate": "68%",
       "programme_duration": "18 weeks",
-      "contact_email": "hello@coachcarter.com",
+      "contact_email": "fraser@coachcarter.uk",
       "guarantee_note": "In 2024 car practical test pass rate was 47%. Choose the protection that feels right for you.",
-      "footer_text": "© 2025 CoachCarter Driving School · Privacy · Terms · All prices include VAT where applicable."
+      "footer_text": "CoachCarter Driving School · The last instructor you'll need"
     }
   },
-  "last_updated": "2025-01-20T12:00:00.000Z"
+  "last_updated": "2026-02-27T08:08:32.580Z"
 }
