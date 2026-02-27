@@ -1119,18 +1119,18 @@ td.highlight .best-for {
     <img src="Logo.png" alt="CoachCarter" style="height: 40px; width: auto;">
   </a>
   <ul class="nav-links">
-    <li><a href="#payg">Pay As You Go</a></li>
-    <li><a href="#packages">Bulk Packages</a></li>
-    <li><a href="#guarantee">Pass Guarantee</a></li>
+    <li><a href="#payg" id="nav-payg">Pay As You Go</a></li>
+    <li><a href="#packages" id="nav-packages">Bulk Packages</a></li>
+    <li><a href="#guarantee" id="nav-guarantee">Pass Guarantee</a></li>
   </ul>
-  <button class="nav-cta" onclick="startCheckout('payg')">Book a Lesson</button>
+  <button class="nav-cta" id="nav-cta-primary" onclick="startCheckout('payg')">Book a Lesson</button>
 </nav>
 
 <div class="hero">
   <div class="hero-left reveal">
     <div class="hero-tag">CoachCarter Driving School</div>
-    <h1>Your licence.<br><em>Your way.</em></h1>
-    <p class="hero-sub">Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.</p>
+    <h1 id="hero-headline">Your licence.<br><em>Your way.</em></h1>
+    <p class="hero-sub" id="hero-subheadline">Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.</p>
     <div class="hero-badges">
       <div class="hero-badge"><div class="dot"></div> DVSA Approved</div>
       <div class="hero-badge"><div class="dot"></div> Pass Guarantee Available</div>
@@ -1140,24 +1140,24 @@ td.highlight .best-for {
   <div class="hero-right reveal">
     <div class="stat-grid">
       <div class="stat-item">
-        <div class="stat-num">£60</div>
-        <div class="stat-label">Per hour,<br>pay as you go</div>
+        <div class="stat-num" id="hero-stat-1-value">£60</div>
+        <div class="stat-label" id="hero-stat-1-label">Per hour,<br>pay as you go</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num">15%</div>
-        <div class="stat-label">Max discount on<br>bulk packages</div>
+        <div class="stat-num" id="hero-stat-2-value">15%</div>
+        <div class="stat-label" id="hero-stat-2-label">Max discount on<br>bulk packages</div>
       </div>
       <div class="stat-divider"></div>
       <div class="stat-item">
-        <div class="stat-num">£2,400</div>
-        <div class="stat-label">Full Pass Guarantee<br>programme</div>
+        <div class="stat-num" id="hero-stat-3-value">£2,400</div>
+        <div class="stat-label" id="hero-stat-3-label">Full Pass Guarantee<br>programme</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num">18wk</div>
-        <div class="stat-label">Structured programme<br>to test day</div>
+        <div class="stat-num" id="hero-stat-4-value">18wk</div>
+        <div class="stat-label" id="hero-stat-4-label">Structured programme<br>to test day</div>
       </div>
     </div>
-    <button class="hero-right-cta" onclick="scrollToPackages()">View all options →</button>
+    <button class="hero-right-cta" id="hero-cta" onclick="scrollToPackages()">View all options →</button>
   </div>
 </div>
 
@@ -1165,8 +1165,8 @@ td.highlight .best-for {
   <div class="section-wrap">
     <div class="section-intro reveal">
       <div class="section-tag-line">Option 1</div>
-      <h2 class="section-title">Pay As You Go</h2>
-      <p class="section-sub">Maximum flexibility. Book when you need, cancel when life happens. Perfect if you're just starting out or have an unpredictable schedule.</p>
+      <h2 class="section-title" id="section-payg-title">Pay As You Go</h2>
+      <p class="section-sub" id="section-payg-subtitle">Maximum flexibility. Book when you need, cancel when life happens. Perfect if you're just starting out or have an unpredictable schedule.</p>
     </div>
 
     <div class="payg-card reveal">
@@ -1174,11 +1174,11 @@ td.highlight .best-for {
         <div class="payg-tag">Most Flexible</div>
         <h2>One lesson<br>at a time.</h2>
         <div class="payg-price">
-          <span class="payg-price-num">£60</span>
+          <span class="payg-price-num" id="payg-price-display">£60</span>
           <span class="payg-price-unit">per hour</span>
         </div>
-        <p>No commitment, no upfront cost. Book your first lesson and go from there. Every lesson is with a qualified CoachCarter instructor and tailored to where you are in your learning journey.</p>
-        <ul class="payg-features">
+        <p id="payg-description">No commitment, no upfront cost. Book your first lesson and go from there. Every lesson is with a qualified CoachCarter instructor and tailored to where you are in your learning journey.</p>
+        <ul class="payg-features" id="payg-features-list">
           <li class="payg-feature">Qualified ADI instructor every time</li>
           <li class="payg-feature">Book online or by phone</li>
           <li class="payg-feature">Lesson length to suit you</li>
@@ -1216,7 +1216,7 @@ td.highlight .best-for {
             <div class="mini-stat-sub">Keep full control of your spending as you go</div>
           </div>
         </div>
-        <button class="btn-lg primary" onclick="startCheckout('payg')">Book £60 lesson →</button>
+        <button class="btn-lg primary" id="btn-payg" onclick="startCheckout('payg')">Book £60 lesson →</button>
       </div>
     </div>
   </div>
@@ -1226,8 +1226,8 @@ td.highlight .best-for {
   <div class="section-wrap">
     <div class="section-intro reveal">
       <div class="section-tag-line">Option 2</div>
-      <h2 class="section-title">Bulk Hour Packages</h2>
-      <p class="section-sub">Buy more hours up front and save up to 15%. The more committed you are, the better the deal.</p>
+      <h2 class="section-title" id="section-packages-title">Bulk Hour Packages</h2>
+      <p class="section-sub" id="section-packages-subtitle">Buy more hours up front and save up to 15%. The more committed you are, the better the deal.</p>
     </div>
 
     <div class="pkg-calculator reveal">
@@ -1266,46 +1266,12 @@ td.highlight .best-for {
           <div class="pkg-result-total-label">Total package price</div>
           <div class="pkg-result-total-num" id="pkg-total">£1,620</div>
         </div>
-        <button class="btn-lg primary" onclick="startCheckout('bulk', currentPkgIndex)">Buy this package →</button>
+        <button class="btn-lg primary" id="btn-package" onclick="startCheckout('bulk', currentPkgIndex)">Buy this package →</button>
       </div>
     </div>
 
-    <div class="pkg-grid reveal">
-      <div class="pkg-card" onclick="selectPkg(0, this)">
-        <div class="pkg-hrs">10</div>
-        <div class="pkg-hrs-label">hours</div>
-        <div class="pkg-discount">5% off</div>
-        <div class="pkg-total-price">£570</div>
-        <div class="pkg-per-hr">£57 / hr</div>
-      </div>
-      <div class="pkg-card" onclick="selectPkg(1, this)">
-        <div class="pkg-hrs">20</div>
-        <div class="pkg-hrs-label">hours</div>
-        <div class="pkg-discount">7.5% off</div>
-        <div class="pkg-total-price">£1,110</div>
-        <div class="pkg-per-hr">£55.50 / hr</div>
-      </div>
-      <div class="pkg-card active" onclick="selectPkg(2, this)">
-        <div class="pkg-hrs">30</div>
-        <div class="pkg-hrs-label">hours</div>
-        <div class="pkg-discount">10% off</div>
-        <div class="pkg-total-price">£1,620</div>
-        <div class="pkg-per-hr">£54 / hr</div>
-      </div>
-      <div class="pkg-card" onclick="selectPkg(3, this)">
-        <div class="pkg-hrs">40</div>
-        <div class="pkg-hrs-label">hours</div>
-        <div class="pkg-discount">12.5% off</div>
-        <div class="pkg-total-price">£2,100</div>
-        <div class="pkg-per-hr">£52.50 / hr</div>
-      </div>
-      <div class="pkg-card popular" onclick="selectPkg(4, this)">
-        <div class="pkg-hrs">50</div>
-        <div class="pkg-hrs-label">hours</div>
-        <div class="pkg-discount">15% off</div>
-        <div class="pkg-total-price">£2,550</div>
-        <div class="pkg-per-hr">£51 / hr</div>
-      </div>
+    <div class="pkg-grid reveal" id="packages-grid">
+      <!-- Populated by JS from config -->
     </div>
   </div>
 </section>
@@ -1314,8 +1280,8 @@ td.highlight .best-for {
   <div class="section-wrap">
     <div class="section-intro reveal">
       <div class="section-tag-line">Option 3</div>
-      <h2 class="section-title">The Pass Guarantee</h2>
-      <p class="section-sub">18 weeks to your driving licence — or we keep going until you pass. <a href="learner-journey.html" class="programme-link">See exactly how the programme works →</a></p>
+      <h2 class="section-title" id="section-guarantee-title">The Pass Guarantee</h2>
+      <p class="section-sub" id="section-guarantee-subtitle">18 weeks to your driving licence — or we keep going until you pass. <a href="learner-journey.html" class="programme-link">See exactly how the programme works →</a></p>
     </div>
 
     <div class="calculator-container reveal">
@@ -1324,11 +1290,11 @@ td.highlight .best-for {
         <div class="base-header">
           <div class="base-title">Core Programme</div>
           <div class="base-price">
-            <div class="base-price-amount">£2,400</div>
+            <div class="base-price-amount" id="core-price-display">£2,400</div>
             <div class="base-price-note">Everything included</div>
           </div>
         </div>
-        <ul class="base-features">
+        <ul class="base-features" id="core-features-list">
           <li class="base-feature">18-week structured programme</li>
           <li class="base-feature">~30 hours with expert instructor</li>
           <li class="base-feature">Theory & practical test booked for you</li>
@@ -1341,35 +1307,35 @@ td.highlight .best-for {
       <div class="addons-section">
         <div class="addon-section-title">Add Protection</div>
         
-        <div class="addon-card" onclick="toggleAddon(1, 200, this)" data-tier="plus_1">
+        <div class="addon-card" onclick="toggleAddon(1, this)" data-tier="plus_1" id="addon-card-1">
           <div class="addon-info">
             <h3>+1 Retake Cover</h3>
             <p>If you don't pass first time, we cover your 2nd attempt (10 hours + test)</p>
           </div>
           <div class="addon-price">
-            <div class="addon-price-amount">+£200</div>
+            <div class="addon-price-amount" id="addon-price-1">+£200</div>
             <div class="addon-checkbox" id="checkbox-1"></div>
           </div>
         </div>
         
-        <div class="addon-card" onclick="toggleAddon(2, 350, this)" data-tier="plus_2">
+        <div class="addon-card" onclick="toggleAddon(2, this)" data-tier="plus_2" id="addon-card-2">
           <div class="addon-info">
             <h3>+2 Retake Cover</h3>
             <p>Covers your 2nd and 3rd attempts if needed (10 hours + test each)</p>
           </div>
           <div class="addon-price">
-            <div class="addon-price-amount">+£350</div>
+            <div class="addon-price-amount" id="addon-price-2">+£350</div>
             <div class="addon-checkbox" id="checkbox-2"></div>
           </div>
         </div>
         
-        <div class="addon-card" onclick="toggleAddon(3, 500, this)" data-tier="lifetime">
+        <div class="addon-card" onclick="toggleAddon(3, this)" data-tier="lifetime" id="addon-card-3">
           <div class="addon-info">
             <h3>Lifetime Cover</h3>
             <p>Unlimited retakes until you pass — 10 hours + test for every attempt</p>
           </div>
           <div class="addon-price">
-            <div class="addon-price-amount">+£500</div>
+            <div class="addon-price-amount" id="addon-price-3">+£500</div>
             <div class="addon-checkbox" id="checkbox-3"></div>
           </div>
         </div>
@@ -1379,19 +1345,19 @@ td.highlight .best-for {
       <div class="total-card">
         <div class="total-row">
           <span>Core Programme</span>
-          <span>£2,400</span>
+          <span id="total-core-display">£2,400</span>
         </div>
         <div class="total-row" id="addon-row-1" style="display: none;">
           <span>+1 Retake Cover</span>
-          <span>£200</span>
+          <span id="total-addon-1-display">£200</span>
         </div>
         <div class="total-row" id="addon-row-2" style="display: none;">
           <span>+2 Retake Cover</span>
-          <span>£350</span>
+          <span id="total-addon-2-display">£350</span>
         </div>
         <div class="total-row" id="addon-row-3" style="display: none;">
           <span>Lifetime Cover</span>
-          <span>£500</span>
+          <span id="total-addon-3-display">£500</span>
         </div>
         <div class="total-row final">
           <span>Total</span>
@@ -1399,9 +1365,9 @@ td.highlight .best-for {
         </div>
       </div>
 
-      <button class="cta-button" onclick="startCalculatorCheckout()">Continue to Booking →</button>
+      <button class="cta-button" id="btn-guarantee" onclick="startCalculatorCheckout()">Continue to Booking →</button>
 
-      <p class="guarantee-note">✓ In 2024 car practical test pass rate was 47%. Choose the protection that feels right for you.</p>
+      <p class="guarantee-note" id="guarantee-note">✓ In 2024 car practical test pass rate was 47%. Choose the protection that feels right for you.</p>
       <p class="programme-link-wrapper"><a href="learner-journey.html" class="programme-link-secondary">Learn about the 18-week programme structure</a></p>
     </div>
   </div>
@@ -1419,23 +1385,23 @@ td.highlight .best-for {
       <thead>
         <tr>
           <th></th>
-          <th>Pay As You Go</th>
-          <th>Bulk Package</th>
-          <th class="highlight">Pass Guarantee</th>
+          <th id="compare-payg-title">Pay As You Go</th>
+          <th id="compare-packages-title">Bulk Package</th>
+          <th class="highlight" id="compare-guarantee-title">Pass Guarantee</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td>Price per hour</td>
-          <td>£60</td>
-          <td>£51–£57</td>
+          <td id="compare-payg-rate">£60</td>
+          <td id="compare-packages-rate">£51–£57</td>
           <td class="highlight">Included</td>
         </tr>
         <tr>
           <td>Upfront cost</td>
           <td>None</td>
-          <td>£570–£2,550</td>
-          <td class="highlight">£2,400+</td>
+          <td id="compare-packages-range">£570–£2,550</td>
+          <td class="highlight" id="compare-guarantee-range">£2,400+</td>
         </tr>
         <tr>
           <td>Tests booked for you</td>
@@ -1468,11 +1434,11 @@ td.highlight .best-for {
           <td class="highlight"><span class="partial">Structured</span></td>
         </tr>
         <tr>
-  <td>Best for</td>
-  <td><span class="best-for">Trying it out</span></td>
-  <td><span class="best-for">Committed learners</span></td>
-  <td class="highlight"><span class="best-for">Best outcome, zero risk</span></td>
-</tr>
+          <td>Best for</td>
+          <td><span class="best-for">Trying it out</span></td>
+          <td><span class="best-for">Committed learners</span></td>
+          <td class="highlight"><span class="best-for">Best outcome, zero risk</span></td>
+        </tr>
       </tbody>
     </table>
   </div>
@@ -1483,18 +1449,18 @@ td.highlight .best-for {
     <h2>Ready to get<br>your <em>licence</em>?</h2>
     <p>Book your first lesson or get in touch — we'll help you pick the right option and get started.</p>
     <div class="cta-buttons">
-      <button class="btn-lg primary" onclick="startCheckout('payg')">Book a lesson now</button>
-      <a href="mailto:hello@coachcarter.com" class="btn-lg secondary">Talk to us first</a>
+      <button class="btn-lg primary" id="cta-primary" onclick="startCheckout('payg')">Book a lesson now</button>
+      <a href="mailto:hello@coachcarter.com" class="btn-lg secondary" id="cta-secondary">Talk to us first</a>
     </div>
   </div>
 </section>
 
 <footer>
-  <p>© 2025 CoachCarter Driving School · <a href="#">Privacy</a> · <a href="#">Terms</a> · All prices include VAT where applicable.</p>
+  <p id="footer-text">© 2025 CoachCarter Driving School · <a href="#">Privacy</a> · <a href="#">Terms</a> · All prices include VAT where applicable.</p>
 </footer>
 
 <script>
-  // CONFIG SYSTEM
+// CONFIG SYSTEM
 let SITE_CONFIG = {};
 
 async function loadConfig() {
@@ -1504,43 +1470,156 @@ async function loadConfig() {
     applyConfig();
   } catch (err) {
     console.error('Failed to load config:', err);
-    // Keep defaults if config fails to load
+    // Initialize with defaults if config fails
+    initWithDefaults();
   }
 }
 
+function initWithDefaults() {
+  // Fallback defaults if config fails to load
+  PACKAGES.push(
+    { hrs: 10, discount: 0.05, price: 570 },
+    { hrs: 20, discount: 0.075, price: 1110 },
+    { hrs: 30, discount: 0.10, price: 1620 },
+    { hrs: 40, discount: 0.125, price: 2100 },
+    { hrs: 50, discount: 0.15, price: 2550 }
+  );
+  renderPackages();
+  updatePkg(2);
+}
+
 function applyConfig() {
-  if (!SITE_CONFIG.pricing || !SITE_CONFIG.copy) return;
+  if (!SITE_CONFIG.pricing || !SITE_CONFIG.content) {
+    console.warn('Config missing required sections');
+    initWithDefaults();
+    return;
+  }
   
   const p = SITE_CONFIG.pricing;
-  const c = SITE_CONFIG.copy;
+  const c = SITE_CONFIG.content;
   
-  // Update PAYG prices
-  const paygPriceEl = document.querySelector('.payg-price-num');
+  // === PRICING UPDATES ===
+  
+  // Update PAYG price display
+  const paygPriceEl = document.getElementById('payg-price-display');
   if (paygPriceEl) paygPriceEl.textContent = '£' + p.payg_hourly;
   
   // Update hero stats
-  const heroStats = document.querySelectorAll('.hero-right .stat-num');
-  if (heroStats[0]) heroStats[0].textContent = '£' + p.payg_hourly;
-  if (heroStats[2]) heroStats[2].textContent = '£' + p.core_programme.toLocaleString();
-  if (heroStats[3]) heroStats[3].textContent = c.programme_duration.replace(' weeks', 'wk');
-  
-  // Update Core Programme price in calculator
-  const basePriceEl = document.querySelector('.base-price-amount');
-  if (basePriceEl) basePriceEl.textContent = '£' + p.core_programme.toLocaleString();
-  
-  // Update addon prices (these are used in the calculator logic)
-  if (typeof addonPrices !== 'undefined') {
-    addonPrices = { 1: p.retake_1, 2: p.retake_2, 3: p.retake_lifetime };
+  if (c.hero && c.hero.stats) {
+    document.getElementById('hero-stat-1-value').textContent = c.hero.stats[0]?.value || '£' + p.payg_hourly;
+    document.getElementById('hero-stat-1-label').textContent = c.hero.stats[0]?.label || 'Per hour,\npay as you go';
+    document.getElementById('hero-stat-2-value').textContent = c.hero.stats[1]?.value || '15%';
+    document.getElementById('hero-stat-2-label').textContent = c.hero.stats[1]?.label || 'Max discount on\nbulk packages';
+    document.getElementById('hero-stat-3-value').textContent = c.hero.stats[2]?.value || '£' + p.core_programme.toLocaleString();
+    document.getElementById('hero-stat-3-label').textContent = c.hero.stats[2]?.label || 'Full Pass Guarantee\nprogramme';
+    document.getElementById('hero-stat-4-value').textContent = c.hero.stats[3]?.value || c.business?.programme_duration?.replace(' weeks', 'wk') || '18wk';
+    document.getElementById('hero-stat-4-label').textContent = c.hero.stats[3]?.label || 'Structured programme\nto test day';
   }
   
-  // Update basePrice variable if it exists
-  if (typeof basePrice !== 'undefined') {
-    basePrice = p.core_programme;
+  // Update Core Programme price
+  const corePriceEl = document.getElementById('core-price-display');
+  if (corePriceEl) corePriceEl.textContent = '£' + p.core_programme.toLocaleString();
+  
+  // Update total displays
+  document.getElementById('total-core-display').textContent = '£' + p.core_programme.toLocaleString();
+  
+  // Update addon prices
+  addonPrices = { 
+    1: p.retake_1, 
+    2: p.retake_2, 
+    3: p.retake_lifetime 
+  };
+  
+  // Update addon price displays
+  document.getElementById('addon-price-1').textContent = '+£' + p.retake_1;
+  document.getElementById('addon-price-2').textContent = '+£' + p.retake_2;
+  document.getElementById('addon-price-3').textContent = '+£' + p.retake_lifetime;
+  
+  // Update addon total displays (core + addon)
+  document.getElementById('total-addon-1-display').textContent = '£' + p.retake_1;
+  document.getElementById('total-addon-2-display').textContent = '£' + p.retake_2;
+  document.getElementById('total-addon-3-display').textContent = '£' + p.retake_lifetime;
+  
+  // Update basePrice for calculations
+  basePrice = p.core_programme;
+  
+  // === CONTENT UPDATES ===
+  
+  // Hero content
+  if (c.hero) {
+    const headlineEl = document.getElementById('hero-headline');
+    if (headlineEl && c.hero.headline) {
+      headlineEl.innerHTML = c.hero.headline.replace('.', '.<br><em>') + '</em>';
+    }
+    
+    const subheadEl = document.getElementById('hero-subheadline');
+    if (subheadEl && c.hero.subheadline) {
+      subheadEl.textContent = c.hero.subheadline;
+    }
   }
   
-  // Update bulk packages
-  if (p.bulk_packages && typeof PACKAGES !== 'undefined') {
-    // Clear and repopulate PACKAGES array
+  // Section titles
+  if (c.sections) {
+    document.getElementById('section-payg-title').textContent = c.sections.payg?.title || 'Pay As You Go';
+    document.getElementById('section-payg-subtitle').textContent = c.sections.payg?.subtitle || 'Maximum flexibility. Book when you need, cancel when life happens.';
+    document.getElementById('section-packages-title').textContent = c.sections.packages?.title || 'Bulk Hour Packages';
+    document.getElementById('section-packages-subtitle').textContent = c.sections.packages?.subtitle || 'Buy more hours up front and save up to 15%.';
+    document.getElementById('section-guarantee-title').textContent = c.sections.guarantee?.title || 'The Pass Guarantee';
+    document.getElementById('section-guarantee-subtitle').textContent = c.sections.guarantee?.subtitle || '18 weeks to your driving licence — or we keep going until you pass.';
+  }
+  
+  // Feature lists
+  if (c.features) {
+    // PAYG features
+    const paygFeaturesList = document.getElementById('payg-features-list');
+    if (paygFeaturesList && c.features.payg) {
+      paygFeaturesList.innerHTML = c.features.payg.map(f => 
+        `<li class="payg-feature">${f}</li>`
+      ).join('');
+    }
+    
+    // Core features
+    const coreFeaturesList = document.getElementById('core-features-list');
+    if (coreFeaturesList && c.features.core) {
+      coreFeaturesList.innerHTML = c.features.core.map(f => 
+        `<li class="base-feature">${f}</li>`
+      ).join('');
+    }
+  }
+  
+  // CTA buttons
+  if (c.cta) {
+    document.getElementById('nav-cta-primary').textContent = c.cta.primary || 'Book a Lesson';
+    document.getElementById('hero-cta').textContent = 'View all options →';
+    document.getElementById('btn-payg').textContent = c.cta.payg_button || `Book £${p.payg_hourly} lesson →`;
+    document.getElementById('btn-package').textContent = c.cta.package_button || 'Buy this package →';
+    document.getElementById('btn-guarantee').textContent = c.cta.guarantee_button || 'Continue to Booking →';
+    document.getElementById('cta-primary').textContent = c.cta.primary || 'Book a lesson now';
+    document.getElementById('cta-secondary').textContent = c.cta.secondary || 'Talk to us first';
+  }
+  
+  // Business info
+  if (c.business) {
+    const guaranteeNote = document.getElementById('guarantee-note');
+    if (guaranteeNote && c.business.guarantee_note) {
+      guaranteeNote.innerHTML = `✓ ${c.business.guarantee_note}`;
+    }
+    
+    const footerText = document.getElementById('footer-text');
+    if (footerText && c.business.footer_text) {
+      footerText.innerHTML = c.business.footer_text.replace(/(Privacy|Terms)/g, '<a href="#">$1</a>');
+    }
+    
+    // Update email link
+    const ctaSecondary = document.getElementById('cta-secondary');
+    if (ctaSecondary && c.business.contact_email) {
+      ctaSecondary.href = 'mailto:' + c.business.contact_email;
+    }
+  }
+  
+  // === BULK PACKAGES ===
+  
+  if (p.bulk_packages && Array.isArray(p.bulk_packages)) {
     PACKAGES.length = 0;
     p.bulk_packages.forEach(pkg => {
       PACKAGES.push({
@@ -1549,45 +1628,56 @@ function applyConfig() {
         discount: pkg.discount
       });
     });
-    // Refresh the package display
-    if (typeof updatePkg === 'function') {
-      updatePkg(currentPkgIndex || 2);
-    }
+    renderPackages();
+    updatePkg(currentPkgIndex || 2);
   }
   
-  // Update copy/text content
-  const headlineEl = document.querySelector('.hero h1');
-  if (headlineEl && c.headline) {
-    headlineEl.innerHTML = c.headline.replace('.', '.<br><em>') + '</em>';
+  // Update comparison table pricing
+  updateComparisonTable(p);
+}
+
+function updateComparisonTable(pricing) {
+  // Update PAYG rate
+  document.getElementById('compare-payg-rate').textContent = '£' + pricing.payg_hourly;
+  
+  // Update packages range
+  if (pricing.bulk_packages && pricing.bulk_packages.length > 0) {
+    const minPrice = pricing.bulk_packages[0].price;
+    const maxPrice = pricing.bulk_packages[pricing.bulk_packages.length - 1].price;
+    document.getElementById('compare-packages-range').textContent = `£${minPrice}–£${maxPrice.toLocaleString()}`;
+    
+    // Calculate per-hour range
+    const minPerHour = pricing.bulk_packages[pricing.bulk_packages.length - 1].per_hour;
+    const maxPerHour = pricing.bulk_packages[0].per_hour;
+    document.getElementById('compare-packages-rate').textContent = `£${minPerHour}–£${maxPerHour}`;
   }
   
-  const subheadEl = document.querySelector('.hero-sub');
-  if (subheadEl && c.subheadline) {
-    subheadEl.textContent = c.subheadline;
-  }
+  // Update guarantee range
+  const core = pricing.core_programme;
+  const maxGuarantee = core + pricing.retake_lifetime;
+  document.getElementById('compare-guarantee-range').textContent = `£${core.toLocaleString()}+`;
+}
+
+function renderPackages() {
+  const grid = document.getElementById('packages-grid');
+  if (!grid) return;
   
-  const guaranteeNote = document.querySelector('.guarantee-note');
-  if (guaranteeNote && c.pass_rate) {
-    guaranteeNote.innerHTML = `✓ ${c.pass_rate} of students pass first time. Choose the protection that feels right for you.`;
-  }
-  
-  // Update guarantee section subheadline if it exists
-  const guaranteeSub = document.querySelector('#guarantee .section-sub');
-  if (guaranteeSub && c.guarantee_promise) {
-    guaranteeSub.textContent = c.guarantee_promise + '. Choose your protection level.';
-  }
+  grid.innerHTML = PACKAGES.map((pkg, i) => `
+    <div class="pkg-card ${i === 4 ? 'popular' : ''} ${i === currentPkgIndex ? 'active' : ''}" onclick="selectPkg(${i}, this)">
+      <div class="pkg-hrs">${pkg.hrs}</div>
+      <div class="pkg-hrs-label">hours</div>
+      <div class="pkg-discount">${(pkg.discount * 100)}% off</div>
+      <div class="pkg-total-price">£${pkg.price.toLocaleString()}</div>
+      <div class="pkg-per-hr">£${(pkg.price / pkg.hrs).toFixed(2)} / hr</div>
+    </div>
+  `).join('');
 }
 
 // Load config immediately
 loadConfig();
+
 // PACKAGE DATA
-const PACKAGES = [
-  { hrs: 10, discount: 0.05, price: 570 },
-  { hrs: 20, discount: 0.075, price: 1110 },
-  { hrs: 30, discount: 0.10, price: 1620 },
-  { hrs: 40, discount: 0.125, price: 2100 },
-  { hrs: 50, discount: 0.15, price: 2550 },
-];
+const PACKAGES = [];
 const BASE_RATE = 60;
 let currentPkgIndex = 2;
 
@@ -1605,7 +1695,10 @@ function updatePkg(idx) {
   idx = parseInt(idx);
   currentPkgIndex = idx;
   const pkg = PACKAGES[idx];
-  const std = pkg.hrs * BASE_RATE;
+  
+  if (!pkg) return;
+  
+  const std = pkg.hrs * (SITE_CONFIG.pricing?.payg_hourly || 60);
   const saving = std - pkg.price;
   const perHr = pkg.price / pkg.hrs;
 
@@ -1631,7 +1724,7 @@ function scrollToPackages() {
 }
 
 // CALCULATOR FUNCTIONS
-function toggleAddon(addon, price, element) {
+function toggleAddon(addon, element) {
   // If clicking already selected, deselect
   if (selectedAddon === addon) {
     selectedAddon = 0;
@@ -1678,13 +1771,14 @@ async function startCheckout(type, pkgIndex = null) {
 
   try {
     let lineItems, metadata, customFields;
+    const p = SITE_CONFIG.pricing || { payg_hourly: 60, core_programme: 2400 };
 
     if (type === 'payg') {
       // Single lesson
       lineItems = [{
         price_data: {
           currency: 'gbp',
-          unit_amount: 6000, // £60 in pence
+          unit_amount: (p.payg_hourly || 60) * 100,
           product_data: {
             name: 'Driving Lesson — Pay As You Go',
             description: 'Single 1-hour lesson with CoachCarter'
@@ -1704,6 +1798,8 @@ async function startCheckout(type, pkgIndex = null) {
     } else if (type === 'bulk') {
       // Bulk package
       const pkg = PACKAGES[pkgIndex || currentPkgIndex];
+      if (!pkg) throw new Error('No package selected');
+      
       lineItems = [{
         price_data: {
           currency: 'gbp',
@@ -1727,46 +1823,6 @@ async function startCheckout(type, pkgIndex = null) {
           type: 'text',
           optional: false
         }
-      ];
-    } else if (type === 'guarantee') {
-      // Legacy Pass Guarantee (fallback)
-      lineItems = [{
-        price_data: {
-          currency: 'gbp',
-          unit_amount: 240000, // £2,400 in pence
-          product_data: {
-            name: '18-Week Pass Guarantee Programme',
-            description: 'Full structured programme with test booking and pass guarantee'
-          }
-        },
-        quantity: 1
-      }];
-      metadata = { package_type: 'pass_guarantee' };
-      customFields = [
-        {
-          key: 'provisional_licence',
-          label: { type: 'custom', custom: 'Provisional licence number' },
-          type: 'text',
-          optional: false
-        },
-        {
-          key: 'has_test_booked',
-          label: { type: 'custom', custom: 'Do you already have a practical test booked?' },
-          type: 'dropdown',
-          dropdown: {
-            options: [
-              { label: 'No, I need you to book it', value: 'needstest' },
-              { label: 'Yes, I have a test date', value: 'hastest' },
-              { label: "I'm not sure / need help", value: 'unsure' }
-            ]
-          }
-        },
-        {
-          key: 'dvsa_reference',
-          label: { type: 'custom', custom: 'DVSA reference number (if you have a test booked)' },
-          type: 'text',
-          optional: true
-        },
       ];
     }
 
@@ -1807,15 +1863,16 @@ async function startCalculatorCheckout() {
     let lineItems = [];
     let metadata = {};
     let customFields = [];
+    const p = SITE_CONFIG.pricing || { core_programme: 2400, retake_1: 200, retake_2: 350, retake_lifetime: 500 };
     
     // Base Core Programme
     lineItems.push({
       price_data: {
         currency: 'gbp',
-                unit_amount: basePrice * 100, // in pence
+        unit_amount: basePrice * 100,
         product_data: {
           name: 'Core Programme — 18 Week Guarantee',
-          description: '18 weeks minimum, 18+ hours, test booked, instructor performance-paid'
+          description: '18 weeks minimum, test booked, instructor performance-paid'
         }
       },
       quantity: 1
@@ -1824,20 +1881,19 @@ async function startCalculatorCheckout() {
     // Determine tier and add retake if selected
     let tierName = 'core_only';
     let packageName = 'Core Only';
-    let totalHours = 18;
+    let totalHours = SITE_CONFIG.pricing?.core_hours || 30;
     let retakeCoverage = 0;
 
     if (selectedAddon === 1) {
-      // +1 Retake
       tierName = 'core_plus_1';
       packageName = 'Core + 1 Retake';
-      totalHours = 28; // 18 + 10
+      totalHours = (SITE_CONFIG.pricing?.core_hours || 30) + 10;
       retakeCoverage = 1;
       
       lineItems.push({
         price_data: {
           currency: 'gbp',
-                    unit_amount: addonPrices[1] * 100, // in pence
+          unit_amount: addonPrices[1] * 100,
           product_data: {
             name: '+1 Retake Cover',
             description: '+10 hours + test if first attempt failed'
@@ -1846,16 +1902,15 @@ async function startCalculatorCheckout() {
         quantity: 1
       });
     } else if (selectedAddon === 2) {
-      // +2 Retakes
       tierName = 'core_plus_2';
       packageName = 'Core + 2 Retakes';
-      totalHours = 38; // 18 + 10 + 10
+      totalHours = (SITE_CONFIG.pricing?.core_hours || 30) + 20;
       retakeCoverage = 2;
       
       lineItems.push({
         price_data: {
           currency: 'gbp',
-                    unit_amount: addonPrices[2] * 100, // in pence
+          unit_amount: addonPrices[2] * 100,
           product_data: {
             name: '+2 Retake Cover',
             description: '+10 hours + test for 2nd & 3rd fails'
@@ -1864,19 +1919,18 @@ async function startCalculatorCheckout() {
         quantity: 1
       });
     } else if (selectedAddon === 3) {
-      // Lifetime
       tierName = 'core_plus_lifetime';
       packageName = 'Core + Lifetime Cover';
-      totalHours = '18+';
+      totalHours = (SITE_CONFIG.pricing?.core_hours || 30) + '+';
       retakeCoverage = 'unlimited';
       
       lineItems.push({
         price_data: {
           currency: 'gbp',
-                   unit_amount: addonPrices[3] * 100, // in pence
+          unit_amount: addonPrices[3] * 100,
           product_data: {
             name: 'Lifetime Retake Cover',
-            description: 'Unlimited 10hr+test retakes until you pass'
+            description: 'Unlimited retakes until you pass'
           }
         },
         quantity: 1
@@ -1888,12 +1942,12 @@ async function startCalculatorCheckout() {
       package_name: packageName,
       total_hours: totalHours.toString(),
       retake_coverage: retakeCoverage.toString(),
-      base_price: '2400',
+      base_price: basePrice.toString(),
       addon_price: selectedAddon > 0 ? addonPrices[selectedAddon].toString() : '0',
       estimated_profit: calculateProfit(tierName).toString()
     };
 
-        customFields = [
+    customFields = [
       {
         key: 'provisional_licence',
         label: { type: 'custom', custom: 'Provisional licence number' },
@@ -1947,18 +2001,14 @@ async function startCalculatorCheckout() {
 }
 
 function calculateProfit(tier) {
-  // Your estimated profit margins for admin tracking
   const profits = {
     'core_only': 430,
-    'core_plus_1': 489, // weighted average
-    'core_plus_2': 611, // weighted
-    'core_plus_lifetime': 750 // weighted
+    'core_plus_1': 489,
+    'core_plus_2': 611,
+    'core_plus_lifetime': 750
   };
   return profits[tier] || 430;
 }
-
-// Init
-updatePkg(2);
 
 // SCROLL REVEAL
 const observer = new IntersectionObserver(entries => {
