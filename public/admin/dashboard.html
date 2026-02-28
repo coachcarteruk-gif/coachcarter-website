@@ -236,9 +236,9 @@ header nav a:hover, header nav a.active {
     <img src="/Logo.png" alt="CoachCarter" style="height: 36px; width: auto;">
     <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Staff Dashboard</span>
   </div>
-      <nav>
-    <a href="/admin/dashboard.html" class="active">📋 Bookings</a>
-    <a href="/admin/dashboard.html#enquiries">✉️ Enquiries</a>
+        <nav>
+    <a href="/admin/dashboard.html" class="active" id="nav-bookings">📋 Bookings</a>
+    <a href="#" id="nav-enquiries" onclick="scrollToEnquiries(); return false;">✉️ Enquiries</a>
     <a href="/admin/editor.html">✏️ Editor</a>
     <a href="/" target="_blank">🌐 View Site →</a>
   </nav>
@@ -398,6 +398,13 @@ function renderBookings(filter = 'all') {
   `).join('');
 
   updateStats();
+  function scrollToEnquiries() {
+  // Find the enquiries section (the div with margin-top: 64px)
+  const enquirySection = document.querySelector('div[style*="margin-top: 64px"]');
+  if (enquirySection) {
+    enquirySection.scrollIntoView({ behavior: 'smooth' });
+  }
+}
 }
 
 function updateStats() {
@@ -424,9 +431,9 @@ function verifyDVSA(ref) {
 }
 
 // FILTER BUTTONS
-document.querySelectorAll('.filter-btn').forEach(btn => {
+document.querySelectorAll('.filters .filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.filters .filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     renderBookings(btn.dataset.filter);
   });
