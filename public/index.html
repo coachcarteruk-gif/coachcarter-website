@@ -1253,6 +1253,376 @@ td.highlight .best-for {
     padding: 32px 24px;
   }
 }
+  /* MODERN ENQUIRY FORM STYLES */
+.enquiry-section {
+  padding: 120px 48px;
+  background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.enquiry-section::before {
+  content: '';
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245,131,33,0.08), transparent 70%);
+  top: -200px;
+  right: -200px;
+  pointer-events: none;
+}
+
+.enquiry-section::after {
+  content: '';
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245,131,33,0.05), transparent 70%);
+  bottom: -100px;
+  left: -100px;
+  pointer-events: none;
+}
+
+.enquiry-card {
+  background: var(--white);
+  border-radius: 24px;
+  padding: 48px;
+  max-width: 800px;
+  margin: 0 auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.02);
+  position: relative;
+  z-index: 1;
+}
+
+.enquiry-header {
+  text-align: center;
+  margin-bottom: 40px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--border);
+}
+
+.enquiry-icon {
+  width: 64px;
+  height: 64px;
+  background: var(--accent-lt);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin: 0 auto 20px;
+}
+
+.enquiry-header h3 {
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.enquiry-header p {
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.enquiry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.enquiry-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-family: var(--font-head);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.form-group label .required {
+  color: var(--accent);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.form-group label .optional {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 16px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--primary);
+  background: var(--white);
+  transition: all 0.2s ease;
+  outline: none;
+  width: 100%;
+}
+
+.form-group input:hover,
+.form-group select:hover,
+.form-group textarea:hover {
+  border-color: #d0d0d0;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(245,131,33,0.1);
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #aaa;
+}
+
+.form-group select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23272727' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 40px;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 120px;
+  line-height: 1.6;
+}
+
+/* Custom Checkbox */
+.checkbox-wrapper {
+  margin-top: 8px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--muted);
+  position: relative;
+  padding-left: 36px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 24px;
+  width: 24px;
+  background-color: var(--white);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.checkbox-label:hover input ~ .checkmark {
+  border-color: var(--accent);
+}
+
+.checkbox-label input:checked ~ .checkmark {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 7px;
+  top: 3px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.checkbox-label input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.checkbox-text {
+  line-height: 1.4;
+}
+
+/* Submit Button */
+.enquiry-submit {
+  width: 100%;
+  background: var(--accent);
+  color: white;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 18px 32px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.enquiry-submit::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s;
+}
+
+.enquiry-submit:hover::before {
+  left: 100%;
+}
+
+.enquiry-submit:hover {
+  background: var(--accent-dk);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(245,131,33,0.3);
+}
+
+.enquiry-submit:active {
+  transform: translateY(0);
+}
+
+.enquiry-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.enquiry-submit svg {
+  transition: transform 0.2s;
+}
+
+.enquiry-submit:hover svg {
+  transform: translateX(4px);
+}
+
+/* Status Message */
+.enquiry-status {
+  text-align: center;
+  padding: 16px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  display: none;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.enquiry-status.success {
+  display: block;
+  background: rgba(26,158,92,0.1);
+  color: var(--green);
+  border: 1px solid rgba(26,158,92,0.2);
+}
+
+.enquiry-status.error {
+  display: block;
+  background: rgba(220,38,38,0.1);
+  color: #dc2626;
+  border: 1px solid rgba(220,38,38,0.2);
+}
+
+/* Trust Badges */
+.enquiry-trust {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  margin-top: 48px;
+  flex-wrap: wrap;
+}
+
+.trust-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.trust-item svg {
+  color: var(--accent);
+  stroke-width: 2.5px;
+}
+
+@media (max-width: 768px) {
+  .enquiry-section {
+    padding: 80px 24px;
+  }
+  
+  .enquiry-card {
+    padding: 32px 24px;
+  }
+  
+  .enquiry-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .enquiry-trust {
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+}
 </style>
 </head>
 <body>
@@ -1586,34 +1956,52 @@ td.highlight .best-for {
     </table>
   </div>
 </section>
-  <section class="enquiry-section" id="enquiry">
+ <section class="enquiry-section" id="enquiry">
   <div class="section-wrap">
     <div class="section-intro reveal">
       <div class="section-tag-line">Get in Touch</div>
       <h2 class="section-title">Have a <em>question?</em></h2>
-      <p class="section-sub">Not sure which option is right for you? Ask us anything — we'll get back to you within 24 hours.</p>
+      <p class="section-sub">Not sure which option is right for you? Send us a message and we'll get back to you within 24 hours.</p>
     </div>
 
     <div class="enquiry-card reveal">
+      <div class="enquiry-header">
+        <div class="enquiry-icon">✉️</div>
+        <h3>Send us a message</h3>
+        <p>Fill in your details below and we'll be in touch shortly</p>
+      </div>
+
       <form id="enquiry-form" class="enquiry-form">
         <div class="enquiry-grid">
           <div class="form-group">
-            <label for="enq-name">Full Name</label>
-            <input type="text" id="enq-name" name="name" required placeholder="Your name">
+            <label for="enq-name">
+              <span>Full Name</span>
+              <span class="required">*</span>
+            </label>
+            <input type="text" id="enq-name" name="name" required placeholder="e.g. Sarah Johnson">
           </div>
           
           <div class="form-group">
-            <label for="enq-email">Email Address</label>
-            <input type="email" id="enq-email" name="email" required placeholder="you@example.com">
+            <label for="enq-email">
+              <span>Email Address</span>
+              <span class="required">*</span>
+            </label>
+            <input type="email" id="enq-email" name="email" required placeholder="sarah@example.com">
           </div>
 
           <div class="form-group">
-            <label for="enq-phone">Phone Number</label>
+            <label for="enq-phone">
+              <span>Phone Number</span>
+              <span class="required">*</span>
+            </label>
             <input type="tel" id="enq-phone" name="phone" required placeholder="07123 456789">
           </div>
 
           <div class="form-group">
-            <label for="enq-type">What can we help with?</label>
+            <label for="enq-type">
+              <span>What can we help with?</span>
+              <span class="required">*</span>
+            </label>
             <select id="enq-type" name="enquiryType" required>
               <option value="" disabled selected>Choose an option</option>
               <option value="general">General question</option>
@@ -1626,23 +2014,54 @@ td.highlight .best-for {
         </div>
 
         <div class="form-group full-width">
-          <label for="enq-message">Your Message</label>
-          <textarea id="enq-message" name="message" rows="4" placeholder="Tell us what you'd like to know..."></textarea>
+          <label for="enq-message">
+            <span>Your Message</span>
+            <span class="optional">(optional)</span>
+          </label>
+          <textarea id="enq-message" name="message" rows="4" placeholder="Tell us more about what you're looking for..."></textarea>
         </div>
 
-        <div class="form-group full-width">
+        <div class="form-group full-width checkbox-wrapper">
           <label class="checkbox-label">
             <input type="checkbox" name="marketing" id="enq-marketing">
-            <span>Keep me updated with driving tips and special offers (optional)</span>
+            <span class="checkmark"></span>
+            <span class="checkbox-text">Keep me updated with driving tips and special offers</span>
           </label>
         </div>
 
-        <button type="submit" class="btn-lg primary enquiry-submit" id="enq-submit">
-          Send Enquiry →
+        <button type="submit" class="enquiry-submit" id="enq-submit">
+          <span>Send Enquiry</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
         </button>
 
         <div id="enquiry-status" class="enquiry-status"></div>
       </form>
+    </div>
+
+    <div class="enquiry-trust">
+      <div class="trust-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+        <span>Reply within 24 hours</span>
+      </div>
+      <div class="trust-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <span>Your data is secure</span>
+      </div>
+      <div class="trust-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        </svg>
+        <span>No spam, ever</span>
+      </div>
     </div>
   </div>
 </section>
