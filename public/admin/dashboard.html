@@ -237,8 +237,8 @@ header nav a:hover, header nav a.active {
     <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Staff Dashboard</span>
   </div>
         <nav>
-    <a href="/admin/dashboard.html" class="active" id="nav-bookings">📋 Bookings</a>
-    <a href="#" id="nav-enquiries" onclick="scrollToEnquiries(); return false;">✉️ Enquiries</a>
+     <a href="#" onclick="showSection('bookings'); return false;" class="active" id="nav-bookings">📋 Bookings</a>
+  <a href="#" onclick="showSection('enquiries'); return false;" id="nav-enquiries">✉️ Enquiries</a>
     <a href="/admin/editor.html">✏️ Editor</a>
     <a href="/" target="_blank">🌐 View Site →</a>
   </nav>
@@ -247,6 +247,8 @@ header nav a:hover, header nav a.active {
 
 <div class="container">
 
+  <!-- BOOKINGS SECTION -->
+<div class="bookings-section">
   <div class="stats">
     <div class="stat-card">
       <div class="stat-value" id="total-bookings">0</div>
@@ -286,35 +288,34 @@ header nav a:hover, header nav a.active {
       <div class="empty-state">Loading bookings...</div>
     </div>
   </div>
-  </div>    <!-- ← bookings-table closes here -->
+</div>
 
-  <!-- ADD THE ENQUIRIES SECTION HERE -->
-  <div style="margin-top: 64px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-      <h2 style="font-family: var(--font-head); font-size: 1.5rem; font-weight: 700;">Recent Enquiries</h2>
-      <div style="display: flex; gap: 12px; align-items: center;">
-        <span id="enquiry-count" style="font-size: 0.9rem; color: var(--muted);">Loading...</span>
-        <button class="filter-btn" onclick="refreshEnquiries()">↻ Refresh</button>
-      </div>
-    </div>
-
-    <div class="bookings-table">
-      <div class="table-header">
-        <div style="width: 150px;">Type</div>
-        <div>Contact</div>
-        <div style="width: 150px;">Phone</div>
-        <div style="width: 200px;">Submitted</div>
-        <div style="width: 120px;">Status</div>
-        <div style="width: 100px;">Actions</div>
-      </div>
-      <div id="enquiries-list">
-        <div class="empty-state">Loading enquiries...</div>
-      </div>
+<!-- ENQUIRIES SECTION -->
+<div class="enquiries-section" style="display: none;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <h2 style="font-family: var(--font-head); font-size: 1.5rem; font-weight: 700;">Recent Enquiries</h2>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <span id="enquiry-count" style="font-size: 0.9rem; color: var(--muted);">Loading...</span>
+      <button class="filter-btn" onclick="refreshEnquiries()">↻ Refresh</button>
     </div>
   </div>
 
-</div>  <!-- ← container closes here -->
+  <div class="bookings-table">
+    <div class="table-header">
+      <div style="width: 150px;">Type</div>
+      <div>Contact</div>
+      <div style="width: 150px;">Phone</div>
+      <div style="width: 200px;">Submitted</div>
+      <div style="width: 120px;">Status</div>
+      <div style="width: 100px;">Actions</div>
+    </div>
+    <div id="enquiries-list">
+      <div class="empty-state">Loading enquiries...</div>
+    </div>
+  </div>
 </div>
+
+</div>  <!-- ← container closes here -->
 
 <script>
 const demoBookings = [
@@ -425,6 +426,22 @@ function scrollToEnquiries() {
   const enquirySection = document.querySelector('div[style*="margin-top: 64px"]');
   if (enquirySection) {
     enquirySection.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+function showSection(section) {
+  // Hide all sections
+  document.querySelector('.bookings-section').style.display = 'none';
+  document.querySelector('.enquiries-section').style.display = 'none';
+  
+  // Show selected section
+  if (section === 'bookings') {
+    document.querySelector('.bookings-section').style.display = 'block';
+    document.getElementById('nav-bookings').classList.add('active');
+    document.getElementById('nav-enquiries').classList.remove('active');
+  } else {
+    document.querySelector('.enquiries-section').style.display = 'block';
+    document.getElementById('nav-enquiries').classList.add('active');
+    document.getElementById('nav-bookings').classList.remove('active');
   }
 }
 
