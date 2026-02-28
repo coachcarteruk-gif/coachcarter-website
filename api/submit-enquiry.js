@@ -42,18 +42,18 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // Connect to Neon database if URL exists
+    // Connect to Neon database
     if (process.env.POSTGRES_URL) {
       try {
         sql = neon(process.env.POSTGRES_URL);
       } catch (dbErr) {
         console.error('Database connection failed:', dbErr);
-        // Continue without database - email is primary
       }
     }
 
-    // Save to database if connected
+    // Save to database
     let dbSaved = false;
+    let enquiryId;
     if (sql) {
       try {
         await sql`
@@ -70,18 +70,67 @@ module.exports = async (req, res) => {
           )
         `;
         
-        await sql`
+        const result = await sql`
           INSERT INTO enquiries (name, email, phone, enquiry_type, message, marketing_consent, submitted_at)
           VALUES (${name}, ${email}, ${phone}, ${enquiryType}, ${message || null}, ${marketing || false}, ${submittedAt || new Date().toISOString()})
+          RETURNING id
         `;
+        enquiryId = result[0].id;
         dbSaved = true;
       } catch (dbErr) {
         console.error('Database save failed:', dbErr);
-        // Continue - email is primary
       }
     }
 
-    // Format enquiry type for display
+    // Save to Google Sheets
+    let sheetsSaved = false;
+    if (process.env.GOOGLE_SHEETS_ID && process.env.GOOGLE_API_KEY) {
+      try {
+        const enquiryTypeLabels = {
+          'general': 'General Question',
+          'booking': 'Booking Enquiry',
+          'pass-guarantee': 'Pass Guarantee',
+          'bulk-packages': 'Bulk Packages',
+          'availability': 'Check Availability'
+        };
+
+        const sheetsData = {
+          values: [[
+            new Date(submittedAt || Date.now()).toLocaleString('en-GB'),
+            name,
+            email,
+            phone,
+            enquiryTypeLabels[enquiryType] || enquiryType,
+            message || '',
+            marketing ? 'Yes' : 'No',
+            'New',
+            enquiryId ? enquiryId.toString() : 'N/A'
+          ]]
+        };
+
+        const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${process.env.GOOGLE_SHEETS_ID}/values/Enquiries!A:I:append?valueInputOption=USER_ENTERED&key=${process.env.GOOGLE_API_KEY}`;
+
+        const sheetsResponse = await fetch(sheetsUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sheetsData)
+        });
+
+        if (sheetsResponse.ok) {
+          sheetsSaved = true;
+          console.log('Saved to Google Sheets');
+        } else {
+          const errorText = await sheetsResponse.text();
+          console.error('Google Sheets error:', errorText);
+        }
+      } catch (sheetsErr) {
+        console.error('Google Sheets failed:', sheetsErr);
+      }
+    } else {
+      console.log('Google Sheets not configured, skipping');
+    }
+
+    // Format enquiry type for email
     const enquiryTypeLabels = {
       'general': 'General Question',
       'booking': 'Booking Enquiry',
@@ -133,6 +182,7 @@ module.exports = async (req, res) => {
             <div style="font-size: 12px; color: #797879;">
               <strong>Marketing Consent:</strong> ${marketing ? 'Yes' : 'No'}<br>
               <strong>Database Saved:</strong> ${dbSaved ? 'Yes' : 'No (email only)'}<br>
+              <strong>Google Sheets:</strong> ${sheetsSaved ? 'Yes' : 'No'}<br>
               <strong>Submitted:</strong> ${new Date(submittedAt || Date.now()).toLocaleString('en-GB')}
             </div>
           </div>
@@ -157,6 +207,7 @@ Email: ${email}
 Phone: ${phone}
 Marketing Consent: ${marketing ? 'Yes' : 'No'}
 Database Saved: ${dbSaved ? 'Yes' : 'No'}
+Google Sheets: ${sheetsSaved ? 'Yes' : 'No'}
 
 Message:
 ${message || 'No message provided'}
@@ -204,7 +255,9 @@ Submitted: ${new Date(submittedAt || Date.now()).toLocaleString('en-GB')}
     res.status(200).json({ 
       success: true, 
       message: 'Enquiry submitted successfully',
-      dbSaved: dbSaved
+      dbSaved: dbSaved,
+      sheetsSaved: sheetsSaved,
+      emailSent: true
     });
 
   } catch (err) {
