@@ -1398,7 +1398,7 @@ td.highlight .best-for {
             <div class="mini-stat-sub">Keep full control of your spending as you go</div>
           </div>
         </div>
-        <button class="btn-lg primary" id="btn-payg" onclick="startCheckout('payg')">Book £60 lesson →</button>
+        <button class="btn-lg primary" id="btn-payg" onclick="openSetmoreBooking()">Book First lesson →</button>
       </div>
     </div>
   </div>
@@ -2013,7 +2013,14 @@ function selectPkg(idx, card) {
 function scrollToPackages() {
   document.getElementById('packages').scrollIntoView({ behavior: 'smooth' });
 }
-
+function openSetmoreBooking() {
+  const setmoreButton = document.getElementById('Anywhere_button_iframe');
+  if (setmoreButton) {
+    setmoreButton.click();
+  } else {
+    window.open('https://coachcarteruk.setmore.com', '_blank');
+  }
+}
 // CALCULATOR FUNCTIONS
 function toggleAddon(addon, element) {
   // If clicking already selected, deselect
@@ -2363,6 +2370,7 @@ document.getElementById('enquiry-form').addEventListener('submit', async functio
   }
 });
 </script>
-
+<script id="anywhere_book_now_script" type="text/javascript" src="https://assets.setmore.com/integration/book-now/live/v1/anywhere-book-now.js"></script>
+<button style="display: none;" id="Anywhere_button_iframe" class="anywhere-book-now-button" data-booking-url="https://coachcarteruk.setmore.com" data-new-tab="false">Book now</button>
 </body>
 </html>
