@@ -1,11 +1,12 @@
 const { Resend } = require('resend');
 const nodemailer = require('nodemailer');
+const { neon } = require('@neondatabase/serverless');
 
-// Initialize Resend (primary) and Nodemailer (fallback)
+// Initialize services
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  host: process.env.SMTP_HOST || 'smtp.ionos.co.uk',
   port: parseInt(process.env.SMTP_PORT) || 587,
   secure: false,
   auth: {
@@ -31,6 +32,7 @@ module.exports = async (req, res) => {
     return;
   }
 
+  let sql;
   try {
     const { name, email, phone, enquiryType, message, marketing, submittedAt } = req.body;
 
@@ -38,6 +40,45 @@ module.exports = async (req, res) => {
     if (!name || !email || !phone || !enquiryType) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
+    }
+
+    // Connect to Neon database if URL exists
+    if (process.env.POSTGRES_URL) {
+      try {
+        sql = neon(process.env.POSTGRES_URL);
+      } catch (dbErr) {
+        console.error('Database connection failed:', dbErr);
+        // Continue without database - email is primary
+      }
+    }
+
+    // Save to database if connected
+    let dbSaved = false;
+    if (sql) {
+      try {
+        await sql`
+          CREATE TABLE IF NOT EXISTS enquiries (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            phone VARCHAR(50) NOT NULL,
+            enquiry_type VARCHAR(100) NOT NULL,
+            message TEXT,
+            marketing_consent BOOLEAN DEFAULT false,
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status VARCHAR(50) DEFAULT 'new'
+          )
+        `;
+        
+        await sql`
+          INSERT INTO enquiries (name, email, phone, enquiry_type, message, marketing_consent, submitted_at)
+          VALUES (${name}, ${email}, ${phone}, ${enquiryType}, ${message || null}, ${marketing || false}, ${submittedAt || new Date().toISOString()})
+        `;
+        dbSaved = true;
+      } catch (dbErr) {
+        console.error('Database save failed:', dbErr);
+        // Continue - email is primary
+      }
     }
 
     // Format enquiry type for display
@@ -84,21 +125,25 @@ module.exports = async (req, res) => {
           ${message ? `
           <div style="margin-bottom: 20px;">
             <label style="display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #797879; margin-bottom: 4px; font-weight: 700;">Message</label>
-            <div style="font-size: 16px; line-height: 1.6; white-space: pre-wrap;">${message}</div>
+            <div style="font-size: 16px; line-height: 1.6; white-space: pre-wrap;">${message.replace(/\n/g, '<br>')}</div>
           </div>
           ` : ''}
           
           <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e0e0e0;">
             <div style="font-size: 12px; color: #797879;">
               <strong>Marketing Consent:</strong> ${marketing ? 'Yes' : 'No'}<br>
-              <strong>Submitted:</strong> ${new Date(submittedAt).toLocaleString('en-GB')}
+              <strong>Database Saved:</strong> ${dbSaved ? 'Yes' : 'No (email only)'}<br>
+              <strong>Submitted:</strong> ${new Date(submittedAt || Date.now()).toLocaleString('en-GB')}
             </div>
           </div>
         </div>
         
         <div style="text-align: center; margin-top: 32px; font-size: 12px; color: #797879;">
           <p>This enquiry was submitted via the CoachCarter website.</p>
-          <p style="margin-top: 8px;"><a href="mailto:${email}?subject=Re: Your enquiry to CoachCarter" style="background: #f58321; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 700;">Reply to ${name}</a></p>
+          <p style="margin-top: 16px;">
+            <a href="mailto:${email}?subject=Re: Your enquiry to CoachCarter" style="background: #f58321; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 700; margin-right: 8px;">Reply to ${name}</a>
+            <a href="tel:${phone}" style="background: #272727; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 700;">Call ${phone}</a>
+          </p>
         </div>
       </div>
     `;
@@ -111,37 +156,43 @@ Name: ${name}
 Email: ${email}
 Phone: ${phone}
 Marketing Consent: ${marketing ? 'Yes' : 'No'}
+Database Saved: ${dbSaved ? 'Yes' : 'No'}
 
 Message:
 ${message || 'No message provided'}
 
-Submitted: ${new Date(submittedAt).toLocaleString('en-GB')}
+Submitted: ${new Date(submittedAt || Date.now()).toLocaleString('en-GB')}
     `;
 
-    // Try Resend first, fallback to Nodemailer
+    // Send email (Resend primary, Nodemailer fallback)
     let emailSent = false;
-    const toEmail = process.env.ENQUIRY_EMAIL || 'fraser@coachcarter.uk';
-    const fromEmail = process.env.FROM_EMAIL || 'enquiries@coachcarter.uk';
+    const toEmail = process.env.STAFF_EMAIL || 'fraser@coachcarter.uk';
+    const fromEmail = 'enquiries@coachcarter.uk';
 
     if (resend) {
       try {
-        await resend.emails.send({
-          from: `CoachCarter Enquiries <${fromEmail}>`,
+        const { error } = await resend.emails.send({
+          from: `CoachCarter <${fromEmail}>`,
           to: [toEmail],
           subject: emailSubject,
           html: emailHtml,
           text: emailText,
           reply_to: email
         });
-        emailSent = true;
+        
+        if (!error) {
+          emailSent = true;
+        } else {
+          console.error('Resend error:', error);
+        }
       } catch (resendErr) {
-        console.error('Resend failed, trying Nodemailer:', resendErr);
+        console.error('Resend failed:', resendErr);
       }
     }
 
     if (!emailSent) {
       await transporter.sendMail({
-        from: `"CoachCarter Enquiries" <${fromEmail}>`,
+        from: `"CoachCarter" <${process.env.SMTP_USER}>`,
         to: toEmail,
         subject: emailSubject,
         html: emailHtml,
@@ -150,10 +201,14 @@ Submitted: ${new Date(submittedAt).toLocaleString('en-GB')}
       });
     }
 
-    res.status(200).json({ success: true, message: 'Enquiry submitted successfully' });
+    res.status(200).json({ 
+      success: true, 
+      message: 'Enquiry submitted successfully',
+      dbSaved: dbSaved
+    });
 
   } catch (err) {
     console.error('Error processing enquiry:', err);
-    res.status(500).json({ error: 'Failed to process enquiry. Please try again or contact us directly.' });
+    res.status(500).json({ error: 'Failed to process enquiry. Please try again or contact us directly at fraser@coachcarter.uk' });
   }
 };
