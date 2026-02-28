@@ -1110,6 +1110,149 @@ td.highlight .best-for {
 .cta-section h2 {
   font-family: var(--font-head);
   font-size: clamp(2rem, 4vw, 3.2rem);
+  /* ENQUIRY FORM STYLES */
+.enquiry-section {
+  padding: 100px 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.enquiry-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px;
+  max-width: 800px;
+  margin: 0 auto;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+}
+
+.enquiry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.enquiry-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-family: var(--font-head);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 14px 16px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--primary);
+  background: var(--white);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(245,131,33,0.1);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.form-group select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23272727' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 40px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.enquiry-submit {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.enquiry-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.enquiry-status {
+  text-align: center;
+  padding: 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  display: none;
+}
+
+.enquiry-status.success {
+  display: block;
+  background: rgba(26,158,92,0.1);
+  color: var(--green);
+  border: 1px solid rgba(26,158,92,0.2);
+}
+
+.enquiry-status.error {
+  display: block;
+  background: rgba(239,68,68,0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239,68,68,0.2);
+}
+
+@media (max-width: 600px) {
+  .enquiry-grid {
+    grid-template-columns: 1fr;
+  }
+  .enquiry-card {
+    padding: 32px 24px;
+  }
+}
 </style>
 </head>
 <body>
@@ -1441,6 +1584,66 @@ td.highlight .best-for {
         </tr>
       </tbody>
     </table>
+  </div>
+</section>
+  <section class="enquiry-section" id="enquiry">
+  <div class="section-wrap">
+    <div class="section-intro reveal">
+      <div class="section-tag-line">Get in Touch</div>
+      <h2 class="section-title">Have a <em>question?</em></h2>
+      <p class="section-sub">Not sure which option is right for you? Ask us anything — we'll get back to you within 24 hours.</p>
+    </div>
+
+    <div class="enquiry-card reveal">
+      <form id="enquiry-form" class="enquiry-form">
+        <div class="enquiry-grid">
+          <div class="form-group">
+            <label for="enq-name">Full Name</label>
+            <input type="text" id="enq-name" name="name" required placeholder="Your name">
+          </div>
+          
+          <div class="form-group">
+            <label for="enq-email">Email Address</label>
+            <input type="email" id="enq-email" name="email" required placeholder="you@example.com">
+          </div>
+
+          <div class="form-group">
+            <label for="enq-phone">Phone Number</label>
+            <input type="tel" id="enq-phone" name="phone" required placeholder="07123 456789">
+          </div>
+
+          <div class="form-group">
+            <label for="enq-type">What can we help with?</label>
+            <select id="enq-type" name="enquiryType" required>
+              <option value="" disabled selected>Choose an option</option>
+              <option value="general">General question</option>
+              <option value="booking">Booking enquiry</option>
+              <option value="pass-guarantee">Pass Guarantee programme</option>
+              <option value="bulk-packages">Bulk packages</option>
+              <option value="availability">Check availability</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="enq-message">Your Message</label>
+          <textarea id="enq-message" name="message" rows="4" placeholder="Tell us what you'd like to know..."></textarea>
+        </div>
+
+        <div class="form-group full-width">
+          <label class="checkbox-label">
+            <input type="checkbox" name="marketing" id="enq-marketing">
+            <span>Keep me updated with driving tips and special offers (optional)</span>
+          </label>
+        </div>
+
+        <button type="submit" class="btn-lg primary enquiry-submit" id="enq-submit">
+          Send Enquiry →
+        </button>
+
+        <div id="enquiry-status" class="enquiry-status"></div>
+      </form>
+    </div>
   </div>
 </section>
 
@@ -2018,6 +2221,59 @@ const observer = new IntersectionObserver(entries => {
 }, { threshold: 0.08 });
 
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  // ENQUIRY FORM HANDLER
+document.getElementById('enquiry-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const submitBtn = document.getElementById('enq-submit');
+  const statusDiv = document.getElementById('enquiry-status');
+  const originalText = submitBtn.textContent;
+  
+  // Disable button and show loading
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Sending...';
+  statusDiv.className = 'enquiry-status';
+  statusDiv.style.display = 'none';
+  
+  // Collect form data
+  const formData = {
+    name: document.getElementById('enq-name').value.trim(),
+    email: document.getElementById('enq-email').value.trim(),
+    phone: document.getElementById('enq-phone').value.trim(),
+    enquiryType: document.getElementById('enq-type').value,
+    message: document.getElementById('enq-message').value.trim(),
+    marketing: document.getElementById('enq-marketing').checked,
+    submittedAt: new Date().toISOString()
+  };
+  
+  try {
+    const response = await fetch('/api/submit-enquiry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData)
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      statusDiv.textContent = '✓ Message sent! We\'ll be in touch within 24 hours.';
+      statusDiv.className = 'enquiry-status success';
+      document.getElementById('enquiry-form').reset();
+      
+      // Scroll to status message
+      statusDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+      throw new Error(result.error || 'Failed to send enquiry');
+    }
+  } catch (err) {
+    console.error('Enquiry error:', err);
+    statusDiv.textContent = 'Something went wrong. Please email us directly at fraser@coachcarter.uk';
+    statusDiv.className = 'enquiry-status error';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
+});
 </script>
 
 </body>
