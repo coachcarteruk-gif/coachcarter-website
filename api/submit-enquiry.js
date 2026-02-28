@@ -2,7 +2,6 @@ const { Resend } = require('resend');
 const nodemailer = require('nodemailer');
 const { neon } = require('@neondatabase/serverless');
 
-// Initialize services
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const transporter = nodemailer.createTransport({
@@ -16,7 +15,6 @@ const transporter = nodemailer.createTransport({
 });
 
 module.exports = async (req, res) => {
-  // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -32,30 +30,22 @@ module.exports = async (req, res) => {
     return;
   }
 
-  let sql;
   try {
     const { name, email, phone, enquiryType, message, marketing, submittedAt } = req.body;
 
-    // Validation
     if (!name || !email || !phone || !enquiryType) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
     }
 
-    // Connect to Neon database
+    // Save to database
+    let sql;
+    let dbSaved = false;
+    let enquiryId;
+    
     if (process.env.POSTGRES_URL) {
       try {
         sql = neon(process.env.POSTGRES_URL);
-      } catch (dbErr) {
-        console.error('Database connection failed:', dbErr);
-      }
-    }
-
-    // Save to database
-    let dbSaved = false;
-    let enquiryId;
-    if (sql) {
-      try {
         await sql`
           CREATE TABLE IF NOT EXISTS enquiries (
             id SERIAL PRIMARY KEY,
@@ -82,9 +72,9 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Save to Google Sheets
+    // Forward to n8n for Google Sheets (REMOVE GOOGLE API CODE)
     let sheetsSaved = false;
-    if (process.env.GOOGLE_SHEETS_ID && process.env.GOOGLE_API_KEY) {
+    if (process.env.N8N_WEBHOOK_URL) {
       try {
         const enquiryTypeLabels = {
           'general': 'General Question',
@@ -94,43 +84,36 @@ module.exports = async (req, res) => {
           'availability': 'Check Availability'
         };
 
-        const sheetsData = {
-          values: [[
-            new Date(submittedAt || Date.now()).toLocaleString('en-GB'),
+        const n8nResponse = await fetch(process.env.N8N_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: new Date(submittedAt || Date.now()).toLocaleString('en-GB'),
             name,
             email,
             phone,
-            enquiryTypeLabels[enquiryType] || enquiryType,
-            message || '',
-            marketing ? 'Yes' : 'No',
-            'New',
-            enquiryId ? enquiryId.toString() : 'N/A'
-          ]]
-        };
-
-        const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${process.env.GOOGLE_SHEETS_ID}/values/Enquiries!A:I:append?valueInputOption=USER_ENTERED&key=${process.env.GOOGLE_API_KEY}`;
-
-        const sheetsResponse = await fetch(sheetsUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(sheetsData)
+            type: enquiryTypeLabels[enquiryType] || enquiryType,
+            message: message || '',
+            marketing: marketing ? 'Yes' : 'No',
+            status: 'New',
+            id: enquiryId ? enquiryId.toString() : 'N/A'
+          })
         });
-
-        if (sheetsResponse.ok) {
+        
+        if (n8nResponse.ok) {
           sheetsSaved = true;
-          console.log('Saved to Google Sheets');
+          console.log('Forwarded to n8n successfully');
         } else {
-          const errorText = await sheetsResponse.text();
-          console.error('Google Sheets error:', errorText);
+          console.error('n8n error:', await n8nResponse.text());
         }
-      } catch (sheetsErr) {
-        console.error('Google Sheets failed:', sheetsErr);
+      } catch (n8nErr) {
+        console.error('n8n forward failed:', n8nErr);
       }
     } else {
-      console.log('Google Sheets not configured, skipping');
+      console.log('N8N_WEBHOOK_URL not set, skipping Google Sheets');
     }
 
-    // Format enquiry type for email
+    // Send email (keep existing code)
     const enquiryTypeLabels = {
       'general': 'General Question',
       'booking': 'Booking Enquiry',
@@ -140,9 +123,8 @@ module.exports = async (req, res) => {
     };
 
     const formattedType = enquiryTypeLabels[enquiryType] || enquiryType;
+    const toEmail = process.env.STAFF_EMAIL || 'fraser@coachcarter.uk';
 
-    // Build email content
-    const emailSubject = `New Enquiry: ${formattedType} from ${name}`;
     const emailHtml = `
       <div style="font-family: 'Lato', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #272727;">
         <div style="text-align: center; margin-bottom: 32px;">
@@ -181,8 +163,8 @@ module.exports = async (req, res) => {
           <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e0e0e0;">
             <div style="font-size: 12px; color: #797879;">
               <strong>Marketing Consent:</strong> ${marketing ? 'Yes' : 'No'}<br>
-              <strong>Database Saved:</strong> ${dbSaved ? 'Yes' : 'No (email only)'}<br>
-              <strong>Google Sheets:</strong> ${sheetsSaved ? 'Yes' : 'No'}<br>
+              <strong>Database Saved:</strong> ${dbSaved ? 'Yes' : 'No'}<br>
+              <strong>Google Sheets (via n8n):</strong> ${sheetsSaved ? 'Yes' : 'No'}<br>
               <strong>Submitted:</strong> ${new Date(submittedAt || Date.now()).toLocaleString('en-GB')}
             </div>
           </div>
@@ -198,36 +180,15 @@ module.exports = async (req, res) => {
       </div>
     `;
 
-    const emailText = `
-New Enquiry from CoachCarter Website
-
-Type: ${formattedType}
-Name: ${name}
-Email: ${email}
-Phone: ${phone}
-Marketing Consent: ${marketing ? 'Yes' : 'No'}
-Database Saved: ${dbSaved ? 'Yes' : 'No'}
-Google Sheets: ${sheetsSaved ? 'Yes' : 'No'}
-
-Message:
-${message || 'No message provided'}
-
-Submitted: ${new Date(submittedAt || Date.now()).toLocaleString('en-GB')}
-    `;
-
-    // Send email (Resend primary, Nodemailer fallback)
     let emailSent = false;
-    const toEmail = process.env.STAFF_EMAIL || 'fraser@coachcarter.uk';
-    const fromEmail = 'enquiries@coachcarter.uk';
-
     if (resend) {
       try {
         const { error } = await resend.emails.send({
-          from: `CoachCarter <${fromEmail}>`,
+          from: `CoachCarter <enquiries@coachcarter.uk>`,
           to: [toEmail],
-          subject: emailSubject,
+          subject: `New Enquiry: ${formattedType} from ${name}`,
           html: emailHtml,
-          text: emailText,
+          text: `New enquiry from ${name}. Type: ${formattedType}. Email: ${email}. Phone: ${phone}.`,
           reply_to: email
         });
         
@@ -245,9 +206,9 @@ Submitted: ${new Date(submittedAt || Date.now()).toLocaleString('en-GB')}
       await transporter.sendMail({
         from: `"CoachCarter" <${process.env.SMTP_USER}>`,
         to: toEmail,
-        subject: emailSubject,
+        subject: `New Enquiry: ${formattedType} from ${name}`,
         html: emailHtml,
-        text: emailText,
+        text: `New enquiry from ${name}. Type: ${formattedType}. Email: ${email}. Phone: ${phone}.`,
         replyTo: email
       });
     }
@@ -255,9 +216,8 @@ Submitted: ${new Date(submittedAt || Date.now()).toLocaleString('en-GB')}
     res.status(200).json({ 
       success: true, 
       message: 'Enquiry submitted successfully',
-      dbSaved: dbSaved,
-      sheetsSaved: sheetsSaved,
-      emailSent: true
+      dbSaved,
+      sheetsSaved
     });
 
   } catch (err) {
