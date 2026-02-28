@@ -317,6 +317,7 @@ header nav a:hover, header nav a.active {
 </div>
 
 <script>
+// DEMO DATA
 const demoBookings = [
   {
     ref: 'CC-2847',
@@ -359,8 +360,11 @@ const demoBookings = [
   }
 ];
 
+// RENDER BOOKINGS
 function renderBookings(filter = 'all') {
   const list = document.getElementById('bookings-list');
+  if (!list) return;
+  
   let filtered = demoBookings;
   
   if (filter === 'pending-verification') {
@@ -397,14 +401,21 @@ function renderBookings(filter = 'all') {
 }
 
 function updateStats() {
-  document.getElementById('total-bookings').textContent = demoBookings.length;
-  document.getElementById('pending-verification').textContent = demoBookings.filter(b => b.status === 'PAID_PENDING_VERIFICATION').length;
-  document.getElementById('pending-scheduling').textContent = demoBookings.filter(b => b.status === 'PAID_PENDING_SCHEDULING').length;
-  document.getElementById('pass-guarantees').textContent = demoBookings.filter(b => b.package === 'pass_guarantee').length;
+  const totalEl = document.getElementById('total-bookings');
+  const verifyEl = document.getElementById('pending-verification');
+  const scheduleEl = document.getElementById('pending-scheduling');
+  const passEl = document.getElementById('pass-guarantees');
+  
+  if (totalEl) totalEl.textContent = demoBookings.length;
+  if (verifyEl) verifyEl.textContent = demoBookings.filter(b => b.status === 'PAID_PENDING_VERIFICATION').length;
+  if (scheduleEl) scheduleEl.textContent = demoBookings.filter(b => b.status === 'PAID_PENDING_SCHEDULING').length;
+  if (passEl) passEl.textContent = demoBookings.filter(b => b.package === 'pass_guarantee').length;
 }
 
 function viewBooking(ref) {
   const booking = demoBookings.find(b => b.ref === ref);
+  if (!booking) return;
+  
   alert(`Booking: ${ref}\n\nName: ${booking.name}\nEmail: ${booking.email}\nLicence: ${booking.licence}\nTest Status: ${booking.testStatus}\nTest Ref: ${booking.testRef || 'N/A'}`);
 }
 
@@ -412,6 +423,7 @@ function verifyDVSA(ref) {
   window.open('https://www.gov.uk/check-driving-test', '_blank');
 }
 
+// FILTER BUTTONS
 document.querySelectorAll('.filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -420,8 +432,140 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
   });
 });
 
+// ENQUIRIES MANAGEMENT
+async function loadEnquiries() {
+  try {
+    const res = await fetch('/api/get-enquiries');
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    
+    const countEl = document.getElementById('enquiry-count');
+    const listEl = document.getElementById('enquiries-list');
+    
+    if (!countEl || !listEl) return;
+    
+    if (!data.enquiries || data.enquiries.length === 0) {
+      listEl.innerHTML = '<div class="empty-state">No enquiries yet</div>';
+      countEl.textContent = '0 enquiries';
+      return;
+    }
+    
+    countEl.textContent = `${data.enquiries.length} enquiry${data.enquiries.length !== 1 ? 'ies' : 'y'}`;
+    
+    const enquiryTypeLabels = {
+      'general': 'General',
+      'booking': 'Booking',
+      'pass-guarantee': 'Pass Guarantee',
+      'bulk-packages': 'Bulk Package',
+      'availability': 'Availability'
+    };
+    
+    listEl.innerHTML = data.enquiries.map(e => {
+      const date = new Date(e.submitted_at);
+      const dateStr = date.toLocaleDateString('en-GB');
+      const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const isPass = e.enquiry_type === 'pass-guarantee';
+      
+      return `
+        <div class="booking-row">
+          <div class="package ${isPass ? 'pass' : ''}" style="min-width: 120px;">${enquiryTypeLabels[e.enquiry_type] || e.enquiry_type}</div>
+          <div class="customer">
+            <span class="customer-name">${e.name}</span>
+            <span class="customer-email">${e.email}</span>
+          </div>
+          <div style="min-width: 140px; font-size: 0.9rem;">
+            <a href="tel:${e.phone}" style="color: var(--primary); text-decoration: none;">${e.phone}</a>
+          </div>
+          <div style="min-width: 180px; font-size: 0.85rem; color: var(--muted);">
+            ${dateStr} at ${timeStr}
+          </div>
+          <div style="min-width: 100px;">
+            <span class="status ${e.status === 'new' ? 'pending' : e.status === 'contacted' ? 'scheduled' : 'verification'}">
+              ${e.status}
+            </span>
+          </div>
+          <div class="actions" style="min-width: 80px;">
+            <button class="action-btn" onclick="viewEnquiry(${e.id})">View</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Failed to load enquiries:', err);
+    const listEl = document.getElementById('enquiries-list');
+    const countEl = document.getElementById('enquiry-count');
+    if (listEl) listEl.innerHTML = '<div class="empty-state">Error loading enquiries. Check console.</div>';
+    if (countEl) countEl.textContent = 'Error';
+  }
+}
+
+function refreshEnquiries() {
+  const listEl = document.getElementById('enquiries-list');
+  if (listEl) listEl.innerHTML = '<div class="empty-state">Loading...</div>';
+  loadEnquiries();
+}
+
+function viewEnquiry(id) {
+  fetch(`/api/get-enquiry?id=${id}`)
+    .then(res => res.json())
+    .then(data => {
+      const e = data.enquiry;
+      const enquiryTypeLabels = {
+        'general': 'General Question',
+        'booking': 'Booking Enquiry',
+        'pass-guarantee': 'Pass Guarantee Programme',
+        'bulk-packages': 'Bulk Packages',
+        'availability': 'Check Availability'
+      };
+      
+      const marketingText = e.marketing_consent ? '✓ Yes' : '✗ No';
+      const messageText = e.message ? `\n\nMessage:\n${e.message}` : '';
+      
+      const action = prompt(
+        `Enquiry from ${e.name}\n\n` +
+        `Type: ${enquiryTypeLabels[e.enquiry_type] || e.enquiry_type}\n` +
+        `Email: ${e.email}\n` +
+        `Phone: ${e.phone}\n` +
+        `Marketing: ${marketingText}` +
+        messageText +
+        `\n\nSubmitted: ${new Date(e.submitted_at).toLocaleString('en-GB')}\n\n` +
+        `Actions:\n1. Mark as contacted\n2. Reply via email\n3. Close\n\nEnter 1, 2, or 3:`
+      );
+      
+      if (action === '1') {
+        updateEnquiryStatus(id, 'contacted');
+      } else if (action === '2') {
+        window.location.href = `mailto:${e.email}?subject=Re: Your enquiry to CoachCarter&body=Hi ${e.name.split(' ')[0]},%0D%0A%0D%0AThank you for your enquiry about ${enquiryTypeLabels[e.enquiry_type] || e.enquiry_type}.%0D%0A%0D%0A`;
+        updateEnquiryStatus(id, 'contacted');
+      }
+    })
+    .catch(err => {
+      alert('Error loading enquiry details');
+    });
+}
+
+async function updateEnquiryStatus(id, status) {
+  try {
+    const res = await fetch('/api/update-enquiry-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status })
+    });
+    
+    if (res.ok) {
+      refreshEnquiries();
+    } else {
+      alert('Failed to update status');
+    }
+  } catch (err) {
+    alert('Error updating status');
+  }
+}
+
+// INITIALIZE
 renderBookings();
-  <script>
+loadEnquiries();
+</script>
 const demoBookings = [
   // ... all the demo booking data stays here ...
 ];
