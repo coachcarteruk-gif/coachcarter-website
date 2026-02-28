@@ -101,6 +101,19 @@ nav {
   border: none;
 }
 .nav-cta:hover { background: var(--accent-dk); transform: translateY(-1px); }
+  .nav-cta:hover { background: var(--accent-dk); transform: translateY(-1px); }
+
+.nav-cta.secondary {
+  background: transparent;
+  color: var(--primary);
+  border: 2px solid var(--border);
+}
+
+.nav-cta.secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-lt);
+}
 
 .hero {
   padding: 100px 48px 80px;
@@ -1305,7 +1318,10 @@ td.highlight .best-for {
     <li><a href="#packages" id="nav-packages">Bulk Packages</a></li>
     <li><a href="#guarantee" id="nav-guarantee">Pass Guarantee</a></li>
   </ul>
-  <button class="nav-cta" id="nav-cta-primary" onclick="openSetmoreBooking()">Book a Lesson</button>
+  <div style="display: flex; gap: 12px; align-items: center;">
+    <button class="nav-cta secondary" onclick="document.getElementById('enquiry').scrollIntoView({behavior: 'smooth'})">Enquire</button>
+    <button class="nav-cta" id="nav-cta-primary" onclick="openSetmoreBooking()">Book a Lesson</button>
+  </div>
 </nav>
 
 <div class="hero">
