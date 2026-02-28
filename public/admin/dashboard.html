@@ -317,7 +317,6 @@ header nav a:hover, header nav a.active {
 </div>
 
 <script>
-// DEMO DATA
 const demoBookings = [
   {
     ref: 'CC-2847',
@@ -360,7 +359,6 @@ const demoBookings = [
   }
 ];
 
-// RENDER BOOKINGS
 function renderBookings(filter = 'all') {
   const list = document.getElementById('bookings-list');
   if (!list) return;
@@ -398,13 +396,6 @@ function renderBookings(filter = 'all') {
   `).join('');
 
   updateStats();
-  function scrollToEnquiries() {
-  // Find the enquiries section (the div with margin-top: 64px)
-  const enquirySection = document.querySelector('div[style*="margin-top: 64px"]');
-  if (enquirySection) {
-    enquirySection.scrollIntoView({ behavior: 'smooth' });
-  }
-}
 }
 
 function updateStats() {
@@ -430,7 +421,13 @@ function verifyDVSA(ref) {
   window.open('https://www.gov.uk/check-driving-test', '_blank');
 }
 
-// FILTER BUTTONS
+function scrollToEnquiries() {
+  const enquirySection = document.querySelector('div[style*="margin-top: 64px"]');
+  if (enquirySection) {
+    enquirySection.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
 document.querySelectorAll('.filters .filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.filters .filter-btn').forEach(b => b.classList.remove('active'));
@@ -439,7 +436,6 @@ document.querySelectorAll('.filters .filter-btn').forEach(btn => {
   });
 });
 
-// ENQUIRIES MANAGEMENT
 async function loadEnquiries() {
   try {
     const res = await fetch('/api/get-enquiries');
@@ -457,7 +453,7 @@ async function loadEnquiries() {
       return;
     }
     
-    countEl.textContent = `${data.enquiries.length} enquiry${data.enquiries.length !== 1 ? 'ies' : 'y'}`;
+    countEl.textContent = data.enquiries.length + ' enquiry' + (data.enquiries.length !== 1 ? 'ies' : 'y');
     
     const enquiryTypeLabels = {
       'general': 'General',
@@ -473,29 +469,27 @@ async function loadEnquiries() {
       const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       const isPass = e.enquiry_type === 'pass-guarantee';
       
-      return `
-        <div class="booking-row">
-          <div class="package ${isPass ? 'pass' : ''}" style="min-width: 120px;">${enquiryTypeLabels[e.enquiry_type] || e.enquiry_type}</div>
-          <div class="customer">
-            <span class="customer-name">${e.name}</span>
-            <span class="customer-email">${e.email}</span>
-          </div>
-          <div style="min-width: 140px; font-size: 0.9rem;">
-            <a href="tel:${e.phone}" style="color: var(--primary); text-decoration: none;">${e.phone}</a>
-          </div>
-          <div style="min-width: 180px; font-size: 0.85rem; color: var(--muted);">
-            ${dateStr} at ${timeStr}
-          </div>
-          <div style="min-width: 100px;">
-            <span class="status ${e.status === 'new' ? 'pending' : e.status === 'contacted' ? 'scheduled' : 'verification'}">
-              ${e.status}
-            </span>
-          </div>
-          <div class="actions" style="min-width: 80px;">
-            <button class="action-btn" onclick="viewEnquiry(${e.id})">View</button>
-          </div>
-        </div>
-      `;
+      return '<div class="booking-row">' +
+        '<div class="package ' + (isPass ? 'pass' : '') + '" style="min-width: 120px;">' + (enquiryTypeLabels[e.enquiry_type] || e.enquiry_type) + '</div>' +
+        '<div class="customer">' +
+          '<span class="customer-name">' + e.name + '</span>' +
+          '<span class="customer-email">' + e.email + '</span>' +
+        '</div>' +
+        '<div style="min-width: 140px; font-size: 0.9rem;">' +
+          '<a href="tel:' + e.phone + '" style="color: var(--primary); text-decoration: none;">' + e.phone + '</a>' +
+        '</div>' +
+        '<div style="min-width: 180px; font-size: 0.85rem; color: var(--muted);">' +
+          dateStr + ' at ' + timeStr +
+        '</div>' +
+        '<div style="min-width: 100px;">' +
+          '<span class="status ' + (e.status === 'new' ? 'pending' : e.status === 'contacted' ? 'scheduled' : 'verification') + '">' +
+            e.status +
+          '</span>' +
+        '</div>' +
+        '<div class="actions" style="min-width: 80px;">' +
+          '<button class="action-btn" onclick="viewEnquiry(' + e.id + ')">View</button>' +
+        '</div>' +
+      '</div>';
     }).join('');
   } catch (err) {
     console.error('Failed to load enquiries:', err);
@@ -513,7 +507,7 @@ function refreshEnquiries() {
 }
 
 function viewEnquiry(id) {
-  fetch(`/api/get-enquiry?id=${id}`)
+  fetch('/api/get-enquiry?id=' + id)
     .then(res => res.json())
     .then(data => {
       const e = data.enquiry;
@@ -525,24 +519,24 @@ function viewEnquiry(id) {
         'availability': 'Check Availability'
       };
       
-      const marketingText = e.marketing_consent ? '✓ Yes' : '✗ No';
-      const messageText = e.message ? `\n\nMessage:\n${e.message}` : '';
+      const marketingText = e.marketing_consent ? 'Yes' : 'No';
+      const messageText = e.message ? '\n\nMessage:\n' + e.message : '';
       
       const action = prompt(
-        `Enquiry from ${e.name}\n\n` +
-        `Type: ${enquiryTypeLabels[e.enquiry_type] || e.enquiry_type}\n` +
-        `Email: ${e.email}\n` +
-        `Phone: ${e.phone}\n` +
-        `Marketing: ${marketingText}` +
+        'Enquiry from ' + e.name + '\n\n' +
+        'Type: ' + (enquiryTypeLabels[e.enquiry_type] || e.enquiry_type) + '\n' +
+        'Email: ' + e.email + '\n' +
+        'Phone: ' + e.phone + '\n' +
+        'Marketing: ' + marketingText +
         messageText +
-        `\n\nSubmitted: ${new Date(e.submitted_at).toLocaleString('en-GB')}\n\n` +
-        `Actions:\n1. Mark as contacted\n2. Reply via email\n3. Close\n\nEnter 1, 2, or 3:`
+        '\n\nSubmitted: ' + new Date(e.submitted_at).toLocaleString('en-GB') + '\n\n' +
+        'Actions:\n1. Mark as contacted\n2. Reply via email\n3. Close\n\nEnter 1, 2, or 3:'
       );
       
       if (action === '1') {
         updateEnquiryStatus(id, 'contacted');
       } else if (action === '2') {
-        window.location.href = `mailto:${e.email}?subject=Re: Your enquiry to CoachCarter&body=Hi ${e.name.split(' ')[0]},%0D%0A%0D%0AThank you for your enquiry about ${enquiryTypeLabels[e.enquiry_type] || e.enquiry_type}.%0D%0A%0D%0A`;
+        window.location.href = 'mailto:' + e.email + '?subject=Re: Your enquiry to CoachCarter&body=Hi ' + e.name.split(' ')[0] + ',%0D%0A%0D%0AThank you for your enquiry about ' + (enquiryTypeLabels[e.enquiry_type] || e.enquiry_type) + '.%0D%0A%0D%0A';
         updateEnquiryStatus(id, 'contacted');
       }
     })
@@ -556,7 +550,7 @@ async function updateEnquiryStatus(id, status) {
     const res = await fetch('/api/update-enquiry-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status })
+      body: JSON.stringify({ id: id, status: status })
     });
     
     if (res.ok) {
@@ -569,152 +563,10 @@ async function updateEnquiryStatus(id, status) {
   }
 }
 
-// INITIALIZE
 renderBookings();
 loadEnquiries();
 </script>
-const demoBookings = [
-  // ... all the demo booking data stays here ...
-];
 
-function renderBookings(filter = 'all') {
-  // ... existing code stays here ...
-}
-
-// ... all your other existing functions stay here ...
-
-renderBookings();
-
-// ADD ALL THIS NEW CODE HERE:
-// ENQUIRIES MANAGEMENT
-async function loadEnquiries() {
-  try {
-    const res = await fetch('/api/get-enquiries');
-    const data = await res.json();
-    
-    if (!data.enquiries || data.enquiries.length === 0) {
-      document.getElementById('enquiries-list').innerHTML = '<div class="empty-state">No enquiries yet</div>';
-      document.getElementById('enquiry-count').textContent = '0 enquiries';
-      return;
-    }
-    
-    document.getElementById('enquiry-count').textContent = `${data.enquiries.length} enquiry${data.enquiries.length !== 1 ? 'ies' : 'y'}`;
-    
-    document.getElementById('enquiries-list').innerHTML = data.enquiries.map(e => {
-      const enquiryTypeLabels = {
-        'general': 'General',
-        'booking': 'Booking',
-        'pass-guarantee': 'Pass Guarantee',
-        'bulk-packages': 'Bulk Package',
-        'availability': 'Availability'
-      };
-      
-      const date = new Date(e.submitted_at);
-      const dateStr = date.toLocaleDateString('en-GB');
-      const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-      
-      const isPassGuarantee = e.enquiry_type === 'pass-guarantee';
-      
-      return `
-        <div class="booking-row">
-          <div class="package ${isPassGuarantee ? 'pass' : ''}" style="width: 150px;">
-            ${enquiryTypeLabels[e.enquiry_type] || e.enquiry_type}
-          </div>
-          <div class="customer">
-            <span class="customer-name">${e.name}</span>
-            <span class="customer-email">${e.email}</span>
-          </div>
-          <div style="width: 150px; font-size: 0.9rem;">
-            <a href="tel:${e.phone}" style="color: var(--primary); text-decoration: none;">${e.phone}</a>
-          </div>
-          <div style="width: 200px; font-size: 0.85rem; color: var(--muted);">
-            ${dateStr} at ${timeStr}
-          </div>
-          <div style="width: 120px;">
-            <span class="status ${e.status === 'new' ? 'pending' : e.status === 'contacted' ? 'scheduled' : 'verification'}">
-              ${e.status}
-            </span>
-          </div>
-          <div class="actions" style="width: 100px;">
-            <button class="action-btn" onclick="viewEnquiry(${e.id})">View</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  } catch (err) {
-    console.error('Failed to load enquiries:', err);
-    document.getElementById('enquiries-list').innerHTML = '<div class="empty-state">Error loading enquiries</div>';
-    document.getElementById('enquiry-count').textContent = 'Error';
-  }
-}
-
-function refreshEnquiries() {
-  document.getElementById('enquiries-list').innerHTML = '<div class="empty-state">Loading...</div>';
-  loadEnquiries();
-}
-
-function viewEnquiry(id) {
-  fetch(`/api/get-enquiry?id=${id}`)
-    .then(res => res.json())
-    .then(data => {
-      const e = data.enquiry;
-      const enquiryTypeLabels = {
-        'general': 'General Question',
-        'booking': 'Booking Enquiry',
-        'pass-guarantee': 'Pass Guarantee Programme',
-        'bulk-packages': 'Bulk Packages',
-        'availability': 'Check Availability'
-      };
-      
-      const marketingText = e.marketing_consent ? '✓ Yes' : '✗ No';
-      const messageText = e.message ? `\n\nMessage:\n${e.message}` : '';
-      
-      const action = prompt(
-        `Enquiry from ${e.name}\n\n` +
-        `Type: ${enquiryTypeLabels[e.enquiry_type] || e.enquiry_type}\n` +
-        `Email: ${e.email}\n` +
-        `Phone: ${e.phone}\n` +
-        `Marketing: ${marketingText}` +
-        messageText +
-        `\n\nSubmitted: ${new Date(e.submitted_at).toLocaleString('en-GB')}\n\n` +
-        `Actions:\n1. Mark as contacted\n2. Reply via email\n3. Close\n\nEnter 1, 2, or 3:`
-      );
-      
-      if (action === '1') {
-        updateEnquiryStatus(id, 'contacted');
-      } else if (action === '2') {
-        window.location.href = `mailto:${e.email}?subject=Re: Your enquiry to CoachCarter&body=Hi ${e.name.split(' ')[0]},%0D%0A%0D%0AThank you for your enquiry about ${enquiryTypeLabels[e.enquiry_type] || e.enquiry_type}.%0D%0A%0D%0A`;
-        updateEnquiryStatus(id, 'contacted');
-      }
-    })
-    .catch(err => {
-      alert('Error loading enquiry details');
-    });
-}
-
-async function updateEnquiryStatus(id, status) {
-  try {
-    const res = await fetch('/api/update-enquiry-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status })
-    });
-    
-    if (res.ok) {
-      refreshEnquiries();
-    } else {
-      alert('Failed to update status');
-    }
-  } catch (err) {
-    alert('Error updating status');
-  }
-}
-
-// Load enquiries on page load
-loadEnquiries();
-
-</script>
-</script>
 
 </body>
 </html>
