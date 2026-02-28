@@ -236,8 +236,9 @@ header nav a:hover, header nav a.active {
     <img src="/Logo.png" alt="CoachCarter" style="height: 36px; width: auto;">
     <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Staff Dashboard</span>
   </div>
-  <nav>
+    <nav>
     <a href="/admin/dashboard.html" class="active">📋 Bookings</a>
+    <a href="#enquiries" onclick="document.querySelector('.enquiry-section')?.scrollIntoView({behavior: 'smooth'})">✉️ Enquiries</a>
     <a href="/admin/editor.html">✏️ Editor</a>
     <a href="/" target="_blank">🌐 View Site →</a>
   </nav>
@@ -285,7 +286,34 @@ header nav a:hover, header nav a.active {
       <div class="empty-state">Loading bookings...</div>
     </div>
   </div>
+  </div>    <!-- ← bookings-table closes here -->
 
+  <!-- ADD THE ENQUIRIES SECTION HERE -->
+  <div style="margin-top: 64px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <h2 style="font-family: var(--font-head); font-size: 1.5rem; font-weight: 700;">Recent Enquiries</h2>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <span id="enquiry-count" style="font-size: 0.9rem; color: var(--muted);">Loading...</span>
+        <button class="filter-btn" onclick="refreshEnquiries()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div class="bookings-table">
+      <div class="table-header">
+        <div style="width: 150px;">Type</div>
+        <div>Contact</div>
+        <div style="width: 150px;">Phone</div>
+        <div style="width: 200px;">Submitted</div>
+        <div style="width: 120px;">Status</div>
+        <div style="width: 100px;">Actions</div>
+      </div>
+      <div id="enquiries-list">
+        <div class="empty-state">Loading enquiries...</div>
+      </div>
+    </div>
+  </div>
+
+</div>  <!-- ← container closes here -->
 </div>
 
 <script>
