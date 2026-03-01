@@ -57,7 +57,7 @@
           "label": "Full Pass Guarantee programme"
         },
         {
-          "value": "18wk",
+          "value": "18 Weeks",
           "label": "Structured programme to test day"
         }
       ]
@@ -86,7 +86,7 @@
       ],
       "core": [
         "18-week structured programme",
-        "Instructor paid when you pass",
+        "100% Money Back After First Lesson",
         "Theory & practical test booked for you",
         "Progress tracking throughout",
         "If you fail: We book your 2nd attempt in Reading and include another 10hrs of lessons"
@@ -95,7 +95,7 @@
     "cta": {
       "primary": "Book a Lesson",
       "secondary": "Talk to us first",
-      "payg_button": "Book First lesson →",
+      "payg_button": "Book First Lesson Free →",
       "package_button": "Buy this package →",
       "guarantee_button": "Continue to Booking →"
     },
@@ -104,8 +104,8 @@
       "programme_duration": "18 weeks",
       "contact_email": "fraser@coachcarter.uk",
       "guarantee_note": "In 2024 car practical test pass rate was 47%. Choose the protection that feels right for you.",
-      "footer_text": "CoachCarter Driving School · The last instructor you'll need"
+      "footer_text": "CoachCarter Driving School · The last driving school you'll need"
     }
   },
-  "last_updated": "2026-02-27T08:43:16.164Z"
+  "last_updated": "2026-03-01T11:07:51.451Z"
 }
