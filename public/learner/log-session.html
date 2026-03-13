@@ -179,6 +179,40 @@
     .rating-btn.sel-usually  { background: rgba(134,239,172,0.15);border-color: var(--lime);  color: var(--lime); font-weight: 700; }
     .rating-btn.sel-always   { background: rgba(34,197,94,0.15);  border-color: var(--green); color: #86efac; font-weight: 700; }
 
+    /* PER-QUESTION NOTE */
+    .note-row {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 8px;
+    }
+    .note-toggle-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 0.74rem;
+      font-weight: 500;
+      padding: 4px 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .note-toggle-btn:hover { color: var(--text); border-color: var(--muted); }
+    .note-toggle-btn.has-note { border-color: #4f6ef755; color: var(--blue); }
+    .note-input-wrap {
+      display: none;
+      margin-top: 8px;
+    }
+    .note-input-wrap.open { display: block; }
+    .note-input-wrap textarea {
+      min-height: 56px;
+      font-size: 0.85rem;
+      padding: 8px 10px;
+    }
+
     .save-btn {
       width: 100%;
       background: var(--blue);
@@ -293,6 +327,7 @@ const RATINGS = [
 
 let AUTH, currentType = 'instructor';
 const ratings = {};
+const questionNotes = {};
 
 window.addEventListener('DOMContentLoaded', () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
@@ -317,6 +352,18 @@ window.addEventListener('DOMContentLoaded', () => {
               ${r.label}
             </button>`).join('')}
         </div>
+        <div class="note-row">
+          <button class="note-toggle-btn" id="note-btn-${q.key}" onclick="toggleNote('${q.key}')">
+            ✎ Add note
+          </button>
+        </div>
+        <div class="note-input-wrap" id="note-wrap-${q.key}">
+          <textarea
+            id="note-${q.key}"
+            placeholder="What happened here? Any specific moment worth remembering…"
+            oninput="updateNoteBtn('${q.key}')"
+          ></textarea>
+        </div>
       </div>`).join('');
   });
 });
@@ -334,12 +381,35 @@ function setRating(key, value, btn) {
   btn.classList.add(`sel-${value}`);
 }
 
+function toggleNote(key) {
+  const wrap = document.getElementById(`note-wrap-${key}`);
+  const isOpen = wrap.classList.toggle('open');
+  if (isOpen) {
+    document.getElementById(`note-${key}`).focus();
+  }
+  updateNoteBtn(key);
+}
+
+function updateNoteBtn(key) {
+  const val = (document.getElementById(`note-${key}`)?.value || '').trim();
+  questionNotes[key] = val || null;
+  const btn = document.getElementById(`note-btn-${key}`);
+  const wrap = document.getElementById(`note-wrap-${key}`);
+  if (val) {
+    btn.className = 'note-toggle-btn has-note';
+    btn.textContent = '✎ Note saved';
+  } else {
+    btn.className = 'note-toggle-btn';
+    btn.textContent = wrap.classList.contains('open') ? '✎ Add note' : '✎ Add note';
+  }
+}
+
 async function saveSession() {
   const date = document.getElementById('session-date').value;
   if (!date) { showError('Please enter a session date.'); return; }
 
   const ratingsList = Object.entries(ratings).map(([skill_key, rating]) => ({
-    tier: 0, skill_key, rating
+    tier: 0, skill_key, rating, note: questionNotes[skill_key] || null
   }));
 
   const payload = {

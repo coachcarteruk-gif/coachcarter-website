@@ -266,6 +266,34 @@
       font-style: italic;
     }
 
+    /* PER-QUESTION NOTES IN SESSION HISTORY */
+    .q-notes-list {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .q-note-item {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 0.8rem;
+      color: var(--muted);
+      background: var(--surface2);
+      border-radius: 6px;
+      padding: 6px 10px;
+    }
+    .q-note-item .q-note-label {
+      font-weight: 600;
+      color: var(--blue);
+      flex-shrink: 0;
+      font-size: 0.72rem;
+    }
+    .q-note-item .q-note-text {
+      font-style: italic;
+      line-height: 1.4;
+    }
+
     .empty-state {
       text-align: center;
       padding: 40px 20px;
@@ -530,11 +558,26 @@ function renderSessions() {
         : r.rating === 'sometimes' ? '#f59e0b'
         : '#ef4444';
       const qLabel = findQuestionLabel(r.skill_key);
+      const noteIcon = r.note ? ` <span style="opacity:0.7">📝</span>` : '';
       return `<div class="session-skill-pill">
         <div class="dot" style="background:${dotColor}"></div>
-        ${qLabel}
+        ${qLabel}${noteIcon}
       </div>`;
     }).join('');
+
+    // Per-question notes list
+    const qNotesWithContent = (s.ratings || []).filter(r => r.note);
+    const qNotesHTML = qNotesWithContent.length > 0
+      ? `<div class="q-notes-list">
+          ${qNotesWithContent.map(r => {
+            const q = QUESTIONS.find(q => q.key === r.skill_key);
+            const label = q ? `Q${q.num}` : r.skill_key;
+            return `<div class="q-note-item">
+              <span class="q-note-label">${label}</span>
+              <span class="q-note-text">${r.note}</span>
+            </div>`;
+          }).join('')}
+        </div>` : '';
 
     const notesHTML = s.notes
       ? `<div class="session-notes">"${s.notes}"</div>` : '';
@@ -547,6 +590,7 @@ function renderSessions() {
           ${durationChip}
         </div>
         ${ratingsHTML ? `<div class="session-ratings">${ratingsHTML}</div>` : ''}
+        ${qNotesHTML}
         ${notesHTML}
       </div>`;
   }).join('');

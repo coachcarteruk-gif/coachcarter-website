@@ -107,13 +107,15 @@ async function handleSessions(req, res) {
     id SERIAL PRIMARY KEY, session_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
     tier INTEGER NOT NULL, skill_key TEXT NOT NULL, rating TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW())`;
+  // Add note column to existing tables that predate this feature
+  await sql`ALTER TABLE skill_ratings ADD COLUMN IF NOT EXISTS note TEXT`;
 
   if (req.method === 'GET') {
     try {
       const sessions = await sql`
         SELECT s.*,
           COALESCE(json_agg(
-            json_build_object('skill_key', r.skill_key, 'tier', r.tier, 'rating', r.rating)
+            json_build_object('skill_key', r.skill_key, 'tier', r.tier, 'rating', r.rating, 'note', r.note)
             ORDER BY r.id
           ) FILTER (WHERE r.id IS NOT NULL), '[]') as ratings
         FROM driving_sessions s
@@ -139,8 +141,8 @@ async function handleSessions(req, res) {
 
       if (ratings?.length > 0) {
         for (const r of ratings) {
-          await sql`INSERT INTO skill_ratings (session_id, user_id, tier, skill_key, rating)
-            VALUES (${sessionId}, ${user.id}, ${r.tier}, ${r.skill_key}, ${r.rating})`;
+          await sql`INSERT INTO skill_ratings (session_id, user_id, tier, skill_key, rating, note)
+            VALUES (${sessionId}, ${user.id}, ${r.tier}, ${r.skill_key}, ${r.rating}, ${r.note || null})`;
         }
       }
       return res.json({ success: true, session_id: sessionId });
