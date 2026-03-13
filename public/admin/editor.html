@@ -1158,7 +1158,16 @@ function renderBulkTable(packages) {
     
     return `
       <tr data-index="${i}" data-hours="${pkg.hrs}">
-        <td><strong>${pkg.hrs} hrs</strong></td>
+        <td>
+          <input type="number"
+                 id="hours-${i}"
+                 value="${pkg.hrs}"
+                 min="1"
+                 style="width: 70px;"
+                 onchange="updateHours(${i})"
+                 placeholder="hrs">
+          <span style="font-size: 0.85rem; color: var(--muted);">hrs</span>
+        </td>
         <td>
           <input type="number" 
                  id="discount-${i}" 
@@ -1193,6 +1202,13 @@ function renderBulkTable(packages) {
 }
 
 // BULK CALCULATIONS
+function updateHours(index) {
+  const row = document.querySelector(`tr[data-index="${index}"]`);
+  const newHours = parseInt(document.getElementById(`hours-${index}`).value) || 1;
+  row.dataset.hours = newHours;
+  calculateFromDiscount(index);
+}
+
 function calculateFromDiscount(index) {
   const hours = parseInt(document.querySelector(`tr[data-index="${index}"]`).dataset.hours);
   const discount = parseFloat(document.getElementById(`discount-${index}`).value) || 0;
@@ -1330,6 +1346,7 @@ function gatherFormData() {
   // Update bulk packages
   const rows = document.querySelectorAll('#bulkTableBody tr');
   rows.forEach((row, i) => {
+    currentConfig.pricing.bulk_packages[i].hrs = parseInt(document.getElementById(`hours-${i}`).value) || currentConfig.pricing.bulk_packages[i].hrs;
     currentConfig.pricing.bulk_packages[i].price = parseInt(document.getElementById(`total-${i}`).value) || currentConfig.pricing.bulk_packages[i].price;
     currentConfig.pricing.bulk_packages[i].discount = parseFloat(document.getElementById(`discount-${i}`).value) / 100 || currentConfig.pricing.bulk_packages[i].discount;
     currentConfig.pricing.bulk_packages[i].per_hour = parseFloat(document.getElementById(`perhour-${i}`).value) || currentConfig.pricing.bulk_packages[i].per_hour;
