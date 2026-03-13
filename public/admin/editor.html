@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoachCarter — Config Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #272727;
+  --accent: #f58321;
+  --accent-dk: #e07518;
+  --accent-lt: #fff4ec;
+  --bg-warm: #d8c2af;
+  --muted: #797879;
+  --white: #ffffff;
+  --bg-light: #f9f9f9;
+  --border: #e0e0e0;
+  --green: #1a9e5c;
+  --red: #dc2626;
+  --font-head: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Lato', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg-light);
+  color: var(--primary);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+header {
+  background: var(--primary);
+  color: white;
+  padding: 24px 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+header nav {
+  display: flex;
+  gap: 32px;
+  align-items: center;
+}
+
+header nav a {
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+header nav a:hover, header nav a.active {
+  color: var(--accent);
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px;
+}
+
+.section-title {
+  font-family: var(--font-head);
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--primary);
+}
+
+.section-desc {
+  color: var(--muted);
+  margin-bottom: 32px;
+  font-size: 1rem;
+}
+
+.editor-section {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 32px;
+}
+
+.editor-section h2 {
+  font-family: var(--font-head);
+  font-size: 1.3rem;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--primary);
+}
+
+.editor-section h2::before {
+  content: '';
+  width: 4px;
+  height: 24px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.form-group { margin-bottom: 8px; }
+.form-group.full-width { grid-column: 1 / -1; }
+
+label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+input[type="text"],
+input[type="number"],
+textarea,
+select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: var(--font-body);
+  transition: border-color 0.2s;
+  background: var(--white);
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.price-input { position: relative; }
+.price-input::before {
+  content: '£';
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-weight: 700;
+}
+.price-input input { padding-left: 28px; }
+
+textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.calc-note {
+  background: var(--accent-lt);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 20px 0;
+  font-size: 0.9rem;
+  color: var(--accent-dk);
+}
+
+.calc-note strong {
+  font-family: var(--font-head);
+}
+
+.bulk-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.bulk-table th,
+.bulk-table td {
+  text-align: left;
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.bulk-table th {
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  background: #f5f5f5;
+}
+
+.bulk-table input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+}
+
+.bulk-table input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--accent-lt);
+}
+
+.bulk-table td.price-cell {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.bulk-table tr:hover { background: #f9f9f9; }
+
+.guarantee-calc {
+  background: var(--primary);
+  border-radius: 16px;
+  padding: 32px;
+  margin-top: 24px;
+  color: white;
+}
+
+.guarantee-calc h3 {
+  font-family: var(--font-head);
+  font-size: 1.2rem;
+  margin-bottom: 24px;
+  color: var(--accent);
+}
+
+.guarantee-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.guarantee-base {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.guarantee-base h4 {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  margin-bottom: 16px;
+  color: rgba(255,255,255,0.8);
+}
+
+.guarantee-input-group {
+  margin-bottom: 16px;
+}
+
+.guarantee-input-group label {
+  color: rgba(255,255,255,0.6);
+  font-size: 0.75rem;
+  margin-bottom: 6px;
+}
+
+.guarantee-input-group input {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  font-size: 1.5rem;
+  font-family: var(--font-head);
+  font-weight: 700;
+  padding: 12px 16px 12px 32px;
+  border-radius: 8px;
+  width: 100%;
+}
+
+.guarantee-input-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(255,255,255,0.15);
+}
+
+.guarantee-addons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.addon-edit-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.addon-edit-card h5 {
+  font-family: var(--font-head);
+  font-size: 0.95rem;
+  color: white;
+  margin: 0;
+}
+
+.addon-edit-card .addon-desc {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.5);
+  margin-top: 2px;
+}
+
+.addon-price-input {
+  position: relative;
+}
+
+.addon-price-input input {
+  width: 100px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  padding: 8px 12px 8px 24px;
+  border-radius: 6px;
+  font-family: var(--font-head);
+  font-weight: 700;
+  text-align: right;
+}
+
+.addon-price-input::before {
+  content: '+£';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.addon-total {
+  text-align: right;
+  min-width: 100px;
+}
+
+.addon-total-label {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.addon-total-value {
+  font-family: var(--font-head);
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.guarantee-preview {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 24px;
+  margin-top: 24px;
+}
+
+.guarantee-preview h4 {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  margin-bottom: 16px;
+  color: rgba(255,255,255,0.8);
+}
+
+.preview-tiers {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.tier-preview {
+  text-align: center;
+  padding: 16px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tier-preview.active {
+  border-color: var(--accent);
+  background: rgba(245,131,33,0.1);
+}
+
+.tier-name {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.tier-price {
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: white;
+}
+
+.tier-breakdown {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.5);
+  margin-top: 4px;
+}
+
+.content-grid {
+  display: grid;
+  gap: 32px;
+}
+
+.content-block {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  background: #fafafa;
+}
+
+.content-block h3 {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  margin-bottom: 16px;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.content-block h3::before {
+  content: '§';
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.feature-list-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feature-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.feature-item input {
+  flex: 1;
+}
+
+.feature-item button {
+  padding: 8px 12px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--red);
+  font-size: 0.8rem;
+}
+
+.feature-item button:hover {
+  background: #fee2e2;
+  border-color: var(--red);
+}
+
+.btn-add {
+  padding: 10px 16px;
+  background: var(--white);
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 8px;
+  width: 100%;
+  transition: all 0.2s;
+}
+
+.btn-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-lt);
+}
+
+.preview-box {
+  background: var(--accent-lt);
+  border-radius: 12px;
+  padding: 24px;
+  margin-top: 24px;
+  border: 2px solid rgba(245,131,33,0.2);
+}
+
+.preview-box h3 {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  margin-bottom: 16px;
+  color: var(--accent-dk);
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.preview-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(245,131,33,0.2);
+  font-size: 0.95rem;
+}
+
+.preview-item:last-child { border-bottom: none; }
+.preview-item strong {
+  color: var(--primary);
+  font-family: var(--font-head);
+}
+
+.actions-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 48px;
+  padding: 24px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  position: sticky;
+  bottom: 24px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: white;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 14px 28px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background: var(--accent-dk);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--white);
+  color: var(--primary);
+  border: 2px solid var(--border);
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--white);
+}
+
+.status-msg {
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  display: none;
+  margin-bottom: 24px;
+}
+
+.status-msg.success {
+  display: block;
+  background: #dcfce7;
+  color: var(--green);
+  border: 1px solid #86efac;
+}
+
+.status-msg.error {
+  display: block;
+  background: #fee2e2;
+  color: var(--red);
+  border: 1px solid #fca5a5;
+}
+
+.status-msg.info {
+  display: block;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+@media (max-width: 1024px) {
+  .guarantee-grid {
+    grid-template-columns: 1fr;
+  }
+  .preview-tiers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .container { padding: 24px; }
+  header { padding: 16px 24px; flex-wrap: wrap; gap: 16px; }
+  header nav { gap: 16px; width: 100%; justify-content: center; }
+  .actions-bar { flex-direction: column; position: static; }
+  .addon-edit-card {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .preview-tiers {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <img src="/Logo.png" alt="CoachCarter" style="height: 36px; width: auto;">
+    <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Config Editor</span>
+  </div>
+  <nav>
+  <a href="/admin/dashboard.html">📋 Bookings</a>
+  <a href="/admin/dashboard.html#enquiries">✉️ Enquiries</a>  <!-- ADD THIS -->
+  <a href="/admin/editor.html" class="active">✏️ Editor</a>
+  <a href="/" target="_blank">🌐 View Site →</a>
+</nav>
+  <div class="user" style="font-size: 0.9rem; color: var(--bg-warm);">admin@coachcarter.uk</div>
+</header>
+
+<div class="container">
+
+  <h1 class="section-title">Config Editor</h1>
+  <p class="section-desc">Edit pricing and content. Download config.json, then replace the file in your repository and deploy.</p>
+
+  <div id="saveStatus" class="status-msg"></div>
+
+  <!-- PRICING SECTION -->
+  <div class="editor-section">
+    <h2>Pricing Settings</h2>
+    
+    <div class="form-grid" style="margin-bottom: 24px;">
+      <div class="form-group price-input">
+        <label>PAYG Hourly Rate (Anchor Price)</label>
+        <input type="number" id="paygHourly" value="60" onchange="updateAllCalculations()">
+      </div>
+    </div>
+
+    <div class="calc-note">
+      <strong>💡 How bulk pricing works:</strong> All calculations are based on the PAYG hourly rate (£<span id="anchorRateDisplay">60</span>/hr). 
+      Edit any value below (Discount %, Total Price, or Price/Hour) and the others auto-calculate.
+    </div>
+
+    <h3 style="margin-top: 32px; margin-bottom: 16px; font-family: var(--font-head); font-size: 1.1rem;">Bulk Packages</h3>
+    <table class="bulk-table">
+      <thead>
+        <tr>
+          <th>Hours</th>
+          <th>Discount %</th>
+          <th>Total Price (£)</th>
+          <th>Price Per Hour (£)</th>
+          <th>You Save</th>
+        </tr>
+      </thead>
+      <tbody id="bulkTableBody">
+        <!-- Populated by JS -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- PASS GUARANTEE SECTION -->
+  <div class="editor-section">
+    <h2>Pass Guarantee Pricing</h2>
+    
+    <div class="calc-note">
+      <strong>💡 Interconnected pricing:</strong> Changing the Core Programme price updates all addon totals. Changing an addon price updates its total. All values stay in sync.
+    </div>
+
+    <div class="guarantee-calc">
+      <h3>🛡️ Guarantee Calculator</h3>
+      
+      <div class="guarantee-grid">
+        <!-- Core Programme -->
+        <div class="guarantee-base">
+          <h4>Core Programme (Base)</h4>
+          <div class="guarantee-input-group price-input">
+            <label>Core Price</label>
+            <input type="number" id="coreProgramme" value="2400" onchange="calculateFromCore()">
+          </div>
+          <div class="form-group" style="margin-top: 16px;">
+            <label style="color: rgba(255,255,255,0.6); font-size: 0.75rem;">Included Hours</label>
+            <input type="number" id="coreHours" value="30" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px 12px; border-radius: 6px; width: 100px;">
+          </div>
+          <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin-top: 12px;">
+            This is the base price for the 18-week programme. All addon totals are calculated from this value.
+          </p>
+        </div>
+
+        <!-- Addons -->
+        <div class="guarantee-addons">
+          <div class="addon-edit-card">
+            <div>
+              <h5>+1 Retake Cover</h5>
+              <div class="addon-desc">2nd attempt protection</div>
+            </div>
+            <div class="addon-price-input">
+              <input type="number" id="retake1" value="200" onchange="calculateFromAddon(1)">
+            </div>
+            <div class="addon-total">
+              <div class="addon-total-label">Total</div>
+              <div class="addon-total-value" id="total-retake1">£2,600</div>
+            </div>
+          </div>
+
+          <div class="addon-edit-card">
+            <div>
+              <h5>+2 Retake Cover</h5>
+              <div class="addon-desc">2nd & 3rd attempt protection</div>
+            </div>
+            <div class="addon-price-input">
+              <input type="number" id="retake2" value="350" onchange="calculateFromAddon(2)">
+            </div>
+            <div class="addon-total">
+              <div class="addon-total-label">Total</div>
+              <div class="addon-total-value" id="total-retake2">£2,750</div>
+            </div>
+          </div>
+
+          <div class="addon-edit-card">
+            <div>
+              <h5>Lifetime Cover</h5>
+              <div class="addon-desc">Unlimited retakes until pass</div>
+            </div>
+            <div class="addon-price-input">
+              <input type="number" id="retakeLifetime" value="500" onchange="calculateFromAddon(3)">
+            </div>
+            <div class="addon-total">
+              <div class="addon-total-label">Total</div>
+              <div class="addon-total-value" id="total-retakeLifetime">£2,900</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Preview -->
+      <div class="guarantee-preview">
+        <h4>Live Price Preview (Customer View)</h4>
+        <div class="preview-tiers">
+          <div class="tier-preview" id="tier-core">
+            <div class="tier-name">Core Only</div>
+            <div class="tier-price" id="preview-tier-core">£2,400</div>
+            <div class="tier-breakdown">Base programme</div>
+          </div>
+          <div class="tier-preview" id="tier-plus1">
+            <div class="tier-name">+1 Retake</div>
+            <div class="tier-price" id="preview-tier-plus1">£2,600</div>
+            <div class="tier-breakdown" id="breakdown-plus1">+£200</div>
+          </div>
+          <div class="tier-preview" id="tier-plus2">
+            <div class="tier-name">+2 Retakes</div>
+            <div class="tier-price" id="preview-tier-plus2">£2,750</div>
+            <div class="tier-breakdown" id="breakdown-plus2">+£350</div>
+          </div>
+          <div class="tier-preview" id="tier-lifetime">
+            <div class="tier-name">Lifetime</div>
+            <div class="tier-price" id="preview-tier-lifetime">£2,900</div>
+            <div class="tier-breakdown" id="breakdown-lifetime">+£500</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HERO SECTION CONTENT -->
+  <div class="editor-section">
+    <h2>Hero Section</h2>
+    <div class="form-grid">
+      <div class="form-group full-width">
+        <label>Main Headline</label>
+        <input type="text" id="heroHeadline" value="Your licence. Your way.">
+      </div>
+      <div class="form-group full-width">
+        <label>Subheadline</label>
+        <textarea id="heroSubheadline">Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.</textarea>
+      </div>
+      <div class="form-group">
+        <label>Stat 1 - Value</label>
+        <input type="text" id="heroStat1Value" value="£60">
+      </div>
+      <div class="form-group">
+        <label>Stat 1 - Label</label>
+        <input type="text" id="heroStat1Label" value="Per hour, pay as you go">
+      </div>
+      <div class="form-group">
+        <label>Stat 2 - Value</label>
+        <input type="text" id="heroStat2Value" value="15%">
+      </div>
+      <div class="form-group">
+        <label>Stat 2 - Label</label>
+        <input type="text" id="heroStat2Label" value="Max discount on bulk packages">
+      </div>
+      <div class="form-group">
+        <label>Stat 3 - Value</label>
+        <input type="text" id="heroStat3Value" value="£2,400">
+      </div>
+      <div class="form-group">
+        <label>Stat 3 - Label</label>
+        <input type="text" id="heroStat3Label" value="Full Pass Guarantee programme">
+      </div>
+      <div class="form-group">
+        <label>Stat 4 - Value</label>
+        <input type="text" id="heroStat4Value" value="18wk">
+      </div>
+      <div class="form-group">
+        <label>Stat 4 - Label</label>
+        <input type="text" id="heroStat4Label" value="Structured programme to test day">
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION TITLES -->
+  <div class="editor-section">
+    <h2>Section Titles</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>PAYG Section Title</label>
+        <input type="text" id="sectionPaygTitle" value="Pay As You Go">
+      </div>
+      <div class="form-group">
+        <label>PAYG Section Subtitle</label>
+        <input type="text" id="sectionPaygSubtitle" value="Maximum flexibility. Book when you need, cancel when life happens.">
+      </div>
+      <div class="form-group">
+        <label>Packages Section Title</label>
+        <input type="text" id="sectionPackagesTitle" value="Bulk Hour Packages">
+      </div>
+      <div class="form-group">
+        <label>Packages Section Subtitle</label>
+        <input type="text" id="sectionPackagesSubtitle" value="Buy more hours up front and save up to 15%.">
+      </div>
+      <div class="form-group">
+        <label>Guarantee Section Title</label>
+        <input type="text" id="sectionGuaranteeTitle" value="The Pass Guarantee">
+      </div>
+      <div class="form-group">
+        <label>Guarantee Section Subtitle</label>
+        <input type="text" id="sectionGuaranteeSubtitle" value="18 weeks to your driving licence — or we keep going until you pass.">
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURE LISTS -->
+  <div class="editor-section">
+    <h2>Package Features</h2>
+    <div class="content-grid">
+      
+      <div class="content-block">
+        <h3>PAYG Features</h3>
+        <div class="feature-list-editor" id="paygFeatures">
+          <div class="feature-item"><input type="text" value="Qualified ADI instructor every time"><button onclick="removeFeature(this)">Remove</button></div>
+          <div class="feature-item"><input type="text" value="Book online or by phone"><button onclick="removeFeature(this)">Remove</button></div>
+          <div class="feature-item"><input type="text" value="Lesson length to suit you"><button onclick="removeFeature(this)">Remove</button></div>
+          <div class="feature-item"><input type="text" value="Progress tracked between lessons"><button onclick="removeFeature(this)">Remove</button></div>
+          <div class="feature-item"><input type="text" value="Upgrade to a package anytime"><button onclick="removeFeature(this)">Remove</button></div>
+        </div>
+        <button class="btn-add" onclick="addFeature('paygFeatures')">+ Add Feature</button>
+      </div>
+
+      <div class="content-block">
+        <h3>Core Programme Includes</h3>
+        <div class="feature-list-editor" id="coreFeatures">
+          <div class="feature-item"><input type="text" value="18-week structured programme"><button onclick="removeFeature(this)">Remove</button></div>
+          <div class="feature-item"><input type="text" value="~30 hours with expert instructor"><button onclick="removeFeature(this)">Remove</button></div>
+          <div class="feature-item"><input type="text" value="Theory & practical test booked for you"><button onclick="removeFeature(this)">Remove</button></div>
+          <div class="feature-item"><input type="text" value="Progress tracking throughout"><button onclick="removeFeature(this)">Remove</button></div>
+          <div class="feature-item"><input type="text" value="1 attempt included"><button onclick="removeFeature(this)">Remove</button></div>
+        </div>
+        <button class="btn-add" onclick="addFeature('coreFeatures')">+ Add Feature</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CTA & BUTTON TEXT -->
+  <div class="editor-section">
+    <h2>Calls to Action</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Primary CTA Text</label>
+        <input type="text" id="ctaPrimary" value="Book a Lesson">
+      </div>
+      <div class="form-group">
+        <label>Secondary CTA Text</label>
+        <input type="text" id="ctaSecondary" value="Talk to us first">
+      </div>
+      <div class="form-group">
+        <label>PAYG Button Text</label>
+        <input type="text" id="btnPayg" value="Book £60 lesson →">
+      </div>
+      <div class="form-group">
+        <label>Package Button Text</label>
+        <input type="text" id="btnPackage" value="Buy this package →">
+      </div>
+      <div class="form-group">
+        <label>Guarantee Button Text</label>
+        <input type="text" id="btnGuarantee" value="Continue to Booking →">
+      </div>
+    </div>
+  </div>
+
+  <!-- BUSINESS INFO -->
+  <div class="editor-section">
+    <h2>Business Information</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Pass Rate Statistic</label>
+        <input type="text" id="passRate" value="68%">
+      </div>
+      <div class="form-group">
+        <label>Programme Duration</label>
+        <input type="text" id="programmeDuration" value="18 weeks">
+      </div>
+      <div class="form-group">
+        <label>Contact Email</label>
+        <input type="text" id="contactEmail" value="hello@coachcarter.com">
+      </div>
+      <div class="form-group full-width">
+        <label>Guarantee Note</label>
+        <input type="text" id="guaranteeNote" value="In 2024 car practical test pass rate was 47%. Choose the protection that feels right for you.">
+      </div>
+      <div class="form-group full-width">
+        <label>Footer Text</label>
+        <input type="text" id="footerText" value="© 2025 CoachCarter Driving School · Privacy · Terms · All prices include VAT where applicable.">
+      </div>
+    </div>
+
+    <div class="preview-box">
+      <h3>Quick Preview</h3>
+      <div class="preview-grid">
+        <div class="preview-item">
+          <span>PAYG Rate:</span>
+          <strong id="previewPayg">£60/hr</strong>
+        </div>
+        <div class="preview-item">
+          <span>Core Programme:</span>
+          <strong id="previewCore">£2,400</strong>
+        </div>
+        <div class="preview-item">
+          <span>With +1 Retake:</span>
+          <strong id="previewRetake1">£2,600</strong>
+        </div>
+        <div class="preview-item">
+          <span>With Lifetime:</span>
+          <strong id="previewLifetime">£2,900</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STICKY ACTION BAR -->
+  <div class="actions-bar">
+    <button class="btn" onclick="saveConfig()">💾 Save Changes</button>
+    <button class="btn btn-secondary" onclick="downloadConfig()">⬇️ Download config.json</button>
+    <button class="btn btn-secondary" onclick="resetConfig()">🔄 Reset to Saved</button>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem;">
+      <span id="lastSaved">Last saved: Never</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let currentConfig = {};
+let hourlyRate = 60;
+
+// Initialize
+loadConfig();
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/config.json?t=' + Date.now());
+    currentConfig = await res.json();
+    populateForm();
+    updateAllCalculations();
+    showStatus('Config loaded successfully', 'success');
+  } catch (err) {
+    showStatus('Error loading config: ' + err.message, 'error');
+    // Initialize with defaults if load fails
+    currentConfig = getDefaultConfig();
+    populateForm();
+    updateAllCalculations();
+  }
+}
+
+function getDefaultConfig() {
+  return {
+    pricing: {
+      payg_hourly: 60,
+      core_programme: 2400,
+      core_hours: 30,
+      retake_1: 200,
+      retake_2: 350,
+      retake_lifetime: 500,
+      bulk_packages: [
+        { hrs: 10, discount: 0.05, price: 570, per_hour: 57 },
+        { hrs: 20, discount: 0.075, price: 1110, per_hour: 55.50 },
+        { hrs: 30, discount: 0.10, price: 1620, per_hour: 54 },
+        { hrs: 40, discount: 0.125, price: 2100, per_hour: 52.50 },
+        { hrs: 50, discount: 0.15, price: 2550, per_hour: 51 }
+      ]
+    },
+    content: {
+      hero: {
+        headline: "Your licence. Your way.",
+        subheadline: "Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.",
+        stats: [
+          { value: "£60", label: "Per hour, pay as you go" },
+          { value: "15%", label: "Max discount on bulk packages" },
+          { value: "£2,400", label: "Full Pass Guarantee programme" },
+          { value: "18wk", label: "Structured programme to test day" }
+        ]
+      },
+      sections: {
+        payg: { title: "Pay As You Go", subtitle: "Maximum flexibility. Book when you need, cancel when life happens." },
+        packages: { title: "Bulk Hour Packages", subtitle: "Buy more hours up front and save up to 15%." },
+        guarantee: { title: "The Pass Guarantee", subtitle: "18 weeks to your driving licence — or we keep going until you pass." }
+      },
+      features: {
+        payg: ["Qualified ADI instructor every time", "Book online or by phone", "Lesson length to suit you", "Progress tracked between lessons", "Upgrade to a package anytime"],
+        core: ["18-week structured programme", "~30 hours with expert instructor", "Theory & practical test booked for you", "Progress tracking throughout", "1 attempt included"]
+      },
+      cta: {
+        primary: "Book a Lesson",
+        secondary: "Talk to us first",
+        payg_button: "Book £60 lesson →",
+        package_button: "Buy this package →",
+        guarantee_button: "Continue to Booking →"
+      },
+      business: {
+        pass_rate: "68%",
+        programme_duration: "18 weeks",
+        contact_email: "hello@coachcarter.com",
+        guarantee_note: "In 2024 car practical test pass rate was 47%. Choose the protection that feels right for you.",
+        footer_text: "© 2025 CoachCarter Driving School · Privacy · Terms · All prices include VAT where applicable."
+      }
+    },
+    last_updated: new Date().toISOString()
+  };
+}
+
+function populateForm() {
+  const p = currentConfig.pricing;
+  const c = currentConfig.content;
+  
+  // Pricing
+  document.getElementById('paygHourly').value = p.payg_hourly;
+  document.getElementById('coreProgramme').value = p.core_programme;
+  document.getElementById('coreHours').value = p.core_hours || 30;
+  document.getElementById('retake1').value = p.retake_1;
+  document.getElementById('retake2').value = p.retake_2;
+  document.getElementById('retakeLifetime').value = p.retake_lifetime;
+  
+  // Hero
+  document.getElementById('heroHeadline').value = c.hero.headline;
+  document.getElementById('heroSubheadline').value = c.hero.subheadline;
+  if (c.hero.stats) {
+    document.getElementById('heroStat1Value').value = c.hero.stats[0]?.value || '£60';
+    document.getElementById('heroStat1Label').value = c.hero.stats[0]?.label || 'Per hour, pay as you go';
+    document.getElementById('heroStat2Value').value = c.hero.stats[1]?.value || '15%';
+    document.getElementById('heroStat2Label').value = c.hero.stats[1]?.label || 'Max discount on bulk packages';
+    document.getElementById('heroStat3Value').value = c.hero.stats[2]?.value || '£2,400';
+    document.getElementById('heroStat3Label').value = c.hero.stats[2]?.label || 'Full Pass Guarantee programme';
+    document.getElementById('heroStat4Value').value = c.hero.stats[3]?.value || '18wk';
+    document.getElementById('heroStat4Label').value = c.hero.stats[3]?.label || 'Structured programme to test day';
+  }
+  
+  // Sections
+  document.getElementById('sectionPaygTitle').value = c.sections.payg.title;
+  document.getElementById('sectionPaygSubtitle').value = c.sections.payg.subtitle;
+  document.getElementById('sectionPackagesTitle').value = c.sections.packages.title;
+  document.getElementById('sectionPackagesSubtitle').value = c.sections.packages.subtitle;
+  document.getElementById('sectionGuaranteeTitle').value = c.sections.guarantee.title;
+  document.getElementById('sectionGuaranteeSubtitle').value = c.sections.guarantee.subtitle;
+  
+  // Features
+  populateFeatureList('paygFeatures', c.features.payg);
+  populateFeatureList('coreFeatures', c.features.core);
+  
+  // CTAs
+  document.getElementById('ctaPrimary').value = c.cta.primary;
+  document.getElementById('ctaSecondary').value = c.cta.secondary;
+  document.getElementById('btnPayg').value = c.cta.payg_button;
+  document.getElementById('btnPackage').value = c.cta.package_button;
+  document.getElementById('btnGuarantee').value = c.cta.guarantee_button;
+  
+  // Business
+  document.getElementById('passRate').value = c.business.pass_rate;
+  document.getElementById('programmeDuration').value = c.business.programme_duration;
+  document.getElementById('contactEmail').value = c.business.contact_email;
+  document.getElementById('guaranteeNote').value = c.business.guarantee_note;
+  document.getElementById('footerText').value = c.business.footer_text;
+  
+  // Bulk table
+  renderBulkTable(p.bulk_packages);
+  updateGuaranteePreview();
+}
+
+function populateFeatureList(elementId, features) {
+  const container = document.getElementById(elementId);
+  container.innerHTML = features.map(f => `
+    <div class="feature-item">
+      <input type="text" value="${f}">
+      <button onclick="removeFeature(this)">Remove</button>
+    </div>
+  `).join('');
+}
+
+function addFeature(containerId) {
+  const container = document.getElementById(containerId);
+  const div = document.createElement('div');
+  div.className = 'feature-item';
+  div.innerHTML = `
+    <input type="text" value="" placeholder="Enter feature text">
+    <button onclick="removeFeature(this)">Remove</button>
+  `;
+  container.appendChild(div);
+}
+
+function removeFeature(btn) {
+  btn.parentElement.remove();
+}
+
+function renderBulkTable(packages) {
+  const tbody = document.getElementById('bulkTableBody');
+  hourlyRate = parseInt(document.getElementById('paygHourly').value) || 60;
+  
+  tbody.innerHTML = packages.map((pkg, i) => {
+    const standardPrice = pkg.hrs * hourlyRate;
+    const savings = standardPrice - pkg.price;
+    
+    return `
+      <tr data-index="${i}" data-hours="${pkg.hrs}">
+        <td><strong>${pkg.hrs} hrs</strong></td>
+        <td>
+          <input type="number" 
+                 id="discount-${i}" 
+                 value="${(pkg.discount * 100).toFixed(1)}" 
+                 step="0.1"
+                 onchange="calculateFromDiscount(${i})"
+                 placeholder="%">
+        </td>
+        <td>
+          <input type="number" 
+                 id="total-${i}" 
+                 value="${pkg.price}"
+                 onchange="calculateFromTotal(${i})"
+                 placeholder="£">
+        </td>
+        <td class="price-cell">
+          <input type="number" 
+                 id="perhour-${i}" 
+                 value="${pkg.per_hour}"
+                 step="0.01"
+                 onchange="calculateFromPerHour(${i})"
+                 placeholder="£/hr">
+        </td>
+        <td style="color: var(--green); font-weight: 600;">
+          −£${savings}
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
+  document.getElementById('anchorRateDisplay').textContent = hourlyRate;
+}
+
+// BULK CALCULATIONS
+function calculateFromDiscount(index) {
+  const hours = parseInt(document.querySelector(`tr[data-index="${index}"]`).dataset.hours);
+  const discount = parseFloat(document.getElementById(`discount-${index}`).value) || 0;
+  const standardPrice = hours * hourlyRate;
+  const newPrice = Math.round(standardPrice * (1 - discount / 100));
+  const perHour = (newPrice / hours).toFixed(2);
+  
+  document.getElementById(`total-${index}`).value = newPrice;
+  document.getElementById(`perhour-${index}`).value = perHour;
+  updateSavings(index, newPrice);
+  updatePreview();
+}
+
+function calculateFromTotal(index) {
+  const hours = parseInt(document.querySelector(`tr[data-index="${index}"]`).dataset.hours);
+  const total = parseInt(document.getElementById(`total-${index}`).value) || 0;
+  const standardPrice = hours * hourlyRate;
+  const discount = ((standardPrice - total) / standardPrice * 100).toFixed(1);
+  const perHour = (total / hours).toFixed(2);
+  
+  document.getElementById(`discount-${index}`).value = discount;
+  document.getElementById(`perhour-${index}`).value = perHour;
+  updateSavings(index, total);
+  updatePreview();
+}
+
+function calculateFromPerHour(index) {
+  const hours = parseInt(document.querySelector(`tr[data-index="${index}"]`).dataset.hours);
+  const perHour = parseFloat(document.getElementById(`perhour-${index}`).value) || 0;
+  const total = Math.round(perHour * hours);
+  const standardPrice = hours * hourlyRate;
+  const discount = ((standardPrice - total) / standardPrice * 100).toFixed(1);
+  
+  document.getElementById(`total-${index}`).value = total;
+  document.getElementById(`discount-${index}`).value = discount;
+  updateSavings(index, total);
+  updatePreview();
+}
+
+function updateSavings(index, actualPrice) {
+  const hours = parseInt(document.querySelector(`tr[data-index="${index}"]`).dataset.hours);
+  const standardPrice = hours * hourlyRate;
+  const savings = standardPrice - actualPrice;
+  const row = document.querySelector(`tr[data-index="${index}"]`);
+  row.cells[4].textContent = `−£${savings}`;
+  row.cells[4].style.color = savings > 0 ? 'var(--green)' : 'var(--muted)';
+}
+
+// GUARANTEE CALCULATIONS
+function calculateFromCore() {
+  const core = parseInt(document.getElementById('coreProgramme').value) || 2400;
+  const r1 = parseInt(document.getElementById('retake1').value) || 0;
+  const r2 = parseInt(document.getElementById('retake2').value) || 0;
+  const rLife = parseInt(document.getElementById('retakeLifetime').value) || 0;
+  
+  document.getElementById('total-retake1').textContent = '£' + (core + r1).toLocaleString();
+  document.getElementById('total-retake2').textContent = '£' + (core + r2).toLocaleString();
+  document.getElementById('total-retakeLifetime').textContent = '£' + (core + rLife).toLocaleString();
+  
+  updateGuaranteePreview();
+  updatePreview();
+}
+
+function calculateFromAddon(addonNum) {
+  const core = parseInt(document.getElementById('coreProgramme').value) || 2400;
+  let addonPrice, totalElementId;
+  
+  if (addonNum === 1) {
+    addonPrice = parseInt(document.getElementById('retake1').value) || 0;
+    totalElementId = 'total-retake1';
+  } else if (addonNum === 2) {
+    addonPrice = parseInt(document.getElementById('retake2').value) || 0;
+    totalElementId = 'total-retake2';
+  } else if (addonNum === 3) {
+    addonPrice = parseInt(document.getElementById('retakeLifetime').value) || 0;
+    totalElementId = 'total-retakeLifetime';
+  }
+  
+  document.getElementById(totalElementId).textContent = '£' + (core + addonPrice).toLocaleString();
+  updateGuaranteePreview();
+  updatePreview();
+}
+
+function updateGuaranteePreview() {
+  const core = parseInt(document.getElementById('coreProgramme').value) || 2400;
+  const r1 = parseInt(document.getElementById('retake1').value) || 0;
+  const r2 = parseInt(document.getElementById('retake2').value) || 0;
+  const rLife = parseInt(document.getElementById('retakeLifetime').value) || 0;
+  
+  document.getElementById('preview-tier-core').textContent = '£' + core.toLocaleString();
+  document.getElementById('preview-tier-plus1').textContent = '£' + (core + r1).toLocaleString();
+  document.getElementById('preview-tier-plus2').textContent = '£' + (core + r2).toLocaleString();
+  document.getElementById('preview-tier-lifetime').textContent = '£' + (core + rLife).toLocaleString();
+  
+  document.getElementById('breakdown-plus1').textContent = '+£' + r1.toLocaleString();
+  document.getElementById('breakdown-plus2').textContent = '+£' + r2.toLocaleString();
+  document.getElementById('breakdown-lifetime').textContent = '+£' + rLife.toLocaleString();
+}
+
+function updateAllCalculations() {
+  hourlyRate = parseInt(document.getElementById('paygHourly').value) || 60;
+  document.getElementById('anchorRateDisplay').textContent = hourlyRate;
+  
+  const rows = document.querySelectorAll('#bulkTableBody tr');
+  rows.forEach(row => {
+    const index = row.dataset.index;
+    calculateFromDiscount(index);
+  });
+  
+  calculateFromCore();
+  updatePreview();
+}
+
+function updatePreview() {
+  const payg = parseInt(document.getElementById('paygHourly').value) || 60;
+  const core = parseInt(document.getElementById('coreProgramme').value) || 2400;
+  const r1 = parseInt(document.getElementById('retake1').value) || 200;
+  const rLife = parseInt(document.getElementById('retakeLifetime').value) || 500;
+  
+  document.getElementById('previewPayg').textContent = '£' + payg + '/hr';
+  document.getElementById('previewCore').textContent = '£' + core.toLocaleString();
+  document.getElementById('previewRetake1').textContent = '£' + (core + r1).toLocaleString();
+  document.getElementById('previewLifetime').textContent = '£' + (core + rLife).toLocaleString();
+}
+
+function gatherFormData() {
+  // Update pricing
+  currentConfig.pricing.payg_hourly = parseInt(document.getElementById('paygHourly').value) || 60;
+  currentConfig.pricing.core_programme = parseInt(document.getElementById('coreProgramme').value) || 2400;
+  currentConfig.pricing.core_hours = parseInt(document.getElementById('coreHours').value) || 30;
+  currentConfig.pricing.retake_1 = parseInt(document.getElementById('retake1').value) || 200;
+  currentConfig.pricing.retake_2 = parseInt(document.getElementById('retake2').value) || 350;
+  currentConfig.pricing.retake_lifetime = parseInt(document.getElementById('retakeLifetime').value) || 500;
+  
+  // Update bulk packages
+  const rows = document.querySelectorAll('#bulkTableBody tr');
+  rows.forEach((row, i) => {
+    currentConfig.pricing.bulk_packages[i].price = parseInt(document.getElementById(`total-${i}`).value) || currentConfig.pricing.bulk_packages[i].price;
+    currentConfig.pricing.bulk_packages[i].discount = parseFloat(document.getElementById(`discount-${i}`).value) / 100 || currentConfig.pricing.bulk_packages[i].discount;
+    currentConfig.pricing.bulk_packages[i].per_hour = parseFloat(document.getElementById(`perhour-${i}`).value) || currentConfig.pricing.bulk_packages[i].per_hour;
+  });
+  
+  // Update content
+  currentConfig.content.hero.headline = document.getElementById('heroHeadline').value;
+  currentConfig.content.hero.subheadline = document.getElementById('heroSubheadline').value;
+  currentConfig.content.hero.stats = [
+    { value: document.getElementById('heroStat1Value').value, label: document.getElementById('heroStat1Label').value },
+    { value: document.getElementById('heroStat2Value').value, label: document.getElementById('heroStat2Label').value },
+    { value: document.getElementById('heroStat3Value').value, label: document.getElementById('heroStat3Label').value },
+    { value: document.getElementById('heroStat4Value').value, label: document.getElementById('heroStat4Label').value }
+  ];
+  
+  currentConfig.content.sections.payg.title = document.getElementById('sectionPaygTitle').value;
+  currentConfig.content.sections.payg.subtitle = document.getElementById('sectionPaygSubtitle').value;
+  currentConfig.content.sections.packages.title = document.getElementById('sectionPackagesTitle').value;
+  currentConfig.content.sections.packages.subtitle = document.getElementById('sectionPackagesSubtitle').value;
+  currentConfig.content.sections.guarantee.title = document.getElementById('sectionGuaranteeTitle').value;
+  currentConfig.content.sections.guarantee.subtitle = document.getElementById('sectionGuaranteeSubtitle').value;
+  
+  // Gather features from dynamic lists
+  currentConfig.content.features.payg = Array.from(document.querySelectorAll('#paygFeatures .feature-item input')).map(i => i.value).filter(v => v);
+  currentConfig.content.features.core = Array.from(document.querySelectorAll('#coreFeatures .feature-item input')).map(i => i.value).filter(v => v);
+  
+  currentConfig.content.cta.primary = document.getElementById('ctaPrimary').value;
+  currentConfig.content.cta.secondary = document.getElementById('ctaSecondary').value;
+  currentConfig.content.cta.payg_button = document.getElementById('btnPayg').value;
+  currentConfig.content.cta.package_button = document.getElementById('btnPackage').value;
+  currentConfig.content.cta.guarantee_button = document.getElementById('btnGuarantee').value;
+  
+  currentConfig.content.business.pass_rate = document.getElementById('passRate').value;
+  currentConfig.content.business.programme_duration = document.getElementById('programmeDuration').value;
+  currentConfig.content.business.contact_email = document.getElementById('contactEmail').value;
+  currentConfig.content.business.guarantee_note = document.getElementById('guaranteeNote').value;
+  currentConfig.content.business.footer_text = document.getElementById('footerText').value;
+  
+  currentConfig.last_updated = new Date().toISOString();
+}
+
+function saveConfig() {
+  gatherFormData();
+  downloadConfig();
+  document.getElementById('lastSaved').textContent = 'Last saved: ' + new Date().toLocaleTimeString();
+  showStatus('✅ Config downloaded! Replace /public/config.json and deploy.', 'success');
+}
+
+function downloadConfig() {
+  const dataStr = JSON.stringify(currentConfig, null, 2);
+  const blob = new Blob([dataStr], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'config.json';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function resetConfig() {
+  if (confirm('Reset all changes to last saved config?')) {
+    loadConfig();
+  }
+}
+
+function showStatus(msg, type) {
+  const status = document.getElementById('saveStatus');
+  status.textContent = msg;
+  status.className = 'status-msg ' + type;
+  setTimeout(() => status.className = 'status-msg', 6000);
+}
+
+// Live preview listeners
+document.querySelectorAll('input, textarea').forEach(input => {
+  input.addEventListener('input', () => {
+    if (input.id.includes('payg') || input.id.includes('core') || input.id.includes('retake')) {
+      updatePreview();
+    }
+  });
+});
+</script>
+
+</body>
+</html>

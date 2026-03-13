@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoachCarter — Availability Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #272727;
+  --accent: #f58321;
+  --bg-warm: #d8c2af;
+  --muted: #797879;
+  --white: #ffffff;
+  --bg-light: #ffffff;
+  --border: #e0e0e0;
+  --surface: #f9f9f9;
+  --green: #1a9e5c;
+  --red: #dc2626;
+  --font-head: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Lato', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg-light);
+  color: var(--primary);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+header {
+  background: var(--primary);
+  color: white;
+  padding: 24px 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.logo span { color: var(--accent); }
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 48px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  margin-bottom: 48px;
+}
+
+.stat-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.stat-value {
+  font-family: var(--font-head);
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.submissions-list {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.table-header {
+  display: grid;
+  grid-template-columns: 150px 1fr 200px 120px 100px;
+  gap: 16px;
+  padding: 16px 24px;
+  background: var(--surface);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--primary);
+}
+
+.submission-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 200px 120px 100px;
+  gap: 16px;
+  padding: 20px 24px;
+  border-top: 1px solid var(--border);
+  align-items: center;
+}
+
+.submission-row:hover {
+  background: var(--bg-light);
+}
+
+.ref {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.customer {
+  display: flex;
+  flex-direction: column;
+}
+
+.customer-email {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.customer-date {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.slots {
+  font-size: 0.9rem;
+}
+
+.status {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status.pending { background: #fef3c7; color: #92400e; }
+.status.contacted { background: #dbeafe; color: #1e40af; }
+.status.scheduled { background: #d1fae5; color: #065f46; }
+.status.completed { background: #e5e7eb; color: #374151; }
+
+.action-btn {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--white);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+}
+
+.action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 64px 24px;
+  color: var(--muted);
+}
+
+.loading {
+  text-align: center;
+  padding: 64px 24px;
+  color: var(--muted);
+}
+
+.error {
+  background: #fee;
+  color: #c53030;
+  padding: 16px;
+  margin: 24px;
+  border-radius: 8px;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal.active {
+  display: flex;
+}
+
+.modal-content {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.detail-row {
+  display: flex;
+  margin-bottom: 16px;
+}
+
+.detail-label {
+  width: 150px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.detail-value {
+  flex: 1;
+  color: var(--primary);
+}
+
+.status-select {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+}
+
+@media (max-width: 1024px) {
+  .table-header, .submission-row {
+    grid-template-columns: 120px 1fr 150px;
+  }
+  .table-header > *:nth-child(4),
+  .table-header > *:nth-child(5),
+  .submission-row > *:nth-child(4),
+  .submission-row > *:nth-child(5) {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .container { padding: 24px; }
+  header { padding: 16px 24px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display: flex; align-items: center; gap: 12px;">
+  <img src="Logo.png" alt="CoachCarter" style="height: 36px; width: auto;">
+  <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Availability Dashboard</span>
+</div>
+  <a href="/admin.html" style="color:var(--accent);text-decoration:none;">← Back to Bookings</a>
+</header>
+
+<div class="container">
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-value" id="total-submissions">0</div>
+      <div class="stat-label">Total Submissions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="pending-count">0</div>
+      <div class="stat-label">Pending</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="this-week-count">0</div>
+      <div class="stat-label">This Week</div>
+    </div>
+  </div>
+
+  <div class="submissions-list">
+    <div class="table-header">
+      <div>Reference</div>
+      <div>Customer</div>
+      <div>Slots</div>
+      <div>Status</div>
+      <div>Actions</div>
+    </div>
+    <div id="submissions-container">
+      <div class="loading">Loading availability submissions...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for details -->
+<div class="modal" id="detail-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Submission Details</div>
+      <button class="close-btn" onclick="closeModal()">&times;</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+let submissions = [];
+
+async function loadSubmissions() {
+  const container = document.getElementById('submissions-container');
+  
+  try {
+    const response = await fetch('/api/get-availability');
+    const data = await response.json();
+    
+    if (!data.submissions) {
+      throw new Error('Invalid response');
+    }
+
+    submissions = data.submissions;
+    updateStats();
+    renderSubmissions();
+    
+  } catch (error) {
+    console.error('Error loading submissions:', error);
+    container.innerHTML = `<div class="error">Failed to load data: ${error.message}</div>`;
+  }
+}
+
+function updateStats() {
+  document.getElementById('total-submissions').textContent = submissions.length;
+  
+  const pending = submissions.filter(s => s.status === 'pending').length;
+  document.getElementById('pending-count').textContent = pending;
+
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  const thisWeek = submissions.filter(s => new Date(s.submitted_at) > oneWeekAgo).length;
+  document.getElementById('this-week-count').textContent = thisWeek;
+}
+
+function renderSubmissions() {
+  const container = document.getElementById('submissions-container');
+  
+  if (submissions.length === 0) {
+    container.innerHTML = '<div class="empty-state">No availability submissions yet</div>';
+    return;
+  }
+
+  container.innerHTML = submissions.map(sub => {
+    const preferredCount = sub.preferred_days?.length || 0;
+    const availableCount = sub.available_days?.length || 0;
+    
+    return `
+    <div class="submission-row">
+      <div class="ref">${sub.booking_reference || 'N/A'}</div>
+      <div class="customer">
+        <span class="customer-email">${sub.customer_email}</span>
+        <span class="customer-date">${new Date(sub.submitted_at).toLocaleString()}</span>
+      </div>
+      <div class="slots">
+        ${preferredCount} preferred, ${availableCount} available
+        ${sub.frequency_preference ? `<br><small>${sub.frequency_preference}</small>` : ''}
+      </div>
+      <div>
+        <select class="status-select" onchange="updateStatus(${sub.id}, this.value)">
+          <option value="pending" ${sub.status === 'pending' ? 'selected' : ''}>Pending</option>
+          <option value="contacted" ${sub.status === 'contacted' ? 'selected' : ''}>Contacted</option>
+          <option value="scheduled" ${sub.status === 'scheduled' ? 'selected' : ''}>Scheduled</option>
+          <option value="completed" ${sub.status === 'completed' ? 'selected' : ''}>Completed</option>
+        </select>
+      </div>
+      <div>
+        <button class="action-btn" onclick="viewDetails(${sub.id})">View</button>
+      </div>
+    </div>
+  `}).join('');
+}
+
+function viewDetails(id) {
+  const sub = submissions.find(s => s.id === id);
+  if (!sub) return;
+
+  const modalBody = document.getElementById('modal-body');
+  modalBody.innerHTML = `
+    <div class="detail-row">
+      <div class="detail-label">Reference:</div>
+      <div class="detail-value">${sub.booking_reference || 'N/A'}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Email:</div>
+      <div class="detail-value">${sub.customer_email}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Submitted:</div>
+      <div class="detail-value">${new Date(sub.submitted_at).toLocaleString()}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Preferred Days:</div>
+      <div class="detail-value">${sub.preferred_days?.join(', ') || 'None'}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Available Days:</div>
+      <div class="detail-value">${sub.available_days?.join(', ') || 'None'}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Frequency:</div>
+      <div class="detail-value">${sub.frequency_preference || 'Not specified'}</div>
+    </div>
+    ${sub.additional_notes ? `
+    <div class="detail-row">
+      <div class="detail-label">Notes:</div>
+      <div class="detail-value">${sub.additional_notes}</div>
+    </div>
+    ` : ''}
+  `;
+  
+  document.getElementById('detail-modal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('detail-modal').classList.remove('active');
+}
+
+async function updateStatus(id, newStatus) {
+  try {
+    const response = await fetch('/api/update-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: newStatus })
+    });
+
+    if (!response.ok) throw new Error('Failed to update');
+    
+    const sub = submissions.find(s => s.id === id);
+    if (sub) sub.status = newStatus;
+    
+  } catch (error) {
+    alert('Failed to update status: ' + error.message);
+    loadSubmissions(); // Refresh to reset
+  }
+}
+
+// Close modal on outside click
+document.getElementById('detail-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'detail-modal') closeModal();
+});
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', loadSubmissions);
+
+// Auto-refresh every 30 seconds
+setInterval(loadSubmissions, 30000);
+</script>
+
+</body>
+</html>

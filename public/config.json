@@ -1,0 +1,111 @@
+{
+  "pricing": {
+    "payg_hourly": 60,
+    "core_programme": 2400,
+    "core_hours": 18,
+    "retake_1": 200,
+    "retake_2": 350,
+    "retake_lifetime": 500,
+    "bulk_packages": [
+      {
+        "hrs": 10,
+        "discount": 0.05,
+        "price": 570,
+        "per_hour": 57
+      },
+      {
+        "hrs": 20,
+        "discount": 0.075,
+        "price": 1110,
+        "per_hour": 55.5
+      },
+      {
+        "hrs": 30,
+        "discount": 0.1,
+        "price": 1620,
+        "per_hour": 54
+      },
+      {
+        "hrs": 40,
+        "discount": 0.125,
+        "price": 2100,
+        "per_hour": 52.5
+      },
+      {
+        "hrs": 50,
+        "discount": 0.15,
+        "price": 2550,
+        "per_hour": 51
+      }
+    ]
+  },
+  "content": {
+    "hero": {
+      "headline": "Your licence, secured",
+      "subheadline": "Choose how you want to learn. From flexible pay-per-lesson to our 18-week pass programme. Choose from our range of test fail insurance covers",
+      "stats": [
+        {
+          "value": "£60",
+          "label": "Per hour, pay as you go"
+        },
+        {
+          "value": "15%",
+          "label": "Max discount on bulk packages"
+        },
+        {
+          "value": "£2,400",
+          "label": "Full Pass Guarantee programme"
+        },
+        {
+          "value": "18 Weeks",
+          "label": "Structured programme to test day"
+        }
+      ]
+    },
+    "sections": {
+      "payg": {
+        "title": "Pay Per Lesson",
+        "subtitle": "Maximum flexibility. Book when you need, cancel when life happens."
+      },
+      "packages": {
+        "title": "Bulk Hour Packages",
+        "subtitle": "Buy more hours up front and save up to 15%."
+      },
+      "guarantee": {
+        "title": "The Pass Guarantee",
+        "subtitle": "18 weeks to your driving licence - choose your guarantee level"
+      }
+    },
+    "features": {
+      "payg": [
+        "Qualified ADI instructor every time",
+        "Book online or by phone",
+        "Lesson length to suit you",
+        "Progress tracked between lessons",
+        "Upgrade to a package anytime"
+      ],
+      "core": [
+        "18-week structured programme",
+        "100% Money Back After First Lesson",
+        "Theory & practical test booked for you",
+        "Progress tracking throughout",
+        "If you fail: We book your 2nd attempt in Reading and include another 10hrs of lessons"
+      ]
+    },
+    "cta": {
+      "primary": "Book a Lesson",
+      "secondary": "Talk to us first",
+      "payg_button": "Book First Lesson Free →",
+      "package_button": "Buy this package →",
+      "guarantee_button": "Continue to Booking →"
+    },
+    "business": {
+      "pass_rate": "68%",
+      "programme_duration": "18 weeks",
+      "contact_email": "fraser@coachcarter.uk",
+      "guarantee_note": "In 2024 car practical test pass rate was 47%. Choose the protection that feels right for you.",
+      "footer_text": "CoachCarter Driving School · The last driving school you'll need"
+    }
+  },
+  "last_updated": "2026-03-01T11:07:51.451Z"
+}
