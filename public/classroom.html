@@ -299,7 +299,6 @@ let allVideos = [];
 let activeGroup = 'all';
 let observer = null;
 const muteState = {}; // uid -> true (muted) / false (unmuted)
-const initialized = new Set();
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -331,7 +330,6 @@ function selectTab(key) {
   document.querySelectorAll('.tab-btn').forEach((btn, i) => {
     btn.classList.toggle('active', GROUPS[i].key === key);
   });
-  initialized.clear();
   if (observer) observer.disconnect();
   renderReels(key);
 }
@@ -396,17 +394,16 @@ function setupObserver(videos) {
       const iframe = document.getElementById(`iframe-${uid}`);
 
       if (entry.isIntersecting) {
-        if (!initialized.has(uid)) {
-          // First time: load with autoplay + muted
-          iframe.src = `${CF_BASE}/${uid}/iframe?autoplay=true&muted=true&loop=false&poster=${encodeURIComponent(`${CF_BASE}/${uid}/thumbnails/thumbnail.jpg?time=2s&height=720`)}`;
-          initialized.add(uid);
-          muteState[uid] = true;
-          showMutedBanner(uid);
-        } else {
-          sendMsg(uid, 'play');
-        }
+        // Always reload fresh — guarantees clean muted autoplay, no audio bleed
+        iframe.src = `${CF_BASE}/${uid}/iframe?autoplay=true&muted=true&loop=false&controls=false&poster=${encodeURIComponent(`${CF_BASE}/${uid}/thumbnails/thumbnail.jpg?time=2s&height=720`)}`;
+        muteState[uid] = true;
+        const btn = document.getElementById(`mute-btn-${uid}`);
+        if (btn) btn.textContent = '🔇';
+        showMutedBanner(uid);
       } else {
-        sendMsg(uid, 'pause');
+        // Blank the src immediately — kills audio with certainty
+        iframe.src = 'about:blank';
+        muteState[uid] = true;
       }
     });
   }, {
