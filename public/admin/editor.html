@@ -978,7 +978,8 @@ textarea {
 
   <!-- STICKY ACTION BAR -->
   <div class="actions-bar">
-    <button class="btn" onclick="saveConfig()">💾 Save Changes</button>
+    <input type="password" id="adminPassword" placeholder="Admin password" style="padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-body); font-size: 0.9rem; width: 200px;">
+    <button class="btn" onclick="saveConfig()">💾 Save to Live Site</button>
     <button class="btn btn-secondary" onclick="downloadConfig()">⬇️ Download config.json</button>
     <button class="btn btn-secondary" onclick="resetConfig()">🔄 Reset to Saved</button>
     <div style="margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem;">
@@ -997,14 +998,14 @@ loadConfig();
 
 async function loadConfig() {
   try {
-    const res = await fetch('/config.json?t=' + Date.now());
+    const res = await fetch('/api/get-config?t=' + Date.now());
     currentConfig = await res.json();
+    const source = currentConfig._source === 'db' ? 'database' : 'config file';
     populateForm();
     updateAllCalculations();
-    showStatus('Config loaded successfully', 'success');
+    showStatus('Config loaded from ' + source, 'success');
   } catch (err) {
     showStatus('Error loading config: ' + err.message, 'error');
-    // Initialize with defaults if load fails
     currentConfig = getDefaultConfig();
     populateForm();
     updateAllCalculations();
@@ -1017,15 +1018,13 @@ function getDefaultConfig() {
       payg_hourly: 60,
       core_programme: 2400,
       core_hours: 30,
-      retake_1: 200,
-      retake_2: 350,
-      retake_lifetime: 500,
+      retake_price: 349,
       bulk_packages: [
-        { hrs: 10, discount: 0.05, price: 570, per_hour: 57 },
-        { hrs: 20, discount: 0.075, price: 1110, per_hour: 55.50 },
-        { hrs: 30, discount: 0.10, price: 1620, per_hour: 54 },
-        { hrs: 40, discount: 0.125, price: 2100, per_hour: 52.50 },
-        { hrs: 50, discount: 0.15, price: 2550, per_hour: 51 }
+        { hrs: 10, discount: 0.08, price: 552, per_hour: 55.2 },
+        { hrs: 20, discount: 0.12, price: 1056, per_hour: 52.8 },
+        { hrs: 30, discount: 0.15, price: 1530, per_hour: 51 },
+        { hrs: 40, discount: 0.18, price: 1968, per_hour: 49.2 },
+        { hrs: 50, discount: 0.21, price: 2370, per_hour: 47.4 }
       ]
     },
     content: {
@@ -1034,19 +1033,19 @@ function getDefaultConfig() {
         subheadline: "Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.",
         stats: [
           { value: "£60", label: "Per hour, pay as you go" },
-          { value: "15%", label: "Max discount on bulk packages" },
+          { value: "21%", label: "Max discount on bulk packages" },
           { value: "£2,400", label: "Full Pass Guarantee programme" },
           { value: "18wk", label: "Structured programme to test day" }
         ]
       },
       sections: {
         payg: { title: "Pay As You Go", subtitle: "Maximum flexibility. Book when you need, cancel when life happens." },
-        packages: { title: "Bulk Hour Packages", subtitle: "Buy more hours up front and save up to 15%." },
+        packages: { title: "Bulk Hour Packages", subtitle: "Buy more hours up front and save up to 21%. The more committed you are, the better the deal." },
         guarantee: { title: "The Pass Guarantee", subtitle: "18 weeks to your driving licence — or we keep going until you pass." }
       },
       features: {
         payg: ["Qualified ADI instructor every time", "Book online or by phone", "Lesson length to suit you", "Progress tracked between lessons", "Upgrade to a package anytime"],
-        core: ["18-week structured programme", "~30 hours with expert instructor", "Theory & practical test booked for you", "Progress tracking throughout", "1 attempt included"]
+        core: ["18-week structured programme", "~30 hours with expert instructor", "3 mock driving assessments included", "Practical test booked for you", "100% Money Back After First Lesson", "1st retake fully covered — 15 hrs tuition + test booking included"]
       },
       cta: {
         primary: "Book a Lesson",
@@ -1372,11 +1371,36 @@ function gatherFormData() {
   currentConfig.last_updated = new Date().toISOString();
 }
 
-function saveConfig() {
+async function saveConfig() {
+  const password = document.getElementById('adminPassword').value.trim();
+  if (!password) {
+    showStatus('⚠️ Enter your admin password before saving.', 'error');
+    document.getElementById('adminPassword').focus();
+    return;
+  }
+
   gatherFormData();
-  downloadConfig();
-  document.getElementById('lastSaved').textContent = 'Last saved: ' + new Date().toLocaleTimeString();
-  showStatus('✅ Config downloaded! Replace /public/config.json and deploy.', 'success');
+  showStatus('Saving...', 'success');
+
+  try {
+    const res = await fetch('/api/save-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: currentConfig, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showStatus('❌ ' + (data.error || 'Save failed'), 'error');
+      return;
+    }
+
+    document.getElementById('lastSaved').textContent = 'Last saved: ' + new Date().toLocaleTimeString();
+    showStatus('✅ Saved to live site! Changes are live immediately.', 'success');
+  } catch (err) {
+    showStatus('❌ Network error: ' + err.message, 'error');
+  }
 }
 
 function downloadConfig() {

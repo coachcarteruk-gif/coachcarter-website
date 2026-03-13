@@ -1949,13 +1949,19 @@ let SITE_CONFIG = {};
 
 async function loadConfig() {
   try {
-    const res = await fetch('/config.json?t=' + Date.now());
+    const res = await fetch('/api/get-config?t=' + Date.now());
     SITE_CONFIG = await res.json();
     applyConfig();
   } catch (err) {
-    console.error('Failed to load config:', err);
-    // Initialize with defaults if config fails
-    initWithDefaults();
+    console.error('Failed to load config from API, trying file fallback:', err);
+    try {
+      const res = await fetch('/config.json?t=' + Date.now());
+      SITE_CONFIG = await res.json();
+      applyConfig();
+    } catch (err2) {
+      console.error('Config fallback also failed:', err2);
+      initWithDefaults();
+    }
   }
 }
 
