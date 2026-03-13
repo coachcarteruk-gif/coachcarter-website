@@ -660,13 +660,13 @@ textarea {
     
     <div class="form-grid" style="margin-bottom: 24px;">
       <div class="form-group price-input">
-        <label>PAYG Hourly Rate (Anchor Price)</label>
-        <input type="number" id="paygHourly" value="60" onchange="updateAllCalculations()">
+        <label>PAYG Lesson Price (1.5 hrs)</label>
+        <input type="number" id="paygHourly" value="90" onchange="updateAllCalculations()">
       </div>
     </div>
 
     <div class="calc-note">
-      <strong>💡 How bulk pricing works:</strong> All calculations are based on the PAYG hourly rate (£<span id="anchorRateDisplay">60</span>/hr). 
+      <strong>💡 How bulk pricing works:</strong> Bulk package discounts are calculated against the equivalent hourly rate (lesson price ÷ 1.5 = £<span id="anchorRateDisplay">60</span>/hr).
       Edit any value below (Discount %, Total Price, or Price/Hour) and the others auto-calculate.
     </div>
 
@@ -957,8 +957,8 @@ textarea {
       <h3>Quick Preview</h3>
       <div class="preview-grid">
         <div class="preview-item">
-          <span>PAYG Rate:</span>
-          <strong id="previewPayg">£60/hr</strong>
+          <span>PAYG Lesson:</span>
+          <strong id="previewPayg">£90/lesson</strong>
         </div>
         <div class="preview-item">
           <span>Core Programme:</span>
@@ -1015,7 +1015,7 @@ async function loadConfig() {
 function getDefaultConfig() {
   return {
     pricing: {
-      payg_hourly: 60,
+      payg_lesson_price: 90,
       core_programme: 2400,
       core_hours: 30,
       retake_price: 349,
@@ -1032,7 +1032,7 @@ function getDefaultConfig() {
         headline: "Your licence. Your way.",
         subheadline: "Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.",
         stats: [
-          { value: "£60", label: "Per hour, pay as you go" },
+          { value: "£90", label: "Per 1.5hr lesson" },
           { value: "21%", label: "Max discount on bulk packages" },
           { value: "£2,400", label: "Full Pass Guarantee programme" },
           { value: "18wk", label: "Structured programme to test day" }
@@ -1071,7 +1071,7 @@ function populateForm() {
   const c = currentConfig.content;
   
   // Pricing
-  document.getElementById('paygHourly').value = p.payg_hourly;
+  document.getElementById('paygHourly').value = p.payg_lesson_price || (p.payg_hourly ? p.payg_hourly * 1.5 : 90);
   document.getElementById('coreProgramme').value = p.core_programme;
   document.getElementById('coreHours').value = p.core_hours || 30;
   document.getElementById('retake1').value = p.retake_1;
@@ -1083,7 +1083,7 @@ function populateForm() {
   document.getElementById('heroSubheadline').value = c.hero.subheadline;
   if (c.hero.stats) {
     document.getElementById('heroStat1Value').value = c.hero.stats[0]?.value || '£60';
-    document.getElementById('heroStat1Label').value = c.hero.stats[0]?.label || 'Per hour, pay as you go';
+    document.getElementById('heroStat1Label').value = c.hero.stats[0]?.label || 'Per 1.5hr lesson';
     document.getElementById('heroStat2Value').value = c.hero.stats[1]?.value || '15%';
     document.getElementById('heroStat2Label').value = c.hero.stats[1]?.label || 'Max discount on bulk packages';
     document.getElementById('heroStat3Value').value = c.hero.stats[2]?.value || '£2,400';
@@ -1150,7 +1150,7 @@ function removeFeature(btn) {
 
 function renderBulkTable(packages) {
   const tbody = document.getElementById('bulkTableBody');
-  hourlyRate = parseInt(document.getElementById('paygHourly').value) || 60;
+  hourlyRate = (parseInt(document.getElementById('paygHourly').value) || 90) / 1.5;
   
   tbody.innerHTML = packages.map((pkg, i) => {
     const standardPrice = pkg.hrs * hourlyRate;
@@ -1309,7 +1309,7 @@ function updateGuaranteePreview() {
 }
 
 function updateAllCalculations() {
-  hourlyRate = parseInt(document.getElementById('paygHourly').value) || 60;
+  hourlyRate = (parseInt(document.getElementById('paygHourly').value) || 90) / 1.5;
   document.getElementById('anchorRateDisplay').textContent = hourlyRate;
   
   const rows = document.querySelectorAll('#bulkTableBody tr');
@@ -1328,7 +1328,7 @@ function updatePreview() {
   const r1 = parseInt(document.getElementById('retake1').value) || 200;
   const rLife = parseInt(document.getElementById('retakeLifetime').value) || 500;
   
-  document.getElementById('previewPayg').textContent = '£' + payg + '/hr';
+  document.getElementById('previewPayg').textContent = '£' + payg + '/lesson';
   document.getElementById('previewCore').textContent = '£' + core.toLocaleString();
   document.getElementById('previewRetake1').textContent = '£' + (core + r1).toLocaleString();
   document.getElementById('previewLifetime').textContent = '£' + (core + rLife).toLocaleString();
@@ -1336,7 +1336,9 @@ function updatePreview() {
 
 function gatherFormData() {
   // Update pricing
-  currentConfig.pricing.payg_hourly = parseInt(document.getElementById('paygHourly').value) || 60;
+  const lessonPrice = parseInt(document.getElementById('paygHourly').value) || 90;
+  currentConfig.pricing.payg_lesson_price = lessonPrice;
+  currentConfig.pricing.payg_hourly = lessonPrice / 1.5;
   currentConfig.pricing.core_programme = parseInt(document.getElementById('coreProgramme').value) || 2400;
   currentConfig.pricing.core_hours = parseInt(document.getElementById('coreHours').value) || 30;
   currentConfig.pricing.retake_1 = parseInt(document.getElementById('retake1').value) || 200;

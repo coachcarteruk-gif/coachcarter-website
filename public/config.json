@@ -1,5 +1,6 @@
 {
   "pricing": {
+    "payg_lesson_price": 90,
     "payg_hourly": 60,
     "core_programme": 2400,
     "core_hours": 30,
@@ -43,8 +44,8 @@
       "subheadline": "Choose how you want to learn. From flexible pay-per-lesson to our 18-week pass programme. Choose from our range of test fail insurance covers",
       "stats": [
         {
-          "value": "£60",
-          "label": "Per hour, pay as you go"
+          "value": "£90",
+          "label": "Per 1.5hr lesson"
         },
         {
           "value": "21%",

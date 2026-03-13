@@ -1506,7 +1506,7 @@ td.highlight .best-for {
         <h2>One lesson<br>at a time.</h2>
         <div class="payg-price">
           <span class="payg-price-num" id="payg-price-display">£60</span>
-          <span class="payg-price-unit">per hour</span>
+          <span class="payg-price-unit">per 1.5hr lesson</span>
         </div>
         <p id="payg-description">No commitment, no upfront cost. Book your first lesson and go from there. Every lesson is with a qualified CoachCarter instructor and tailored to where you are in your learning journey.</p>
         <ul class="payg-features" id="payg-features-list">
@@ -1724,8 +1724,8 @@ td.highlight .best-for {
       </thead>
       <tbody>
         <tr>
-          <td>Price per hour</td>
-          <td id="compare-payg-rate">£60</td>
+          <td>Lesson price</td>
+          <td id="compare-payg-rate">£90</td>
           <td id="compare-packages-rate">£47–£55</td>
           <td class="highlight">Included</td>
         </tr>
@@ -1992,12 +1992,13 @@ function applyConfig() {
   
   // Update PAYG price display
   const paygPriceEl = document.getElementById('payg-price-display');
-  if (paygPriceEl) paygPriceEl.textContent = '£' + p.payg_hourly;
+  const paygLessonPrice = p.payg_lesson_price || (p.payg_hourly ? p.payg_hourly * 1.5 : 90);
+  if (paygPriceEl) paygPriceEl.textContent = '£' + paygLessonPrice;
   
   // Update hero stats
   if (c.hero && c.hero.stats) {
-    document.getElementById('hero-stat-1-value').textContent = c.hero.stats[0]?.value || '£' + p.payg_hourly;
-    document.getElementById('hero-stat-1-label').textContent = c.hero.stats[0]?.label || 'Per hour,\npay as you go';
+    document.getElementById('hero-stat-1-value').textContent = c.hero.stats[0]?.value || '£' + paygLessonPrice;
+    document.getElementById('hero-stat-1-label').textContent = c.hero.stats[0]?.label || 'Per 1.5hr lesson';
     document.getElementById('hero-stat-2-value').textContent = c.hero.stats[1]?.value || '15%';
     document.getElementById('hero-stat-2-label').textContent = c.hero.stats[1]?.label || 'Max discount on\nbulk packages';
     document.getElementById('hero-stat-3-value').textContent = c.hero.stats[2]?.value || '£' + p.core_programme.toLocaleString();
@@ -2125,7 +2126,8 @@ function applyConfig() {
 
 function updateComparisonTable(pricing) {
   // Update PAYG rate
-  document.getElementById('compare-payg-rate').textContent = '£' + pricing.payg_hourly;
+  const paygLesson = pricing.payg_lesson_price || (pricing.payg_hourly ? pricing.payg_hourly * 1.5 : 90);
+  document.getElementById('compare-payg-rate').textContent = '£' + paygLesson;
   
   // Update packages range
   if (pricing.bulk_packages && pricing.bulk_packages.length > 0) {
@@ -2188,7 +2190,8 @@ function updatePkg(idx) {
   
   if (!pkg) return;
   
-  const std = pkg.hrs * (SITE_CONFIG.pricing?.payg_hourly || 60);
+  const _lessonPrice = SITE_CONFIG.pricing?.payg_lesson_price || (SITE_CONFIG.pricing?.payg_hourly ? SITE_CONFIG.pricing.payg_hourly * 1.5 : 90);
+  const std = pkg.hrs * (_lessonPrice / 1.5);
   const saving = std - pkg.price;
   const perHr = pkg.price / pkg.hrs;
 
@@ -2267,17 +2270,18 @@ async function startCheckout(type, pkgIndex = null) {
 
   try {
     let lineItems, metadata, customFields;
-    const p = SITE_CONFIG.pricing || { payg_hourly: 60, core_programme: 2400 };
+    const p = SITE_CONFIG.pricing || { payg_lesson_price: 90, core_programme: 2400 };
+    const _paygLesson = p.payg_lesson_price || (p.payg_hourly ? p.payg_hourly * 1.5 : 90);
 
     if (type === 'payg') {
       // Single lesson
       lineItems = [{
         price_data: {
           currency: 'gbp',
-          unit_amount: (p.payg_hourly || 60) * 100,
+          unit_amount: _paygLesson * 100,
           product_data: {
             name: 'Driving Lesson — Pay As You Go',
-            description: 'Single 1-hour lesson with CoachCarter'
+            description: 'Single 1.5hr lesson with CoachCarter'
           }
         },
         quantity: 1
