@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Classroom — CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #000;
+      --surface: #13161f;
+      --border: #1e2230;
+      --text: #e8eaf2;
+      --muted: #9ca3af;
+      --blue: #4f6ef7;
+      --radius: 12px;
+      --header-h: 56px;
+      --tabs-h: 48px;
+      --chrome-h: calc(var(--header-h) + var(--tabs-h));
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: var(--header-h);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      text-decoration: none;
+    }
+    .header-brand img { height: 32px; width: auto; }
+    .header-brand-text { font-size: 0.88rem; font-weight: 700; color: var(--text); }
+    .header-brand-sub  { font-size: 0.68rem; color: rgba(255,255,255,0.5); }
+    .header-back {
+      color: rgba(255,255,255,0.7);
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .header-back:hover { color: #fff; }
+
+    /* ── TAB BAR ── */
+    .tab-bar {
+      position: fixed;
+      top: var(--header-h);
+      left: 0; right: 0;
+      height: var(--tabs-h);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 16px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      flex-shrink: 0;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 20px;
+      color: rgba(255,255,255,0.65);
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 14px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
+    .tab-btn.active {
+      background: #fff;
+      border-color: #fff;
+      color: #000;
+    }
+
+    /* ── REELS CONTAINER ── */
+    .reels-container {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .reels-container::-webkit-scrollbar { display: none; }
+
+    /* ── REEL ITEM ── */
+    .reel-item {
+      position: relative;
+      width: 100%;
+      height: 100dvh;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      background: #000;
+      overflow: hidden;
+    }
+
+    .reel-iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #000;
+    }
+
+    /* ── INFO OVERLAY ── */
+    .reel-overlay {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      padding: 80px 16px 28px;
+      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
+      pointer-events: none;
+    }
+    .reel-group-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-bottom: 8px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .reel-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 5px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    }
+    .reel-desc {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.75);
+      line-height: 1.4;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+
+    /* ── MUTE BUTTON ── */
+    .mute-btn {
+      position: absolute;
+      bottom: 28px;
+      right: 16px;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      transition: background 0.15s;
+      z-index: 10;
+    }
+    .mute-btn:hover { background: rgba(0,0,0,0.75); }
+
+    /* ── MUTED BANNER (initial) ── */
+    .muted-banner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.2);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.85);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 10;
+      white-space: nowrap;
+    }
+    .muted-banner.show { opacity: 1; }
+
+    /* ── EMPTY STATE ── */
+    .empty-reels {
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: rgba(255,255,255,0.4);
+      padding: 40px;
+      text-align: center;
+    }
+    .empty-reels .emoji { font-size: 2.5rem; }
+    .empty-reels p { font-size: 0.9rem; line-height: 1.5; }
+
+    /* ── LOADING ── */
+    .loading-screen {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 300;
+      transition: opacity 0.3s;
+    }
+    .loading-screen.hidden { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 28px; height: 28px;
+      border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: rgba(255,255,255,0.7);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── GROUP COLOURS ── */
+    .tag-speed-control  { background: rgba(79,110,247,0.25); color: #93a8fd; }
+    .tag-looking-around { background: rgba(139,92,246,0.25); color: #c4b5fd; }
+    .tag-junctions      { background: rgba(245,158,11,0.25); color: #fcd34d; }
+    .tag-reversing      { background: rgba(16,185,129,0.25); color: #6ee7b7; }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div class="loading-screen" id="loading"><div class="spinner"></div></div>
+
+<!-- Header -->
+<header>
+  <a href="/" class="header-brand">
+    <img src="/Logo.png" alt="CoachCarter">
+    <div>
+      <div class="header-brand-text">CoachCarter</div>
+      <div class="header-brand-sub">Classroom</div>
+    </div>
+  </a>
+  <a href="/" class="header-back">← Back to site</a>
+</header>
+
+<!-- Tab bar -->
+<div class="tab-bar" id="tab-bar"></div>
+
+<!-- Reels -->
+<div class="reels-container" id="reels"></div>
+
+<script>
+const CF_BASE = 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com';
+
+const GROUPS = [
+  { key: 'all',            label: 'All' },
+  { key: 'speed-control',  label: 'Speed & Control' },
+  { key: 'looking-around', label: 'Looking Around' },
+  { key: 'junctions',      label: 'Junctions & Roundabouts' },
+  { key: 'reversing',      label: 'Reversing' }
+];
+
+const GROUP_LABELS = {
+  'speed-control':  'Speed & Control',
+  'looking-around': 'Looking Around',
+  'junctions':      'Junctions & Roundabouts',
+  'reversing':      'Reversing'
+};
+
+let allVideos = [];
+let activeGroup = 'all';
+let observer = null;
+const muteState = {}; // uid -> true (muted) / false (unmuted)
+const initialized = new Set();
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const res = await fetch('/videos.json');
+    allVideos = await res.json();
+  } catch (e) {
+    allVideos = [];
+  }
+
+  buildTabs();
+  renderReels('all');
+
+  document.getElementById('loading').classList.add('hidden');
+});
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function buildTabs() {
+  const bar = document.getElementById('tab-bar');
+  bar.innerHTML = GROUPS.map(g => `
+    <button class="tab-btn${g.key === 'all' ? ' active' : ''}"
+            onclick="selectTab('${g.key}')">
+      ${g.label}
+    </button>`).join('');
+}
+
+function selectTab(key) {
+  activeGroup = key;
+  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', GROUPS[i].key === key);
+  });
+  initialized.clear();
+  if (observer) observer.disconnect();
+  renderReels(key);
+}
+
+// ── Render reels ──────────────────────────────────────────────────────────────
+function renderReels(group) {
+  const container = document.getElementById('reels');
+  const videos = group === 'all'
+    ? allVideos
+    : allVideos.filter(v => v.group === group);
+
+  if (videos.length === 0) {
+    container.innerHTML = `
+      <div class="empty-reels">
+        <div class="emoji">🎬</div>
+        <p>No videos in this section yet.<br>Check back soon!</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = videos.map(v => `
+    <div class="reel-item" id="reel-${v.uid}" data-uid="${v.uid}">
+      <iframe
+        class="reel-iframe"
+        id="iframe-${v.uid}"
+        src="about:blank"
+        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+        allowfullscreen
+      ></iframe>
+
+      <div class="muted-banner" id="banner-${v.uid}">🔇 Tap anywhere to unmute</div>
+
+      <div class="reel-overlay">
+        <div class="reel-group-tag tag-${v.group}">${GROUP_LABELS[v.group] || v.group}</div>
+        <div class="reel-title">${v.title}</div>
+        ${v.description ? `<div class="reel-desc">${v.description}</div>` : ''}
+      </div>
+
+      <button class="mute-btn" id="mute-btn-${v.uid}" onclick="toggleMute('${v.uid}')" title="Toggle mute">
+        🔇
+      </button>
+    </div>`).join('');
+
+  // Tap-to-unmute on the reel itself
+  videos.forEach(v => {
+    document.getElementById(`reel-${v.uid}`)
+      .addEventListener('click', (e) => {
+        if (!e.target.closest('.mute-btn')) toggleMute(v.uid);
+      });
+    muteState[v.uid] = true;
+  });
+
+  container.scrollTop = 0;
+  setupObserver(videos);
+}
+
+// ── IntersectionObserver ──────────────────────────────────────────────────────
+function setupObserver(videos) {
+  observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const uid = entry.target.dataset.uid;
+      const iframe = document.getElementById(`iframe-${uid}`);
+
+      if (entry.isIntersecting) {
+        if (!initialized.has(uid)) {
+          // First time: load with autoplay + muted
+          iframe.src = `${CF_BASE}/${uid}/iframe?autoplay=true&muted=true&loop=false&poster=${encodeURIComponent(`${CF_BASE}/${uid}/thumbnails/thumbnail.jpg?time=2s&height=720`)}`;
+          initialized.add(uid);
+          muteState[uid] = true;
+          showMutedBanner(uid);
+        } else {
+          sendMsg(uid, 'play');
+        }
+      } else {
+        sendMsg(uid, 'pause');
+      }
+    });
+  }, {
+    root: document.getElementById('reels'),
+    threshold: 0.6
+  });
+
+  videos.forEach(v => {
+    const el = document.getElementById(`reel-${v.uid}`);
+    if (el) observer.observe(el);
+  });
+}
+
+// ── Mute / unmute ─────────────────────────────────────────────────────────────
+function toggleMute(uid) {
+  const nowMuted = muteState[uid] !== false; // default true
+  if (nowMuted) {
+    sendMsg(uid, 'unmute');
+    muteState[uid] = false;
+    document.getElementById(`mute-btn-${uid}`).textContent = '🔊';
+    hideMutedBanner(uid);
+  } else {
+    sendMsg(uid, 'mute');
+    muteState[uid] = true;
+    document.getElementById(`mute-btn-${uid}`).textContent = '🔇';
+  }
+}
+
+function showMutedBanner(uid) {
+  const banner = document.getElementById(`banner-${uid}`);
+  if (!banner) return;
+  banner.classList.add('show');
+  setTimeout(() => banner.classList.remove('show'), 3000);
+}
+
+function hideMutedBanner(uid) {
+  const banner = document.getElementById(`banner-${uid}`);
+  if (banner) banner.classList.remove('show');
+}
+
+function sendMsg(uid, method) {
+  try {
+    const iframe = document.getElementById(`iframe-${uid}`);
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage(JSON.stringify({ method }), '*');
+    }
+  } catch (e) {}
+}
+</script>
+</body>
+</html>
