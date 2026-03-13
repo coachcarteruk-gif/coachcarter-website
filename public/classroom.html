@@ -331,6 +331,8 @@ function selectTab(key) {
     btn.classList.toggle('active', GROUPS[i].key === key);
   });
   if (observer) observer.disconnect();
+  // Clear mute state so each video starts fresh when tab changes
+  Object.keys(muteState).forEach(k => delete muteState[k]);
   renderReels(key);
 }
 
@@ -394,16 +396,16 @@ function setupObserver(videos) {
       const iframe = document.getElementById(`iframe-${uid}`);
 
       if (entry.isIntersecting) {
-        // Always reload fresh — guarantees clean muted autoplay, no audio bleed
-        iframe.src = `${CF_BASE}/${uid}/iframe?autoplay=true&muted=true&loop=false&controls=false&poster=${encodeURIComponent(`${CF_BASE}/${uid}/thumbnails/thumbnail.jpg?time=2s&height=720`)}`;
-        muteState[uid] = true;
+        // Reload with correct muted state — preserve user's preference across scrolls
+        const muted = muteState[uid] !== false;
+        iframe.src = buildSrc(uid, muted);
         const btn = document.getElementById(`mute-btn-${uid}`);
-        if (btn) btn.textContent = '🔇';
-        showMutedBanner(uid);
+        if (btn) btn.textContent = muted ? '🔇' : '🔊';
+        if (muted) showMutedBanner(uid);
       } else {
         // Blank the src immediately — kills audio with certainty
         iframe.src = 'about:blank';
-        muteState[uid] = true;
+        // Note: intentionally don't reset muteState here so preference is remembered
       }
     });
   }, {
@@ -417,18 +419,32 @@ function setupObserver(videos) {
   });
 }
 
+// ── Build iframe src ──────────────────────────────────────────────────────────
+function buildSrc(uid, muted) {
+  const poster = encodeURIComponent(`${CF_BASE}/${uid}/thumbnails/thumbnail.jpg?time=2s&height=720`);
+  return `${CF_BASE}/${uid}/iframe?autoplay=true${muted ? '&muted=true' : ''}&loop=false&controls=false&poster=${poster}`;
+}
+
 // ── Mute / unmute ─────────────────────────────────────────────────────────────
+// Reloads the iframe src rather than relying on postMessage, which can arrive
+// before the player is ready. Since the user tapped (a user gesture), the
+// browser allows audio playback on reload.
 function toggleMute(uid) {
-  const nowMuted = muteState[uid] !== false; // default true
+  const nowMuted = muteState[uid] !== false; // default true = starts muted
+  muteState[uid] = !nowMuted;
+
+  const iframe = document.getElementById(`iframe-${uid}`);
+  const btn    = document.getElementById(`mute-btn-${uid}`);
+
   if (nowMuted) {
-    sendMsg(uid, 'unmute');
-    muteState[uid] = false;
-    document.getElementById(`mute-btn-${uid}`).textContent = '🔊';
+    // Unmuting — reload without muted param
+    iframe.src = buildSrc(uid, false);
+    if (btn) btn.textContent = '🔊';
     hideMutedBanner(uid);
   } else {
-    sendMsg(uid, 'mute');
-    muteState[uid] = true;
-    document.getElementById(`mute-btn-${uid}`).textContent = '🔇';
+    // Muting — reload with muted param
+    iframe.src = buildSrc(uid, true);
+    if (btn) btn.textContent = '🔇';
   }
 }
 
@@ -442,15 +458,6 @@ function showMutedBanner(uid) {
 function hideMutedBanner(uid) {
   const banner = document.getElementById(`banner-${uid}`);
   if (banner) banner.classList.remove('show');
-}
-
-function sendMsg(uid, method) {
-  try {
-    const iframe = document.getElementById(`iframe-${uid}`);
-    if (iframe && iframe.contentWindow) {
-      iframe.contentWindow.postMessage(JSON.stringify({ method }), '*');
-    }
-  } catch (e) {}
 }
 </script>
 </body>
