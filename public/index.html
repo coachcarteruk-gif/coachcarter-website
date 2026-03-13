@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CoachCarter — Learn to Drive</title>
+<meta name="description" content="CoachCarter Driving School — flexible pay-as-you-go lessons, bulk hour packages, and an 18-week Pass Guarantee programme. DVSA approved instructors in Reading. Book online today.">
+<meta property="og:title" content="CoachCarter — Learn to Drive">
+<meta property="og:description" content="Flexible driving lessons with a Pass Guarantee. Pay as you go or choose a structured 18-week programme with expert DVSA-approved instructors.">
+<meta property="og:image" content="https://coachcarter.co.uk/Logo.png">
+<meta property="og:url" content="https://coachcarter.co.uk">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="CoachCarter — Learn to Drive">
+<meta name="twitter:description" content="Flexible driving lessons with a Pass Guarantee. DVSA-approved instructors in Reading.">
+<meta name="twitter:image" content="https://coachcarter.co.uk/Logo.png">
 
 <script>
   // Maintenance mode check - runs immediately before page renders
@@ -48,6 +58,61 @@ body {
   font-size: 16px;
   line-height: 1.6;
   overflow-x: hidden;
+}
+
+/* Mobile nav */
+.hamburger {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  z-index: 200;
+}
+.hamburger span {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 2px;
+  transition: all 0.25s ease;
+}
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+@media (max-width: 768px) {
+  .hamburger { display: flex; }
+  .nav-links {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.98);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    z-index: 150;
+    font-size: 1.2rem;
+  }
+  .nav-links.open { display: flex; }
+  .nav-links li { list-style: none; }
+  .nav-links a { font-size: 1.3rem; font-weight: 600; color: var(--primary); text-decoration: none; }
+  .nav-cta-wrap { display: none; }
+  .nav-cta-wrap.open {
+    display: flex;
+    position: fixed;
+    bottom: 48px;
+    left: 0; right: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    z-index: 160;
+    padding: 0 24px;
+  }
+  .nav-cta-wrap.open .nav-cta { width: 100%; justify-content: center; }
 }
 
 nav {
@@ -1149,6 +1214,71 @@ td.highlight .best-for {
 }
 
 /* ENQUIRY FORM STYLES */
+/* TESTIMONIALS */
+.testimonials-section {
+  background: var(--surface);
+  padding: 80px 0;
+}
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 48px;
+}
+.testimonial-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.testimonial-stars {
+  display: flex;
+  gap: 3px;
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+.testimonial-text {
+  font-size: 0.97rem;
+  line-height: 1.65;
+  color: #444;
+  flex: 1;
+}
+.testimonial-author {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.testimonial-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.testimonial-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.testimonials-cta {
+  text-align: center;
+  margin-top: 40px;
+}
+.testimonials-cta a {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+.testimonials-cta a:hover { text-decoration: underline; }
+@media (max-width: 900px) {
+  .testimonials-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .testimonials-grid { grid-template-columns: 1fr; }
+}
+
 .enquiry-section {
   padding: 100px 20px;
   background: var(--surface);
@@ -1313,15 +1443,18 @@ td.highlight .best-for {
   <a href="#" class="nav-logo">
     <img src="Logo.png" alt="CoachCarter" style="height: 90px; width: auto;">
   </a>
-  <ul class="nav-links">
-    <li><a href="#payg" id="nav-payg">Pay As You Go</a></li>
-    <li><a href="#packages" id="nav-packages">Bulk Packages</a></li>
-    <li><a href="#guarantee" id="nav-guarantee">Pass Guarantee</a></li>
+  <ul class="nav-links" id="nav-links">
+    <li><a href="#payg" id="nav-payg" onclick="closeMenu()">Pay As You Go</a></li>
+    <li><a href="#packages" id="nav-packages" onclick="closeMenu()">Bulk Packages</a></li>
+    <li><a href="#guarantee" id="nav-guarantee" onclick="closeMenu()">Pass Guarantee</a></li>
   </ul>
-  <div style="display: flex; gap: 12px; align-items: center;">
-    <button class="nav-cta secondary" onclick="document.getElementById('enquiry').scrollIntoView({behavior: 'smooth'})">Enquire</button>
-    <button class="nav-cta" id="nav-cta-primary" onclick="openSetmoreBooking()">Book a Lesson</button>
+  <div class="nav-cta-wrap" id="nav-cta-wrap" style="display: flex; gap: 12px; align-items: center;">
+    <button class="nav-cta secondary" onclick="closeMenu(); document.getElementById('enquiry').scrollIntoView({behavior: 'smooth'})">Enquire</button>
+    <button class="nav-cta" id="nav-cta-primary" onclick="closeMenu(); openSetmoreBooking()">Book a Lesson</button>
   </div>
+  <button class="hamburger" id="hamburger" aria-label="Open menu" onclick="toggleMenu()">
+    <span></span><span></span><span></span>
+  </button>
 </nav>
 
 <div class="hero">
@@ -1530,7 +1663,7 @@ td.highlight .best-for {
         <div class="addon-card" onclick="toggleAddon(3, this)" data-tier="lifetime" id="addon-card-3">
           <div class="addon-info">
             <h3>Lifetime Cover</h3>
-            <p>Unlimited retakes for life until you pass (inc. 10 hours lesson + Reading test booked for every attempt</p>
+            <p>Unlimited retakes for life until you pass (inc. 10 hours lesson + Reading test booked for every attempt)</p>
           </div>
           <div class="addon-price">
             <div class="addon-price-amount" id="addon-price-3">+£500</div>
@@ -1641,6 +1774,49 @@ td.highlight .best-for {
     </table>
   </div>
 </section>
+<section class="testimonials-section" id="testimonials">
+  <div class="section-wrap">
+    <div class="section-intro reveal">
+      <div class="section-tag-line">Real Results</div>
+      <h2 class="section-title">What our learners say</h2>
+      <p class="section-sub">Hear from people who've passed with CoachCarter.</p>
+    </div>
+
+    <div class="testimonials-grid">
+      <div class="testimonial-card reveal">
+        <div class="testimonial-stars">★★★★★</div>
+        <p class="testimonial-text">"Passed first time after the 18-week programme. My instructor was patient and really helped me build confidence on the Reading ring road. Couldn't recommend more highly."</p>
+        <div class="testimonial-author">
+          <span class="testimonial-name">Emily R.</span>
+          <span class="testimonial-meta">Pass Guarantee · Passed first attempt</span>
+        </div>
+      </div>
+
+      <div class="testimonial-card reveal">
+        <div class="testimonial-stars">★★★★★</div>
+        <p class="testimonial-text">"The bulk package saved me a good chunk of money and the lessons were always well-structured. Booked online the same evening and had my first lesson within the week."</p>
+        <div class="testimonial-author">
+          <span class="testimonial-name">James T.</span>
+          <span class="testimonial-meta">30-hour Bulk Package</span>
+        </div>
+      </div>
+
+      <div class="testimonial-card reveal">
+        <div class="testimonial-stars">★★★★★</div>
+        <p class="testimonial-text">"Really flexible and no pressure. I could book pay-as-you-go around my shift work and my instructor always remembered exactly where we'd left off."</p>
+        <div class="testimonial-author">
+          <span class="testimonial-name">Priya M.</span>
+          <span class="testimonial-meta">Pay As You Go</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="testimonials-cta">
+      <a href="https://g.page/r/coachcarter/review" target="_blank" rel="noopener">See all reviews on Google →</a>
+    </div>
+  </div>
+</section>
+
  <section class="enquiry-section" id="enquiry">
   <div class="section-wrap">
     <div class="section-intro reveal">
@@ -1763,7 +1939,7 @@ td.highlight .best-for {
 </section>
 
 <footer>
-  <p id="footer-text">© 2025 CoachCarter Driving School · <a href="#">Privacy</a> · <a href="#">Terms</a> · All prices include VAT where applicable.</p>
+  <p id="footer-text">© 2026 CoachCarter Driving School · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · All prices include VAT where applicable.</p>
 </footer>
 
 <script>
@@ -2385,6 +2561,27 @@ document.getElementById('enquiry-form').addEventListener('submit', async functio
     submitBtn.textContent = originalText;
   }
 });
+
+// MOBILE NAV
+function toggleMenu() {
+  const hamburger = document.getElementById('hamburger');
+  const links = document.getElementById('nav-links');
+  const ctaWrap = document.getElementById('nav-cta-wrap');
+  const open = hamburger.classList.toggle('open');
+  links.classList.toggle('open', open);
+  ctaWrap.classList.toggle('open', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+
+function closeMenu() {
+  const hamburger = document.getElementById('hamburger');
+  const links = document.getElementById('nav-links');
+  const ctaWrap = document.getElementById('nav-cta-wrap');
+  hamburger.classList.remove('open');
+  links.classList.remove('open');
+  ctaWrap.classList.remove('open');
+  document.body.style.overflow = '';
+}
 </script>
 <script id="anywhere_book_now_script" type="text/javascript" src="https://assets.setmore.com/integration/book-now/live/v1/anywhere-book-now.js"></script>
 <button style="display: none;" id="Anywhere_button_iframe" class="anywhere-book-now-button" data-booking-url="https://coachcarteruk.setmore.com/services/f92268da-e2cc-4661-8cdd-82afa1b767a0" data-new-tab="false">Book now</button>
