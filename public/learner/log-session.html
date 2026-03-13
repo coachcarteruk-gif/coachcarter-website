@@ -18,6 +18,7 @@
       --muted: #6b7280;
       --blue: #4f6ef7;
       --green: #22c55e;
+      --lime: #86efac;
       --amber: #f59e0b;
       --red: #ef4444;
       --radius: 14px;
@@ -30,7 +31,6 @@
       min-height: 100vh;
     }
 
-    /* HEADER */
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -56,7 +56,6 @@
     .back-btn:hover { color: var(--text); }
     .page-title { font-size: 0.95rem; font-weight: 700; }
 
-    /* MAIN */
     main { max-width: 600px; margin: 0 auto; padding: 28px 16px 80px; }
 
     .form-section {
@@ -64,10 +63,10 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 20px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
     .form-section-title {
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -104,16 +103,9 @@
     }
     input:focus, textarea:focus { border-color: var(--blue); }
     textarea { resize: vertical; min-height: 72px; }
-
-    /* DATE PICKER COLORS */
     input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
 
-    /* TYPE TOGGLE */
-    .type-toggle {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
+    .type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .type-btn {
       background: var(--bg);
       border: 1px solid var(--border);
@@ -127,51 +119,44 @@
       text-align: center;
       transition: all 0.15s;
     }
-    .type-btn.selected-instructor {
-      background: rgba(79,110,247,0.12);
-      border-color: var(--blue);
-      color: var(--blue);
-      font-weight: 600;
-    }
-    .type-btn.selected-private {
-      background: rgba(139,92,246,0.12);
-      border-color: #8b5cf6;
-      color: #a78bfa;
-      font-weight: 600;
-    }
+    .type-btn.selected-instructor { background: rgba(79,110,247,0.12); border-color: var(--blue); color: var(--blue); font-weight: 600; }
+    .type-btn.selected-private { background: rgba(139,92,246,0.12); border-color: #8b5cf6; color: #a78bfa; font-weight: 600; }
 
-    /* SKILLS SECTION */
-    .tier-label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 4px;
-    }
-    .tier-label .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-    }
-    .tier-label span { font-size: 0.85rem; font-weight: 700; }
-    .skills-hint {
-      font-size: 0.8rem;
+    /* QUESTION GROUPS */
+    .q-group-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
       color: var(--muted);
-      margin-bottom: 16px;
+      margin: 4px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
     }
 
-    .skill-item {
+    .question-item {
       padding: 14px 0;
       border-bottom: 1px solid var(--border);
     }
-    .skill-item:last-child { border-bottom: none; }
-    .skill-label {
-      font-size: 0.92rem;
-      font-weight: 500;
-      margin-bottom: 10px;
+    .question-item:last-child { border-bottom: none; padding-bottom: 4px; }
+
+    .question-num {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 4px;
     }
+    .question-text {
+      font-size: 0.95rem;
+      font-weight: 500;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+
     .rating-group {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 5px;
     }
     .rating-btn {
       background: var(--bg);
@@ -179,46 +164,21 @@
       border-radius: 8px;
       color: var(--muted);
       font-family: inherit;
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-weight: 500;
-      padding: 9px 6px;
+      padding: 9px 4px;
       cursor: pointer;
       text-align: center;
       transition: all 0.15s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 5px;
+      line-height: 1.2;
     }
-    .rating-btn .dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .rating-btn.not-yet .dot { background: var(--red); }
-    .rating-btn.developing .dot { background: var(--amber); }
-    .rating-btn.habitual .dot { background: var(--green); }
+    .rating-btn:hover { border-color: var(--muted); color: var(--text); }
 
-    .rating-btn.selected-not_yet {
-      background: rgba(239,68,68,0.12);
-      border-color: var(--red);
-      color: #fca5a5;
-      font-weight: 600;
-    }
-    .rating-btn.selected-developing {
-      background: rgba(245,158,11,0.12);
-      border-color: var(--amber);
-      color: #fcd34d;
-      font-weight: 600;
-    }
-    .rating-btn.selected-habitual {
-      background: rgba(34,197,94,0.12);
-      border-color: var(--green);
-      color: #86efac;
-      font-weight: 600;
-    }
+    .rating-btn.sel-never    { background: rgba(239,68,68,0.15);  border-color: var(--red);   color: #fca5a5; font-weight: 700; }
+    .rating-btn.sel-sometimes{ background: rgba(245,158,11,0.15); border-color: var(--amber); color: #fcd34d; font-weight: 700; }
+    .rating-btn.sel-usually  { background: rgba(134,239,172,0.15);border-color: var(--lime);  color: var(--lime); font-weight: 700; }
+    .rating-btn.sel-always   { background: rgba(34,197,94,0.15);  border-color: var(--green); color: #86efac; font-weight: 700; }
 
-    /* SAVE BUTTON */
     .save-btn {
       width: 100%;
       background: var(--blue);
@@ -237,8 +197,8 @@
     .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
     .error-msg {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.3);
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
       color: #fca5a5;
       border-radius: 8px;
       padding: 10px 14px;
@@ -280,12 +240,8 @@
     <div class="form-group">
       <label>Session Type</label>
       <div class="type-toggle">
-        <button class="type-btn selected-instructor" id="btn-instructor" onclick="setType('instructor')">
-          🧑‍🏫 With Instructor
-        </button>
-        <button class="type-btn" id="btn-private" onclick="setType('private')">
-          🚗 Private Practice
-        </button>
+        <button class="type-btn selected-instructor" id="btn-instructor" onclick="setType('instructor')">🧑‍🏫 With Instructor</button>
+        <button class="type-btn" id="btn-private" onclick="setType('private')">🚗 Private Practice</button>
       </div>
     </div>
     <div class="form-group">
@@ -294,56 +250,46 @@
     </div>
   </div>
 
-  <!-- SKILLS RATING -->
+  <!-- QUESTIONS -->
   <div class="form-section">
-    <div class="form-section-title">Rate Your Progress</div>
-    <div class="tier-label">
-      <div class="dot" id="tier-dot"></div>
-      <span id="tier-label-text"></span>
-    </div>
-    <p class="skills-hint">How well did you demonstrate each skill this session? Only rate skills you actually practiced.</p>
-    <div id="skills-form"></div>
+    <div class="form-section-title">How did this session go?</div>
+
+    <div class="q-group-title">Speed &amp; Control</div>
+    <div id="q-speed-control"></div>
+
+    <div class="q-group-title" style="margin-top:16px;">Looking Around</div>
+    <div id="q-looking-around"></div>
+
+    <div class="q-group-title" style="margin-top:16px;">Junctions &amp; Roundabouts</div>
+    <div id="q-junctions"></div>
+
+    <div class="q-group-title" style="margin-top:16px;">Reversing</div>
+    <div id="q-reversing"></div>
   </div>
 
   <button class="save-btn" id="save-btn" onclick="saveSession()">Save Session →</button>
 </main>
 
 <script>
-const CURRICULUM = {
-  1: {
-    title: 'Tier 1 — Foundations', color: '#4f6ef7',
-    skills: [
-      { key: 't1_move',    label: 'Moving the car' },
-      { key: 't1_stop',    label: 'Stopping & slowing' },
-      { key: 't1_steer',   label: 'Steering' },
-      { key: 't1_mirrors', label: 'Mirror checks' },
-      { key: 't1_mice',    label: 'MICE for junctions' },
-      { key: 't1_eval',    label: 'Junction evaluation' }
-    ]
-  },
-  2: {
-    title: 'Tier 2 — Building Complexity', color: '#8b5cf6',
-    skills: [
-      { key: 't2_speed',      label: 'Speed management' },
-      { key: 't2_roundabout', label: 'Roundabout clearance & lane discipline' },
-      { key: 't2_reverse',    label: 'Reversing' },
-      { key: 't2_mirrors',    label: 'Mirror checks for unexpected hazards' },
-      { key: 't2_mice',       label: 'MICE for roundabouts' },
-      { key: 't2_eval',       label: 'Roundabout & junction evaluation' }
-    ]
-  },
-  3: {
-    title: 'Tier 3 — Test Ready', color: '#10b981',
-    skills: [
-      { key: 't3_faults',    label: 'Understanding driving faults' },
-      { key: 't3_lanes',     label: 'Lane changing & discipline' },
-      { key: 't3_parking',   label: 'Parking' },
-      { key: 't3_stop_move', label: 'Stopping, moving off & emergency stop' },
-      { key: 't3_mice',      label: 'MICE for all junction types' },
-      { key: 't3_eval',      label: 'Junction & roundabout evaluation' }
-    ]
-  }
-};
+const QUESTIONS = [
+  { key: 'q1_speed_react',    group: 'speed-control',   num: 1,  text: 'I drove at a safe speed and had enough time to react' },
+  { key: 'q2_speed_lane',     group: 'speed-control',   num: 2,  text: 'I slowed down in time to choose the right lane before roundabouts and junctions' },
+  { key: 'q3_mirrors_routine',group: 'speed-control',   num: 3,  text: 'I checked my mirrors every time before moving, stopping, slowing down or turning' },
+  { key: 'q4_mirrors_unexp',  group: 'looking-around',  num: 4,  text: 'When something unexpected came up, I still checked my mirrors first' },
+  { key: 'q5_awareness',      group: 'looking-around',  num: 5,  text: 'I always knew what was going on around me — not just what was straight ahead' },
+  { key: 'q6_mice_order',     group: 'junctions',       num: 6,  text: 'I checked mirrors, signalled, got in position and adjusted my speed — in the right order' },
+  { key: 'q7_lane_choice',    group: 'junctions',       num: 7,  text: 'I got in the right lane before roundabouts and junctions' },
+  { key: 'q8_safe_to_go',     group: 'junctions',       num: 8,  text: 'I decided early enough whether it was safe to go — so I didn\'t feel rushed' },
+  { key: 'q9_roundabout_space',group:'junctions',        num: 9,  text: 'I kept enough space and stayed in my lane all the way around roundabouts' },
+  { key: 'q10_reversing',     group: 'reversing',       num: 10, text: 'I reversed slowly, accurately and kept looking all around me' }
+];
+
+const RATINGS = [
+  { value: 'never',     label: 'Never' },
+  { value: 'sometimes', label: 'Sometimes' },
+  { value: 'usually',   label: 'Usually' },
+  { value: 'always',    label: 'Always' }
+];
 
 let AUTH, currentType = 'instructor';
 const ratings = {};
@@ -352,49 +298,40 @@ window.addEventListener('DOMContentLoaded', () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
   if (!AUTH?.token) { window.location.href = '/learner/'; return; }
 
-  // Set default date to today
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
 
-  const tier = AUTH.user.tier || 1;
-  const info = CURRICULUM[tier];
+  // Render questions into their groups
+  const groups = { 'speed-control': [], 'looking-around': [], 'junctions': [], 'reversing': [] };
+  QUESTIONS.forEach(q => groups[q.group].push(q));
 
-  document.getElementById('tier-dot').style.background = info.color;
-  document.getElementById('tier-label-text').textContent = info.title;
-
-  // Render skill rows
-  const form = document.getElementById('skills-form');
-  form.innerHTML = info.skills.map(sk => `
-    <div class="skill-item">
-      <div class="skill-label">${sk.label}</div>
-      <div class="rating-group" id="group-${sk.key}">
-        <button class="rating-btn not-yet"   onclick="setRating('${sk.key}', 'not_yet', this)">
-          <div class="dot"></div> Not Yet
-        </button>
-        <button class="rating-btn developing" onclick="setRating('${sk.key}', 'developing', this)">
-          <div class="dot"></div> Developing
-        </button>
-        <button class="rating-btn habitual"   onclick="setRating('${sk.key}', 'habitual', this)">
-          <div class="dot"></div> Habitual
-        </button>
-      </div>
-    </div>`).join('');
+  Object.entries(groups).forEach(([groupKey, qs]) => {
+    const container = document.getElementById(`q-${groupKey}`);
+    if (!container) return;
+    container.innerHTML = qs.map(q => `
+      <div class="question-item">
+        <div class="question-num">Q${q.num}</div>
+        <div class="question-text">${q.text}</div>
+        <div class="rating-group" id="group-${q.key}">
+          ${RATINGS.map(r => `
+            <button class="rating-btn" onclick="setRating('${q.key}', '${r.value}', this)">
+              ${r.label}
+            </button>`).join('')}
+        </div>
+      </div>`).join('');
+  });
 });
 
 function setType(type) {
   currentType = type;
-  document.getElementById('btn-instructor').className =
-    type === 'instructor' ? 'type-btn selected-instructor' : 'type-btn';
-  document.getElementById('btn-private').className =
-    type === 'private' ? 'type-btn selected-private' : 'type-btn';
+  document.getElementById('btn-instructor').className = type === 'instructor' ? 'type-btn selected-instructor' : 'type-btn';
+  document.getElementById('btn-private').className   = type === 'private'    ? 'type-btn selected-private'    : 'type-btn';
 }
 
-function setRating(skillKey, value, btn) {
-  ratings[skillKey] = value;
-  const group = document.getElementById(`group-${skillKey}`);
-  group.querySelectorAll('.rating-btn').forEach(b => {
-    b.className = b.className.replace(/\s*selected-\S+/, '');
-  });
-  btn.classList.add(`selected-${value}`);
+function setRating(key, value, btn) {
+  ratings[key] = value;
+  const group = document.getElementById(`group-${key}`);
+  group.querySelectorAll('.rating-btn').forEach(b => b.className = 'rating-btn');
+  btn.classList.add(`sel-${value}`);
 }
 
 async function saveSession() {
@@ -402,7 +339,7 @@ async function saveSession() {
   if (!date) { showError('Please enter a session date.'); return; }
 
   const ratingsList = Object.entries(ratings).map(([skill_key, rating]) => ({
-    tier: AUTH.user.tier || 1, skill_key, rating
+    tier: 0, skill_key, rating
   }));
 
   const payload = {
@@ -420,17 +357,12 @@ async function saveSession() {
   try {
     const res = await fetch('/api/learner?action=sessions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${AUTH.token}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AUTH.token}` },
       body: JSON.stringify(payload)
     });
-
     if (res.status === 401) { window.location.href = '/learner/'; return; }
     const data = await res.json();
     if (!res.ok) { showError(data.error || 'Failed to save. Please try again.'); return; }
-
     window.location.href = '/learner/dashboard.html';
   } catch {
     showError('Network error. Please check your connection and try again.');
