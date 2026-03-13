@@ -1558,7 +1558,7 @@ td.highlight .best-for {
     <div class="section-intro reveal">
       <div class="section-tag-line">Option 2</div>
       <h2 class="section-title" id="section-packages-title">Bulk Hour Packages</h2>
-      <p class="section-sub" id="section-packages-subtitle">Buy more hours up front and save up to 15%. The more committed you are, the better the deal.</p>
+      <p class="section-sub" id="section-packages-subtitle">Buy more hours up front and save up to 21%. The more committed you are, the better the deal.</p>
     </div>
 
     <div class="pkg-calculator reveal">
@@ -1628,45 +1628,46 @@ td.highlight .best-for {
         <ul class="base-features" id="core-features-list">
           <li class="base-feature">18-week structured programme</li>
           <li class="base-feature">~30 hours with expert instructor</li>
-          <li class="base-feature">Theory & practical test booked for you</li>
-          <li class="base-feature">Progress tracking throughout</li>
-          <li class="base-feature">If you fail we book your 2nd attempt in Reading and include another 10hrs of lessons </li>
+          <li class="base-feature">3 mock driving assessments included</li>
+          <li class="base-feature">Practical test booked for you</li>
+          <li class="base-feature">100% Money Back After First Lesson</li>
+          <li class="base-feature">1st retake fully covered — 15 hrs tuition + test booking included</li>
         </ul>
       </div>
 
       <!-- Add-ons -->
       <div class="addons-section">
-        <div class="addon-section-title">Add Test Fail Cover</div>
-        
-        <div class="addon-card" onclick="toggleAddon(1, this)" data-tier="plus_1" id="addon-card-1">
+        <div class="addon-section-title">Pre-buy Extra Retake Cover</div>
+
+        <div class="addon-card" onclick="toggleAddon(1, this)" data-tier="retake_2" id="addon-card-1">
           <div class="addon-info">
-            <h3>3rd attempt Cover</h3>
-            <p>If you don't pass for the 2nd time, we cover your 3rd attempt (inc. 10 hours lesson + Reading test booked)</p>
+            <h3>2nd Retake Cover</h3>
+            <p>If you don't pass on your 2nd attempt, we cover a 3rd — 15 hrs tuition + DVSA test fee (£62) included</p>
           </div>
           <div class="addon-price">
-            <div class="addon-price-amount" id="addon-price-1">+£200</div>
+            <div class="addon-price-amount" id="addon-price-1">+£349</div>
             <div class="addon-checkbox" id="checkbox-1"></div>
           </div>
         </div>
-        
-        <div class="addon-card" onclick="toggleAddon(2, this)" data-tier="plus_2" id="addon-card-2">
+
+        <div class="addon-card" onclick="toggleAddon(2, this)" data-tier="retake_3" id="addon-card-2">
           <div class="addon-info">
-            <h3>4th Retake Cover</h3>
-            <p>Covers 4th attempt if needed (inc. 10 hours lesson + Reading test booked each attempt)</p>
+            <h3>3rd Retake Cover</h3>
+            <p>Covers a 4th attempt if needed — 15 hrs tuition + DVSA test fee (£62) included</p>
           </div>
           <div class="addon-price">
-            <div class="addon-price-amount" id="addon-price-2">+£350</div>
+            <div class="addon-price-amount" id="addon-price-2">+£349</div>
             <div class="addon-checkbox" id="checkbox-2"></div>
           </div>
         </div>
-        
-        <div class="addon-card" onclick="toggleAddon(3, this)" data-tier="lifetime" id="addon-card-3">
+
+        <div class="addon-card" onclick="toggleAddon(3, this)" data-tier="retake_4" id="addon-card-3">
           <div class="addon-info">
-            <h3>Lifetime Cover</h3>
-            <p>Unlimited retakes for life until you pass (inc. 10 hours lesson + Reading test booked for every attempt)</p>
+            <h3>4th Retake Cover</h3>
+            <p>Covers a 5th attempt if needed — 15 hrs tuition + DVSA test fee (£62) included</p>
           </div>
           <div class="addon-price">
-            <div class="addon-price-amount" id="addon-price-3">+£500</div>
+            <div class="addon-price-amount" id="addon-price-3">+£349</div>
             <div class="addon-checkbox" id="checkbox-3"></div>
           </div>
         </div>
@@ -1679,16 +1680,16 @@ td.highlight .best-for {
           <span id="total-core-display">£2,400</span>
         </div>
         <div class="total-row" id="addon-row-1" style="display: none;">
-          <span>+1 Retake Cover</span>
-          <span id="total-addon-1-display">£200</span>
+          <span>2nd Retake Cover</span>
+          <span id="total-addon-1-display">£349</span>
         </div>
         <div class="total-row" id="addon-row-2" style="display: none;">
-          <span>+2 Retake Cover</span>
-          <span id="total-addon-2-display">£350</span>
+          <span>3rd Retake Cover</span>
+          <span id="total-addon-2-display">£349</span>
         </div>
         <div class="total-row" id="addon-row-3" style="display: none;">
-          <span>Lifetime Cover</span>
-          <span id="total-addon-3-display">£500</span>
+          <span>4th Retake Cover</span>
+          <span id="total-addon-3-display">£349</span>
         </div>
         <div class="total-row final">
           <span>Total</span>
@@ -1725,13 +1726,13 @@ td.highlight .best-for {
         <tr>
           <td>Price per hour</td>
           <td id="compare-payg-rate">£60</td>
-          <td id="compare-packages-rate">£51–£57</td>
+          <td id="compare-packages-rate">£47–£55</td>
           <td class="highlight">Included</td>
         </tr>
         <tr>
           <td>Upfront cost</td>
           <td>None</td>
-          <td id="compare-packages-range">£570–£2,550</td>
+          <td id="compare-packages-range">£552–£2,370</td>
           <td class="highlight" id="compare-guarantee-range">£2,400+</td>
         </tr>
         <tr>
@@ -1961,11 +1962,11 @@ async function loadConfig() {
 function initWithDefaults() {
   // Fallback defaults if config fails to load
   PACKAGES.push(
-    { hrs: 10, discount: 0.05, price: 570 },
-    { hrs: 20, discount: 0.075, price: 1110 },
-    { hrs: 30, discount: 0.10, price: 1620 },
-    { hrs: 40, discount: 0.125, price: 2100 },
-    { hrs: 50, discount: 0.15, price: 2550 }
+    { hrs: 10, discount: 0.08, price: 552 },
+    { hrs: 20, discount: 0.12, price: 1056 },
+    { hrs: 30, discount: 0.15, price: 1530 },
+    { hrs: 40, discount: 0.18, price: 1968 },
+    { hrs: 50, discount: 0.21, price: 2370 }
   );
   renderPackages();
   updatePkg(2);
@@ -2006,22 +2007,19 @@ function applyConfig() {
   // Update total displays
   document.getElementById('total-core-display').textContent = '£' + p.core_programme.toLocaleString();
   
-  // Update addon prices
-  addonPrices = { 
-    1: p.retake_1, 
-    2: p.retake_2, 
-    3: p.retake_lifetime 
-  };
-  
+  // Update addon prices (all three retake slots are the same price)
+  const rp = p.retake_price || 349;
+  addonPrices = { 1: rp, 2: rp, 3: rp };
+
   // Update addon price displays
-  document.getElementById('addon-price-1').textContent = '+£' + p.retake_1;
-  document.getElementById('addon-price-2').textContent = '+£' + p.retake_2;
-  document.getElementById('addon-price-3').textContent = '+£' + p.retake_lifetime;
-  
-  // Update addon total displays (core + addon)
-  document.getElementById('total-addon-1-display').textContent = '£' + p.retake_1;
-  document.getElementById('total-addon-2-display').textContent = '£' + p.retake_2;
-  document.getElementById('total-addon-3-display').textContent = '£' + p.retake_lifetime;
+  document.getElementById('addon-price-1').textContent = '+£' + rp;
+  document.getElementById('addon-price-2').textContent = '+£' + rp;
+  document.getElementById('addon-price-3').textContent = '+£' + rp;
+
+  // Update addon total displays
+  document.getElementById('total-addon-1-display').textContent = '£' + rp;
+  document.getElementById('total-addon-2-display').textContent = '£' + rp;
+  document.getElementById('total-addon-3-display').textContent = '£' + rp;
   
   // Update basePrice for calculations
   basePrice = p.core_programme;
@@ -2046,7 +2044,7 @@ function applyConfig() {
     document.getElementById('section-payg-title').textContent = c.sections.payg?.title || 'Pay As You Go';
     document.getElementById('section-payg-subtitle').textContent = c.sections.payg?.subtitle || 'Maximum flexibility. Book when you need, cancel when life happens.';
     document.getElementById('section-packages-title').textContent = c.sections.packages?.title || 'Bulk Hour Packages';
-    document.getElementById('section-packages-subtitle').textContent = c.sections.packages?.subtitle || 'Buy more hours up front and save up to 15%.';
+    document.getElementById('section-packages-subtitle').textContent = c.sections.packages?.subtitle || 'Buy more hours up front and save up to 21%.';
     document.getElementById('section-guarantee-title').textContent = c.sections.guarantee?.title || 'The Pass Guarantee';
     document.getElementById('section-guarantee-subtitle').textContent = c.sections.guarantee?.subtitle || '18 weeks to your driving licence — or we keep going until you pass.';
   }
@@ -2165,10 +2163,13 @@ const BASE_RATE = 60;
 let currentPkgIndex = 2;
 
 // CALCULATOR STATE
-let selectedAddon = 0;
 let basePrice = 2400;
-let addonPrices = { 1: 200, 2: 350, 3: 500 };
-let addonTiers = { 1: 'plus_1', 2: 'plus_2', 3: 'lifetime' };
+let addonPrices = { 1: 349, 2: 349, 3: 349 };
+let addonTiers = { 1: 'retake_2', 2: 'retake_3', 3: 'retake_4' };
+
+function getSelectedRetakes() {
+  return [1,2,3].filter(i => document.getElementById('addon-card-' + i)?.classList.contains('selected'));
+}
 
 function fmt(n) {
   return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -2215,38 +2216,37 @@ function openSetmoreBooking() {
 }
 // CALCULATOR FUNCTIONS
 function toggleAddon(addon, element) {
-  // If clicking already selected, deselect
-  if (selectedAddon === addon) {
-    selectedAddon = 0;
-    element.classList.remove('selected');
-    document.getElementById('checkbox-' + addon).textContent = '';
-    document.getElementById('addon-row-' + addon).style.display = 'none';
-    updateTotal();
-    return;
-  }
-  
-  // Deselect previous
-  if (selectedAddon > 0) {
-    document.querySelectorAll('.addon-card').forEach(el => el.classList.remove('selected'));
-    document.querySelectorAll('.addon-checkbox').forEach(el => el.textContent = '');
-    for (let i = 1; i <= 3; i++) {
-      document.getElementById('addon-row-' + i).style.display = 'none';
+  const isActive = element.classList.contains('selected');
+
+  if (isActive) {
+    // Deselect this and all higher retakes (can't have gap in sequence)
+    for (let i = addon; i <= 3; i++) {
+      const card = document.getElementById('addon-card-' + i);
+      if (card) card.classList.remove('selected');
+      const cb = document.getElementById('checkbox-' + i);
+      if (cb) cb.textContent = '';
+      const row = document.getElementById('addon-row-' + i);
+      if (row) row.style.display = 'none';
     }
+  } else {
+    // Only allow selection if all previous retakes are already selected
+    for (let i = 1; i < addon; i++) {
+      if (!document.getElementById('addon-card-' + i)?.classList.contains('selected')) return;
+    }
+    element.classList.add('selected');
+    document.getElementById('checkbox-' + addon).textContent = '✓';
+    document.getElementById('addon-row-' + addon).style.display = 'flex';
   }
-  
-  // Select new
-  selectedAddon = addon;
-  element.classList.add('selected');
-  document.getElementById('checkbox-' + addon).textContent = '✓';
-  document.getElementById('addon-row-' + addon).style.display = 'flex';
-  
+
   updateTotal();
 }
 
 function updateTotal() {
   let total = basePrice;
-  if (selectedAddon > 0) {
-    total += addonPrices[selectedAddon];
+  for (let i = 1; i <= 3; i++) {
+    if (document.getElementById('addon-card-' + i)?.classList.contains('selected')) {
+      total += addonPrices[i];
+    }
   }
   document.getElementById('total-amount').textContent = '£' + total.toLocaleString();
 }
@@ -2353,8 +2353,8 @@ async function startCalculatorCheckout() {
     let lineItems = [];
     let metadata = {};
     let customFields = [];
-    const p = SITE_CONFIG.pricing || { core_programme: 2400, retake_1: 200, retake_2: 350, retake_lifetime: 500 };
-    
+    const p = SITE_CONFIG.pricing || { core_programme: 2400, retake_price: 349 };
+
     // Base Core Programme
     lineItems.push({
       price_data: {
@@ -2362,70 +2362,38 @@ async function startCalculatorCheckout() {
         unit_amount: basePrice * 100,
         product_data: {
           name: 'Core Programme — 18 Week Guarantee',
-          description: '18 weeks minimum, test booked, instructor performance-paid'
+          description: '18 weeks, practical test booked, instructor performance-paid'
         }
       },
       quantity: 1
     });
 
-    // Determine tier and add retake if selected
-    let tierName = 'core_only';
-    let packageName = 'Core Only';
-    let totalHours = SITE_CONFIG.pricing?.core_hours || 30;
-    let retakeCoverage = 0;
+    // Determine how many retakes are pre-purchased
+    const selectedRetakes = getSelectedRetakes();
+    const retakeCount = selectedRetakes.length;
+    const retakeLabels = ['2nd', '3rd', '4th'];
+    const tierNames = ['core_only', 'core_plus_1', 'core_plus_2', 'core_plus_3'];
 
-    if (selectedAddon === 1) {
-      tierName = 'core_plus_1';
-      packageName = 'Core + 1 Retake';
-      totalHours = (SITE_CONFIG.pricing?.core_hours || 30) + 10;
-      retakeCoverage = 1;
-      
+    const tierName = tierNames[retakeCount] || 'core_only';
+    const packageName = retakeCount === 0
+      ? 'Core Programme'
+      : `Core + ${retakeCount} Pre-paid Retake${retakeCount > 1 ? 's' : ''}`;
+    const totalHours = (SITE_CONFIG.pricing?.core_hours || 30) + retakeCount * 15;
+    const retakeCoverage = retakeCount;
+
+    selectedRetakes.forEach((slot, idx) => {
       lineItems.push({
         price_data: {
           currency: 'gbp',
-          unit_amount: addonPrices[1] * 100,
+          unit_amount: addonPrices[slot] * 100,
           product_data: {
-            name: '+1 Retake Cover',
-            description: '+10 hours + test if first attempt failed'
+            name: `${retakeLabels[idx]} Retake Cover`,
+            description: '15 hrs tuition + DVSA test fee included'
           }
         },
         quantity: 1
       });
-    } else if (selectedAddon === 2) {
-      tierName = 'core_plus_2';
-      packageName = 'Core + 2 Retakes';
-      totalHours = (SITE_CONFIG.pricing?.core_hours || 30) + 20;
-      retakeCoverage = 2;
-      
-      lineItems.push({
-        price_data: {
-          currency: 'gbp',
-          unit_amount: addonPrices[2] * 100,
-          product_data: {
-            name: '+2 Retake Cover',
-            description: '+10 hours + test for 2nd & 3rd fails'
-          }
-        },
-        quantity: 1
-      });
-    } else if (selectedAddon === 3) {
-      tierName = 'core_plus_lifetime';
-      packageName = 'Core + Lifetime Cover';
-      totalHours = (SITE_CONFIG.pricing?.core_hours || 30) + '+';
-      retakeCoverage = 'unlimited';
-      
-      lineItems.push({
-        price_data: {
-          currency: 'gbp',
-          unit_amount: addonPrices[3] * 100,
-          product_data: {
-            name: 'Lifetime Retake Cover',
-            description: 'Unlimited retakes until you pass'
-          }
-        },
-        quantity: 1
-      });
-    }
+    });
 
     metadata = {
       package_type: tierName,
@@ -2433,7 +2401,7 @@ async function startCalculatorCheckout() {
       total_hours: totalHours.toString(),
       retake_coverage: retakeCoverage.toString(),
       base_price: basePrice.toString(),
-      addon_price: selectedAddon > 0 ? addonPrices[selectedAddon].toString() : '0',
+      addon_price: (retakeCount * (addonPrices[1] || 349)).toString(),
       estimated_profit: calculateProfit(tierName).toString()
     };
 
@@ -2494,8 +2462,8 @@ function calculateProfit(tier) {
   const profits = {
     'core_only': 430,
     'core_plus_1': 489,
-    'core_plus_2': 611,
-    'core_plus_lifetime': 750
+    'core_plus_2': 548,
+    'core_plus_3': 607
   };
   return profits[tier] || 430;
 }

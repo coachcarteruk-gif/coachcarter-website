@@ -2,40 +2,38 @@
   "pricing": {
     "payg_hourly": 60,
     "core_programme": 2400,
-    "core_hours": 18,
-    "retake_1": 200,
-    "retake_2": 350,
-    "retake_lifetime": 500,
+    "core_hours": 30,
+    "retake_price": 349,
     "bulk_packages": [
       {
         "hrs": 10,
-        "discount": 0.05,
-        "price": 570,
-        "per_hour": 57
+        "discount": 0.08,
+        "price": 552,
+        "per_hour": 55.2
       },
       {
         "hrs": 20,
-        "discount": 0.075,
-        "price": 1110,
-        "per_hour": 55.5
+        "discount": 0.12,
+        "price": 1056,
+        "per_hour": 52.8
       },
       {
         "hrs": 30,
-        "discount": 0.1,
-        "price": 1620,
-        "per_hour": 54
+        "discount": 0.15,
+        "price": 1530,
+        "per_hour": 51
       },
       {
         "hrs": 40,
-        "discount": 0.125,
-        "price": 2100,
-        "per_hour": 52.5
+        "discount": 0.18,
+        "price": 1968,
+        "per_hour": 49.2
       },
       {
         "hrs": 50,
-        "discount": 0.15,
-        "price": 2550,
-        "per_hour": 51
+        "discount": 0.21,
+        "price": 2370,
+        "per_hour": 47.4
       }
     ]
   },
@@ -49,7 +47,7 @@
           "label": "Per hour, pay as you go"
         },
         {
-          "value": "15%",
+          "value": "21%",
           "label": "Max discount on bulk packages"
         },
         {
@@ -69,7 +67,7 @@
       },
       "packages": {
         "title": "Bulk Hour Packages",
-        "subtitle": "Buy more hours up front and save up to 15%."
+        "subtitle": "Buy more hours up front and save up to 21%. The more committed you are, the better the deal."
       },
       "guarantee": {
         "title": "The Pass Guarantee",
@@ -86,10 +84,11 @@
       ],
       "core": [
         "18-week structured programme",
+        "~30 hours with expert instructor",
+        "3 mock driving assessments included",
+        "Practical test booked for you",
         "100% Money Back After First Lesson",
-        "Theory & practical test booked for you",
-        "Progress tracking throughout",
-        "If you fail: We book your 2nd attempt in Reading and include another 10hrs of lessons"
+        "1st retake fully covered — 15 hrs tuition + test booking included"
       ]
     },
     "cta": {
@@ -107,5 +106,5 @@
       "footer_text": "CoachCarter Driving School · The last driving school you'll need"
     }
   },
-  "last_updated": "2026-03-01T11:07:51.451Z"
+  "last_updated": "2026-03-13T00:00:00.000Z"
 }
