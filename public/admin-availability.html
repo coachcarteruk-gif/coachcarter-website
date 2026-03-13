@@ -341,7 +341,7 @@ async function loadSubmissions() {
   const container = document.getElementById('submissions-container');
   
   try {
-    const response = await fetch('/api/get-availability');
+    const response = await fetch('/api/availability');
     const data = await response.json();
     
     if (!data.submissions) {

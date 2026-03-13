@@ -433,7 +433,7 @@ function logout() {
 
 async function loadProgress() {
   try {
-    const res = await fetch('/api/learner/progress', {
+    const res = await fetch('/api/learner?action=progress', {
       headers: { 'Authorization': `Bearer ${AUTH.token}` }
     });
     if (res.status === 401) { logout(); return; }
@@ -446,7 +446,7 @@ async function loadProgress() {
 
 async function loadSessions() {
   try {
-    const res = await fetch('/api/learner/sessions', {
+    const res = await fetch('/api/learner?action=sessions', {
       headers: { 'Authorization': `Bearer ${AUTH.token}` }
     });
     if (res.ok) SESSIONS_DATA = (await res.json()).sessions;

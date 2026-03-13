@@ -16,6 +16,34 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // GET — fetch submissions (admin use)
+  if (req.method === 'GET') {
+    try {
+      const sql = neon(process.env.POSTGRES_URL);
+      const { status, limit = 50, offset = 0 } = req.query;
+      let query = 'SELECT * FROM availability_submissions';
+      let params = [];
+      let countQuery = 'SELECT COUNT(*) as total FROM availability_submissions';
+      let countParams = [];
+      if (status) {
+        query += ' WHERE status = $1';
+        countQuery += ' WHERE status = $1';
+        params.push(status);
+        countParams.push(status);
+      }
+      query += ` ORDER BY submitted_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      params.push(parseInt(limit), parseInt(offset));
+      const submissions = await sql(query, params);
+      const countResult = await sql(countQuery, countParams);
+      return res.status(200).json({
+        submissions,
+        pagination: { total: parseInt(countResult[0].total), limit: parseInt(limit), offset: parseInt(offset) }
+      });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;

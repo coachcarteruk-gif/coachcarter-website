@@ -246,7 +246,7 @@
     btn.textContent = 'Signing in…';
 
     try {
-      const res = await fetch('/api/learner/login', {
+      const res = await fetch('/api/learner?action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -279,7 +279,7 @@
     btn.textContent = 'Creating account…';
 
     try {
-      const res = await fetch('/api/learner/register', {
+      const res = await fetch('/api/learner?action=register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

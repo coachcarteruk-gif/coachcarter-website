@@ -418,7 +418,7 @@ async function saveSession() {
   btn.textContent = 'Saving…';
 
   try {
-    const res = await fetch('/api/learner/sessions', {
+    const res = await fetch('/api/learner?action=sessions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
