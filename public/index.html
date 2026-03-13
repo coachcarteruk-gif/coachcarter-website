@@ -17,7 +17,7 @@
 
 <script>
   // Maintenance mode check - runs immediately before page renders
-  fetch('/api/check-maintenance')
+  fetch('/api/status')
     .then(res => res.json())
     .then(data => {
       if (data.maintenance === true) {
@@ -1949,7 +1949,7 @@ let SITE_CONFIG = {};
 
 async function loadConfig() {
   try {
-    const res = await fetch('/api/get-config?t=' + Date.now());
+    const res = await fetch('/api/config?t=' + Date.now());
     SITE_CONFIG = await res.json();
     applyConfig();
   } catch (err) {
