@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log a Session — CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0c10;
+      --surface: #13161f;
+      --surface2: #191c27;
+      --border: #1e2230;
+      --text: #e8eaf2;
+      --muted: #6b7280;
+      --blue: #4f6ef7;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --radius: 14px;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* HEADER */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .back-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .back-btn:hover { color: var(--text); }
+    .page-title { font-size: 0.95rem; font-weight: 700; }
+
+    /* MAIN */
+    main { max-width: 600px; margin: 0 auto; padding: 28px 16px 80px; }
+
+    .form-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .form-section-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group:last-child { margin-bottom: 0; }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    input[type="date"],
+    input[type="number"],
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus, textarea:focus { border-color: var(--blue); }
+    textarea { resize: vertical; min-height: 72px; }
+
+    /* DATE PICKER COLORS */
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+
+    /* TYPE TOGGLE */
+    .type-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .type-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 500;
+      padding: 10px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .type-btn.selected-instructor {
+      background: rgba(79,110,247,0.12);
+      border-color: var(--blue);
+      color: var(--blue);
+      font-weight: 600;
+    }
+    .type-btn.selected-private {
+      background: rgba(139,92,246,0.12);
+      border-color: #8b5cf6;
+      color: #a78bfa;
+      font-weight: 600;
+    }
+
+    /* SKILLS SECTION */
+    .tier-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .tier-label .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+    .tier-label span { font-size: 0.85rem; font-weight: 700; }
+    .skills-hint {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .skill-item {
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .skill-item:last-child { border-bottom: none; }
+    .skill-label {
+      font-size: 0.92rem;
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+    .rating-group {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .rating-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 500;
+      padding: 9px 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    .rating-btn .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .rating-btn.not-yet .dot { background: var(--red); }
+    .rating-btn.developing .dot { background: var(--amber); }
+    .rating-btn.habitual .dot { background: var(--green); }
+
+    .rating-btn.selected-not_yet {
+      background: rgba(239,68,68,0.12);
+      border-color: var(--red);
+      color: #fca5a5;
+      font-weight: 600;
+    }
+    .rating-btn.selected-developing {
+      background: rgba(245,158,11,0.12);
+      border-color: var(--amber);
+      color: #fcd34d;
+      font-weight: 600;
+    }
+    .rating-btn.selected-habitual {
+      background: rgba(34,197,94,0.12);
+      border-color: var(--green);
+      color: #86efac;
+      font-weight: 600;
+    }
+
+    /* SAVE BUTTON */
+    .save-btn {
+      width: 100%;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 16px;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    .save-btn:hover { background: #3b5ce6; }
+    .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .error-msg {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .error-msg.show { display: block; }
+
+    @media (max-width: 480px) {
+      .form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a href="/learner/dashboard.html" class="back-btn">← Dashboard</a>
+  <span class="page-title">Log a Session</span>
+  <div style="width:80px"></div>
+</header>
+
+<main>
+  <div class="error-msg" id="error-msg"></div>
+
+  <!-- SESSION DETAILS -->
+  <div class="form-section">
+    <div class="form-section-title">Session Details</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="session-date">
+      </div>
+      <div class="form-group">
+        <label>Duration (minutes)</label>
+        <input type="number" id="duration" placeholder="e.g. 90" min="1" max="360">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Session Type</label>
+      <div class="type-toggle">
+        <button class="type-btn selected-instructor" id="btn-instructor" onclick="setType('instructor')">
+          🧑‍🏫 With Instructor
+        </button>
+        <button class="type-btn" id="btn-private" onclick="setType('private')">
+          🚗 Private Practice
+        </button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Notes (optional)</label>
+      <textarea id="notes" placeholder="How did it go? Anything to remember for next time…"></textarea>
+    </div>
+  </div>
+
+  <!-- SKILLS RATING -->
+  <div class="form-section">
+    <div class="form-section-title">Rate Your Progress</div>
+    <div class="tier-label">
+      <div class="dot" id="tier-dot"></div>
+      <span id="tier-label-text"></span>
+    </div>
+    <p class="skills-hint">How well did you demonstrate each skill this session? Only rate skills you actually practiced.</p>
+    <div id="skills-form"></div>
+  </div>
+
+  <button class="save-btn" id="save-btn" onclick="saveSession()">Save Session →</button>
+</main>
+
+<script>
+const CURRICULUM = {
+  1: {
+    title: 'Tier 1 — Foundations', color: '#4f6ef7',
+    skills: [
+      { key: 't1_move',    label: 'Moving the car' },
+      { key: 't1_stop',    label: 'Stopping & slowing' },
+      { key: 't1_steer',   label: 'Steering' },
+      { key: 't1_mirrors', label: 'Mirror checks' },
+      { key: 't1_mice',    label: 'MICE for junctions' },
+      { key: 't1_eval',    label: 'Junction evaluation' }
+    ]
+  },
+  2: {
+    title: 'Tier 2 — Building Complexity', color: '#8b5cf6',
+    skills: [
+      { key: 't2_speed',      label: 'Speed management' },
+      { key: 't2_roundabout', label: 'Roundabout clearance & lane discipline' },
+      { key: 't2_reverse',    label: 'Reversing' },
+      { key: 't2_mirrors',    label: 'Mirror checks for unexpected hazards' },
+      { key: 't2_mice',       label: 'MICE for roundabouts' },
+      { key: 't2_eval',       label: 'Roundabout & junction evaluation' }
+    ]
+  },
+  3: {
+    title: 'Tier 3 — Test Ready', color: '#10b981',
+    skills: [
+      { key: 't3_faults',    label: 'Understanding driving faults' },
+      { key: 't3_lanes',     label: 'Lane changing & discipline' },
+      { key: 't3_parking',   label: 'Parking' },
+      { key: 't3_stop_move', label: 'Stopping, moving off & emergency stop' },
+      { key: 't3_mice',      label: 'MICE for all junction types' },
+      { key: 't3_eval',      label: 'Junction & roundabout evaluation' }
+    ]
+  }
+};
+
+let AUTH, currentType = 'instructor';
+const ratings = {};
+
+window.addEventListener('DOMContentLoaded', () => {
+  AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  if (!AUTH?.token) { window.location.href = '/learner/'; return; }
+
+  // Set default date to today
+  document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
+
+  const tier = AUTH.user.tier || 1;
+  const info = CURRICULUM[tier];
+
+  document.getElementById('tier-dot').style.background = info.color;
+  document.getElementById('tier-label-text').textContent = info.title;
+
+  // Render skill rows
+  const form = document.getElementById('skills-form');
+  form.innerHTML = info.skills.map(sk => `
+    <div class="skill-item">
+      <div class="skill-label">${sk.label}</div>
+      <div class="rating-group" id="group-${sk.key}">
+        <button class="rating-btn not-yet"   onclick="setRating('${sk.key}', 'not_yet', this)">
+          <div class="dot"></div> Not Yet
+        </button>
+        <button class="rating-btn developing" onclick="setRating('${sk.key}', 'developing', this)">
+          <div class="dot"></div> Developing
+        </button>
+        <button class="rating-btn habitual"   onclick="setRating('${sk.key}', 'habitual', this)">
+          <div class="dot"></div> Habitual
+        </button>
+      </div>
+    </div>`).join('');
+});
+
+function setType(type) {
+  currentType = type;
+  document.getElementById('btn-instructor').className =
+    type === 'instructor' ? 'type-btn selected-instructor' : 'type-btn';
+  document.getElementById('btn-private').className =
+    type === 'private' ? 'type-btn selected-private' : 'type-btn';
+}
+
+function setRating(skillKey, value, btn) {
+  ratings[skillKey] = value;
+  const group = document.getElementById(`group-${skillKey}`);
+  group.querySelectorAll('.rating-btn').forEach(b => {
+    b.className = b.className.replace(/\s*selected-\S+/, '');
+  });
+  btn.classList.add(`selected-${value}`);
+}
+
+async function saveSession() {
+  const date = document.getElementById('session-date').value;
+  if (!date) { showError('Please enter a session date.'); return; }
+
+  const ratingsList = Object.entries(ratings).map(([skill_key, rating]) => ({
+    tier: AUTH.user.tier || 1, skill_key, rating
+  }));
+
+  const payload = {
+    session_date: date,
+    duration_minutes: parseInt(document.getElementById('duration').value) || null,
+    session_type: currentType,
+    notes: document.getElementById('notes').value.trim() || null,
+    ratings: ratingsList
+  };
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const res = await fetch('/api/learner/sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AUTH.token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.status === 401) { window.location.href = '/learner/'; return; }
+    const data = await res.json();
+    if (!res.ok) { showError(data.error || 'Failed to save. Please try again.'); return; }
+
+    window.location.href = '/learner/dashboard.html';
+  } catch {
+    showError('Network error. Please check your connection and try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Session →';
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.classList.add('show');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
