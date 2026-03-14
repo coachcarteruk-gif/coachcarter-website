@@ -5,35 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Progress — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0a0c10;
-      --surface: #13161f;
-      --surface2: #191c27;
-      --border: #1e2230;
-      --text: #e8eaf2;
-      --muted: #6b7280;
-      --blue: #4f6ef7;
-      --green: #22c55e;
-      --lime: #86efac;
-      --amber: #f59e0b;
-      --red: #ef4444;
-      --radius: 14px;
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #ffffff;
+      --surface:    #f9f9f9;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --amber:      #f59e0b;
+      --red:        #ef4444;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
     }
 
     body {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: var(--font-body);
       background: var(--bg);
-      color: var(--text);
+      color: var(--primary);
       min-height: 100vh;
     }
 
     /* HEADER */
     header {
-      background: var(--surface);
+      background: var(--white);
       border-bottom: 1px solid var(--border);
       padding: 0 20px;
       display: flex;
@@ -51,7 +55,7 @@
       text-decoration: none;
     }
     .header-brand img { height: 36px; width: auto; }
-    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
     .header-brand-sub { font-size: 0.7rem; color: var(--muted); }
 
     .header-right { display: flex; align-items: center; gap: 12px; }
@@ -67,14 +71,14 @@
       cursor: pointer;
       transition: color 0.2s, border-color 0.2s;
     }
-    .btn-logout:hover { color: var(--text); border-color: var(--text); }
+    .btn-logout:hover { color: var(--primary); border-color: var(--accent); }
 
     /* MAIN LAYOUT */
     main { max-width: 720px; margin: 0 auto; padding: 24px 16px 80px; }
 
     /* WELCOME */
     .welcome { margin-bottom: 28px; }
-    .welcome h1 { font-size: 1.5rem; font-weight: 700; }
+    .welcome h1 { font-size: 1.5rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); }
     .welcome p { font-size: 0.9rem; color: var(--muted); margin-top: 4px; }
 
     /* STATS BAR */
@@ -85,20 +89,21 @@
       margin-bottom: 28px;
     }
     .stat-pill {
-      background: var(--surface);
+      background: var(--white);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 12px;
       text-align: center;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
-    .stat-pill .num { font-size: 1.3rem; font-weight: 700; }
+    .stat-pill .num { font-size: 1.3rem; font-weight: 700; color: var(--primary); }
     .stat-pill .lbl { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
 
     /* LOG SESSION BUTTON */
     .log-btn {
       display: block;
       width: 100%;
-      background: var(--blue);
+      background: var(--accent);
       color: #fff;
       text-decoration: none;
       border-radius: var(--radius);
@@ -108,8 +113,9 @@
       font-weight: 700;
       margin-bottom: 28px;
       transition: background 0.2s;
+      font-family: var(--font-head);
     }
-    .log-btn:hover { background: #3b5ce6; }
+    .log-btn:hover { background: var(--accent-dk); }
 
     /* SECTION TITLE */
     .section-title {
@@ -123,11 +129,12 @@
 
     /* PROGRESS GROUPS */
     .progress-card {
-      background: var(--surface);
+      background: var(--white);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       margin-bottom: 12px;
       overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
     .progress-header {
       display: flex;
@@ -138,7 +145,7 @@
       user-select: none;
     }
     .progress-header-left { display: flex; align-items: center; gap: 12px; }
-    .progress-group-name { font-size: 0.95rem; font-weight: 700; }
+    .progress-group-name { font-size: 0.95rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); }
     .progress-group-sub { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
     .chevron {
       font-size: 0.7rem;
@@ -167,7 +174,7 @@
       flex-shrink: 0;
       width: 22px;
     }
-    .q-text { font-size: 0.88rem; color: var(--text); flex: 1; line-height: 1.4; }
+    .q-text { font-size: 0.88rem; color: var(--primary); flex: 1; line-height: 1.4; }
     .q-badge {
       flex-shrink: 0;
       font-size: 0.72rem;
@@ -175,16 +182,16 @@
       padding: 4px 10px;
       border-radius: 20px;
     }
-    .badge-always    { background: rgba(34,197,94,0.15);  color: #86efac; }
-    .badge-usually   { background: rgba(134,239,172,0.15);color: #86efac; }
-    .badge-sometimes { background: rgba(245,158,11,0.15); color: #fcd34d; }
-    .badge-never     { background: rgba(239,68,68,0.15);  color: #fca5a5; }
-    .badge-none      { background: var(--surface2); color: var(--muted); }
+    .badge-always    { background: rgba(34,197,94,0.12);  color: #15803d; }
+    .badge-usually   { background: rgba(34,197,94,0.12); color: #15803d; }
+    .badge-sometimes { background: rgba(245,158,11,0.12); color: #92400e; }
+    .badge-never     { background: rgba(239,68,68,0.12);  color: #7f1d1d; }
+    .badge-none      { background: var(--surface); color: var(--muted); }
 
     /* GROUP SCORE BAR */
     .group-score {
-      background: var(--surface2);
-      border: 1px solid var(--border);
+      background: var(--accent-lt);
+      border: 1px solid rgba(245,131,33,0.2);
       border-radius: 10px;
       padding: 12px 14px;
       margin-top: 12px;
@@ -195,10 +202,10 @@
       font-size: 0.8rem;
       margin-bottom: 8px;
     }
-    .group-score-label .title { color: var(--muted); }
-    .group-score-label .pct { font-weight: 700; }
+    .group-score-label .title { color: var(--primary); }
+    .group-score-label .pct { font-weight: 700; color: var(--primary); }
     .score-bar-bg {
-      background: var(--border);
+      background: rgba(0,0,0,0.1);
       border-radius: 4px;
       height: 6px;
       overflow: hidden;
@@ -217,11 +224,12 @@
 
     /* SESSIONS LIST */
     .session-card {
-      background: var(--surface);
+      background: var(--white);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 14px 16px;
       margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
     .session-meta {
       display: flex;
@@ -230,16 +238,16 @@
       margin-bottom: 8px;
       flex-wrap: wrap;
     }
-    .session-date { font-size: 0.88rem; font-weight: 600; }
+    .session-date { font-size: 0.88rem; font-weight: 600; color: var(--primary); }
     .session-chip {
       font-size: 0.72rem;
       font-weight: 600;
       padding: 3px 8px;
       border-radius: 12px;
     }
-    .chip-instructor { background: rgba(79,110,247,0.15); color: var(--blue); }
-    .chip-private { background: rgba(139,92,246,0.15); color: #a78bfa; }
-    .chip-duration { background: var(--surface2); color: var(--muted); }
+    .chip-instructor { background: var(--accent-mid); color: var(--accent); }
+    .chip-private { background: rgba(168,85,247,0.12); color: #7c3aed; }
+    .chip-duration { background: var(--surface); color: var(--muted); }
     .session-ratings {
       display: flex;
       flex-wrap: wrap;
@@ -252,8 +260,9 @@
       font-size: 0.72rem;
       padding: 3px 8px;
       border-radius: 12px;
-      background: var(--surface2);
+      background: var(--surface);
       border: 1px solid var(--border);
+      color: var(--primary);
     }
     .session-skill-pill .dot {
       width: 6px; height: 6px;
@@ -278,14 +287,14 @@
       gap: 8px;
       align-items: flex-start;
       font-size: 0.8rem;
-      color: var(--muted);
-      background: var(--surface2);
+      color: var(--primary);
+      background: var(--surface);
       border-radius: 6px;
       padding: 6px 10px;
     }
     .q-note-item .q-note-label {
       font-weight: 600;
-      color: var(--blue);
+      color: var(--accent);
       flex-shrink: 0;
       font-size: 0.72rem;
     }
@@ -500,7 +509,7 @@ function renderProgressCard(group, ratingsMap, container, expanded) {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
-        ${ratedCount > 0 ? `<span style="font-size:0.8rem;font-weight:700;color:${pct >= 75 ? '#86efac' : pct >= 40 ? '#fcd34d' : '#fca5a5'}">${pct}%</span>` : ''}
+        ${ratedCount > 0 ? `<span style="font-size:0.8rem;font-weight:700;color:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}">${pct}%</span>` : ''}
         <span class="chevron${expanded ? ' open' : ''}" id="${chevId}">▼</span>
       </div>
     </div>
@@ -510,7 +519,7 @@ function renderProgressCard(group, ratingsMap, container, expanded) {
       <div class="group-score">
         <div class="group-score-label">
           <span class="title">On track (Usually or Always)</span>
-          <span class="pct" style="color:${pct >= 75 ? '#86efac' : pct >= 40 ? '#fcd34d' : '#fca5a5'}">${pct}%</span>
+          <span class="pct" style="color:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}">${pct}%</span>
         </div>
         <div class="score-bar-bg">
           <div class="score-bar-fill" style="width:${pct}%;background:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}"></div>

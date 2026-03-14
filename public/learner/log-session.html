@@ -5,29 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Log a Session — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0a0c10;
-      --surface: #13161f;
-      --surface2: #191c27;
-      --border: #1e2230;
-      --text: #e8eaf2;
-      --muted: #6b7280;
-      --blue: #4f6ef7;
-      --green: #22c55e;
-      --lime: #86efac;
-      --amber: #f59e0b;
-      --red: #ef4444;
-      --radius: 14px;
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #ffffff;
+      --surface:    #f9f9f9;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --amber:      #f59e0b;
+      --red:        #ef4444;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
     }
 
     body {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: var(--font-body), system-ui, sans-serif;
       background: var(--bg);
-      color: var(--text);
+      color: var(--primary);
       min-height: 100vh;
     }
 
@@ -53,13 +57,13 @@
       font-weight: 500;
       transition: color 0.2s;
     }
-    .back-btn:hover { color: var(--text); }
-    .page-title { font-size: 0.95rem; font-weight: 700; }
+    .back-btn:hover { color: var(--accent); }
+    .page-title { font-size: 0.95rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); }
 
     main { max-width: 600px; margin: 0 auto; padding: 28px 16px 80px; }
 
     .form-section {
-      background: var(--surface);
+      background: var(--white);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 20px;
@@ -72,6 +76,7 @@
       letter-spacing: 0.08em;
       color: var(--muted);
       margin-bottom: 16px;
+      font-family: var(--font-head);
     }
 
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -86,32 +91,33 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin-bottom: 6px;
+      font-family: var(--font-head);
     }
     input[type="date"],
     input[type="number"],
     textarea {
       width: 100%;
-      background: var(--bg);
+      background: var(--white);
       border: 1px solid var(--border);
       border-radius: 8px;
-      color: var(--text);
-      font-family: inherit;
+      color: var(--primary);
+      font-family: var(--font-body);
       font-size: 0.9rem;
       padding: 10px 12px;
       outline: none;
       transition: border-color 0.2s;
     }
-    input:focus, textarea:focus { border-color: var(--blue); }
+    input:focus, textarea:focus { border-color: var(--accent); }
     textarea { resize: vertical; min-height: 72px; }
-    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0); cursor: pointer; }
 
     .type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .type-btn {
-      background: var(--bg);
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--muted);
-      font-family: inherit;
+      font-family: var(--font-body);
       font-size: 0.88rem;
       font-weight: 500;
       padding: 10px;
@@ -119,8 +125,8 @@
       text-align: center;
       transition: all 0.15s;
     }
-    .type-btn.selected-instructor { background: rgba(79,110,247,0.12); border-color: var(--blue); color: var(--blue); font-weight: 600; }
-    .type-btn.selected-private { background: rgba(139,92,246,0.12); border-color: #8b5cf6; color: #a78bfa; font-weight: 600; }
+    .type-btn.selected-instructor { background: var(--accent-mid); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .type-btn.selected-private { background: var(--accent-mid); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
     /* QUESTION GROUPS */
     .q-group-title {
@@ -132,6 +138,7 @@
       margin: 4px 0 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
+      font-family: var(--font-head);
     }
 
     .question-item {
@@ -145,12 +152,15 @@
       font-weight: 700;
       color: var(--muted);
       margin-bottom: 4px;
+      font-family: var(--font-head);
     }
     .question-text {
       font-size: 0.95rem;
       font-weight: 500;
       line-height: 1.4;
       margin-bottom: 12px;
+      color: var(--primary);
+      font-family: var(--font-body);
     }
 
     .rating-group {
@@ -159,11 +169,11 @@
       gap: 5px;
     }
     .rating-btn {
-      background: var(--bg);
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--muted);
-      font-family: inherit;
+      font-family: var(--font-body);
       font-size: 0.75rem;
       font-weight: 500;
       padding: 9px 4px;
@@ -172,12 +182,12 @@
       transition: all 0.15s;
       line-height: 1.2;
     }
-    .rating-btn:hover { border-color: var(--muted); color: var(--text); }
+    .rating-btn:hover { border-color: var(--muted); color: var(--primary); }
 
-    .rating-btn.sel-never    { background: rgba(239,68,68,0.15);  border-color: var(--red);   color: #fca5a5; font-weight: 700; }
-    .rating-btn.sel-sometimes{ background: rgba(245,158,11,0.15); border-color: var(--amber); color: #fcd34d; font-weight: 700; }
-    .rating-btn.sel-usually  { background: rgba(134,239,172,0.15);border-color: var(--lime);  color: var(--lime); font-weight: 700; }
-    .rating-btn.sel-always   { background: rgba(34,197,94,0.15);  border-color: var(--green); color: #86efac; font-weight: 700; }
+    .rating-btn.sel-never    { background: rgba(239,68,68,0.12);  border-color: var(--red);   color: #dc2626; font-weight: 700; }
+    .rating-btn.sel-sometimes{ background: rgba(245,158,11,0.12); border-color: var(--amber); color: #d97706; font-weight: 700; }
+    .rating-btn.sel-usually  { background: rgba(34,197,94,0.12); border-color: var(--green);  color: #15803d; font-weight: 700; }
+    .rating-btn.sel-always   { background: rgba(34,197,94,0.12);  border-color: var(--green); color: #15803d; font-weight: 700; }
 
     /* PER-QUESTION NOTE */
     .note-row {
@@ -186,11 +196,11 @@
       margin-top: 8px;
     }
     .note-toggle-btn {
-      background: none;
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 6px;
       color: var(--muted);
-      font-family: inherit;
+      font-family: var(--font-body);
       font-size: 0.74rem;
       font-weight: 500;
       padding: 4px 10px;
@@ -200,8 +210,8 @@
       gap: 5px;
       transition: color 0.15s, border-color 0.15s;
     }
-    .note-toggle-btn:hover { color: var(--text); border-color: var(--muted); }
-    .note-toggle-btn.has-note { border-color: #4f6ef755; color: var(--blue); }
+    .note-toggle-btn:hover { color: var(--primary); border-color: var(--muted); }
+    .note-toggle-btn.has-note { border-color: var(--accent); color: var(--accent); }
     .note-input-wrap {
       display: none;
       margin-top: 8px;
@@ -215,11 +225,11 @@
 
     .save-btn {
       width: 100%;
-      background: var(--blue);
+      background: var(--accent);
       color: #fff;
       border: none;
       border-radius: var(--radius);
-      font-family: inherit;
+      font-family: var(--font-head);
       font-size: 1rem;
       font-weight: 700;
       padding: 16px;
@@ -227,18 +237,19 @@
       margin-top: 8px;
       transition: background 0.2s, opacity 0.2s;
     }
-    .save-btn:hover { background: #3b5ce6; }
+    .save-btn:hover { background: var(--accent-dk); }
     .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
     .error-msg {
-      background: rgba(239,68,68,0.1);
+      background: rgba(239,68,68,0.12);
       border: 1px solid rgba(239,68,68,0.3);
-      color: #fca5a5;
+      color: #dc2626;
       border-radius: 8px;
       padding: 10px 14px;
       font-size: 0.85rem;
       margin-bottom: 12px;
       display: none;
+      font-family: var(--font-body);
     }
     .error-msg.show { display: block; }
 

@@ -6,18 +6,24 @@
   <title>Classroom — CoachCarter</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #000;
-      --surface: #13161f;
-      --border: #1e2230;
-      --text: #e8eaf2;
-      --muted: #9ca3af;
-      --blue: #4f6ef7;
-      --radius: 12px;
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #ffffff;
+      --surface:    #f9f9f9;
+      --white:      #ffffff;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
       --header-h: 56px;
       --tabs-h: 48px;
     }
@@ -25,9 +31,9 @@
     html, body {
       height: 100%;
       overflow: hidden;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: var(--font-body), system-ui, sans-serif;
       background: var(--bg);
-      color: var(--text);
+      color: var(--primary);
     }
 
     /* ── HEADER ── */
@@ -40,7 +46,8 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 16px;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
+      background: linear-gradient(to bottom, var(--white) 0%, rgba(255,255,255,0.95) 100%);
+      border-bottom: 1px solid var(--border);
     }
     .header-brand {
       display: flex;
@@ -49,15 +56,16 @@
       text-decoration: none;
     }
     .header-brand img { height: 32px; width: auto; }
-    .header-brand-text { font-size: 0.88rem; font-weight: 700; color: var(--text); }
-    .header-brand-sub  { font-size: 0.68rem; color: rgba(255,255,255,0.5); }
+    .header-brand-text { font-size: 0.88rem; font-weight: 700; color: var(--primary); font-family: var(--font-head); }
+    .header-brand-sub  { font-size: 0.68rem; color: var(--accent); }
     .header-back {
-      color: rgba(255,255,255,0.7);
+      color: var(--accent);
       text-decoration: none;
       font-size: 0.82rem;
       font-weight: 500;
+      transition: color 0.15s;
     }
-    .header-back:hover { color: #fff; }
+    .header-back:hover { color: var(--accent-dk); }
 
     /* ── TAB BAR ── */
     .tab-bar {
@@ -73,16 +81,17 @@
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
+      background: linear-gradient(to bottom, var(--surface) 0%, rgba(249,249,249,0.95) 100%);
+      border-bottom: 1px solid var(--border);
     }
     .tab-bar::-webkit-scrollbar { display: none; }
     .tab-btn {
       flex-shrink: 0;
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.15);
+      background: transparent;
+      border: 1px solid var(--border);
       border-radius: 20px;
-      color: rgba(255,255,255,0.65);
-      font-family: inherit;
+      color: var(--muted);
+      font-family: var(--font-body);
       font-size: 0.78rem;
       font-weight: 600;
       padding: 5px 14px;
@@ -90,8 +99,8 @@
       white-space: nowrap;
       transition: all 0.15s;
     }
-    .tab-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
-    .tab-btn.active { background: #fff; border-color: #fff; color: #000; }
+    .tab-btn:hover { background: var(--accent-mid); color: var(--accent-dk); border-color: var(--accent-mid); }
+    .tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
     /* ── REELS CONTAINER ── */
     .reels-container {
@@ -151,12 +160,15 @@
       line-height: 1.3;
       margin-bottom: 5px;
       text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+      font-family: var(--font-head);
+      color: #fff;
     }
     .reel-desc {
       font-size: 0.85rem;
-      color: rgba(255,255,255,0.75);
+      color: rgba(255,255,255,0.85);
       line-height: 1.4;
       text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+      font-family: var(--font-body);
     }
 
     /* ── MUTE BUTTON ── */
@@ -168,7 +180,7 @@
       height: 42px;
       border-radius: 50%;
       background: rgba(0,0,0,0.55);
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
       color: #fff;
       font-size: 1.1rem;
       cursor: pointer;
@@ -177,10 +189,10 @@
       justify-content: center;
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
-      transition: background 0.15s;
+      transition: all 0.15s;
       z-index: 10;
     }
-    .mute-btn:hover { background: rgba(0,0,0,0.75); }
+    .mute-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.5); }
 
     /* ── MUTED BANNER ── */
     .muted-banner {
@@ -188,20 +200,21 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.6);
-      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.25);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       border-radius: 10px;
       padding: 10px 18px;
       font-size: 0.82rem;
       font-weight: 600;
-      color: rgba(255,255,255,0.85);
+      color: #fff;
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.3s;
       z-index: 10;
       white-space: nowrap;
+      font-family: var(--font-body);
     }
     .muted-banner.show { opacity: 1; }
 
@@ -213,9 +226,11 @@
       align-items: center;
       justify-content: center;
       gap: 12px;
-      color: rgba(255,255,255,0.4);
+      color: var(--muted);
       padding: 40px;
       text-align: center;
+      background: var(--bg);
+      font-family: var(--font-body);
     }
     .empty-reels .emoji { font-size: 2.5rem; }
     .empty-reels p { font-size: 0.9rem; line-height: 1.5; }
@@ -224,7 +239,7 @@
     .loading-screen {
       position: fixed;
       inset: 0;
-      background: #000;
+      background: var(--bg);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -234,18 +249,18 @@
     .loading-screen.hidden { opacity: 0; pointer-events: none; }
     .spinner {
       width: 28px; height: 28px;
-      border: 2px solid rgba(255,255,255,0.15);
-      border-top-color: rgba(255,255,255,0.7);
+      border: 2px solid rgba(245,131,33,0.15);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── GROUP COLOURS ── */
-    .tag-speed-control  { background: rgba(79,110,247,0.25);  color: #93a8fd; }
-    .tag-looking-around { background: rgba(139,92,246,0.25);  color: #c4b5fd; }
-    .tag-junctions      { background: rgba(245,158,11,0.25);  color: #fcd34d; }
-    .tag-reversing      { background: rgba(16,185,129,0.25);  color: #6ee7b7; }
+    .tag-speed-control  { background: rgba(245,131,33,0.2);  color: rgba(255,255,255,0.95); }
+    .tag-looking-around { background: rgba(245,131,33,0.2);  color: rgba(255,255,255,0.95); }
+    .tag-junctions      { background: rgba(245,131,33,0.2);  color: rgba(255,255,255,0.95); }
+    .tag-reversing      { background: rgba(245,131,33,0.2);  color: rgba(255,255,255,0.95); }
   </style>
 </head>
 <body>

@@ -5,29 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Learner Hub — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0a0c10;
-      --surface: #13161f;
-      --surface2: #191c27;
-      --border: #1e2230;
-      --text: #e8eaf2;
-      --muted: #6b7280;
-      --blue: #4f6ef7;
-      --blue-hover: #3b5ce6;
-      --green: #22c55e;
-      --amber: #f59e0b;
-      --purple: #8b5cf6;
-      --radius: 14px;
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #ffffff;
+      --surface:    #f9f9f9;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --amber:      #f59e0b;
+      --red:        #ef4444;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
     }
 
     body {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: var(--font-body);
       background: var(--bg);
-      color: var(--text);
+      color: var(--primary);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -35,7 +39,7 @@
 
     /* ── HEADER ── */
     header {
-      background: var(--surface);
+      background: var(--white);
       border-bottom: 1px solid var(--border);
       padding: 0 20px;
       display: flex;
@@ -51,7 +55,7 @@
       text-decoration: none;
     }
     .header-brand img { height: 36px; width: auto; }
-    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); font-family: var(--font-head); }
     .header-brand-sub { font-size: 0.7rem; color: var(--muted); }
 
     .header-right { display: flex; align-items: center; gap: 12px; }
@@ -70,9 +74,9 @@
       transition: color 0.2s, border-color 0.2s;
       display: none;
     }
-    .btn-logout:hover { color: var(--text); border-color: var(--text); }
+    .btn-logout:hover { color: var(--primary); border-color: var(--primary); }
     .btn-signin {
-      background: var(--blue);
+      background: var(--accent);
       border: none;
       border-radius: 6px;
       color: #fff;
@@ -84,7 +88,7 @@
       text-decoration: none;
       transition: background 0.2s;
     }
-    .btn-signin:hover { background: var(--blue-hover); }
+    .btn-signin:hover { background: var(--accent-dk); }
 
     /* ── MAIN ── */
     main {
@@ -104,7 +108,7 @@
       font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--blue);
+      color: var(--accent);
       margin-bottom: 10px;
     }
     .hero-title {
@@ -112,6 +116,8 @@
       font-weight: 700;
       line-height: 1.25;
       margin-bottom: 10px;
+      font-family: var(--font-head);
+      color: var(--primary);
     }
     .hero-sub {
       font-size: 0.95rem;
@@ -128,7 +134,7 @@
       flex-wrap: wrap;
     }
     .cta-primary {
-      background: var(--blue);
+      background: var(--accent);
       color: #fff;
       border: none;
       border-radius: 8px;
@@ -140,10 +146,10 @@
       text-decoration: none;
       transition: background 0.2s;
     }
-    .cta-primary:hover { background: var(--blue-hover); }
+    .cta-primary:hover { background: var(--accent-dk); }
     .cta-secondary {
       background: none;
-      color: var(--text);
+      color: var(--primary);
       border: 1px solid var(--border);
       border-radius: 8px;
       font-family: inherit;
@@ -154,7 +160,7 @@
       text-decoration: none;
       transition: border-color 0.2s, color 0.2s;
     }
-    .cta-secondary:hover { border-color: var(--text); }
+    .cta-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
     /* ── NAV CARDS ── */
     .section-label {
@@ -162,8 +168,9 @@
       font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--muted);
+      color: var(--primary);
       margin-bottom: 14px;
+      font-family: var(--font-head);
     }
 
     .card-grid {
@@ -177,21 +184,23 @@
     }
 
     .nav-card {
-      background: var(--surface);
+      background: var(--white);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 20px 18px;
       text-decoration: none;
-      color: var(--text);
+      color: var(--primary);
       display: flex;
       flex-direction: column;
       gap: 10px;
-      transition: border-color 0.2s, background 0.2s;
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
       cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .nav-card:hover {
-      border-color: rgba(255,255,255,0.2);
-      background: var(--surface2);
+      border-color: var(--accent);
+      background: var(--accent-lt);
+      box-shadow: 0 4px 12px rgba(245,131,33,0.08);
     }
     .nav-card-icon {
       font-size: 1.6rem;
@@ -200,6 +209,8 @@
     .nav-card-title {
       font-size: 1rem;
       font-weight: 700;
+      font-family: var(--font-head);
+      color: var(--primary);
     }
     .nav-card-desc {
       font-size: 0.82rem;
@@ -208,14 +219,15 @@
     }
     .nav-card-arrow {
       font-size: 0.8rem;
-      color: var(--muted);
+      color: var(--accent);
       margin-top: auto;
+      font-weight: 600;
     }
 
     /* Accent borders per card */
-    .card-progress  { border-top: 2px solid var(--blue); }
-    .card-log       { border-top: 2px solid var(--green); }
-    .card-classroom { border-top: 2px solid var(--purple); }
+    .card-progress  { border-top: 3px solid var(--accent); }
+    .card-log       { border-top: 3px solid var(--green); }
+    .card-classroom { border-top: 3px solid var(--amber); }
 
     /* Full-width card for classroom */
     .nav-card-wide {
@@ -244,7 +256,7 @@
       text-decoration: none;
       transition: color 0.2s;
     }
-    .back-link:hover { color: var(--text); }
+    .back-link:hover { color: var(--accent); }
   </style>
 </head>
 <body>

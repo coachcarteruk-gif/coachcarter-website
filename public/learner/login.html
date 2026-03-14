@@ -5,27 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0a0c10;
-      --surface: #13161f;
-      --border: #1e2230;
-      --text: #e8eaf2;
-      --muted: #6b7280;
-      --blue: #4f6ef7;
-      --blue-hover: #3b5ce6;
-      --green: #22c55e;
-      --red: #ef4444;
-      --radius: 14px;
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #ffffff;
+      --surface:    #f9f9f9;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --red:        #ef4444;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
     }
 
     body {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: var(--font-body);
       background: var(--bg);
-      color: var(--text);
+      color: var(--primary);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -42,16 +47,17 @@
       text-decoration: none;
     }
     .brand img { height: 48px; width: auto; }
-    .brand-text { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+    .brand-text { font-size: 1.1rem; font-weight: 700; color: var(--primary); font-family: var(--font-head); }
     .brand-sub { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
 
     .card {
-      background: var(--surface);
+      background: var(--white);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       width: 100%;
       max-width: 420px;
       overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
 
     .tabs {
@@ -71,10 +77,11 @@
       border-bottom: 2px solid transparent;
       transition: color 0.2s, border-color 0.2s;
       margin-bottom: -1px;
+      font-family: var(--font-body);
     }
     .tab.active {
-      color: var(--blue);
-      border-bottom-color: var(--blue);
+      color: var(--accent);
+      border-bottom-color: var(--accent);
     }
 
     .panel { padding: 28px 24px; display: none; }
@@ -84,6 +91,8 @@
       font-size: 1.3rem;
       font-weight: 700;
       margin-bottom: 6px;
+      font-family: var(--font-head);
+      color: var(--primary);
     }
     .panel-sub {
       font-size: 0.85rem;
@@ -100,30 +109,37 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin-bottom: 6px;
+      font-family: var(--font-body);
     }
     input[type="text"],
     input[type="email"],
     input[type="password"] {
       width: 100%;
-      background: var(--bg);
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
-      color: var(--text);
-      font-family: inherit;
+      color: var(--primary);
+      font-family: var(--font-body);
       font-size: 0.95rem;
       padding: 11px 14px;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, background-color 0.2s;
     }
-    input:focus { border-color: var(--blue); }
+    input::placeholder {
+      color: var(--muted);
+    }
+    input:focus {
+      border-color: var(--accent);
+      background: var(--white);
+    }
 
     .btn-primary {
       width: 100%;
-      background: var(--blue);
+      background: var(--accent);
       color: #fff;
       border: none;
       border-radius: 8px;
-      font-family: inherit;
+      font-family: var(--font-body);
       font-size: 0.95rem;
       font-weight: 600;
       padding: 13px;
@@ -131,18 +147,19 @@
       margin-top: 8px;
       transition: background 0.2s, opacity 0.2s;
     }
-    .btn-primary:hover { background: var(--blue-hover); }
+    .btn-primary:hover { background: var(--accent-dk); }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
     .error-msg {
-      background: rgba(239, 68, 68, 0.1);
+      background: rgba(239, 68, 68, 0.08);
       border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
+      color: #c41e1e;
       border-radius: 8px;
       padding: 10px 14px;
       font-size: 0.85rem;
       margin-bottom: 16px;
       display: none;
+      font-family: var(--font-body);
     }
     .error-msg.show { display: block; }
 
@@ -151,6 +168,7 @@
       font-size: 0.8rem;
       color: var(--muted);
       margin-top: 16px;
+      font-family: var(--font-body);
     }
 
     .back-link {
@@ -158,8 +176,9 @@
       font-size: 0.8rem;
       color: var(--muted);
       text-decoration: none;
+      font-family: var(--font-body);
     }
-    .back-link:hover { color: var(--text); }
+    .back-link:hover { color: var(--primary); }
   </style>
 </head>
 <body>
@@ -194,7 +213,7 @@
       </div>
       <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
     </form>
-    <p class="hint">Don't have an account? <a href="#" onclick="switchTab('register')" style="color: var(--blue);">Create one</a></p>
+    <p class="hint">Don't have an account? <a href="#" onclick="switchTab('register')" style="color: var(--accent); cursor: pointer;">Create one</a></p>
   </div>
 
   <!-- REGISTER PANEL -->
@@ -221,7 +240,7 @@
       </div>
       <button type="submit" class="btn-primary" id="register-btn">Create Account</button>
     </form>
-    <p class="hint">Already have an account? <a href="#" onclick="switchTab('login')" style="color: var(--blue);">Sign in</a></p>
+    <p class="hint">Already have an account? <a href="#" onclick="switchTab('login')" style="color: var(--accent); cursor: pointer;">Sign in</a></p>
   </div>
 </div>
 
