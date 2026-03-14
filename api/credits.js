@@ -93,8 +93,8 @@ async function handleCheckout(req, res) {
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      payment_method_types: ['card'],
-      // Klarna requires a billing address and is enabled in the Stripe dashboard
+      // Don't restrict payment_method_types — let Stripe offer whatever's
+      // enabled in the dashboard (card, Klarna, etc.) automatically.
       line_items: [
         {
           price_data: {
