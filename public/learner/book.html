@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book a Lesson — CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #f5f5f5;
+      --surface:    #ffffff;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --green-lt:   #f0fdf4;
+      --red:        #ef4444;
+      --red-lt:     #fef2f2;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--primary);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+    }
+    .header-brand {
+      display: flex; align-items: center; gap: 10px; text-decoration: none;
+    }
+    .header-brand img { height: 36px; width: auto; }
+    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
+    .header-brand-sub  { font-size: 0.7rem; color: var(--muted); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-right a {
+      font-size: 0.85rem; color: var(--muted); text-decoration: none;
+      padding: 6px 12px; border-radius: 8px; transition: background 0.15s;
+    }
+    .header-right a:hover { background: var(--bg); color: var(--primary); }
+    .credit-badge {
+      font-size: 0.85rem; font-weight: 700; color: var(--accent);
+      background: var(--accent-lt); padding: 6px 14px; border-radius: 20px;
+      cursor: pointer; text-decoration: none;
+    }
+    .credit-badge.zero { color: var(--red); background: var(--red-lt); }
+
+    /* ── Layout ── */
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 32px 16px 80px;
+    }
+
+    /* ── Page title row ── */
+    .page-title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      font-family: var(--font-head);
+      font-size: 1.75rem;
+      font-weight: 800;
+    }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+
+    /* ── No credits banner ── */
+    .no-credits-banner {
+      background: var(--red-lt);
+      border: 1.5px solid var(--red);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .no-credits-banner p { font-size: 0.9rem; }
+    .no-credits-banner strong { color: var(--red); }
+    .btn-buy-now {
+      background: var(--accent); color: white; border: none;
+      padding: 10px 20px; border-radius: 8px; font-family: var(--font-head);
+      font-size: 0.9rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+      text-decoration: none; display: inline-block;
+    }
+    .btn-buy-now:hover { background: var(--accent-dk); }
+
+    /* ── Controls bar ── */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .week-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 6px 8px;
+    }
+    .week-btn {
+      width: 34px; height: 34px;
+      background: none; border: none; cursor: pointer;
+      border-radius: 7px; font-size: 1rem; color: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .week-btn:hover { background: var(--bg); }
+    .week-btn:disabled { color: var(--border); cursor: default; }
+    .week-label {
+      font-size: 0.875rem; font-weight: 700; min-width: 160px; text-align: center;
+    }
+    .btn-today {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 14px; font-size: 0.85rem;
+      font-weight: 700; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-today:hover { background: var(--bg); }
+
+    /* Instructor filter */
+    .filter-wrap { margin-left: auto; }
+    .filter-wrap select {
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 12px; font-size: 0.85rem; background: var(--white);
+      color: var(--primary); cursor: pointer;
+    }
+
+    /* ── Upcoming bookings strip ── */
+    .upcoming-strip {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .upcoming-header {
+      padding: 14px 20px;
+      font-family: var(--font-head);
+      font-size: 0.9rem;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .upcoming-list { display: flex; flex-direction: column; }
+    .upcoming-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+    .upcoming-item:last-child { border-bottom: none; }
+    .upcoming-date {
+      font-weight: 700;
+      min-width: 120px;
+    }
+    .upcoming-time { color: var(--muted); min-width: 100px; }
+    .upcoming-instructor { flex: 1; }
+    .upcoming-cancel {
+      background: none; border: 1px solid var(--border);
+      border-radius: 7px; padding: 5px 12px; font-size: 0.8rem;
+      cursor: pointer; color: var(--muted); transition: all 0.15s;
+    }
+    .upcoming-cancel:hover { border-color: var(--red); color: var(--red); background: var(--red-lt); }
+    .upcoming-empty {
+      padding: 16px 20px;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+
+    /* ── Calendar grid ── */
+    .calendar { display: flex; flex-direction: column; gap: 16px; }
+
+    .day-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .day-header {
+      padding: 12px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .day-name {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .day-date { font-size: 0.85rem; color: var(--muted); }
+    .day-today .day-name { color: var(--accent); }
+
+    .slots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      padding: 16px;
+    }
+
+    .slot-card {
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, transform 0.1s;
+      position: relative;
+    }
+    .slot-card:hover {
+      border-color: var(--accent);
+      background: var(--accent-lt);
+      transform: translateY(-1px);
+    }
+    .slot-card.no-credits {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .slot-card.no-credits:hover {
+      border-color: var(--border);
+      background: none;
+      transform: none;
+    }
+    .slot-time {
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .slot-instructor {
+      font-size: 0.8rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .slot-avatar {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--accent-mid);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 700; color: var(--accent);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .slot-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    /* ── Empty / loading states ── */
+    .calendar-loading, .calendar-empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .calendar-loading .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    .calendar-empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .calendar-empty h3 {
+      font-family: var(--font-head);
+      font-size: 1.1rem;
+      margin-bottom: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Booking modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 500;
+      padding: 20px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 32px;
+      max-width: 420px;
+      width: 100%;
+      transform: translateY(20px);
+      transition: transform 0.2s;
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+
+    .modal h2 {
+      font-family: var(--font-head);
+      font-size: 1.3rem;
+      font-weight: 800;
+      margin-bottom: 20px;
+    }
+    .modal-detail {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .modal-detail-row { display: flex; justify-content: space-between; }
+    .modal-detail-row span:first-child { color: var(--muted); }
+    .modal-detail-row span:last-child { font-weight: 700; }
+    .modal-credit-note {
+      font-size: 0.825rem;
+      color: var(--muted);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .modal-credit-note strong { color: var(--accent); }
+    .modal-actions { display: flex; gap: 12px; }
+    .btn-confirm {
+      flex: 1; padding: 14px;
+      background: var(--accent); color: white; border: none;
+      border-radius: 10px; font-family: var(--font-head);
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+      transition: background 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-confirm:hover { background: var(--accent-dk); }
+    .btn-confirm:disabled { background: var(--border); cursor: not-allowed; }
+    .btn-modal-cancel {
+      padding: 14px 20px;
+      background: none; border: 1px solid var(--border);
+      border-radius: 10px; font-size: 0.9rem; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-modal-cancel:hover { background: var(--bg); }
+
+    /* modal spinner */
+    .modal-spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.4);
+      border-top-color: white; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    /* ── Cancel confirm modal ── */
+    .cancel-modal h2 { color: var(--red); }
+    .cancel-policy {
+      background: var(--red-lt);
+      border: 1px solid #fca5a5;
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .cancel-policy.safe {
+      background: var(--green-lt);
+      border-color: #86efac;
+    }
+    .btn-confirm-cancel {
+      flex: 1; padding: 14px;
+      background: var(--red); color: white; border: none;
+      border-radius: 10px; font-family: var(--font-head);
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-confirm-cancel:hover { background: #dc2626; }
+    .btn-confirm-cancel:disabled { background: var(--border); cursor: not-allowed; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--primary); color: white;
+      padding: 14px 24px; border-radius: 10px;
+      font-size: 0.9rem; font-weight: 600;
+      transition: transform 0.3s; z-index: 999; white-space: nowrap;
+    }
+    .toast.show  { transform: translateX(-50%) translateY(0); }
+    .toast.success { background: #16a34a; }
+    .toast.error   { background: var(--red); }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .slots-grid { grid-template-columns: 1fr 1fr; }
+      .upcoming-time, .upcoming-instructor { display: none; }
+      .week-label { min-width: 120px; font-size: 0.8rem; }
+      .filter-wrap { width: 100%; }
+      .filter-wrap select { width: 100%; }
+      h1 { font-size: 1.4rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <a class="header-brand" href="/learner/dashboard.html">
+    <img src="/Logo.png" alt="CoachCarter">
+    <div>
+      <div class="header-brand-text">CoachCarter</div>
+      <div class="header-brand-sub">Learner Portal</div>
+    </div>
+  </a>
+  <div class="header-right">
+    <a href="/learner/dashboard.html">← Dashboard</a>
+    <a href="/learner/buy-credits.html" class="credit-badge" id="creditBadge">⏳ …</a>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- Title -->
+  <div class="page-title-row">
+    <div>
+      <h1>Book a Lesson</h1>
+      <p class="subtitle">Pick any available slot — one credit per 1.5-hour lesson.</p>
+    </div>
+  </div>
+
+  <!-- No credits banner (hidden until needed) -->
+  <div class="no-credits-banner" id="noCreditsBanner" style="display:none">
+    <p><strong>You have no credits.</strong> Buy credits to start booking lessons.</p>
+    <a href="/learner/buy-credits.html" class="btn-buy-now">Buy Credits</a>
+  </div>
+
+  <!-- Upcoming bookings -->
+  <div class="upcoming-strip" id="upcomingStrip" style="display:none">
+    <div class="upcoming-header">
+      <span>Upcoming lessons</span>
+    </div>
+    <div class="upcoming-list" id="upcomingList"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="week-nav">
+      <button class="week-btn" id="btnPrevWeek" title="Previous week">&#8592;</button>
+      <span class="week-label" id="weekLabel">Loading…</span>
+      <button class="week-btn" id="btnNextWeek" title="Next week">&#8594;</button>
+    </div>
+    <button class="btn-today" id="btnToday">Today</button>
+    <div class="filter-wrap">
+      <select id="instructorFilter">
+        <option value="">All instructors</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Calendar -->
+  <div class="calendar" id="calendar">
+    <div class="calendar-loading">
+      <div class="spinner"></div>
+      <p>Loading available slots…</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Book confirmation modal ── -->
+<div class="modal-overlay" id="bookModal">
+  <div class="modal">
+    <h2>Confirm booking</h2>
+    <div class="modal-detail">
+      <div class="modal-detail-row">
+        <span>Date</span><span id="mdDate">—</span>
+      </div>
+      <div class="modal-detail-row">
+        <span>Time</span><span id="mdTime">—</span>
+      </div>
+      <div class="modal-detail-row">
+        <span>Instructor</span><span id="mdInstructor">—</span>
+      </div>
+      <div class="modal-detail-row">
+        <span>Duration</span><span>1.5 hours</span>
+      </div>
+    </div>
+    <p class="modal-credit-note">
+      This will use <strong>1 credit</strong> from your balance.
+      You can cancel for a full credit refund up to 48 hours before the lesson.
+    </p>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" id="bookModalClose">Cancel</button>
+      <button class="btn-confirm" id="btnConfirmBook">
+        <span id="bookBtnLabel">Confirm booking</span>
+        <div class="modal-spinner" id="bookSpinner"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Cancel confirmation modal ── -->
+<div class="modal-overlay" id="cancelModal">
+  <div class="modal cancel-modal">
+    <h2>Cancel lesson?</h2>
+    <div class="modal-detail">
+      <div class="modal-detail-row">
+        <span>Date</span><span id="cmDate">—</span>
+      </div>
+      <div class="modal-detail-row">
+        <span>Time</span><span id="cmTime">—</span>
+      </div>
+      <div class="modal-detail-row">
+        <span>Instructor</span><span id="cmInstructor">—</span>
+      </div>
+    </div>
+    <div class="cancel-policy" id="cancelPolicyNote"></div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" id="cancelModalClose">Keep lesson</button>
+      <button class="btn-confirm-cancel" id="btnConfirmCancel">
+        <span id="cancelBtnLabel">Cancel lesson</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── State ───────────────────────────────────────────────────────────────────
+  let token         = null;
+  let creditBalance = 0;
+  let weekOffset    = 0;   // 0 = current week, 1 = next week, etc.
+  let allSlots      = {};  // { "YYYY-MM-DD": [ slot, ... ] }
+  let instructors   = [];
+  let pendingSlot   = null;
+  let pendingCancel = null;
+
+  const DAY_NAMES  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MON_NAMES  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // ── Auth ─────────────────────────────────────────────────────────────────────
+  function init() {
+    token = localStorage.getItem('learnerToken');
+    if (!token) {
+      window.location.href = '/learner/login.html?redirect=/learner/book.html';
+      return;
+    }
+    Promise.all([loadBalance(), loadInstructors(), loadUpcoming()])
+      .then(() => loadWeek());
+  }
+
+  // ── Load credit balance ───────────────────────────────────────────────────
+  async function loadBalance() {
+    try {
+      const res  = await fetch('/api/credits?action=balance', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      creditBalance = data.credit_balance;
+      updateCreditBadge();
+    } catch (e) {
+      console.error('balance error:', e);
+    }
+  }
+
+  function updateCreditBadge() {
+    const badge = document.getElementById('creditBadge');
+    badge.textContent = creditBalance === 1
+      ? '1 credit'
+      : `${creditBalance} credits`;
+    badge.className = 'credit-badge' + (creditBalance === 0 ? ' zero' : '');
+
+    const banner = document.getElementById('noCreditsBanner');
+    banner.style.display = creditBalance === 0 ? 'flex' : 'none';
+  }
+
+  // ── Load instructors for filter ───────────────────────────────────────────
+  async function loadInstructors() {
+    try {
+      const res  = await fetch('/api/instructors?action=list');
+      const data = await res.json();
+      instructors = data.instructors || [];
+      const sel  = document.getElementById('instructorFilter');
+      instructors.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value       = i.id;
+        opt.textContent = i.name;
+        sel.appendChild(opt);
+      });
+    } catch (e) { console.error('instructors error:', e); }
+  }
+
+  // ── Load upcoming bookings ────────────────────────────────────────────────
+  async function loadUpcoming() {
+    try {
+      const res  = await fetch('/api/slots?action=my-bookings', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      const upcoming = data.upcoming || [];
+      const strip    = document.getElementById('upcomingStrip');
+      const list     = document.getElementById('upcomingList');
+
+      if (upcoming.length === 0) {
+        strip.style.display = 'none';
+        return;
+      }
+
+      strip.style.display = 'block';
+      list.innerHTML = upcoming.map(b => {
+        const dateObj  = new Date(b.scheduled_date + 'T00:00:00Z');
+        const dateStr  = dateObj.toLocaleDateString('en-GB', {
+          weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'
+        });
+        const start = b.start_time.slice(0, 5);
+        const end   = b.end_time.slice(0, 5);
+
+        // Check if within 48 hours
+        const lessonMs    = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
+        const hoursUntil  = (lessonMs - Date.now()) / 3600000;
+        const canCancel   = hoursUntil > 0;
+
+        return `
+          <div class="upcoming-item">
+            <div class="upcoming-date">${dateStr}</div>
+            <div class="upcoming-time">${start} – ${end}</div>
+            <div class="upcoming-instructor">${b.instructor_name}</div>
+            ${canCancel ? `<button class="upcoming-cancel" onclick="openCancelModal(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${b.instructor_name}', ${hoursUntil})">Cancel</button>` : '<span style="font-size:0.8rem;color:var(--muted)">Past</span>'}
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      console.error('upcoming error:', e);
+    }
+  }
+
+  // ── Week navigation ───────────────────────────────────────────────────────
+  function getWeekBounds(offset) {
+    const today = new Date();
+    // Start from today for week 0, Monday of the relevant week for others
+    const base  = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+
+    if (offset === 0) {
+      // Week 0: starts today, runs 7 days
+      const from = formatDate(base);
+      const to   = formatDate(addDays(base, 6));
+      return { from, to, base };
+    } else {
+      // Find next Monday from today, then add (offset-1) weeks
+      const dayOfWeek = base.getUTCDay(); // 0=Sun
+      const daysToMon = dayOfWeek === 0 ? 1 : (8 - dayOfWeek) % 7 || 7;
+      const firstMon  = addDays(base, daysToMon + (offset - 1) * 7);
+      const from = formatDate(firstMon);
+      const to   = formatDate(addDays(firstMon, 6));
+      return { from, to, base: firstMon };
+    }
+  }
+
+  function updateWeekLabel(from, to) {
+    const f = new Date(from + 'T00:00:00Z');
+    const t = new Date(to   + 'T00:00:00Z');
+    const fStr = `${f.getUTCDate()} ${MON_NAMES[f.getUTCMonth()]}`;
+    const tStr = `${t.getUTCDate()} ${MON_NAMES[t.getUTCMonth()]}`;
+    const year = t.getUTCFullYear();
+    document.getElementById('weekLabel').textContent =
+      f.getUTCMonth() === t.getUTCMonth()
+        ? `${f.getUTCDate()}–${t.getUTCDate()} ${MON_NAMES[f.getUTCMonth()]} ${year}`
+        : `${fStr} – ${tStr} ${year}`;
+    document.getElementById('btnPrevWeek').disabled = weekOffset <= 0;
+    document.getElementById('btnNextWeek').disabled = weekOffset >= 12; // ~3 months
+  }
+
+  async function loadWeek() {
+    const { from, to } = getWeekBounds(weekOffset);
+    updateWeekLabel(from, to);
+
+    const instructorId = document.getElementById('instructorFilter').value;
+    const url = `/api/slots?action=available&from=${from}&to=${to}`
+              + (instructorId ? `&instructor_id=${instructorId}` : '');
+
+    document.getElementById('calendar').innerHTML = `
+      <div class="calendar-loading">
+        <div class="spinner"></div>
+        <p>Loading available slots…</p>
+      </div>`;
+
+    try {
+      const res  = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      allSlots = data.slots || {};
+      renderCalendar(from, to);
+    } catch (err) {
+      document.getElementById('calendar').innerHTML = `
+        <div class="calendar-empty">
+          <div class="calendar-empty-icon">⚠️</div>
+          <h3>Couldn't load slots</h3>
+          <p>${err.message}</p>
+        </div>`;
+    }
+  }
+
+  // ── Render calendar ───────────────────────────────────────────────────────
+  function renderCalendar(from, to) {
+    const cal      = document.getElementById('calendar');
+    const todayStr = formatDate(new Date());
+    let   html     = '';
+    let   cursor   = new Date(from + 'T00:00:00Z');
+    const toDate   = new Date(to + 'T00:00:00Z');
+    let   hasAny   = false;
+
+    while (cursor <= toDate) {
+      const dateStr  = formatDate(cursor);
+      const daySlots = allSlots[dateStr];
+      if (daySlots && daySlots.length > 0) {
+        hasAny = true;
+        const isToday = dateStr === todayStr;
+        const dayName = DAY_NAMES[cursor.getUTCDay()];
+        const dayNum  = `${cursor.getUTCDate()} ${MON_NAMES[cursor.getUTCMonth()]}`;
+
+        html += `
+          <div class="day-card">
+            <div class="day-header ${isToday ? 'day-today' : ''}">
+              <span class="day-name">${dayName}${isToday ? ' · Today' : ''}</span>
+              <span class="day-date">${dayNum}</span>
+            </div>
+            <div class="slots-grid">
+              ${daySlots.map(slot => renderSlot(slot)).join('')}
+            </div>
+          </div>`;
+      }
+      cursor = addDays(cursor, 1);
+    }
+
+    if (!hasAny) {
+      html = `
+        <div class="calendar-empty">
+          <div class="calendar-empty-icon">📅</div>
+          <h3>No slots available this week</h3>
+          <p>Try the next week or a different instructor.</p>
+        </div>`;
+    }
+
+    cal.innerHTML = html;
+  }
+
+  function renderSlot(slot) {
+    const initials = slot.instructor_name.split(' ').map(n => n[0]).join('').slice(0, 2);
+    const avatar   = slot.instructor_photo
+      ? `<img src="${slot.instructor_photo}" alt="${slot.instructor_name}">`
+      : initials;
+    const noCredits = creditBalance < 1;
+    const dataAttrs = `data-instructor-id="${slot.instructor_id}" data-date="${slot.date}"
+      data-start="${slot.start_time}" data-end="${slot.end_time}"
+      data-instructor-name="${slot.instructor_name}"`;
+
+    return `
+      <div class="slot-card ${noCredits ? 'no-credits' : ''}"
+           onclick="${noCredits ? 'openNoCreditAlert()' : `openBookModal(this)`}"
+           ${dataAttrs}>
+        <div class="slot-time">${slot.start_time} – ${slot.end_time}</div>
+        <div class="slot-instructor">
+          <div class="slot-avatar">${avatar}</div>
+          ${slot.instructor_name}
+        </div>
+      </div>`;
+  }
+
+  // ── No credit alert ───────────────────────────────────────────────────────
+  function openNoCreditAlert() {
+    showToast('You need credits to book. Buy some first!', 'error');
+    setTimeout(() => window.location.href = '/learner/buy-credits.html', 1800);
+  }
+
+  // ── Book modal ────────────────────────────────────────────────────────────
+  function openBookModal(el) {
+    pendingSlot = {
+      instructor_id:   el.dataset.instructorId,
+      date:            el.dataset.date,
+      start_time:      el.dataset.start,
+      end_time:        el.dataset.end,
+      instructor_name: el.dataset.instructorName
+    };
+    const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
+
+    document.getElementById('mdDate').textContent       = dateDisplay;
+    document.getElementById('mdTime').textContent       = `${pendingSlot.start_time} – ${pendingSlot.end_time}`;
+    document.getElementById('mdInstructor').textContent = pendingSlot.instructor_name;
+    document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
+    document.getElementById('bookSpinner').style.display = 'none';
+    document.getElementById('btnConfirmBook').disabled  = false;
+
+    document.getElementById('bookModal').classList.add('open');
+  }
+
+  document.getElementById('bookModalClose').onclick = () =>
+    document.getElementById('bookModal').classList.remove('open');
+
+  document.getElementById('btnConfirmBook').onclick = async () => {
+    if (!pendingSlot) return;
+    const btn     = document.getElementById('btnConfirmBook');
+    const label   = document.getElementById('bookBtnLabel');
+    const spinner = document.getElementById('bookSpinner');
+
+    btn.disabled        = true;
+    label.textContent   = 'Booking…';
+    spinner.style.display = 'block';
+
+    try {
+      const res  = await fetch('/api/slots?action=book', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body:    JSON.stringify(pendingSlot)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      creditBalance = data.credit_balance;
+      updateCreditBadge();
+      document.getElementById('bookModal').classList.remove('open');
+      showToast('Lesson booked! Check your email for confirmation.', 'success');
+
+      // Refresh upcoming and calendar
+      await Promise.all([loadUpcoming(), loadWeek()]);
+    } catch (err) {
+      showToast(err.message || 'Booking failed. Please try again.', 'error');
+      btn.disabled        = false;
+      label.textContent   = 'Confirm booking';
+      spinner.style.display = 'none';
+    }
+  };
+
+  // ── Cancel modal ──────────────────────────────────────────────────────────
+  function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil) {
+    pendingCancel = { bookingId, date, start, end, instructorName, hoursUntil };
+
+    const dateDisplay = new Date(date + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
+
+    document.getElementById('cmDate').textContent       = dateDisplay;
+    document.getElementById('cmTime').textContent       = `${start} – ${end}`;
+    document.getElementById('cmInstructor').textContent = instructorName;
+
+    const policyEl  = document.getElementById('cancelPolicyNote');
+    const willGet   = hoursUntil >= 48;
+    policyEl.className = 'cancel-policy' + (willGet ? ' safe' : '');
+    policyEl.innerHTML = willGet
+      ? '✓ You are cancelling more than 48 hours before the lesson. <strong>Your credit will be returned automatically.</strong>'
+      : `⚠ This lesson is within 48 hours. <strong>Your credit will be forfeited</strong> in line with the cancellation policy.`;
+
+    document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
+    document.getElementById('btnConfirmCancel').disabled  = false;
+    document.getElementById('cancelModal').classList.add('open');
+  }
+
+  document.getElementById('cancelModalClose').onclick = () =>
+    document.getElementById('cancelModal').classList.remove('open');
+
+  document.getElementById('btnConfirmCancel').onclick = async () => {
+    if (!pendingCancel) return;
+    const btn   = document.getElementById('btnConfirmCancel');
+    btn.disabled = true;
+    document.getElementById('cancelBtnLabel').textContent = 'Cancelling…';
+
+    try {
+      const res  = await fetch('/api/slots?action=cancel', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body:    JSON.stringify({ booking_id: pendingCancel.bookingId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      creditBalance = data.credit_balance;
+      updateCreditBadge();
+      document.getElementById('cancelModal').classList.remove('open');
+      showToast(data.message, data.credit_returned ? 'success' : '');
+      await Promise.all([loadUpcoming(), loadWeek()]);
+    } catch (err) {
+      showToast(err.message || 'Cancellation failed.', 'error');
+      btn.disabled = false;
+      document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
+    }
+  };
+
+  // ── Controls ──────────────────────────────────────────────────────────────
+  document.getElementById('btnPrevWeek').onclick = () => {
+    if (weekOffset > 0) { weekOffset--; loadWeek(); }
+  };
+  document.getElementById('btnNextWeek').onclick = () => {
+    weekOffset++;
+    loadWeek();
+  };
+  document.getElementById('btnToday').onclick = () => {
+    weekOffset = 0;
+    loadWeek();
+  };
+  document.getElementById('instructorFilter').onchange = () => loadWeek();
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (type ? ' ' + type : '');
+    void t.offsetWidth;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function formatDate(d) {
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  function addDays(d, n) {
+    const r = new Date(d);
+    r.setUTCDate(r.getUTCDate() + n);
+    return r;
+  }
+
+  // ── Close modals on overlay click ────────────────────────────────────────
+  document.getElementById('bookModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('bookModal'))
+      document.getElementById('bookModal').classList.remove('open');
+  });
+  document.getElementById('cancelModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('cancelModal'))
+      document.getElementById('cancelModal').classList.remove('open');
+  });
+
+  // ── Start ─────────────────────────────────────────────────────────────────
+  init();
+</script>
+</body>
+</html>
