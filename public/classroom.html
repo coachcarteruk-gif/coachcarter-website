@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Classroom — CoachCarter</title>
-  <!-- Cloudflare Stream SDK — registers the <stream> custom element -->
+  <!-- Cloudflare Stream SDK — used to wrap iframes for direct player control -->
   <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21,7 +21,6 @@
       --radius: 12px;
       --header-h: 56px;
       --tabs-h: 48px;
-      --chrome-h: calc(var(--header-h) + var(--tabs-h));
     }
 
     html, body {
@@ -117,13 +116,13 @@
       overflow: hidden;
     }
 
-    /* ── STREAM ELEMENT ── */
-    stream {
-      display: block;
+    /* ── IFRAME ── */
+    .reel-iframe {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
+      border: none;
       background: #000;
     }
 
@@ -274,6 +273,8 @@
 <div class="reels-container" id="reels"></div>
 
 <script>
+const CF_BASE = 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com';
+
 const GROUPS = [
   { key: 'all',            label: 'All' },
   { key: 'speed-control',  label: 'Speed & Control' },
@@ -292,7 +293,10 @@ const GROUP_LABELS = {
 let allVideos   = [];
 let activeGroup = 'all';
 let observer    = null;
-let globalMuted = true; // once the user unmutes once, stays false for the whole session
+let globalMuted = true; // once unmuted, stays false for the whole session
+
+// uid -> SDK player object (populated once each iframe loads)
+const players = {};
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -345,14 +349,13 @@ function renderReels(group) {
   container.innerHTML = videos.map(v => `
     <div class="reel-item" id="reel-${v.uid}" data-uid="${v.uid}">
 
-      <stream
-        id="player-${v.uid}"
-        src="${v.uid}"
-        preload="none"
-        muted
-        playsinline
-        loop
-      ></stream>
+      <iframe
+        class="reel-iframe"
+        id="iframe-${v.uid}"
+        src="about:blank"
+        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+        allowfullscreen
+      ></iframe>
 
       <div class="muted-banner" id="banner-${v.uid}">🔇 Tap to unmute</div>
 
@@ -384,16 +387,43 @@ function setupObserver(videos) {
   observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       const uid    = entry.target.dataset.uid;
-      const player = getPlayer(uid);
-      if (!player) return;
+      const iframe = document.getElementById(`iframe-${uid}`);
+      if (!iframe) return;
 
       if (entry.isIntersecting) {
-        player.muted = globalMuted;
-        player.play().catch(() => {});
-        setMuteBtn(uid, globalMuted);
-        if (globalMuted) showMutedBanner(uid);
+        // Always load muted — browser allows muted autoplay.
+        // SDK will unmute after load if globalMuted is already false.
+        iframe.src = `${CF_BASE}/${uid}/iframe?autoplay=true&muted=true&controls=false`;
+        setMuteBtn(uid, true);
+
+        // Wrap iframe with SDK once it loads for reliable player control
+        iframe.onload = () => {
+          if (!window.Stream) return;
+          try {
+            const player = Stream(iframe);
+            players[uid] = player;
+
+            // If user already unmuted earlier, apply that now via SDK
+            // (video is playing, so browser allows unmuting)
+            player.addEventListener('canplay', () => {
+              if (!globalMuted) {
+                player.muted = false;
+                setMuteBtn(uid, false);
+              } else {
+                showMutedBanner(uid);
+              }
+            }, { once: true });
+          } catch (e) {
+            // SDK unavailable — fall back to showing muted banner
+            if (globalMuted) showMutedBanner(uid);
+          }
+        };
+
       } else {
-        player.pause();
+        // Blank the src — guaranteed to kill audio immediately
+        iframe.src   = 'about:blank';
+        iframe.onload = null;
+        delete players[uid];
         hideMutedBanner(uid);
       }
     });
@@ -409,24 +439,20 @@ function setupObserver(videos) {
 }
 
 // ── Mute / unmute ─────────────────────────────────────────────────────────────
-// Direct property access on the SDK player — no reload, no postMessage.
-// The browser allows unmuting a video that's already playing.
 function toggleMute(uid) {
-  const player = getPlayer(uid);
-  if (!player) return;
+  globalMuted = !globalMuted;
 
-  globalMuted  = !globalMuted;
-  player.muted = globalMuted;
+  const player = players[uid];
+  if (player) {
+    // SDK direct property — works because video is already playing
+    player.muted = globalMuted;
+  }
 
   setMuteBtn(uid, globalMuted);
   if (!globalMuted) hideMutedBanner(uid);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function getPlayer(uid) {
-  return document.getElementById(`player-${uid}`);
-}
-
 function setMuteBtn(uid, muted) {
   const btn = document.getElementById(`mute-btn-${uid}`);
   if (btn) btn.textContent = muted ? '🔇' : '🔊';
