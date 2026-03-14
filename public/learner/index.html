@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Learner Portal — CoachCarter</title>
+  <title>Learner Hub — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -12,13 +12,15 @@
     :root {
       --bg: #0a0c10;
       --surface: #13161f;
+      --surface2: #191c27;
       --border: #1e2230;
       --text: #e8eaf2;
       --muted: #6b7280;
       --blue: #4f6ef7;
       --blue-hover: #3b5ce6;
       --green: #22c55e;
-      --red: #ef4444;
+      --amber: #f59e0b;
+      --purple: #8b5cf6;
       --radius: 14px;
     }
 
@@ -29,275 +31,324 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 24px 16px;
     }
 
-    .brand {
+    /* ── HEADER ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      flex-shrink: 0;
+    }
+    .header-brand {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 32px;
       text-decoration: none;
     }
-    .brand img { height: 48px; width: auto; }
-    .brand-text { font-size: 1.1rem; font-weight: 700; color: var(--text); }
-    .brand-sub { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
+    .header-brand img { height: 36px; width: auto; }
+    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+    .header-brand-sub { font-size: 0.7rem; color: var(--muted); }
 
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      width: 100%;
-      max-width: 420px;
-      overflow: hidden;
-    }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-name { font-size: 0.85rem; color: var(--muted); }
 
-    .tabs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      border-bottom: 1px solid var(--border);
-    }
-    .tab {
-      padding: 16px;
-      text-align: center;
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: var(--muted);
-      cursor: pointer;
+    /* Shown only when logged in */
+    .btn-logout {
       background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      transition: color 0.2s, border-color 0.2s;
-      margin-bottom: -1px;
-    }
-    .tab.active {
-      color: var(--blue);
-      border-bottom-color: var(--blue);
-    }
-
-    .panel { padding: 28px 24px; display: none; }
-    .panel.active { display: block; }
-
-    .panel-title {
-      font-size: 1.3rem;
-      font-weight: 700;
-      margin-bottom: 6px;
-    }
-    .panel-sub {
-      font-size: 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
       color: var(--muted);
-      margin-bottom: 24px;
+      font-family: inherit;
+      font-size: 0.8rem;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+      display: none;
     }
-
-    .form-group { margin-bottom: 16px; }
-    label {
-      display: block;
+    .btn-logout:hover { color: var(--text); border-color: var(--text); }
+    .btn-signin {
+      background: var(--blue);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-family: inherit;
       font-size: 0.8rem;
       font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 6px;
+      padding: 7px 14px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s;
     }
-    input[type="text"],
-    input[type="email"],
-    input[type="password"] {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 0.95rem;
-      padding: 11px 14px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    input:focus { border-color: var(--blue); }
+    .btn-signin:hover { background: var(--blue-hover); }
 
-    .btn-primary {
+    /* ── MAIN ── */
+    main {
+      flex: 1;
+      max-width: 600px;
       width: 100%;
+      margin: 0 auto;
+      padding: 36px 16px 60px;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      margin-bottom: 36px;
+    }
+    .hero-eyebrow {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 10px;
+    }
+    .hero-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.25;
+      margin-bottom: 10px;
+    }
+    .hero-sub {
+      font-size: 0.95rem;
+      color: var(--muted);
+      line-height: 1.55;
+      max-width: 440px;
+    }
+
+    /* Guest CTA */
+    .guest-cta {
+      display: flex;
+      gap: 10px;
+      margin-top: 22px;
+      flex-wrap: wrap;
+    }
+    .cta-primary {
       background: var(--blue);
       color: #fff;
       border: none;
       border-radius: 8px;
       font-family: inherit;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       font-weight: 600;
-      padding: 13px;
+      padding: 11px 20px;
       cursor: pointer;
-      margin-top: 8px;
-      transition: background 0.2s, opacity 0.2s;
+      text-decoration: none;
+      transition: background 0.2s;
     }
-    .btn-primary:hover { background: var(--blue-hover); }
-    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-
-    .error-msg {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
+    .cta-primary:hover { background: var(--blue-hover); }
+    .cta-secondary {
+      background: none;
+      color: var(--text);
+      border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 0.85rem;
-      margin-bottom: 16px;
-      display: none;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 11px 20px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.2s, color 0.2s;
     }
-    .error-msg.show { display: block; }
+    .cta-secondary:hover { border-color: var(--text); }
 
-    .hint {
-      text-align: center;
+    /* ── NAV CARDS ── */
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 380px) {
+      .card-grid { grid-template-columns: 1fr; }
+    }
+
+    .nav-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 18px;
+      text-decoration: none;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
+    }
+    .nav-card:hover {
+      border-color: rgba(255,255,255,0.2);
+      background: var(--surface2);
+    }
+    .nav-card-icon {
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+    .nav-card-title {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .nav-card-desc {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .nav-card-arrow {
       font-size: 0.8rem;
       color: var(--muted);
-      margin-top: 16px;
+      margin-top: auto;
     }
+
+    /* Accent borders per card */
+    .card-progress  { border-top: 2px solid var(--blue); }
+    .card-log       { border-top: 2px solid var(--green); }
+    .card-classroom { border-top: 2px solid var(--purple); }
+
+    /* Full-width card for classroom */
+    .nav-card-wide {
+      grid-column: 1 / -1;
+      flex-direction: row;
+      align-items: center;
+      gap: 16px;
+    }
+    .nav-card-wide .nav-card-body { flex: 1; }
+    .nav-card-wide .nav-card-icon { font-size: 2rem; }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 28px 0;
+    }
+
+    /* ── BACK LINK ── */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--text); }
   </style>
 </head>
 <body>
 
-<a href="/" class="brand">
-  <img src="/Logo.png" alt="CoachCarter">
-  <div>
-    <div class="brand-text">CoachCarter</div>
-    <div class="brand-sub">Learner Portal</div>
+<header>
+  <a href="/" class="header-brand">
+    <img src="/Logo.png" alt="CoachCarter">
+    <div>
+      <div class="header-brand-text">CoachCarter</div>
+      <div class="header-brand-sub">Learner Hub</div>
+    </div>
+  </a>
+  <div class="header-right">
+    <span class="header-name" id="header-name"></span>
+    <button class="btn-logout" id="btn-logout" onclick="logout()">Sign out</button>
+    <a href="/learner/login.html" class="btn-signin" id="btn-signin">Sign in</a>
   </div>
-</a>
+</header>
 
-<div class="card">
-  <div class="tabs">
-    <button class="tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
-    <button class="tab" id="tab-register" onclick="switchTab('register')">Create Account</button>
-  </div>
+<main>
 
-  <!-- LOGIN PANEL -->
-  <div class="panel active" id="panel-login">
-    <div class="panel-title">Welcome back</div>
-    <div class="panel-sub">Sign in to view your progress and log sessions.</div>
-    <div class="error-msg" id="login-error"></div>
-    <form onsubmit="handleLogin(event)">
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="login-email" placeholder="your@email.com" required autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
-      </div>
-      <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
-    </form>
-    <p class="hint">Don't have an account? <a href="#" onclick="switchTab('register')" style="color: var(--blue);">Create one</a></p>
+  <!-- HERO — text changes based on auth state -->
+  <div class="hero">
+    <div class="hero-eyebrow" id="hero-eyebrow">Learner Hub</div>
+    <h1 class="hero-title" id="hero-title">Your driving journey<br>starts here</h1>
+    <p class="hero-sub" id="hero-sub">Track every session, see your progress, and watch coaching videos — all in one place.</p>
+
+    <!-- Shown only when logged out -->
+    <div class="guest-cta" id="guest-cta">
+      <a href="/learner/login.html" class="cta-primary">Sign in</a>
+      <a href="/learner/login.html#register" class="cta-secondary" onclick="sessionStorage.setItem('cc_tab','register')">Create account</a>
+    </div>
   </div>
 
-  <!-- REGISTER PANEL -->
-  <div class="panel" id="panel-register">
-    <div class="panel-title">Create your account</div>
-    <div class="panel-sub">Start tracking your driving progress today.</div>
-    <div class="error-msg" id="register-error"></div>
-    <form onsubmit="handleRegister(event)">
-      <div class="form-group">
-        <label>Full Name</label>
-        <input type="text" id="reg-name" placeholder="Your name" required autocomplete="name">
+  <!-- NAV CARDS — always visible (links prompt login if not authed) -->
+  <div class="section-label" id="section-label">Where would you like to go?</div>
+
+  <div class="card-grid">
+
+    <a class="nav-card card-progress" id="card-progress" href="/learner/dashboard.html">
+      <div class="nav-card-icon">📊</div>
+      <div class="nav-card-title">My Progress</div>
+      <div class="nav-card-desc">See how your skills are developing over time.</div>
+      <div class="nav-card-arrow">View dashboard →</div>
+    </a>
+
+    <a class="nav-card card-log" id="card-log" href="/learner/log-session.html">
+      <div class="nav-card-icon">✏️</div>
+      <div class="nav-card-title">Log a Session</div>
+      <div class="nav-card-desc">Rate your skills after a lesson or practice drive.</div>
+      <div class="nav-card-arrow">Add session →</div>
+    </a>
+
+    <a class="nav-card card-classroom nav-card-wide" href="/classroom.html">
+      <div class="nav-card-icon">🎬</div>
+      <div class="nav-card-body">
+        <div class="nav-card-title">Classroom</div>
+        <div class="nav-card-desc">Short coaching videos — speed control, junctions, reversing and more.</div>
+        <div class="nav-card-arrow">Watch videos →</div>
       </div>
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="reg-email" placeholder="your@email.com" required autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="reg-password" placeholder="Min 8 characters" required autocomplete="new-password">
-      </div>
-      <div class="form-group">
-        <label>Confirm Password</label>
-        <input type="password" id="reg-confirm" placeholder="••••••••" required autocomplete="new-password">
-      </div>
-      <button type="submit" class="btn-primary" id="register-btn">Create Account</button>
-    </form>
-    <p class="hint">Already have an account? <a href="#" onclick="switchTab('login')" style="color: var(--blue);">Sign in</a></p>
+    </a>
+
   </div>
-</div>
+
+  <hr class="divider">
+  <a href="/" class="back-link">← Back to CoachCarter</a>
+
+</main>
 
 <script>
-  // Redirect if already logged in
-  const existing = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (existing?.token) window.location.href = '/learner/dashboard.html';
+  const stored = JSON.parse(localStorage.getItem('cc_learner') || 'null');
 
-  function switchTab(tab) {
-    document.getElementById('tab-login').classList.toggle('active', tab === 'login');
-    document.getElementById('tab-register').classList.toggle('active', tab === 'register');
-    document.getElementById('panel-login').classList.toggle('active', tab === 'login');
-    document.getElementById('panel-register').classList.toggle('active', tab === 'register');
+  if (stored?.token && stored?.user) {
+    // Logged in state
+    const name = stored.user.name?.split(' ')[0] || 'there';
+    document.getElementById('header-name').textContent = name;
+    document.getElementById('btn-logout').style.display = 'inline-flex';
+    document.getElementById('btn-signin').style.display = 'none';
+    document.getElementById('hero-eyebrow').textContent = 'Welcome back';
+    document.getElementById('hero-title').textContent = `Hey ${name}, what\u2019s the plan?`;
+    document.getElementById('hero-sub').textContent = 'Pick up where you left off, log your latest session, or watch a coaching video.';
+    document.getElementById('guest-cta').style.display = 'none';
+    document.getElementById('section-label').textContent = 'Choose where to go';
+  } else {
+    // Guest state — lock the authed cards behind login
+    document.getElementById('btn-logout').style.display = 'none';
+    document.getElementById('section-label').textContent = 'Explore the learner portal';
+
+    ['card-progress', 'card-log'].forEach(id => {
+      const card = document.getElementById(id);
+      card.href = '/learner/login.html';
+      card.querySelector('.nav-card-arrow').textContent = 'Sign in to access →';
+      card.style.opacity = '0.65';
+    });
   }
 
-  function showError(id, msg) {
-    const el = document.getElementById(id);
-    el.textContent = msg;
-    el.classList.add('show');
-  }
-  function clearError(id) {
-    document.getElementById(id).classList.remove('show');
+  // Handle #register anchor from the create account button
+  if (window.location.hash === '#register' || sessionStorage.getItem('cc_tab') === 'register') {
+    sessionStorage.removeItem('cc_tab');
   }
 
-  async function handleLogin(e) {
-    e.preventDefault();
-    clearError('login-error');
-    const btn = document.getElementById('login-btn');
-    btn.disabled = true;
-    btn.textContent = 'Signing in…';
-
-    try {
-      const res = await fetch('/api/learner?action=login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: document.getElementById('login-email').value,
-          password: document.getElementById('login-password').value
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) { showError('login-error', data.error || 'Login failed'); return; }
-      localStorage.setItem('cc_learner', JSON.stringify(data));
-      window.location.href = '/learner/dashboard.html';
-    } catch {
-      showError('login-error', 'Network error. Please try again.');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Sign In';
-    }
-  }
-
-  async function handleRegister(e) {
-    e.preventDefault();
-    clearError('register-error');
-
-    const password = document.getElementById('reg-password').value;
-    const confirm = document.getElementById('reg-confirm').value;
-    if (password !== confirm) { showError('register-error', 'Passwords do not match'); return; }
-
-    const btn = document.getElementById('register-btn');
-    btn.disabled = true;
-    btn.textContent = 'Creating account…';
-
-    try {
-      const res = await fetch('/api/learner?action=register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: document.getElementById('reg-name').value,
-          email: document.getElementById('reg-email').value,
-          password
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) { showError('register-error', data.error || 'Registration failed'); return; }
-      localStorage.setItem('cc_learner', JSON.stringify(data));
-      window.location.href = '/learner/dashboard.html';
-    } catch {
-      showError('register-error', 'Network error. Please try again.');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Create Account';
-    }
+  function logout() {
+    localStorage.removeItem('cc_learner');
+    window.location.reload();
   }
 </script>
 </body>
