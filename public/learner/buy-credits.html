@@ -177,6 +177,36 @@
     .qty-value::-webkit-outer-spin-button,
     .qty-value::-webkit-inner-spin-button { -webkit-appearance: none; }
 
+    /* ── Discount tiers ── */
+    .discount-tiers {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    .tier-card {
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      user-select: none;
+    }
+    .tier-card:hover { border-color: var(--accent); background: var(--accent-lt); }
+    .tier-card.active {
+      border-color: var(--accent);
+      background: var(--accent-lt);
+    }
+    .tier-hours { font-size: 0.8rem; color: var(--muted); margin-bottom: 2px; }
+    .tier-discount {
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--accent);
+    }
+    .tier-credits { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
     /* ── Price breakdown ── */
     .price-breakdown {
       background: var(--white);
@@ -192,6 +222,10 @@
       color: var(--muted);
       padding: 4px 0;
     }
+    .price-row.discount {
+      color: var(--green);
+      font-weight: 700;
+    }
     .price-row.total {
       font-size: 1.1rem;
       font-weight: 700;
@@ -199,6 +233,25 @@
       border-top: 1px solid var(--border);
       margin-top: 8px;
       padding-top: 12px;
+    }
+    .saving-badge {
+      display: inline-block;
+      background: var(--green);
+      color: white;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    @media (max-width: 500px) {
+      .discount-tiers { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+      .tier-card { padding: 8px 4px; }
+      .tier-hours { font-size: 0.7rem; }
+      .tier-discount { font-size: 0.875rem; }
+      .tier-credits { display: none; }
     }
 
     /* ── Checkout button ── */
@@ -336,6 +389,35 @@
   <div class="buy-card">
     <h2>Add credits to your account</h2>
 
+    <!-- Discount tier cards -->
+    <div class="discount-tiers">
+      <div class="tier-card" onclick="updateQty(4)"  data-credits="4">
+        <div class="tier-hours">6 hrs</div>
+        <div class="tier-discount">5% off</div>
+        <div class="tier-credits">4 credits</div>
+      </div>
+      <div class="tier-card" onclick="updateQty(8)"  data-credits="8">
+        <div class="tier-hours">12 hrs</div>
+        <div class="tier-discount">10% off</div>
+        <div class="tier-credits">8 credits</div>
+      </div>
+      <div class="tier-card" onclick="updateQty(12)" data-credits="12">
+        <div class="tier-hours">18 hrs</div>
+        <div class="tier-discount">15% off</div>
+        <div class="tier-credits">12 credits</div>
+      </div>
+      <div class="tier-card" onclick="updateQty(16)" data-credits="16">
+        <div class="tier-hours">24 hrs</div>
+        <div class="tier-discount">20% off</div>
+        <div class="tier-credits">16 credits</div>
+      </div>
+      <div class="tier-card" onclick="updateQty(20)" data-credits="20">
+        <div class="tier-hours">30 hrs</div>
+        <div class="tier-discount">25% off</div>
+        <div class="tier-credits">20 credits</div>
+      </div>
+    </div>
+
     <div class="qty-row">
       <span class="qty-label">Credits</span>
       <div class="qty-control">
@@ -350,8 +432,12 @@
         <span id="pricePerLine">1 credit × £82.50</span>
         <span id="pricePerValue">£82.50</span>
       </div>
+      <div class="price-row discount" id="discountRow" style="display:none">
+        <span id="discountLabel">Bulk discount</span>
+        <span id="discountValue"></span>
+      </div>
       <div class="price-row total">
-        <span>Total</span>
+        <span>Total <span class="saving-badge" id="savingBadge" style="display:none"></span></span>
         <span id="totalValue">£82.50</span>
       </div>
     </div>
@@ -383,6 +469,26 @@
 <script>
   const PRICE_PENCE = 8250;
   const MAX_QTY     = 20;
+
+  const DISCOUNT_TIERS = [
+    { minCredits: 20, pct: 25 },
+    { minCredits: 16, pct: 20 },
+    { minCredits: 12, pct: 15 },
+    { minCredits:  8, pct: 10 },
+    { minCredits:  4, pct:  5 },
+  ];
+
+  function getDiscount(q) {
+    const tier = DISCOUNT_TIERS.find(t => q >= t.minCredits);
+    return tier ? tier.pct : 0;
+  }
+
+  function calcTotal(q) {
+    const full     = PRICE_PENCE * q;
+    const pct      = getDiscount(q);
+    const saving   = Math.round(full * pct / 100);
+    return { full, pct, saving, total: full - saving };
+  }
 
   let token    = null;
   let qty      = 1;
@@ -421,17 +527,37 @@
   // ── Quantity controls ───────────────────────────────────────────────────────
   function updateQty(newQty) {
     qty = Math.max(1, Math.min(MAX_QTY, newQty));
-    document.getElementById('qtyInput').value  = qty;
+    document.getElementById('qtyInput').value    = qty;
     document.getElementById('btnMinus').disabled = qty <= 1;
     document.getElementById('btnPlus').disabled  = qty >= MAX_QTY;
 
-    const total = (PRICE_PENCE * qty) / 100;
-    const pp    = (PRICE_PENCE / 100).toFixed(2);
+    const { full, pct, saving, total } = calcTotal(qty);
+    const pp = (PRICE_PENCE / 100).toFixed(2);
+
     document.getElementById('pricePerLine').textContent  = `${qty} credit${qty > 1 ? 's' : ''} × £${pp}`;
-    document.getElementById('pricePerValue').textContent = `£${(PRICE_PENCE * qty / 100).toFixed(2)}`;
-    document.getElementById('totalValue').textContent    = `£${total.toFixed(2)}`;
-    document.getElementById('btnLabel').textContent      =
-      `Pay £${total.toFixed(2)} securely with Stripe`;
+    document.getElementById('pricePerValue').textContent = `£${(full / 100).toFixed(2)}`;
+
+    // Discount row
+    const discountRow   = document.getElementById('discountRow');
+    const savingBadge   = document.getElementById('savingBadge');
+    if (pct > 0) {
+      discountRow.style.display = 'flex';
+      document.getElementById('discountLabel').textContent = `${pct}% bulk discount`;
+      document.getElementById('discountValue').textContent = `−£${(saving / 100).toFixed(2)}`;
+      savingBadge.style.display   = 'inline-block';
+      savingBadge.textContent     = `Save £${(saving / 100).toFixed(2)}`;
+    } else {
+      discountRow.style.display = 'none';
+      savingBadge.style.display = 'none';
+    }
+
+    document.getElementById('totalValue').textContent = `£${(total / 100).toFixed(2)}`;
+    document.getElementById('btnLabel').textContent   = `Pay £${(total / 100).toFixed(2)} securely with Stripe`;
+
+    // Highlight the matching tier card
+    document.querySelectorAll('.tier-card').forEach(card => {
+      card.classList.toggle('active', parseInt(card.dataset.credits) === qty);
+    });
   }
 
   document.getElementById('btnMinus').addEventListener('click', () => updateQty(qty - 1));
@@ -460,7 +586,7 @@
     } catch (err) {
       showToast(err.message || 'Something went wrong. Please try again.', 'error');
       btn.disabled     = false;
-      label.textContent = `Pay £${((PRICE_PENCE * qty) / 100).toFixed(2)} securely with Stripe`;
+      label.textContent = `Pay £${(calcTotal(qty).total / 100).toFixed(2)} securely with Stripe`;
       spinner.style.display = 'none';
     }
   });
