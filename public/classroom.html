@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Classroom — CoachCarter</title>
+  <!-- Cloudflare Stream SDK — registers the <stream> custom element -->
+  <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -56,9 +58,6 @@
       text-decoration: none;
       font-size: 0.82rem;
       font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 5px;
     }
     .header-back:hover { color: #fff; }
 
@@ -94,11 +93,7 @@
       transition: all 0.15s;
     }
     .tab-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
-    .tab-btn.active {
-      background: #fff;
-      border-color: #fff;
-      color: #000;
-    }
+    .tab-btn.active { background: #fff; border-color: #fff; color: #000; }
 
     /* ── REELS CONTAINER ── */
     .reels-container {
@@ -122,12 +117,13 @@
       overflow: hidden;
     }
 
-    .reel-iframe {
+    /* ── STREAM ELEMENT ── */
+    stream {
+      display: block;
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
-      border: none;
       background: #000;
     }
 
@@ -188,7 +184,7 @@
     }
     .mute-btn:hover { background: rgba(0,0,0,0.75); }
 
-    /* ── MUTED BANNER (initial) ── */
+    /* ── MUTED BANNER ── */
     .muted-banner {
       position: absolute;
       top: 50%;
@@ -248,10 +244,10 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── GROUP COLOURS ── */
-    .tag-speed-control  { background: rgba(79,110,247,0.25); color: #93a8fd; }
-    .tag-looking-around { background: rgba(139,92,246,0.25); color: #c4b5fd; }
-    .tag-junctions      { background: rgba(245,158,11,0.25); color: #fcd34d; }
-    .tag-reversing      { background: rgba(16,185,129,0.25); color: #6ee7b7; }
+    .tag-speed-control  { background: rgba(79,110,247,0.25);  color: #93a8fd; }
+    .tag-looking-around { background: rgba(139,92,246,0.25);  color: #c4b5fd; }
+    .tag-junctions      { background: rgba(245,158,11,0.25);  color: #fcd34d; }
+    .tag-reversing      { background: rgba(16,185,129,0.25);  color: #6ee7b7; }
   </style>
 </head>
 <body>
@@ -278,8 +274,6 @@
 <div class="reels-container" id="reels"></div>
 
 <script>
-const CF_BASE = 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com';
-
 const GROUPS = [
   { key: 'all',            label: 'All' },
   { key: 'speed-control',  label: 'Speed & Control' },
@@ -295,10 +289,10 @@ const GROUP_LABELS = {
   'reversing':      'Reversing'
 };
 
-let allVideos = [];
+let allVideos   = [];
 let activeGroup = 'all';
-let observer = null;
-const muteState = {}; // uid -> true (muted) / false (unmuted)
+let observer    = null;
+const muteState = {}; // uid -> false means user unmuted it
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -308,10 +302,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   } catch (e) {
     allVideos = [];
   }
-
   buildTabs();
   renderReels('all');
-
   document.getElementById('loading').classList.add('hidden');
 });
 
@@ -331,7 +323,6 @@ function selectTab(key) {
     btn.classList.toggle('active', GROUPS[i].key === key);
   });
   if (observer) observer.disconnect();
-  // Clear mute state so each video starts fresh when tab changes
   Object.keys(muteState).forEach(k => delete muteState[k]);
   renderReels(key);
 }
@@ -354,15 +345,17 @@ function renderReels(group) {
 
   container.innerHTML = videos.map(v => `
     <div class="reel-item" id="reel-${v.uid}" data-uid="${v.uid}">
-      <iframe
-        class="reel-iframe"
-        id="iframe-${v.uid}"
-        src="about:blank"
-        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-        allowfullscreen
-      ></iframe>
 
-      <div class="muted-banner" id="banner-${v.uid}">🔇 Tap anywhere to unmute</div>
+      <stream
+        id="player-${v.uid}"
+        src="${v.uid}"
+        preload="none"
+        muted
+        playsinline
+        loop
+      ></stream>
+
+      <div class="muted-banner" id="banner-${v.uid}">🔇 Tap to unmute</div>
 
       <div class="reel-overlay">
         <div class="reel-group-tag tag-${v.group}">${GROUP_LABELS[v.group] || v.group}</div>
@@ -370,18 +363,17 @@ function renderReels(group) {
         ${v.description ? `<div class="reel-desc">${v.description}</div>` : ''}
       </div>
 
-      <button class="mute-btn" id="mute-btn-${v.uid}" onclick="toggleMute('${v.uid}')" title="Toggle mute">
-        🔇
-      </button>
+      <button class="mute-btn" id="mute-btn-${v.uid}"
+              onclick="toggleMute('${v.uid}')" title="Toggle mute">🔇</button>
+
     </div>`).join('');
 
-  // Tap-to-unmute on the reel itself
+  // Tap anywhere on reel (outside mute button) also toggles mute
   videos.forEach(v => {
     document.getElementById(`reel-${v.uid}`)
-      .addEventListener('click', (e) => {
+      .addEventListener('click', e => {
         if (!e.target.closest('.mute-btn')) toggleMute(v.uid);
       });
-    muteState[v.uid] = true;
   });
 
   container.scrollTop = 0;
@@ -392,20 +384,20 @@ function renderReels(group) {
 function setupObserver(videos) {
   observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      const uid = entry.target.dataset.uid;
-      const iframe = document.getElementById(`iframe-${uid}`);
+      const uid    = entry.target.dataset.uid;
+      const player = getPlayer(uid);
+      if (!player) return;
 
       if (entry.isIntersecting) {
-        // Reload with correct muted state — preserve user's preference across scrolls
+        // Restore the user's mute preference; default to muted for new videos
         const muted = muteState[uid] !== false;
-        iframe.src = buildSrc(uid, muted);
-        const btn = document.getElementById(`mute-btn-${uid}`);
-        if (btn) btn.textContent = muted ? '🔇' : '🔊';
+        player.muted = muted;
+        player.play().catch(() => {});
+        setMuteBtn(uid, muted);
         if (muted) showMutedBanner(uid);
       } else {
-        // Blank the src immediately — kills audio with certainty
-        iframe.src = 'about:blank';
-        // Note: intentionally don't reset muteState here so preference is remembered
+        player.pause();
+        hideMutedBanner(uid);
       }
     });
   }, {
@@ -419,33 +411,31 @@ function setupObserver(videos) {
   });
 }
 
-// ── Build iframe src ──────────────────────────────────────────────────────────
-function buildSrc(uid, muted) {
-  const poster = encodeURIComponent(`${CF_BASE}/${uid}/thumbnails/thumbnail.jpg?time=2s&height=720`);
-  return `${CF_BASE}/${uid}/iframe?autoplay=true${muted ? '&muted=true' : ''}&loop=false&controls=false&poster=${poster}`;
+// ── Mute / unmute ─────────────────────────────────────────────────────────────
+// Direct property access on the SDK player — no reload, no postMessage.
+// The browser allows unmuting a video that's already playing.
+function toggleMute(uid) {
+  const player = getPlayer(uid);
+  if (!player) return;
+
+  const nowMuted = player.muted;
+  player.muted   = !nowMuted;
+  muteState[uid] = nowMuted ? false : true; // remember choice
+
+  setMuteBtn(uid, !nowMuted);
+  if (nowMuted) {
+    hideMutedBanner(uid); // was muted, now unmuted
+  }
 }
 
-// ── Mute / unmute ─────────────────────────────────────────────────────────────
-// Reloads the iframe src rather than relying on postMessage, which can arrive
-// before the player is ready. Since the user tapped (a user gesture), the
-// browser allows audio playback on reload.
-function toggleMute(uid) {
-  const nowMuted = muteState[uid] !== false; // default true = starts muted
-  muteState[uid] = !nowMuted;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getPlayer(uid) {
+  return document.getElementById(`player-${uid}`);
+}
 
-  const iframe = document.getElementById(`iframe-${uid}`);
-  const btn    = document.getElementById(`mute-btn-${uid}`);
-
-  if (nowMuted) {
-    // Unmuting — reload without muted param
-    iframe.src = buildSrc(uid, false);
-    if (btn) btn.textContent = '🔊';
-    hideMutedBanner(uid);
-  } else {
-    // Muting — reload with muted param
-    iframe.src = buildSrc(uid, true);
-    if (btn) btn.textContent = '🔇';
-  }
+function setMuteBtn(uid, muted) {
+  const btn = document.getElementById(`mute-btn-${uid}`);
+  if (btn) btn.textContent = muted ? '🔇' : '🔊';
 }
 
 function showMutedBanner(uid) {
@@ -456,8 +446,8 @@ function showMutedBanner(uid) {
 }
 
 function hideMutedBanner(uid) {
-  const banner = document.getElementById(`banner-${uid}`);
-  if (banner) banner.classList.remove('show');
+  const el = document.getElementById(`banner-${uid}`);
+  if (el) el.classList.remove('show');
 }
 </script>
 </body>
