@@ -1,7 +1,10 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const nodemailer = require('nodemailer');
+const { neon } = require('@neondatabase/serverless');
 
-// In-memory storage for demo (replace with Vercel Postgres or Airtable in production)
+// In-memory storage for legacy booking flow (pass guarantee / packages)
+// NOTE: this is intentionally kept for the existing flow — the new credit
+// purchase flow writes directly to Neon instead.
 const bookings = new Map();
 
 module.exports = async (req, res) => {
@@ -26,12 +29,89 @@ module.exports = async (req, res) => {
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
-    await handleCheckoutComplete(session);
+    const paymentType = session.metadata?.payment_type;
+
+    if (paymentType === 'credit_purchase') {
+      // ── New credit-based booking system ──────────────────────────────────
+      await handleCreditPurchase(session);
+    } else {
+      // ── Legacy pass guarantee / package flow ──────────────────────────────
+      await handleCheckoutComplete(session);
+    }
   }
 
   res.json({ received: true });
 };
 
+// ── Credit purchase handler ───────────────────────────────────────────────────
+async function handleCreditPurchase(session) {
+  const metadata      = session.metadata || {};
+  const learnerId     = parseInt(metadata.learner_id, 10);
+  const credits       = parseInt(metadata.credits_purchased, 10);
+  const amountPence   = parseInt(metadata.amount_pence, 10);
+  const learnerEmail  = metadata.learner_email || session.customer_email;
+
+  if (!learnerId || !credits) {
+    console.error('❌ credit_purchase webhook missing learner_id or credits_purchased', metadata);
+    return;
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Determine payment method (card or klarna)
+    const paymentMethod = session.payment_method_types?.[0] || 'card';
+
+    // 1. Record the transaction
+    await sql`
+      INSERT INTO credit_transactions
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id)
+      VALUES
+        (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${session.id})
+    `;
+
+    // 2. Increment the learner's credit balance atomically
+    await sql`
+      UPDATE learner_users
+      SET credit_balance = credit_balance + ${credits}
+      WHERE id = ${learnerId}
+    `;
+
+    console.log(`✅ Credits added: ${credits} credits → learner #${learnerId} (${learnerEmail})`);
+
+    // 3. Send confirmation email via nodemailer
+    const transporter = createTransporter();
+    const plural = credits === 1 ? 'credit' : 'credits';
+
+    await transporter.sendMail({
+      from:    'CoachCarter <bookings@coachcarter.uk>',
+      to:      learnerEmail,
+      subject: `${credits} lesson ${plural} added to your account`,
+      html: `
+        <h1>Your credits are ready.</h1>
+        <p>We've added <strong>${credits} lesson ${plural}</strong> to your CoachCarter account.</p>
+        <p><strong>Amount paid:</strong> £${(amountPence / 100).toFixed(2)}</p>
+        <p>You can now book your ${plural} directly from your dashboard.</p>
+        <p><a href="https://coachcarter.uk/learner/dashboard.html"
+              style="background:#f58321;color:#fff;padding:14px 28px;text-decoration:none;
+                     border-radius:8px;display:inline-block;font-weight:bold;">
+          Book a lesson →
+        </a></p>
+        <p style="color:#888;font-size:0.85rem;">
+          Credits are refundable. Cancellations made 48+ hours before a lesson
+          automatically return the credit to your balance.
+        </p>
+      `
+    });
+
+  } catch (err) {
+    console.error('❌ handleCreditPurchase error:', err);
+    // Don't rethrow — we've already responded 200 to Stripe.
+    // A failed DB write here should be caught by Neon error logging / Stripe retry.
+  }
+}
+
+// ── Legacy checkout handler ───────────────────────────────────────────────────
 async function handleCheckoutComplete(session) {
   const provisionalLicence = session.custom_fields?.find(f => f.key === 'provisional_licence')?.text?.value;
   const testStatus = session.custom_fields?.find(f => f.key === 'has_test_booked')?.dropdown?.value;

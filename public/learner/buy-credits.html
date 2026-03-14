@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buy Lesson Credits — CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #ffffff;
+      --surface:    #f9f9f9;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --red:        #ef4444;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--primary);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .header-brand img { height: 36px; width: auto; }
+    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
+    .header-brand-sub  { font-size: 0.7rem; color: var(--muted); }
+    .header-nav { display: flex; align-items: center; gap: 12px; }
+    .header-nav a {
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 8px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .header-nav a:hover { background: var(--surface); color: var(--primary); }
+    .header-balance {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-lt);
+      padding: 6px 14px;
+      border-radius: 20px;
+    }
+
+    /* ── Page layout ── */
+    main {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 48px 20px 80px;
+    }
+
+    h1 {
+      font-family: var(--font-head);
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 1rem;
+      margin-bottom: 40px;
+    }
+
+    /* ── Current balance card ── */
+    .balance-card {
+      background: var(--accent-lt);
+      border: 1.5px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+    .balance-label { font-size: 0.85rem; color: var(--muted); }
+    .balance-value {
+      font-family: var(--font-head);
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--accent);
+    }
+    .balance-unit { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Buy card ── */
+    .buy-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+    .buy-card h2 {
+      font-family: var(--font-head);
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+
+    /* ── Quantity selector ── */
+    .qty-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .qty-label { font-size: 0.9rem; color: var(--muted); min-width: 80px; }
+    .qty-control {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .qty-btn {
+      width: 44px;
+      height: 44px;
+      background: var(--white);
+      border: none;
+      font-size: 1.25rem;
+      cursor: pointer;
+      color: var(--primary);
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .qty-btn:hover:not(:disabled) { background: var(--surface); }
+    .qty-btn:disabled { color: var(--border); cursor: default; }
+    .qty-value {
+      width: 56px;
+      height: 44px;
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: 700;
+      border: none;
+      border-left: 1.5px solid var(--border);
+      border-right: 1.5px solid var(--border);
+      background: var(--white);
+      color: var(--primary);
+      -moz-appearance: textfield;
+    }
+    .qty-value::-webkit-outer-spin-button,
+    .qty-value::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+    /* ── Price breakdown ── */
+    .price-breakdown {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 28px;
+    }
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      color: var(--muted);
+      padding: 4px 0;
+    }
+    .price-row.total {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--primary);
+      border-top: 1px solid var(--border);
+      margin-top: 8px;
+      padding-top: 12px;
+    }
+
+    /* ── Checkout button ── */
+    .btn-checkout {
+      width: 100%;
+      padding: 16px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-family: var(--font-head);
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn-checkout:hover { background: var(--accent-dk); }
+    .btn-checkout:active { transform: scale(0.98); }
+    .btn-checkout:disabled {
+      background: var(--border);
+      cursor: not-allowed;
+    }
+
+    /* ── Klarna note ── */
+    .klarna-note {
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+    .klarna-note strong { color: var(--primary); }
+
+    /* ── Policy card ── */
+    .policy-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+    .policy-card h3 {
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .policy-card ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .policy-card li {
+      font-size: 0.875rem;
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+      line-height: 1.4;
+    }
+    .policy-card li::before {
+      content: '✓';
+      color: var(--green);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--primary);
+      color: white;
+      padding: 14px 24px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: transform 0.3s ease;
+      z-index: 999;
+      white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.error { background: var(--red); }
+    .toast.cancelled { background: var(--muted); }
+
+    /* ── Loading spinner ── */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="header-brand" href="/learner/dashboard.html">
+    <img src="/Logo.png" alt="CoachCarter">
+    <div>
+      <div class="header-brand-text">CoachCarter</div>
+      <div class="header-brand-sub">Learner Portal</div>
+    </div>
+  </a>
+  <nav class="header-nav">
+    <a href="/learner/dashboard.html">← Dashboard</a>
+    <span class="header-balance" id="headerBalance">⏳ loading…</span>
+  </nav>
+</header>
+
+<main>
+  <h1>Buy Lesson Credits</h1>
+  <p class="subtitle">Each credit = one 1.5-hour driving lesson. Use them to book any available slot.</p>
+
+  <!-- Current balance -->
+  <div class="balance-card">
+    <div>
+      <div class="balance-label">Your current balance</div>
+      <div class="balance-value" id="balanceValue">—</div>
+      <div class="balance-unit" id="balanceUnit">credits</div>
+    </div>
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#f58321" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+    </svg>
+  </div>
+
+  <!-- Buy card -->
+  <div class="buy-card">
+    <h2>Add credits to your account</h2>
+
+    <div class="qty-row">
+      <span class="qty-label">Credits</span>
+      <div class="qty-control">
+        <button class="qty-btn" id="btnMinus" aria-label="Decrease">−</button>
+        <input class="qty-value" type="number" id="qtyInput" value="1" min="1" max="20" readonly>
+        <button class="qty-btn" id="btnPlus" aria-label="Increase">+</button>
+      </div>
+    </div>
+
+    <div class="price-breakdown">
+      <div class="price-row">
+        <span id="pricePerLine">1 credit × £82.50</span>
+        <span id="pricePerValue">£82.50</span>
+      </div>
+      <div class="price-row total">
+        <span>Total</span>
+        <span id="totalValue">£82.50</span>
+      </div>
+    </div>
+
+    <button class="btn-checkout" id="btnCheckout">
+      <span id="btnLabel">Pay securely with Stripe</span>
+      <div class="spinner" id="btnSpinner"></div>
+    </button>
+    <p class="klarna-note">
+      <strong>Pay in 3 with Klarna</strong> available at checkout — split the cost over 3 months, interest-free.
+    </p>
+  </div>
+
+  <!-- Policy card -->
+  <div class="policy-card">
+    <h3>How credits work</h3>
+    <ul>
+      <li>One credit books one 1.5-hour lesson with any available instructor</li>
+      <li>Credits never expire — use them whenever you're ready</li>
+      <li>Cancel 48+ hours before a lesson and the credit returns to your balance automatically</li>
+      <li>Credits are fully refundable — contact us if you need a cash refund</li>
+    </ul>
+  </div>
+</main>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  const PRICE_PENCE = 8250;
+  const MAX_QTY     = 20;
+
+  let token    = null;
+  let qty      = 1;
+
+  // ── Auth check ──────────────────────────────────────────────────────────────
+  function initAuth() {
+    token = localStorage.getItem('learnerToken');
+    if (!token) {
+      window.location.href = '/learner/login.html?redirect=/learner/buy-credits.html';
+      return false;
+    }
+    return true;
+  }
+
+  // ── Load balance ────────────────────────────────────────────────────────────
+  async function loadBalance() {
+    try {
+      const res  = await fetch('/api/credits?action=balance', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load balance');
+
+      const b = data.credit_balance;
+      document.getElementById('balanceValue').textContent = b;
+      document.getElementById('balanceUnit').textContent  = b === 1 ? 'credit' : 'credits';
+      document.getElementById('headerBalance').textContent =
+        `${b} credit${b === 1 ? '' : 's'}`;
+    } catch (err) {
+      document.getElementById('balanceValue').textContent = '?';
+      document.getElementById('headerBalance').textContent = 'Balance unavailable';
+    }
+  }
+
+  // ── Quantity controls ───────────────────────────────────────────────────────
+  function updateQty(newQty) {
+    qty = Math.max(1, Math.min(MAX_QTY, newQty));
+    document.getElementById('qtyInput').value  = qty;
+    document.getElementById('btnMinus').disabled = qty <= 1;
+    document.getElementById('btnPlus').disabled  = qty >= MAX_QTY;
+
+    const total = (PRICE_PENCE * qty) / 100;
+    const pp    = (PRICE_PENCE / 100).toFixed(2);
+    document.getElementById('pricePerLine').textContent  = `${qty} credit${qty > 1 ? 's' : ''} × £${pp}`;
+    document.getElementById('pricePerValue').textContent = `£${(PRICE_PENCE * qty / 100).toFixed(2)}`;
+    document.getElementById('totalValue').textContent    = `£${total.toFixed(2)}`;
+    document.getElementById('btnLabel').textContent      =
+      `Pay £${total.toFixed(2)} securely with Stripe`;
+  }
+
+  document.getElementById('btnMinus').addEventListener('click', () => updateQty(qty - 1));
+  document.getElementById('btnPlus').addEventListener('click',  () => updateQty(qty + 1));
+
+  // ── Checkout ────────────────────────────────────────────────────────────────
+  document.getElementById('btnCheckout').addEventListener('click', async () => {
+    const btn     = document.getElementById('btnCheckout');
+    const label   = document.getElementById('btnLabel');
+    const spinner = document.getElementById('btnSpinner');
+
+    btn.disabled     = true;
+    label.textContent = 'Redirecting to Stripe…';
+    spinner.style.display = 'block';
+
+    try {
+      const res  = await fetch('/api/credits?action=checkout', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body:    JSON.stringify({ quantity: qty })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Checkout failed');
+
+      window.location.href = data.url;
+    } catch (err) {
+      showToast(err.message || 'Something went wrong. Please try again.', 'error');
+      btn.disabled     = false;
+      label.textContent = `Pay £${((PRICE_PENCE * qty) / 100).toFixed(2)} securely with Stripe`;
+      spinner.style.display = 'none';
+    }
+  });
+
+  // ── Toast ────────────────────────────────────────────────────────────────────
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className   = 'toast' + (type ? ' ' + type : '');
+    void t.offsetWidth;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  // ── Check for ?cancelled=true ────────────────────────────────────────────────
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('cancelled') === 'true') {
+    showToast('Payment cancelled — your balance is unchanged.', 'cancelled');
+  }
+
+  // ── Init ─────────────────────────────────────────────────────────────────────
+  if (initAuth()) {
+    loadBalance();
+    updateQty(1);
+  }
+</script>
+</body>
+</html>
