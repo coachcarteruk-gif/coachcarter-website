@@ -4,8 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Classroom — CoachCarter</title>
-  <!-- Cloudflare Stream SDK — used to wrap iframes for direct player control -->
-  <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -295,8 +294,30 @@ let activeGroup = 'all';
 let observer    = null;
 let globalMuted = true; // once unmuted, stays false for the whole session
 
-// uid -> SDK player object (populated once each iframe loads)
-const players = {};
+// Track which iframes have a live, playing Cloudflare player ready for postMessages.
+// Populated when we receive {"event":"play"} back from the iframe.
+const playerReady = {};
+
+// Listen for events sent BY Cloudflare iframes to the parent page.
+// The player sends {"event":"play"} once it starts — that's our signal it's
+// ready to receive {"method":"unmute"} etc.
+window.addEventListener('message', (event) => {
+  try {
+    const data = JSON.parse(event.data);
+    if (data.event === 'play') {
+      document.querySelectorAll('.reel-iframe').forEach(iframe => {
+        if (iframe.contentWindow === event.source) {
+          const uid = iframe.id.replace('iframe-', '');
+          playerReady[uid] = true;
+          // Apply current global mute state now the player is live
+          if (!globalMuted) {
+            iframe.contentWindow.postMessage(JSON.stringify({ method: 'unmute' }), '*');
+          }
+        }
+      });
+    }
+  } catch (e) {}
+});
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -392,38 +413,15 @@ function setupObserver(videos) {
 
       if (entry.isIntersecting) {
         // Always load muted — browser allows muted autoplay.
-        // SDK will unmute after load if globalMuted is already false.
+        // The message listener above will unmute once {"event":"play"} arrives
+        // from the iframe, if the user has already unmuted globally.
         iframe.src = `${CF_BASE}/${uid}/iframe?autoplay=true&muted=true&controls=false`;
-        setMuteBtn(uid, true);
-
-        // Wrap iframe with SDK once it loads for reliable player control
-        iframe.onload = () => {
-          if (!window.Stream) return;
-          try {
-            const player = Stream(iframe);
-            players[uid] = player;
-
-            // If user already unmuted earlier, apply that now via SDK
-            // (video is playing, so browser allows unmuting)
-            player.addEventListener('canplay', () => {
-              if (!globalMuted) {
-                player.muted = false;
-                setMuteBtn(uid, false);
-              } else {
-                showMutedBanner(uid);
-              }
-            }, { once: true });
-          } catch (e) {
-            // SDK unavailable — fall back to showing muted banner
-            if (globalMuted) showMutedBanner(uid);
-          }
-        };
-
+        setMuteBtn(uid, globalMuted);
+        if (globalMuted) showMutedBanner(uid);
       } else {
         // Blank the src — guaranteed to kill audio immediately
-        iframe.src   = 'about:blank';
-        iframe.onload = null;
-        delete players[uid];
+        iframe.src = 'about:blank';
+        delete playerReady[uid];
         hideMutedBanner(uid);
       }
     });
@@ -439,13 +437,17 @@ function setupObserver(videos) {
 }
 
 // ── Mute / unmute ─────────────────────────────────────────────────────────────
+// postMessage to the already-playing iframe. We only send when playerReady[uid]
+// is true — i.e. we've received {"event":"play"} from that iframe — so the
+// player is guaranteed to be initialised and listening.
 function toggleMute(uid) {
   globalMuted = !globalMuted;
 
-  const player = players[uid];
-  if (player) {
-    // SDK direct property — works because video is already playing
-    player.muted = globalMuted;
+  const iframe = document.getElementById(`iframe-${uid}`);
+  if (iframe && playerReady[uid]) {
+    iframe.contentWindow.postMessage(
+      JSON.stringify({ method: globalMuted ? 'mute' : 'unmute' }), '*'
+    );
   }
 
   setMuteBtn(uid, globalMuted);
