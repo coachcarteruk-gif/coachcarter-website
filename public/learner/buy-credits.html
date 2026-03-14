@@ -389,7 +389,8 @@
 
   // ── Auth check ──────────────────────────────────────────────────────────────
   function initAuth() {
-    token = localStorage.getItem('learnerToken');
+    const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+    token = session?.token || null;
     if (!token) {
       window.location.href = '/learner/login.html?redirect=/learner/buy-credits.html';
       return false;
