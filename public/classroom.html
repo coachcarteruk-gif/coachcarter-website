@@ -115,13 +115,13 @@
       overflow: hidden;
     }
 
-    /* ── IFRAME ── */
-    .reel-iframe {
+    /* ── VIDEO ── */
+    .reel-video {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
-      border: none;
+      object-fit: cover;
       background: #000;
     }
 
@@ -271,6 +271,9 @@
 <!-- Reels -->
 <div class="reels-container" id="reels"></div>
 
+<!-- HLS.js for adaptive streaming on non-Safari browsers -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+
 <script>
 const CF_BASE = 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com';
 
@@ -292,31 +295,9 @@ const GROUP_LABELS = {
 let allVideos   = [];
 let activeGroup = 'all';
 let observer    = null;
-let globalMuted = true; // once unmuted, stays false for the whole session
-
-// ── postMessage helper ────────────────────────────────────────────────────────
-function sendToPlayer(iframe, method) {
-  try {
-    iframe.contentWindow.postMessage(JSON.stringify({ method }), '*');
-  } catch (e) {}
-}
-
-// ── Cloudflare player event listener ─────────────────────────────────────────
-// The Cloudflare player fires {"event":"play"} to the parent when it starts.
-// We can't reliably match event.source (Cloudflare uses nested frames internally),
-// so we find the one non-blank iframe — only one video loads at a time.
-window.addEventListener('message', (event) => {
-  if (typeof event.data !== 'string') return;
-  try {
-    const data = JSON.parse(event.data);
-    if (data.event !== 'play') return;
-    // Find the active iframe (only ever one at a time)
-    const active = document.querySelector('.reel-iframe:not([src="about:blank"])');
-    if (active && !globalMuted) {
-      sendToPlayer(active, 'unmute');
-    }
-  } catch (e) {}
-});
+let globalMuted = true;       // starts muted; once user taps, stays unmuted
+let hlsInstances = {};        // uid → Hls instance (for cleanup)
+let activeUid    = null;      // currently visible video uid
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -347,6 +328,7 @@ function selectTab(key) {
     btn.classList.toggle('active', GROUPS[i].key === key);
   });
   if (observer) observer.disconnect();
+  destroyAllHls();
   renderReels(key);
 }
 
@@ -369,13 +351,15 @@ function renderReels(group) {
   container.innerHTML = videos.map(v => `
     <div class="reel-item" id="reel-${v.uid}" data-uid="${v.uid}">
 
-      <iframe
-        class="reel-iframe"
-        id="iframe-${v.uid}"
-        src="about:blank"
-        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-        allowfullscreen
-      ></iframe>
+      <video
+        class="reel-video"
+        id="video-${v.uid}"
+        playsinline
+        webkit-playsinline
+        preload="none"
+        loop
+        muted
+      ></video>
 
       <div class="muted-banner" id="banner-${v.uid}">🔇 Tap to unmute</div>
 
@@ -402,33 +386,81 @@ function renderReels(group) {
   setupObserver(videos);
 }
 
+// ── HLS helpers ──────────────────────────────────────────────────────────────
+function attachHls(uid) {
+  const video = document.getElementById(`video-${uid}`);
+  if (!video) return;
+
+  const hlsUrl = `${CF_BASE}/${uid}/manifest/video.m3u8`;
+
+  // Safari supports HLS natively
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = hlsUrl;
+    video.muted = globalMuted;
+    video.play().catch(() => {});
+    return;
+  }
+
+  // Everything else uses HLS.js
+  if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+    const hls = new Hls({
+      enableWorker: true,
+      startLevel: -1 // auto quality
+    });
+    hls.loadSource(hlsUrl);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      video.muted = globalMuted;
+      video.play().catch(() => {});
+    });
+    hlsInstances[uid] = hls;
+    return;
+  }
+
+  // Fallback: try direct (won't work in most browsers for HLS)
+  video.src = hlsUrl;
+  video.muted = globalMuted;
+  video.play().catch(() => {});
+}
+
+function detachHls(uid) {
+  const video = document.getElementById(`video-${uid}`);
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load(); // release the media element
+  }
+  if (hlsInstances[uid]) {
+    hlsInstances[uid].destroy();
+    delete hlsInstances[uid];
+  }
+}
+
+function destroyAllHls() {
+  Object.keys(hlsInstances).forEach(uid => detachHls(uid));
+  hlsInstances = {};
+  activeUid = null;
+}
+
 // ── IntersectionObserver ──────────────────────────────────────────────────────
 function setupObserver(videos) {
   observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      const uid    = entry.target.dataset.uid;
-      const iframe = document.getElementById(`iframe-${uid}`);
-      if (!iframe) return;
+      const uid = entry.target.dataset.uid;
 
       if (entry.isIntersecting) {
-        iframe.src = `${CF_BASE}/${uid}/iframe?autoplay=true&muted=true&controls=false`;
-        setMuteBtn(uid, globalMuted);
-        if (globalMuted) {
-          showMutedBanner(uid);
+        // Detach previous video if different
+        if (activeUid && activeUid !== uid) {
+          detachHls(activeUid);
         }
-        // Once the iframe HTML loads, retry unmute at intervals.
-        // The Cloudflare player initialises asynchronously inside the iframe
-        // so early postMessages are silently dropped — retrying catches when it's ready.
-        iframe.onload = () => {
-          if (!globalMuted) {
-            [300, 800, 1600].forEach(ms => setTimeout(() => {
-              if (!globalMuted && iframe.src !== 'about:blank') sendToPlayer(iframe, 'unmute');
-            }, ms));
-          }
-        };
-      } else {
-        iframe.onload = null;
-        iframe.src = 'about:blank';
+        activeUid = uid;
+        attachHls(uid);
+        setMuteBtn(uid, globalMuted);
+        if (globalMuted) showMutedBanner(uid);
+      } else if (uid !== activeUid) {
+        // Only detach if it's not the current active one
+        // (avoids race conditions during scroll)
+        detachHls(uid);
         hideMutedBanner(uid);
       }
     });
@@ -444,17 +476,24 @@ function setupObserver(videos) {
 }
 
 // ── Mute / unmute ─────────────────────────────────────────────────────────────
-// Video is already playing when the user taps, so send immediately.
-// The message listener above also picks up the next "play" event for new videos.
+// Direct property access — no postMessage needed!
 function toggleMute(uid) {
   globalMuted = !globalMuted;
 
-  const iframe = document.getElementById(`iframe-${uid}`);
-  if (iframe && iframe.src !== 'about:blank') {
-    sendToPlayer(iframe, globalMuted ? 'mute' : 'unmute');
+  const video = document.getElementById(`video-${uid}`);
+  if (video) {
+    video.muted = globalMuted;
+    // If unmuting and video isn't playing, start it
+    if (!globalMuted && video.paused) {
+      video.play().catch(() => {});
+    }
   }
 
-  setMuteBtn(uid, globalMuted);
+  // Update all visible mute buttons to reflect global state
+  document.querySelectorAll('.mute-btn').forEach(btn => {
+    btn.textContent = globalMuted ? '🔇' : '🔊';
+  });
+
   if (!globalMuted) hideMutedBanner(uid);
 }
 
