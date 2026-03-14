@@ -294,20 +294,29 @@ let activeGroup = 'all';
 let observer    = null;
 let globalMuted = true; // once unmuted, stays false for the whole session
 
-// Sends {"method":"unmute"} to an iframe at increasing intervals after it loads.
-// postMessage is silently ignored if the player isn't ready yet, so retrying
-// at 200 / 600 / 1200 / 2000ms catches whichever point it finishes initialising.
-function scheduleUnmute(uid, iframe) {
-  [200, 600, 1200, 2000].forEach(ms => {
-    setTimeout(() => {
-      if (!globalMuted && iframe.src !== 'about:blank') {
-        try {
-          iframe.contentWindow.postMessage(JSON.stringify({ method: 'unmute' }), '*');
-        } catch (e) {}
-      }
-    }, ms);
-  });
+// ── postMessage helper ────────────────────────────────────────────────────────
+function sendToPlayer(iframe, method) {
+  try {
+    iframe.contentWindow.postMessage(JSON.stringify({ method }), '*');
+  } catch (e) {}
 }
+
+// ── Cloudflare player event listener ─────────────────────────────────────────
+// The Cloudflare player fires {"event":"play"} to the parent when it starts.
+// We can't reliably match event.source (Cloudflare uses nested frames internally),
+// so we find the one non-blank iframe — only one video loads at a time.
+window.addEventListener('message', (event) => {
+  if (typeof event.data !== 'string') return;
+  try {
+    const data = JSON.parse(event.data);
+    if (data.event !== 'play') return;
+    // Find the active iframe (only ever one at a time)
+    const active = document.querySelector('.reel-iframe:not([src="about:blank"])');
+    if (active && !globalMuted) {
+      sendToPlayer(active, 'unmute');
+    }
+  } catch (e) {}
+});
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -407,11 +416,15 @@ function setupObserver(videos) {
         if (globalMuted) {
           showMutedBanner(uid);
         }
-        // Once the iframe document loads, schedule unmute retries if needed.
-        // We retry because the Cloudflare player initialises asynchronously
-        // inside the iframe after onload — postMessage is a no-op until it's ready.
+        // Once the iframe HTML loads, retry unmute at intervals.
+        // The Cloudflare player initialises asynchronously inside the iframe
+        // so early postMessages are silently dropped — retrying catches when it's ready.
         iframe.onload = () => {
-          if (!globalMuted) scheduleUnmute(uid, iframe);
+          if (!globalMuted) {
+            [300, 800, 1600].forEach(ms => setTimeout(() => {
+              if (!globalMuted && iframe.src !== 'about:blank') sendToPlayer(iframe, 'unmute');
+            }, ms));
+          }
         };
       } else {
         iframe.onload = null;
@@ -431,22 +444,14 @@ function setupObserver(videos) {
 }
 
 // ── Mute / unmute ─────────────────────────────────────────────────────────────
-// postMessage to the already-playing iframe. We only send when playerReady[uid]
-// is true — i.e. we've received {"event":"play"} from that iframe — so the
-// player is guaranteed to be initialised and listening.
+// Video is already playing when the user taps, so send immediately.
+// The message listener above also picks up the next "play" event for new videos.
 function toggleMute(uid) {
   globalMuted = !globalMuted;
 
   const iframe = document.getElementById(`iframe-${uid}`);
   if (iframe && iframe.src !== 'about:blank') {
-    if (!globalMuted) {
-      // Video is already playing — unmuting a live player is always allowed
-      scheduleUnmute(uid, iframe);
-    } else {
-      try {
-        iframe.contentWindow.postMessage(JSON.stringify({ method: 'mute' }), '*');
-      } catch (e) {}
-    }
+    sendToPlayer(iframe, globalMuted ? 'mute' : 'unmute');
   }
 
   setMuteBtn(uid, globalMuted);
