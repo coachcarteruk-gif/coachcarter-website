@@ -2513,7 +2513,7 @@ document.getElementById('enquiry-form').addEventListener('submit', async functio
   };
   
   try {
-    const response = await fetch('/api/submit-enquiry', {
+    const response = await fetch('/api/enquiries?action=submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData)

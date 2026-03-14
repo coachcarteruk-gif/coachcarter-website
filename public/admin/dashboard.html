@@ -455,7 +455,7 @@ document.querySelectorAll('.filters .filter-btn').forEach(btn => {
 
 async function loadEnquiries() {
   try {
-    const res = await fetch('/api/get-enquiries');
+    const res = await fetch('/api/enquiries?action=list');
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
     
@@ -524,7 +524,7 @@ function refreshEnquiries() {
 }
 
 function viewEnquiry(id) {
-  fetch('/api/get-enquiry?id=' + id)
+  fetch('/api/enquiries?action=get&id=' + id)
     .then(res => res.json())
     .then(data => {
       const e = data.enquiry;
@@ -564,7 +564,7 @@ function viewEnquiry(id) {
 
 async function updateEnquiryStatus(id, status) {
   try {
-    const res = await fetch('/api/update-enquiry-status', {
+    const res = await fetch('/api/enquiries?action=update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: id, status: status })
