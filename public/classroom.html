@@ -292,7 +292,7 @@ const GROUP_LABELS = {
 let allVideos   = [];
 let activeGroup = 'all';
 let observer    = null;
-const muteState = {}; // uid -> false means user unmuted it
+let globalMuted = true; // once the user unmutes once, stays false for the whole session
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -323,7 +323,6 @@ function selectTab(key) {
     btn.classList.toggle('active', GROUPS[i].key === key);
   });
   if (observer) observer.disconnect();
-  Object.keys(muteState).forEach(k => delete muteState[k]);
   renderReels(key);
 }
 
@@ -389,12 +388,10 @@ function setupObserver(videos) {
       if (!player) return;
 
       if (entry.isIntersecting) {
-        // Restore the user's mute preference; default to muted for new videos
-        const muted = muteState[uid] !== false;
-        player.muted = muted;
+        player.muted = globalMuted;
         player.play().catch(() => {});
-        setMuteBtn(uid, muted);
-        if (muted) showMutedBanner(uid);
+        setMuteBtn(uid, globalMuted);
+        if (globalMuted) showMutedBanner(uid);
       } else {
         player.pause();
         hideMutedBanner(uid);
@@ -418,14 +415,11 @@ function toggleMute(uid) {
   const player = getPlayer(uid);
   if (!player) return;
 
-  const nowMuted = player.muted;
-  player.muted   = !nowMuted;
-  muteState[uid] = nowMuted ? false : true; // remember choice
+  globalMuted  = !globalMuted;
+  player.muted = globalMuted;
 
-  setMuteBtn(uid, !nowMuted);
-  if (nowMuted) {
-    hideMutedBanner(uid); // was muted, now unmuted
-  }
+  setMuteBtn(uid, globalMuted);
+  if (!globalMuted) hideMutedBanner(uid);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
