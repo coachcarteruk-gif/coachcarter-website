@@ -314,6 +314,121 @@
     @media (max-width: 480px) {
       .stats-bar { grid-template-columns: repeat(2, 1fr); }
     }
+
+    /* CREDIT BALANCE CARD */
+    .credit-card {
+      background: var(--accent);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      box-shadow: 0 2px 8px rgba(245,131,33,0.25);
+    }
+    .credit-card-left {}
+    .credit-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.75);
+      margin-bottom: 4px;
+    }
+    .credit-value {
+      font-family: var(--font-head);
+      font-size: 2.4rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1;
+    }
+    .credit-sub {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.75);
+      margin-top: 4px;
+    }
+    .credit-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .btn-buy {
+      background: #fff;
+      color: var(--accent);
+      border: none;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-family: var(--font-head);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: opacity 0.15s;
+    }
+    .btn-buy:hover { opacity: 0.9; }
+    .btn-book-lesson {
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-family: var(--font-head);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: background 0.15s;
+    }
+    .btn-book-lesson:hover { background: rgba(255,255,255,0.28); }
+
+    /* UPCOMING LESSONS */
+    .upcoming-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .upcoming-card-left {}
+    .upcoming-date {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .upcoming-time {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .upcoming-instructor {
+      font-size: 0.78rem;
+      color: var(--accent);
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .btn-cancel-lesson {
+      font-size: 0.78rem;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      background: none;
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .btn-cancel-lesson:hover { color: #ef4444; border-color: #ef4444; }
   </style>
 </head>
 <body>
@@ -336,6 +451,25 @@
   <div class="welcome">
     <h1 id="welcome-msg">Loading…</h1>
     <p id="welcome-sub"></p>
+  </div>
+
+  <!-- CREDIT BALANCE -->
+  <div class="credit-card" id="credit-card">
+    <div class="credit-card-left">
+      <div class="credit-label">Credit Balance</div>
+      <div class="credit-value" id="credit-balance">—</div>
+      <div class="credit-sub" id="credit-sub">lesson credits</div>
+    </div>
+    <div class="credit-actions">
+      <a href="/learner/buy-credits.html" class="btn-buy">Buy Credits</a>
+      <a href="/learner/book.html" class="btn-book-lesson" id="book-btn">Book a Lesson →</a>
+    </div>
+  </div>
+
+  <!-- UPCOMING LESSONS -->
+  <div id="upcoming-section" style="display:none; margin-bottom: 28px;">
+    <div class="section-title">Upcoming Lessons</div>
+    <div id="upcoming-list"></div>
   </div>
 
   <!-- STATS -->
@@ -401,7 +535,7 @@ const RATING_LABELS = {
 // Score weighting: always=2, usually=1, sometimes=0, never=-1
 const SCORE_WEIGHT = { always: 2, usually: 1, sometimes: 0, never: -1 };
 
-let AUTH, PROGRESS, SESSIONS_DATA;
+let AUTH, PROGRESS, SESSIONS_DATA, CREDITS_DATA, BOOKINGS_DATA;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
@@ -409,7 +543,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('header-name').textContent = AUTH.user.name;
 
-  await Promise.all([loadProgress(), loadSessions()]);
+  await Promise.all([loadProgress(), loadSessions(), loadCredits(), loadBookings()]);
   render();
 });
 
@@ -437,8 +571,64 @@ async function loadSessions() {
   } catch (e) { console.error(e); }
 }
 
+async function loadCredits() {
+  try {
+    const res = await fetch('/api/credits?action=balance', {
+      headers: { 'Authorization': `Bearer ${AUTH.token}` }
+    });
+    if (res.ok) CREDITS_DATA = await res.json();
+  } catch (e) { console.error(e); }
+}
+
+async function loadBookings() {
+  try {
+    const res = await fetch('/api/slots?action=my-bookings', {
+      headers: { 'Authorization': `Bearer ${AUTH.token}` }
+    });
+    if (res.ok) BOOKINGS_DATA = await res.json();
+  } catch (e) { console.error(e); }
+}
+
 function render() {
   if (!PROGRESS) return;
+
+  // Credit balance
+  if (CREDITS_DATA) {
+    const bal = CREDITS_DATA.credit_balance ?? 0;
+    document.getElementById('credit-balance').textContent = bal;
+    document.getElementById('credit-sub').textContent = bal === 1 ? 'lesson credit' : 'lesson credits';
+    // Dim the Book button if no credits
+    if (bal === 0) {
+      const bookBtn = document.getElementById('book-btn');
+      bookBtn.style.opacity = '0.5';
+      bookBtn.style.pointerEvents = 'none';
+      bookBtn.title = 'You need credits to book a lesson';
+    }
+  }
+
+  // Upcoming bookings
+  if (BOOKINGS_DATA && BOOKINGS_DATA.upcoming && BOOKINGS_DATA.upcoming.length > 0) {
+    const section = document.getElementById('upcoming-section');
+    section.style.display = 'block';
+    const list = document.getElementById('upcoming-list');
+    list.innerHTML = BOOKINGS_DATA.upcoming.slice(0, 5).map(b => {
+      const date = new Date(b.scheduled_date + 'T00:00:00Z');
+      const dateStr = date.toLocaleDateString('en-GB', {
+        weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'
+      });
+      const start = b.start_time ? b.start_time.slice(0, 5) : '';
+      const end   = b.end_time   ? b.end_time.slice(0, 5)   : '';
+      return `
+        <div class="upcoming-card">
+          <div class="upcoming-card-left">
+            <div class="upcoming-date">📅 ${dateStr}</div>
+            <div class="upcoming-time">${start} – ${end}</div>
+            <div class="upcoming-instructor">with ${b.instructor_name}</div>
+          </div>
+          <a href="/learner/book.html" class="btn-cancel-lesson">Manage</a>
+        </div>`;
+    }).join('');
+  }
 
   // Welcome message
   const s = PROGRESS.stats;
