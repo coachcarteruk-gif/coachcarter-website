@@ -147,7 +147,7 @@ async function handleCheckout(req, res) {
       },
       customer_email: user.email,
       billing_address_collection: 'required',
-      success_url: `${origin}/learner/dashboard.html?credits_added=${qty}`,
+      success_url: `${origin}/learner/?credits_added=${qty}`,
       cancel_url:  `${origin}/learner/buy-credits.html?cancelled=true`
     });
 

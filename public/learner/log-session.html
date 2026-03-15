@@ -289,7 +289,7 @@
 <body>
 
 <header>
-  <a href="/learner/dashboard.html" class="back-btn">← Dashboard</a>
+  <a href="/learner/" class="back-btn">← Dashboard</a>
   <span class="page-title">Log a Session</span>
   <div style="width:80px"></div>
 </header>
@@ -472,7 +472,7 @@ async function saveSession() {
     if (res.status === 401) { window.location.href = '/learner/'; return; }
     const data = await res.json();
     if (!res.ok) { showError(data.error || 'Failed to save. Please try again.'); return; }
-    window.location.href = '/learner/dashboard.html';
+    window.location.href = '/learner/';
   } catch {
     showError('Network error. Please check your connection and try again.');
   } finally {
@@ -490,7 +490,7 @@ function showError(msg) {
 </script>
 
 <nav class="bottom-nav">
-  <a href="/learner/dashboard.html" class="bottom-nav-item">
+  <a href="/learner/" class="bottom-nav-item">
     <span class="bottom-nav-icon">📊</span>
     <span>Dashboard</span>
   </a>

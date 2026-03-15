@@ -347,7 +347,7 @@ async function handleBook(req, res) {
           Need to cancel? Do so at least 48 hours before the lesson to get your credit back.
         </p>
         <p>
-          <a href="https://coachcarter.uk/learner/dashboard.html"
+          <a href="https://coachcarter.uk/learner/"
              style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">
             View my bookings →
           </a>
@@ -449,7 +449,7 @@ async function handleCancel(req, res) {
            with ${booking.instructor_name} has been cancelled.</p>
         <p><strong>Your credit has been returned to your balance.</strong>
            You now have ${updated.credit_balance} credit${updated.credit_balance !== 1 ? 's' : ''}.</p>
-        <p><a href="https://coachcarter.uk/learner/dashboard.html"
+        <p><a href="https://coachcarter.uk/learner/"
               style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;
                      border-radius:8px;display:inline-block;font-weight:bold">
           Book another lesson →

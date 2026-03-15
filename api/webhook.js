@@ -101,7 +101,7 @@ async function handleCreditPurchase(session) {
         <p>We've added <strong>${credits} lesson ${plural}</strong> to your CoachCarter account.</p>
         <p><strong>Amount paid:</strong> £${(amountPence / 100).toFixed(2)}</p>
         <p>You can now book your ${plural} directly from your dashboard.</p>
-        <p><a href="https://coachcarter.uk/learner/dashboard.html"
+        <p><a href="https://coachcarter.uk/learner/"
               style="background:#f58321;color:#fff;padding:14px 28px;text-decoration:none;
                      border-radius:8px;display:inline-block;font-weight:bold;">
           Book a lesson →
