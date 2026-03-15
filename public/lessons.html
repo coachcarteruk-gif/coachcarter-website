@@ -1513,6 +1513,48 @@ footer a:hover { color: var(--accent); }
   .pkg-grid { grid-template-columns: 1fr 1fr; }
   .testimonials-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Setmore widget overrides ───── */
+#Anywhere_button_iframe { display: none !important; }
+
+#setmore-overlay {
+  background: rgba(15, 23, 42, 0.65) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+}
+
+#setmore-fancy-box {
+  border-radius: 18px !important;
+  overflow: hidden !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.08) !important;
+  border: 1px solid rgba(245, 131, 33, 0.15) !important;
+}
+
+#setmore-fancy-box-close-icon {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  background: var(--primary) !important;
+  color: #fff !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  top: 12px !important;
+  right: 12px !important;
+  font-size: 18px !important;
+  cursor: pointer !important;
+  transition: background 0.2s ease !important;
+  z-index: 10 !important;
+}
+
+#setmore-fancy-box-close-icon:hover {
+  background: var(--accent) !important;
+}
+
+#setmore-fancy-box-content,
+#setmore-fancy-box-iframe {
+  border-radius: 18px !important;
+}
 </style>
 </head>
 <body>
