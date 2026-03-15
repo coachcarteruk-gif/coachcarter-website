@@ -1,0 +1,389 @@
+// Admin authentication & dashboard data
+//
+// Routes:
+//   POST /api/admin?action=login
+//     → authenticate admin, return JWT
+//
+//   POST /api/admin?action=create-admin
+//     → create a new admin user (requires ADMIN_SECRET or existing admin JWT)
+//
+//   GET  /api/admin?action=verify
+//     → verify admin JWT is valid, return admin info
+//
+//   GET  /api/admin?action=dashboard-stats
+//     → overview stats for admin dashboard (admin JWT required)
+//
+//   GET  /api/admin?action=all-bookings
+//     → all bookings with learner/instructor info (admin JWT required)
+//
+//   POST /api/admin?action=mark-complete
+//     → mark a booking as completed (admin JWT required)
+//
+//   GET  /api/admin?action=all-instructors
+//     → all instructors including inactive (admin JWT required)
+
+const { neon }   = require('@neondatabase/serverless');
+const bcrypt     = require('bcryptjs');
+const jwt        = require('jsonwebtoken');
+
+function setCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Admin-Secret');
+}
+
+// Verify admin JWT token
+function verifyAdminJWT(req) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) return null;
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return null;
+  try {
+    const payload = jwt.verify(auth.slice(7), secret);
+    if (payload.role !== 'admin' && payload.role !== 'superadmin') return null;
+    return payload;
+  } catch { return null; }
+}
+
+// Verify legacy ADMIN_SECRET
+function verifyAdminSecret(req) {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) return false;
+  return (req.body?.admin_secret === secret) ||
+         (req.headers['x-admin-secret'] === secret);
+}
+
+module.exports = async (req, res) => {
+  setCors(res);
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+
+  const action = req.query.action;
+  if (action === 'login')           return handleLogin(req, res);
+  if (action === 'create-admin')    return handleCreateAdmin(req, res);
+  if (action === 'verify')          return handleVerify(req, res);
+  if (action === 'dashboard-stats') return handleDashboardStats(req, res);
+  if (action === 'all-bookings')    return handleAllBookings(req, res);
+  if (action === 'mark-complete')   return handleMarkComplete(req, res);
+  if (action === 'all-instructors') return handleAllInstructors(req, res);
+
+  return res.status(400).json({ error: 'Unknown action' });
+};
+
+// ── POST /api/admin?action=login ──────────────────────────────────────────────
+async function handleLogin(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { email, password } = req.body;
+  if (!email || !password)
+    return res.status(400).json({ error: 'Email and password are required' });
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return res.status(500).json({ error: 'JWT_SECRET not configured' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Ensure table exists
+    await sql`
+      CREATE TABLE IF NOT EXISTS admin_users (
+        id            SERIAL PRIMARY KEY,
+        name          TEXT    NOT NULL,
+        email         TEXT    UNIQUE NOT NULL,
+        password_hash TEXT    NOT NULL,
+        role          TEXT    NOT NULL DEFAULT 'admin',
+        active        BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+
+    const rows = await sql`
+      SELECT * FROM admin_users
+      WHERE email = ${email.toLowerCase().trim()} AND active = true
+    `;
+    if (rows.length === 0)
+      return res.status(401).json({ error: 'Invalid email or password' });
+
+    const admin = rows[0];
+    const match = await bcrypt.compare(password, admin.password_hash);
+    if (!match)
+      return res.status(401).json({ error: 'Invalid email or password' });
+
+    const token = jwt.sign(
+      { id: admin.id, email: admin.email, role: admin.role, isAdmin: true },
+      secret,
+      { expiresIn: '7d' }
+    );
+
+    return res.json({
+      token,
+      admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role }
+    });
+  } catch (err) {
+    console.error('admin login error:', err);
+    return res.status(500).json({ error: 'Login failed', details: err.message });
+  }
+}
+
+// ── POST /api/admin?action=create-admin ───────────────────────────────────────
+// Requires either ADMIN_SECRET or an existing admin JWT
+async function handleCreateAdmin(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const adminJWT = verifyAdminJWT(req);
+  const hasSecret = verifyAdminSecret(req);
+  if (!adminJWT && !hasSecret)
+    return res.status(401).json({ error: 'Unauthorised' });
+
+  const { name, email, password } = req.body;
+  if (!name || !email || !password)
+    return res.status(400).json({ error: 'name, email and password are required' });
+  if (password.length < 8)
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Ensure table exists
+    await sql`
+      CREATE TABLE IF NOT EXISTS admin_users (
+        id            SERIAL PRIMARY KEY,
+        name          TEXT    NOT NULL,
+        email         TEXT    UNIQUE NOT NULL,
+        password_hash TEXT    NOT NULL,
+        role          TEXT    NOT NULL DEFAULT 'admin',
+        active        BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+
+    const existing = await sql`SELECT id FROM admin_users WHERE email = ${email.toLowerCase().trim()}`;
+    if (existing.length > 0)
+      return res.status(400).json({ error: 'An admin with this email already exists' });
+
+    const hash = await bcrypt.hash(password, 10);
+    const [admin] = await sql`
+      INSERT INTO admin_users (name, email, password_hash)
+      VALUES (${name.trim()}, ${email.toLowerCase().trim()}, ${hash})
+      RETURNING id, name, email, role, active, created_at
+    `;
+
+    return res.status(201).json({ admin });
+  } catch (err) {
+    console.error('admin create error:', err);
+    return res.status(500).json({ error: 'Failed to create admin', details: err.message });
+  }
+}
+
+// ── GET /api/admin?action=verify ──────────────────────────────────────────────
+async function handleVerify(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Invalid or expired token' });
+
+  return res.json({ valid: true, admin: { id: admin.id, email: admin.email, role: admin.role } });
+}
+
+// ── GET /api/admin?action=dashboard-stats ─────────────────────────────────────
+async function handleDashboardStats(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Booking stats
+    const bookingStats = await sql`
+      SELECT
+        COUNT(*)::int AS total_bookings,
+        COUNT(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
+        COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
+        COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled,
+        COUNT(*) FILTER (WHERE status = 'confirmed' AND scheduled_date >= CURRENT_DATE)::int AS upcoming
+      FROM lesson_bookings
+    `;
+
+    // Learner stats
+    const learnerStats = await sql`
+      SELECT
+        COUNT(*)::int AS total_learners,
+        COALESCE(SUM(credit_balance), 0)::int AS total_credits_held
+      FROM learner_users
+    `;
+
+    // Instructor stats
+    const instructorStats = await sql`
+      SELECT
+        COUNT(*)::int AS total_instructors,
+        COUNT(*) FILTER (WHERE active = true)::int AS active_instructors
+      FROM instructors
+    `;
+
+    // Revenue (from credit transactions)
+    const revenueStats = await sql`
+      SELECT
+        COALESCE(SUM(amount_pence) FILTER (WHERE type = 'purchase'), 0)::int AS total_revenue_pence,
+        COUNT(*) FILTER (WHERE type = 'purchase')::int AS total_purchases
+      FROM credit_transactions
+    `;
+
+    // Today's bookings
+    const todayBookings = await sql`
+      SELECT COUNT(*)::int AS today
+      FROM lesson_bookings
+      WHERE scheduled_date = CURRENT_DATE AND status IN ('confirmed', 'completed')
+    `;
+
+    // This week's bookings
+    const weekBookings = await sql`
+      SELECT COUNT(*)::int AS this_week
+      FROM lesson_bookings
+      WHERE scheduled_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')
+        AND status IN ('confirmed', 'completed')
+    `;
+
+    return res.json({
+      bookings: bookingStats[0],
+      learners: learnerStats[0],
+      instructors: instructorStats[0],
+      revenue: revenueStats[0],
+      today: todayBookings[0].today,
+      this_week: weekBookings[0].this_week
+    });
+  } catch (err) {
+    console.error('admin dashboard-stats error:', err);
+    return res.status(500).json({ error: 'Failed to load stats', details: err.message });
+  }
+}
+
+// ── GET /api/admin?action=all-bookings ────────────────────────────────────────
+async function handleAllBookings(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { status, instructor_id, from, to } = req.query;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const bookings = await sql`
+      SELECT
+        lb.id,
+        lb.scheduled_date::text,
+        lb.start_time::text,
+        lb.end_time::text,
+        lb.status,
+        lb.cancelled_at,
+        lb.credit_returned,
+        lb.notes,
+        lb.created_at,
+        lu.id   AS learner_id,
+        lu.name AS learner_name,
+        lu.email AS learner_email,
+        lu.phone AS learner_phone,
+        i.id   AS instructor_id,
+        i.name AS instructor_name,
+        i.email AS instructor_email
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN instructors i    ON i.id  = lb.instructor_id
+      WHERE 1=1
+        ${status ? sql`AND lb.status = ${status}` : sql``}
+        ${instructor_id ? sql`AND lb.instructor_id = ${parseInt(instructor_id)}` : sql``}
+        ${from ? sql`AND lb.scheduled_date >= ${from}` : sql``}
+        ${to ? sql`AND lb.scheduled_date <= ${to}` : sql``}
+      ORDER BY lb.scheduled_date DESC, lb.start_time DESC
+      LIMIT 200
+    `;
+
+    return res.json({ bookings });
+  } catch (err) {
+    console.error('admin all-bookings error:', err);
+    return res.status(500).json({ error: 'Failed to load bookings', details: err.message });
+  }
+}
+
+// ── POST /api/admin?action=mark-complete ──────────────────────────────────────
+async function handleMarkComplete(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { booking_id } = req.body;
+  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [booking] = await sql`
+      SELECT id, status FROM lesson_bookings WHERE id = ${booking_id}
+    `;
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== 'confirmed')
+      return res.status(400).json({ error: `Cannot mark a "${booking.status}" booking as complete` });
+
+    await sql`
+      UPDATE lesson_bookings SET status = 'completed' WHERE id = ${booking_id}
+    `;
+
+    return res.json({ success: true, booking_id });
+  } catch (err) {
+    console.error('admin mark-complete error:', err);
+    return res.status(500).json({ error: 'Failed to mark complete', details: err.message });
+  }
+}
+
+// ── GET /api/admin?action=all-instructors ─────────────────────────────────────
+// Returns ALL instructors (including inactive) for admin management
+async function handleAllInstructors(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const instructors = await sql`
+      SELECT
+        i.id, i.name, i.email, i.phone, i.bio, i.photo_url, i.active, i.created_at,
+        (SELECT COUNT(*)::int FROM lesson_bookings lb
+         WHERE lb.instructor_id = i.id AND lb.status = 'confirmed'
+           AND lb.scheduled_date >= CURRENT_DATE) AS upcoming_bookings,
+        (SELECT COUNT(*)::int FROM lesson_bookings lb
+         WHERE lb.instructor_id = i.id AND lb.status = 'completed') AS completed_lessons
+      FROM instructors i
+      ORDER BY i.active DESC, i.name ASC
+    `;
+
+    // Get availability windows for each instructor
+    const availability = await sql`
+      SELECT instructor_id, id, day_of_week, start_time::text, end_time::text, active
+      FROM instructor_availability
+      WHERE active = true
+      ORDER BY instructor_id, day_of_week, start_time
+    `;
+
+    // Group availability by instructor
+    const availByInstructor = {};
+    for (const w of availability) {
+      if (!availByInstructor[w.instructor_id]) availByInstructor[w.instructor_id] = [];
+      availByInstructor[w.instructor_id].push(w);
+    }
+
+    const result = instructors.map(i => ({
+      ...i,
+      availability: availByInstructor[i.id] || []
+    }));
+
+    return res.json({ instructors: result });
+  } catch (err) {
+    console.error('admin all-instructors error:', err);
+    return res.status(500).json({ error: 'Failed to load instructors', details: err.message });
+  }
+}

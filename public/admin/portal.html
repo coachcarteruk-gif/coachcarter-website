@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Portal — CoachCarter</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --sidebar-bg: #1a1a2e;
+  --sidebar-hover: #16213e;
+  --sidebar-active: #0f3460;
+  --accent: #f58321;
+  --accent-dk: #e07518;
+  --accent-lt: #fff4ec;
+  --accent-mid: rgba(245,131,33,0.12);
+  --primary: #272727;
+  --muted: #797879;
+  --border: #e0e0e0;
+  --bg: #f5f5f7;
+  --white: #ffffff;
+  --green: #22c55e;
+  --green-bg: #dcfce7;
+  --amber: #f59e0b;
+  --amber-bg: #fef3c7;
+  --red: #ef4444;
+  --red-bg: #fee2e2;
+  --blue: #3b82f6;
+  --blue-bg: #dbeafe;
+  --font-head: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Lato', sans-serif;
+  --radius: 12px;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--primary);
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────── */
+.sidebar {
+  width: 240px;
+  background: var(--sidebar-bg);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transition: transform 0.3s;
+}
+
+.sidebar-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 24px 20px 20px;
+  text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.sidebar-brand img { height: 32px; }
+.sidebar-brand-text { font-family: var(--font-head); font-size: 1rem; font-weight: 700; color: #fff; }
+.sidebar-brand-sub { font-size: 0.7rem; color: var(--accent); font-weight: 600; }
+
+.sidebar-nav { flex: 1; padding: 16px 0; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  color: rgba(255,255,255,0.6);
+  text-decoration: none;
+  font-size: 0.9rem; font-weight: 500;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+.sidebar-nav a:hover { color: #fff; background: var(--sidebar-hover); }
+.sidebar-nav a.active {
+  color: var(--accent); background: var(--sidebar-hover);
+  border-left-color: var(--accent);
+}
+.sidebar-nav a .nav-icon { font-size: 1.1rem; width: 24px; text-align: center; }
+
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.sidebar-footer .admin-name { font-size: 0.85rem; color: rgba(255,255,255,0.8); font-weight: 600; }
+.sidebar-footer .admin-email { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+.logout-btn {
+  display: block; width: 100%;
+  margin-top: 12px; padding: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px; color: rgba(255,255,255,0.6);
+  font-size: 0.8rem; cursor: pointer;
+  transition: all 0.15s;
+}
+.logout-btn:hover { background: rgba(239,68,68,0.15); color: var(--red); border-color: rgba(239,68,68,0.3); }
+
+/* ── Mobile sidebar toggle ─────────────────────────────────────── */
+.mobile-header {
+  display: none; position: fixed; top: 0; left: 0; right: 0;
+  background: var(--sidebar-bg); color: #fff; padding: 12px 16px;
+  z-index: 99; align-items: center; gap: 12px;
+}
+.hamburger {
+  background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer;
+}
+.sidebar-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5); z-index: 99;
+}
+
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .mobile-header { display: flex; }
+  .main { margin-left: 0 !important; padding-top: 64px !important; }
+}
+
+/* ── Main content ─────────────────────────────────────────────── */
+.main {
+  flex: 1;
+  margin-left: 240px;
+  padding: 32px;
+  min-height: 100vh;
+}
+
+.page-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 28px;
+}
+.page-title { font-family: var(--font-head); font-size: 1.5rem; font-weight: 700; }
+.page-subtitle { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+
+/* ── Sections ─────────────────────────────────────────────────── */
+.section { display: none; }
+.section.active { display: block; }
+
+/* ── Stats cards ─────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px; margin-bottom: 32px;
+}
+.stat-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+}
+.stat-value {
+  font-family: var(--font-head); font-size: 2rem;
+  font-weight: 800; color: var(--accent); line-height: 1;
+}
+.stat-label {
+  font-size: 0.8rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.04em; margin-top: 6px;
+}
+
+/* ── Cards / Tables ───────────────────────────────────────────── */
+.panel-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.panel-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.panel-card-title { font-family: var(--font-head); font-weight: 700; font-size: 1rem; }
+
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  text-align: left; padding: 12px 20px;
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--muted);
+  background: #fafafa; border-bottom: 1px solid var(--border);
+}
+.data-table td {
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+  font-size: 0.9rem; vertical-align: middle;
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #fafafa; }
+
+/* ── Badges ───────────────────────────────────────────────────── */
+.badge {
+  display: inline-block; padding: 4px 10px; border-radius: 100px;
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+}
+.badge-green { background: var(--green-bg); color: #166534; }
+.badge-amber { background: var(--amber-bg); color: #92400e; }
+.badge-red   { background: var(--red-bg);   color: #991b1b; }
+.badge-blue  { background: var(--blue-bg);  color: #1e40af; }
+.badge-gray  { background: #f1f1f1; color: #555; }
+
+/* ── Buttons ──────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 8px;
+  font-family: var(--font-body); font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: var(--white);
+  color: var(--primary); transition: all 0.15s;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn-primary {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.btn-primary:hover { background: var(--accent-dk); border-color: var(--accent-dk); color: #fff; }
+.btn-sm { padding: 5px 10px; font-size: 0.8rem; }
+.btn-danger { color: var(--red); }
+.btn-danger:hover { border-color: var(--red); background: var(--red-bg); }
+.btn-success { color: #166534; }
+.btn-success:hover { border-color: var(--green); background: var(--green-bg); }
+
+/* ── Filter bar ───────────────────────────────────────────────── */
+.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.filter-pill {
+  padding: 7px 16px; border-radius: 100px;
+  font-size: 0.82rem; font-weight: 600;
+  border: 1px solid var(--border); background: var(--white);
+  cursor: pointer; transition: all 0.15s; color: var(--muted);
+}
+.filter-pill:hover { border-color: var(--accent); color: var(--accent); }
+.filter-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Modal ────────────────────────────────────────────────────── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200; align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--white); border-radius: 16px;
+  width: 90%; max-width: 520px; max-height: 90vh;
+  overflow-y: auto; padding: 28px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+}
+.modal-title {
+  font-family: var(--font-head); font-size: 1.2rem; font-weight: 700;
+  margin-bottom: 20px;
+}
+.modal .form-group { margin-bottom: 14px; }
+.modal label {
+  display: block; font-size: 0.78rem; font-weight: 600;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+  margin-bottom: 5px;
+}
+.modal input[type="text"],
+.modal input[type="email"],
+.modal input[type="tel"],
+.modal input[type="url"],
+.modal textarea,
+.modal select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 8px; font-family: var(--font-body); font-size: 0.9rem;
+  outline: none; transition: border-color 0.2s; background: #fafafa;
+}
+.modal input:focus, .modal textarea:focus, .modal select:focus {
+  border-color: var(--accent); background: #fff;
+}
+.modal textarea { resize: vertical; min-height: 80px; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+/* ── Empty state ──────────────────────────────────────────────── */
+.empty-state {
+  text-align: center; padding: 48px 24px;
+  color: var(--muted); font-size: 0.9rem;
+}
+
+/* ── Availability grid ────────────────────────────────────────── */
+.avail-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 8px; margin-top: 12px;
+}
+.avail-day {
+  background: #fafafa; border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px; min-height: 80px;
+}
+.avail-day-label {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 6px;
+}
+.avail-slot {
+  font-size: 0.78rem; background: var(--accent-lt);
+  color: var(--accent-dk); padding: 3px 6px;
+  border-radius: 4px; margin-bottom: 3px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.avail-slot .remove-slot {
+  background: none; border: none; color: var(--red);
+  cursor: pointer; font-size: 0.85rem; padding: 0 2px;
+}
+
+/* ── Responsive table wrapper ─────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+
+@media (max-width: 900px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .avail-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 600px) {
+  .main { padding: 16px; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .avail-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Toast ─────────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--primary); color: #fff;
+  padding: 12px 20px; border-radius: 8px;
+  font-size: 0.85rem; font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transform: translateY(100px); opacity: 0;
+  transition: all 0.3s; z-index: 300;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { background: #166534; }
+.toast.error { background: #991b1b; }
+</style>
+</head>
+<body>
+
+<!-- Mobile header -->
+<div class="mobile-header">
+  <button class="hamburger" onclick="toggleSidebar()">&#9776;</button>
+  <img src="/Logo.png" alt="CoachCarter" style="height: 28px;">
+  <span style="font-family:var(--font-head);font-weight:700;font-size:0.9rem;">Admin</span>
+</div>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <a href="/admin/portal.html" class="sidebar-brand">
+    <img src="/Logo.png" alt="CoachCarter">
+    <div>
+      <div class="sidebar-brand-text">CoachCarter</div>
+      <div class="sidebar-brand-sub">Admin Portal</div>
+    </div>
+  </a>
+  <nav class="sidebar-nav">
+    <a href="#" onclick="showSection('dashboard'); return false;" class="active" data-section="dashboard">
+      <span class="nav-icon">&#x1f4ca;</span> Dashboard
+    </a>
+    <a href="#" onclick="showSection('instructors'); return false;" data-section="instructors">
+      <span class="nav-icon">&#x1f468;&#x200d;&#x1f3eb;</span> Instructors
+    </a>
+    <a href="#" onclick="showSection('availability'); return false;" data-section="availability">
+      <span class="nav-icon">&#x1f4c5;</span> Availability
+    </a>
+    <a href="#" onclick="showSection('bookings'); return false;" data-section="bookings">
+      <span class="nav-icon">&#x1f4d6;</span> Bookings
+    </a>
+    <a href="/admin/dashboard.html" style="margin-top: 16px; opacity: 0.5; font-size: 0.82rem;">
+      <span class="nav-icon">&#x1f4cb;</span> Legacy Dashboard
+    </a>
+    <a href="/" target="_blank" style="opacity: 0.5; font-size: 0.82rem;">
+      <span class="nav-icon">&#x1f310;</span> View Site
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="admin-name" id="admin-name">Admin</div>
+    <div class="admin-email" id="admin-email">admin@coachcarter.uk</div>
+    <button class="logout-btn" onclick="logout()">Sign Out</button>
+  </div>
+</aside>
+
+<!-- Main content -->
+<div class="main">
+
+  <!-- ═══════════ DASHBOARD SECTION ═══════════ -->
+  <div class="section active" id="section-dashboard">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-subtitle">Overview of your driving school</div>
+      </div>
+      <button class="btn" onclick="loadDashboard()">Refresh</button>
+    </div>
+
+    <div class="stats-grid" id="dash-stats">
+      <div class="stat-card"><div class="stat-value" id="stat-upcoming">-</div><div class="stat-label">Upcoming Lessons</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-today">-</div><div class="stat-label">Today</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-week">-</div><div class="stat-label">This Week</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-learners">-</div><div class="stat-label">Total Learners</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-instructors">-</div><div class="stat-label">Active Instructors</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-revenue">-</div><div class="stat-label">Total Revenue</div></div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-card-header">
+        <span class="panel-card-title">Upcoming Bookings</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="dash-upcoming-table">
+          <thead>
+            <tr><th>Date</th><th>Time</th><th>Learner</th><th>Instructor</th><th>Status</th></tr>
+          </thead>
+          <tbody id="dash-upcoming-body">
+            <tr><td colspan="5" class="empty-state">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ INSTRUCTORS SECTION ═══════════ -->
+  <div class="section" id="section-instructors">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Instructors</div>
+        <div class="page-subtitle">Manage your driving instructors</div>
+      </div>
+      <button class="btn btn-primary" onclick="openAddInstructor()">+ Add Instructor</button>
+    </div>
+
+    <div id="instructors-list">
+      <div class="empty-state">Loading...</div>
+    </div>
+  </div>
+
+  <!-- ═══════════ AVAILABILITY SECTION ═══════════ -->
+  <div class="section" id="section-availability">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Availability</div>
+        <div class="page-subtitle">Set weekly availability windows for each instructor</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      <label style="font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; display: block;">Select Instructor</label>
+      <select id="avail-instructor-select" onchange="loadAvailability()" style="padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; min-width: 260px; background: var(--white);">
+        <option value="">Choose an instructor...</option>
+      </select>
+    </div>
+
+    <div id="availability-editor" style="display: none;">
+      <div class="avail-grid" id="avail-grid"></div>
+      <div style="margin-top: 16px; display: flex; gap: 10px; align-items: center;">
+        <button class="btn btn-primary" onclick="openAddWindow()">+ Add Window</button>
+        <button class="btn btn-success" onclick="saveAvailability()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ BOOKINGS SECTION ═══════════ -->
+  <div class="section" id="section-bookings">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Bookings</div>
+        <div class="page-subtitle">View and manage all lesson bookings</div>
+      </div>
+      <button class="btn" onclick="loadBookings()">Refresh</button>
+    </div>
+
+    <div class="filter-bar" id="booking-filters">
+      <button class="filter-pill active" data-status="" onclick="filterBookings(this, '')">All</button>
+      <button class="filter-pill" data-status="confirmed" onclick="filterBookings(this, 'confirmed')">Confirmed</button>
+      <button class="filter-pill" data-status="completed" onclick="filterBookings(this, 'completed')">Completed</button>
+      <button class="filter-pill" data-status="cancelled" onclick="filterBookings(this, 'cancelled')">Cancelled</button>
+    </div>
+
+    <div class="panel-card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Date</th><th>Time</th><th>Learner</th><th>Instructor</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="bookings-body">
+            <tr><td colspan="6" class="empty-state">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ═══════════ MODALS ═══════════ -->
+
+<!-- Add/Edit Instructor Modal -->
+<div class="modal-overlay" id="modal-instructor">
+  <div class="modal">
+    <div class="modal-title" id="instructor-modal-title">Add Instructor</div>
+    <input type="hidden" id="instructor-edit-id">
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input type="text" id="inst-name" placeholder="e.g. John Smith" required>
+    </div>
+    <div class="form-group">
+      <label>Email *</label>
+      <input type="email" id="inst-email" placeholder="john@example.com" required>
+    </div>
+    <div class="form-group">
+      <label>Phone</label>
+      <input type="tel" id="inst-phone" placeholder="07700 900000">
+    </div>
+    <div class="form-group">
+      <label>Bio</label>
+      <textarea id="inst-bio" placeholder="Short bio about the instructor..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Photo URL</label>
+      <input type="url" id="inst-photo" placeholder="https://...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-instructor')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveInstructor()">Save Instructor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Availability Window Modal -->
+<div class="modal-overlay" id="modal-avail-window">
+  <div class="modal">
+    <div class="modal-title">Add Availability Window</div>
+    <div class="form-group">
+      <label>Day of Week</label>
+      <select id="window-day" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
+        <option value="1">Monday</option>
+        <option value="2">Tuesday</option>
+        <option value="3">Wednesday</option>
+        <option value="4">Thursday</option>
+        <option value="5">Friday</option>
+        <option value="6">Saturday</option>
+        <option value="0">Sunday</option>
+      </select>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+      <div class="form-group">
+        <label>Start Time</label>
+        <input type="text" id="window-start" placeholder="09:00" style="width:100%;">
+      </div>
+      <div class="form-group">
+        <label>End Time</label>
+        <input type="text" id="window-end" placeholder="17:00" style="width:100%;">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-avail-window')">Cancel</button>
+      <button class="btn btn-primary" onclick="addWindow()">Add Window</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Auth ──────────────────────────────────────────────────────────
+const adminData = JSON.parse(localStorage.getItem('cc_admin') || 'null');
+if (!adminData?.token) window.location.href = '/admin/login.html';
+
+const TOKEN = adminData.token;
+const HEADERS = { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' };
+
+// Set admin info in sidebar
+if (adminData.admin) {
+  document.getElementById('admin-name').textContent = adminData.admin.name || 'Admin';
+  document.getElementById('admin-email').textContent = adminData.admin.email || '';
+}
+
+function logout() {
+  localStorage.removeItem('cc_admin');
+  window.location.href = '/admin/login.html';
+}
+
+// Verify token on load
+fetch('/api/admin?action=verify', { headers: HEADERS })
+  .then(r => { if (!r.ok) logout(); })
+  .catch(() => logout());
+
+// ── Navigation ────────────────────────────────────────────────────
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('section-' + name).classList.add('active');
+  document.querySelectorAll('.sidebar-nav a').forEach(a => {
+    a.classList.toggle('active', a.dataset.section === name);
+  });
+  // Load data for section
+  if (name === 'dashboard')    loadDashboard();
+  if (name === 'instructors')  loadInstructors();
+  if (name === 'availability') loadInstructorSelect();
+  if (name === 'bookings')     loadBookings();
+  // Close mobile sidebar
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Modal helpers ─────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Date helpers ──────────────────────────────────────────────────
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function formatDate(str) {
+  const d = new Date(str + 'T00:00:00Z');
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+function formatTime(str) { return str ? str.slice(0, 5) : ''; }
+
+function statusBadge(status) {
+  const map = {
+    confirmed: 'badge-green', completed: 'badge-blue',
+    cancelled: 'badge-red', active: 'badge-green', inactive: 'badge-gray'
+  };
+  return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + status + '</span>';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════════════
+async function loadDashboard() {
+  try {
+    const res = await fetch('/api/admin?action=dashboard-stats', { headers: HEADERS });
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+
+    document.getElementById('stat-upcoming').textContent = data.bookings.upcoming;
+    document.getElementById('stat-today').textContent = data.today;
+    document.getElementById('stat-week').textContent = data.this_week;
+    document.getElementById('stat-learners').textContent = data.learners.total_learners;
+    document.getElementById('stat-instructors').textContent = data.instructors.active_instructors;
+    document.getElementById('stat-revenue').textContent =
+      '\u00a3' + (data.revenue.total_revenue_pence / 100).toLocaleString('en-GB', { minimumFractionDigits: 2 });
+  } catch (err) {
+    console.error('Dashboard stats error:', err);
+  }
+
+  // Load upcoming bookings
+  try {
+    const res = await fetch('/api/admin?action=all-bookings&status=confirmed', { headers: HEADERS });
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = data.bookings.filter(b => b.scheduled_date >= today).slice(0, 10);
+
+    const body = document.getElementById('dash-upcoming-body');
+    if (upcoming.length === 0) {
+      body.innerHTML = '<tr><td colspan="5" class="empty-state">No upcoming bookings</td></tr>';
+      return;
+    }
+    body.innerHTML = upcoming.map(b =>
+      '<tr>' +
+        '<td>' + formatDate(b.scheduled_date) + '</td>' +
+        '<td>' + formatTime(b.start_time) + ' – ' + formatTime(b.end_time) + '</td>' +
+        '<td><strong>' + esc(b.learner_name) + '</strong><br><span style="font-size:0.8rem;color:var(--muted)">' + esc(b.learner_email) + '</span></td>' +
+        '<td>' + esc(b.instructor_name) + '</td>' +
+        '<td>' + statusBadge(b.status) + '</td>' +
+      '</tr>'
+    ).join('');
+  } catch (err) {
+    console.error('Dashboard bookings error:', err);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INSTRUCTORS
+// ══════════════════════════════════════════════════════════════════
+let instructorsCache = [];
+
+async function loadInstructors() {
+  try {
+    const res = await fetch('/api/admin?action=all-instructors', { headers: HEADERS });
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    instructorsCache = data.instructors;
+    renderInstructors();
+  } catch (err) {
+    document.getElementById('instructors-list').innerHTML =
+      '<div class="empty-state">Failed to load instructors</div>';
+  }
+}
+
+function renderInstructors() {
+  const el = document.getElementById('instructors-list');
+  if (instructorsCache.length === 0) {
+    el.innerHTML = '<div class="empty-state">No instructors added yet</div>';
+    return;
+  }
+
+  el.innerHTML = instructorsCache.map(i => {
+    const availSummary = i.availability.length > 0
+      ? i.availability.map(w => DAYS[w.day_of_week] + ' ' + formatTime(w.start_time) + '–' + formatTime(w.end_time)).join(', ')
+      : 'No availability set';
+
+    return '<div class="panel-card" style="margin-bottom: 16px;">' +
+      '<div style="padding: 20px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">' +
+        '<div style="flex: 1; min-width: 200px;">' +
+          '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">' +
+            '<strong style="font-size: 1.1rem; font-family: var(--font-head);">' + esc(i.name) + '</strong>' +
+            statusBadge(i.active ? 'active' : 'inactive') +
+          '</div>' +
+          '<div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 4px;">' + esc(i.email) + (i.phone ? ' &middot; ' + esc(i.phone) : '') + '</div>' +
+          (i.bio ? '<div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 8px;">' + esc(i.bio) + '</div>' : '') +
+          '<div style="font-size: 0.8rem; color: var(--muted);">' +
+            '<span style="margin-right: 16px;">Upcoming: <strong>' + i.upcoming_bookings + '</strong></span>' +
+            '<span>Completed: <strong>' + i.completed_lessons + '</strong></span>' +
+          '</div>' +
+          '<div style="font-size: 0.78rem; color: var(--muted); margin-top: 6px;">Availability: ' + esc(availSummary) + '</div>' +
+        '</div>' +
+        '<div style="display: flex; gap: 8px; flex-shrink: 0;">' +
+          '<button class="btn btn-sm" onclick="openEditInstructor(' + i.id + ')">Edit</button>' +
+          (i.active
+            ? '<button class="btn btn-sm btn-danger" onclick="toggleInstructor(' + i.id + ', false)">Deactivate</button>'
+            : '<button class="btn btn-sm btn-success" onclick="toggleInstructor(' + i.id + ', true)">Activate</button>') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function openAddInstructor() {
+  document.getElementById('instructor-modal-title').textContent = 'Add Instructor';
+  document.getElementById('instructor-edit-id').value = '';
+  document.getElementById('inst-name').value = '';
+  document.getElementById('inst-email').value = '';
+  document.getElementById('inst-phone').value = '';
+  document.getElementById('inst-bio').value = '';
+  document.getElementById('inst-photo').value = '';
+  openModal('modal-instructor');
+}
+
+function openEditInstructor(id) {
+  const i = instructorsCache.find(x => x.id === id);
+  if (!i) return;
+  document.getElementById('instructor-modal-title').textContent = 'Edit Instructor';
+  document.getElementById('instructor-edit-id').value = id;
+  document.getElementById('inst-name').value = i.name || '';
+  document.getElementById('inst-email').value = i.email || '';
+  document.getElementById('inst-phone').value = i.phone || '';
+  document.getElementById('inst-bio').value = i.bio || '';
+  document.getElementById('inst-photo').value = i.photo_url || '';
+  openModal('modal-instructor');
+}
+
+async function saveInstructor() {
+  const editId = document.getElementById('instructor-edit-id').value;
+  const body = {
+    name: document.getElementById('inst-name').value.trim(),
+    email: document.getElementById('inst-email').value.trim(),
+    phone: document.getElementById('inst-phone').value.trim() || null,
+    bio: document.getElementById('inst-bio').value.trim() || null,
+    photo_url: document.getElementById('inst-photo').value.trim() || null,
+  };
+
+  if (!body.name || !body.email) { toast('Name and email are required', 'error'); return; }
+
+  try {
+    let url, payload;
+    if (editId) {
+      url = '/api/instructors?action=update';
+      payload = { ...body, id: parseInt(editId) };
+    } else {
+      url = '/api/instructors?action=create';
+      payload = body;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST', headers: HEADERS,
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+
+    closeModal('modal-instructor');
+    toast(editId ? 'Instructor updated' : 'Instructor created', 'success');
+    loadInstructors();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function toggleInstructor(id, active) {
+  try {
+    const res = await fetch('/api/instructors?action=update', {
+      method: 'POST', headers: HEADERS,
+      body: JSON.stringify({ id, active })
+    });
+    if (!res.ok) throw new Error('Failed');
+    toast(active ? 'Instructor activated' : 'Instructor deactivated', 'success');
+    loadInstructors();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// AVAILABILITY
+// ══════════════════════════════════════════════════════════════════
+let availWindows = []; // current working set
+
+async function loadInstructorSelect() {
+  try {
+    const res = await fetch('/api/admin?action=all-instructors', { headers: HEADERS });
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    instructorsCache = data.instructors;
+
+    const select = document.getElementById('avail-instructor-select');
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">Choose an instructor...</option>';
+    data.instructors.filter(i => i.active).forEach(i => {
+      select.innerHTML += '<option value="' + i.id + '">' + esc(i.name) + '</option>';
+    });
+    if (currentVal) { select.value = currentVal; loadAvailability(); }
+  } catch (err) {
+    toast('Failed to load instructors', 'error');
+  }
+}
+
+function loadAvailability() {
+  const id = document.getElementById('avail-instructor-select').value;
+  const editor = document.getElementById('availability-editor');
+  if (!id) { editor.style.display = 'none'; return; }
+  editor.style.display = 'block';
+
+  const instructor = instructorsCache.find(i => i.id === parseInt(id));
+  availWindows = instructor ? instructor.availability.map(w => ({
+    day_of_week: w.day_of_week,
+    start_time: formatTime(w.start_time),
+    end_time: formatTime(w.end_time)
+  })) : [];
+
+  renderAvailGrid();
+}
+
+function renderAvailGrid() {
+  const grid = document.getElementById('avail-grid');
+  // Show Mon-Sun (1,2,3,4,5,6,0)
+  const dayOrder = [1, 2, 3, 4, 5, 6, 0];
+
+  grid.innerHTML = dayOrder.map(d => {
+    const dayWindows = availWindows.filter(w => w.day_of_week === d);
+    return '<div class="avail-day">' +
+      '<div class="avail-day-label">' + DAY_NAMES[d] + '</div>' +
+      (dayWindows.length > 0
+        ? dayWindows.map((w, idx) => {
+            const globalIdx = availWindows.indexOf(w);
+            return '<div class="avail-slot">' +
+              '<span>' + w.start_time + '–' + w.end_time + '</span>' +
+              '<button class="remove-slot" onclick="removeWindow(' + globalIdx + ')" title="Remove">&times;</button>' +
+            '</div>';
+          }).join('')
+        : '<div style="font-size:0.75rem;color:var(--muted);font-style:italic;">No windows</div>') +
+    '</div>';
+  }).join('');
+}
+
+function openAddWindow() {
+  document.getElementById('window-day').value = '1';
+  document.getElementById('window-start').value = '09:00';
+  document.getElementById('window-end').value = '17:00';
+  openModal('modal-avail-window');
+}
+
+function addWindow() {
+  const day = parseInt(document.getElementById('window-day').value);
+  const start = document.getElementById('window-start').value.trim();
+  const end = document.getElementById('window-end').value.trim();
+
+  if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) {
+    toast('Times must be HH:MM format', 'error'); return;
+  }
+  if (start >= end) { toast('Start time must be before end time', 'error'); return; }
+
+  availWindows.push({ day_of_week: day, start_time: start, end_time: end });
+  closeModal('modal-avail-window');
+  renderAvailGrid();
+  toast('Window added (unsaved)', '');
+}
+
+function removeWindow(idx) {
+  availWindows.splice(idx, 1);
+  renderAvailGrid();
+}
+
+async function saveAvailability() {
+  const instructorId = parseInt(document.getElementById('avail-instructor-select').value);
+  if (!instructorId) return;
+
+  try {
+    const res = await fetch('/api/instructors?action=set-availability', {
+      method: 'POST', headers: HEADERS,
+      body: JSON.stringify({
+        instructor_id: instructorId,
+        windows: availWindows
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+
+    toast('Availability saved', 'success');
+    // Refresh instructor cache
+    loadInstructorSelect();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BOOKINGS
+// ══════════════════════════════════════════════════════════════════
+let allBookings = [];
+let currentBookingFilter = '';
+
+async function loadBookings() {
+  try {
+    const res = await fetch('/api/admin?action=all-bookings', { headers: HEADERS });
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    allBookings = data.bookings;
+    renderBookings();
+  } catch (err) {
+    document.getElementById('bookings-body').innerHTML =
+      '<tr><td colspan="6" class="empty-state">Failed to load bookings</td></tr>';
+  }
+}
+
+function filterBookings(btn, status) {
+  document.querySelectorAll('#booking-filters .filter-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  currentBookingFilter = status;
+  renderBookings();
+}
+
+function renderBookings() {
+  const body = document.getElementById('bookings-body');
+  let filtered = allBookings;
+  if (currentBookingFilter) {
+    filtered = allBookings.filter(b => b.status === currentBookingFilter);
+  }
+
+  if (filtered.length === 0) {
+    body.innerHTML = '<tr><td colspan="6" class="empty-state">No bookings found</td></tr>';
+    return;
+  }
+
+  body.innerHTML = filtered.map(b => {
+    const canComplete = b.status === 'confirmed';
+    return '<tr>' +
+      '<td>' + formatDate(b.scheduled_date) + '</td>' +
+      '<td>' + formatTime(b.start_time) + ' – ' + formatTime(b.end_time) + '</td>' +
+      '<td><strong>' + esc(b.learner_name) + '</strong><br><span style="font-size:0.8rem;color:var(--muted)">' + esc(b.learner_email) + '</span></td>' +
+      '<td>' + esc(b.instructor_name) + '</td>' +
+      '<td>' + statusBadge(b.status) + '</td>' +
+      '<td>' +
+        (canComplete ? '<button class="btn btn-sm btn-success" onclick="markComplete(' + b.id + ')">Complete</button>' : '') +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function markComplete(bookingId) {
+  try {
+    const res = await fetch('/api/admin?action=mark-complete', {
+      method: 'POST', headers: HEADERS,
+      body: JSON.stringify({ booking_id: bookingId })
+    });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+    toast('Booking marked as complete', 'success');
+    loadBookings();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+// ── Escape HTML ───────────────────────────────────────────────────
+function esc(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// ── Initial load ──────────────────────────────────────────────────
+loadDashboard();
+</script>
+</body>
+</html>

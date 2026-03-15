@@ -15,6 +15,7 @@
 //     → replace all availability windows for an instructor
 
 const { neon } = require('@neondatabase/serverless');
+const jwt = require('jsonwebtoken');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,12 +23,26 @@ function setCors(res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Admin-Secret');
 }
 
+// Accept either legacy ADMIN_SECRET or admin JWT token
 function verifyAdmin(req) {
+  // 1. Check legacy ADMIN_SECRET
   const secret = process.env.ADMIN_SECRET;
-  if (!secret) return false;
-  // Accept secret in body or as X-Admin-Secret header
-  return (req.body?.admin_secret === secret) ||
-         (req.headers['x-admin-secret'] === secret);
+  if (secret) {
+    if ((req.body?.admin_secret === secret) ||
+        (req.headers['x-admin-secret'] === secret)) return true;
+  }
+  // 2. Check admin JWT
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (jwtSecret) {
+      try {
+        const payload = jwt.verify(auth.slice(7), jwtSecret);
+        if (payload.role === 'admin' || payload.role === 'superadmin') return true;
+      } catch {}
+    }
+  }
+  return false;
 }
 
 module.exports = async (req, res) => {
