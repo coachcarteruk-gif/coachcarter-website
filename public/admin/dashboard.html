@@ -453,9 +453,15 @@ document.querySelectorAll('.filters .filter-btn').forEach(btn => {
   });
 });
 
+// Admin auth headers for API calls
+const adminAuth = JSON.parse(localStorage.getItem('cc_admin') || 'null');
+const ADMIN_HEADERS = adminAuth?.token
+  ? { 'Authorization': 'Bearer ' + adminAuth.token, 'Content-Type': 'application/json' }
+  : { 'Content-Type': 'application/json' };
+
 async function loadEnquiries() {
   try {
-    const res = await fetch('/api/enquiries?action=list');
+    const res = await fetch('/api/enquiries?action=list', { headers: ADMIN_HEADERS });
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
     
@@ -524,7 +530,7 @@ function refreshEnquiries() {
 }
 
 function viewEnquiry(id) {
-  fetch('/api/enquiries?action=get&id=' + id)
+  fetch('/api/enquiries?action=get&id=' + id, { headers: ADMIN_HEADERS })
     .then(res => res.json())
     .then(data => {
       const e = data.enquiry;
@@ -566,7 +572,7 @@ async function updateEnquiryStatus(id, status) {
   try {
     const res = await fetch('/api/enquiries?action=update-status', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: ADMIN_HEADERS,
       body: JSON.stringify({ id: id, status: status })
     });
     

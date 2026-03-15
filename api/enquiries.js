@@ -10,6 +10,7 @@
 const { Resend }     = require('resend');
 const nodemailer     = require('nodemailer');
 const { neon }       = require('@neondatabase/serverless');
+const jwt            = require('jsonwebtoken');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -20,12 +21,27 @@ const transporter = nodemailer.createTransport({
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
 });
 
+// Admin auth — checks JWT or ADMIN_SECRET
+function verifyAdmin(req) {
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try {
+      const decoded = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
+      if (decoded.role === 'admin' || decoded.role === 'superadmin') return true;
+    } catch {}
+  }
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) return false;
+  const provided = req.body?.admin_secret || req.headers['x-admin-secret'];
+  return provided === secret;
+}
+
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, X-Admin-Secret');
 }
 
 module.exports = async (req, res) => {
@@ -34,9 +50,12 @@ module.exports = async (req, res) => {
 
   const action = req.query.action;
 
+  if (action === 'submit')        return handleSubmit(req, res);
+
+  // Admin-only endpoints
+  if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised — admin access required' });
   if (action === 'list')          return handleList(req, res);
   if (action === 'get')           return handleGet(req, res);
-  if (action === 'submit')        return handleSubmit(req, res);
   if (action === 'update-status') return handleUpdateStatus(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });

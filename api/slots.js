@@ -285,8 +285,18 @@ async function handleBook(req, res) {
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found or unavailable' });
 
-    // 3. Create booking — unique index on (instructor_id, scheduled_date, start_time)
-    //    will throw if slot was taken between the credit check and this insert
+    // 3. Deduct credit FIRST (atomically — only if balance >= 1)
+    const [deducted] = await sql`
+      UPDATE learner_users
+      SET credit_balance = credit_balance - 1
+      WHERE id = ${user.id} AND credit_balance >= 1
+      RETURNING credit_balance
+    `;
+    if (!deducted)
+      return res.status(402).json({ error: 'Insufficient credits. Please purchase credits to book a lesson.' });
+
+    // 4. Create booking — unique index on (instructor_id, scheduled_date, start_time)
+    //    will throw if slot was taken. If so, refund the credit.
     let booking;
     try {
       const [b] = await sql`
@@ -299,18 +309,17 @@ async function handleBook(req, res) {
       `;
       booking = b;
     } catch (insertErr) {
+      // Refund the credit since booking failed
+      await sql`
+        UPDATE learner_users
+        SET credit_balance = credit_balance + 1
+        WHERE id = ${user.id}
+      `;
       if (insertErr.message?.includes('uq_instructor_slot')) {
         return res.status(409).json({ error: 'Sorry, that slot was just booked by someone else. Please choose another.' });
       }
       throw insertErr;
     }
-
-    // 4. Deduct 1 credit from learner balance
-    await sql`
-      UPDATE learner_users
-      SET credit_balance = credit_balance - 1
-      WHERE id = ${user.id}
-    `;
 
     // 5. Get updated balance for response
     const [updated] = await sql`SELECT credit_balance FROM learner_users WHERE id = ${user.id}`;

@@ -59,6 +59,15 @@ async function handleCreditPurchase(session) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
+    // Idempotency check — skip if this session was already processed
+    const [existing] = await sql`
+      SELECT id FROM credit_transactions WHERE stripe_session_id = ${session.id}
+    `;
+    if (existing) {
+      console.log(`⏭️ Duplicate webhook for session ${session.id} — skipping`);
+      return;
+    }
+
     // Determine payment method (card or klarna)
     const paymentMethod = session.payment_method_types?.[0] || 'card';
 
