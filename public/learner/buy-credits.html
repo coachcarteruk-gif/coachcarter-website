@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
     :root {
       --primary:    #272727;
@@ -17,7 +18,7 @@
       --accent-mid: rgba(245,131,33,0.12);
       --muted:      #797879;
       --border:     #e0e0e0;
-      --bg:         #ffffff;
+      --bg:         #f9f9f9;
       --surface:    #f9f9f9;
       --white:      #ffffff;
       --green:      #22c55e;
@@ -218,13 +219,16 @@
       padding: 10px 8px;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
       user-select: none;
+      position: relative;
     }
     .tier-card:hover { border-color: var(--accent); background: var(--accent-lt); }
     .tier-card.active {
       border-color: var(--accent);
       background: var(--accent-lt);
+      box-shadow: 0 0 0 2px var(--accent);
+      transform: translateY(-2px);
     }
     .tier-hours { font-size: 0.8rem; color: var(--muted); margin-bottom: 2px; }
     .tier-discount {
@@ -234,6 +238,21 @@
       color: var(--accent);
     }
     .tier-credits { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+    .popular-badge {
+      position: absolute;
+      top: -9px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: white;
+      font-size: 0.6rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 10px;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
 
     /* ── Price breakdown ── */
     .price-breakdown {
@@ -425,6 +444,7 @@
         <div class="tier-credits">4 credits</div>
       </div>
       <div class="tier-card" onclick="updateQty(8)"  data-credits="8">
+        <div class="popular-badge">Most popular</div>
         <div class="tier-hours">12 hrs</div>
         <div class="tier-discount">10% off</div>
         <div class="tier-credits">8 credits</div>
@@ -638,7 +658,7 @@
   // ── Init ─────────────────────────────────────────────────────────────────────
   if (initAuth()) {
     loadBalance();
-    updateQty(1);
+    updateQty(8); // Default to 12hrs / 10% off — the most popular package
   }
 </script>
 
