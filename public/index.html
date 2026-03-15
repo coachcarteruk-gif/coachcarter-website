@@ -271,6 +271,26 @@ body {
   color: var(--accent);
 }
 
+/* ── Social proof ────────────────────── */
+.social-proof {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 8px;
+  margin-bottom: -8px;
+  letter-spacing: 0.01em;
+}
+
+/* ── Highlight card (Lessons & Pricing) ─ */
+.card.highlight {
+  border-left: 3px solid var(--accent);
+}
+
+/* ── Contact card ────────────────────── */
+.card-icon-green {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
 /* Setmore hidden button */
 #Anywhere_button_iframe { display: none !important; }
 
@@ -293,6 +313,7 @@ body {
     </div>
     <h1>Coach<span>Carter</span></h1>
     <p>Driving Instructor · Reading &amp; surrounding areas</p>
+    <p class="social-proof">⭐ X.X on Google · DVSA Approved Instructor</p>
   </header>
 
   <!-- Cards -->
@@ -337,11 +358,25 @@ body {
     </div>
 
     <!-- Lessons / Marketing site -->
-    <a class="card" href="/lessons.html" aria-label="See lessons and pricing">
+    <a class="card highlight" href="/lessons.html" aria-label="See lessons and pricing">
       <div class="card-icon">🚗</div>
       <div class="card-text">
         <div class="card-label">Lessons &amp; Pricing</div>
         <div class="card-sub">Pay as you go, bulk packages &amp; Pass Guarantee</div>
+      </div>
+      <div class="card-arrow">→</div>
+    </a>
+
+    <div class="divider">
+      <hr><span>questions?</span><hr>
+    </div>
+
+    <!-- WhatsApp / Call -->
+    <a class="card" href="https://wa.me/447903081618" target="_blank" rel="noopener" aria-label="WhatsApp or call CoachCarter">
+      <div class="card-icon card-icon-green">💬</div>
+      <div class="card-text">
+        <div class="card-label">WhatsApp or Call</div>
+        <div class="card-sub">07903 081 618 — happy to answer any questions</div>
       </div>
       <div class="card-arrow">→</div>
     </a>

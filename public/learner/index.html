@@ -774,6 +774,7 @@ function renderProgressCard(group, ratingsMap, container, expanded) {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:0.75rem;color:var(--muted);">${ratedCount}/${questions.length}</span>
         ${ratedCount > 0 ? `<span style="font-size:0.8rem;font-weight:700;color:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}">${pct}%</span>` : ''}
         <span class="chevron${expanded ? ' open' : ''}" id="${chevId}">▼</span>
       </div>

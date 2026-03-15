@@ -230,14 +230,19 @@
       box-shadow: 0 0 0 2px var(--accent);
       transform: translateY(-2px);
     }
-    .tier-hours { font-size: 0.8rem; color: var(--muted); margin-bottom: 2px; }
-    .tier-discount {
+    .tier-hours {
       font-family: var(--font-head);
-      font-size: 1rem;
+      font-size: 1.1rem;
       font-weight: 800;
+      color: var(--primary);
+      margin-bottom: 3px;
+    }
+    .tier-discount {
+      font-size: 0.72rem;
+      font-weight: 700;
       color: var(--accent);
     }
-    .tier-credits { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+    .tier-credits { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
     .popular-badge {
       position: absolute;
       top: -9px;
@@ -440,28 +445,28 @@
     <div class="discount-tiers">
       <div class="tier-card" onclick="updateQty(4)"  data-credits="4">
         <div class="tier-hours">6 hrs</div>
-        <div class="tier-discount">5% off</div>
+        <div class="tier-discount">Save 5%</div>
         <div class="tier-credits">4 credits</div>
       </div>
       <div class="tier-card" onclick="updateQty(8)"  data-credits="8">
         <div class="popular-badge">Most popular</div>
         <div class="tier-hours">12 hrs</div>
-        <div class="tier-discount">10% off</div>
+        <div class="tier-discount">Save 10%</div>
         <div class="tier-credits">8 credits</div>
       </div>
       <div class="tier-card" onclick="updateQty(12)" data-credits="12">
         <div class="tier-hours">18 hrs</div>
-        <div class="tier-discount">15% off</div>
+        <div class="tier-discount">Save 15%</div>
         <div class="tier-credits">12 credits</div>
       </div>
       <div class="tier-card" onclick="updateQty(16)" data-credits="16">
         <div class="tier-hours">24 hrs</div>
-        <div class="tier-discount">20% off</div>
+        <div class="tier-discount">Save 20%</div>
         <div class="tier-credits">16 credits</div>
       </div>
       <div class="tier-card" onclick="updateQty(20)" data-credits="20">
         <div class="tier-hours">30 hrs</div>
-        <div class="tier-discount">25% off</div>
+        <div class="tier-discount">Save 25%</div>
         <div class="tier-credits">20 credits</div>
       </div>
     </div>
@@ -658,7 +663,7 @@
   // ── Init ─────────────────────────────────────────────────────────────────────
   if (initAuth()) {
     loadBalance();
-    updateQty(8); // Default to 12hrs / 10% off — the most popular package
+    updateQty(8); // Default to 12hrs / Save 10% — the most popular package
   }
 </script>
 
