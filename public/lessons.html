@@ -16,7 +16,6 @@
 <meta name="twitter:image" content="https://coachcarter.co.uk/Logo.png">
 
 <script>
-  // Maintenance mode check - runs immediately before page renders
   fetch('/api/status')
     .then(res => res.json())
     .then(data => {
@@ -24,29 +23,30 @@
         window.location.replace('/maintenance.html');
       }
     })
-    .catch(() => {
-      // If API fails, show site anyway
-    });
+    .catch(() => {});
 </script>
 
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --primary:      #272727;
+  --primary:      #0f172a;
   --accent:       #f58321;
   --accent-dk:    #e07518;
-  --accent-lt:    #fff4ec;
+  --accent-lt:    #fff7ed;
   --accent-mid:   rgba(245,131,33,0.12);
-  --muted:        #797879;
-  --border:       #e0e0e0;
-  --bg:           #ffffff;
+  --accent-glow:  rgba(245,131,33,0.25);
+  --muted:        #64748b;
+  --border:       #e2e8f0;
+  --bg:           #fafaf9;
   --white:        #ffffff;
-  --surface:      #f9f9f9;
-  --green:        #1a9e5c;
-  --font-head:    'Bricolage Grotesque', sans-serif;
-  --font-body:    'Lato', sans-serif;
+  --surface:      #f8fafc;
+  --green:        #10b981;
+  --font-head:    'Syne', sans-serif;
+  --font-body:    'Outfit', sans-serif;
 }
 
 html { scroll-behavior: smooth; }
@@ -60,7 +60,18 @@ body {
   overflow-x: hidden;
 }
 
-/* Mobile nav */
+/* ── REVEAL ANIMATION ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── MOBILE NAV ── */
 .hamburger {
   display: none;
   flex-direction: column;
@@ -89,7 +100,8 @@ body {
     display: none;
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(255,255,255,0.98);
+    background: rgba(250,250,249,0.98);
+    backdrop-filter: blur(20px);
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -115,12 +127,14 @@ body {
   .nav-cta-wrap.open .nav-cta { width: 100%; justify-content: center; }
 }
 
+/* ── NAV ── */
 nav {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(16px);
+  background: rgba(250,250,249,0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -142,13 +156,14 @@ nav {
   list-style: none;
 }
 .nav-links a {
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: 0.82rem;
+  font-weight: 600;
   color: var(--muted);
   text-decoration: none;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   transition: color 0.2s;
+  font-family: var(--font-body);
 }
 .nav-links a:hover { color: var(--accent); }
 
@@ -157,29 +172,28 @@ nav {
   color: var(--white);
   font-family: var(--font-head);
   font-weight: 700;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   padding: 10px 24px;
-  border-radius: 6px;
+  border-radius: 8px;
   text-decoration: none;
-  transition: background 0.2s, transform 0.15s;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   cursor: pointer;
   border: none;
 }
-.nav-cta:hover { background: var(--accent-dk); transform: translateY(-1px); }
-  .nav-cta:hover { background: var(--accent-dk); transform: translateY(-1px); }
+.nav-cta:hover { background: var(--accent-dk); transform: translateY(-2px); box-shadow: 0 6px 20px var(--accent-glow); }
 
 .nav-cta.secondary {
   background: transparent;
   color: var(--primary);
   border: 2px solid var(--border);
 }
-
 .nav-cta.secondary:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-lt);
 }
 
+/* ── HERO ── */
 .hero {
   padding: 100px 48px 80px;
   max-width: 1200px;
@@ -188,25 +202,37 @@ nav {
   grid-template-columns: 1fr 1fr;
   gap: 64px;
   align-items: center;
+  position: relative;
 }
 
-.hero-left {}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -100px;
+  right: -200px;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245,131,33,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
 
 .hero-tag {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.75rem;
+  gap: 10px;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   color: var(--accent);
   margin-bottom: 24px;
+  font-family: var(--font-body);
 }
 .hero-tag::before {
   content: '';
   display: block;
-  width: 24px;
+  width: 32px;
   height: 2px;
   background: var(--accent);
 }
@@ -217,41 +243,60 @@ nav {
   font-weight: 800;
   color: var(--primary);
   line-height: 1.0;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   margin-bottom: 24px;
 }
 
 .hero h1 em {
   font-style: normal;
   color: var(--accent);
+  position: relative;
+}
+
+.hero h1 em::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--accent);
+  opacity: 0.3;
+  border-radius: 2px;
+  transform: skewX(-12deg);
 }
 
 .hero-sub {
   font-size: 1.05rem;
   color: var(--muted);
   line-height: 1.75;
-  font-weight: 300;
+  font-weight: 400;
   margin-bottom: 40px;
   max-width: 440px;
 }
 
 .hero-badges {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .hero-badge {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   background: var(--white);
   border: 1px solid var(--border);
   border-radius: 100px;
-  padding: 8px 16px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  padding: 8px 18px;
+  font-size: 0.78rem;
+  font-weight: 600;
   color: var(--primary);
+  transition: all 0.2s;
+}
+.hero-badge:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 12px var(--accent-glow);
 }
 .hero-badge .dot {
   width: 8px; height: 8px;
@@ -261,7 +306,7 @@ nav {
 
 .hero-right {
   background: var(--primary);
-  border-radius: 24px;
+  border-radius: 20px;
   padding: 48px;
   color: var(--white);
   position: relative;
@@ -272,8 +317,17 @@ nav {
   position: absolute;
   width: 300px; height: 300px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(245,131,33,0.2), transparent 70%);
+  background: radial-gradient(circle, rgba(245,131,33,0.15), transparent 70%);
   top: -60px; right: -60px;
+}
+.hero-right::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent), transparent);
 }
 
 .stat-grid {
@@ -283,7 +337,6 @@ nav {
   position: relative;
 }
 
-.stat-item {}
 .stat-num {
   font-family: var(--font-head);
   font-size: 2.2rem;
@@ -295,7 +348,7 @@ nav {
 }
 .stat-label {
   font-size: 0.78rem;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.45);
   font-weight: 300;
   line-height: 1.4;
 }
@@ -303,7 +356,7 @@ nav {
 .stat-divider {
   grid-column: 1 / -1;
   height: 1px;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.06);
   margin: 4px 0;
 }
 
@@ -319,13 +372,14 @@ nav {
   border-radius: 10px;
   text-align: center;
   text-decoration: none;
-  transition: background 0.2s;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
   cursor: pointer;
   border: none;
 }
-.hero-right-cta:hover { background: var(--accent-dk); }
+.hero-right-cta:hover { background: var(--accent-dk); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,131,33,0.3); }
 
+/* ── SECTIONS ── */
 .section-wrap {
   max-width: 1200px;
   margin: 0 auto;
@@ -338,16 +392,17 @@ nav {
 }
 
 .section-tag-line {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 16px;
+  font-family: var(--font-body);
 }
 .section-tag-line::before,
 .section-tag-line::after {
@@ -362,7 +417,7 @@ nav {
   font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 800;
   color: var(--primary);
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   line-height: 1.05;
   margin-bottom: 16px;
 }
@@ -370,15 +425,25 @@ nav {
 .section-sub {
   font-size: 1rem;
   color: var(--muted);
-  font-weight: 300;
-  max-width: 500px;
+  font-weight: 400;
+  max-width: 520px;
   margin: 0 auto;
   line-height: 1.7;
 }
 
+/* ── PAYG SECTION ── */
 .payg-section {
   padding: 100px 0 60px;
-  border-top: 1px solid var(--border);
+  position: relative;
+}
+.payg-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
 }
 
 .payg-card {
@@ -388,6 +453,7 @@ nav {
   overflow: hidden;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.04);
 }
 
 .payg-left {
@@ -399,13 +465,14 @@ nav {
   display: inline-block;
   background: var(--accent-mid);
   color: var(--accent);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  padding: 5px 12px;
-  border-radius: 4px;
+  padding: 5px 14px;
+  border-radius: 6px;
   margin-bottom: 24px;
+  font-family: var(--font-body);
 }
 
 .payg-left h2 {
@@ -413,7 +480,7 @@ nav {
   font-size: 2.4rem;
   font-weight: 800;
   color: var(--primary);
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   line-height: 1.05;
   margin-bottom: 16px;
 }
@@ -421,7 +488,7 @@ nav {
 .payg-price {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 24px;
 }
 .payg-price-num {
@@ -443,7 +510,7 @@ nav {
   color: var(--muted);
   line-height: 1.75;
   margin-bottom: 32px;
-  font-weight: 300;
+  font-weight: 400;
 }
 
 .payg-features {
@@ -463,7 +530,7 @@ nav {
 }
 .payg-feature::before {
   content: '✓';
-  width: 22px; height: 22px;
+  width: 24px; height: 24px;
   border-radius: 50%;
   background: var(--accent-mid);
   color: var(--accent);
@@ -495,38 +562,54 @@ nav {
 .mini-stat {
   background: var(--white);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px 24px;
+  border-radius: 14px;
+  padding: 18px 22px;
   display: flex;
   align-items: center;
   gap: 16px;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.mini-stat:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  border-color: var(--accent);
 }
 .mini-stat-icon {
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   width: 44px; height: 44px;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--accent-lt);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
-.mini-stat-text {}
 .mini-stat-title {
   font-size: 0.88rem;
   font-weight: 700;
   color: var(--primary);
   margin-bottom: 2px;
+  font-family: var(--font-head);
 }
 .mini-stat-sub {
   font-size: 0.78rem;
   color: var(--muted);
-  font-weight: 300;
+  font-weight: 400;
 }
 
+/* ── PACKAGES SECTION ── */
 .packages-section {
   padding: 100px 0;
-  border-top: 1px solid var(--border);
+  position: relative;
+}
+.packages-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
 }
 
 .pkg-calculator {
@@ -538,6 +621,17 @@ nav {
   grid-template-columns: 1fr 1fr;
   gap: 48px;
   align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.pkg-calculator::before {
+  content: '';
+  position: absolute;
+  width: 400px; height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245,131,33,0.08), transparent 70%);
+  bottom: -200px; left: -100px;
+  pointer-events: none;
 }
 
 .pkg-calc-left h3 {
@@ -549,12 +643,11 @@ nav {
 }
 .pkg-calc-left p {
   font-size: 0.88rem;
-  color: rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.4);
   margin-bottom: 32px;
   font-weight: 300;
 }
 
-.pkg-slider-wrap {}
 .pkg-slider-label {
   display: flex;
   justify-content: space-between;
@@ -562,10 +655,10 @@ nav {
   margin-bottom: 14px;
 }
 .pkg-slider-label span:first-child {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.35);
 }
 .pkg-slider-val {
   font-family: var(--font-head);
@@ -583,29 +676,33 @@ input[type=range].pkg-range {
 }
 input[type=range].pkg-range::-webkit-slider-track {
   height: 4px;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.08);
   border-radius: 2px;
 }
 input[type=range].pkg-range::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 22px; height: 22px;
+  width: 24px; height: 24px;
   border-radius: 50%;
   background: var(--accent);
-  margin-top: -9px;
-  box-shadow: 0 0 12px rgba(245,131,33,0.5);
+  margin-top: -10px;
+  box-shadow: 0 0 16px rgba(245,131,33,0.5);
+  transition: transform 0.2s;
+}
+input[type=range].pkg-range::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
 }
 
 .pkg-steps {
   display: flex;
   justify-content: space-between;
   font-size: 0.7rem;
-  color: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.2);
   margin-top: 4px;
 }
 
 .pkg-calc-right {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
   border-radius: 16px;
   padding: 36px;
 }
@@ -615,13 +712,13 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   justify-content: space-between;
   align-items: baseline;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 .pkg-result-row:last-of-type { border-bottom: none; }
 
 .pkg-result-label {
   font-size: 0.82rem;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.35);
 }
 .pkg-result-val {
   font-family: var(--font-head);
@@ -635,14 +732,14 @@ input[type=range].pkg-range::-webkit-slider-thumb {
 .pkg-result-total {
   margin-top: 20px;
   padding-top: 20px;
-  border-top: 1px solid rgba(255,255,255,0.12);
+  border-top: 1px solid rgba(255,255,255,0.1);
   text-align: center;
 }
 .pkg-result-total-label {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: rgba(255,255,255,0.35);
+  color: rgba(255,255,255,0.3);
   margin-bottom: 8px;
 }
 .pkg-result-total-num {
@@ -667,19 +764,19 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   padding: 28px 20px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.25s;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
 }
 .pkg-card:hover {
   border-color: var(--accent);
   transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(245,131,33,0.12);
+  box-shadow: 0 12px 32px var(--accent-glow);
 }
 .pkg-card.active {
   border-color: var(--accent);
   background: var(--accent-lt);
   transform: translateY(-6px);
-  box-shadow: 0 16px 40px rgba(245,131,33,0.18);
+  box-shadow: 0 16px 40px rgba(245,131,33,0.15);
 }
 .pkg-card.popular::before {
   content: 'Best Value';
@@ -689,13 +786,14 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   transform: translateX(-50%);
   background: var(--accent);
   color: white;
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  padding: 4px 12px;
+  padding: 4px 14px;
   border-radius: 100px;
   white-space: nowrap;
+  font-family: var(--font-body);
 }
 
 .pkg-hrs {
@@ -708,7 +806,7 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   margin-bottom: 2px;
 }
 .pkg-hrs-label {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -718,9 +816,9 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   display: inline-block;
   background: var(--accent-mid);
   color: var(--accent);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  padding: 3px 10px;
+  padding: 3px 12px;
   border-radius: 100px;
   margin-bottom: 14px;
 }
@@ -740,10 +838,19 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   color: var(--muted);
 }
 
-/* CALCULATOR STYLES */
+/* ── GUARANTEE SECTION ── */
 .guarantee-section {
   padding: 100px 0;
-  border-top: 1px solid var(--border);
+  position: relative;
+}
+.guarantee-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
 }
 
 .calculator-container {
@@ -768,13 +875,33 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   font-size: 1.1rem;
 }
 
-/* Base Product */
 .base-card {
   background: var(--primary);
   color: white;
   border-radius: 20px;
   padding: 40px;
   margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.base-card::before {
+  content: '';
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245,131,33,0.12), transparent 70%);
+}
+.base-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), transparent);
 }
 
 .base-header {
@@ -792,9 +919,7 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   font-weight: 800;
 }
 
-.base-price {
-  text-align: right;
-}
+.base-price { text-align: right; }
 
 .base-price-amount {
   font-family: var(--font-head);
@@ -806,7 +931,7 @@ input[type=range].pkg-range::-webkit-slider-thumb {
 
 .base-price-note {
   font-size: 0.85rem;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.5);
 }
 
 .base-features {
@@ -837,9 +962,7 @@ input[type=range].pkg-range::-webkit-slider-thumb {
 }
 
 /* Add-ons */
-.addons-section {
-  margin-bottom: 24px;
-}
+.addons-section { margin-bottom: 24px; }
 
 .addon-section-title {
   font-family: var(--font-head);
@@ -859,13 +982,9 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-
-.addon-card:hover {
-  border-color: var(--accent);
-}
-
+.addon-card:hover { border-color: var(--accent); }
 .addon-card.selected {
   border-color: var(--accent);
   background: var(--accent-lt);
@@ -877,7 +996,6 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   font-weight: 700;
   margin-bottom: 4px;
 }
-
 .addon-info p {
   font-size: 0.9rem;
   color: var(--muted);
@@ -902,15 +1020,15 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   width: 28px;
   height: 28px;
   border: 2px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1rem;
   color: white;
   background: var(--white);
+  transition: all 0.2s;
 }
-
 .addon-card.selected .addon-checkbox {
   background: var(--accent);
   border-color: var(--accent);
@@ -931,19 +1049,16 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   margin-bottom: 12px;
   font-size: 0.95rem;
 }
-
 .total-row:last-child {
   margin-bottom: 0;
   padding-top: 12px;
   border-top: 2px solid var(--border);
   font-weight: 700;
 }
-
 .total-row.final {
   font-family: var(--font-head);
   font-size: 1.3rem;
 }
-
 .total-amount {
   color: var(--accent);
   font-size: 1.5rem;
@@ -960,12 +1075,12 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-
 .cta-button:hover {
   background: var(--accent-dk);
   transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--accent-glow);
 }
 
 .guarantee-note {
@@ -975,103 +1090,19 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   color: var(--muted);
 }
 
-@media (max-width: 900px) {
-  nav { padding: 0 20px; }
-  .hero { grid-template-columns: 1fr; padding: 80px 20px 60px; gap: 40px; }
-  .payg-card { grid-template-columns: 1fr; }
-  .payg-left { border-right: none; border-bottom: 1px solid var(--border); }
-  .pkg-calculator { grid-template-columns: 1fr; }
-  .pkg-grid { grid-template-columns: repeat(3, 1fr); }
-  .section-wrap { padding: 0 20px; }
-  .nav-links { display: none; }
-  .base-header { flex-direction: column; }
-  .base-price { text-align: left; }
-  .addon-card {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-  .addon-price {
-    flex-direction: row;
-    width: 100%;
-    justify-content: space-between;
-  }
-}
-
-@media (max-width: 560px) {
-  .pkg-grid { grid-template-columns: 1fr 1fr; }
-}
-  .btn-lg {
-  display: inline-block;
-  background: var(--accent);
-  color: white;
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: 1rem;
-  padding: 16px 40px;
-  border-radius: 10px;
-  text-decoration: none;
-  transition: all 0.2s;
-  cursor: pointer;
-  border: none;
-  text-align: center;
-}
-
-.btn-lg:hover {
-  background: var(--accent-dk);
-  transform: translateY(-2px);
-}
-
-.btn-lg.primary {
-  background: var(--accent);
-  color: white;
-}
-
-.btn-lg.secondary {
-  background: var(--white);
-  color: var(--primary);
-  border: 1px solid var(--border);
-}
-
-.btn-lg.secondary:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-/* Full width buttons in cards */
-.payg-right .btn-lg,
-.pkg-calc-right .btn-lg {
-  width: 100%;
-  margin-top: 12px;
-}
- .programme-link {
-  color: var(--accent);
-  text-decoration: underline;
-  font-weight: 500;
-}
-
-.programme-link:hover {
-  color: var(--accent-dk);
-}
-
-.programme-link-wrapper {
-  text-align: center;
-  margin-top: 16px;
-}
-
-.programme-link-secondary {
-  color: var(--muted);
-  font-size: 0.9rem;
-  text-decoration: underline;
-}
-
-.programme-link-secondary:hover {
-  color: var(--accent);
-} 
-  /* COMPARE SECTION FIXES */
+/* ── COMPARE ── */
 .compare-section {
   padding: 100px 0 60px;
-  border-top: 1px solid var(--border);
+  position: relative;
+}
+.compare-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
 }
 
 .compare-table {
@@ -1084,7 +1115,7 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   border-radius: 16px;
   overflow: hidden;
   background: var(--white);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.03);
 }
 
 .compare-table th,
@@ -1097,7 +1128,7 @@ input[type=range].pkg-range::-webkit-slider-thumb {
 .compare-table th {
   background: var(--surface);
   font-family: var(--font-head);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--primary);
   border-bottom: 2px solid var(--border);
@@ -1119,34 +1150,13 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   color: var(--primary);
 }
 
-.compare-table tr:last-child td {
-  border-bottom: none;
-}
+.compare-table tr:last-child td { border-bottom: none; }
+.compare-table tr:hover td { background: var(--surface); }
+.compare-table tr:hover td.highlight { background: rgba(245,131,33,0.04); }
 
-.compare-table tr:hover td {
-  background: var(--surface);
-}
-
-.compare-table tr:hover td.highlight {
-  background: rgba(245,131,33,0.06);
-}
-
-.check { 
-  color: var(--green); 
-  font-size: 1.2rem;
-  font-weight: 700;
-}
-
-.cross { 
-  color: #d0d0d0; 
-  font-size: 1.2rem;
-}
-
-.partial { 
-  color: var(--accent); 
-  font-size: 0.85rem; 
-  font-weight: 700;
-}
+.check { color: var(--green); font-size: 1.2rem; font-weight: 700; }
+.cross { color: #d0d0d0; font-size: 1.2rem; }
+.partial { color: var(--accent); font-size: 0.85rem; font-weight: 700; }
 
 .best-for {
   font-size: 0.78rem;
@@ -1158,21 +1168,210 @@ input[type=range].pkg-range::-webkit-slider-thumb {
   border-radius: 100px;
   white-space: nowrap;
 }
-
 td.highlight .best-for {
-  background: rgba(245,131,33,0.12);
+  background: var(--accent-mid);
   color: var(--accent-dk);
 }
 
-/* CTA SECTION SPACING */
+/* ── TESTIMONIALS ── */
+.testimonials-section {
+  background: var(--surface);
+  padding: 80px 0;
+}
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 48px;
+}
+.testimonial-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.testimonial-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+}
+.testimonial-stars {
+  display: flex;
+  gap: 3px;
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+.testimonial-text {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: #444;
+  flex: 1;
+}
+.testimonial-author {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.testimonial-name { font-weight: 700; font-size: 0.95rem; }
+.testimonial-meta { font-size: 0.85rem; color: var(--muted); }
+.testimonials-cta { text-align: center; margin-top: 40px; }
+.testimonials-cta a { color: var(--accent); font-weight: 600; font-size: 0.95rem; text-decoration: none; }
+.testimonials-cta a:hover { text-decoration: underline; }
+
+/* ── ENQUIRY ── */
+.enquiry-section {
+  padding: 100px 20px;
+  background: var(--surface);
+}
+
+.enquiry-card {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 40px;
+  max-width: 700px;
+  margin: 0 auto;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.06);
+  border: 1px solid var(--border);
+}
+
+.enquiry-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.enquiry-header h3 {
+  font-family: var(--font-head);
+  font-size: 1.4rem;
+  margin-bottom: 8px;
+}
+
+.enquiry-header p { color: var(--muted); }
+
+.enquiry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.enquiry-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-group.full-width { grid-column: 1 / -1; }
+
+.form-group label {
+  font-family: var(--font-head);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--primary);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 14px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+  background: var(--white);
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.form-group textarea { resize: vertical; min-height: 100px; }
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.enquiry-submit {
+  background: var(--accent);
+  color: white;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 16px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.enquiry-submit:hover {
+  background: var(--accent-dk);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px var(--accent-glow);
+}
+
+.enquiry-trust {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin-top: 40px;
+  flex-wrap: wrap;
+}
+.trust-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.enquiry-status {
+  text-align: center;
+  padding: 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  display: none;
+}
+.enquiry-status.success {
+  display: block;
+  background: rgba(16,185,129,0.08);
+  color: var(--green);
+  border: 1px solid rgba(16,185,129,0.2);
+}
+.enquiry-status.error {
+  display: block;
+  background: rgba(239,68,68,0.08);
+  color: #dc2626;
+  border: 1px solid rgba(239,68,68,0.2);
+}
+
+/* ── CTA SECTION ── */
 .cta-section {
   padding: 120px 48px;
   text-align: center;
-  border-top: 1px solid var(--border);
-  margin-top: 60px;
   position: relative;
 }
-
 .cta-section::before {
   content: '';
   position: absolute;
@@ -1190,7 +1389,7 @@ td.highlight .best-for {
   font-size: clamp(2rem, 4vw, 3.2rem);
   font-weight: 800;
   color: var(--primary);
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   line-height: 1.05;
   margin-bottom: 24px;
 }
@@ -1213,227 +1412,106 @@ td.highlight .best-for {
   flex-wrap: wrap;
 }
 
-/* ENQUIRY FORM STYLES */
-/* TESTIMONIALS */
-.testimonials-section {
-  background: var(--surface);
-  padding: 80px 0;
-}
-.testimonials-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  margin-top: 48px;
-}
-.testimonial-card {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.testimonial-stars {
-  display: flex;
-  gap: 3px;
-  color: var(--accent);
-  font-size: 1.1rem;
-}
-.testimonial-text {
-  font-size: 0.97rem;
-  line-height: 1.65;
-  color: #444;
-  flex: 1;
-}
-.testimonial-author {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  border-top: 1px solid var(--border);
-  padding-top: 16px;
-}
-.testimonial-name {
-  font-weight: 700;
-  font-size: 0.95rem;
-}
-.testimonial-meta {
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-.testimonials-cta {
-  text-align: center;
-  margin-top: 40px;
-}
-.testimonials-cta a {
-  color: var(--accent);
-  font-weight: 600;
-  font-size: 0.95rem;
-  text-decoration: none;
-}
-.testimonials-cta a:hover { text-decoration: underline; }
-@media (max-width: 900px) {
-  .testimonials-grid { grid-template-columns: 1fr 1fr; }
-}
-@media (max-width: 560px) {
-  .testimonials-grid { grid-template-columns: 1fr; }
-}
-
-.enquiry-section {
-  padding: 100px 20px;
-  background: var(--surface);
-}
-
-.enquiry-card {
-  background: var(--white);
-  border-radius: 20px;
-  padding: 40px;
-  max-width: 700px;
-  margin: 0 auto;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.08);
-}
-
-.enquiry-header {
-  text-align: center;
-  margin-bottom: 32px;
-}
-
-.enquiry-header h3 {
-  font-family: var(--font-head);
-  font-size: 1.4rem;
-  margin-bottom: 8px;
-}
-
-.enquiry-header p {
-  color: var(--muted);
-}
-
-.enquiry-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.enquiry-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-group.full-width {
-  grid-column: 1 / -1;
-}
-
-.form-group label {
-  font-family: var(--font-head);
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--primary);
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  padding: 14px;
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  font-family: var(--font-body);
-  font-size: 1rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  border-color: var(--accent);
-}
-
-.form-group textarea {
-  resize: vertical;
-  min-height: 100px;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.enquiry-submit {
+/* ── BUTTONS ── */
+.btn-lg {
+  display: inline-block;
   background: var(--accent);
   color: white;
   font-family: var(--font-head);
   font-weight: 700;
-  font-size: 1.1rem;
-  padding: 16px;
-  border: none;
+  font-size: 1rem;
+  padding: 16px 40px;
   border-radius: 10px;
+  text-decoration: none;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   cursor: pointer;
-  transition: all 0.2s;
+  border: none;
+  text-align: center;
 }
-
-.enquiry-submit:hover {
+.btn-lg:hover {
   background: var(--accent-dk);
   transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--accent-glow);
+}
+.btn-lg.primary { background: var(--accent); color: white; }
+.btn-lg.secondary {
+  background: var(--white);
+  color: var(--primary);
+  border: 1.5px solid var(--border);
+}
+.btn-lg.secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-.enquiry-trust {
-  display: flex;
-  justify-content: center;
-  gap: 40px;
-  margin-top: 40px;
-  flex-wrap: wrap;
+.payg-right .btn-lg,
+.pkg-calc-right .btn-lg {
+  width: 100%;
+  margin-top: 12px;
 }
 
-.trust-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.programme-link {
+  color: var(--accent);
+  text-decoration: underline;
+  font-weight: 500;
+}
+.programme-link:hover { color: var(--accent-dk); }
+.programme-link-wrapper { text-align: center; margin-top: 16px; }
+.programme-link-secondary {
   color: var(--muted);
   font-size: 0.9rem;
+  text-decoration: underline;
 }
+.programme-link-secondary:hover { color: var(--accent); }
 
-.enquiry-status {
+/* ── FOOTER ── */
+footer {
+  background: var(--primary);
+  color: rgba(255,255,255,0.4);
   text-align: center;
-  padding: 16px;
-  border-radius: 10px;
-  font-weight: 600;
-  display: none;
+  padding: 32px 48px;
+  font-size: 0.82rem;
 }
-
-.enquiry-status.success {
-  display: block;
-  background: rgba(26,158,92,0.1);
-  color: var(--green);
-  border: 1px solid rgba(26,158,92,0.2);
+footer a {
+  color: rgba(255,255,255,0.5);
+  text-decoration: none;
+  transition: color 0.2s;
 }
+footer a:hover { color: var(--accent); }
 
-.enquiry-status.error {
-  display: block;
-  background: rgba(239,68,68,0.1);
-  color: #dc2626;
-  border: 1px solid rgba(239,68,68,0.2);
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  nav { padding: 0 20px; }
+  .hero { grid-template-columns: 1fr; padding: 80px 20px 60px; gap: 40px; }
+  .payg-card { grid-template-columns: 1fr; }
+  .payg-left { border-right: none; border-bottom: 1px solid var(--border); }
+  .pkg-calculator { grid-template-columns: 1fr; }
+  .pkg-grid { grid-template-columns: repeat(3, 1fr); }
+  .section-wrap { padding: 0 20px; }
+  .nav-links { display: none; }
+  .base-header { flex-direction: column; }
+  .base-price { text-align: left; }
+  .addon-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .addon-price {
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .testimonials-grid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 600px) {
-  .enquiry-grid {
-    grid-template-columns: 1fr;
-  }
-  .enquiry-card {
-    padding: 24px;
-  }
+  .enquiry-grid { grid-template-columns: 1fr; }
+  .enquiry-card { padding: 24px; }
+}
+
+@media (max-width: 560px) {
+  .pkg-grid { grid-template-columns: 1fr 1fr; }
+  .testimonials-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -1602,9 +1680,7 @@ td.highlight .best-for {
       </div>
     </div>
 
-    <div class="pkg-grid reveal" id="packages-grid">
-      <!-- Populated by JS from config -->
-    </div>
+    <div class="pkg-grid reveal" id="packages-grid"></div>
   </div>
 </section>
 
@@ -1617,7 +1693,6 @@ td.highlight .best-for {
     </div>
 
     <div class="calculator-container reveal">
-      <!-- Base Product -->
       <div class="base-card">
         <div class="base-header">
           <div class="base-title">Core Programme</div>
@@ -1636,7 +1711,6 @@ td.highlight .best-for {
         </ul>
       </div>
 
-      <!-- Add-ons -->
       <div class="addons-section">
         <div class="addon-section-title">Pre-buy Extra Retake Cover</div>
 
@@ -1674,7 +1748,6 @@ td.highlight .best-for {
         </div>
       </div>
 
-      <!-- Total -->
       <div class="total-card">
         <div class="total-row">
           <span>Core Programme</span>
@@ -1776,6 +1849,7 @@ td.highlight .best-for {
     </table>
   </div>
 </section>
+
 <section class="testimonials-section" id="testimonials">
   <div class="section-wrap">
     <div class="section-intro reveal">
@@ -1819,7 +1893,7 @@ td.highlight .best-for {
   </div>
 </section>
 
- <section class="enquiry-section" id="enquiry">
+<section class="enquiry-section" id="enquiry">
   <div class="section-wrap">
     <div class="section-intro reveal">
       <div class="section-tag-line">Get in Touch</div>
@@ -1837,34 +1911,19 @@ td.highlight .best-for {
       <form id="enquiry-form" class="enquiry-form">
         <div class="enquiry-grid">
           <div class="form-group">
-            <label for="enq-name">
-              <span>Full Name</span>
-              <span class="required">*</span>
-            </label>
+            <label for="enq-name"><span>Full Name</span> <span class="required">*</span></label>
             <input type="text" id="enq-name" name="name" required placeholder="e.g. Sarah Johnson">
           </div>
-          
           <div class="form-group">
-            <label for="enq-email">
-              <span>Email Address</span>
-              <span class="required">*</span>
-            </label>
+            <label for="enq-email"><span>Email Address</span> <span class="required">*</span></label>
             <input type="email" id="enq-email" name="email" required placeholder="sarah@example.com">
           </div>
-
           <div class="form-group">
-            <label for="enq-phone">
-              <span>Phone Number</span>
-              <span class="required">*</span>
-            </label>
+            <label for="enq-phone"><span>Phone Number</span> <span class="required">*</span></label>
             <input type="tel" id="enq-phone" name="phone" required placeholder="07123 456789">
           </div>
-
           <div class="form-group">
-            <label for="enq-type">
-              <span>What can we help with?</span>
-              <span class="required">*</span>
-            </label>
+            <label for="enq-type"><span>What can we help with?</span> <span class="required">*</span></label>
             <select id="enq-type" name="enquiryType" required>
               <option value="" disabled selected>Choose an option</option>
               <option value="general">General question</option>
@@ -1877,10 +1936,7 @@ td.highlight .best-for {
         </div>
 
         <div class="form-group full-width">
-          <label for="enq-message">
-            <span>Your Message</span>
-            <span class="optional">(optional)</span>
-          </label>
+          <label for="enq-message"><span>Your Message</span> <span class="optional">(optional)</span></label>
           <textarea id="enq-message" name="message" rows="4" placeholder="Tell us more about what you're looking for..."></textarea>
         </div>
 
@@ -1967,7 +2023,6 @@ async function loadConfig() {
 }
 
 function initWithDefaults() {
-  // Fallback defaults if config fails to load
   PACKAGES.push(
     { hrs: 10, discount: 0.08, price: 552 },
     { hrs: 20, discount: 0.12, price: 1056 },
@@ -1985,18 +2040,14 @@ function applyConfig() {
     initWithDefaults();
     return;
   }
-  
+
   const p = SITE_CONFIG.pricing;
   const c = SITE_CONFIG.content;
-  
-  // === PRICING UPDATES ===
-  
-  // Update PAYG price display
+
   const paygPriceEl = document.getElementById('payg-price-display');
   const paygLessonPrice = p.payg_lesson_price || (p.payg_hourly ? p.payg_hourly * 1.5 : 90);
   if (paygPriceEl) paygPriceEl.textContent = '£' + paygLessonPrice;
-  
-  // Update hero stats
+
   if (c.hero && c.hero.stats) {
     document.getElementById('hero-stat-1-value').textContent = c.hero.stats[0]?.value || '£' + paygLessonPrice;
     document.getElementById('hero-stat-1-label').textContent = c.hero.stats[0]?.label || 'Per 1.5hr lesson';
@@ -2007,76 +2058,54 @@ function applyConfig() {
     document.getElementById('hero-stat-4-value').textContent = c.hero.stats[3]?.value || c.business?.programme_duration?.replace(' weeks', 'wk') || '18wk';
     document.getElementById('hero-stat-4-label').textContent = c.hero.stats[3]?.label || 'Structured programme\nto test day';
   }
-  
-  // Update Core Programme price
+
   const corePriceEl = document.getElementById('core-price-display');
   if (corePriceEl) corePriceEl.textContent = '£' + p.core_programme.toLocaleString();
-  
-  // Update total displays
+
   document.getElementById('total-core-display').textContent = '£' + p.core_programme.toLocaleString();
-  
-  // Update addon prices (all three retake slots are the same price)
+
   const rp = p.retake_price || 349;
   addonPrices = { 1: rp, 2: rp, 3: rp };
-
-  // Update addon price displays
   document.getElementById('addon-price-1').textContent = '+£' + rp;
   document.getElementById('addon-price-2').textContent = '+£' + rp;
   document.getElementById('addon-price-3').textContent = '+£' + rp;
-
-  // Update addon total displays
   document.getElementById('total-addon-1-display').textContent = '£' + rp;
   document.getElementById('total-addon-2-display').textContent = '£' + rp;
   document.getElementById('total-addon-3-display').textContent = '£' + rp;
-  
-  // Update basePrice for calculations
+
   basePrice = p.core_programme;
-  
-  // === CONTENT UPDATES ===
-  
-  // Hero content
+
   if (c.hero) {
     const headlineEl = document.getElementById('hero-headline');
     if (headlineEl && c.hero.headline) {
       headlineEl.innerHTML = c.hero.headline.replace('.', '.<br><em>') + '</em>';
     }
-    
     const subheadEl = document.getElementById('hero-subheadline');
     if (subheadEl && c.hero.subheadline) {
       subheadEl.textContent = c.hero.subheadline;
     }
   }
-  
-  // Section titles
+
   if (c.sections) {
     document.getElementById('section-payg-title').textContent = c.sections.payg?.title || 'Pay As You Go';
-    document.getElementById('section-payg-subtitle').textContent = c.sections.payg?.subtitle || 'Maximum flexibility. Book when you need, cancel when life happens.';
+    document.getElementById('section-payg-subtitle').textContent = c.sections.payg?.subtitle || 'Maximum flexibility.';
     document.getElementById('section-packages-title').textContent = c.sections.packages?.title || 'Bulk Hour Packages';
-    document.getElementById('section-packages-subtitle').textContent = c.sections.packages?.subtitle || 'Buy more hours up front and save up to 21%.';
+    document.getElementById('section-packages-subtitle').textContent = c.sections.packages?.subtitle || 'Buy more hours up front and save.';
     document.getElementById('section-guarantee-title').textContent = c.sections.guarantee?.title || 'The Pass Guarantee';
-    document.getElementById('section-guarantee-subtitle').textContent = c.sections.guarantee?.subtitle || '18 weeks to your driving licence — or we keep going until you pass.';
+    document.getElementById('section-guarantee-subtitle').textContent = c.sections.guarantee?.subtitle || '18 weeks to your driving licence.';
   }
-  
-  // Feature lists
+
   if (c.features) {
-    // PAYG features
     const paygFeaturesList = document.getElementById('payg-features-list');
     if (paygFeaturesList && c.features.payg) {
-      paygFeaturesList.innerHTML = c.features.payg.map(f => 
-        `<li class="payg-feature">${f}</li>`
-      ).join('');
+      paygFeaturesList.innerHTML = c.features.payg.map(f => `<li class="payg-feature">${f}</li>`).join('');
     }
-    
-    // Core features
     const coreFeaturesList = document.getElementById('core-features-list');
     if (coreFeaturesList && c.features.core) {
-      coreFeaturesList.innerHTML = c.features.core.map(f => 
-        `<li class="base-feature">${f}</li>`
-      ).join('');
+      coreFeaturesList.innerHTML = c.features.core.map(f => `<li class="base-feature">${f}</li>`).join('');
     }
   }
-  
-  // CTA buttons
+
   if (c.cta) {
     document.getElementById('nav-cta-primary').textContent = c.cta.primary || 'Book a Lesson';
     document.getElementById('hero-cta').textContent = 'View all options →';
@@ -2086,84 +2115,65 @@ function applyConfig() {
     document.getElementById('cta-primary').textContent = c.cta.primary || 'Book a lesson now';
     document.getElementById('cta-secondary').textContent = c.cta.secondary || 'Talk to us first';
   }
-  
-  // Business info
+
   if (c.business) {
     const guaranteeNote = document.getElementById('guarantee-note');
     if (guaranteeNote && c.business.guarantee_note) {
-      guaranteeNote.innerHTML = `✓ ${c.business.guarantee_note}`;
+      guaranteeNote.innerHTML = '✓ ' + c.business.guarantee_note;
     }
-    
     const footerText = document.getElementById('footer-text');
     if (footerText && c.business.footer_text) {
       footerText.innerHTML = c.business.footer_text.replace(/(Privacy|Terms)/g, '<a href="#">$1</a>');
     }
-    
-    // Update email link
     const ctaSecondary = document.getElementById('cta-secondary');
     if (ctaSecondary && c.business.contact_email) {
       ctaSecondary.href = 'mailto:' + c.business.contact_email;
     }
   }
-  
-  // === BULK PACKAGES ===
-  
+
   if (p.bulk_packages && Array.isArray(p.bulk_packages)) {
     PACKAGES.length = 0;
     p.bulk_packages.forEach(pkg => {
-      PACKAGES.push({
-        hrs: pkg.hrs,
-        price: pkg.price,
-        discount: pkg.discount
-      });
+      PACKAGES.push({ hrs: pkg.hrs, price: pkg.price, discount: pkg.discount });
     });
     renderPackages();
     updatePkg(currentPkgIndex || 2);
   }
-  
-  // Update comparison table pricing
+
   updateComparisonTable(p);
 }
 
 function updateComparisonTable(pricing) {
-  // Update PAYG rate
   const paygLesson = pricing.payg_lesson_price || (pricing.payg_hourly ? pricing.payg_hourly * 1.5 : 90);
   document.getElementById('compare-payg-rate').textContent = '£' + paygLesson;
-  
-  // Update packages range
+
   if (pricing.bulk_packages && pricing.bulk_packages.length > 0) {
     const minPrice = pricing.bulk_packages[0].price;
     const maxPrice = pricing.bulk_packages[pricing.bulk_packages.length - 1].price;
-    document.getElementById('compare-packages-range').textContent = `£${minPrice}–£${maxPrice.toLocaleString()}`;
-    
-    // Calculate per-hour range
+    document.getElementById('compare-packages-range').textContent = '£' + minPrice + '–£' + maxPrice.toLocaleString();
     const minPerHour = pricing.bulk_packages[pricing.bulk_packages.length - 1].per_hour;
     const maxPerHour = pricing.bulk_packages[0].per_hour;
-    document.getElementById('compare-packages-rate').textContent = `£${minPerHour}–£${maxPerHour}`;
+    document.getElementById('compare-packages-rate').textContent = '£' + minPerHour + '–£' + maxPerHour;
   }
-  
-  // Update guarantee range
+
   const core = pricing.core_programme;
-  const maxGuarantee = core + pricing.retake_lifetime;
-  document.getElementById('compare-guarantee-range').textContent = `£${core.toLocaleString()}+`;
+  document.getElementById('compare-guarantee-range').textContent = '£' + core.toLocaleString() + '+';
 }
 
 function renderPackages() {
   const grid = document.getElementById('packages-grid');
   if (!grid) return;
-  
-  grid.innerHTML = PACKAGES.map((pkg, i) => `
-    <div class="pkg-card ${i === 4 ? 'popular' : ''} ${i === currentPkgIndex ? 'active' : ''}" onclick="selectPkg(${i}, this)">
-      <div class="pkg-hrs">${pkg.hrs}</div>
-      <div class="pkg-hrs-label">hours</div>
-      <div class="pkg-discount">${(pkg.discount * 100)}% off</div>
-      <div class="pkg-total-price">£${pkg.price.toLocaleString()}</div>
-      <div class="pkg-per-hr">£${(pkg.price / pkg.hrs).toFixed(2)} / hr</div>
-    </div>
-  `).join('');
+  grid.innerHTML = PACKAGES.map((pkg, i) =>
+    '<div class="pkg-card ' + (i === 4 ? 'popular' : '') + ' ' + (i === currentPkgIndex ? 'active' : '') + '" onclick="selectPkg(' + i + ', this)">' +
+      '<div class="pkg-hrs">' + pkg.hrs + '</div>' +
+      '<div class="pkg-hrs-label">hours</div>' +
+      '<div class="pkg-discount">' + (pkg.discount * 100) + '% off</div>' +
+      '<div class="pkg-total-price">£' + pkg.price.toLocaleString() + '</div>' +
+      '<div class="pkg-per-hr">£' + (pkg.price / pkg.hrs).toFixed(2) + ' / hr</div>' +
+    '</div>'
+  ).join('');
 }
 
-// Load config immediately
 loadConfig();
 
 // PACKAGE DATA
@@ -2188,9 +2198,8 @@ function updatePkg(idx) {
   idx = parseInt(idx);
   currentPkgIndex = idx;
   const pkg = PACKAGES[idx];
-  
   if (!pkg) return;
-  
+
   const _lessonPrice = SITE_CONFIG.pricing?.payg_lesson_price || (SITE_CONFIG.pricing?.payg_hourly ? SITE_CONFIG.pricing.payg_hourly * 1.5 : 90);
   const std = pkg.hrs * (_lessonPrice / 1.5);
   const saving = std - pkg.price;
@@ -2216,6 +2225,7 @@ function selectPkg(idx, card) {
 function scrollToPackages() {
   document.getElementById('packages').scrollIntoView({ behavior: 'smooth' });
 }
+
 function openSetmoreBooking() {
   const setmoreButton = document.getElementById('Anywhere_button_iframe');
   if (setmoreButton) {
@@ -2224,12 +2234,10 @@ function openSetmoreBooking() {
     window.open('https://coachcarteruk.setmore.com/services/f92268da-e2cc-4661-8cdd-82afa1b767a0', '_blank');
   }
 }
-// CALCULATOR FUNCTIONS
+
 function toggleAddon(addon, element) {
   const isActive = element.classList.contains('selected');
-
   if (isActive) {
-    // Deselect this and all higher retakes (can't have gap in sequence)
     for (let i = addon; i <= 3; i++) {
       const card = document.getElementById('addon-card-' + i);
       if (card) card.classList.remove('selected');
@@ -2239,7 +2247,6 @@ function toggleAddon(addon, element) {
       if (row) row.style.display = 'none';
     }
   } else {
-    // Only allow selection if all previous retakes are already selected
     for (let i = 1; i < addon; i++) {
       if (!document.getElementById('addon-card-' + i)?.classList.contains('selected')) return;
     }
@@ -2247,7 +2254,6 @@ function toggleAddon(addon, element) {
     document.getElementById('checkbox-' + addon).textContent = '✓';
     document.getElementById('addon-row-' + addon).style.display = 'flex';
   }
-
   updateTotal();
 }
 
@@ -2261,9 +2267,7 @@ function updateTotal() {
   document.getElementById('total-amount').textContent = '£' + total.toLocaleString();
 }
 
-// STRIPE CHECKOUT INTEGRATION
 async function startCheckout(type, pkgIndex = null) {
-  // Show loading state on button
   const btn = event.target;
   const originalText = btn.textContent;
   btn.textContent = 'Loading...';
@@ -2275,76 +2279,32 @@ async function startCheckout(type, pkgIndex = null) {
     const _paygLesson = p.payg_lesson_price || (p.payg_hourly ? p.payg_hourly * 1.5 : 90);
 
     if (type === 'payg') {
-      // Single lesson
       lineItems = [{
-        price_data: {
-          currency: 'gbp',
-          unit_amount: _paygLesson * 100,
-          product_data: {
-            name: 'Driving Lesson — Pay As You Go',
-            description: 'Single 1.5hr lesson with CoachCarter'
-          }
-        },
+        price_data: { currency: 'gbp', unit_amount: _paygLesson * 100, product_data: { name: 'Driving Lesson — Pay As You Go', description: 'Single 1.5hr lesson with CoachCarter' } },
         quantity: 1
       }];
       metadata = { package_type: 'payg' };
-      customFields = [
-        {
-          key: 'provisional_licence',
-          label: { type: 'custom', custom: 'Provisional licence number' },
-          type: 'text',
-          optional: false
-        }
-      ];
+      customFields = [{ key: 'provisional_licence', label: { type: 'custom', custom: 'Provisional licence number' }, type: 'text', optional: false }];
     } else if (type === 'bulk') {
-      // Bulk package
       const pkg = PACKAGES[pkgIndex || currentPkgIndex];
       if (!pkg) throw new Error('No package selected');
-      
       lineItems = [{
-        price_data: {
-          currency: 'gbp',
-          unit_amount: pkg.price * 100,
-          product_data: {
-            name: `${pkg.hrs} Hour Package`,
-            description: `${pkg.hrs} hours of driving instruction — ${(pkg.discount * 100)}% off`
-          }
-        },
+        price_data: { currency: 'gbp', unit_amount: pkg.price * 100, product_data: { name: pkg.hrs + ' Hour Package', description: pkg.hrs + ' hours of driving instruction — ' + (pkg.discount * 100) + '% off' } },
         quantity: 1
       }];
-      metadata = { 
-        package_type: 'bulk',
-        hours: pkg.hrs,
-        discount: pkg.discount
-      };
-      customFields = [
-        {
-          key: 'provisional_licence',
-          label: { type: 'custom', custom: 'Provisional licence number' },
-          type: 'text',
-          optional: false
-        }
-      ];
+      metadata = { package_type: 'bulk', hours: pkg.hrs, discount: pkg.discount };
+      customFields = [{ key: 'provisional_licence', label: { type: 'custom', custom: 'Provisional licence number' }, type: 'text', optional: false }];
     }
 
-    // Create checkout session
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        line_items: lineItems,
-        metadata: metadata,
-        custom_fields: customFields,
-        success_url: window.location.origin + '/success.html?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: window.location.origin + '/'
-      })
+      body: JSON.stringify({ line_items: lineItems, metadata: metadata, custom_fields: customFields, success_url: window.location.origin + '/success.html?session_id={CHECKOUT_SESSION_ID}', cancel_url: window.location.origin + '/' })
     });
 
     if (!response.ok) throw new Error('Failed to create checkout');
-
     const { url } = await response.json();
     window.location.href = url;
-
   } catch (err) {
     console.error('Checkout error:', err);
     btn.textContent = originalText;
@@ -2353,7 +2313,6 @@ async function startCheckout(type, pkgIndex = null) {
   }
 }
 
-// CALCULATOR CHECKOUT
 async function startCalculatorCheckout() {
   const btn = event.target;
   const originalText = btn.textContent;
@@ -2364,103 +2323,43 @@ async function startCalculatorCheckout() {
     let lineItems = [];
     let metadata = {};
     let customFields = [];
-    const p = SITE_CONFIG.pricing || { core_programme: 2400, retake_price: 349 };
 
-    // Base Core Programme
     lineItems.push({
-      price_data: {
-        currency: 'gbp',
-        unit_amount: basePrice * 100,
-        product_data: {
-          name: 'Core Programme — 18 Week Guarantee',
-          description: '18 weeks, practical test booked, instructor performance-paid'
-        }
-      },
+      price_data: { currency: 'gbp', unit_amount: basePrice * 100, product_data: { name: 'Core Programme — 18 Week Guarantee', description: '18 weeks, practical test booked, instructor performance-paid' } },
       quantity: 1
     });
 
-    // Determine how many retakes are pre-purchased
     const selectedRetakes = getSelectedRetakes();
     const retakeCount = selectedRetakes.length;
     const retakeLabels = ['2nd', '3rd', '4th'];
     const tierNames = ['core_only', 'core_plus_1', 'core_plus_2', 'core_plus_3'];
-
     const tierName = tierNames[retakeCount] || 'core_only';
-    const packageName = retakeCount === 0
-      ? 'Core Programme'
-      : `Core + ${retakeCount} Pre-paid Retake${retakeCount > 1 ? 's' : ''}`;
+    const packageName = retakeCount === 0 ? 'Core Programme' : 'Core + ' + retakeCount + ' Pre-paid Retake' + (retakeCount > 1 ? 's' : '');
     const totalHours = (SITE_CONFIG.pricing?.core_hours || 30) + retakeCount * 15;
-    const retakeCoverage = retakeCount;
 
     selectedRetakes.forEach((slot, idx) => {
       lineItems.push({
-        price_data: {
-          currency: 'gbp',
-          unit_amount: addonPrices[slot] * 100,
-          product_data: {
-            name: `${retakeLabels[idx]} Retake Cover`,
-            description: '15 hrs tuition + DVSA test fee included'
-          }
-        },
+        price_data: { currency: 'gbp', unit_amount: addonPrices[slot] * 100, product_data: { name: retakeLabels[idx] + ' Retake Cover', description: '15 hrs tuition + DVSA test fee included' } },
         quantity: 1
       });
     });
 
-    metadata = {
-      package_type: tierName,
-      package_name: packageName,
-      total_hours: totalHours.toString(),
-      retake_coverage: retakeCoverage.toString(),
-      base_price: basePrice.toString(),
-      addon_price: (retakeCount * (addonPrices[1] || 349)).toString(),
-      estimated_profit: calculateProfit(tierName).toString()
-    };
-
+    metadata = { package_type: tierName, package_name: packageName, total_hours: totalHours.toString(), retake_coverage: retakeCount.toString(), base_price: basePrice.toString(), addon_price: (retakeCount * (addonPrices[1] || 349)).toString(), estimated_profit: calculateProfit(tierName).toString() };
     customFields = [
-      {
-        key: 'provisional_licence',
-        label: { type: 'custom', custom: 'Provisional licence number' },
-        type: 'text',
-        optional: false
-      },
-      {
-        key: 'has_test_booked',
-        label: { type: 'custom', custom: 'Do you already have a practical test booked?' },
-        type: 'dropdown',
-        dropdown: {
-          options: [
-            { label: 'No, I need you to book it', value: 'needstest' },
-            { label: 'Yes, I have a test date', value: 'hastest' },
-            { label: "I'm not sure / need help", value: 'unsure' }
-          ]
-        }
-      },
-      {
-        key: 'dvsa_reference',
-        label: { type: 'custom', custom: 'DVSA reference or preferred start date' },
-        type: 'text',
-        optional: true
-      }
+      { key: 'provisional_licence', label: { type: 'custom', custom: 'Provisional licence number' }, type: 'text', optional: false },
+      { key: 'has_test_booked', label: { type: 'custom', custom: 'Do you already have a practical test booked?' }, type: 'dropdown', dropdown: { options: [{ label: 'No, I need you to book it', value: 'needstest' }, { label: 'Yes, I have a test date', value: 'hastest' }, { label: "I'm not sure / need help", value: 'unsure' }] } },
+      { key: 'dvsa_reference', label: { type: 'custom', custom: 'DVSA reference or preferred start date' }, type: 'text', optional: true }
     ];
 
-    // Create checkout session
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        line_items: lineItems,
-        metadata: metadata,
-        custom_fields: customFields,
-        success_url: window.location.origin + '/success.html?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: window.location.origin + '/#guarantee'
-      })
+      body: JSON.stringify({ line_items: lineItems, metadata: metadata, custom_fields: customFields, success_url: window.location.origin + '/success.html?session_id={CHECKOUT_SESSION_ID}', cancel_url: window.location.origin + '/#guarantee' })
     });
 
     if (!response.ok) throw new Error('Failed to create checkout');
-
     const { url } = await response.json();
     window.location.href = url;
-
   } catch (err) {
     console.error('Checkout error:', err);
     btn.textContent = originalText;
@@ -2470,38 +2369,27 @@ async function startCalculatorCheckout() {
 }
 
 function calculateProfit(tier) {
-  const profits = {
-    'core_only': 430,
-    'core_plus_1': 489,
-    'core_plus_2': 548,
-    'core_plus_3': 607
-  };
+  const profits = { 'core_only': 430, 'core_plus_1': 489, 'core_plus_2': 548, 'core_plus_3': 607 };
   return profits[tier] || 430;
 }
 
 // SCROLL REVEAL
 const observer = new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (e.isIntersecting) e.target.classList.add('visible');
-  });
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
 }, { threshold: 0.08 });
-
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-  // ENQUIRY FORM HANDLER
+
+// ENQUIRY FORM HANDLER
 document.getElementById('enquiry-form').addEventListener('submit', async function(e) {
   e.preventDefault();
-  
   const submitBtn = document.getElementById('enq-submit');
   const statusDiv = document.getElementById('enquiry-status');
   const originalText = submitBtn.textContent;
-  
-  // Disable button and show loading
   submitBtn.disabled = true;
   submitBtn.textContent = 'Sending...';
   statusDiv.className = 'enquiry-status';
   statusDiv.style.display = 'none';
-  
-  // Collect form data
+
   const formData = {
     name: document.getElementById('enq-name').value.trim(),
     email: document.getElementById('enq-email').value.trim(),
@@ -2511,22 +2399,18 @@ document.getElementById('enquiry-form').addEventListener('submit', async functio
     marketing: document.getElementById('enq-marketing').checked,
     submittedAt: new Date().toISOString()
   };
-  
+
   try {
     const response = await fetch('/api/enquiries?action=submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData)
     });
-    
     const result = await response.json();
-    
     if (response.ok) {
       statusDiv.textContent = '✓ Message sent! We\'ll be in touch within 24 hours.';
       statusDiv.className = 'enquiry-status success';
       document.getElementById('enquiry-form').reset();
-      
-      // Scroll to status message
       statusDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } else {
       throw new Error(result.error || 'Failed to send enquiry');

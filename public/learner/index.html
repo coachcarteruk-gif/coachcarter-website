@@ -5,27 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Progress — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
     :root {
-      --primary:    #272727;
+      --primary:    #0f172a;
       --accent:     #f58321;
       --accent-dk:  #e07518;
-      --accent-lt:  #fff4ec;
+      --accent-lt:  #fff7ed;
       --accent-mid: rgba(245,131,33,0.12);
-      --muted:      #797879;
-      --border:     #e0e0e0;
-      --bg:         #f9f9f9;
-      --surface:    #f9f9f9;
+      --accent-glow: rgba(245,131,33,0.25);
+      --muted:      #64748b;
+      --border:     #e2e8f0;
+      --bg:         #f8fafc;
+      --surface:    #f1f5f9;
       --white:      #ffffff;
       --green:      #22c55e;
       --amber:      #f59e0b;
       --red:        #ef4444;
-      --font-head:  'Bricolage Grotesque', sans-serif;
-      --font-body:  'Lato', sans-serif;
+      --font-head:  'Syne', sans-serif;
+      --font-body:  'Outfit', sans-serif;
       --radius:     14px;
     }
 
@@ -48,6 +50,9 @@
       position: sticky;
       top: 0;
       z-index: 100;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(255,255,255,0.9);
     }
     .header-brand {
       display: flex;
@@ -56,49 +61,211 @@
       text-decoration: none;
     }
     .header-brand img { height: 36px; width: auto; }
-    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
-    .header-brand-sub { font-size: 0.7rem; color: var(--muted); }
+    .header-brand-text {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--primary);
+      font-family: var(--font-head);
+      letter-spacing: -0.02em;
+    }
+    .header-brand-sub {
+      font-size: 0.68rem;
+      color: var(--accent);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
 
     .header-right { display: flex; align-items: center; gap: 12px; }
     .header-name { font-size: 0.85rem; color: var(--muted); }
     .btn-logout {
       background: none;
-      border: 1px solid var(--border);
-      border-radius: 6px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
       color: var(--muted);
       font-family: inherit;
       font-size: 0.8rem;
-      padding: 6px 12px;
+      padding: 6px 14px;
       cursor: pointer;
-      transition: color 0.2s, border-color 0.2s;
+      transition: all 0.2s;
+      font-weight: 500;
     }
     .btn-logout:hover { color: var(--primary); border-color: var(--accent); }
 
     /* MAIN LAYOUT */
-    main { max-width: 720px; margin: 0 auto; padding: 24px 16px 80px; }
+    main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; }
 
     /* WELCOME */
-    .welcome { margin-bottom: 28px; }
-    .welcome h1 { font-size: 1.5rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); }
+    .welcome { margin-bottom: 24px; }
+    .welcome h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      font-family: var(--font-head);
+      color: var(--primary);
+      letter-spacing: -0.02em;
+    }
     .welcome p { font-size: 0.9rem; color: var(--muted); margin-top: 4px; }
+
+    /* CREDIT BALANCE CARD */
+    .credit-card {
+      background: var(--primary);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      position: relative;
+      overflow: hidden;
+    }
+    .credit-card::before {
+      content: '';
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(245,131,33,0.2), transparent 70%);
+      pointer-events: none;
+    }
+    .credit-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 60%;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+    }
+    .credit-card-left { position: relative; z-index: 1; }
+    .credit-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 4px;
+    }
+    .credit-value {
+      font-family: var(--font-head);
+      font-size: 2.8rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .credit-sub {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.5);
+      margin-top: 4px;
+    }
+    .credit-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 1;
+    }
+    .btn-buy {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-family: var(--font-head);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .btn-buy:hover { transform: translateY(-2px); box-shadow: 0 6px 20px var(--accent-glow); }
+    .btn-book-lesson {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      border: 1.5px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-family: var(--font-head);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.2s;
+    }
+    .btn-book-lesson:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.4); }
+    .btn-book-lesson.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: auto; }
+
+    /* UPCOMING LESSONS */
+    .upcoming-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      transition: all 0.2s;
+    }
+    .upcoming-card:hover { border-color: var(--accent); }
+    .upcoming-date { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
+    .upcoming-time { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+    .upcoming-instructor {
+      font-size: 0.78rem;
+      color: var(--accent);
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .btn-cancel-lesson {
+      font-size: 0.78rem;
+      color: var(--muted);
+      border: 1.5px solid var(--border);
+      background: none;
+      border-radius: 8px;
+      padding: 6px 14px;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .btn-cancel-lesson:hover { color: #ef4444; border-color: #ef4444; }
 
     /* STATS BAR */
     .stats-bar {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 10px;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
     .stat-pill {
       background: var(--white);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
+      border-radius: 12px;
+      padding: 14px 12px;
       text-align: center;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      transition: all 0.2s;
     }
-    .stat-pill .num { font-size: 1.3rem; font-weight: 700; color: var(--primary); }
-    .stat-pill .lbl { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+    .stat-pill:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+    .stat-pill .num {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--primary);
+      font-family: var(--font-head);
+    }
+    .stat-pill .lbl { font-size: 0.68rem; color: var(--muted); margin-top: 2px; font-weight: 500; }
 
     /* LOG SESSION BUTTON */
     .log-btn {
@@ -113,19 +280,20 @@
       font-size: 1rem;
       font-weight: 700;
       margin-bottom: 28px;
-      transition: background 0.2s;
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
       font-family: var(--font-head);
     }
-    .log-btn:hover { background: var(--accent-dk); }
+    .log-btn:hover { background: var(--accent-dk); transform: translateY(-2px); box-shadow: 0 8px 24px var(--accent-glow); }
 
     /* SECTION TITLE */
     .section-title {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
       color: var(--muted);
       margin-bottom: 12px;
+      font-family: var(--font-body);
     }
 
     /* PROGRESS GROUPS */
@@ -133,10 +301,12 @@
       background: var(--white);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      transition: all 0.2s;
     }
+    .progress-card:hover { border-color: rgba(245,131,33,0.2); }
     .progress-header {
       display: flex;
       align-items: center;
@@ -146,12 +316,18 @@
       user-select: none;
     }
     .progress-header-left { display: flex; align-items: center; gap: 12px; }
-    .progress-group-name { font-size: 0.95rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); }
+    .progress-group-name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-family: var(--font-head);
+      color: var(--primary);
+      letter-spacing: -0.01em;
+    }
     .progress-group-sub { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
     .chevron {
       font-size: 0.7rem;
       color: var(--muted);
-      transition: transform 0.2s;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .chevron.open { transform: rotate(180deg); }
 
@@ -180,21 +356,21 @@
       flex-shrink: 0;
       font-size: 0.72rem;
       font-weight: 700;
-      padding: 4px 10px;
+      padding: 4px 12px;
       border-radius: 20px;
     }
-    .badge-always    { background: rgba(34,197,94,0.12);  color: #15803d; }
-    .badge-usually   { background: rgba(34,197,94,0.12); color: #15803d; }
-    .badge-sometimes { background: rgba(245,158,11,0.12); color: #92400e; }
-    .badge-never     { background: rgba(239,68,68,0.12);  color: #7f1d1d; }
+    .badge-always    { background: rgba(34,197,94,0.1);  color: #15803d; }
+    .badge-usually   { background: rgba(34,197,94,0.1); color: #15803d; }
+    .badge-sometimes { background: rgba(245,158,11,0.1); color: #92400e; }
+    .badge-never     { background: rgba(239,68,68,0.1);  color: #7f1d1d; }
     .badge-none      { background: var(--surface); color: var(--muted); }
 
     /* GROUP SCORE BAR */
     .group-score {
       background: var(--accent-lt);
-      border: 1px solid rgba(245,131,33,0.2);
-      border-radius: 10px;
-      padding: 12px 14px;
+      border: 1px solid rgba(245,131,33,0.15);
+      border-radius: 12px;
+      padding: 14px 16px;
       margin-top: 12px;
     }
     .group-score-label {
@@ -206,7 +382,7 @@
     .group-score-label .title { color: var(--primary); }
     .group-score-label .pct { font-weight: 700; color: var(--primary); }
     .score-bar-bg {
-      background: rgba(0,0,0,0.1);
+      background: rgba(0,0,0,0.08);
       border-radius: 4px;
       height: 6px;
       overflow: hidden;
@@ -223,15 +399,45 @@
       margin-top: 6px;
     }
 
+    /* PER-QUESTION NOTES */
+    .q-notes-list {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .q-note-item {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 0.8rem;
+      color: var(--primary);
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+    .q-note-item .q-note-label {
+      font-weight: 700;
+      color: var(--accent);
+      flex-shrink: 0;
+      font-size: 0.72rem;
+    }
+    .q-note-item .q-note-text {
+      font-style: italic;
+      line-height: 1.4;
+    }
+
     /* SESSIONS LIST */
     .session-card {
       background: var(--white);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 16px;
+      border-radius: 12px;
+      padding: 16px 18px;
       margin-bottom: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      transition: all 0.2s;
     }
+    .session-card:hover { border-color: rgba(245,131,33,0.2); }
     .session-meta {
       display: flex;
       align-items: center;
@@ -243,11 +449,11 @@
     .session-chip {
       font-size: 0.72rem;
       font-weight: 600;
-      padding: 3px 8px;
+      padding: 3px 10px;
       border-radius: 12px;
     }
     .chip-instructor { background: var(--accent-mid); color: var(--accent); }
-    .chip-private { background: rgba(168,85,247,0.12); color: #7c3aed; }
+    .chip-private { background: rgba(168,85,247,0.1); color: #7c3aed; }
     .chip-duration { background: var(--surface); color: var(--muted); }
     .session-ratings {
       display: flex;
@@ -259,7 +465,7 @@
       align-items: center;
       gap: 4px;
       font-size: 0.72rem;
-      padding: 3px 8px;
+      padding: 3px 10px;
       border-radius: 12px;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -279,7 +485,7 @@
     /* RATING LEGEND */
     .rating-legend {
       display: flex;
-      gap: 12px;
+      gap: 14px;
       flex-wrap: wrap;
       font-size: 0.72rem;
       color: var(--muted);
@@ -294,34 +500,6 @@
       margin-right: 4px;
       vertical-align: middle;
       flex-shrink: 0;
-    }
-
-    /* PER-QUESTION NOTES IN SESSION HISTORY */
-    .q-notes-list {
-      margin-top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .q-note-item {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-      font-size: 0.8rem;
-      color: var(--primary);
-      background: var(--surface);
-      border-radius: 6px;
-      padding: 6px 10px;
-    }
-    .q-note-item .q-note-label {
-      font-weight: 600;
-      color: var(--accent);
-      flex-shrink: 0;
-      font-size: 0.72rem;
-    }
-    .q-note-item .q-note-text {
-      font-style: italic;
-      line-height: 1.4;
     }
 
     .empty-state {
@@ -340,12 +518,14 @@
     .bottom-nav {
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      background: var(--white);
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border-top: 1px solid var(--border);
       display: flex;
       z-index: 200;
       padding-bottom: env(safe-area-inset-bottom);
-      box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+      box-shadow: 0 -2px 16px rgba(0,0,0,0.04);
     }
     .bottom-nav-item {
       flex: 1;
@@ -357,132 +537,12 @@
       color: var(--muted);
       font-size: 0.68rem;
       font-weight: 600;
-      transition: color 0.15s;
+      transition: color 0.2s;
       gap: 3px;
     }
     .bottom-nav-item:hover { color: var(--primary); }
     .bottom-nav-item.active { color: var(--accent); }
     .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
-
-    /* CREDIT BALANCE CARD */
-    .credit-card {
-      background: var(--accent);
-      border-radius: var(--radius);
-      padding: 20px;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      flex-wrap: wrap;
-      box-shadow: 0 2px 8px rgba(245,131,33,0.25);
-    }
-    .credit-card-left {}
-    .credit-label {
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: rgba(255,255,255,0.75);
-      margin-bottom: 4px;
-    }
-    .credit-value {
-      font-family: var(--font-head);
-      font-size: 2.4rem;
-      font-weight: 800;
-      color: #fff;
-      line-height: 1;
-    }
-    .credit-sub {
-      font-size: 0.8rem;
-      color: rgba(255,255,255,0.75);
-      margin-top: 4px;
-    }
-    .credit-actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .btn-buy {
-      background: #fff;
-      color: var(--accent);
-      border: none;
-      border-radius: 8px;
-      padding: 10px 18px;
-      font-family: var(--font-head);
-      font-size: 0.85rem;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: none;
-      display: inline-block;
-      transition: opacity 0.15s;
-    }
-    .btn-buy:hover { opacity: 0.9; }
-    .btn-book-lesson {
-      background: rgba(255,255,255,0.18);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.4);
-      border-radius: 8px;
-      padding: 10px 18px;
-      font-family: var(--font-head);
-      font-size: 0.85rem;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: none;
-      display: inline-block;
-      transition: background 0.15s;
-    }
-    .btn-book-lesson:hover { background: rgba(255,255,255,0.28); }
-    .btn-book-lesson.disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      pointer-events: auto;
-    }
-
-    /* UPCOMING LESSONS */
-    .upcoming-card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 16px;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .upcoming-card-left {}
-    .upcoming-date {
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: var(--primary);
-    }
-    .upcoming-time {
-      font-size: 0.82rem;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-    .upcoming-instructor {
-      font-size: 0.78rem;
-      color: var(--accent);
-      font-weight: 600;
-      margin-top: 2px;
-    }
-    .btn-cancel-lesson {
-      font-size: 0.78rem;
-      color: var(--muted);
-      border: 1px solid var(--border);
-      background: none;
-      border-radius: 6px;
-      padding: 5px 12px;
-      cursor: pointer;
-      text-decoration: none;
-      white-space: nowrap;
-      transition: color 0.15s, border-color 0.15s;
-    }
-    .btn-cancel-lesson:hover { color: #ef4444; border-color: #ef4444; }
   </style>
 </head>
 <body>
@@ -585,24 +645,8 @@ const GROUPS = [
   { key: 'reversing',      label: 'Reversing',                 sub: 'Question 10'  }
 ];
 
-const RATING_LABELS = {
-  always:    'Always',
-  usually:   'Usually',
-  sometimes: 'Sometimes',
-  never:     'Needs work'
-};
-
-// Human-readable labels for legacy/alternate skill keys
-const SKILL_KEY_LABELS = {
-  't1_move':    'Moving off',
-  't1_stop':    'Stopping',
-  't1_steer':   'Steering',
-  't1_mirrors': 'Mirror checks',
-  't1_mice':    'MICE routine',
-  't1_eval':    'Overall assessment',
-};
-
-// Score weighting: always=2, usually=1, sometimes=0, never=-1
+const RATING_LABELS = { always: 'Always', usually: 'Usually', sometimes: 'Sometimes', never: 'Needs work' };
+const SKILL_KEY_LABELS = { 't1_move': 'Moving off', 't1_stop': 'Stopping', 't1_steer': 'Steering', 't1_mirrors': 'Mirror checks', 't1_mice': 'MICE routine', 't1_eval': 'Overall assessment' };
 const SCORE_WEIGHT = { always: 2, usually: 1, sometimes: 0, never: -1 };
 
 let AUTH, PROGRESS, SESSIONS_DATA, CREDITS_DATA, BOOKINGS_DATA;
@@ -610,9 +654,7 @@ let AUTH, PROGRESS, SESSIONS_DATA, CREDITS_DATA, BOOKINGS_DATA;
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
   if (!AUTH?.token) { window.location.href = '/learner/login.html'; return; }
-
   document.getElementById('header-name').textContent = AUTH.user.name;
-
   await Promise.all([loadProgress(), loadSessions(), loadCredits(), loadBookings()]);
   render();
 });
@@ -624,9 +666,7 @@ function logout() {
 
 async function loadProgress() {
   try {
-    const res = await fetch('/api/learner?action=progress', {
-      headers: { 'Authorization': `Bearer ${AUTH.token}` }
-    });
+    const res = await fetch('/api/learner?action=progress', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
     if (res.status === 401) { logout(); return; }
     PROGRESS = await res.json();
   } catch (e) { console.error(e); }
@@ -634,27 +674,21 @@ async function loadProgress() {
 
 async function loadSessions() {
   try {
-    const res = await fetch('/api/learner?action=sessions', {
-      headers: { 'Authorization': `Bearer ${AUTH.token}` }
-    });
+    const res = await fetch('/api/learner?action=sessions', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
     if (res.ok) SESSIONS_DATA = (await res.json()).sessions;
   } catch (e) { console.error(e); }
 }
 
 async function loadCredits() {
   try {
-    const res = await fetch('/api/credits?action=balance', {
-      headers: { 'Authorization': `Bearer ${AUTH.token}` }
-    });
+    const res = await fetch('/api/credits?action=balance', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
     if (res.ok) CREDITS_DATA = await res.json();
   } catch (e) { console.error(e); }
 }
 
 async function loadBookings() {
   try {
-    const res = await fetch('/api/slots?action=my-bookings', {
-      headers: { 'Authorization': `Bearer ${AUTH.token}` }
-    });
+    const res = await fetch('/api/slots?action=my-bookings', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
     if (res.ok) BOOKINGS_DATA = await res.json();
   } catch (e) { console.error(e); }
 }
@@ -662,89 +696,57 @@ async function loadBookings() {
 function render() {
   if (!PROGRESS) return;
 
-  // Credit balance
   if (CREDITS_DATA) {
     const bal = CREDITS_DATA.credit_balance ?? 0;
     document.getElementById('credit-balance').textContent = bal;
     document.getElementById('credit-sub').textContent = bal === 1 ? 'lesson credit' : 'lesson credits';
-    // Disable the Book button if no credits
     if (bal === 0) {
       const bookBtn = document.getElementById('book-btn');
       bookBtn.classList.add('disabled');
       bookBtn.setAttribute('aria-disabled', 'true');
       bookBtn.title = 'Buy credits to book a lesson';
-      bookBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        // Scroll to / flash the Buy Credits button
-        document.querySelector('.btn-buy').focus();
-      });
+      bookBtn.addEventListener('click', (e) => { e.preventDefault(); document.querySelector('.btn-buy').focus(); });
     }
   }
 
-  // Upcoming bookings
   if (BOOKINGS_DATA && BOOKINGS_DATA.upcoming && BOOKINGS_DATA.upcoming.length > 0) {
     const section = document.getElementById('upcoming-section');
     section.style.display = 'block';
     const list = document.getElementById('upcoming-list');
     list.innerHTML = BOOKINGS_DATA.upcoming.slice(0, 5).map(b => {
       const date = new Date(b.scheduled_date + 'T00:00:00Z');
-      const dateStr = date.toLocaleDateString('en-GB', {
-        weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'
-      });
+      const dateStr = date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
       const start = b.start_time ? b.start_time.slice(0, 5) : '';
-      const end   = b.end_time   ? b.end_time.slice(0, 5)   : '';
-      return `
-        <div class="upcoming-card">
-          <div class="upcoming-card-left">
-            <div class="upcoming-date">📅 ${dateStr}</div>
-            <div class="upcoming-time">${start} – ${end}</div>
-            <div class="upcoming-instructor">with ${b.instructor_name}</div>
-          </div>
-          <a href="/learner/book.html" class="btn-cancel-lesson">Manage</a>
-        </div>`;
+      const end = b.end_time ? b.end_time.slice(0, 5) : '';
+      return `<div class="upcoming-card"><div class="upcoming-card-left"><div class="upcoming-date">📅 ${dateStr}</div><div class="upcoming-time">${start} – ${end}</div><div class="upcoming-instructor">with ${b.instructor_name}</div></div><a href="/learner/book.html" class="btn-cancel-lesson">Manage</a></div>`;
     }).join('');
   }
 
-  // Welcome message
   const s = PROGRESS.stats;
   document.getElementById('welcome-msg').textContent = `Hi, ${PROGRESS.name} 👋`;
-
   const alwaysCount = (PROGRESS.latest_ratings || []).filter(r => r.rating === 'always').length;
   const rated = (PROGRESS.latest_ratings || []).length;
-  if (rated === 0) {
-    document.getElementById('welcome-sub').textContent = 'Log your first session to start tracking progress.';
-  } else {
-    document.getElementById('welcome-sub').textContent =
-      `${alwaysCount} of ${QUESTIONS.length} areas rated Always — keep going!`;
-  }
+  document.getElementById('welcome-sub').textContent = rated === 0
+    ? 'Log your first session to start tracking progress.'
+    : `${alwaysCount} of ${QUESTIONS.length} areas rated Always — keep going!`;
 
-  // Stats
   document.getElementById('stat-sessions').textContent = s.total_sessions;
   document.getElementById('stat-hours').textContent = (s.total_minutes / 60).toFixed(1);
   document.getElementById('stat-instructor').textContent = s.instructor_sessions;
   document.getElementById('stat-private').textContent = s.private_sessions;
 
-  // Build ratings lookup
   const ratingsMap = {};
   (PROGRESS.latest_ratings || []).forEach(r => { ratingsMap[r.skill_key] = r.rating; });
 
-  // Render progress cards
   const container = document.getElementById('progress-cards');
   container.innerHTML = '';
   GROUPS.forEach((group, i) => renderProgressCard(group, ratingsMap, container, i === 0));
-
-  // Render sessions
   renderSessions();
 }
 
 function renderProgressCard(group, ratingsMap, container, expanded) {
   const questions = QUESTIONS.filter(q => q.group === group.key);
-
-  // Calculate score (always/usually count toward "on track")
-  const onTrackCount = questions.filter(q => {
-    const r = ratingsMap[q.key];
-    return r === 'always' || r === 'usually';
-  }).length;
+  const onTrackCount = questions.filter(q => { const r = ratingsMap[q.key]; return r === 'always' || r === 'usually'; }).length;
   const ratedCount = questions.filter(q => ratingsMap[q.key]).length;
   const pct = ratedCount > 0 ? Math.round((onTrackCount / questions.length) * 100) : 0;
 
@@ -752,12 +754,7 @@ function renderProgressCard(group, ratingsMap, container, expanded) {
     const rating = ratingsMap[q.key];
     const label = rating ? RATING_LABELS[rating] : 'Not rated';
     const badgeClass = rating ? `badge-${rating}` : 'badge-none';
-    return `
-      <div class="q-row">
-        <span class="q-num">Q${q.num}</span>
-        <span class="q-text">${q.text}</span>
-        <span class="q-badge ${badgeClass}">${label}</span>
-      </div>`;
+    return `<div class="q-row"><span class="q-num">Q${q.num}</span><span class="q-text">${q.text}</span><span class="q-badge ${badgeClass}">${label}</span></div>`;
   }).join('');
 
   const card = document.createElement('div');
@@ -767,12 +764,7 @@ function renderProgressCard(group, ratingsMap, container, expanded) {
 
   card.innerHTML = `
     <div class="progress-header" onclick="toggleGroup('${group.key}')">
-      <div class="progress-header-left">
-        <div>
-          <div class="progress-group-name">${group.label}</div>
-          <div class="progress-group-sub">${group.sub}</div>
-        </div>
-      </div>
+      <div class="progress-header-left"><div><div class="progress-group-name">${group.label}</div><div class="progress-group-sub">${group.sub}</div></div></div>
       <div style="display:flex;align-items:center;gap:10px;">
         <span style="font-size:0.75rem;color:var(--muted);">${ratedCount}/${questions.length}</span>
         ${ratedCount > 0 ? `<span style="font-size:0.8rem;font-weight:700;color:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}">${pct}%</span>` : ''}
@@ -781,22 +773,8 @@ function renderProgressCard(group, ratingsMap, container, expanded) {
     </div>
     <div class="progress-body${expanded ? ' open' : ''}" id="${bodyId}">
       ${questionsHTML}
-      ${ratedCount > 0 ? `
-      <div class="group-score">
-        <div class="group-score-label">
-          <span class="title">On track (Usually or Always)</span>
-          <span class="pct" style="color:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}">${pct}%</span>
-        </div>
-        <div class="score-bar-bg">
-          <div class="score-bar-fill" style="width:${pct}%;background:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}"></div>
-        </div>
-        <div class="score-note">${onTrackCount} of ${questions.length} questions at Usually or Always</div>
-      </div>` : `
-      <div class="group-score">
-        <div class="score-note" style="text-align:center;padding:4px 0;">Log a session to see your progress here.</div>
-      </div>`}
+      ${ratedCount > 0 ? `<div class="group-score"><div class="group-score-label"><span class="title">On track (Usually or Always)</span><span class="pct" style="color:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}">${pct}%</span></div><div class="score-bar-bg"><div class="score-bar-fill" style="width:${pct}%;background:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}"></div></div><div class="score-note">${onTrackCount} of ${questions.length} questions at Usually or Always</div></div>` : `<div class="group-score"><div class="score-note" style="text-align:center;padding:4px 0;">Log a session to see your progress here.</div></div>`}
     </div>`;
-
   container.appendChild(card);
 }
 
@@ -810,77 +788,40 @@ function toggleGroup(key) {
 function renderSessions() {
   const el = document.getElementById('sessions-list');
   if (!SESSIONS_DATA || SESSIONS_DATA.length === 0) {
-    el.innerHTML = `
-      <div class="empty-state">
-        <div class="emoji">📋</div>
-        <p>No sessions logged yet.<br>Hit the button above after your first drive!</p>
-      </div>`;
+    el.innerHTML = `<div class="empty-state"><div class="emoji">📋</div><p>No sessions logged yet.<br>Hit the button above after your first drive!</p></div>`;
     return;
   }
 
   el.innerHTML = SESSIONS_DATA.map(s => {
     const date = new Date(s.session_date);
     const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    const typeChip = s.session_type === 'private'
-      ? `<span class="session-chip chip-private">Private Practice</span>`
-      : `<span class="session-chip chip-instructor">With Instructor</span>`;
-    const durationChip = s.duration_minutes
-      ? `<span class="session-chip chip-duration">${s.duration_minutes} min</span>` : '';
+    const typeChip = s.session_type === 'private' ? `<span class="session-chip chip-private">Private Practice</span>` : `<span class="session-chip chip-instructor">With Instructor</span>`;
+    const durationChip = s.duration_minutes ? `<span class="session-chip chip-duration">${s.duration_minutes} min</span>` : '';
 
     const ratingsHTML = (s.ratings || []).map(r => {
-      const dotColor = r.rating === 'always' ? '#22c55e'
-        : r.rating === 'usually'   ? '#86efac'
-        : r.rating === 'sometimes' ? '#f59e0b'
-        : '#ef4444';
+      const dotColor = r.rating === 'always' ? '#22c55e' : r.rating === 'usually' ? '#86efac' : r.rating === 'sometimes' ? '#f59e0b' : '#ef4444';
       const qLabel = findQuestionLabel(r.skill_key);
       const noteIcon = r.note ? ` <span style="opacity:0.7">📝</span>` : '';
-      return `<div class="session-skill-pill">
-        <div class="dot" style="background:${dotColor}"></div>
-        ${qLabel}${noteIcon}
-      </div>`;
+      return `<div class="session-skill-pill"><div class="dot" style="background:${dotColor}"></div>${qLabel}${noteIcon}</div>`;
     }).join('');
 
-    // Per-question notes list
     const qNotesWithContent = (s.ratings || []).filter(r => r.note);
     const qNotesHTML = qNotesWithContent.length > 0
-      ? `<div class="q-notes-list">
-          ${qNotesWithContent.map(r => {
-            const q = QUESTIONS.find(q => q.key === r.skill_key);
-            const label = q ? `Q${q.num}` : r.skill_key;
-            return `<div class="q-note-item">
-              <span class="q-note-label">${label}</span>
-              <span class="q-note-text">${r.note}</span>
-            </div>`;
-          }).join('')}
-        </div>` : '';
+      ? `<div class="q-notes-list">${qNotesWithContent.map(r => {
+          const q = QUESTIONS.find(q => q.key === r.skill_key);
+          const label = q ? `Q${q.num}` : r.skill_key;
+          return `<div class="q-note-item"><span class="q-note-label">${label}</span><span class="q-note-text">${r.note}</span></div>`;
+        }).join('')}</div>` : '';
 
-    const notesHTML = s.notes
-      ? `<div class="session-notes">"${s.notes}"</div>` : '';
-
-    return `
-      <div class="session-card">
-        <div class="session-meta">
-          <span class="session-date">📅 ${dateStr}</span>
-          ${typeChip}
-          ${durationChip}
-        </div>
-        ${ratingsHTML ? `<div class="session-ratings">${ratingsHTML}</div>` : ''}
-        ${qNotesHTML}
-        ${notesHTML}
-      </div>`;
+    const notesHTML = s.notes ? `<div class="session-notes">"${s.notes}"</div>` : '';
+    return `<div class="session-card"><div class="session-meta"><span class="session-date">📅 ${dateStr}</span>${typeChip}${durationChip}</div>${ratingsHTML ? `<div class="session-ratings">${ratingsHTML}</div>` : ''}${qNotesHTML}${notesHTML}</div>`;
   }).join('');
 }
 
 function findQuestionLabel(key) {
-  // Check legacy/custom key mapping first
   if (SKILL_KEY_LABELS[key]) return SKILL_KEY_LABELS[key];
-  // Then check questions array
   const q = QUESTIONS.find(q => q.key === key);
-  if (q) {
-    const words = q.text.split(' ');
-    return words.slice(0, 4).join(' ') + (words.length > 4 ? '…' : '');
-  }
-  // Last resort: humanise the key (e.g. "t1_safe_stop" → "safe stop")
+  if (q) { const words = q.text.split(' '); return words.slice(0, 4).join(' ') + (words.length > 4 ? '…' : ''); }
   return key.replace(/^[a-z]\d+_/, '').replace(/_/g, ' ');
 }
 </script>
