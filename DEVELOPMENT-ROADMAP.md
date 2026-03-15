@@ -140,11 +140,14 @@ Cash refund for unused credits.
 - Admin approves in portal
 - Stripe processes reversal, credit deducted from balance
 
-### 2.4 — Learner Dashboard Enhancements
+### 2.4 — Learner Dashboard Enhancements ✅ Complete
 Surface the new booking system on the existing learner dashboard.
-- Credit balance and "Buy Credits" / "Book a Lesson" CTAs at the top
-- Upcoming bookings listed (currently only visible on the book page)
-- Transaction history
+
+**What was built:**
+- ✅ Credit balance card at the top of the dashboard with "Buy Credits" and "Book a Lesson" CTAs
+- ✅ "Book a Lesson" button automatically dimmed when balance is zero, prompting learner to buy credits
+- ✅ Upcoming lessons section showing next 5 confirmed bookings with date, time, and instructor name
+- ✅ "Manage" link on each upcoming lesson through to the booking page for cancellations
 
 ### 2.5 — Reviews & Testimonials
 Post-lesson review prompt triggered after a lesson is marked completed.
