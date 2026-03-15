@@ -109,12 +109,24 @@ All tables live in **Neon (PostgreSQL)**. Migration file: `db/migrations/001_boo
 
 The following features are prioritised for the next phase, ordered roughly by value.
 
-### 2.1 — Admin / Instructor Portal
+### 2.1 — Admin / Instructor Portal ✅ Complete
 A web-based interface for managing instructors and their schedules without touching SQL or the API directly.
-- Add / edit / deactivate instructors
-- Set and update weekly availability windows per instructor
-- View all upcoming bookings across all instructors
-- Mark lessons as completed
+
+**What was built:**
+- ✅ `api/admin.js` — admin authentication (JWT), dashboard stats, bookings management, instructor listing
+- ✅ `public/admin/login.html` — admin login page with JWT-based auth, stored in localStorage
+- ✅ `public/admin/portal.html` — full admin portal with sidebar navigation and four sections:
+  - **Dashboard** — upcoming lessons count, today/this week stats, total learners, active instructors, total revenue
+  - **Instructors** — add, edit, activate/deactivate instructors
+  - **Availability** — set and update weekly availability windows per instructor
+  - **Bookings** — view all bookings with status filters, mark lessons as completed
+- ✅ `db/migrations/002_admin_users.sql` — `admin_users` table with role support (admin / superadmin)
+- ✅ Admin accounts secured with bcrypt password hashing and JWT tokens
+- ✅ `public/admin.html` — redirect shim from `/admin` to `/admin/login.html`
+
+**Bug fixes (15 March 2026):**
+- ✅ Fixed `middleware.js` returning empty 200 responses instead of passing requests through to handlers — was silently breaking all pages and API endpoints
+- ✅ Renamed `api/update-statis.js` → `api/update-status.js` to match frontend API calls
 
 ### 2.2 — Automated Reminders
 Email (and optionally SMS) reminders before upcoming lessons.
