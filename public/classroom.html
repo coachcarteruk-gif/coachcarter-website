@@ -294,6 +294,25 @@
     .tag-looking-around { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
     .tag-junctions      { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
     .tag-reversing      { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
+
+    /* ── DESKTOP: constrain video width like TikTok/Shorts ── */
+    @media (min-width: 768px) {
+      .reels-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: #111;
+      }
+      .reel-item {
+        width: 100%;
+        max-width: 420px;
+        border-radius: 0;
+      }
+      .empty-reels {
+        max-width: 420px;
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
