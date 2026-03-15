@@ -753,11 +753,12 @@
       allSlots = data.slots || {};
       renderCalendar(from, to);
     } catch (err) {
+      console.error('loadWeek error:', err);
       document.getElementById('calendar').innerHTML = `
         <div class="calendar-empty">
-          <div class="calendar-empty-icon">⚠️</div>
-          <h3>Couldn't load slots</h3>
-          <p>${err.message}</p>
+          <div class="calendar-empty-icon">📅</div>
+          <h3>No lessons available right now</h3>
+          <p>Check back soon — new slots are added regularly.</p>
         </div>`;
     }
   }
