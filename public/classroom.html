@@ -327,10 +327,10 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── GROUP COLOURS ── */
-    .tag-speed-control  { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
-    .tag-looking-around { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
-    .tag-junctions      { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
-    .tag-reversing      { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
+    .tag-roundabouts    { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
+    .tag-manoeuvres     { background: rgba(99,179,237,0.25); color: rgba(255,255,255,0.95); }
+    .tag-lesson-vibes   { background: rgba(154,117,245,0.25); color: rgba(255,255,255,0.95); }
+    .tag-course         { background: rgba(52,211,153,0.25); color: rgba(255,255,255,0.95); }
 
     /* ── DESKTOP: height-fills viewport, width follows 9:16 ratio ── */
     @media (min-width: 768px) {
@@ -388,18 +388,18 @@
 const CF_BASE = 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com';
 
 const GROUPS = [
-  { key: 'all',            label: 'All' },
-  { key: 'speed-control',  label: 'Speed & Control' },
-  { key: 'looking-around', label: 'Looking Around' },
-  { key: 'junctions',      label: 'Junctions & Roundabouts' },
-  { key: 'reversing',      label: 'Reversing' }
+  { key: 'all',          label: 'All' },
+  { key: 'roundabouts',  label: 'Roundabouts' },
+  { key: 'manoeuvres',   label: 'Manoeuvres' },
+  { key: 'lesson-vibes', label: 'Lesson Vibes' },
+  { key: 'course',       label: 'Learn to Drive Course' }
 ];
 
 const GROUP_LABELS = {
-  'speed-control':  'Speed & Control',
-  'looking-around': 'Looking Around',
-  'junctions':      'Junctions & Roundabouts',
-  'reversing':      'Reversing'
+  'roundabouts':  'Roundabouts',
+  'manoeuvres':   'Manoeuvres',
+  'lesson-vibes': 'Lesson Vibes',
+  'course':       'Learn to Drive Course'
 };
 
 let allVideos   = [];
