@@ -1,40 +1,40 @@
 {
   "pricing": {
-    "payg_lesson_price": 90,
-    "payg_hourly": 60,
+    "payg_lesson_price": 82.50,
+    "payg_hourly": 55,
     "core_programme": 2400,
     "core_hours": 30,
-    "retake_price": 349,
+    "retake_price": 0,
     "bulk_packages": [
       {
         "hrs": 10,
         "discount": 0.08,
-        "price": 552,
-        "per_hour": 55.2
+        "price": 506,
+        "per_hour": 50.60
       },
       {
         "hrs": 20,
         "discount": 0.12,
-        "price": 1056,
-        "per_hour": 52.8
+        "price": 968,
+        "per_hour": 48.40
       },
       {
         "hrs": 30,
         "discount": 0.15,
-        "price": 1530,
-        "per_hour": 51
+        "price": 1403,
+        "per_hour": 46.75
       },
       {
         "hrs": 40,
         "discount": 0.18,
-        "price": 1968,
-        "per_hour": 49.2
+        "price": 1804,
+        "per_hour": 45.10
       },
       {
         "hrs": 50,
         "discount": 0.21,
-        "price": 2370,
-        "per_hour": 47.4
+        "price": 2173,
+        "per_hour": 43.45
       }
     ]
   },
@@ -44,8 +44,8 @@
       "subheadline": "Choose how you want to learn. From flexible pay-per-lesson to our 18-week pass programme. Choose from our range of test fail insurance covers",
       "stats": [
         {
-          "value": "£90",
-          "label": "Per 1.5hr lesson"
+          "value": "£55",
+          "label": "Per hour, pay as you go"
         },
         {
           "value": "21%",
@@ -107,5 +107,5 @@
       "footer_text": "CoachCarter Driving School · The last driving school you'll need"
     }
   },
-  "last_updated": "2026-03-13T00:00:00.000Z"
+  "last_updated": "2026-03-16T00:00:00.000Z"
 }
