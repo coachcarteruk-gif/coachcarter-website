@@ -801,6 +801,90 @@ footer {
 #setmore-fancy-box-close-icon:hover { background: var(--orange) !important; }
 
 /* ═══════════════════════════════════════
+   GUIDED QUIZ
+═══════════════════════════════════════ */
+.quiz-wrap {
+  margin-top: 28px;
+  width: 100%;
+  max-width: 480px;
+  animation: quizIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+@keyframes quizIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+.quiz-step {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px;
+  padding: 24px 24px 18px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  text-align: left;
+}
+
+.quiz-progress {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 8px;
+}
+
+.quiz-q {
+  font-family: var(--font-h);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 16px;
+  line-height: 1.3;
+}
+
+.quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.quiz-opt {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.85);
+  font-family: var(--font-b);
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 12px 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.quiz-opt:hover {
+  background: rgba(245,131,33,0.15);
+  border-color: rgba(245,131,33,0.5);
+  color: #fff;
+  transform: translateX(3px);
+}
+
+.quiz-skip {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.35);
+  font-family: var(--font-b);
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.18s;
+}
+
+.quiz-skip:hover { color: rgba(255,255,255,0.65); }
+
+/* ═══════════════════════════════════════
    RESPONSIVE
 ═══════════════════════════════════════ */
 @media (max-width: 700px) {
@@ -924,9 +1008,36 @@ footer {
       <button class="btn-primary" onclick="bookFreeTrial()">
         📅 Book Free Trial Lesson
       </button>
-      <a class="btn-ghost" href="/classroom.html">
-        🎬 Watch Free Videos
-      </a>
+      <button class="btn-ghost" onclick="startQuiz()">
+        🧭 Help me choose
+      </button>
+    </div>
+
+    <!-- ── GUIDED QUIZ ── -->
+    <div id="quizWrap" class="quiz-wrap" aria-live="polite" hidden>
+
+      <div id="quizStep1" class="quiz-step">
+        <p class="quiz-progress">Step 1 of 2</p>
+        <p class="quiz-q">Where are you in your learning journey?</p>
+        <div class="quiz-options">
+          <button class="quiz-opt" onclick="quizNext(1,'new')">🚗 Complete beginner — haven't started yet</button>
+          <button class="quiz-opt" onclick="quizNext(1,'some')">📖 Had some lessons before, want to continue</button>
+          <button class="quiz-opt" onclick="quizNext(1,'test')">🎯 Ready to book my test soon</button>
+        </div>
+        <button class="quiz-skip" onclick="closeQuiz()">✕ Close</button>
+      </div>
+
+      <div id="quizStep2" class="quiz-step" hidden>
+        <p class="quiz-progress">Step 2 of 2</p>
+        <p class="quiz-q">What's most important to you right now?</p>
+        <div class="quiz-options">
+          <button class="quiz-opt" onclick="quizFinish('price')">💰 Understanding the pricing &amp; packages</button>
+          <button class="quiz-opt" onclick="quizFinish('book')">📅 Getting my first lesson booked</button>
+          <button class="quiz-opt" onclick="quizFinish('learn')">🎬 Brushing up with free videos first</button>
+        </div>
+        <button class="quiz-skip" onclick="quizBack()">← Back</button>
+      </div>
+
     </div>
 
     <div class="hero-trust">
@@ -1085,6 +1196,58 @@ function bookFreeTrial() {
     window.location.href = '/learner/login.html?tab=register&redirect=/learner/book.html';
   }
 }
+
+// ── GUIDED QUIZ ──────────────────────────────────────────
+let quizAnswer1 = null;
+
+function startQuiz() {
+  quizAnswer1 = null;
+  document.getElementById('quizStep1').hidden = false;
+  document.getElementById('quizStep2').hidden = true;
+  const wrap = document.getElementById('quizWrap');
+  wrap.hidden = false;
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeQuiz() {
+  document.getElementById('quizWrap').hidden = true;
+}
+
+function quizNext(step, answer) {
+  if (step === 1) {
+    quizAnswer1 = answer;
+    document.getElementById('quizStep1').hidden = true;
+    document.getElementById('quizStep2').hidden = false;
+  }
+}
+
+function quizBack() {
+  document.getElementById('quizStep2').hidden = true;
+  document.getElementById('quizStep1').hidden = false;
+}
+
+function quizFinish(priority) {
+  // Route based on both answers
+  // priority: 'price' | 'book' | 'learn'
+  // quizAnswer1: 'new' | 'some' | 'test'
+  if (priority === 'learn') {
+    window.location.href = '/classroom.html';
+    return;
+  }
+  if (priority === 'price') {
+    window.location.href = '/lessons.html';
+    return;
+  }
+  // priority === 'book'
+  if (quizAnswer1 === 'test') {
+    // Further ahead — send to lessons page for intensive/test packages
+    window.location.href = '/lessons.html#packages';
+  } else {
+    // Beginner or returning — free trial flow
+    bookFreeTrial();
+  }
+}
+// ─────────────────────────────────────────────────────────
 
 // Setmore kept as hidden fallback — can be called via openSetmoreBooking() if needed
 function openSetmoreBooking() {
