@@ -382,6 +382,13 @@ async function handleBook(req, res) {
           <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
           <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
         </table>
+        <p style="margin-top:16px">
+          <a href="https://coachcarter.uk/instructor/"
+             style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
+                    border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
+            View my schedule →
+          </a>
+        </p>
       `
     });
 

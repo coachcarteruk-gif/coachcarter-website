@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Availability — CoachCarter Instructor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #f9f9f9;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --green-lt:   #f0fdf4;
+      --red:        #ef4444;
+      --red-lt:     #fef2f2;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
+    }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--primary); min-height: 100vh; }
+
+    header {
+      background: var(--white); border-bottom: 1px solid var(--border);
+      padding: 0 20px; display: flex; align-items: center;
+      justify-content: space-between; height: 60px;
+      position: sticky; top: 0; z-index: 200;
+    }
+    .header-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .header-brand img { height: 36px; }
+    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
+    .header-brand-sub  { font-size: 0.7rem; color: var(--muted); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-name { font-size: 0.85rem; font-weight: 700; }
+    .btn-signout {
+      font-size: 0.8rem; color: var(--muted); background: none; border: none;
+      cursor: pointer; padding: 6px 10px; border-radius: 6px; transition: background 0.15s;
+    }
+    .btn-signout:hover { background: var(--bg); color: var(--primary); }
+
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--white); border-top: 1px solid var(--border);
+      display: flex; z-index: 200;
+      padding-bottom: env(safe-area-inset-bottom);
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+    }
+    .bottom-nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 10px 8px; text-decoration: none; color: var(--muted);
+      font-size: 0.68rem; font-weight: 600; transition: color 0.15s; gap: 3px;
+    }
+    .bottom-nav-item:hover  { color: var(--primary); }
+    .bottom-nav-item.active { color: var(--accent); }
+    .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
+
+    .page { max-width: 700px; margin: 0 auto; padding: 28px 16px 80px; }
+    h1 { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; }
+    .subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 4px; margin-bottom: 28px; }
+
+    /* Day card */
+    .day-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 10px; overflow: hidden;
+    }
+    .day-header {
+      padding: 12px 18px; display: flex; align-items: center;
+      justify-content: space-between; border-bottom: 1px solid var(--border);
+    }
+    .day-name { font-family: var(--font-head); font-size: 0.95rem; font-weight: 700; }
+    .btn-add-window {
+      background: none; border: 1.5px solid var(--border); border-radius: 7px;
+      padding: 5px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+      color: var(--muted); transition: all 0.15s; display: flex; align-items: center; gap: 4px;
+    }
+    .btn-add-window:hover { border-color: var(--accent); color: var(--accent); }
+
+    .windows-list { padding: 8px 18px 12px; display: flex; flex-direction: column; gap: 6px; }
+    .window-row {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--bg); border-radius: 8px; padding: 8px 12px;
+    }
+    .window-times { font-size: 0.875rem; font-weight: 700; flex: 1; }
+    .window-time-inputs {
+      display: flex; align-items: center; gap: 8px; flex: 1;
+    }
+    input[type="time"] {
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 8px; font-size: 0.875rem; font-family: var(--font-body);
+      background: var(--white); color: var(--primary); outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="time"]:focus { border-color: var(--accent); }
+    .time-sep { color: var(--muted); font-size: 0.85rem; }
+    .btn-remove-window {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 1rem; padding: 2px 6px; border-radius: 4px; transition: all 0.15s;
+      line-height: 1;
+    }
+    .btn-remove-window:hover { color: var(--red); background: var(--red-lt); }
+    .no-windows { font-size: 0.825rem; color: var(--muted); padding: 8px 0 4px; font-style: italic; }
+
+    /* Save bar */
+    .save-bar {
+      position: fixed; bottom: 64px; left: 0; right: 0; z-index: 100;
+      padding: 12px 20px; background: var(--white); border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
+      transform: translateY(100%); transition: transform 0.25s;
+    }
+    .save-bar.visible { transform: translateY(0); }
+    .save-bar p { font-size: 0.85rem; color: var(--muted); }
+    .btn-save {
+      background: var(--accent); color: white; border: none;
+      border-radius: 8px; padding: 10px 24px; font-family: var(--font-head);
+      font-size: 0.9rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .btn-save:hover    { background: var(--accent-dk); }
+    .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .toast {
+      position: fixed; bottom: 72px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--primary); color: white;
+      padding: 12px 22px; border-radius: 10px;
+      font-size: 0.875rem; font-weight: 600;
+      transition: transform 0.3s; z-index: 999; white-space: nowrap;
+    }
+    .toast.show    { transform: translateX(-50%) translateY(0); }
+    .toast.success { background: #16a34a; }
+    .toast.error   { background: var(--red); }
+
+    .loading { text-align: center; padding: 48px; color: var(--muted); }
+    .spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.7s linear infinite; margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="header-brand" href="/instructor/">
+    <img src="/Logo.png" alt="CoachCarter">
+    <div>
+      <div class="header-brand-text">CoachCarter</div>
+      <div class="header-brand-sub">Instructor Portal</div>
+    </div>
+  </a>
+  <div class="header-right">
+    <span class="header-name" id="headerName">—</span>
+    <button class="btn-signout" onclick="signOut()">Sign out</button>
+  </div>
+</header>
+
+<div class="page">
+  <h1>My Availability</h1>
+  <p class="subtitle">Set the days and hours you're available to teach. Learners can book within these windows.</p>
+
+  <div id="availContent">
+    <div class="loading"><div class="spinner"></div><p>Loading…</p></div>
+  </div>
+</div>
+
+<!-- Save bar -->
+<div class="save-bar" id="saveBar">
+  <p>You have unsaved changes</p>
+  <button class="btn-save" id="saveBtn" onclick="saveAvailability()">Save changes</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<nav class="bottom-nav">
+  <a href="/instructor/" class="bottom-nav-item">
+    <span class="bottom-nav-icon">📅</span>
+    <span>Schedule</span>
+  </a>
+  <a href="/instructor/availability.html" class="bottom-nav-item active">
+    <span class="bottom-nav-icon">🕐</span>
+    <span>Availability</span>
+  </a>
+  <a href="/instructor/profile.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">👤</span>
+    <span>Profile</span>
+  </a>
+</nav>
+
+<script>
+  const DAYS = [
+    { label: 'Monday',    value: 1 },
+    { label: 'Tuesday',   value: 2 },
+    { label: 'Wednesday', value: 3 },
+    { label: 'Thursday',  value: 4 },
+    { label: 'Friday',    value: 5 },
+    { label: 'Saturday',  value: 6 },
+    { label: 'Sunday',    value: 0 },
+  ];
+
+  let token     = null;
+  let windows   = []; // [{ day_of_week, start_time, end_time }]
+  let isDirty   = false;
+
+  function init() {
+    const session = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
+    token = session?.token || null;
+    if (!token) { window.location.href = '/instructor/login.html'; return; }
+    document.getElementById('headerName').textContent = session?.instructor?.name || '—';
+    loadAvailability();
+  }
+
+  async function loadAvailability() {
+    try {
+      const res  = await fetch('/api/instructor?action=availability', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (res.status === 401) { signOut(); return; }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      windows  = (data.windows || []).map(w => ({
+        day_of_week: w.day_of_week,
+        start_time:  w.start_time.slice(0, 5),
+        end_time:    w.end_time.slice(0, 5)
+      }));
+      isDirty  = false;
+      render();
+    } catch (err) {
+      document.getElementById('availContent').innerHTML = `<p style="color:var(--red);padding:20px">${err.message}</p>`;
+    }
+  }
+
+  function render() {
+    let html = '';
+    for (const day of DAYS) {
+      const dayWindows = windows.filter(w => w.day_of_week === day.value);
+      html += `
+        <div class="day-card">
+          <div class="day-header">
+            <span class="day-name">${day.label}</span>
+            <button class="btn-add-window" onclick="addWindow(${day.value})">+ Add</button>
+          </div>
+          <div class="windows-list" id="day-${day.value}">
+            ${dayWindows.length === 0
+              ? '<p class="no-windows">No availability set</p>'
+              : dayWindows.map((w, i) => renderWindow(day.value, w, windows.indexOf(w))).join('')
+            }
+          </div>
+        </div>`;
+    }
+    document.getElementById('availContent').innerHTML = html;
+    updateSaveBar();
+  }
+
+  function renderWindow(dayValue, w, idx) {
+    return `
+      <div class="window-row" id="window-row-${idx}">
+        <div class="window-time-inputs">
+          <input type="time" value="${w.start_time}" onchange="updateWindow(${idx}, 'start_time', this.value)">
+          <span class="time-sep">to</span>
+          <input type="time" value="${w.end_time}" onchange="updateWindow(${idx}, 'end_time', this.value)">
+        </div>
+        <button class="btn-remove-window" onclick="removeWindow(${idx})" title="Remove">✕</button>
+      </div>`;
+  }
+
+  function addWindow(dayValue) {
+    windows.push({ day_of_week: dayValue, start_time: '09:00', end_time: '17:00' });
+    isDirty = true;
+    render();
+  }
+
+  function removeWindow(idx) {
+    windows.splice(idx, 1);
+    isDirty = true;
+    render();
+  }
+
+  function updateWindow(idx, field, value) {
+    windows[idx][field] = value;
+    isDirty = true;
+    updateSaveBar();
+  }
+
+  function updateSaveBar() {
+    document.getElementById('saveBar').classList.toggle('visible', isDirty);
+  }
+
+  async function saveAvailability() {
+    // Validate — start < end for each window
+    for (const w of windows) {
+      if (w.start_time >= w.end_time) {
+        showToast('Start time must be before end time for all windows', 'error');
+        return;
+      }
+    }
+
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+      const res  = await fetch('/api/instructor?action=set-availability', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body:    JSON.stringify({ windows })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      windows = (data.windows || []).map(w => ({
+        day_of_week: w.day_of_week,
+        start_time:  w.start_time.slice(0, 5),
+        end_time:    w.end_time.slice(0, 5)
+      }));
+      isDirty = false;
+      render();
+      showToast('Availability saved ✓', 'success');
+    } catch (err) {
+      showToast(err.message || 'Failed to save', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save changes';
+    }
+  }
+
+  function signOut() {
+    localStorage.removeItem('cc_instructor');
+    window.location.href = '/instructor/login.html';
+  }
+
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className   = 'toast' + (type ? ' ' + type : '');
+    void t.offsetWidth;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  init();
+</script>
+</body>
+</html>

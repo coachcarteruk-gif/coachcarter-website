@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Profile — CoachCarter Instructor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #f9f9f9;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --green-lt:   #f0fdf4;
+      --red:        #ef4444;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
+    }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--primary); min-height: 100vh; }
+
+    header {
+      background: var(--white); border-bottom: 1px solid var(--border);
+      padding: 0 20px; display: flex; align-items: center;
+      justify-content: space-between; height: 60px;
+      position: sticky; top: 0; z-index: 200;
+    }
+    .header-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .header-brand img { height: 36px; }
+    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
+    .header-brand-sub  { font-size: 0.7rem; color: var(--muted); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-name { font-size: 0.85rem; font-weight: 700; }
+    .btn-signout {
+      font-size: 0.8rem; color: var(--muted); background: none; border: none;
+      cursor: pointer; padding: 6px 10px; border-radius: 6px; transition: background 0.15s;
+    }
+    .btn-signout:hover { background: var(--bg); color: var(--primary); }
+
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--white); border-top: 1px solid var(--border);
+      display: flex; z-index: 200;
+      padding-bottom: env(safe-area-inset-bottom);
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+    }
+    .bottom-nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 10px 8px; text-decoration: none; color: var(--muted);
+      font-size: 0.68rem; font-weight: 600; transition: color 0.15s; gap: 3px;
+    }
+    .bottom-nav-item:hover  { color: var(--primary); }
+    .bottom-nav-item.active { color: var(--accent); }
+    .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
+
+    .page { max-width: 600px; margin: 0 auto; padding: 28px 16px 80px; }
+    h1 { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; }
+    .subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 4px; margin-bottom: 28px; }
+
+    /* Avatar */
+    .avatar-row {
+      display: flex; align-items: center; gap: 20px; margin-bottom: 28px;
+    }
+    .avatar {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--accent-lt); display: flex; align-items: center;
+      justify-content: center; font-family: var(--font-head);
+      font-size: 1.6rem; font-weight: 800; color: var(--accent);
+      flex-shrink: 0; overflow: hidden; border: 2px solid var(--border);
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .avatar-info { flex: 1; }
+    .avatar-name  { font-family: var(--font-head); font-size: 1.1rem; font-weight: 700; }
+    .avatar-email { font-size: 0.85rem; color: var(--muted); margin-top: 3px; }
+    .avatar-note  { font-size: 0.78rem; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+
+    /* Form card */
+    .form-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px 20px; margin-bottom: 16px;
+    }
+    .form-card-title {
+      font-family: var(--font-head); font-size: 0.95rem; font-weight: 700;
+      margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+    }
+    .form-group { margin-bottom: 16px; }
+    label {
+      display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+    }
+    input[type="text"],
+    input[type="url"],
+    textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--primary); font-family: var(--font-body);
+      font-size: 0.9rem; padding: 10px 13px; outline: none; transition: border-color 0.2s;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); background: var(--white); }
+    textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+    .field-hint { font-size: 0.78rem; color: var(--muted); margin-top: 5px; }
+
+    /* Read-only email field */
+    .email-field {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--muted); font-family: var(--font-body);
+      font-size: 0.9rem; padding: 10px 13px;
+    }
+
+    .btn-save {
+      width: 100%; background: var(--accent); color: white; border: none;
+      border-radius: 8px; font-family: var(--font-head); font-size: 1rem;
+      font-weight: 700; padding: 13px; cursor: pointer; margin-top: 4px;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    .btn-save:hover    { background: var(--accent-dk); }
+    .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .success-banner {
+      background: var(--green-lt); border: 1.5px solid var(--green);
+      border-radius: 10px; padding: 12px 16px; font-size: 0.875rem;
+      color: #166534; margin-bottom: 16px; display: none;
+    }
+    .success-banner.show { display: block; }
+
+    .loading { text-align: center; padding: 48px; color: var(--muted); }
+    .spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.7s linear infinite; margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="header-brand" href="/instructor/">
+    <img src="/Logo.png" alt="CoachCarter">
+    <div>
+      <div class="header-brand-text">CoachCarter</div>
+      <div class="header-brand-sub">Instructor Portal</div>
+    </div>
+  </a>
+  <div class="header-right">
+    <span class="header-name" id="headerName">—</span>
+    <button class="btn-signout" onclick="signOut()">Sign out</button>
+  </div>
+</header>
+
+<div class="page">
+  <h1>My Profile</h1>
+  <p class="subtitle">Update your details as they appear to learners.</p>
+
+  <div id="profileContent">
+    <div class="loading"><div class="spinner"></div><p>Loading…</p></div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="/instructor/" class="bottom-nav-item">
+    <span class="bottom-nav-icon">📅</span>
+    <span>Schedule</span>
+  </a>
+  <a href="/instructor/availability.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">🕐</span>
+    <span>Availability</span>
+  </a>
+  <a href="/instructor/profile.html" class="bottom-nav-item active">
+    <span class="bottom-nav-icon">👤</span>
+    <span>Profile</span>
+  </a>
+</nav>
+
+<script>
+  let token = null;
+
+  function init() {
+    const session = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
+    token = session?.token || null;
+    if (!token) { window.location.href = '/instructor/login.html'; return; }
+    document.getElementById('headerName').textContent = session?.instructor?.name || '—';
+    loadProfile();
+  }
+
+  async function loadProfile() {
+    try {
+      const res  = await fetch('/api/instructor?action=profile', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (res.status === 401) { signOut(); return; }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      renderProfile(data.instructor);
+    } catch (err) {
+      document.getElementById('profileContent').innerHTML =
+        `<p style="color:var(--red);padding:20px">${err.message}</p>`;
+    }
+  }
+
+  function renderProfile(p) {
+    const initials = p.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    const avatarHtml = p.photo_url
+      ? `<img src="${esc(p.photo_url)}" alt="${esc(p.name)}" onerror="this.style.display='none';this.parentNode.textContent='${initials}'">`
+      : initials;
+
+    document.getElementById('profileContent').innerHTML = `
+      <div class="avatar-row">
+        <div class="avatar" id="avatarEl">${avatarHtml}</div>
+        <div class="avatar-info">
+          <div class="avatar-name" id="displayName">${esc(p.name)}</div>
+          <div class="avatar-email">${esc(p.email)}</div>
+          <p class="avatar-note">Your email is managed by admin and cannot be changed here.</p>
+        </div>
+      </div>
+
+      <div class="success-banner" id="successBanner">✓ Profile updated successfully</div>
+
+      <div class="form-card">
+        <div class="form-card-title">Personal details</div>
+
+        <div class="form-group">
+          <label for="inputName">Full name</label>
+          <input type="text" id="inputName" value="${esc(p.name)}" placeholder="Your full name">
+        </div>
+
+        <div class="form-group">
+          <label>Email address</label>
+          <div class="email-field">${esc(p.email)}</div>
+        </div>
+
+        <div class="form-group">
+          <label for="inputPhone">Phone number</label>
+          <input type="text" id="inputPhone" value="${esc(p.phone || '')}" placeholder="e.g. 07700 900000">
+          <p class="field-hint">Shared with learners for lesson day contact.</p>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">Public profile</div>
+
+        <div class="form-group">
+          <label for="inputBio">Bio</label>
+          <textarea id="inputBio" placeholder="Tell learners a bit about yourself — your experience, teaching style, areas covered…">${esc(p.bio || '')}</textarea>
+          <p class="field-hint">Shown to learners when choosing an instructor.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="inputPhoto">Photo URL</label>
+          <input type="url" id="inputPhoto" value="${esc(p.photo_url || '')}" placeholder="https://…" oninput="previewPhoto(this.value)">
+          <p class="field-hint">Direct link to a photo (JPG or PNG). Contact admin to upload a new image.</p>
+        </div>
+      </div>
+
+      <button class="btn-save" id="saveBtn" onclick="saveProfile()">Save changes</button>
+    `;
+  }
+
+  function previewPhoto(url) {
+    if (!url) return;
+    const avatarEl = document.getElementById('avatarEl');
+    if (!avatarEl) return;
+    avatarEl.innerHTML = `<img src="${url}" alt="preview" onerror="this.style.display='none'">`;
+  }
+
+  async function saveProfile() {
+    const name      = document.getElementById('inputName').value.trim();
+    const phone     = document.getElementById('inputPhone').value.trim();
+    const bio       = document.getElementById('inputBio').value.trim();
+    const photo_url = document.getElementById('inputPhoto').value.trim();
+
+    if (!name) {
+      alert('Name cannot be empty');
+      return;
+    }
+
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+      const res  = await fetch('/api/instructor?action=update-profile', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body:    JSON.stringify({ name, phone: phone || null, bio: bio || null, photo_url: photo_url || null })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // Update displayed name
+      const nameEl = document.getElementById('displayName');
+      if (nameEl) nameEl.textContent = data.instructor.name;
+      document.getElementById('headerName').textContent = data.instructor.name;
+
+      // Update local session name
+      const session = JSON.parse(localStorage.getItem('cc_instructor') || '{}');
+      if (session.instructor) {
+        session.instructor.name      = data.instructor.name;
+        session.instructor.photo_url = data.instructor.photo_url;
+        localStorage.setItem('cc_instructor', JSON.stringify(session));
+      }
+
+      // Show success banner
+      const banner = document.getElementById('successBanner');
+      if (banner) {
+        banner.classList.add('show');
+        setTimeout(() => banner.classList.remove('show'), 4000);
+      }
+
+    } catch (err) {
+      alert(err.message || 'Failed to save profile');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save changes';
+    }
+  }
+
+  function signOut() {
+    localStorage.removeItem('cc_instructor');
+    window.location.href = '/instructor/login.html';
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  init();
+</script>
+</body>
+</html>

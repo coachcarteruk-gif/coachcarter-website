@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instructor Sign In — CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary:   #272727;
+      --accent:    #f58321;
+      --accent-dk: #e07518;
+      --accent-lt: #fff4ec;
+      --muted:     #797879;
+      --border:    #e0e0e0;
+      --bg:        #f9f9f9;
+      --white:     #ffffff;
+      --green:     #22c55e;
+      --green-lt:  #f0fdf4;
+      --red:       #ef4444;
+      --font-head: 'Bricolage Grotesque', sans-serif;
+      --font-body: 'Lato', sans-serif;
+      --radius:    14px;
+    }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 32px; text-decoration: none;
+    }
+    .brand img { height: 48px; width: auto; }
+    .brand-text { font-size: 1.1rem; font-weight: 700; color: var(--primary); font-family: var(--font-head); }
+    .brand-sub  { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
+
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 100%; max-width: 420px;
+      padding: 32px 28px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card-title { font-family: var(--font-head); font-size: 1.4rem; font-weight: 800; margin-bottom: 6px; }
+    .card-sub   { font-size: 0.875rem; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
+
+    label {
+      display: block; font-size: 0.8rem; font-weight: 600;
+      color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: 6px;
+    }
+    input[type="email"] {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--primary); font-family: var(--font-body);
+      font-size: 0.95rem; padding: 11px 14px; outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: var(--accent); background: var(--white); }
+
+    .btn-primary {
+      width: 100%; background: var(--accent); color: #fff; border: none;
+      border-radius: 8px; font-family: var(--font-body); font-size: 0.95rem;
+      font-weight: 700; padding: 13px; cursor: pointer; margin-top: 16px;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    .btn-primary:hover    { background: var(--accent-dk); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .error-msg {
+      background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
+      color: #c41e1e; border-radius: 8px; padding: 10px 14px;
+      font-size: 0.85rem; margin-bottom: 16px; display: none;
+    }
+    .error-msg.show { display: block; }
+
+    /* Sent state */
+    .sent-state { display: none; text-align: center; }
+    .sent-icon  { font-size: 3rem; margin-bottom: 16px; }
+    .sent-title { font-family: var(--font-head); font-size: 1.3rem; font-weight: 800; margin-bottom: 8px; }
+    .sent-sub   { font-size: 0.875rem; color: var(--muted); line-height: 1.6; }
+    .sent-email { font-weight: 700; color: var(--primary); }
+    .resend-link {
+      display: inline-block; margin-top: 20px; font-size: 0.85rem;
+      color: var(--accent); cursor: pointer; background: none; border: none;
+      text-decoration: underline;
+    }
+
+    /* Token verification state */
+    .verifying-state { display: none; text-align: center; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<a href="/" class="brand">
+  <img src="/Logo.png" alt="CoachCarter">
+  <div>
+    <div class="brand-text">CoachCarter</div>
+    <div class="brand-sub">Instructor Portal</div>
+  </div>
+</a>
+
+<div class="card">
+  <!-- Request link form -->
+  <div id="loginForm">
+    <div class="card-title">Instructor sign in</div>
+    <div class="card-sub">Enter your CoachCarter email address and we'll send you a sign-in link.</div>
+    <div class="error-msg" id="errorMsg"></div>
+    <div>
+      <label for="emailInput">Email address</label>
+      <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email">
+    </div>
+    <button class="btn-primary" id="sendBtn" onclick="requestLink()">Send sign-in link</button>
+  </div>
+
+  <!-- Sent confirmation -->
+  <div class="sent-state" id="sentState">
+    <div class="sent-icon">✉️</div>
+    <div class="sent-title">Check your email</div>
+    <p class="sent-sub">
+      We've sent a sign-in link to<br>
+      <span class="sent-email" id="sentEmail">—</span><br><br>
+      The link expires in 30 minutes. Check your spam folder if it doesn't arrive.
+    </p>
+    <button class="resend-link" onclick="showForm()">Send another link</button>
+  </div>
+
+  <!-- Verifying token (shown when ?token= is in URL) -->
+  <div class="verifying-state" id="verifyingState">
+    <div class="spinner"></div>
+    <p style="color:var(--muted);font-size:0.9rem">Signing you in…</p>
+  </div>
+</div>
+
+<script>
+  const urlParams = new URLSearchParams(window.location.search);
+  const token     = urlParams.get('token');
+
+  // If already logged in, redirect
+  const existing = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
+  if (existing?.token && !token) window.location.href = '/instructor/';
+
+  // If a magic link token is in the URL, verify it
+  if (token) {
+    document.getElementById('loginForm').style.display    = 'none';
+    document.getElementById('verifyingState').style.display = 'block';
+    verifyToken(token);
+  }
+
+  async function requestLink() {
+    const email = document.getElementById('emailInput').value.trim();
+    if (!email) return;
+
+    const btn = document.getElementById('sendBtn');
+    const err = document.getElementById('errorMsg');
+    err.classList.remove('show');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    try {
+      const res  = await fetch('/api/instructor?action=request-login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send link');
+
+      // Show sent state
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('sentState').style.display  = 'block';
+      document.getElementById('sentEmail').textContent    = email;
+
+    } catch (e) {
+      err.textContent = e.message;
+      err.classList.add('show');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Send sign-in link';
+    }
+  }
+
+  function showForm() {
+    document.getElementById('sentState').style.display  = 'none';
+    document.getElementById('loginForm').style.display  = 'block';
+  }
+
+  async function verifyToken(token) {
+    try {
+      const res  = await fetch(`/api/instructor?action=verify-token&token=${token}`);
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Invalid link');
+
+      // Store session
+      localStorage.setItem('cc_instructor', JSON.stringify(data));
+      window.location.href = '/instructor/';
+
+    } catch (e) {
+      // Show error in the form instead
+      document.getElementById('verifyingState').style.display = 'none';
+      document.getElementById('loginForm').style.display       = 'block';
+      const err = document.getElementById('errorMsg');
+      err.textContent = e.message + ' Please request a new sign-in link.';
+      err.classList.add('show');
+    }
+  }
+
+  // Allow enter key to submit
+  document.getElementById('emailInput')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') requestLink();
+  });
+</script>
+</body>
+</html>

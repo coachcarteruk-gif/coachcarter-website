@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Schedule — CoachCarter Instructor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #f9f9f9;
+      --surface:    #ffffff;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --green-lt:   #f0fdf4;
+      --red:        #ef4444;
+      --red-lt:     #fef2f2;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
+    }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--primary); min-height: 100vh; }
+
+    /* Header */
+    header {
+      background: var(--white); border-bottom: 1px solid var(--border);
+      padding: 0 20px; display: flex; align-items: center;
+      justify-content: space-between; height: 60px;
+      position: sticky; top: 0; z-index: 200;
+    }
+    .header-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .header-brand img { height: 36px; }
+    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
+    .header-brand-sub  { font-size: 0.7rem; color: var(--muted); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-name { font-size: 0.85rem; font-weight: 700; }
+    .btn-signout {
+      font-size: 0.8rem; color: var(--muted); background: none; border: none;
+      cursor: pointer; padding: 6px 10px; border-radius: 6px; transition: background 0.15s;
+    }
+    .btn-signout:hover { background: var(--bg); color: var(--primary); }
+
+    /* Bottom nav */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--white); border-top: 1px solid var(--border);
+      display: flex; z-index: 200;
+      padding-bottom: env(safe-area-inset-bottom);
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+    }
+    .bottom-nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 10px 8px; text-decoration: none; color: var(--muted);
+      font-size: 0.68rem; font-weight: 600; transition: color 0.15s; gap: 3px;
+    }
+    .bottom-nav-item:hover  { color: var(--primary); }
+    .bottom-nav-item.active { color: var(--accent); }
+    .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
+
+    /* Page */
+    .page { max-width: 860px; margin: 0 auto; padding: 28px 16px 80px; }
+    h1 { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; }
+    .subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 4px; }
+
+    /* Section heading */
+    .section-head {
+      font-family: var(--font-head); font-size: 1rem; font-weight: 700;
+      margin: 28px 0 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-count {
+      background: var(--accent-lt); color: var(--accent);
+      font-size: 0.75rem; font-weight: 700; padding: 2px 8px;
+      border-radius: 20px;
+    }
+
+    /* Booking card */
+    .booking-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 20px;
+      margin-bottom: 10px; display: flex; align-items: center;
+      gap: 16px; flex-wrap: wrap;
+    }
+    .booking-card.today { border-left: 4px solid var(--accent); }
+    .booking-card.completed { opacity: 0.6; }
+
+    .booking-date-block { min-width: 80px; }
+    .booking-day   { font-family: var(--font-head); font-size: 1rem; font-weight: 700; }
+    .booking-date  { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+    .booking-time  {
+      font-size: 0.875rem; font-weight: 700; color: var(--accent);
+      background: var(--accent-lt); padding: 4px 10px; border-radius: 20px;
+      white-space: nowrap;
+    }
+    .booking-learner { flex: 1; min-width: 160px; }
+    .booking-learner-name  { font-weight: 700; font-size: 0.9rem; }
+    .booking-learner-email { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+    .booking-learner-phone { font-size: 0.8rem; color: var(--muted); margin-top: 1px; }
+
+    .booking-status {
+      font-size: 0.78rem; font-weight: 700; padding: 4px 10px;
+      border-radius: 20px; white-space: nowrap;
+    }
+    .status-confirmed  { background: #e0f2fe; color: #0369a1; }
+    .status-completed  { background: var(--green-lt); color: #166534; }
+
+    .btn-complete {
+      background: var(--white); border: 1.5px solid var(--green);
+      color: var(--green); padding: 7px 14px; border-radius: 8px;
+      font-size: 0.82rem; font-weight: 700; cursor: pointer;
+      transition: all 0.15s; white-space: nowrap;
+    }
+    .btn-complete:hover { background: var(--green-lt); }
+    .btn-complete:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Today badge */
+    .today-badge {
+      font-size: 0.72rem; font-weight: 700; background: var(--accent);
+      color: white; padding: 2px 7px; border-radius: 4px; margin-left: 6px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center; padding: 40px 20px;
+      color: var(--muted); font-size: 0.875rem;
+    }
+    .empty-icon { font-size: 2rem; margin-bottom: 10px; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 48px; color: var(--muted); }
+    .spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.7s linear infinite; margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 72px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--primary); color: white;
+      padding: 12px 22px; border-radius: 10px;
+      font-size: 0.875rem; font-weight: 600;
+      transition: transform 0.3s; z-index: 999; white-space: nowrap;
+    }
+    .toast.show    { transform: translateX(-50%) translateY(0); }
+    .toast.success { background: #16a34a; }
+    .toast.error   { background: var(--red); }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="header-brand" href="/instructor/">
+    <img src="/Logo.png" alt="CoachCarter">
+    <div>
+      <div class="header-brand-text">CoachCarter</div>
+      <div class="header-brand-sub">Instructor Portal</div>
+    </div>
+  </a>
+  <div class="header-right">
+    <span class="header-name" id="headerName">—</span>
+    <button class="btn-signout" onclick="signOut()">Sign out</button>
+  </div>
+</header>
+
+<div class="page">
+  <h1>My Schedule</h1>
+  <p class="subtitle" id="subtitleDate">—</p>
+
+  <div id="scheduleContent">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Loading your schedule…</p>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<nav class="bottom-nav">
+  <a href="/instructor/" class="bottom-nav-item active">
+    <span class="bottom-nav-icon">📅</span>
+    <span>Schedule</span>
+  </a>
+  <a href="/instructor/availability.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">🕐</span>
+    <span>Availability</span>
+  </a>
+  <a href="/instructor/profile.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">👤</span>
+    <span>Profile</span>
+  </a>
+</nav>
+
+<script>
+  const DAY_NAMES  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const MON_NAMES  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  let token      = null;
+  let instructor = null;
+
+  function init() {
+    const session = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
+    token      = session?.token || null;
+    instructor = session?.instructor || null;
+    if (!token) { window.location.href = '/instructor/login.html'; return; }
+
+    document.getElementById('headerName').textContent = instructor?.name || '—';
+
+    const today = new Date();
+    document.getElementById('subtitleDate').textContent =
+      today.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+    loadSchedule();
+  }
+
+  async function loadSchedule() {
+    try {
+      const res  = await fetch('/api/instructor?action=schedule', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (res.status === 401) { signOut(); return; }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      renderSchedule(data.upcoming || [], data.past || []);
+    } catch (err) {
+      document.getElementById('scheduleContent').innerHTML = `
+        <div class="empty-state"><div class="empty-icon">⚠️</div><p>${err.message || 'Failed to load schedule'}</p></div>`;
+    }
+  }
+
+  function renderSchedule(upcoming, past) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let html = '';
+
+    // ── Upcoming ─────────────────────────────────────────────────────────────
+    html += `<div class="section-head">Upcoming lessons <span class="section-count">${upcoming.length}</span></div>`;
+
+    if (upcoming.length === 0) {
+      html += `<div class="empty-state"><div class="empty-icon">📭</div><p>No upcoming lessons scheduled.</p></div>`;
+    } else {
+      for (const b of upcoming) {
+        const isToday   = b.scheduled_date === todayStr;
+        const dateObj   = new Date(b.scheduled_date + 'T00:00:00Z');
+        const dayName   = DAY_NAMES[dateObj.getUTCDay()];
+        const dateLabel = `${dateObj.getUTCDate()} ${MON_NAMES[dateObj.getUTCMonth()]}`;
+        const start     = b.start_time.slice(0, 5);
+        const end       = b.end_time.slice(0, 5);
+
+        html += `
+          <div class="booking-card ${isToday ? 'today' : ''}">
+            <div class="booking-date-block">
+              <div class="booking-day">${dayName}${isToday ? '<span class="today-badge">Today</span>' : ''}</div>
+              <div class="booking-date">${dateLabel}</div>
+            </div>
+            <div class="booking-time">${start} – ${end}</div>
+            <div class="booking-learner">
+              <div class="booking-learner-name">${esc(b.learner_name)}</div>
+              <div class="booking-learner-email">${esc(b.learner_email)}</div>
+              ${b.learner_phone ? `<div class="booking-learner-phone">${esc(b.learner_phone)}</div>` : ''}
+            </div>
+            <span class="booking-status status-confirmed">Confirmed</span>
+          </div>`;
+      }
+    }
+
+    // ── Recent past ──────────────────────────────────────────────────────────
+    html += `<div class="section-head" style="margin-top:32px">Recent lessons <span class="section-count">${past.length}</span></div>`;
+
+    if (past.length === 0) {
+      html += `<div class="empty-state"><div class="empty-icon">📋</div><p>No recent lessons yet.</p></div>`;
+    } else {
+      for (const b of past) {
+        const dateObj   = new Date(b.scheduled_date + 'T00:00:00Z');
+        const dayName   = DAY_NAMES[dateObj.getUTCDay()];
+        const dateLabel = `${dateObj.getUTCDate()} ${MON_NAMES[dateObj.getUTCMonth()]}`;
+        const start     = b.start_time.slice(0, 5);
+        const end       = b.end_time.slice(0, 5);
+        const isComplete = b.status === 'completed';
+
+        html += `
+          <div class="booking-card ${isComplete ? 'completed' : ''}">
+            <div class="booking-date-block">
+              <div class="booking-day">${dayName}</div>
+              <div class="booking-date">${dateLabel}</div>
+            </div>
+            <div class="booking-time">${start} – ${end}</div>
+            <div class="booking-learner">
+              <div class="booking-learner-name">${esc(b.learner_name)}</div>
+              <div class="booking-learner-email">${esc(b.learner_email)}</div>
+            </div>
+            <span class="booking-status status-${b.status}">${b.status === 'completed' ? '✓ Completed' : 'Confirmed'}</span>
+            ${!isComplete ? `<button class="btn-complete" id="complete-${b.id}" onclick="markComplete(${b.id})">Mark complete</button>` : ''}
+          </div>`;
+      }
+    }
+
+    document.getElementById('scheduleContent').innerHTML = html;
+  }
+
+  async function markComplete(bookingId) {
+    const btn = document.getElementById(`complete-${bookingId}`);
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+    try {
+      const res  = await fetch('/api/instructor?action=complete', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body:    JSON.stringify({ booking_id: bookingId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('Lesson marked as complete ✓', 'success');
+      await loadSchedule();
+    } catch (err) {
+      showToast(err.message || 'Failed to mark as complete', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Mark complete'; }
+    }
+  }
+
+  function signOut() {
+    localStorage.removeItem('cc_instructor');
+    window.location.href = '/instructor/login.html';
+  }
+
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className   = 'toast' + (type ? ' ' + type : '');
+    void t.offsetWidth;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  init();
+</script>
+</body>
+</html>
