@@ -46,7 +46,7 @@ html { scroll-behavior: smooth; }
 
 body {
   font-family: var(--font-b);
-  background: var(--navy);
+  background: #ffffff;
   color: var(--navy);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -165,7 +165,7 @@ body {
   max-width: 700px;
   max-height: 700px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(245,131,33,0.09) 0%, transparent 65%);
+  background: radial-gradient(circle, rgba(245,131,33,0.06) 0%, transparent 65%);
   pointer-events: none;
 }
 
@@ -189,7 +189,7 @@ body {
   display: block;
   opacity: 0;
   animation: fadeUp 0.5s 0.05s ease forwards;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  border: 1px solid #e2e4eb;
 }
 
 /* Brand mark */
@@ -197,7 +197,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: rgba(245,131,33,0.1);
+  background: rgba(245,131,33,0.08);
   border: 1px solid rgba(245,131,33,0.2);
   border-radius: 100px;
   padding: 5px 14px;
@@ -229,7 +229,7 @@ body {
   font-weight: 900;
   line-height: 1.0;
   letter-spacing: -0.04em;
-  color: #fff;
+  color: #0b0f1a;
   margin-bottom: 12px;
   opacity: 0;
   animation: fadeUp 0.6s 0.2s ease forwards;
@@ -242,7 +242,7 @@ body {
 
 .page-sub {
   font-size: 0.95rem;
-  color: rgba(232,234,240,0.5);
+  color: #6b7484;
   margin-bottom: 40px;
   line-height: 1.6;
   opacity: 0;
@@ -271,7 +271,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(245,131,33,0.7);
+  color: rgba(245,131,33,0.9);
   margin-bottom: 10px;
 }
 
@@ -279,7 +279,7 @@ body {
   font-family: var(--font-h);
   font-size: 1.3rem;
   font-weight: 800;
-  color: #fff;
+  color: #0b0f1a;
   margin-bottom: 20px;
   line-height: 1.25;
   letter-spacing: -0.02em;
@@ -292,10 +292,10 @@ body {
 }
 
 .quiz-opt {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #f5f5f5;
+  border: 1px solid #e2e4eb;
   border-radius: 14px;
-  color: rgba(255,255,255,0.8);
+  color: #2d3748;
   font-family: var(--font-b);
   font-size: 0.95rem;
   font-weight: 500;
@@ -309,9 +309,9 @@ body {
 }
 
 .quiz-opt:hover {
-  background: rgba(245,131,33,0.12);
+  background: rgba(245,131,33,0.08);
   border-color: rgba(245,131,33,0.4);
-  color: #fff;
+  color: #0b0f1a;
   transform: translateX(4px);
 }
 
@@ -325,7 +325,7 @@ body {
 .quiz-back {
   background: none;
   border: none;
-  color: rgba(255,255,255,0.3);
+  color: #9aa0ac;
   font-family: var(--font-b);
   font-size: 0.8rem;
   cursor: pointer;
@@ -335,7 +335,7 @@ body {
   margin: 0 auto;
 }
 
-.quiz-back:hover { color: rgba(255,255,255,0.6); }
+.quiz-back:hover { color: #6b7484; }
 
 /* Progress dots */
 .quiz-dots {
@@ -348,7 +348,7 @@ body {
 .quiz-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.15);
+  background: #e2e4eb;
   transition: all 0.25s;
 }
 
