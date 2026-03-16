@@ -100,6 +100,32 @@ body {
   color: var(--orange);
 }
 
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-login {
+  color: rgba(255,255,255,0.7);
+  font-family: var(--font-b);
+  font-weight: 500;
+  font-size: 0.82rem;
+  padding: 7px 13px;
+  border-radius: 100px;
+  border: 1px solid rgba(255,255,255,0.14);
+  text-decoration: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+  background: transparent;
+}
+
+.nav-login:hover {
+  color: #fff;
+  border-color: rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.06);
+}
+
 .nav-cta {
   background: var(--orange);
   color: #fff;
@@ -782,6 +808,11 @@ footer {
 
   .nav-logo span { font-size: 0.95rem; }
 
+  /* Hide instructor login on small screens to avoid overflow */
+  .nav-login:last-of-type { display: none; }
+
+  .nav-login { font-size: 0.78rem; padding: 6px 10px; }
+
   .hero { padding: 88px 20px 72px; }
 
   .hero h1 { letter-spacing: -0.03em; }
@@ -860,7 +891,11 @@ footer {
     <img src="/Logo.png" alt="CoachCarter">
     <span>Coach<em>Carter</em></span>
   </a>
-  <button class="nav-cta" onclick="bookFreeTrial()">Book Free Trial</button>
+  <div class="nav-right">
+    <a class="nav-login" href="/learner/login.html">Learner Login</a>
+    <a class="nav-login" href="/instructor/login.html">Instructor Login</a>
+    <button class="nav-cta" onclick="bookFreeTrial()">Book Free Trial</button>
+  </div>
 </nav>
 
 <!-- ──────────────────────────────────────
