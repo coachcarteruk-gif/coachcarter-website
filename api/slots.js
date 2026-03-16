@@ -329,7 +329,16 @@ async function handleBook(req, res) {
     const lessonTime    = `${start_time} – ${end_time}`;
     const mailer        = createTransporter();
 
-    // Email to learner
+    // Generate .ics calendar attachment
+    const icsContent = generateICS({
+      id: booking.id,
+      scheduled_date: date,
+      start_time,
+      end_time,
+      instructor_name: instructor.name
+    });
+
+    // Email to learner (with .ics attachment)
     await mailer.sendMail({
       from:    'CoachCarter <bookings@coachcarter.uk>',
       to:      learner.email,
@@ -352,7 +361,12 @@ async function handleBook(req, res) {
             View my bookings →
           </a>
         </p>
-      `
+      `,
+      attachments: [{
+        filename: `coachcarter-lesson-${date}.ics`,
+        content:  icsContent,
+        contentType: 'text/calendar; method=PUBLISH'
+      }]
     });
 
     // Email to instructor
@@ -548,6 +562,50 @@ async function handleMyBookings(req, res) {
     console.error('slots my-bookings error:', err);
     return res.status(500).json({ error: 'Failed to load bookings', details: err.message });
   }
+}
+
+// ── ICS calendar file generation ──────────────────────────────────────────────
+
+function generateICS(booking) {
+  const dtStart = toICSDate(booking.scheduled_date, booking.start_time);
+  const dtEnd   = toICSDate(booking.scheduled_date, booking.end_time);
+  const uid     = `booking-${booking.id}@coachcarter.uk`;
+  const now     = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//CoachCarter//Lesson Booking//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${now}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:Driving Lesson — ${booking.instructor_name}`,
+    `DESCRIPTION:1.5-hour driving lesson with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before for a full credit refund.`,
+    'STATUS:CONFIRMED',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT2H',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Driving lesson in 2 hours',
+    'END:VALARM',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT15M',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Driving lesson in 15 minutes',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+}
+
+// "2026-03-15", "09:30" → "20260315T093000"
+function toICSDate(dateStr, timeStr) {
+  const d = dateStr.replace(/-/g, '');
+  const t = timeStr.replace(/:/g, '').slice(0, 6);
+  return `${d}T${t.padEnd(6, '0')}`;
 }
 
 // ── Date/time helpers ─────────────────────────────────────────────────────────

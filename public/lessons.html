@@ -1571,7 +1571,7 @@ footer a:hover { color: var(--accent); }
   </ul>
   <div class="nav-cta-wrap" id="nav-cta-wrap" style="display: flex; gap: 12px; align-items: center;">
     <button class="nav-cta secondary" onclick="closeMenu(); document.getElementById('enquiry').scrollIntoView({behavior: 'smooth'})">Enquire</button>
-    <button class="nav-cta" id="nav-cta-primary" onclick="closeMenu(); openSetmoreBooking()">Book a Lesson</button>
+    <button class="nav-cta" id="nav-cta-primary" onclick="closeMenu(); bookFreeTrial()">Book a Lesson</button>
   </div>
   <button class="hamburger" id="hamburger" aria-label="Open menu" onclick="toggleMenu()">
     <span></span><span></span><span></span>
@@ -1668,7 +1668,7 @@ footer a:hover { color: var(--accent); }
             <div class="mini-stat-sub">Keep full control of your spending as you go</div>
           </div>
         </div>
-        <button class="btn-lg primary" id="btn-payg" onclick="openSetmoreBooking()">Book First lesson →</button>
+        <button class="btn-lg primary" id="btn-payg" onclick="bookFreeTrial()">Book First lesson →</button>
       </div>
     </div>
   </div>
@@ -2268,6 +2268,17 @@ function scrollToPackages() {
   document.getElementById('packages').scrollIntoView({ behavior: 'smooth' });
 }
 
+// Primary booking flow — sends users to the learner portal
+function bookFreeTrial() {
+  const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  if (session?.token) {
+    window.location.href = '/learner/book.html';
+  } else {
+    window.location.href = '/learner/login.html?tab=register&redirect=/learner/book.html';
+  }
+}
+
+// Setmore kept as hidden fallback
 function openSetmoreBooking() {
   const setmoreButton = document.getElementById('Anywhere_button_iframe');
   if (setmoreButton) {

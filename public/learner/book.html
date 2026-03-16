@@ -399,6 +399,47 @@
     }
     .btn-modal-cancel:hover { background: var(--bg); }
 
+    /* ── Success state ── */
+    .modal-success { text-align: center; }
+    .modal-success-icon { font-size: 3rem; margin-bottom: 12px; }
+    .modal-success h2 { color: var(--green); margin-bottom: 8px; }
+    .modal-success p { color: var(--muted); font-size: 0.9rem; margin-bottom: 20px; line-height: 1.5; }
+    .btn-add-calendar {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--white); border: 1.5px solid var(--accent);
+      color: var(--accent); padding: 12px 24px; border-radius: 10px;
+      font-family: var(--font-head); font-size: 0.95rem; font-weight: 700;
+      cursor: pointer; transition: all 0.15s; text-decoration: none;
+      margin-bottom: 10px; width: 100%; justify-content: center;
+    }
+    .btn-add-calendar:hover { background: var(--accent-lt); }
+    .btn-add-calendar svg { width: 18px; height: 18px; }
+    .btn-subscribe-calendar {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); padding: 10px 20px; border-radius: 10px;
+      font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; text-decoration: none;
+      width: 100%; justify-content: center;
+    }
+    .btn-subscribe-calendar:hover { background: var(--bg); color: var(--primary); }
+    .btn-done {
+      display: block; width: 100%; margin-top: 16px;
+      background: var(--accent); color: white; border: none;
+      padding: 14px; border-radius: 10px; font-family: var(--font-head);
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+    }
+    .btn-done:hover { background: var(--accent-dk); }
+
+    /* Calendar icon on upcoming items */
+    .upcoming-cal-btn {
+      background: none; border: 1px solid var(--border);
+      border-radius: 7px; padding: 5px 10px; cursor: pointer;
+      color: var(--accent); font-size: 0.85rem; transition: all 0.15s;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .upcoming-cal-btn:hover { border-color: var(--accent); background: var(--accent-lt); }
+
     /* modal spinner */
     .modal-spinner {
       width: 18px; height: 18px;
@@ -484,6 +525,17 @@
     </div>
   </div>
 
+  <!-- Welcome banner for new signups -->
+  <div id="welcomeBanner" style="display:none;background:var(--green-lt);border:1.5px solid var(--green);border-radius:var(--radius);padding:20px 24px;margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:12px;justify-content:space-between">
+      <div>
+        <strong style="font-family:var(--font-head);font-size:1.05rem">Your free lesson credit is ready!</strong>
+        <p style="font-size:0.875rem;color:var(--muted);margin-top:4px">Pick any slot below to book your first 1.5-hour driving lesson — completely free.</p>
+      </div>
+      <button onclick="dismissWelcome()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);padding:4px">✕</button>
+    </div>
+  </div>
+
   <!-- No credits banner (hidden until needed) -->
   <div class="no-credits-banner" id="noCreditsBanner" style="display:none">
     <p><strong>You have no credits.</strong> Buy credits to start booking lessons.</p>
@@ -526,31 +578,48 @@
 <!-- ── Book confirmation modal ── -->
 <div class="modal-overlay" id="bookModal">
   <div class="modal">
-    <h2>Confirm booking</h2>
-    <div class="modal-detail">
-      <div class="modal-detail-row">
-        <span>Date</span><span id="mdDate">—</span>
+    <!-- Confirm step -->
+    <div id="bookConfirmStep">
+      <h2>Confirm booking</h2>
+      <div class="modal-detail">
+        <div class="modal-detail-row">
+          <span>Date</span><span id="mdDate">—</span>
+        </div>
+        <div class="modal-detail-row">
+          <span>Time</span><span id="mdTime">—</span>
+        </div>
+        <div class="modal-detail-row">
+          <span>Instructor</span><span id="mdInstructor">—</span>
+        </div>
+        <div class="modal-detail-row">
+          <span>Duration</span><span>1.5 hours</span>
+        </div>
       </div>
-      <div class="modal-detail-row">
-        <span>Time</span><span id="mdTime">—</span>
-      </div>
-      <div class="modal-detail-row">
-        <span>Instructor</span><span id="mdInstructor">—</span>
-      </div>
-      <div class="modal-detail-row">
-        <span>Duration</span><span>1.5 hours</span>
+      <p class="modal-credit-note">
+        This will use <strong>1 credit</strong> from your balance.
+        You can cancel for a full credit refund up to 48 hours before the lesson.
+      </p>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" id="bookModalClose">Cancel</button>
+        <button class="btn-confirm" id="btnConfirmBook">
+          <span id="bookBtnLabel">Confirm booking</span>
+          <div class="modal-spinner" id="bookSpinner"></div>
+        </button>
       </div>
     </div>
-    <p class="modal-credit-note">
-      This will use <strong>1 credit</strong> from your balance.
-      You can cancel for a full credit refund up to 48 hours before the lesson.
-    </p>
-    <div class="modal-actions">
-      <button class="btn-modal-cancel" id="bookModalClose">Cancel</button>
-      <button class="btn-confirm" id="btnConfirmBook">
-        <span id="bookBtnLabel">Confirm booking</span>
-        <div class="modal-spinner" id="bookSpinner"></div>
+    <!-- Success step with calendar options -->
+    <div id="bookSuccessStep" class="modal-success" style="display:none">
+      <div class="modal-success-icon">✓</div>
+      <h2>Lesson booked!</h2>
+      <p>Your lesson on <strong id="successDate">—</strong> at <strong id="successTime">—</strong> with <strong id="successInstructor">—</strong> is confirmed. Check your email for details.</p>
+      <a class="btn-add-calendar" id="btnAddToCalendar" href="#" download>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>
+        Add to iPhone Calendar
+      </a>
+      <button class="btn-subscribe-calendar" id="btnSubscribeCalendar">
+        Subscribe to all lessons (auto-sync)
       </button>
+      <button class="btn-done" id="btnSuccessDone">Done</button>
     </div>
   </div>
 </div>
@@ -604,9 +673,19 @@
       window.location.href = '/learner/login.html?redirect=/learner/book.html';
       return;
     }
+    // Show welcome banner for new signups
+    if (localStorage.getItem('cc_welcome') === '1') {
+      document.getElementById('welcomeBanner').style.display = 'block';
+    }
     Promise.all([loadBalance(), loadInstructors(), loadUpcoming()])
       .then(() => loadWeek());
   }
+
+  function dismissWelcome() {
+    localStorage.removeItem('cc_welcome');
+    document.getElementById('welcomeBanner').style.display = 'none';
+  }
+  window.dismissWelcome = dismissWelcome;
 
   // ── Load credit balance ───────────────────────────────────────────────────
   async function loadBalance() {
@@ -687,6 +766,7 @@
             <div class="upcoming-date">${dateStr}</div>
             <div class="upcoming-time">${start} – ${end}</div>
             <div class="upcoming-instructor">${b.instructor_name}</div>
+            ${canCancel ? `<button class="upcoming-cal-btn" onclick="downloadCalendar(${b.id})" title="Add to calendar">📅</button>` : ''}
             ${canCancel ? `<button class="upcoming-cancel" onclick="openCancelModal(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${b.instructor_name}', ${hoursUntil})">Cancel</button>` : '<span style="font-size:0.8rem;color:var(--muted)">Past</span>'}
           </div>
         `;
@@ -857,8 +937,15 @@
     document.getElementById('bookModal').classList.add('open');
   }
 
-  document.getElementById('bookModalClose').onclick = () =>
+  document.getElementById('bookModalClose').onclick = () => {
     document.getElementById('bookModal').classList.remove('open');
+    setTimeout(() => {
+      document.getElementById('bookConfirmStep').style.display = 'block';
+      document.getElementById('bookSuccessStep').style.display = 'none';
+    }, 300);
+  };
+
+  let lastBookingId = null;
 
   document.getElementById('btnConfirmBook').onclick = async () => {
     if (!pendingSlot) return;
@@ -880,18 +967,84 @@
       if (!res.ok) throw new Error(data.error);
 
       creditBalance = data.credit_balance;
+      lastBookingId = data.booking_id;
       updateCreditBadge();
-      document.getElementById('bookModal').classList.remove('open');
-      showToast('Lesson booked! Check your email for confirmation.', 'success');
 
-      // Refresh upcoming and calendar
-      await Promise.all([loadUpcoming(), loadWeek()]);
+      // Show success step with calendar options
+      const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
+        .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', timeZone:'UTC' });
+      document.getElementById('successDate').textContent       = dateDisplay;
+      document.getElementById('successTime').textContent       = pendingSlot.start_time;
+      document.getElementById('successInstructor').textContent = pendingSlot.instructor_name;
+
+      // Set up the "Add to Calendar" download link
+      document.getElementById('btnAddToCalendar').href =
+        `/api/calendar?action=download&booking_id=${lastBookingId}`;
+      document.getElementById('btnAddToCalendar').setAttribute('download',
+        `coachcarter-lesson-${pendingSlot.date}.ics`);
+
+      // Switch modal to success view
+      document.getElementById('bookConfirmStep').style.display  = 'none';
+      document.getElementById('bookSuccessStep').style.display  = 'block';
+
+      // Refresh upcoming and calendar in background
+      Promise.all([loadUpcoming(), loadWeek()]);
     } catch (err) {
       showToast(err.message || 'Booking failed. Please try again.', 'error');
       btn.disabled        = false;
       label.textContent   = 'Confirm booking';
       spinner.style.display = 'none';
     }
+  };
+
+  // "Add to Calendar" button needs auth header, so we intercept the click
+  document.getElementById('btnAddToCalendar').onclick = async (e) => {
+    e.preventDefault();
+    if (!lastBookingId) return;
+    try {
+      const res = await fetch(`/api/calendar?action=download&booking_id=${lastBookingId}`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (!res.ok) throw new Error('Failed to generate calendar file');
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `coachcarter-lesson.ics`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Calendar file downloaded — open it to add to your calendar', 'success');
+    } catch (err) {
+      showToast('Could not download calendar file', 'error');
+    }
+  };
+
+  // Subscribe button — opens webcal:// link for auto-sync
+  document.getElementById('btnSubscribeCalendar').onclick = async () => {
+    try {
+      const res  = await fetch('/api/calendar?action=feed-url', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // Open webcal:// URL — this triggers iPhone/macOS calendar subscription
+      window.location.href = data.webcal_url;
+    } catch (err) {
+      showToast('Could not set up calendar subscription', 'error');
+    }
+  };
+
+  // Done button closes the modal
+  document.getElementById('btnSuccessDone').onclick = () => {
+    document.getElementById('bookModal').classList.remove('open');
+    // Reset modal to confirm step for next time
+    setTimeout(() => {
+      document.getElementById('bookConfirmStep').style.display = 'block';
+      document.getElementById('bookSuccessStep').style.display = 'none';
+    }, 300);
   };
 
   // ── Cancel modal ──────────────────────────────────────────────────────────
@@ -947,6 +1100,30 @@
     }
   };
 
+  // ── Calendar download for upcoming bookings ────────────────────────────
+  async function downloadCalendar(bookingId) {
+    try {
+      const res = await fetch(`/api/calendar?action=download&booking_id=${bookingId}`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (!res.ok) throw new Error('Failed');
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'coachcarter-lesson.ics';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Calendar file downloaded — open it to add to your calendar', 'success');
+    } catch (err) {
+      showToast('Could not download calendar file', 'error');
+    }
+  }
+  // Make it globally accessible for onclick
+  window.downloadCalendar = downloadCalendar;
+
   // ── Controls ──────────────────────────────────────────────────────────────
   document.getElementById('btnPrevWeek').onclick = () => {
     if (weekOffset > 0) { weekOffset--; loadWeek(); }
@@ -986,8 +1163,13 @@
 
   // ── Close modals on overlay click ────────────────────────────────────────
   document.getElementById('bookModal').addEventListener('click', e => {
-    if (e.target === document.getElementById('bookModal'))
+    if (e.target === document.getElementById('bookModal')) {
       document.getElementById('bookModal').classList.remove('open');
+      setTimeout(() => {
+        document.getElementById('bookConfirmStep').style.display = 'block';
+        document.getElementById('bookSuccessStep').style.display = 'none';
+      }, 300);
+    }
   });
   document.getElementById('cancelModal').addEventListener('click', e => {
     if (e.target === document.getElementById('cancelModal'))

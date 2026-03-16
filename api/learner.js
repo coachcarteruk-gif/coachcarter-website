@@ -1,6 +1,9 @@
 const { neon } = require('@neondatabase/serverless');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+
+const FREE_TRIAL_CREDITS = 1;  // credits granted on signup
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 function verifyAuth(req) {
@@ -52,18 +55,80 @@ async function handleRegister(req, res) {
       return res.status(400).json({ error: 'An account with this email already exists' });
 
     const hash = await bcrypt.hash(password, 10);
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanName  = name.trim();
+
     const rows = await sql`
-      INSERT INTO learner_users (name, email, password_hash)
-      VALUES (${name.trim()}, ${email.toLowerCase().trim()}, ${hash})
-      RETURNING id, name, email, current_tier`;
+      INSERT INTO learner_users (name, email, password_hash, credit_balance)
+      VALUES (${cleanName}, ${cleanEmail}, ${hash}, ${FREE_TRIAL_CREDITS})
+      RETURNING id, name, email, current_tier, credit_balance`;
 
     const user = rows[0];
+
+    // Record the free trial credit as a transaction for audit trail
+    await sql`
+      INSERT INTO credit_transactions
+        (learner_id, type, credits, amount_pence, payment_method)
+      VALUES
+        (${user.id}, 'purchase', ${FREE_TRIAL_CREDITS}, 0, 'free_trial')
+    `;
+
+    // Send welcome email with free credit info
+    try {
+      const mailer = createTransporter();
+      const firstName = cleanName.split(' ')[0] || 'there';
+      await mailer.sendMail({
+        from:    'CoachCarter <bookings@coachcarter.uk>',
+        to:      cleanEmail,
+        subject: `Welcome to CoachCarter — your free lesson credit is ready`,
+        html: `
+          <h1>Welcome, ${firstName}!</h1>
+          <p>Your CoachCarter account is set up and we've added
+             <strong>1 free lesson credit</strong> to get you started.</p>
+          <p>That's a full 1.5-hour lesson with one of our instructors — no payment needed.</p>
+          <h2>What to do next:</h2>
+          <ol>
+            <li><strong>Pick a slot</strong> — Browse available times and book your free lesson</li>
+            <li><strong>Turn up and drive</strong> — Meet your instructor and get behind the wheel</li>
+            <li><strong>Decide what's next</strong> — No pressure, no auto-billing</li>
+          </ol>
+          <p>
+            <a href="https://coachcarter.uk/learner/book.html"
+               style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                      border-radius:8px;display:inline-block;font-weight:bold;">
+              Book your free lesson →
+            </a>
+          </p>
+          <p style="color:#888;font-size:0.85rem;margin-top:20px;">
+            Questions? Just reply to this email — we're here to help.
+          </p>
+        `
+      });
+    } catch (emailErr) {
+      // Don't fail registration if email fails
+      console.error('welcome email error:', emailErr);
+    }
+
     const token = jwt.sign({ id: user.id, email: user.email }, secret, { expiresIn: '30d' });
-    return res.json({ token, user: { id: user.id, name: user.name, email: user.email, tier: user.current_tier } });
+    return res.json({
+      token,
+      user: { id: user.id, name: user.name, email: user.email, tier: user.current_tier },
+      free_credit: true
+    });
   } catch (err) {
     console.error('register error:', err);
     return res.status(500).json({ error: 'Registration failed', details: err.message });
   }
+}
+
+// ── Email helper ────────────────────────────────────────────────────────────
+function createTransporter() {
+  return nodemailer.createTransport({
+    host:   process.env.SMTP_HOST,
+    port:   parseInt(process.env.SMTP_PORT),
+    secure: process.env.SMTP_PORT === '465',
+    auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  });
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────

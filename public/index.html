@@ -860,7 +860,7 @@ footer {
     <img src="/Logo.png" alt="CoachCarter">
     <span>Coach<em>Carter</em></span>
   </a>
-  <button class="nav-cta" onclick="openSetmoreBooking()">Book Free Trial</button>
+  <button class="nav-cta" onclick="bookFreeTrial()">Book Free Trial</button>
 </nav>
 
 <!-- ──────────────────────────────────────
@@ -886,7 +886,7 @@ footer {
     </p>
 
     <div class="hero-actions">
-      <button class="btn-primary" onclick="openSetmoreBooking()">
+      <button class="btn-primary" onclick="bookFreeTrial()">
         📅 Book Free Trial Lesson
       </button>
       <a class="btn-ghost" href="/classroom.html">
@@ -931,7 +931,7 @@ footer {
     <div class="nav-grid">
 
       <!-- Book -->
-      <div class="nav-card featured" onclick="openSetmoreBooking()" style="cursor:pointer;" role="button" tabindex="0" aria-label="Book your free trial lesson">
+      <div class="nav-card featured" onclick="bookFreeTrial()" style="cursor:pointer;" role="button" tabindex="0" aria-label="Book your free trial lesson">
         <span class="card-emoji">📅</span>
         <div class="card-content">
           <span class="card-tag">Start here</span>
@@ -1040,6 +1040,18 @@ footer {
   data-new-tab="false">Book now</button>
 
 <script>
+// Primary booking flow — sends users to the learner portal
+// If already logged in, go straight to booking; otherwise register
+function bookFreeTrial() {
+  const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  if (session?.token) {
+    window.location.href = '/learner/book.html';
+  } else {
+    window.location.href = '/learner/login.html?tab=register&redirect=/learner/book.html';
+  }
+}
+
+// Setmore kept as hidden fallback — can be called via openSetmoreBooking() if needed
 function openSetmoreBooking() {
   const btn = document.getElementById('Anywhere_button_iframe');
   if (btn) {
@@ -1053,7 +1065,7 @@ function openSetmoreBooking() {
 document.querySelector('.nav-card.featured').addEventListener('keydown', function(e) {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
-    openSetmoreBooking();
+    bookFreeTrial();
   }
 });
 </script>

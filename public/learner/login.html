@@ -219,7 +219,7 @@
   <!-- REGISTER PANEL -->
   <div class="panel" id="panel-register">
     <div class="panel-title">Create your account</div>
-    <div class="panel-sub">Start tracking your driving progress today.</div>
+    <div class="panel-sub">Sign up and get a <strong style="color:var(--accent)">free 1.5-hour lesson</strong> — no payment needed.</div>
     <div class="error-msg" id="register-error"></div>
     <form onsubmit="handleRegister(event)">
       <div class="form-group">
@@ -249,7 +249,12 @@
 <script>
   // Redirect if already logged in
   const existing = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (existing?.token) window.location.href = '/learner/';
+  const urlParams = new URLSearchParams(window.location.search);
+  const redirectTo = urlParams.get('redirect') || '/learner/';
+  if (existing?.token) { window.location.href = redirectTo; }
+
+  // Auto-switch to register tab if ?tab=register
+  if (urlParams.get('tab') === 'register') { switchTab('register'); }
 
   function switchTab(tab) {
     document.getElementById('tab-login').classList.toggle('active', tab === 'login');
@@ -286,7 +291,7 @@
       const data = await res.json();
       if (!res.ok) { showError('login-error', data.error || 'Login failed'); return; }
       localStorage.setItem('cc_learner', JSON.stringify(data));
-      window.location.href = '/learner/';
+      window.location.href = redirectTo;
     } catch {
       showError('login-error', 'Network error. Please try again.');
     } finally {
@@ -320,7 +325,13 @@
       const data = await res.json();
       if (!res.ok) { showError('register-error', data.error || 'Registration failed'); return; }
       localStorage.setItem('cc_learner', JSON.stringify(data));
-      window.location.href = '/learner/';
+      // New users get a free credit — send them straight to booking
+      if (data.free_credit) {
+        localStorage.setItem('cc_welcome', '1');
+        window.location.href = '/learner/book.html';
+      } else {
+        window.location.href = '/learner/';
+      }
     } catch {
       showError('register-error', 'Network error. Please try again.');
     } finally {
