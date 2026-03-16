@@ -28,11 +28,17 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  --navy:     #0b0f1a;
+  --navy-2:   #141827;
+  --orange:   #f58321;
+  --orange-dk:#e07518;
+  --font-h:   'Jost', sans-serif;
+  --font-b:   'DM Sans', sans-serif;
   --primary:      #0f172a;
   --accent:       #f58321;
   --accent-dk:    #e07518;
@@ -45,8 +51,8 @@
   --white:        #ffffff;
   --surface:      #f8fafc;
   --green:        #10b981;
-  --font-head:    'Space Grotesk', sans-serif;
-  --font-body:    'Outfit', sans-serif;
+  --font-head:    'Jost', sans-serif;
+  --font-body:    'DM Sans', sans-serif;
 }
 
 html { scroll-behavior: smooth; }
@@ -71,131 +77,86 @@ body {
   transform: translateY(0);
 }
 
-/* ── MOBILE NAV ── */
-.hamburger {
-  display: none;
-  flex-direction: column;
-  gap: 5px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  z-index: 200;
-}
-.hamburger span {
-  display: block;
-  width: 24px;
-  height: 2px;
-  background: var(--primary);
-  border-radius: 2px;
-  transition: all 0.25s ease;
-}
-.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-.hamburger.open span:nth-child(2) { opacity: 0; }
-.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-
-@media (max-width: 768px) {
-  .hamburger { display: flex; }
-  .nav-links {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(250,250,249,0.98);
-    backdrop-filter: blur(20px);
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 32px;
-    z-index: 150;
-    font-size: 1.2rem;
-  }
-  .nav-links.open { display: flex; }
-  .nav-links li { list-style: none; }
-  .nav-links a { font-size: 1.3rem; font-weight: 600; color: var(--primary); text-decoration: none; }
-  .nav-cta-wrap { display: none; }
-  .nav-cta-wrap.open {
-    display: flex;
-    position: fixed;
-    bottom: 48px;
-    left: 0; right: 0;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    z-index: 160;
-    padding: 0 24px;
-  }
-  .nav-cta-wrap.open .nav-cta { width: 100%; justify-content: center; }
-}
-
 /* ── NAV ── */
-nav {
-  position: sticky;
-  top: 0;
+.site-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
   z-index: 100;
-  background: rgba(250,250,249,0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 48px;
-  height: 68px;
+  background: rgba(11, 15, 26, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
-
-.nav-logo {
+.site-nav-logo {
   display: flex;
   align-items: center;
+  gap: 10px;
   text-decoration: none;
 }
-.nav-logo span { color: var(--accent); }
-
-.nav-links {
-  display: flex;
-  gap: 28px;
-  list-style: none;
-}
-.nav-links a {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--muted);
-  text-decoration: none;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  transition: color 0.2s;
-  font-family: var(--font-body);
-}
-.nav-links a:hover { color: var(--accent); }
-
-.nav-cta {
-  background: var(--accent);
-  color: var(--white);
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: 0.85rem;
-  padding: 10px 24px;
+.site-nav-logo img {
+  width: 34px; height: 34px;
+  object-fit: contain;
   border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  padding: 4px;
+}
+.site-nav-logo span {
+  font-family: var(--font-h);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+.site-nav-logo span em { font-style: normal; color: var(--orange); }
+.site-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.site-nav-link {
+  color: rgba(255,255,255,0.6);
+  font-family: var(--font-b);
+  font-weight: 500;
+  font-size: 0.83rem;
+  padding: 7px 14px;
+  border-radius: 100px;
+  border: 1px solid transparent;
   text-decoration: none;
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-  cursor: pointer;
-  border: none;
-}
-.nav-cta:hover { background: var(--accent-dk); transform: translateY(-2px); box-shadow: 0 6px 20px var(--accent-glow); }
-
-.nav-cta.secondary {
+  transition: all 0.18s;
+  white-space: nowrap;
   background: transparent;
-  color: var(--primary);
-  border: 2px solid var(--border);
+  cursor: pointer;
 }
-.nav-cta.secondary:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-lt);
+.site-nav-link:hover {
+  color: #fff;
+  border-color: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+}
+.site-nav-link.primary {
+  background: var(--orange);
+  color: #fff;
+  border-color: var(--orange);
+  font-weight: 600;
+}
+.site-nav-link.primary:hover {
+  background: var(--orange-dk);
+  border-color: var(--orange-dk);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(245,131,33,0.35);
+}
+@media (max-width: 600px) {
+  .site-nav { padding: 0 16px; }
+  .site-nav-link:not(.primary):not(.back) { display: none; }
 }
 
 /* ── HERO ── */
 .hero {
-  padding: 100px 48px 80px;
+  padding: 164px 48px 80px;
   max-width: 1200px;
   margin: 0 auto;
   display: grid;
@@ -1559,23 +1520,18 @@ footer a:hover { color: var(--accent); }
 </head>
 <body>
 
-<nav style="height: 120px; padding: 15px 48px;">
-  <a href="/" class="nav-logo">
-    <img src="Logo.png" alt="CoachCarter" style="height: 90px; width: auto;">
+<nav class="site-nav">
+  <a class="site-nav-logo" href="/">
+    <img src="/Logo.png" alt="CoachCarter">
+    <span>Coach<em>Carter</em></span>
   </a>
-  <ul class="nav-links" id="nav-links">
-    <li><a href="#payg" id="nav-payg" onclick="closeMenu()">Pay As You Go</a></li>
-    <li><a href="#packages" id="nav-packages" onclick="closeMenu()">Bulk Packages</a></li>
-    <li><a href="#guarantee" id="nav-guarantee" onclick="closeMenu()">Pass Guarantee</a></li>
-    <li><a href="/classroom.html" onclick="closeMenu()">Classroom</a></li>
-  </ul>
-  <div class="nav-cta-wrap" id="nav-cta-wrap" style="display: flex; gap: 12px; align-items: center;">
-    <button class="nav-cta secondary" onclick="closeMenu(); document.getElementById('enquiry').scrollIntoView({behavior: 'smooth'})">Enquire</button>
-    <button class="nav-cta" id="nav-cta-primary" onclick="closeMenu(); bookFreeTrial()">Book a Lesson</button>
+  <div class="site-nav-links">
+    <a class="site-nav-link" href="/lessons.html">Pricing</a>
+    <a class="site-nav-link" href="/classroom.html">Free Videos</a>
+    <a class="site-nav-link" href="/learner/login.html">Learner Login</a>
+    <a class="site-nav-link" href="/instructor/login.html">Instructor Login</a>
+    <a class="site-nav-link primary" href="/learner/login.html?tab=register&redirect=/learner/book.html">Book Free Trial</a>
   </div>
-  <button class="hamburger" id="hamburger" aria-label="Open menu" onclick="toggleMenu()">
-    <span></span><span></span><span></span>
-  </button>
 </nav>
 
 <div class="hero">
@@ -2038,8 +1994,12 @@ footer a:hover { color: var(--accent); }
   </div>
 </section>
 
-<footer>
-  <p id="footer-text">© 2026 CoachCarter Driving School · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · All prices include VAT where applicable.</p>
+<footer style="background: var(--navy); padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
+  <span style="font-size: 0.75rem; color: rgba(255,255,255,0.25);">© 2026 CoachCarter Driving School · Reading</span>
+  <div style="display: flex; gap: 20px;">
+    <a href="/privacy.html" style="font-size: 0.75rem; color: rgba(255,255,255,0.3); text-decoration: none;">Privacy</a>
+    <a href="/terms.html" style="font-size: 0.75rem; color: rgba(255,255,255,0.3); text-decoration: none;">Terms</a>
+  </div>
 </footer>
 
 <script>
@@ -2478,26 +2438,6 @@ document.getElementById('enquiry-form').addEventListener('submit', async functio
   }
 });
 
-// MOBILE NAV
-function toggleMenu() {
-  const hamburger = document.getElementById('hamburger');
-  const links = document.getElementById('nav-links');
-  const ctaWrap = document.getElementById('nav-cta-wrap');
-  const open = hamburger.classList.toggle('open');
-  links.classList.toggle('open', open);
-  ctaWrap.classList.toggle('open', open);
-  document.body.style.overflow = open ? 'hidden' : '';
-}
-
-function closeMenu() {
-  const hamburger = document.getElementById('hamburger');
-  const links = document.getElementById('nav-links');
-  const ctaWrap = document.getElementById('nav-cta-wrap');
-  hamburger.classList.remove('open');
-  links.classList.remove('open');
-  ctaWrap.classList.remove('open');
-  document.body.style.overflow = '';
-}
 </script>
 <script id="anywhere_book_now_script" type="text/javascript" src="https://assets.setmore.com/integration/book-now/live/v1/anywhere-book-now.js"></script>
 <button style="display: none;" id="Anywhere_button_iframe" class="anywhere-book-now-button" data-booking-url="https://coachcarteruk.setmore.com/services/f92268da-e2cc-4661-8cdd-82afa1b767a0" data-new-tab="false">Book now</button>

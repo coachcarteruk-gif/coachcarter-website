@@ -5,10 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Profile — CoachCarter Instructor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
+      --navy:     #0b0f1a;
+      --navy-2:   #141827;
+      --orange:   #f58321;
+      --orange-dk:#e07518;
+      --font-h:   'Jost', sans-serif;
+      --font-b:   'DM Sans', sans-serif;
       --primary:    #272727;
       --accent:     #f58321;
       --accent-dk:  #e07518;
@@ -20,17 +27,94 @@
       --green:      #22c55e;
       --green-lt:   #f0fdf4;
       --red:        #ef4444;
-      --font-head:  'Bricolage Grotesque', sans-serif;
-      --font-body:  'Lato', sans-serif;
+      --font-head:  'Jost', sans-serif;
+      --font-body:  'DM Sans', sans-serif;
       --radius:     14px;
     }
     body { font-family: var(--font-body); background: var(--bg); color: var(--primary); min-height: 100vh; }
+
+    .site-nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 300;
+      padding: 0 32px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(11, 15, 26, 0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .site-nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .site-nav-logo img {
+      width: 34px; height: 34px;
+      object-fit: contain;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+      padding: 4px;
+    }
+    .site-nav-logo span {
+      font-family: var(--font-h);
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.02em;
+    }
+    .site-nav-logo span em { font-style: normal; color: var(--orange); }
+    .site-nav-links {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .site-nav-link {
+      color: rgba(255,255,255,0.6);
+      font-family: var(--font-b);
+      font-weight: 500;
+      font-size: 0.83rem;
+      padding: 7px 14px;
+      border-radius: 100px;
+      border: 1px solid transparent;
+      text-decoration: none;
+      transition: all 0.18s;
+      white-space: nowrap;
+      background: transparent;
+      cursor: pointer;
+    }
+    .site-nav-link:hover {
+      color: #fff;
+      border-color: rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.05);
+    }
+    .site-nav-link.primary {
+      background: var(--orange);
+      color: #fff;
+      border-color: var(--orange);
+      font-weight: 600;
+    }
+    .site-nav-link.primary:hover {
+      background: var(--orange-dk);
+      border-color: var(--orange-dk);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(245,131,33,0.35);
+    }
+    @media (max-width: 600px) {
+      .site-nav { padding: 0 16px; }
+      .site-nav-link:not(.primary):not(.back) { display: none; }
+    }
 
     header {
       background: var(--white); border-bottom: 1px solid var(--border);
       padding: 0 20px; display: flex; align-items: center;
       justify-content: space-between; height: 60px;
-      position: sticky; top: 0; z-index: 200;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      margin-top: 64px;
     }
     .header-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
     .header-brand img { height: 36px; }
@@ -60,7 +144,7 @@
     .bottom-nav-item.active { color: var(--accent); }
     .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
 
-    .page { max-width: 600px; margin: 0 auto; padding: 28px 16px 80px; }
+    .page { max-width: 600px; margin: 0 auto; padding: 28px 16px 80px; margin-top: 124px; }
     h1 { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; }
     .subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 4px; margin-bottom: 28px; }
 
@@ -139,6 +223,20 @@
   </style>
 </head>
 <body>
+
+<nav class="site-nav">
+  <a class="site-nav-logo" href="/">
+    <img src="/Logo.png" alt="CoachCarter">
+    <span>Coach<em>Carter</em></span>
+  </a>
+  <div class="site-nav-links">
+    <a class="site-nav-link" href="/lessons.html">Pricing</a>
+    <a class="site-nav-link" href="/classroom.html">Free Videos</a>
+    <a class="site-nav-link" href="/learner/login.html">Learner Login</a>
+    <a class="site-nav-link" href="/instructor/login.html">Instructor Login</a>
+    <a class="site-nav-link primary" href="/learner/login.html?tab=register&redirect=/learner/book.html">Book Free Trial</a>
+  </div>
+</nav>
 
 <header>
   <a class="header-brand" href="/instructor/">
