@@ -21,6 +21,15 @@
 //
 //   GET  /api/admin?action=all-instructors
 //     → all instructors including inactive (admin JWT required)
+//
+//   POST /api/admin?action=create-instructor
+//     → create a new instructor account (admin JWT required)
+//
+//   POST /api/admin?action=update-instructor
+//     → update instructor name/email/phone/bio/photo (admin JWT required)
+//
+//   POST /api/admin?action=toggle-instructor
+//     → activate or deactivate an instructor account (admin JWT required)
 
 const { neon }   = require('@neondatabase/serverless');
 const bcrypt     = require('bcryptjs');
@@ -64,7 +73,10 @@ module.exports = async (req, res) => {
   if (action === 'dashboard-stats') return handleDashboardStats(req, res);
   if (action === 'all-bookings')    return handleAllBookings(req, res);
   if (action === 'mark-complete')   return handleMarkComplete(req, res);
-  if (action === 'all-instructors') return handleAllInstructors(req, res);
+  if (action === 'all-instructors')   return handleAllInstructors(req, res);
+  if (action === 'create-instructor') return handleCreateInstructor(req, res);
+  if (action === 'update-instructor') return handleUpdateInstructor(req, res);
+  if (action === 'toggle-instructor') return handleToggleInstructor(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -385,5 +397,111 @@ async function handleAllInstructors(req, res) {
   } catch (err) {
     console.error('admin all-instructors error:', err);
     return res.status(500).json({ error: 'Failed to load instructors', details: err.message });
+  }
+}
+
+// ── POST /api/admin?action=create-instructor ───────────────────────────────────
+async function handleCreateInstructor(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { name, email, phone, bio, photo_url } = req.body || {};
+  if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+
+  const normalised = email.trim().toLowerCase();
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Check for duplicate email
+    const existing = await sql`SELECT id FROM instructors WHERE email = ${normalised}`;
+    if (existing.length > 0) return res.status(409).json({ error: 'An instructor with that email already exists' });
+
+    const rows = await sql`
+      INSERT INTO instructors (name, email, phone, bio, photo_url, active)
+      VALUES (
+        ${name.trim()},
+        ${normalised},
+        ${phone?.trim() || null},
+        ${bio?.trim() || null},
+        ${photo_url?.trim() || null},
+        true
+      )
+      RETURNING id, name, email, phone, bio, photo_url, active, created_at
+    `;
+
+    return res.status(201).json({ success: true, instructor: rows[0] });
+  } catch (err) {
+    console.error('admin create-instructor error:', err);
+    return res.status(500).json({ error: 'Failed to create instructor', details: err.message });
+  }
+}
+
+// ── POST /api/admin?action=update-instructor ───────────────────────────────────
+async function handleUpdateInstructor(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { id, name, email, phone, bio, photo_url } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'Instructor ID is required' });
+  if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+
+  const normalised = email.trim().toLowerCase();
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Check email not taken by another instructor
+    const conflict = await sql`
+      SELECT id FROM instructors WHERE email = ${normalised} AND id != ${id}
+    `;
+    if (conflict.length > 0) return res.status(409).json({ error: 'That email is already used by another instructor' });
+
+    const rows = await sql`
+      UPDATE instructors
+      SET name      = ${name.trim()},
+          email     = ${normalised},
+          phone     = ${phone?.trim() || null},
+          bio       = ${bio?.trim() || null},
+          photo_url = ${photo_url?.trim() || null}
+      WHERE id = ${id}
+      RETURNING id, name, email, phone, bio, photo_url, active
+    `;
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Instructor not found' });
+    return res.json({ success: true, instructor: rows[0] });
+  } catch (err) {
+    console.error('admin update-instructor error:', err);
+    return res.status(500).json({ error: 'Failed to update instructor', details: err.message });
+  }
+}
+
+// ── POST /api/admin?action=toggle-instructor ───────────────────────────────────
+async function handleToggleInstructor(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { id, active } = req.body || {};
+  if (id === undefined || active === undefined) return res.status(400).json({ error: 'id and active are required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const rows = await sql`
+      UPDATE instructors SET active = ${!!active} WHERE id = ${id}
+      RETURNING id, name, active
+    `;
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Instructor not found' });
+    return res.json({ success: true, instructor: rows[0] });
+  } catch (err) {
+    console.error('admin toggle-instructor error:', err);
+    return res.status(500).json({ error: 'Failed to update instructor', details: err.message });
   }
 }

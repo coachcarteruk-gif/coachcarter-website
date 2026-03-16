@@ -236,9 +236,10 @@ header nav a:hover, header nav a.active {
     <img src="/Logo.png" alt="CoachCarter" style="height: 36px; width: auto;">
     <span style="font-size:0.9rem;font-weight:400;color:var(--bg-warm)">Staff Dashboard</span>
   </div>
-        <nav>
-     <a href="#" onclick="showSection('bookings'); return false;" class="active" id="nav-bookings">📋 Bookings</a>
-  <a href="#" onclick="showSection('enquiries'); return false;" id="nav-enquiries">✉️ Enquiries</a>
+  <nav>
+    <a href="#" onclick="showSection('bookings'); return false;" class="active" id="nav-bookings">📋 Bookings</a>
+    <a href="#" onclick="showSection('enquiries'); return false;" id="nav-enquiries">✉️ Enquiries</a>
+    <a href="#" onclick="showSection('instructors'); return false;" id="nav-instructors">🎓 Instructors</a>
     <a href="/admin/editor.html">✏️ Editor</a>
     <a href="/" target="_blank">🌐 View Site →</a>
   </nav>
@@ -311,6 +312,62 @@ header nav a:hover, header nav a.active {
     </div>
     <div id="enquiries-list">
       <div class="empty-state">Loading enquiries...</div>
+    </div>
+  </div>
+</div>
+
+<!-- INSTRUCTORS SECTION -->
+<div class="instructors-section" style="display: none;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+    <h2 style="font-family: var(--font-head); font-size: 1.5rem; font-weight: 700;">Instructors</h2>
+    <button class="filter-btn" onclick="openInstructorModal(null)" style="background: var(--accent); color: white; border-color: var(--accent);">+ Add Instructor</button>
+  </div>
+
+  <div class="bookings-table" id="instructors-table">
+    <div class="table-header" style="grid-template-columns: 1fr 200px 160px 100px 100px;">
+      <div>Instructor</div>
+      <div>Email</div>
+      <div>Phone</div>
+      <div>Lessons</div>
+      <div>Actions</div>
+    </div>
+    <div id="instructors-list">
+      <div class="empty-state">Loading instructors...</div>
+    </div>
+  </div>
+</div>
+
+<!-- INSTRUCTOR MODAL -->
+<div id="instructorModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:16px; padding:32px; width:100%; max-width:480px; margin:16px; max-height:90vh; overflow-y:auto;">
+    <h3 id="modalTitle" style="font-family:var(--font-head); font-size:1.3rem; font-weight:700; margin-bottom:24px;">Add Instructor</h3>
+    <input type="hidden" id="modalInstructorId">
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <div>
+        <label style="font-size:0.85rem; font-weight:700; display:block; margin-bottom:6px;">Name *</label>
+        <input id="iName" type="text" placeholder="Full name" style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:0.95rem;">
+      </div>
+      <div>
+        <label style="font-size:0.85rem; font-weight:700; display:block; margin-bottom:6px;">Email *</label>
+        <input id="iEmail" type="email" placeholder="instructor@example.com" style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:0.95rem;">
+      </div>
+      <div>
+        <label style="font-size:0.85rem; font-weight:700; display:block; margin-bottom:6px;">Phone</label>
+        <input id="iPhone" type="tel" placeholder="07700 000000" style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:0.95rem;">
+      </div>
+      <div>
+        <label style="font-size:0.85rem; font-weight:700; display:block; margin-bottom:6px;">Bio</label>
+        <textarea id="iBio" rows="3" placeholder="Short bio shown to learners" style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:0.95rem; resize:vertical;"></textarea>
+      </div>
+      <div>
+        <label style="font-size:0.85rem; font-weight:700; display:block; margin-bottom:6px;">Photo URL</label>
+        <input id="iPhoto" type="url" placeholder="https://..." style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:0.95rem;">
+      </div>
+    </div>
+    <p id="modalError" style="color:var(--red); font-size:0.85rem; margin-top:12px; display:none;"></p>
+    <div style="display:flex; gap:12px; margin-top:24px; justify-content:flex-end;">
+      <button onclick="closeInstructorModal()" class="action-btn" style="padding:10px 20px;">Cancel</button>
+      <button onclick="saveInstructor()" class="filter-btn" style="background:var(--accent); color:white; border-color:var(--accent); padding:10px 24px;" id="modalSaveBtn">Save</button>
     </div>
   </div>
 </div>
@@ -429,21 +486,150 @@ function scrollToEnquiries() {
   }
 }
 function showSection(section) {
-  // Hide all sections
   document.querySelector('.bookings-section').style.display = 'none';
   document.querySelector('.enquiries-section').style.display = 'none';
-  
-  // Show selected section
+  document.querySelector('.instructors-section').style.display = 'none';
+  ['nav-bookings','nav-enquiries','nav-instructors'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
+
   if (section === 'bookings') {
     document.querySelector('.bookings-section').style.display = 'block';
     document.getElementById('nav-bookings').classList.add('active');
-    document.getElementById('nav-enquiries').classList.remove('active');
-  } else {
+  } else if (section === 'enquiries') {
     document.querySelector('.enquiries-section').style.display = 'block';
     document.getElementById('nav-enquiries').classList.add('active');
-    document.getElementById('nav-bookings').classList.remove('active');
+  } else if (section === 'instructors') {
+    document.querySelector('.instructors-section').style.display = 'block';
+    document.getElementById('nav-instructors').classList.add('active');
+    loadInstructors();
   }
 }
+
+// ── INSTRUCTOR MANAGEMENT ─────────────────────────────────
+async function loadInstructors() {
+  const listEl = document.getElementById('instructors-list');
+  listEl.innerHTML = '<div class="empty-state">Loading...</div>';
+  try {
+    const res = await fetch('/api/admin?action=all-instructors', { headers: ADMIN_HEADERS });
+    if (!res.ok) throw new Error('API error ' + res.status);
+    const data = await res.json();
+    renderInstructors(data.instructors || []);
+  } catch (err) {
+    listEl.innerHTML = '<div class="empty-state">Failed to load instructors.</div>';
+    console.error(err);
+  }
+}
+
+function renderInstructors(instructors) {
+  const listEl = document.getElementById('instructors-list');
+  if (!instructors.length) {
+    listEl.innerHTML = '<div class="empty-state">No instructors yet. Add one to get started.</div>';
+    return;
+  }
+  listEl.innerHTML = instructors.map(i => `
+    <div class="booking-row" style="grid-template-columns: 1fr 200px 160px 100px 100px; opacity:${i.active ? 1 : 0.5};">
+      <div class="customer">
+        <span class="customer-name">${i.name}${!i.active ? ' <span style="font-size:0.75rem;color:var(--muted)">(inactive)</span>' : ''}</span>
+        ${i.bio ? `<span class="customer-email" style="font-size:0.8rem;">${i.bio.slice(0,60)}${i.bio.length>60?'…':''}</span>` : ''}
+      </div>
+      <div class="customer-email" style="font-size:0.9rem;">${i.email}</div>
+      <div style="font-size:0.9rem;">${i.phone || '—'}</div>
+      <div style="font-size:0.9rem; color:var(--muted);">${i.upcoming_bookings} upcoming<br><span style="font-size:0.8rem;">${i.completed_lessons} done</span></div>
+      <div class="actions">
+        <button class="action-btn" onclick='openInstructorModal(${JSON.stringify(i)})'>Edit</button>
+        <button class="action-btn" onclick="toggleInstructor(${i.id}, ${!i.active})" style="${i.active ? 'color:var(--red)' : 'color:var(--green)'}">${i.active ? 'Deactivate' : 'Activate'}</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openInstructorModal(instructor) {
+  document.getElementById('modalTitle').textContent = instructor ? 'Edit Instructor' : 'Add Instructor';
+  document.getElementById('modalInstructorId').value = instructor ? instructor.id : '';
+  document.getElementById('iName').value  = instructor?.name      || '';
+  document.getElementById('iEmail').value = instructor?.email     || '';
+  document.getElementById('iPhone').value = instructor?.phone     || '';
+  document.getElementById('iBio').value   = instructor?.bio       || '';
+  document.getElementById('iPhoto').value = instructor?.photo_url || '';
+  document.getElementById('modalError').style.display = 'none';
+  document.getElementById('modalError').textContent = '';
+  document.getElementById('instructorModal').style.display = 'flex';
+}
+
+function closeInstructorModal() {
+  document.getElementById('instructorModal').style.display = 'none';
+}
+
+async function saveInstructor() {
+  const id    = document.getElementById('modalInstructorId').value;
+  const name  = document.getElementById('iName').value.trim();
+  const email = document.getElementById('iEmail').value.trim();
+  const phone = document.getElementById('iPhone').value.trim();
+  const bio   = document.getElementById('iBio').value.trim();
+  const photo = document.getElementById('iPhoto').value.trim();
+  const errEl = document.getElementById('modalError');
+  const saveBtn = document.getElementById('modalSaveBtn');
+
+  if (!name || !email) {
+    errEl.textContent = 'Name and email are required.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  saveBtn.textContent = 'Saving…';
+  saveBtn.disabled = true;
+  errEl.style.display = 'none';
+
+  const action = id ? 'update-instructor' : 'create-instructor';
+  const body = { name, email, phone, bio, photo_url: photo };
+  if (id) body.id = parseInt(id);
+
+  try {
+    const res = await fetch('/api/admin?action=' + action, {
+      method: 'POST',
+      headers: ADMIN_HEADERS,
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error || 'Something went wrong.';
+      errEl.style.display = 'block';
+      return;
+    }
+    closeInstructorModal();
+    loadInstructors();
+  } catch (err) {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.style.display = 'block';
+  } finally {
+    saveBtn.textContent = 'Save';
+    saveBtn.disabled = false;
+  }
+}
+
+async function toggleInstructor(id, active) {
+  const label = active ? 'activate' : 'deactivate';
+  if (!confirm(`Are you sure you want to ${label} this instructor?`)) return;
+  try {
+    const res = await fetch('/api/admin?action=toggle-instructor', {
+      method: 'POST',
+      headers: ADMIN_HEADERS,
+      body: JSON.stringify({ id, active })
+    });
+    if (!res.ok) throw new Error('API error');
+    loadInstructors();
+  } catch (err) {
+    alert('Failed to update instructor status.');
+  }
+}
+
+// Close modal on backdrop click
+document.getElementById('instructorModal').addEventListener('click', function(e) {
+  if (e.target === this) closeInstructorModal();
+});
+// ─────────────────────────────────────────────────────────
 
 document.querySelectorAll('.filters .filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
