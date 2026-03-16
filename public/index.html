@@ -1018,23 +1018,18 @@ footer {
 
       <div id="quizStep1" class="quiz-step">
         <p class="quiz-progress">Step 1 of 2</p>
-        <p class="quiz-q">Where are you in your learning journey?</p>
+        <p class="quiz-q">Are you a learner or an instructor?</p>
         <div class="quiz-options">
-          <button class="quiz-opt" onclick="quizNext(1,'new')">🚗 Complete beginner — haven't started yet</button>
-          <button class="quiz-opt" onclick="quizNext(1,'some')">📖 Had some lessons before, want to continue</button>
-          <button class="quiz-opt" onclick="quizNext(1,'test')">🎯 Ready to book my test soon</button>
+          <button class="quiz-opt" onclick="quizNext(1,'learner')">🚗 I'm a learner</button>
+          <button class="quiz-opt" onclick="quizNext(1,'instructor')">🎓 I'm an instructor</button>
         </div>
         <button class="quiz-skip" onclick="closeQuiz()">✕ Close</button>
       </div>
 
       <div id="quizStep2" class="quiz-step" hidden>
         <p class="quiz-progress">Step 2 of 2</p>
-        <p class="quiz-q">What's most important to you right now?</p>
-        <div class="quiz-options">
-          <button class="quiz-opt" onclick="quizFinish('price')">💰 Understanding the pricing &amp; packages</button>
-          <button class="quiz-opt" onclick="quizFinish('book')">📅 Getting my first lesson booked</button>
-          <button class="quiz-opt" onclick="quizFinish('learn')">🎬 Brushing up with free videos first</button>
-        </div>
+        <p class="quiz-q">What would you like to do?</p>
+        <div class="quiz-options" id="quizStep2Options"></div>
         <button class="quiz-skip" onclick="quizBack()">← Back</button>
       </div>
 
@@ -1200,6 +1195,18 @@ function bookFreeTrial() {
 // ── GUIDED QUIZ ──────────────────────────────────────────
 let quizAnswer1 = null;
 
+const quizStep2Options = {
+  learner: [
+    { emoji: '🎬', label: 'Scroll through some of our videos', action: () => window.location.href = '/classroom.html' },
+    { emoji: '📅', label: 'Book a free trial lesson',          action: () => bookFreeTrial() },
+    { emoji: '💰', label: 'Look at our prices',               action: () => window.location.href = '/lessons.html' },
+  ],
+  instructor: [
+    { emoji: '🔑', label: 'Log in to my portal',              action: () => window.location.href = '/instructor/login.html' },
+    { emoji: '🗓️', label: 'View my schedule',                 action: () => window.location.href = '/instructor/' },
+  ],
+};
+
 function startQuiz() {
   quizAnswer1 = null;
   document.getElementById('quizStep1').hidden = false;
@@ -1216,6 +1223,10 @@ function closeQuiz() {
 function quizNext(step, answer) {
   if (step === 1) {
     quizAnswer1 = answer;
+    const opts = quizStep2Options[answer] || [];
+    document.getElementById('quizStep2Options').innerHTML = opts.map((o, i) =>
+      `<button class="quiz-opt" onclick="quizFinish(${i})">${o.emoji} ${o.label}</button>`
+    ).join('');
     document.getElementById('quizStep1').hidden = true;
     document.getElementById('quizStep2').hidden = false;
   }
@@ -1226,26 +1237,9 @@ function quizBack() {
   document.getElementById('quizStep1').hidden = false;
 }
 
-function quizFinish(priority) {
-  // Route based on both answers
-  // priority: 'price' | 'book' | 'learn'
-  // quizAnswer1: 'new' | 'some' | 'test'
-  if (priority === 'learn') {
-    window.location.href = '/classroom.html';
-    return;
-  }
-  if (priority === 'price') {
-    window.location.href = '/lessons.html';
-    return;
-  }
-  // priority === 'book'
-  if (quizAnswer1 === 'test') {
-    // Further ahead — send to lessons page for intensive/test packages
-    window.location.href = '/lessons.html#packages';
-  } else {
-    // Beginner or returning — free trial flow
-    bookFreeTrial();
-  }
+function quizFinish(index) {
+  const opts = quizStep2Options[quizAnswer1];
+  if (opts && opts[index]) opts[index].action();
 }
 // ─────────────────────────────────────────────────────────
 
