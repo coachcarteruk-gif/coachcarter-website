@@ -332,7 +332,7 @@
     .tag-junctions      { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
     .tag-reversing      { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
 
-    /* ── DESKTOP: constrain video width like TikTok/Shorts ── */
+    /* ── DESKTOP: height-fills viewport, width follows 9:16 ratio ── */
     @media (min-width: 768px) {
       .reels-container {
         display: flex;
@@ -341,13 +341,16 @@
         background: #111;
       }
       .reel-item {
-        width: 100%;
-        max-width: 420px;
+        /* Each reel fills the full viewport height, width is capped at the 9:16 ratio */
+        height: 100dvh;
+        width: calc(100dvh * 9 / 16);
+        max-width: 100%;
+        flex-shrink: 0;
         border-radius: 0;
       }
       .empty-reels {
-        max-width: 420px;
-        width: 100%;
+        width: calc(100dvh * 9 / 16);
+        max-width: 100%;
       }
     }
   </style>
