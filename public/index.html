@@ -177,6 +177,20 @@ body {
   text-align: center;
 }
 
+/* Hero logo */
+.hero-logo {
+  width: 90px;
+  height: 90px;
+  object-fit: contain;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.06);
+  padding: 10px;
+  margin: 0 auto 24px;
+  display: block;
+  opacity: 0;
+  animation: fadeUp 0.5s 0.05s ease forwards;
+}
+
 /* Brand mark */
 .page-badge {
   display: inline-flex;
@@ -413,6 +427,8 @@ footer {
 ────────────────────────────────────── -->
 <main class="page">
   <div class="page-inner">
+
+    <img src="/Logo.png" alt="CoachCarter" class="hero-logo">
 
     <div class="page-badge">
       <span class="dot"></span>
