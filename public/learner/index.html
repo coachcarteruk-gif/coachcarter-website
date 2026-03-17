@@ -701,13 +701,7 @@ function render() {
     const bal = CREDITS_DATA.credit_balance ?? 0;
     document.getElementById('credit-balance').textContent = bal;
     document.getElementById('credit-sub').textContent = bal === 1 ? 'lesson' : 'lessons';
-    if (bal === 0) {
-      const bookBtn = document.getElementById('book-btn');
-      bookBtn.classList.add('disabled');
-      bookBtn.setAttribute('aria-disabled', 'true');
-      bookBtn.title = 'Buy lessons to start booking';
-      bookBtn.addEventListener('click', (e) => { e.preventDefault(); document.querySelector('.btn-buy').focus(); });
-    }
+    // Book button always active — learners can pay per slot even with 0 credits
   }
 
   if (BOOKINGS_DATA && BOOKINGS_DATA.upcoming && BOOKINGS_DATA.upcoming.length > 0) {
