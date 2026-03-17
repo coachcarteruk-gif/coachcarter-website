@@ -761,7 +761,7 @@ async function loadUpcoming() {
 
     strip.style.display = 'block';
     list.innerHTML = upcoming.map(b => {
-      const dateObj = new Date(b.scheduled_date + 'T00:00:00U');
+      const dateObj = new Date(b.scheduled_date + 'T00:00:00Z');
       const dateStr = new Date(b.scheduled_date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
       const start = b.start_time.slice(0,5);
       const end = b.end_time.slice(0,5);
@@ -805,7 +805,8 @@ function onFilterChange() { loadedRanges = []; slotCache = {}; renderCurrentView
 
 async function renderCurrentView() {
   updateToolbarLabel();
-  await fetchNeededSlots();
+  const ok = await fetchNeededSlots();
+  if (ok === false) return; // fetch showed an error
   if (currentView === 'monthly') renderMonthly();
   else if (currentView === 'weekly') renderWeekly();
   else renderDaily();
@@ -854,18 +855,18 @@ async function fetchNeededSlots() {
   }
 
   // Don't fetch if entirely in the past
-  if (to < fmtDate(today)) return;
+  if (to < fmtDate(today)) return true;
   if (from < fmtDate(today)) from = fmtDate(today);
 
   // Check max 90 days ahead
   const maxDate = fmtDate(addDaysLocal(today, 90));
-  if (from > maxDate) return;
+  if (from > maxDate) return true;
   if (to > maxDate) to = maxDate;
 
   // Range already loaded?
   const instructorId = document.getElementById('instructorFilter').value;
   const cacheKey = `${from}|${to}|${instructorId}`;
-  if (loadedRanges.includes(cacheKey)) return;
+  if (loadedRanges.includes(cacheKey)) return true;
 
   showLoading();
 
@@ -899,8 +900,11 @@ async function fetchNeededSlots() {
       }
     }
     loadedRanges.push(cacheKey);
+    return true;
   } catch (err) {
+    console.error('fetchNeededSlots error:', err);
     showError(err.message || 'Failed to load available slots');
+    return false;
   }
 }
 
