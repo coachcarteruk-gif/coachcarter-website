@@ -167,8 +167,9 @@ async function handleVerify(req, res) {
     await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS phone TEXT`;
     // Ensure phone uniqueness (ignore error if constraint already exists)
     try { await sql`ALTER TABLE learner_users ADD CONSTRAINT learner_users_phone_unique UNIQUE (phone)`; } catch {};
-    // Drop NOT NULL on name if it exists — magic link creates accounts without a name (collected later)
+    // Drop NOT NULL constraints that conflict with magic link signup (name + password collected later or not at all)
     try { await sql`ALTER TABLE learner_users ALTER COLUMN name DROP NOT NULL`; } catch {};
+    try { await sql`ALTER TABLE learner_users ALTER COLUMN password_hash DROP NOT NULL`; } catch {};
 
     // Look up or create the user
     let user;
