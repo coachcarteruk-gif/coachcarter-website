@@ -6,17 +6,19 @@ A complete reference for the CoachCarter driving instructor website. Use this wh
 
 ## What the site is
 
-A driving instructor website for CoachCarter (Fraser). It has three distinct areas:
+A driving instructor website for CoachCarter (Fraser). It has five distinct areas:
 
 - **Public marketing site** — homepage, pricing, availability, about, contact
-- **Learner portal** — private area where learners log driving sessions and track their progress
+- **Learner portal** — private area where learners log driving sessions, track progress, buy credits, and book lessons
+- **Instructor portal** — private area where instructors view their schedule, manage availability, and update their profile
+- **Admin portal** — internal tool for managing instructors, bookings, and availability
 - **Classroom** — a public video library with a mobile-first reels-style UI
 
 ---
 
 ## Hosting & deployment
 
-- **Platform:** Vercel (serverless)
+- **Platform:** Vercel Pro (upgraded to support >12 serverless functions)
 - **Repo:** `https://github.com/coachcarteruk-gif/coachcarter-website.git` (branch: `main`)
 - **Deploy:** Automatic on push to `main`
 - **Database:** Neon Postgres (serverless) — connection string in `POSTGRES_URL` env var
@@ -27,10 +29,11 @@ A driving instructor website for CoachCarter (Fraser). It has three distinct are
 | Variable | Purpose |
 |---|---|
 | `POSTGRES_URL` | Neon Postgres connection string |
-| `JWT_SECRET` | Signs learner auth tokens (30-day expiry) |
+| `JWT_SECRET` | Signs learner, instructor, and admin auth tokens |
 | `MAINTENANCE_MODE` | Set to `"true"` to redirect all traffic to maintenance page |
 | `STRIPE_SECRET_KEY` | Stripe payments |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook verification |
+| `RESEND_API_KEY` | Resend email API (booking confirmations, magic links) |
 
 ---
 
@@ -38,45 +41,65 @@ A driving instructor website for CoachCarter (Fraser). It has three distinct are
 
 ```
 /
-├── api/                        # Vercel serverless functions
-│   ├── learner.js              # Learner portal: register, login, sessions, progress
-│   ├── availability.js         # Read/write availability slots
-│   ├── submit-enquiry.js       # Contact form submissions
-│   ├── get-enquiries.js        # Admin: list enquiries
-│   ├── get-enquiry.js          # Admin: single enquiry
-│   ├── update-enquiry-status.js
-│   ├── create-checkout-session.js  # Stripe checkout
-│   ├── verify-session.js       # Stripe payment verification
-│   ├── webhook.js              # Stripe webhook handler
-│   ├── status.js               # Health check
-│   ├── config.js               # Shared config helpers
-│   └── update-statis.js        # (legacy status update)
+├── api/                            # Vercel serverless functions
+│   ├── learner.js                  # Learner auth, sessions, progress
+│   ├── credits.js                  # Credit balance, Stripe checkout, bulk discounts
+│   ├── slots.js                    # Slot generation, booking, cancellation, my-bookings
+│   ├── instructors.js              # Instructor CRUD + availability (admin-protected)
+│   ├── instructor.js               # Instructor portal: magic-link login, schedule, profile
+│   ├── admin.js                    # Admin auth (JWT), dashboard stats, bookings management
+│   ├── calendar.js                 # iCal feed + .ics download for learners
+│   ├── availability.js             # Read/write public availability slots
+│   ├── enquiries.js                # Contact form: submit, list, update status
+│   ├── webhook.js                  # Stripe webhook handler
+│   ├── create-checkout-session.js  # Legacy Stripe checkout (pass guarantee / packages)
+│   ├── verify-session.js           # Stripe payment verification
+│   ├── update-status.js            # Booking status update
+│   ├── status.js                   # Health check endpoint
+│   └── config.js                   # Shared config helpers
 │
-├── public/                     # Static files served directly
-│   ├── index.html              # Homepage (main marketing page)
-│   ├── classroom.html          # Video reels page (public)
-│   ├── availability.html       # Availability/booking page
-│   ├── learner-journey.html    # Marketing page for the learner portal
-│   ├── admin.html              # Admin login
-│   ├── admin-availability.html # Admin availability management
-│   ├── admin/
-│   │   ├── dashboard.html      # Admin enquiry dashboard
-│   │   └── editor.html         # Admin content editor
-│   ├── learner/
-│   │   ├── index.html          # Learner hub — main landing page (choose where to go)
-│   │   ├── login.html          # Login / register form
-│   │   ├── dashboard.html      # Learner progress dashboard
-│   │   └── log-session.html    # Log a driving session
-│   ├── videos.json             # Video library data (edit to add/remove videos)
-│   ├── config.json             # Site config
-│   ├── Logo.png                # CoachCarter logo
-│   ├── success.html            # Post-payment success page
-│   ├── maintenance.html        # Maintenance mode page
+├── public/                         # Static files served directly
+│   ├── index.html                  # Homepage (main marketing page)
+│   ├── classroom.html              # Video reels page (public)
+│   ├── availability.html           # Availability/booking page
+│   ├── learner-journey.html        # Marketing page for the learner portal
+│   ├── lessons.html                # Lessons / pricing page
+│   ├── admin.html                  # Redirect shim → /admin/login.html
+│   ├── admin-availability.html     # Standalone admin availability management
+│   ├── success.html                # Post-payment success page
+│   ├── maintenance.html            # Maintenance mode page
 │   ├── privacy.html
-│   └── terms.html
+│   ├── terms.html
+│   ├── admin/
+│   │   ├── login.html              # Admin login (JWT auth)
+│   │   ├── portal.html             # Full admin portal (dashboard, instructors, availability, bookings)
+│   │   ├── dashboard.html          # Admin enquiry dashboard
+│   │   └── editor.html             # Admin content editor
+│   ├── learner/
+│   │   ├── index.html              # Learner hub — dashboard (credits, bookings, progress)
+│   │   ├── login.html              # Login / register form
+│   │   ├── book.html               # Lesson booking calendar
+│   │   ├── buy-credits.html        # Buy lesson credits via Stripe
+│   │   └── log-session.html        # Log a driving session
+│   ├── instructor/
+│   │   ├── login.html              # Magic-link login for instructors
+│   │   ├── index.html              # Instructor dashboard (schedule, lesson completion)
+│   │   ├── availability.html       # Instructor sets their own weekly availability
+│   │   └── profile.html            # Instructor updates bio and contact details
+│   ├── videos.json                 # Video library data (edit to add/remove videos)
+│   ├── config.json                 # Site config
+│   └── Logo.png                    # CoachCarter logo
 │
-├── middleware.js               # Vercel middleware — handles maintenance mode redirect
-├── vercel.json                 # Route config: /api/* → api/, everything else → public/
+├── db/
+│   ├── migrations/                 # SQL files — run manually in Neon SQL Editor
+│   │   ├── 001_booking_system.sql  # Core booking tables
+│   │   ├── 002_admin_users.sql     # Admin users table
+│   │   ├── 003_calendar_token.sql  # iCal token column on learner_users
+│   │   └── 004_instructor_portal.sql # Instructor magic-link tokens
+│   └── seeds/                      # Placeholder data for testing
+│
+├── middleware.js                   # Vercel middleware — maintenance mode redirect
+├── vercel.json                     # Route config
 └── package.json
 ```
 
@@ -93,17 +116,72 @@ A driving instructor website for CoachCarter (Fraser). It has three distinct are
 
 So `/classroom.html` serves `public/classroom.html`, `/api/learner?action=login` calls `api/learner.js`, etc.
 
+**API pattern:** All related endpoints are grouped into a single file using `?action=` routing (e.g. `/api/slots?action=available`, `/api/slots?action=book`).
+
+---
+
+## Design system
+
+The site uses a consistent dark charcoal theme matching the CoachCarter logo exactly.
+
+```css
+--navy:     #262626   /* primary dark background — charcoal black from logo */
+--navy-2:   #2e2e2e   /* card / panel background */
+--navy-3:   #383838   /* elevated surfaces */
+--orange:   #f58321   /* primary accent — matches logo orange exactly */
+--orange-dk:#e07518   /* hover / pressed state */
+--orange-lt:#fff4e8   /* light orange tint */
+--text:     #e8eaf0   /* body text on dark backgrounds */
+--muted:    #6b7484   /* secondary / placeholder text */
+--border:   #e2e4eb   /* dividers on light backgrounds */
+```
+
+Font: Inter (Google Fonts). All pages link to it via:
+```html
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+```
+
+---
+
+## Booking & credit system
+
+### How credits work
+
+Each credit = one 1.5-hour lesson. Credits are stored as a balance on the learner's account and purchased via Stripe (Klarna available). Bulk discounts apply automatically:
+
+| Credits | Hours | Discount |
+|---|---|---|
+| 4 | 6hrs | 5% off |
+| 8 | 12hrs | 10% off |
+| 12 | 18hrs | 15% off |
+| 16 | 24hrs | 20% off |
+| 20 | 30hrs | 25% off |
+
+Base price: **£82.50 per credit** (set in `api/credits.js` as `CREDIT_PRICE_PENCE = 8250`).
+
+### How booking works
+
+- Instructors set recurring weekly availability windows (admin or self-service via instructor portal)
+- The slot engine (`api/slots.js`) divides windows into 1.5-hour bookable slots
+- Learners browse the calendar, filter by instructor (optional), and book any available slot
+- Booking is instant — no instructor approval needed
+- 1 credit deducted on booking; returned automatically on 48+ hour cancellations
+- Race condition protection via DB unique index on `(instructor_id, scheduled_date, start_time)`
+
+### Cancellation policy
+
+- 48+ hours notice → credit returned automatically
+- Under 48 hours → credit forfeited, learner informed at time of cancellation
+
 ---
 
 ## Learner portal
 
-### How it works
+### Authentication
 
-Learners register/login at `/learner/` (email + password). A JWT is issued and stored in `localStorage` under the key `cc_learner` as `{ token, user }`. All subsequent API calls include the token as a `Bearer` header.
+Register/login at `/learner/login.html`. JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls include it as a `Bearer` header.
 
 ### API — `api/learner.js`
-
-All requests go to `/api/learner?action=<action>`.
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
@@ -113,46 +191,76 @@ All requests go to `/api/learner?action=<action>`.
 | `sessions` | POST | Yes | Save a new session |
 | `progress` | GET | Yes | Returns latest skill ratings, stats, current tier |
 
+### API — `api/credits.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `balance` | GET | Yes | Returns current credit balance |
+| `checkout` | POST | Yes | Creates Stripe checkout session with bulk discount logic |
+
+### API — `api/slots.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `available` | GET | Yes | Available slots in date range, grouped by date |
+| `book` | POST | Yes | Book a slot (deducts 1 credit) |
+| `cancel` | POST | Yes | Cancel a booking (returns credit if 48hr+ policy met) |
+| `my-bookings` | GET | Yes | Learner's upcoming confirmed bookings |
+
+### API — `api/calendar.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `download` | GET | JWT | Download `.ics` file for a single booking |
+| `feed` | GET | Token | iCal feed for Apple/Google Calendar subscription (no JWT — uses per-learner token) |
+| `feed-url` | GET | JWT | Returns the learner's personalised iCal feed URL |
+
 ### Database tables
 
 **`learner_users`**
-```
+```sql
 id SERIAL PRIMARY KEY
 name TEXT
 email TEXT UNIQUE
 password_hash TEXT
+phone TEXT
 current_tier INTEGER DEFAULT 1
+credit_balance INTEGER DEFAULT 0   -- DB constraint prevents negative
+calendar_token TEXT UNIQUE         -- for iCal feed polling
 created_at TIMESTAMPTZ
 ```
 
-**`driving_sessions`**
-```
+**`driving_sessions`** / **`skill_ratings`** — unchanged from original design (see original schema).
+
+**`credit_transactions`**
+```sql
 id SERIAL PRIMARY KEY
 user_id INTEGER
-session_date DATE
-duration_minutes INTEGER
-session_type TEXT  -- 'instructor' or 'private'
-notes TEXT         -- overall session notes
+type TEXT               -- 'purchase', 'refund', 'booking', 'cancellation_return'
+credits INTEGER
+amount_pence INTEGER
+stripe_payment_id TEXT
+stripe_refund_id TEXT
 created_at TIMESTAMPTZ
 ```
 
-**`skill_ratings`**
-```
+**`lesson_bookings`**
+```sql
 id SERIAL PRIMARY KEY
-session_id INTEGER
-user_id INTEGER
-tier INTEGER
-skill_key TEXT     -- e.g. 'speed_control', 'junctions'
-rating TEXT        -- 'green', 'amber', 'red'
-note TEXT          -- per-question note added by learner (nullable)
+learner_id INTEGER
+instructor_id INTEGER
+scheduled_date DATE
+start_time TIME
+end_time TIME
+status TEXT             -- 'confirmed', 'completed', 'cancelled'
+credit_returned BOOLEAN DEFAULT FALSE
 created_at TIMESTAMPTZ
+-- UNIQUE (instructor_id, scheduled_date, start_time) prevents double-booking
 ```
-
-Tables are created automatically on first use (CREATE TABLE IF NOT EXISTS). The `note` column was added later with `ALTER TABLE skill_ratings ADD COLUMN IF NOT EXISTS note TEXT` — this runs on every request to handle existing databases safely.
 
 ### The 10-question self-assessment
 
-When logging a session (`log-session.html`), the learner answers 10 questions across 4 driving groups. Each question gets a green/amber/red rating and an optional per-question note (toggled with a ✎ button). The groups and questions are:
+When logging a session, learners answer 10 questions across 4 groups (green/amber/red + optional note per question):
 
 **Speed & Control** — Acceleration smoothly, Braking progressively, Appropriate speed for conditions
 
@@ -162,99 +270,115 @@ When logging a session (`log-session.html`), the learner answers 10 questions ac
 
 **Reversing** — Controlled speed when reversing, Effective all-round observation
 
-The dashboard (`dashboard.html`) shows the latest rating for each question as a colour-coded grid, plus a session history list that includes the per-question notes inline.
+---
+
+## Instructor portal
+
+Instructors log in via magic link — no password. An email is sent with a time-limited token; clicking it authenticates them and redirects to their dashboard.
+
+### API — `api/instructor.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `request-login` | POST | No | Sends magic link to instructor email |
+| `verify-token` | GET | No | Validates token, returns JWT |
+| `schedule` | GET | JWT | Instructor's upcoming confirmed bookings |
+| `complete` | POST | JWT | Mark a lesson as completed |
+| `availability` | GET | JWT | Current weekly availability windows |
+| `set-availability` | POST | JWT | Update weekly availability windows |
+| `profile` | GET | JWT | Profile details |
+| `update-profile` | POST | JWT | Update bio and contact details |
+
+### Database tables
+
+**`instructors`** — name, email, phone, bio, photo_url, active flag
+
+**`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0–6, start_time, end_time)
+
+**`instructor_login_tokens`** — magic-link tokens with expiry and used flag
+
+---
+
+## Admin portal
+
+Login at `/admin/login.html` with email + password. JWT stored in `localStorage` as `cc_admin`.
+
+### API — `api/admin.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `login` | POST | No | Returns JWT |
+| `stats` | GET | JWT | Dashboard stats (upcoming lessons, revenue, learner count) |
+| `bookings` | GET | JWT | All bookings with status filters |
+| `instructors` | GET | JWT | Instructor list |
+| `add-instructor` | POST | JWT | Add a new instructor |
+| `update-instructor` | POST | JWT | Edit instructor details |
+| `toggle-instructor` | POST | JWT | Activate / deactivate instructor |
+
+**`admin_users`** table: email, bcrypt password_hash, role (`admin` / `superadmin`).
 
 ---
 
 ## Classroom (video reels)
 
-### How it works
-
-`/classroom.html` is a full-screen mobile-first page where learners scroll through short driving videos like Instagram Reels or YouTube Shorts. Videos are organised into 4 groups matching the assessment categories.
+`/classroom.html` is a full-screen mobile-first page where learners scroll through short driving videos like Instagram Reels / YouTube Shorts.
 
 ### Video hosting — Cloudflare Stream
 
 - Customer subdomain: `customer-qn21p6ogmlqlhcv4.cloudflarestream.com`
-- Each video has a UID (e.g. `7e36d845f1a0d80c57ebf7ef969c2572`)
-- HLS manifest URL: `https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com/{uid}/manifest/video.m3u8`
-- Videos are publicly accessible — no authentication needed
+- HLS manifest: `https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com/{uid}/manifest/video.m3u8`
+- Videos are publicly accessible — no auth needed
 
 ### Technical approach
 
-**Iframes were abandoned.** Cloudflare Stream iframes use internal nested frames, making it impossible to reliably control mute/unmute via `postMessage`. After several failed approaches, the page was rewritten to use native `<video>` elements.
+Native `<video>` elements (iframes were abandoned — Cloudflare Stream's nested frames make mute/unmute via `postMessage` unreliable).
 
-Current approach:
-- Native `<video>` elements with `object-fit: cover`, `playsinline`, `loop`, `muted`
-- **HLS.js** (`cdn.jsdelivr.net/npm/hls.js@1.5.7`) loads the HLS manifest on non-Safari browsers
-- Safari uses its native HLS support (detected via `canPlayType('application/vnd.apple.mpegurl')`)
-- `IntersectionObserver` (threshold 0.6) triggers `attachHls(uid)` when a video scrolls into view and `detachHls(uid)` when it scrolls out — this prevents audio bleed and saves bandwidth
-- `video.muted = false` for direct mute control — no cross-origin messaging
-- CSS `scroll-snap-type: y mandatory` + `scroll-snap-align: start` for the snap-scroll behaviour
-- Global `globalMuted` boolean — user only needs to unmute once; all subsequent videos play with sound
+- HLS.js loads manifests on non-Safari; Safari uses native HLS
+- `IntersectionObserver` (threshold 0.6) attaches/detaches HLS on scroll to prevent audio bleed
+- `scroll-snap-type: y mandatory` for snap-scroll behaviour
+- Global `globalMuted` boolean — user unmutes once; all subsequent videos play with sound
 
 ### Adding videos — `public/videos.json`
 
-Edit this file to add or remove videos:
+Upload to Cloudflare Stream, copy the UID, add an entry to `videos.json`, commit and push:
 
 ```json
-[
-  {
-    "uid": "7e36d845f1a0d80c57ebf7ef969c2572",
-    "title": "Smooth acceleration",
-    "description": "How to build speed progressively from a standstill.",
-    "group": "speed-control"
-  }
-]
+{
+  "uid": "7e36d845f1a0d80c57ebf7ef969c2572",
+  "title": "Smooth acceleration",
+  "description": "How to build speed progressively from a standstill.",
+  "group": "speed-control"
+}
 ```
 
 Valid group values: `speed-control`, `looking-around`, `junctions`, `reversing`
-
-Upload videos to Cloudflare Stream dashboard, copy the UID, add an entry here, commit and push.
 
 ---
 
 ## Maintenance mode
 
-Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visitors to `/maintenance.html`. The API routes (`/api/*`) are exempt and still function. Change back to `false` (or delete the variable) to restore normal traffic. Handled by `middleware.js`.
-
----
-
-## Design system
-
-The site uses a consistent dark theme across all pages:
-
-```css
---bg: #0a0c10        /* page background */
---surface: #13161f   /* card / panel background */
---border: #1e2230    /* dividers */
---text: #e8eaf2      /* body text */
---muted: #6b7280     /* secondary text */
---blue: #4f6ef7      /* primary accent */
---green: #22c55e
---amber: #f59e0b
---red: #ef4444
---radius: 14px
-```
-
-Font: Inter (Google Fonts). All pages link to it via `<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">`.
+Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visitors to `/maintenance.html`. API routes (`/api/*`) are exempt. Handled by `middleware.js`.
 
 ---
 
 ## Known gotchas
 
-- **JWT_SECRET must be set in Vercel** for the learner portal to work. Without it, all auth endpoints return 500.
-- **Neon Postgres cold starts** — the first request after inactivity may be slow (~1–2s). Subsequent requests are fast.
-- **HLS.js CDN** — the classroom page loads HLS.js from jsDelivr. If that CDN is slow, video load will be delayed. Consider self-hosting if this becomes an issue.
-- **videos.json is the source of truth** for the classroom — there's no admin UI for it yet. Edit the file directly in the repo and push.
-- **Mobile autoplay policy** — browsers require videos to start muted. The classroom does this correctly. `video.muted = false` after a user gesture is what unlocks sound.
-- `api/update-statis.js` appears to be a legacy file with a typo in the name — treat carefully.
+- **JWT_SECRET must be set in Vercel** — without it, all auth endpoints return 500
+- **Neon Postgres cold starts** — first request after inactivity may be slow (~1–2s)
+- **HLS.js CDN** — classroom loads HLS.js from jsDelivr; consider self-hosting if CDN latency becomes an issue
+- **videos.json is the source of truth** for the classroom — no admin UI for it yet; edit directly and push
+- **Mobile autoplay** — browsers require videos to start muted; `video.muted = false` after a user gesture unlocks sound
+- **Klarna** — enabled via Stripe dashboard, not hardcoded; no code changes needed to toggle it
+- **DB migrations** — run manually in Neon SQL Editor; files in `db/migrations/` are numbered sequentially
 
 ---
 
-## Potential next features
+## What's still to build
 
-- Admin UI for managing videos.json (drag to reorder, add/remove without editing code)
-- Learner portal: instructor can view a learner's progress dashboard
-- Notifications / reminders for learners to log sessions
-- More video groups or sub-categories in the classroom
-- Stripe integration for lesson booking payments (foundation already exists in api/)
+See `DEVELOPMENT-ROADMAP.md` for the full prioritised list. Key remaining items:
+
+- **Refund flow** — learner requests cash refund, admin approves, Stripe reverses the charge
+- **Automated reminders** — 24-hour email to learner and instructor before each lesson (needs a Vercel cron job)
+- **Reviews & testimonials** — post-lesson email prompt, star rating + comment, optional public display
+- **Waiting list** — capture leads when calendar is fully booked
+- **Referral system** — unique links per learner, credit bonuses for both parties on first referral purchase
