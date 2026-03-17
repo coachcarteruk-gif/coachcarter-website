@@ -322,7 +322,13 @@
     }
     .daily-booking-time { font-weight: 700; font-size: 0.82rem; color: var(--accent); white-space: nowrap; }
     .daily-booking-card.completed .daily-booking-time { color: #16a34a; }
-    .daily-booking-name { font-weight: 700; font-size: 0.875rem; }
+    .daily-booking-name { font-weight: 700; font-size: 0.875rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .contact-badge {
+      font-size: 0.7rem; font-weight: 700;
+      color: var(--accent); background: var(--accent-lt);
+      padding: 2px 8px; border-radius: 20px;
+      white-space: nowrap;
+    }
     .daily-booking-email { font-size: 0.78rem; color: var(--muted); }
     .daily-booking-status {
       font-size: 0.72rem; font-weight: 700; padding: 3px 8px;
@@ -886,7 +892,7 @@ function renderDaily() {
           <div class="daily-booking-card ${isCompleted ? 'completed' : ''}">
             <div class="daily-booking-time">${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)}</div>
             <div>
-              <div class="daily-booking-name">${esc(b.learner_name)}</div>
+              <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before the lesson">📞 Contact before</span>' : ''}</div>
               <div class="daily-booking-email">${esc(b.learner_email)}</div>
             </div>
             <span class="daily-booking-status status-${b.status}">${b.status === 'completed' ? '✓ Completed' : 'Confirmed'}</span>
@@ -964,6 +970,7 @@ function openBookingDetail(bookingId) {
     <div class="booking-detail-row"><span class="booking-detail-label">Email</span><span class="booking-detail-val">${esc(b.learner_email)}</span></div>
     ${b.learner_phone ? `<div class="booking-detail-row"><span class="booking-detail-label">Phone</span><span class="booking-detail-val">${esc(b.learner_phone)}</span></div>` : ''}
     <div class="booking-detail-row"><span class="booking-detail-label">Status</span><span class="booking-detail-val">${b.status === 'completed' ? '✓ Completed' : 'Confirmed'}</span></div>
+    ${b.prefer_contact_before ? `<div class="booking-detail-row"><span class="booking-detail-label">Note</span><span class="booking-detail-val" style="color:var(--accent);">📞 Learner would like you to contact them beforehand</span></div>` : ''}
   `;
 
   const actions = document.getElementById('bookingModalActions');

@@ -18,9 +18,11 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   const action = req.query.action;
-  if (action === 'update-name') return handleUpdateName(req, res);
-  if (action === 'sessions')    return handleSessions(req, res);
-  if (action === 'progress')    return handleProgress(req, res);
+  if (action === 'update-name')       return handleUpdateName(req, res);
+  if (action === 'sessions')          return handleSessions(req, res);
+  if (action === 'progress')          return handleProgress(req, res);
+  if (action === 'contact-pref')      return handleContactPref(req, res);
+  if (action === 'set-contact-pref')  return handleSetContactPref(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -123,14 +125,54 @@ async function handleProgress(req, res) {
         COUNT(*) FILTER (WHERE session_type = 'private')::int as private_sessions
       FROM driving_sessions WHERE user_id = ${user.id}`;
 
-    const userRow = await sql`SELECT current_tier, name FROM learner_users WHERE id = ${user.id}`;
+    const userRow = await sql`SELECT current_tier, name, prefer_contact_before FROM learner_users WHERE id = ${user.id}`;
     return res.json({
       latest_ratings: latestRatings,
       stats: stats[0],
       current_tier: userRow[0]?.current_tier || 1,
-      name: userRow[0]?.name || ''
+      name: userRow[0]?.name || '',
+      prefer_contact_before: userRow[0]?.prefer_contact_before || false
     });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to load progress', details: err.message });
+  }
+}
+
+// ── GET /api/learner?action=contact-pref ─────────────────────────────────────
+// Returns the learner's contact preference.
+async function handleContactPref(req, res) {
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [row] = await sql`
+      SELECT prefer_contact_before FROM learner_users WHERE id = ${user.id}
+    `;
+    return res.json({ prefer_contact_before: row?.prefer_contact_before || false });
+  } catch (err) {
+    console.error('contact-pref error:', err);
+    return res.status(500).json({ error: 'Failed to load preference' });
+  }
+}
+
+// ── POST /api/learner?action=set-contact-pref ────────────────────────────────
+// Body: { prefer_contact_before: boolean }
+async function handleSetContactPref(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const { prefer_contact_before } = req.body;
+    const val = prefer_contact_before === true;
+    const sql = neon(process.env.POSTGRES_URL);
+    await sql`
+      UPDATE learner_users SET prefer_contact_before = ${val} WHERE id = ${user.id}
+    `;
+    return res.json({ success: true, prefer_contact_before: val });
+  } catch (err) {
+    console.error('set-contact-pref error:', err);
+    return res.status(500).json({ error: 'Failed to save preference' });
   }
 }
