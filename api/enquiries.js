@@ -169,7 +169,7 @@ async function handleSubmit(req, res) {
   const enquiryTypeLabels = {
     general: 'General Question', booking: 'Booking Enquiry',
     'pass-guarantee': 'Pass Guarantee Programme', 'bulk-packages': 'Bulk Packages',
-    availability: 'Check Availability'
+    availability: 'Check Availability', 'join-team': 'Instructor Application'
   };
   const formattedType = enquiryTypeLabels[enquiryType] || enquiryType;
   const toEmail       = process.env.STAFF_EMAIL || 'fraser@coachcarter.uk';

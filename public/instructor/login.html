@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Instructor Sign In — CoachCarter</title>
+  <title>Instructors — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Jost:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -20,9 +20,11 @@
       --accent:    #f58321;
       --accent-dk: #e07518;
       --accent-lt: #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
       --muted:     #797879;
       --border:    #e0e0e0;
       --bg:        #f9f9f9;
+      --surface:   #f9f9f9;
       --white:     #ffffff;
       --green:     #22c55e;
       --green-lt:  #f0fdf4;
@@ -120,14 +122,6 @@
       .site-nav-link:not(.primary):not(.back) { display: none; }
     }
 
-    .brand {
-      display: flex; align-items: center; gap: 10px;
-      margin-bottom: 32px; text-decoration: none;
-    }
-    .brand img { height: 48px; width: auto; }
-    .brand-text { font-size: 1.1rem; font-weight: 700; color: var(--primary); font-family: var(--font-head); }
-    .brand-sub  { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
-
     .card {
       background: var(--white);
       border: 1px solid var(--border);
@@ -136,30 +130,92 @@
       padding: 32px 28px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    .card-title { font-family: var(--font-head); font-size: 1.4rem; font-weight: 800; margin-bottom: 6px; }
-    .card-sub   { font-size: 0.875rem; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
+    .card-title { font-family: var(--font-head); font-size: 1.35rem; font-weight: 800; margin-bottom: 6px; }
+    .card-sub   { font-size: 0.85rem; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
+
+    /* ── Choice screen ───────────────────────────────────────────── */
+    .choice-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .choice-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      color: inherit;
+      background: var(--white);
+    }
+    .choice-card:hover {
+      border-color: var(--accent);
+      background: var(--accent-lt);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(245,131,33,0.1);
+    }
+    .choice-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .choice-icon svg { width: 24px; height: 24px; }
+    .choice-icon.sign-in { background: var(--accent-lt); color: var(--accent); }
+    .choice-icon.join    { background: #f0f0f0; color: var(--primary); }
+    .choice-label { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+    .choice-desc  { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+
+    /* ── Shared form styles ──────────────────────────────────────── */
+    .screen { display: none; }
+    .screen.active { display: block; }
 
     label {
       display: block; font-size: 0.8rem; font-weight: 600;
       color: var(--muted); text-transform: uppercase;
       letter-spacing: 0.05em; margin-bottom: 6px;
     }
-    input[type="email"] {
-      width: 100%; background: var(--bg); border: 1px solid var(--border);
+    input[type="email"],
+    input[type="text"],
+    input[type="tel"],
+    textarea {
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
       border-radius: 8px; color: var(--primary); font-family: var(--font-body);
       font-size: 0.95rem; padding: 11px 14px; outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, background 0.2s;
     }
-    input:focus { border-color: var(--accent); background: var(--white); }
+    input:focus, textarea:focus { border-color: var(--accent); background: var(--white); }
+    input::placeholder, textarea::placeholder { color: var(--muted); }
+    textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; }
 
     .btn-primary {
       width: 100%; background: var(--accent); color: #fff; border: none;
       border-radius: 8px; font-family: var(--font-body); font-size: 0.95rem;
-      font-weight: 700; padding: 13px; cursor: pointer; margin-top: 16px;
-      transition: background 0.2s, opacity 0.2s;
+      font-weight: 700; padding: 13px; cursor: pointer; margin-top: 8px;
+      transition: background 0.2s, opacity 0.2s, transform 0.15s;
     }
     .btn-primary:hover    { background: var(--accent-dk); }
-    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary:active   { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .btn-back {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.82rem; color: var(--muted); background: none;
+      border: none; cursor: pointer; padding: 0; margin-bottom: 20px;
+      font-family: var(--font-body); transition: color 0.2s;
+    }
+    .btn-back:hover { color: var(--primary); }
+    .btn-back svg { width: 16px; height: 16px; }
 
     .error-msg {
       background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
@@ -168,27 +224,58 @@
     }
     .error-msg.show { display: block; }
 
-    /* Sent state */
-    .sent-state { display: none; text-align: center; }
-    .sent-icon  { font-size: 3rem; margin-bottom: 16px; }
-    .sent-title { font-family: var(--font-head); font-size: 1.3rem; font-weight: 800; margin-bottom: 8px; }
-    .sent-sub   { font-size: 0.875rem; color: var(--muted); line-height: 1.6; }
-    .sent-email { font-weight: 700; color: var(--primary); }
-    .resend-link {
-      display: inline-block; margin-top: 20px; font-size: 0.85rem;
-      color: var(--accent); cursor: pointer; background: none; border: none;
-      text-decoration: underline;
+    /* ── Sent / success states ───────────────────────────────────── */
+    .result-icon {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
     }
+    .result-icon svg { width: 28px; height: 28px; }
+    .result-icon.orange { background: var(--accent-lt); color: var(--accent); }
+    .result-icon.green  { background: rgba(34,197,94,0.1); color: var(--green); }
+    .result-title {
+      font-family: var(--font-head); font-size: 1.2rem;
+      font-weight: 700; margin-bottom: 8px; text-align: center;
+    }
+    .result-sub {
+      font-size: 0.88rem; color: var(--muted);
+      line-height: 1.5; text-align: center;
+    }
+    .result-sub strong { color: var(--primary); font-weight: 600; }
 
-    /* Token verification state */
-    .verifying-state { display: none; text-align: center; }
+    .resend-link {
+      display: inline-block; margin-top: 20px; font-size: 0.82rem;
+      color: var(--muted); cursor: pointer; background: none; border: none;
+      font-family: var(--font-body); transition: color 0.2s;
+    }
+    .resend-link:hover { color: var(--accent); }
+    .resend-link:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Verifying spinner ───────────────────────────────────────── */
     .spinner {
-      width: 36px; height: 36px;
+      width: 40px; height: 40px;
       border: 3px solid var(--border); border-top-color: var(--accent);
       border-radius: 50%; animation: spin 0.7s linear infinite;
-      margin: 0 auto 16px;
+      margin: 0 auto 20px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hint {
+      text-align: center; font-size: 0.78rem;
+      color: var(--muted); margin-top: 20px; line-height: 1.5;
+    }
+
+    .back-link {
+      margin-top: 20px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-family: var(--font-body);
+    }
+    .back-link:hover { color: var(--primary); }
   </style>
 </head>
 <body>
@@ -208,36 +295,132 @@
 </nav>
 
 <div class="card">
-  <!-- Request link form -->
-  <div id="loginForm">
-    <div class="card-title">Instructor sign in</div>
-    <div class="card-sub">Enter your CoachCarter email address and we'll send you a sign-in link.</div>
-    <div class="error-msg" id="errorMsg"></div>
-    <div>
-      <label for="emailInput">Email address</label>
-      <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 1 — Choice: Sign In or Join the Team
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen active" id="screen-choice">
+    <div class="card-title">Instructor portal</div>
+    <div class="card-sub">Are you already a CoachCarter instructor, or interested in joining the team?</div>
+    <div class="choice-grid">
+      <a class="choice-card" onclick="showScreen('sign-in')">
+        <div class="choice-icon sign-in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        </div>
+        <div>
+          <div class="choice-label">I'm a CoachCarter instructor</div>
+          <div class="choice-desc">Sign in to view your schedule, manage availability, and update your profile.</div>
+        </div>
+      </a>
+      <a class="choice-card" onclick="showScreen('join')">
+        <div class="choice-icon join">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+        </div>
+        <div>
+          <div class="choice-label">Join the team</div>
+          <div class="choice-desc">Interested in becoming a driving instructor with CoachCarter? Get in touch.</div>
+        </div>
+      </a>
     </div>
-    <button class="btn-primary" id="sendBtn" onclick="requestLink()">Send sign-in link</button>
   </div>
 
-  <!-- Sent confirmation -->
-  <div class="sent-state" id="sentState">
-    <div class="sent-icon">✉️</div>
-    <div class="sent-title">Check your email</div>
-    <p class="sent-sub">
-      We've sent a sign-in link to<br>
-      <span class="sent-email" id="sentEmail">—</span><br><br>
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 2 — Sign In (magic link)
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-sign-in">
+    <button class="btn-back" onclick="showScreen('choice')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back
+    </button>
+    <div class="card-title">Instructor sign in</div>
+    <div class="card-sub">Enter your CoachCarter email and we'll send you a sign-in link. No password needed.</div>
+    <div class="error-msg" id="loginError"></div>
+    <form onsubmit="handleLoginSubmit(event)">
+      <div class="form-group">
+        <label for="loginEmail">Email address</label>
+        <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+      </div>
+      <button type="submit" class="btn-primary" id="loginBtn">Send sign-in link</button>
+    </form>
+    <p class="hint">The link expires in 30 minutes and can only be used once.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 2b — Sign in link sent
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-sign-in-sent" style="text-align:center;">
+    <div class="result-icon orange">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9z"/></svg>
+    </div>
+    <div class="result-title">Check your email</div>
+    <div class="result-sub">
+      We sent a sign-in link to<br>
+      <strong id="sentEmail">—</strong><br><br>
       The link expires in 30 minutes. Check your spam folder if it doesn't arrive.
-    </p>
-    <button class="resend-link" onclick="showForm()">Send another link</button>
+    </div>
+    <button class="resend-link" id="resendBtn" onclick="handleResend()">Didn't get it? Send again</button>
   </div>
 
-  <!-- Verifying token (shown when ?token= is in URL) -->
-  <div class="verifying-state" id="verifyingState">
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 2c — Verifying token (spinner)
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-verifying" style="text-align:center;">
     <div class="spinner"></div>
-    <p style="color:var(--muted);font-size:0.9rem">Signing you in…</p>
+    <div class="result-title">Signing you in…</div>
+    <div class="result-sub">Verifying your login link.</div>
   </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 3 — Join the Team form
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-join">
+    <button class="btn-back" onclick="showScreen('choice')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back
+    </button>
+    <div class="card-title">Join the team</div>
+    <div class="card-sub">Interested in teaching with CoachCarter? Tell us a bit about yourself and we'll be in touch.</div>
+    <div class="error-msg" id="joinError"></div>
+    <form onsubmit="handleJoinSubmit(event)">
+      <div class="form-group">
+        <label for="joinName">Your name</label>
+        <input type="text" id="joinName" placeholder="Full name" autocomplete="name" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="joinEmail">Email</label>
+          <input type="email" id="joinEmail" placeholder="your@email.com" autocomplete="email" required>
+        </div>
+        <div class="form-group">
+          <label for="joinPhone">Phone</label>
+          <input type="tel" id="joinPhone" placeholder="07700 900000" autocomplete="tel" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="joinMessage">Tell us about yourself</label>
+        <textarea id="joinMessage" placeholder="e.g. your experience, ADI badge number, areas you cover…"></textarea>
+      </div>
+      <button type="submit" class="btn-primary" id="joinBtn">Send enquiry</button>
+    </form>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 3b — Join enquiry sent
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-join-sent" style="text-align:center;">
+    <div class="result-icon green">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+    </div>
+    <div class="result-title">Thanks for getting in touch!</div>
+    <div class="result-sub">
+      We've received your enquiry and will be in touch soon.<br><br>
+      In the meantime, feel free to check out our <a href="/classroom.html" style="color:var(--accent);font-weight:600;">free video library</a>.
+    </div>
+  </div>
+
 </div>
+
+<a href="/" class="back-link">&larr; Back to home</a>
 
 <script>
   const urlParams = new URLSearchParams(window.location.search);
@@ -247,39 +430,46 @@
   const existing = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
   if (existing?.token && !token) window.location.href = '/instructor/';
 
-  // If a magic link token is in the URL, verify it
+  let lastLoginEmail = null;
+
+  // ── Screen management ──────────────────────────────────────────
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + id).classList.add('active');
+  }
+
+  // ── If magic link token is in URL, verify immediately ──────────
   if (token) {
-    document.getElementById('loginForm').style.display    = 'none';
-    document.getElementById('verifyingState').style.display = 'block';
+    showScreen('verifying');
     verifyToken(token);
   }
 
-  async function requestLink() {
-    const email = document.getElementById('emailInput').value.trim();
+  // ── Sign in: request magic link ────────────────────────────────
+  async function handleLoginSubmit(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
     if (!email) return;
 
-    const btn = document.getElementById('sendBtn');
-    const err = document.getElementById('errorMsg');
+    const btn = document.getElementById('loginBtn');
+    const err = document.getElementById('loginError');
     err.classList.remove('show');
     btn.disabled = true;
     btn.textContent = 'Sending…';
 
     try {
-      const res  = await fetch('/api/instructor?action=request-login', {
-        method:  'POST',
+      const res = await fetch('/api/instructor?action=request-login', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email })
+        body: JSON.stringify({ email })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send link');
 
-      // Show sent state
-      document.getElementById('loginForm').style.display = 'none';
-      document.getElementById('sentState').style.display  = 'block';
-      document.getElementById('sentEmail').textContent    = email;
-
-    } catch (e) {
-      err.textContent = e.message;
+      lastLoginEmail = email;
+      document.getElementById('sentEmail').textContent = email;
+      showScreen('sign-in-sent');
+    } catch (ex) {
+      err.textContent = ex.message;
       err.classList.add('show');
     } finally {
       btn.disabled = false;
@@ -287,35 +477,125 @@
     }
   }
 
-  function showForm() {
-    document.getElementById('sentState').style.display  = 'none';
-    document.getElementById('loginForm').style.display  = 'block';
+  // ── Resend sign-in link ────────────────────────────────────────
+  async function handleResend() {
+    if (!lastLoginEmail) return;
+    const btn = document.getElementById('resendBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    try {
+      const res = await fetch('/api/instructor?action=request-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: lastLoginEmail })
+      });
+      if (res.ok) {
+        btn.textContent = 'Sent! Check again';
+        setTimeout(() => { btn.textContent = "Didn't get it? Send again"; btn.disabled = false; }, 5000);
+      } else {
+        btn.textContent = 'Failed — try again';
+        btn.disabled = false;
+      }
+    } catch {
+      btn.textContent = 'Failed — try again';
+      btn.disabled = false;
+    }
   }
 
+  // ── Verify magic link token (two-step: validate then verify) ───
   async function verifyToken(token) {
     try {
-      const res  = await fetch(`/api/instructor?action=verify-token&token=${token}`);
+      // Step 1: Validate (GET — does NOT consume the token)
+      const valRes = await fetch('/api/instructor?action=validate-token&token=' + encodeURIComponent(token));
+      const valData = await valRes.json();
+
+      if (!valRes.ok) {
+        showScreen('sign-in');
+        const err = document.getElementById('loginError');
+        err.textContent = (valData.error || 'Invalid link') + ' Please request a new sign-in link.';
+        err.classList.add('show');
+        return;
+      }
+
+      // Step 2: Consume (POST — marks token as used, returns JWT)
+      const res = await fetch('/api/instructor?action=verify-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
       const data = await res.json();
 
-      if (!res.ok) throw new Error(data.error || 'Invalid link');
+      if (!res.ok) {
+        showScreen('sign-in');
+        const err = document.getElementById('loginError');
+        err.textContent = (data.error || 'Invalid link') + ' Please request a new sign-in link.';
+        err.classList.add('show');
+        return;
+      }
 
-      // Store session
+      // Store session and redirect
       localStorage.setItem('cc_instructor', JSON.stringify(data));
       window.location.href = '/instructor/';
-
-    } catch (e) {
-      // Show error in the form instead
-      document.getElementById('verifyingState').style.display = 'none';
-      document.getElementById('loginForm').style.display       = 'block';
-      const err = document.getElementById('errorMsg');
-      err.textContent = e.message + ' Please request a new sign-in link.';
+    } catch {
+      showScreen('sign-in');
+      const err = document.getElementById('loginError');
+      err.textContent = 'Could not reach the server. Please check your connection and try again.';
       err.classList.add('show');
     }
   }
 
-  // Allow enter key to submit
-  document.getElementById('emailInput')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') requestLink();
+  // ── Join the team: submit enquiry ──────────────────────────────
+  async function handleJoinSubmit(e) {
+    e.preventDefault();
+    const name    = document.getElementById('joinName').value.trim();
+    const email   = document.getElementById('joinEmail').value.trim();
+    const phone   = document.getElementById('joinPhone').value.trim();
+    const message = document.getElementById('joinMessage').value.trim();
+
+    if (!name || !email || !phone) {
+      const err = document.getElementById('joinError');
+      err.textContent = 'Please fill in your name, email, and phone number.';
+      err.classList.add('show');
+      return;
+    }
+
+    const btn = document.getElementById('joinBtn');
+    const err = document.getElementById('joinError');
+    err.classList.remove('show');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    try {
+      const res = await fetch('/api/enquiries?action=submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          enquiryType: 'join-team',
+          message: message || null,
+          marketing: false,
+          submittedAt: new Date().toISOString()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send enquiry');
+
+      showScreen('join-sent');
+    } catch (ex) {
+      err.textContent = ex.message;
+      err.classList.add('show');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Send enquiry';
+    }
+  }
+
+  // Allow enter key to submit login
+  document.getElementById('loginEmail')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); handleLoginSubmit(e); }
   });
 </script>
 </body>

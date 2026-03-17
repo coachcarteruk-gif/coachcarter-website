@@ -318,14 +318,15 @@ When logging a session, learners answer 10 questions across 4 groups (green/ambe
 
 ## Instructor portal
 
-Instructors log in via magic link — no password. An email is sent with a time-limited token; clicking it authenticates them and redirects to their dashboard.
+The instructor login page (`/instructor/login.html`) presents a choice: "I'm a CoachCarter instructor" (magic-link sign in) or "Join the team" (enquiry form for prospective instructors). Magic link login uses the same two-step validate/verify pattern as the learner login to prevent email prefetchers from consuming tokens. Join-the-team submissions go through the existing enquiry system (`api/enquiries.js`) with `enquiry_type: 'join-team'`.
 
 ### API — `api/instructor.js`
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `request-login` | POST | No | Sends magic link to instructor email |
-| `verify-token` | GET | No | Validates token, returns JWT |
+| `validate-token` | GET | No | Lightweight token check (does NOT consume). Prevents email prefetchers from burning tokens |
+| `verify-token` | POST | No | Consumes token, returns JWT. Body: `{ token }` |
 | `schedule` | GET | JWT | Instructor's upcoming confirmed bookings |
 | `complete` | POST | JWT | Mark a lesson as completed |
 | `availability` | GET | JWT | Current weekly availability windows |
@@ -428,6 +429,7 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Homepage quiz update** — quiz results now direct to Learner Hub / Book a Free Trial / Explore Prices
 - **Stale register links** — removed `?tab=register` query params from 9 files (registration is now handled by magic links)
 - **Font consistency** — log-session.html updated to Space Grotesk + Outfit matching the rest of the portal
+- **Instructor login redesign** — choice screen (Sign In / Join the Team), two-step magic link prefetch fix, and "Join the team" enquiry form for prospective instructors
 
 ## What's still to build
 

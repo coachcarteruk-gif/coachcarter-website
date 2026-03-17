@@ -215,27 +215,38 @@ Added the classroom/videos page to the learner portal behind login, accessible f
 Updated the homepage quiz results to direct learners to the Learner Hub, Book a Free Trial, or Explore Prices instead of just the booking page.
 
 ### 2.10 — Magic Link Login Fix ✅ Complete (17 March 2026)
-Fixed magic link login — email clients were pre-fetching the verify link and consuming the token before the learner clicked it.
+Fixed magic link login — email clients were pre-fetching the verify link and consuming the token before the learner clicked it. Applied to both learner and instructor logins.
 
 **What was built:**
 - ✅ New `validate` endpoint (GET) — lightweight token check that does NOT mark it as used
 - ✅ `verify` endpoint changed to POST-only — only browser JavaScript can consume the token
 - ✅ `public/learner/verify.html` — two-step flow: validate (GET) then verify (POST)
-- ✅ Email prefetchers can no longer burn tokens
+- ✅ `api/instructor.js` — new `validate-token` (GET) + `verify-token` changed to POST-only
+- ✅ Email prefetchers can no longer burn tokens on either portal
 
-### 2.11 — Reviews & Testimonials
+### 2.11 — Instructor Login Redesign ✅ Complete (17 March 2026)
+Redesigned the instructor login page as a choice screen with two paths.
+
+**What was built:**
+- ✅ Choice screen: "I'm a CoachCarter instructor" (sign in) or "Join the team" (enquiry)
+- ✅ Sign-in path: same magic-link flow with two-step prefetch protection
+- ✅ Join-the-team path: name, email, phone, message form → submits as `join-team` enquiry type
+- ✅ Enquiry goes through existing `api/enquiries.js` → staff email with "Instructor Application" label
+- ✅ `api/enquiries.js` updated with `join-team` enquiry type label
+
+### 2.12 — Reviews & Testimonials
 Post-lesson review prompt triggered after a lesson is marked completed.
 - Automated email 24 hours after lesson status → completed
 - Simple star rating + comment
 - Optional: display approved reviews publicly
 
-### 2.12 — Waiting List
+### 2.13 — Waiting List
 Capture leads when all instructors are fully booked.
 - "No slots available" state on calendar triggers a waiting list sign-up
 - Notifies admin when someone joins
 - Admin can manually offer a slot and notify the learner
 
-### 2.13 — Referral System
+### 2.14 — Referral System
 Reward learners for recommending friends.
 - Unique referral link per learner
 - Both referrer and new learner receive a credit bonus on first purchase

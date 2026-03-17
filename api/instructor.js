@@ -4,8 +4,11 @@
 //   POST /api/instructor?action=request-login
 //     → sends a magic link to the instructor's email
 //
-//   GET  /api/instructor?action=verify-token&token=X
-//     → validates the magic link token, returns a JWT
+//   GET  /api/instructor?action=validate-token&token=X
+//     → lightweight token check (does NOT consume it — safe from email prefetchers)
+//
+//   POST /api/instructor?action=verify-token
+//     → consumes the token and returns a JWT (body: { token })
 //
 //   GET  /api/instructor?action=schedule        (JWT auth required)
 //     → returns the instructor's upcoming + recent bookings
@@ -66,6 +69,7 @@ module.exports = async (req, res) => {
 
   const action = req.query.action;
   if (action === 'request-login')    return handleRequestLogin(req, res);
+  if (action === 'validate-token')   return handleValidateToken(req, res);
   if (action === 'verify-token')     return handleVerifyToken(req, res);
   if (action === 'schedule')         return handleSchedule(req, res);
   if (action === 'complete')         return handleComplete(req, res);
@@ -163,12 +167,40 @@ async function handleRequestLogin(req, res) {
   }
 }
 
-// ── GET /api/instructor?action=verify-token&token=X ───────────────────────────
-// Validates the magic link token and returns a JWT.
-async function handleVerifyToken(req, res) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-
+// ── GET /api/instructor?action=validate-token&token=X ─────────────────────────
+// Lightweight check — does NOT consume the token.
+// Prevents email-client link prefetchers from burning tokens.
+async function handleValidateToken(req, res) {
   const { token } = req.query;
+  if (!token) return res.status(400).json({ error: 'Token is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [row] = await sql`
+      SELECT t.id, t.expires_at, t.used
+      FROM instructor_login_tokens t
+      WHERE t.token = ${token}
+    `;
+
+    if (!row)                                  return res.status(401).json({ error: 'Invalid login link' });
+    if (row.used)                              return res.status(401).json({ error: 'This login link has already been used' });
+    if (new Date(row.expires_at) < new Date()) return res.status(401).json({ error: 'This login link has expired. Please request a new one.' });
+
+    return res.json({ valid: true });
+  } catch (err) {
+    console.error('instructor validate-token error:', err);
+    return res.status(500).json({ error: 'Validation failed' });
+  }
+}
+
+// ── POST /api/instructor?action=verify-token ──────────────────────────────────
+// Consumes the token and returns a JWT. POST-only to prevent email prefetchers.
+// Body: { token }
+async function handleVerifyToken(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const token = req.body?.token;
   if (!token) return res.status(400).json({ error: 'Token is required' });
 
   try {
@@ -182,8 +214,8 @@ async function handleVerifyToken(req, res) {
       WHERE t.token = ${token}
     `;
 
-    if (!row)                           return res.status(401).json({ error: 'Invalid login link' });
-    if (row.used)                       return res.status(401).json({ error: 'This login link has already been used' });
+    if (!row)                                  return res.status(401).json({ error: 'Invalid login link' });
+    if (row.used)                              return res.status(401).json({ error: 'This login link has already been used' });
     if (new Date(row.expires_at) < new Date()) return res.status(401).json({ error: 'This login link has expired. Please request a new one.' });
 
     // Mark token as used
@@ -192,7 +224,7 @@ async function handleVerifyToken(req, res) {
     `;
 
     // Issue a JWT
-    const secret  = process.env.JWT_SECRET;
+    const secret   = process.env.JWT_SECRET;
     const jwtToken = jwt.sign(
       { id: row.instructor_id, email: row.email, role: 'instructor' },
       secret,
