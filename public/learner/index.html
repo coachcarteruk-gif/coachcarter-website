@@ -627,8 +627,8 @@
   <!-- CONTACT PREFERENCE -->
   <div class="pref-card" id="pref-card">
     <div class="pref-card-left">
-      <div class="pref-card-title">Contact me before lessons</div>
-      <div class="pref-card-sub" id="pref-sub">Let your instructor know you'd like a call or message before each lesson.</div>
+      <div class="pref-card-title">Contact me before my first lesson</div>
+      <div class="pref-card-sub" id="pref-sub">Let your instructor know you'd like a call or message before your first session.</div>
     </div>
     <label class="toggle-wrap">
       <input type="checkbox" id="contactToggle" onchange="toggleContactPref()">
@@ -857,8 +857,8 @@ function renderSessions() {
 function updatePrefSub(isOn) {
   const sub = document.getElementById('pref-sub');
   sub.textContent = isOn
-    ? 'Your instructor will be notified to contact you before each lesson.'
-    : 'Let your instructor know you\'d like a call or message before each lesson.';
+    ? 'Your instructor will be notified to contact you before your first session.'
+    : 'Let your instructor know you\'d like a call or message before your first session.';
 }
 
 async function toggleContactPref() {
