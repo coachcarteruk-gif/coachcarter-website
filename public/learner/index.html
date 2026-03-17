@@ -463,17 +463,14 @@
     .session-skill-pill {
       display: flex;
       align-items: center;
-      gap: 4px;
-      font-size: 0.72rem;
-      padding: 3px 10px;
+      gap: 5px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 4px 12px;
       border-radius: 12px;
       background: var(--surface);
       border: 1px solid var(--border);
       color: var(--primary);
-    }
-    .session-skill-pill .dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
     }
     .session-notes {
       font-size: 0.8rem;
@@ -485,21 +482,12 @@
     /* RATING LEGEND */
     .rating-legend {
       display: flex;
-      gap: 14px;
+      gap: 16px;
       flex-wrap: wrap;
-      font-size: 0.72rem;
+      font-size: 0.78rem;
       color: var(--muted);
       margin-bottom: 12px;
       align-items: center;
-    }
-    .rating-legend .dot {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-right: 4px;
-      vertical-align: middle;
-      flex-shrink: 0;
     }
 
     .empty-state {
@@ -616,38 +604,51 @@
   <!-- RECENT SESSIONS -->
   <div class="section-title" style="margin-top: 28px;">Recent Sessions</div>
   <div class="rating-legend">
-    <span><span class="dot" style="background:#22c55e;"></span>Always</span>
-    <span><span class="dot" style="background:#86efac;"></span>Usually</span>
-    <span><span class="dot" style="background:#f59e0b;"></span>Sometimes</span>
-    <span><span class="dot" style="background:#ef4444;"></span>Needs work</span>
+    <span>🤩 Nailed it</span>
+    <span>😊 OK</span>
+    <span>😬 Struggled</span>
   </div>
   <div id="sessions-list"></div>
 </main>
 
 <script>
-const QUESTIONS = [
-  { key: 'q1_speed_react',     group: 'speed-control',  num: 1,  text: 'I drove at a safe speed and had enough time to react' },
-  { key: 'q2_speed_lane',      group: 'speed-control',  num: 2,  text: 'I slowed down in time to choose the right lane before roundabouts and junctions' },
-  { key: 'q3_mirrors_routine', group: 'speed-control',  num: 3,  text: 'I checked my mirrors every time before moving, stopping, slowing down or turning' },
-  { key: 'q4_mirrors_unexp',   group: 'looking-around', num: 4,  text: 'When something unexpected came up, I still checked my mirrors first' },
-  { key: 'q5_awareness',       group: 'looking-around', num: 5,  text: 'I always knew what was going on around me — not just what was straight ahead' },
-  { key: 'q6_mice_order',      group: 'junctions',      num: 6,  text: 'I checked mirrors, signalled, got in position and adjusted my speed — in the right order' },
-  { key: 'q7_lane_choice',     group: 'junctions',      num: 7,  text: 'I got in the right lane before roundabouts and junctions' },
-  { key: 'q8_safe_to_go',      group: 'junctions',      num: 8,  text: 'I decided early enough whether it was safe to go — so I didn\'t feel rushed' },
-  { key: 'q9_roundabout_space',group: 'junctions',      num: 9,  text: 'I kept enough space and stayed in my lane all the way around roundabouts' },
-  { key: 'q10_reversing',      group: 'reversing',      num: 10, text: 'I reversed slowly, accurately and kept looking all around me' }
+// ── New skill-based system ──
+const SKILLS = [
+  { key: 'speed_choice', label: 'Speed choice' },
+  { key: 'lane_choice',  label: 'Lane choice' },
+  { key: 'mirrors',      label: 'Using mirrors' },
+  { key: 'lane_keeping', label: 'Staying in lane' },
+  { key: 'stay_or_go',   label: 'Stay or go' },
+  { key: 'roundabouts',  label: 'Roundabouts' },
+  { key: 'manoeuvres',   label: 'Manoeuvres' },
 ];
 
-const GROUPS = [
-  { key: 'speed-control',  label: 'Speed & Control',          sub: 'Questions 1–3' },
-  { key: 'looking-around', label: 'Looking Around',            sub: 'Questions 4–5' },
-  { key: 'junctions',      label: 'Junctions & Roundabouts',  sub: 'Questions 6–9' },
-  { key: 'reversing',      label: 'Reversing',                 sub: 'Question 10'  }
-];
+const EMOJI_MAP = { struggled: '😬', ok: '😊', nailed: '🤩' };
+const RATING_DISPLAY = {
+  // New emoji ratings
+  nailed: { emoji: '🤩', label: 'Nailed it', color: '#22c55e' },
+  ok:     { emoji: '😊', label: 'OK',        color: '#f58321' },
+  struggled: { emoji: '😬', label: 'Struggled', color: '#ef4444' },
+  // Legacy ratings (for old sessions)
+  always:    { emoji: '🤩', label: 'Always',    color: '#22c55e' },
+  usually:   { emoji: '😊', label: 'Usually',   color: '#86efac' },
+  sometimes: { emoji: '😊', label: 'Sometimes', color: '#f59e0b' },
+  never:     { emoji: '😬', label: 'Needs work', color: '#ef4444' },
+};
 
-const RATING_LABELS = { always: 'Always', usually: 'Usually', sometimes: 'Sometimes', never: 'Needs work' };
-const SKILL_KEY_LABELS = { 't1_move': 'Moving off', 't1_stop': 'Stopping', 't1_steer': 'Steering', 't1_mirrors': 'Mirror checks', 't1_mice': 'MICE routine', 't1_eval': 'Overall assessment' };
-const SCORE_WEIGHT = { always: 2, usually: 1, sometimes: 0, never: -1 };
+// Skill key → friendly label (includes new + legacy keys)
+const SKILL_LABELS = {};
+SKILLS.forEach(s => { SKILL_LABELS[s.key] = s.label; });
+// Legacy question keys
+const LEGACY_LABELS = {
+  q1_speed_react: 'Speed & react', q2_speed_lane: 'Slowing for lanes',
+  q3_mirrors_routine: 'Mirror routine', q4_mirrors_unexp: 'Mirrors (unexpected)',
+  q5_awareness: 'Awareness', q6_mice_order: 'MICE order',
+  q7_lane_choice: 'Lane choice', q8_safe_to_go: 'Stay or go',
+  q9_roundabout_space: 'Roundabout spacing', q10_reversing: 'Reversing',
+  t1_move: 'Moving off', t1_stop: 'Stopping', t1_steer: 'Steering',
+  t1_mirrors: 'Mirror checks', t1_mice: 'MICE routine', t1_eval: 'Overall'
+};
 
 let AUTH, PROGRESS, SESSIONS_DATA, CREDITS_DATA, BOOKINGS_DATA;
 
@@ -724,65 +725,46 @@ function render() {
 
   const s = PROGRESS.stats;
   document.getElementById('welcome-msg').textContent = `Hi, ${PROGRESS.name} 👋`;
-  const alwaysCount = (PROGRESS.latest_ratings || []).filter(r => r.rating === 'always').length;
-  const rated = (PROGRESS.latest_ratings || []).length;
+
+  // Count "nailed" or legacy "always" across latest ratings
+  const ratingsMap = {};
+  (PROGRESS.latest_ratings || []).forEach(r => { ratingsMap[r.skill_key] = r.rating; });
+
+  const nailedit = SKILLS.filter(s => ratingsMap[s.key] === 'nailed').length;
+  const rated = SKILLS.filter(s => ratingsMap[s.key]).length;
   document.getElementById('welcome-sub').textContent = rated === 0
     ? 'Log your first session to start tracking progress.'
-    : `${alwaysCount} of ${QUESTIONS.length} areas rated Always — keep going!`;
+    : `${nailedit} of ${SKILLS.length} skills at 🤩 — keep going!`;
 
   document.getElementById('stat-sessions').textContent = s.total_sessions;
   document.getElementById('stat-hours').textContent = (s.total_minutes / 60).toFixed(1);
   document.getElementById('stat-instructor').textContent = s.instructor_sessions;
   document.getElementById('stat-private').textContent = s.private_sessions;
 
-  const ratingsMap = {};
-  (PROGRESS.latest_ratings || []).forEach(r => { ratingsMap[r.skill_key] = r.rating; });
-
-  const container = document.getElementById('progress-cards');
-  container.innerHTML = '';
-  GROUPS.forEach((group, i) => renderProgressCard(group, ratingsMap, container, i === 0));
+  renderProgressCards(ratingsMap);
   renderSessions();
 }
 
-function renderProgressCard(group, ratingsMap, container, expanded) {
-  const questions = QUESTIONS.filter(q => q.group === group.key);
-  const onTrackCount = questions.filter(q => { const r = ratingsMap[q.key]; return r === 'always' || r === 'usually'; }).length;
-  const ratedCount = questions.filter(q => ratingsMap[q.key]).length;
-  const pct = ratedCount > 0 ? Math.round((onTrackCount / questions.length) * 100) : 0;
+function renderProgressCards(ratingsMap) {
+  const container = document.getElementById('progress-cards');
+  container.innerHTML = '';
 
-  const questionsHTML = questions.map(q => {
-    const rating = ratingsMap[q.key];
-    const label = rating ? RATING_LABELS[rating] : 'Not rated';
-    const badgeClass = rating ? `badge-${rating}` : 'badge-none';
-    return `<div class="q-row"><span class="q-num">Q${q.num}</span><span class="q-text">${q.text}</span><span class="q-badge ${badgeClass}">${label}</span></div>`;
-  }).join('');
+  SKILLS.forEach(skill => {
+    const rating = ratingsMap[skill.key];
+    const display = rating ? RATING_DISPLAY[rating] : null;
 
-  const card = document.createElement('div');
-  card.className = 'progress-card';
-  const bodyId = `pg-body-${group.key}`;
-  const chevId = `pg-chev-${group.key}`;
+    const card = document.createElement('div');
+    card.className = 'progress-card';
+    card.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:16px 20px; cursor:default;';
 
-  card.innerHTML = `
-    <div class="progress-header" onclick="toggleGroup('${group.key}')">
-      <div class="progress-header-left"><div><div class="progress-group-name">${group.label}</div><div class="progress-group-sub">${group.sub}</div></div></div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:0.75rem;color:var(--muted);">${ratedCount}/${questions.length}</span>
-        ${ratedCount > 0 ? `<span style="font-size:0.8rem;font-weight:700;color:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}">${pct}%</span>` : ''}
-        <span class="chevron${expanded ? ' open' : ''}" id="${chevId}">▼</span>
-      </div>
-    </div>
-    <div class="progress-body${expanded ? ' open' : ''}" id="${bodyId}">
-      ${questionsHTML}
-      ${ratedCount > 0 ? `<div class="group-score"><div class="group-score-label"><span class="title">On track (Usually or Always)</span><span class="pct" style="color:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}">${pct}%</span></div><div class="score-bar-bg"><div class="score-bar-fill" style="width:${pct}%;background:${pct >= 75 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'}"></div></div><div class="score-note">${onTrackCount} of ${questions.length} questions at Usually or Always</div></div>` : `<div class="group-score"><div class="score-note" style="text-align:center;padding:4px 0;">Log a session to see your progress here.</div></div>`}
-    </div>`;
-  container.appendChild(card);
-}
-
-function toggleGroup(key) {
-  const body = document.getElementById(`pg-body-${key}`);
-  const chev = document.getElementById(`pg-chev-${key}`);
-  const isOpen = body.classList.toggle('open');
-  chev.classList.toggle('open', isOpen);
+    card.innerHTML = `
+      <span style="font-size:0.95rem; font-weight:600; color:var(--primary);">${skill.label}</span>
+      ${display
+        ? `<span style="font-size:1.4rem;" title="${display.label}">${display.emoji}</span>`
+        : `<span style="font-size:0.78rem; color:var(--muted); font-style:italic;">Not rated</span>`
+      }`;
+    container.appendChild(card);
+  });
 }
 
 function renderSessions() {
@@ -795,34 +777,18 @@ function renderSessions() {
   el.innerHTML = SESSIONS_DATA.map(s => {
     const date = new Date(s.session_date);
     const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    const typeChip = s.session_type === 'private' ? `<span class="session-chip chip-private">Private Practice</span>` : `<span class="session-chip chip-instructor">With Instructor</span>`;
+    const typeChip = s.session_type === 'private' ? `<span class="session-chip chip-private">Private</span>` : `<span class="session-chip chip-instructor">Instructor</span>`;
     const durationChip = s.duration_minutes ? `<span class="session-chip chip-duration">${s.duration_minutes} min</span>` : '';
 
     const ratingsHTML = (s.ratings || []).map(r => {
-      const dotColor = r.rating === 'always' ? '#22c55e' : r.rating === 'usually' ? '#86efac' : r.rating === 'sometimes' ? '#f59e0b' : '#ef4444';
-      const qLabel = findQuestionLabel(r.skill_key);
-      const noteIcon = r.note ? ` <span style="opacity:0.7">📝</span>` : '';
-      return `<div class="session-skill-pill"><div class="dot" style="background:${dotColor}"></div>${qLabel}${noteIcon}</div>`;
+      const display = RATING_DISPLAY[r.rating] || { emoji: '❓', label: r.rating, color: '#94a3b8' };
+      const label = SKILL_LABELS[r.skill_key] || LEGACY_LABELS[r.skill_key] || r.skill_key.replace(/_/g, ' ');
+      return `<div class="session-skill-pill"><span style="font-size:1rem;">${display.emoji}</span> ${label}</div>`;
     }).join('');
 
-    const qNotesWithContent = (s.ratings || []).filter(r => r.note);
-    const qNotesHTML = qNotesWithContent.length > 0
-      ? `<div class="q-notes-list">${qNotesWithContent.map(r => {
-          const q = QUESTIONS.find(q => q.key === r.skill_key);
-          const label = q ? `Q${q.num}` : r.skill_key;
-          return `<div class="q-note-item"><span class="q-note-label">${label}</span><span class="q-note-text">${r.note}</span></div>`;
-        }).join('')}</div>` : '';
-
     const notesHTML = s.notes ? `<div class="session-notes">"${s.notes}"</div>` : '';
-    return `<div class="session-card"><div class="session-meta"><span class="session-date">📅 ${dateStr}</span>${typeChip}${durationChip}</div>${ratingsHTML ? `<div class="session-ratings">${ratingsHTML}</div>` : ''}${qNotesHTML}${notesHTML}</div>`;
+    return `<div class="session-card"><div class="session-meta"><span class="session-date">📅 ${dateStr}</span>${typeChip}${durationChip}</div>${ratingsHTML ? `<div class="session-ratings">${ratingsHTML}</div>` : ''}${notesHTML}</div>`;
   }).join('');
-}
-
-function findQuestionLabel(key) {
-  if (SKILL_KEY_LABELS[key]) return SKILL_KEY_LABELS[key];
-  const q = QUESTIONS.find(q => q.key === key);
-  if (q) { const words = q.text.split(' '); return words.slice(0, 4).join(' ') + (words.length > 4 ? '…' : ''); }
-  return key.replace(/^[a-z]\d+_/, '').replace(/_/g, ' ');
 }
 </script>
 

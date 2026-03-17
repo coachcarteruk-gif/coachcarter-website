@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Log a Session — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -13,30 +14,33 @@
       --primary:    #262626;
       --accent:     #f58321;
       --accent-dk:  #e07518;
-      --accent-lt:  #fff4ec;
+      --accent-lt:  #fff7ed;
       --accent-mid: rgba(245,131,33,0.12);
-      --muted:      #797879;
-      --border:     #e0e0e0;
-      --bg:         #f9f9f9;
-      --surface:    #f9f9f9;
+      --muted:      #64748b;
+      --border:     #e2e8f0;
+      --bg:         #f8fafc;
+      --surface:    #f1f5f9;
       --white:      #ffffff;
       --green:      #22c55e;
       --amber:      #f59e0b;
       --red:        #ef4444;
-      --font-head:  'Bricolage Grotesque', sans-serif;
-      --font-body:  'Lato', sans-serif;
+      --font-head:  'Space Grotesk', sans-serif;
+      --font-body:  'Outfit', sans-serif;
       --radius:     14px;
     }
 
     body {
-      font-family: var(--font-body), system-ui, sans-serif;
+      font-family: var(--font-body);
       background: var(--bg);
       color: var(--primary);
       min-height: 100vh;
     }
 
+    /* ── HEADER ── */
     header {
-      background: var(--surface);
+      background: rgba(255,255,255,0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
       padding: 0 20px;
       display: flex;
@@ -58,11 +62,342 @@
       transition: color 0.2s;
     }
     .back-btn:hover { color: var(--accent); }
-    .page-title { font-size: 0.95rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); }
+    .page-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-family: var(--font-head);
+      color: var(--primary);
+    }
 
-    main { max-width: 600px; margin: 0 auto; padding: 28px 16px 80px; }
+    /* ── PROGRESS BAR ── */
+    .progress-wrap {
+      padding: 16px 20px 0;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .progress-bar-bg {
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 4px;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .progress-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 600;
+      margin-top: 8px;
+      text-align: center;
+    }
 
-    /* BOTTOM NAV */
+    /* ── MAIN ── */
+    main {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px 16px 100px;
+    }
+
+    /* ── STEP CONTAINER ── */
+    .step {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .step.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── STEP HEADER ── */
+    .step-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .step-emoji {
+      font-size: 2.2rem;
+      margin-bottom: 8px;
+    }
+    .step-title {
+      font-family: var(--font-head);
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+    .step-sub {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    /* ── FORM CARD ── */
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 14px;
+    }
+
+    /* ── FORM ELEMENTS ── */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-group:last-child { margin-bottom: 0; }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-family: var(--font-head);
+    }
+    input[type="date"],
+    input[type="number"],
+    textarea {
+      width: 100%;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--primary);
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(245,131,33,0.1);
+    }
+    textarea { resize: vertical; min-height: 72px; }
+
+    .type-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .type-btn {
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      color: var(--muted);
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 14px 10px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .type-btn:hover { border-color: var(--accent); color: var(--primary); }
+    .type-btn.selected {
+      background: var(--accent-lt);
+      border-color: var(--accent);
+      color: var(--accent-dk);
+      font-weight: 600;
+    }
+
+    /* ── SKILL RATING CARDS ── */
+    .skill-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      transition: border-color 0.2s;
+    }
+    .skill-card.rated { border-color: rgba(245,131,33,0.3); }
+
+    .skill-label {
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 14px;
+    }
+
+    .emoji-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .emoji-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 8px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .emoji-btn:hover {
+      border-color: var(--muted);
+      transform: translateY(-1px);
+    }
+    .emoji-btn .emoji { font-size: 1.8rem; line-height: 1; }
+    .emoji-btn .emoji-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      font-family: var(--font-body);
+    }
+
+    .emoji-btn.sel-struggled {
+      background: rgba(239,68,68,0.08);
+      border-color: var(--red);
+    }
+    .emoji-btn.sel-struggled .emoji-label { color: #dc2626; }
+
+    .emoji-btn.sel-ok {
+      background: rgba(245,131,33,0.08);
+      border-color: var(--accent);
+    }
+    .emoji-btn.sel-ok .emoji-label { color: var(--accent-dk); }
+
+    .emoji-btn.sel-nailed {
+      background: rgba(34,197,94,0.08);
+      border-color: var(--green);
+    }
+    .emoji-btn.sel-nailed .emoji-label { color: #15803d; }
+
+    /* ── NOTES STEP ── */
+    .notes-textarea {
+      min-height: 120px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    /* ── SUMMARY ── */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .summary-pill {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 12px 14px;
+      text-align: center;
+    }
+    .summary-pill .val {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--primary);
+    }
+    .summary-pill .lbl {
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+    .summary-skills {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .summary-skill-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--bg);
+      border-radius: 10px;
+    }
+    .summary-skill-name {
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--primary);
+    }
+    .summary-skill-emoji { font-size: 1.3rem; }
+    .summary-skill-skip {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── BUTTONS ── */
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+    }
+    .btn-back {
+      flex: 0 0 auto;
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 14px 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-back:hover { border-color: var(--primary); color: var(--primary); }
+
+    .btn-next {
+      flex: 1;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 14px 20px;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s, transform 0.15s;
+    }
+    .btn-next:hover { background: var(--accent-dk); transform: translateY(-1px); }
+    .btn-next:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-skip {
+      display: block;
+      text-align: center;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-family: var(--font-body);
+      transition: color 0.2s;
+      width: 100%;
+    }
+    .btn-skip:hover { color: var(--primary); }
+
+    /* ── ERROR ── */
+    .error-msg {
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.2);
+      color: #dc2626;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .error-msg.show { display: block; }
+
+    /* ── BOTTOM NAV ── */
     .bottom-nav {
       position: fixed;
       bottom: 0; left: 0; right: 0;
@@ -71,7 +406,7 @@
       display: flex;
       z-index: 200;
       padding-bottom: env(safe-area-inset-bottom);
-      box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.04);
     }
     .bottom-nav-item {
       flex: 1;
@@ -90,199 +425,9 @@
     .bottom-nav-item.active { color: var(--accent); }
     .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
 
-    .form-section {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      margin-bottom: 14px;
-    }
-    .form-section-title {
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      margin-bottom: 16px;
-      font-family: var(--font-head);
-    }
-
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .form-group { margin-bottom: 14px; }
-    .form-group:last-child { margin-bottom: 0; }
-
-    label {
-      display: block;
-      font-size: 0.78rem;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 6px;
-      font-family: var(--font-head);
-    }
-    input[type="date"],
-    input[type="number"],
-    textarea {
-      width: 100%;
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--primary);
-      font-family: var(--font-body);
-      font-size: 0.9rem;
-      padding: 10px 12px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    input:focus, textarea:focus { border-color: var(--accent); }
-    textarea { resize: vertical; min-height: 72px; }
-    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0); cursor: pointer; }
-
-    .type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .type-btn {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--muted);
-      font-family: var(--font-body);
-      font-size: 0.88rem;
-      font-weight: 500;
-      padding: 10px;
-      cursor: pointer;
-      text-align: center;
-      transition: all 0.15s;
-    }
-    .type-btn.selected-instructor { background: var(--accent-mid); border-color: var(--accent); color: var(--accent); font-weight: 600; }
-    .type-btn.selected-private { background: var(--accent-mid); border-color: var(--accent); color: var(--accent); font-weight: 600; }
-
-    /* QUESTION GROUPS */
-    .q-group-title {
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      margin: 4px 0 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--border);
-      font-family: var(--font-head);
-    }
-
-    .question-item {
-      padding: 14px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .question-item:last-child { border-bottom: none; padding-bottom: 4px; }
-
-    .question-num {
-      font-size: 0.7rem;
-      font-weight: 700;
-      color: var(--muted);
-      margin-bottom: 4px;
-      font-family: var(--font-head);
-    }
-    .question-text {
-      font-size: 0.95rem;
-      font-weight: 500;
-      line-height: 1.4;
-      margin-bottom: 12px;
-      color: var(--primary);
-      font-family: var(--font-body);
-    }
-
-    .rating-group {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 5px;
-    }
-    .rating-btn {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--muted);
-      font-family: var(--font-body);
-      font-size: 0.75rem;
-      font-weight: 500;
-      padding: 9px 4px;
-      cursor: pointer;
-      text-align: center;
-      transition: all 0.15s;
-      line-height: 1.2;
-    }
-    .rating-btn:hover { border-color: var(--muted); color: var(--primary); }
-
-    .rating-btn.sel-never    { background: rgba(239,68,68,0.12);  border-color: var(--red);   color: #dc2626; font-weight: 700; }
-    .rating-btn.sel-sometimes{ background: rgba(245,158,11,0.12); border-color: var(--amber); color: #d97706; font-weight: 700; }
-    .rating-btn.sel-usually  { background: rgba(34,197,94,0.12); border-color: var(--green);  color: #15803d; font-weight: 700; }
-    .rating-btn.sel-always   { background: rgba(34,197,94,0.12);  border-color: var(--green); color: #15803d; font-weight: 700; }
-
-    /* PER-QUESTION NOTE */
-    .note-row {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 8px;
-    }
-    .note-toggle-btn {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--muted);
-      font-family: var(--font-body);
-      font-size: 0.74rem;
-      font-weight: 500;
-      padding: 4px 10px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      transition: color 0.15s, border-color 0.15s;
-    }
-    .note-toggle-btn:hover { color: var(--primary); border-color: var(--muted); }
-    .note-toggle-btn.has-note { border-color: var(--accent); color: var(--accent); }
-    .note-input-wrap {
-      display: none;
-      margin-top: 8px;
-    }
-    .note-input-wrap.open { display: block; }
-    .note-input-wrap textarea {
-      min-height: 56px;
-      font-size: 0.85rem;
-      padding: 8px 10px;
-    }
-
-    .save-btn {
-      width: 100%;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius);
-      font-family: var(--font-head);
-      font-size: 1rem;
-      font-weight: 700;
-      padding: 16px;
-      cursor: pointer;
-      margin-top: 8px;
-      transition: background 0.2s, opacity 0.2s;
-    }
-    .save-btn:hover { background: var(--accent-dk); }
-    .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-    .error-msg {
-      background: rgba(239,68,68,0.12);
-      border: 1px solid rgba(239,68,68,0.3);
-      color: #dc2626;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 0.85rem;
-      margin-bottom: 12px;
-      display: none;
-      font-family: var(--font-body);
-    }
-    .error-msg.show { display: block; }
-
     @media (max-width: 480px) {
       .form-row { grid-template-columns: 1fr; }
+      .summary-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
@@ -294,161 +439,401 @@
   <div style="width:80px"></div>
 </header>
 
+<div class="progress-wrap">
+  <div class="progress-bar-bg">
+    <div class="progress-bar-fill" id="progress-fill" style="width: 12.5%"></div>
+  </div>
+  <div class="progress-label" id="progress-label">Step 1 of 8</div>
+</div>
+
 <main>
   <div class="error-msg" id="error-msg"></div>
 
-  <!-- SESSION DETAILS -->
-  <div class="form-section">
-    <div class="form-section-title">Session Details</div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>Date</label>
-        <input type="date" id="session-date">
+  <!-- ═══ STEP 1: Session details ═══ -->
+  <div class="step active" id="step-1">
+    <div class="step-header">
+      <div class="step-emoji">📋</div>
+      <div class="step-title">Session details</div>
+      <div class="step-sub">Quick basics about today's drive</div>
+    </div>
+
+    <div class="card">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="session-date">
+        </div>
+        <div class="form-group">
+          <label>Duration (mins)</label>
+          <input type="number" id="duration" placeholder="e.g. 90" min="1" max="360">
+        </div>
       </div>
       <div class="form-group">
-        <label>Duration (minutes)</label>
-        <input type="number" id="duration" placeholder="e.g. 90" min="1" max="360">
+        <label>Session type</label>
+        <div class="type-toggle">
+          <button class="type-btn selected" id="btn-instructor" onclick="setType('instructor')">With Instructor</button>
+          <button class="type-btn" id="btn-private" onclick="setType('private')">Private Practice</button>
+        </div>
       </div>
     </div>
-    <div class="form-group">
-      <label>Session Type</label>
-      <div class="type-toggle">
-        <button class="type-btn selected-instructor" id="btn-instructor" onclick="setType('instructor')">🧑‍🏫 With Instructor</button>
-        <button class="type-btn" id="btn-private" onclick="setType('private')">🚗 Private Practice</button>
-      </div>
-    </div>
-    <div class="form-group">
-      <label>Notes (optional)</label>
-      <textarea id="notes" placeholder="How did it go? Anything to remember for next time…"></textarea>
+
+    <div class="btn-row">
+      <button class="btn-next" onclick="goTo(2)">Next</button>
     </div>
   </div>
 
-  <!-- QUESTIONS -->
-  <div class="form-section">
-    <div class="form-section-title">How did this session go?</div>
+  <!-- ═══ STEP 2: Speed choice ═══ -->
+  <div class="step" id="step-2">
+    <div class="step-header">
+      <div class="step-emoji">⚡</div>
+      <div class="step-title">Speed choice</div>
+      <div class="step-sub">Picking the right speed for the situation</div>
+    </div>
 
-    <div class="q-group-title">Speed &amp; Control</div>
-    <div id="q-speed-control"></div>
+    <div class="skill-card" id="card-speed_choice">
+      <div class="skill-label">Choosing a safe speed</div>
+      <div class="emoji-row">
+        <button class="emoji-btn" onclick="rate('speed_choice','struggled',this)">
+          <span class="emoji">😬</span>
+          <span class="emoji-label">Struggled</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('speed_choice','ok',this)">
+          <span class="emoji">😊</span>
+          <span class="emoji-label">OK</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('speed_choice','nailed',this)">
+          <span class="emoji">🤩</span>
+          <span class="emoji-label">Nailed it</span>
+        </button>
+      </div>
+    </div>
 
-    <div class="q-group-title" style="margin-top:16px;">Looking Around</div>
-    <div id="q-looking-around"></div>
+    <div class="skill-card" id="card-lane_choice">
+      <div class="skill-label">Slowing for junctions & lanes</div>
+      <div class="emoji-row">
+        <button class="emoji-btn" onclick="rate('lane_choice','struggled',this)">
+          <span class="emoji">😬</span>
+          <span class="emoji-label">Struggled</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('lane_choice','ok',this)">
+          <span class="emoji">😊</span>
+          <span class="emoji-label">OK</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('lane_choice','nailed',this)">
+          <span class="emoji">🤩</span>
+          <span class="emoji-label">Nailed it</span>
+        </button>
+      </div>
+    </div>
 
-    <div class="q-group-title" style="margin-top:16px;">Junctions &amp; Roundabouts</div>
-    <div id="q-junctions"></div>
-
-    <div class="q-group-title" style="margin-top:16px;">Reversing</div>
-    <div id="q-reversing"></div>
+    <div class="btn-row">
+      <button class="btn-back" onclick="goTo(1)">Back</button>
+      <button class="btn-next" onclick="goTo(3)">Next</button>
+    </div>
+    <button class="btn-skip" onclick="goTo(3)">Skip this step</button>
   </div>
 
-  <button class="save-btn" id="save-btn" onclick="saveSession()">Save Session →</button>
+  <!-- ═══ STEP 3: Using mirrors ═══ -->
+  <div class="step" id="step-3">
+    <div class="step-header">
+      <div class="step-emoji">🪞</div>
+      <div class="step-title">Using mirrors</div>
+      <div class="step-sub">Checking before you change anything</div>
+    </div>
+
+    <div class="skill-card" id="card-mirrors">
+      <div class="skill-label">Mirror checks</div>
+      <div class="emoji-row">
+        <button class="emoji-btn" onclick="rate('mirrors','struggled',this)">
+          <span class="emoji">😬</span>
+          <span class="emoji-label">Struggled</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('mirrors','ok',this)">
+          <span class="emoji">😊</span>
+          <span class="emoji-label">OK</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('mirrors','nailed',this)">
+          <span class="emoji">🤩</span>
+          <span class="emoji-label">Nailed it</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-back" onclick="goTo(2)">Back</button>
+      <button class="btn-next" onclick="goTo(4)">Next</button>
+    </div>
+    <button class="btn-skip" onclick="goTo(4)">Skip this step</button>
+  </div>
+
+  <!-- ═══ STEP 4: Staying in lane ═══ -->
+  <div class="step" id="step-4">
+    <div class="step-header">
+      <div class="step-emoji">🛣️</div>
+      <div class="step-title">Staying in lane</div>
+      <div class="step-sub">Holding your position on the road</div>
+    </div>
+
+    <div class="skill-card" id="card-lane_keeping">
+      <div class="skill-label">Lane discipline</div>
+      <div class="emoji-row">
+        <button class="emoji-btn" onclick="rate('lane_keeping','struggled',this)">
+          <span class="emoji">😬</span>
+          <span class="emoji-label">Struggled</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('lane_keeping','ok',this)">
+          <span class="emoji">😊</span>
+          <span class="emoji-label">OK</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('lane_keeping','nailed',this)">
+          <span class="emoji">🤩</span>
+          <span class="emoji-label">Nailed it</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-back" onclick="goTo(3)">Back</button>
+      <button class="btn-next" onclick="goTo(5)">Next</button>
+    </div>
+    <button class="btn-skip" onclick="goTo(5)">Skip this step</button>
+  </div>
+
+  <!-- ═══ STEP 5: Stay or go decisions ═══ -->
+  <div class="step" id="step-5">
+    <div class="step-header">
+      <div class="step-emoji">🚦</div>
+      <div class="step-title">"Stay or go" decisions</div>
+      <div class="step-sub">Judging gaps and committing confidently</div>
+    </div>
+
+    <div class="skill-card" id="card-stay_or_go">
+      <div class="skill-label">Junction decisions</div>
+      <div class="emoji-row">
+        <button class="emoji-btn" onclick="rate('stay_or_go','struggled',this)">
+          <span class="emoji">😬</span>
+          <span class="emoji-label">Struggled</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('stay_or_go','ok',this)">
+          <span class="emoji">😊</span>
+          <span class="emoji-label">OK</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('stay_or_go','nailed',this)">
+          <span class="emoji">🤩</span>
+          <span class="emoji-label">Nailed it</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-back" onclick="goTo(4)">Back</button>
+      <button class="btn-next" onclick="goTo(6)">Next</button>
+    </div>
+    <button class="btn-skip" onclick="goTo(6)">Skip this step</button>
+  </div>
+
+  <!-- ═══ STEP 6: Roundabouts ═══ -->
+  <div class="step" id="step-6">
+    <div class="step-header">
+      <div class="step-emoji">🔄</div>
+      <div class="step-title">Roundabouts</div>
+      <div class="step-sub">Lane choice, spacing, and getting round smoothly</div>
+    </div>
+
+    <div class="skill-card" id="card-roundabouts">
+      <div class="skill-label">Roundabout confidence</div>
+      <div class="emoji-row">
+        <button class="emoji-btn" onclick="rate('roundabouts','struggled',this)">
+          <span class="emoji">😬</span>
+          <span class="emoji-label">Struggled</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('roundabouts','ok',this)">
+          <span class="emoji">😊</span>
+          <span class="emoji-label">OK</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('roundabouts','nailed',this)">
+          <span class="emoji">🤩</span>
+          <span class="emoji-label">Nailed it</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-back" onclick="goTo(5)">Back</button>
+      <button class="btn-next" onclick="goTo(7)">Next</button>
+    </div>
+    <button class="btn-skip" onclick="goTo(7)">Skip this step</button>
+  </div>
+
+  <!-- ═══ STEP 7: Manoeuvres ═══ -->
+  <div class="step" id="step-7">
+    <div class="step-header">
+      <div class="step-emoji">🅿️</div>
+      <div class="step-title">Manoeuvres</div>
+      <div class="step-sub">Reversing, parking, and slow-speed control</div>
+    </div>
+
+    <div class="skill-card" id="card-manoeuvres">
+      <div class="skill-label">Manoeuvre control</div>
+      <div class="emoji-row">
+        <button class="emoji-btn" onclick="rate('manoeuvres','struggled',this)">
+          <span class="emoji">😬</span>
+          <span class="emoji-label">Struggled</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('manoeuvres','ok',this)">
+          <span class="emoji">😊</span>
+          <span class="emoji-label">OK</span>
+        </button>
+        <button class="emoji-btn" onclick="rate('manoeuvres','nailed',this)">
+          <span class="emoji">🤩</span>
+          <span class="emoji-label">Nailed it</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-back" onclick="goTo(6)">Back</button>
+      <button class="btn-next" onclick="goTo(8)">Next</button>
+    </div>
+    <button class="btn-skip" onclick="goTo(8)">Skip this step</button>
+  </div>
+
+  <!-- ═══ STEP 8: Anything else + save ═══ -->
+  <div class="step" id="step-8">
+    <div class="step-header">
+      <div class="step-emoji">💬</div>
+      <div class="step-title">Anything else?</div>
+      <div class="step-sub">Jot down anything worth remembering</div>
+    </div>
+
+    <div class="card">
+      <textarea
+        id="notes"
+        class="notes-textarea"
+        placeholder="What stood out today? Any moments, areas, or things your instructor mentioned..."
+      ></textarea>
+    </div>
+
+    <!-- Summary -->
+    <div class="card" id="summary-card" style="display:none;">
+      <div style="font-family:var(--font-head); font-weight:700; font-size:0.88rem; color:var(--muted); margin-bottom:14px;">Session summary</div>
+      <div class="summary-grid" id="summary-meta"></div>
+      <div class="summary-skills" id="summary-skills"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-back" onclick="goTo(7)">Back</button>
+      <button class="btn-next" id="save-btn" onclick="saveSession()">Save Session</button>
+    </div>
+  </div>
+
 </main>
 
 <script>
-const QUESTIONS = [
-  { key: 'q1_speed_react',    group: 'speed-control',   num: 1,  text: 'I drove at a safe speed and had enough time to react' },
-  { key: 'q2_speed_lane',     group: 'speed-control',   num: 2,  text: 'I slowed down in time to choose the right lane before roundabouts and junctions' },
-  { key: 'q3_mirrors_routine',group: 'speed-control',   num: 3,  text: 'I checked my mirrors every time before moving, stopping, slowing down or turning' },
-  { key: 'q4_mirrors_unexp',  group: 'looking-around',  num: 4,  text: 'When something unexpected came up, I still checked my mirrors first' },
-  { key: 'q5_awareness',      group: 'looking-around',  num: 5,  text: 'I always knew what was going on around me — not just what was straight ahead' },
-  { key: 'q6_mice_order',     group: 'junctions',       num: 6,  text: 'I checked mirrors, signalled, got in position and adjusted my speed — in the right order' },
-  { key: 'q7_lane_choice',    group: 'junctions',       num: 7,  text: 'I got in the right lane before roundabouts and junctions' },
-  { key: 'q8_safe_to_go',     group: 'junctions',       num: 8,  text: 'I decided early enough whether it was safe to go — so I didn\'t feel rushed' },
-  { key: 'q9_roundabout_space',group:'junctions',        num: 9,  text: 'I kept enough space and stayed in my lane all the way around roundabouts' },
-  { key: 'q10_reversing',     group: 'reversing',       num: 10, text: 'I reversed slowly, accurately and kept looking all around me' }
+// ── Skills config ──
+const SKILLS = [
+  { key: 'speed_choice', label: 'Speed choice',      step: 2 },
+  { key: 'lane_choice',  label: 'Lane choice',       step: 2 },
+  { key: 'mirrors',      label: 'Using mirrors',     step: 3 },
+  { key: 'lane_keeping', label: 'Staying in lane',   step: 4 },
+  { key: 'stay_or_go',   label: 'Stay or go',        step: 5 },
+  { key: 'roundabouts',  label: 'Roundabouts',       step: 6 },
+  { key: 'manoeuvres',   label: 'Manoeuvres',        step: 7 },
 ];
 
-const RATINGS = [
-  { value: 'never',     label: 'Never' },
-  { value: 'sometimes', label: 'Sometimes' },
-  { value: 'usually',   label: 'Usually' },
-  { value: 'always',    label: 'Always' }
-];
+const EMOJI_MAP = {
+  struggled: '😬',
+  ok:        '😊',
+  nailed:    '🤩'
+};
 
-let AUTH, currentType = 'instructor';
+const TOTAL_STEPS = 8;
+let currentStep = 1;
+let currentType = 'instructor';
+let AUTH;
 const ratings = {};
-const questionNotes = {};
 
+// ── Auth ──
 window.addEventListener('DOMContentLoaded', () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (!AUTH?.token) { window.location.href = '/learner/'; return; }
-
+  if (!AUTH?.token) { window.location.href = '/learner/login.html?redirect=/learner/log-session.html'; return; }
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
-
-  // Render questions into their groups
-  const groups = { 'speed-control': [], 'looking-around': [], 'junctions': [], 'reversing': [] };
-  QUESTIONS.forEach(q => groups[q.group].push(q));
-
-  Object.entries(groups).forEach(([groupKey, qs]) => {
-    const container = document.getElementById(`q-${groupKey}`);
-    if (!container) return;
-    container.innerHTML = qs.map(q => `
-      <div class="question-item">
-        <div class="question-num">Q${q.num}</div>
-        <div class="question-text">${q.text}</div>
-        <div class="rating-group" id="group-${q.key}">
-          ${RATINGS.map(r => `
-            <button class="rating-btn" onclick="setRating('${q.key}', '${r.value}', this)">
-              ${r.label}
-            </button>`).join('')}
-        </div>
-        <div class="note-row">
-          <button class="note-toggle-btn" id="note-btn-${q.key}" onclick="toggleNote('${q.key}')">
-            ✎ Add note
-          </button>
-        </div>
-        <div class="note-input-wrap" id="note-wrap-${q.key}">
-          <textarea
-            id="note-${q.key}"
-            placeholder="What happened here? Any specific moment worth remembering…"
-            oninput="updateNoteBtn('${q.key}')"
-          ></textarea>
-        </div>
-      </div>`).join('');
-  });
 });
 
-function setType(type) {
-  currentType = type;
-  document.getElementById('btn-instructor').className = type === 'instructor' ? 'type-btn selected-instructor' : 'type-btn';
-  document.getElementById('btn-private').className   = type === 'private'    ? 'type-btn selected-private'    : 'type-btn';
+// ── Navigation ──
+function goTo(step) {
+  // Validate step 1
+  if (currentStep === 1 && step > 1) {
+    const date = document.getElementById('session-date').value;
+    if (!date) { showError('Please pick a date'); return; }
+  }
+  hideError();
+  document.getElementById(`step-${currentStep}`).classList.remove('active');
+  currentStep = step;
+  document.getElementById(`step-${currentStep}`).classList.add('active');
+  updateProgress();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Build summary on final step
+  if (step === TOTAL_STEPS) buildSummary();
 }
 
-function setRating(key, value, btn) {
+function updateProgress() {
+  const pct = (currentStep / TOTAL_STEPS) * 100;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = `Step ${currentStep} of ${TOTAL_STEPS}`;
+}
+
+// ── Session type ──
+function setType(type) {
+  currentType = type;
+  document.getElementById('btn-instructor').className = 'type-btn' + (type === 'instructor' ? ' selected' : '');
+  document.getElementById('btn-private').className = 'type-btn' + (type === 'private' ? ' selected' : '');
+}
+
+// ── Rate a skill ──
+function rate(key, value, btn) {
   ratings[key] = value;
-  const group = document.getElementById(`group-${key}`);
-  group.querySelectorAll('.rating-btn').forEach(b => b.className = 'rating-btn');
+  // Clear siblings
+  const card = document.getElementById(`card-${key}`);
+  card.classList.add('rated');
+  card.querySelectorAll('.emoji-btn').forEach(b => {
+    b.className = 'emoji-btn';
+  });
   btn.classList.add(`sel-${value}`);
 }
 
-function toggleNote(key) {
-  const wrap = document.getElementById(`note-wrap-${key}`);
-  const isOpen = wrap.classList.toggle('open');
-  if (isOpen) {
-    document.getElementById(`note-${key}`).focus();
-  }
-  updateNoteBtn(key);
+// ── Summary ──
+function buildSummary() {
+  const date = document.getElementById('session-date').value;
+  const duration = document.getElementById('duration').value;
+  const dateStr = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+  document.getElementById('summary-meta').innerHTML = `
+    <div class="summary-pill"><div class="val">${dateStr}</div><div class="lbl">Date</div></div>
+    <div class="summary-pill"><div class="val">${duration ? duration + ' min' : '—'}</div><div class="lbl">Duration</div></div>
+    <div class="summary-pill"><div class="val">${currentType === 'instructor' ? 'Instructor' : 'Private'}</div><div class="lbl">Type</div></div>
+    <div class="summary-pill"><div class="val">${Object.keys(ratings).length}/${SKILLS.length}</div><div class="lbl">Skills rated</div></div>
+  `;
+
+  document.getElementById('summary-skills').innerHTML = SKILLS.map(s => {
+    const r = ratings[s.key];
+    return `<div class="summary-skill-row">
+      <span class="summary-skill-name">${s.label}</span>
+      ${r ? `<span class="summary-skill-emoji">${EMOJI_MAP[r]}</span>` : `<span class="summary-skill-skip">Skipped</span>`}
+    </div>`;
+  }).join('');
+
+  document.getElementById('summary-card').style.display = 'block';
 }
 
-function updateNoteBtn(key) {
-  const val = (document.getElementById(`note-${key}`)?.value || '').trim();
-  questionNotes[key] = val || null;
-  const btn = document.getElementById(`note-btn-${key}`);
-  const wrap = document.getElementById(`note-wrap-${key}`);
-  if (val) {
-    btn.className = 'note-toggle-btn has-note';
-    btn.textContent = '✎ Note saved';
-  } else {
-    btn.className = 'note-toggle-btn';
-    btn.textContent = wrap.classList.contains('open') ? '✎ Add note' : '✎ Add note';
-  }
-}
-
+// ── Save ──
 async function saveSession() {
   const date = document.getElementById('session-date').value;
-  if (!date) { showError('Please enter a session date.'); return; }
+  if (!date) { showError('Session date is missing'); return; }
 
   const ratingsList = Object.entries(ratings).map(([skill_key, rating]) => ({
-    tier: 0, skill_key, rating, note: questionNotes[skill_key] || null
+    tier: 0, skill_key, rating, note: null
   }));
 
   const payload = {
@@ -461,7 +846,7 @@ async function saveSession() {
 
   const btn = document.getElementById('save-btn');
   btn.disabled = true;
-  btn.textContent = 'Saving…';
+  btn.textContent = 'Saving...';
 
   try {
     const res = await fetch('/api/learner?action=sessions', {
@@ -469,23 +854,27 @@ async function saveSession() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AUTH.token}` },
       body: JSON.stringify(payload)
     });
-    if (res.status === 401) { window.location.href = '/learner/'; return; }
+    if (res.status === 401) { window.location.href = '/learner/login.html'; return; }
     const data = await res.json();
     if (!res.ok) { showError(data.error || 'Failed to save. Please try again.'); return; }
     window.location.href = '/learner/';
   } catch {
-    showError('Network error. Please check your connection and try again.');
+    showError('Network error. Please check your connection.');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Save Session →';
+    btn.textContent = 'Save Session';
   }
 }
 
+// ── Error ──
 function showError(msg) {
   const el = document.getElementById('error-msg');
   el.textContent = msg;
   el.classList.add('show');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function hideError() {
+  document.getElementById('error-msg').classList.remove('show');
 }
 </script>
 
