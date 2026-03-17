@@ -72,6 +72,7 @@ module.exports = async (req, res) => {
   if (action === 'validate-token')   return handleValidateToken(req, res);
   if (action === 'verify-token')     return handleVerifyToken(req, res);
   if (action === 'schedule')         return handleSchedule(req, res);
+  if (action === 'schedule-range')   return handleScheduleRange(req, res);
   if (action === 'complete')         return handleComplete(req, res);
   if (action === 'availability')     return handleAvailability(req, res);
   if (action === 'set-availability') return handleSetAvailability(req, res);
@@ -297,6 +298,53 @@ async function handleSchedule(req, res) {
 
   } catch (err) {
     console.error('instructor schedule error:', err);
+    return res.status(500).json({ error: 'Failed to load schedule' });
+  }
+}
+
+// ── GET /api/instructor?action=schedule-range ────────────────────────────────
+// Returns bookings within a date range for the instructor's calendar view.
+// Query params: from=YYYY-MM-DD&to=YYYY-MM-DD
+async function handleScheduleRange(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: '"from" and "to" are required (YYYY-MM-DD)' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to))
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const bookings = await sql`
+      SELECT
+        lb.id,
+        lb.scheduled_date::text,
+        lb.start_time::text,
+        lb.end_time::text,
+        lb.status,
+        lb.notes,
+        lu.id    AS learner_id,
+        lu.name  AS learner_name,
+        lu.email AS learner_email,
+        lu.phone AS learner_phone
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      WHERE lb.instructor_id = ${instructor.id}
+        AND lb.status IN ('confirmed', 'completed')
+        AND lb.scheduled_date >= ${from}::date
+        AND lb.scheduled_date <= ${to}::date
+      ORDER BY lb.scheduled_date ASC, lb.start_time ASC
+      LIMIT 500
+    `;
+
+    return res.json({ bookings });
+
+  } catch (err) {
+    console.error('instructor schedule-range error:', err);
     return res.status(500).json({ error: 'Failed to load schedule' });
   }
 }
