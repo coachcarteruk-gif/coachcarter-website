@@ -123,17 +123,6 @@
       .site-nav-link:not(.primary):not(.back) { display: none; }
     }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 32px;
-      text-decoration: none;
-    }
-    .brand img { height: 48px; width: auto; }
-    .brand-text { font-size: 1.1rem; font-weight: 700; color: var(--primary); font-family: var(--font-head); }
-    .brand-sub { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
-
     .card {
       background: var(--white);
       border: 1px solid var(--border);
@@ -142,46 +131,60 @@
       max-width: 420px;
       overflow: hidden;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      padding: 32px 28px;
     }
 
-    .tabs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      border-bottom: 1px solid var(--border);
-    }
-    .tab {
-      padding: 16px;
-      text-align: center;
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: var(--muted);
-      cursor: pointer;
-      background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      transition: color 0.2s, border-color 0.2s;
-      margin-bottom: -1px;
-      font-family: var(--font-body);
-    }
-    .tab.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-    }
-
-    .panel { padding: 28px 24px; display: none; }
-    .panel.active { display: block; }
-
-    .panel-title {
-      font-size: 1.3rem;
+    .card-title {
+      font-size: 1.35rem;
       font-weight: 700;
       margin-bottom: 6px;
       font-family: var(--font-head);
       color: var(--primary);
     }
-    .panel-sub {
+    .card-sub {
       font-size: 0.85rem;
       color: var(--muted);
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    /* Method toggle */
+    .method-toggle {
+      display: flex;
+      gap: 0;
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 4px;
       margin-bottom: 24px;
+      border: 1px solid var(--border);
+    }
+    .method-btn {
+      flex: 1;
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      border-radius: 7px;
+      font-family: var(--font-body);
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .method-btn.active {
+      background: var(--white);
+      color: var(--primary);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .method-btn svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
     }
 
     .form-group { margin-bottom: 16px; }
@@ -197,7 +200,7 @@
     }
     input[type="text"],
     input[type="email"],
-    input[type="password"] {
+    input[type="tel"] {
       width: 100%;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -205,13 +208,11 @@
       color: var(--primary);
       font-family: var(--font-body);
       font-size: 0.95rem;
-      padding: 11px 14px;
+      padding: 12px 14px;
       outline: none;
       transition: border-color 0.2s, background-color 0.2s;
     }
-    input::placeholder {
-      color: var(--muted);
-    }
+    input::placeholder { color: var(--muted); }
     input:focus {
       border-color: var(--accent);
       background: var(--white);
@@ -229,10 +230,11 @@
       padding: 13px;
       cursor: pointer;
       margin-top: 8px;
-      transition: background 0.2s, opacity 0.2s;
+      transition: background 0.2s, opacity 0.2s, transform 0.15s;
     }
     .btn-primary:hover { background: var(--accent-dk); }
-    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
     .error-msg {
       background: rgba(239, 68, 68, 0.08);
@@ -247,14 +249,6 @@
     }
     .error-msg.show { display: block; }
 
-    .hint {
-      text-align: center;
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-top: 16px;
-      font-family: var(--font-body);
-    }
-
     .back-link {
       margin-top: 20px;
       font-size: 0.8rem;
@@ -263,6 +257,89 @@
       font-family: var(--font-body);
     }
     .back-link:hover { color: var(--primary); }
+
+    /* Sent state */
+    .sent-state {
+      display: none;
+      text-align: center;
+      padding: 8px 0;
+    }
+    .sent-state.show { display: block; }
+    .sent-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--accent-lt);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .sent-icon svg {
+      width: 28px;
+      height: 28px;
+      color: var(--accent);
+    }
+    .sent-title {
+      font-family: var(--font-head);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+    .sent-sub {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .sent-sub strong {
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .resend-link {
+      font-size: 0.82rem;
+      color: var(--muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: var(--font-body);
+      padding: 0;
+      transition: color 0.2s;
+    }
+    .resend-link:hover { color: var(--accent); }
+    .resend-link:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .form-state { display: block; }
+    .form-state.hide { display: none; }
+
+    .hint {
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 20px;
+      line-height: 1.5;
+    }
+
+    .free-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--accent-lt);
+      color: var(--accent-dk);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 100px;
+      margin-bottom: 20px;
+    }
+    .free-badge svg {
+      width: 14px;
+      height: 14px;
+    }
   </style>
 </head>
 <body>
@@ -277,64 +354,71 @@
     <a class="site-nav-link" href="/classroom.html">Free Videos</a>
     <a class="site-nav-link" href="/learner/login.html">Learner Login</a>
     <a class="site-nav-link" href="/instructor/login.html">Instructor Login</a>
-    <a class="site-nav-link primary" href="/learner/login.html?tab=register&redirect=/learner/book.html">Book Free Trial</a>
+    <a class="site-nav-link primary" href="/learner/book.html">Book Free Trial</a>
   </div>
 </nav>
 
 <div class="card">
-  <div class="tabs">
-    <button class="tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
-    <button class="tab" id="tab-register" onclick="switchTab('register')">Create Account</button>
+  <!-- Form state -->
+  <div class="form-state" id="form-state">
+    <div class="card-title">Sign in or create account</div>
+    <div class="card-sub">Enter your email or phone number and we'll send you a link to sign in. No password needed.</div>
+
+    <div class="free-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26z"/></svg>
+      New accounts get a free 1.5-hour lesson
+    </div>
+
+    <div class="method-toggle">
+      <button class="method-btn active" id="method-email" onclick="switchMethod('email')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>
+        Email
+      </button>
+      <button class="method-btn" id="method-sms" onclick="switchMethod('sms')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        Text message
+      </button>
+    </div>
+
+    <div class="error-msg" id="error-msg"></div>
+
+    <form onsubmit="handleSendLink(event)">
+      <!-- Email input -->
+      <div class="form-group" id="email-group">
+        <label>Email address</label>
+        <input type="email" id="input-email" placeholder="your@email.com" autocomplete="email">
+      </div>
+
+      <!-- Phone input (hidden by default) -->
+      <div class="form-group" id="phone-group" style="display:none;">
+        <label>Phone number</label>
+        <input type="tel" id="input-phone" placeholder="07700 900000" autocomplete="tel">
+      </div>
+
+      <button type="submit" class="btn-primary" id="send-btn">Send login link</button>
+    </form>
+
+    <p class="hint">We'll send a one-time link that expires in 15 minutes.<br>Click it to sign in — no password to remember.</p>
   </div>
 
-  <!-- LOGIN PANEL -->
-  <div class="panel active" id="panel-login">
-    <div class="panel-title">Welcome back</div>
-    <div class="panel-sub">Sign in to view your progress and log sessions.</div>
-    <div class="error-msg" id="login-error"></div>
-    <form onsubmit="handleLogin(event)">
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="login-email" placeholder="your@email.com" required autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
-      </div>
-      <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
-    </form>
-    <p class="hint">Don't have an account? <a href="#" onclick="switchTab('register')" style="color: var(--accent); cursor: pointer;">Create one</a></p>
-  </div>
-
-  <!-- REGISTER PANEL -->
-  <div class="panel" id="panel-register">
-    <div class="panel-title">Create your account</div>
-    <div class="panel-sub">Sign up and get a <strong style="color:var(--accent)">free 1.5-hour lesson</strong> — no payment needed.</div>
-    <div class="error-msg" id="register-error"></div>
-    <form onsubmit="handleRegister(event)">
-      <div class="form-group">
-        <label>Full Name</label>
-        <input type="text" id="reg-name" placeholder="Your name" required autocomplete="name">
-      </div>
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="reg-email" placeholder="your@email.com" required autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="reg-password" placeholder="Min 8 characters" required autocomplete="new-password">
-      </div>
-      <div class="form-group">
-        <label>Confirm Password</label>
-        <input type="password" id="reg-confirm" placeholder="••••••••" required autocomplete="new-password">
-      </div>
-      <button type="submit" class="btn-primary" id="register-btn">Create Account</button>
-    </form>
-    <p class="hint">Already have an account? <a href="#" onclick="switchTab('login')" style="color: var(--accent); cursor: pointer;">Sign in</a></p>
+  <!-- Sent confirmation state -->
+  <div class="sent-state" id="sent-state">
+    <div class="sent-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9z"/></svg>
+    </div>
+    <div class="sent-title">Check your <span id="sent-method-label">email</span></div>
+    <div class="sent-sub">
+      We sent a login link to<br>
+      <strong id="sent-destination"></strong>
+    </div>
+    <button class="resend-link" id="resend-btn" onclick="handleResend()">
+      Didn't get it? Send again
+    </button>
+    <p class="hint" style="margin-top: 16px;">The link expires in 15 minutes and can only be used once.</p>
   </div>
 </div>
 
-<a href="/learner/" class="back-link">← Back</a>
+<a href="/" class="back-link">&larr; Back to home</a>
 
 <script>
   // Redirect if already logged in
@@ -343,90 +427,111 @@
   const redirectTo = urlParams.get('redirect') || '/learner/';
   if (existing?.token) { window.location.href = redirectTo; }
 
-  // Auto-switch to register tab if ?tab=register
-  if (urlParams.get('tab') === 'register') { switchTab('register'); }
+  let currentMethod = 'email';
+  let lastPayload = null;
 
-  function switchTab(tab) {
-    document.getElementById('tab-login').classList.toggle('active', tab === 'login');
-    document.getElementById('tab-register').classList.toggle('active', tab === 'register');
-    document.getElementById('panel-login').classList.toggle('active', tab === 'login');
-    document.getElementById('panel-register').classList.toggle('active', tab === 'register');
+  function switchMethod(method) {
+    currentMethod = method;
+    document.getElementById('method-email').classList.toggle('active', method === 'email');
+    document.getElementById('method-sms').classList.toggle('active', method === 'sms');
+    document.getElementById('email-group').style.display = method === 'email' ? 'block' : 'none';
+    document.getElementById('phone-group').style.display = method === 'sms' ? 'block' : 'none';
+    clearError();
   }
 
-  function showError(id, msg) {
-    const el = document.getElementById(id);
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
     el.textContent = msg;
     el.classList.add('show');
   }
-  function clearError(id) {
-    document.getElementById(id).classList.remove('show');
+  function clearError() {
+    document.getElementById('error-msg').classList.remove('show');
   }
 
-  async function handleLogin(e) {
+  function showSentState(destination, methodLabel) {
+    document.getElementById('form-state').classList.add('hide');
+    document.getElementById('sent-state').classList.add('show');
+    document.getElementById('sent-destination').textContent = destination;
+    document.getElementById('sent-method-label').textContent = methodLabel;
+  }
+
+  async function handleSendLink(e) {
     e.preventDefault();
-    clearError('login-error');
-    const btn = document.getElementById('login-btn');
+    clearError();
+
+    const email = document.getElementById('input-email').value.trim();
+    const phone = document.getElementById('input-phone').value.trim();
+
+    if (currentMethod === 'email' && !email) {
+      showError('Please enter your email address.');
+      return;
+    }
+    if (currentMethod === 'sms' && !phone) {
+      showError('Please enter your phone number.');
+      return;
+    }
+
+    const btn = document.getElementById('send-btn');
     btn.disabled = true;
-    btn.textContent = 'Signing in…';
+    btn.textContent = 'Sending…';
+
+    const payload = {
+      method: currentMethod,
+      email: currentMethod === 'email' ? email : undefined,
+      phone: currentMethod === 'sms' ? phone : undefined
+    };
+    lastPayload = payload;
 
     try {
-      const res = await fetch('/api/learner?action=login', {
+      const res = await fetch('/api/magic-link?action=send-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: document.getElementById('login-email').value,
-          password: document.getElementById('login-password').value
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
-      if (!res.ok) { showError('login-error', data.error || 'Login failed'); return; }
-      localStorage.setItem('cc_learner', JSON.stringify(data));
-      window.location.href = redirectTo;
+
+      if (!res.ok) {
+        showError(data.error || 'Something went wrong. Please try again.');
+        return;
+      }
+
+      const destination = currentMethod === 'email' ? email : phone;
+      const methodLabel = currentMethod === 'email' ? 'email' : 'phone';
+      showSentState(destination, methodLabel);
+
     } catch {
-      showError('login-error', 'Network error. Please try again.');
+      showError('Network error. Please check your connection and try again.');
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Sign In';
+      btn.textContent = 'Send login link';
     }
   }
 
-  async function handleRegister(e) {
-    e.preventDefault();
-    clearError('register-error');
-
-    const password = document.getElementById('reg-password').value;
-    const confirm = document.getElementById('reg-confirm').value;
-    if (password !== confirm) { showError('register-error', 'Passwords do not match'); return; }
-
-    const btn = document.getElementById('register-btn');
+  async function handleResend() {
+    if (!lastPayload) return;
+    const btn = document.getElementById('resend-btn');
     btn.disabled = true;
-    btn.textContent = 'Creating account…';
+    btn.textContent = 'Sending…';
 
     try {
-      const res = await fetch('/api/learner?action=register', {
+      const res = await fetch('/api/magic-link?action=send-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: document.getElementById('reg-name').value,
-          email: document.getElementById('reg-email').value,
-          password
-        })
+        body: JSON.stringify(lastPayload)
       });
-      const data = await res.json();
-      if (!res.ok) { showError('register-error', data.error || 'Registration failed'); return; }
-      localStorage.setItem('cc_learner', JSON.stringify(data));
-      // New users get a free credit — send them straight to booking
-      if (data.free_credit) {
-        localStorage.setItem('cc_welcome', '1');
-        window.location.href = '/learner/book.html';
+      if (res.ok) {
+        btn.textContent = 'Sent! Check again';
+        setTimeout(() => {
+          btn.textContent = "Didn't get it? Send again";
+          btn.disabled = false;
+        }, 5000);
       } else {
-        window.location.href = '/learner/';
+        btn.textContent = 'Failed — try again';
+        btn.disabled = false;
       }
     } catch {
-      showError('register-error', 'Network error. Please try again.');
-    } finally {
+      btn.textContent = 'Failed — try again';
       btn.disabled = false;
-      btn.textContent = 'Create Account';
     }
   }
 </script>
