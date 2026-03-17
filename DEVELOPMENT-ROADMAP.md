@@ -128,19 +128,38 @@ A web-based interface for managing instructors and their schedules without touch
 - ✅ Fixed `middleware.js` returning empty 200 responses instead of passing requests through to handlers — was silently breaking all pages and API endpoints
 - ✅ Renamed `api/update-statis.js` → `api/update-status.js` to match frontend API calls
 
-### 2.2 — Automated Reminders
+### 2.2 — Instructor Self-Service Portal ✅ Complete
+Instructors can log in, view their own schedule, mark lessons complete, and manage their availability and profile — without needing admin access.
+
+**What was built:**
+- ✅ `api/instructor.js` — magic-link login (email token), schedule view, lesson completion, availability management, profile view/update
+- ✅ `db/migrations/004_instructor_portal.sql` — `instructor_login_tokens` table for magic-link auth
+- ✅ `public/instructor/login.html` — magic-link login page (no password needed)
+- ✅ `public/instructor/index.html` — instructor dashboard: upcoming schedule, lesson completion
+- ✅ `public/instructor/availability.html` — instructor sets their own weekly availability windows
+- ✅ `public/instructor/profile.html` — instructor updates their bio and contact details
+
+### 2.3 — Calendar / iCal Integration ✅ Complete
+Learners can subscribe to a personal iCal feed of their upcoming lessons, so bookings appear automatically in Apple Calendar, Google Calendar, etc.
+
+**What was built:**
+- ✅ `api/calendar.js` — `.ics` file download per booking, personalised iCal feed URL, feed polling endpoint (no JWT needed for feed — uses a per-learner token)
+- ✅ `db/migrations/003_calendar_token.sql` — `calendar_token` column on `learner_users`, indexed for fast polling
+- ✅ Feed URL exposed to learners via `GET /api/calendar?action=feed-url`
+
+### 2.4 — Automated Reminders
 Email (and optionally SMS) reminders before upcoming lessons.
 - 24-hour reminder to learner
 - 24-hour reminder to instructor
 - Triggered by a scheduled job or cron webhook
 
-### 2.3 — Refund Flow
+### 2.4 — Refund Flow
 Cash refund for unused credits.
 - Learner requests refund from dashboard
 - Admin approves in portal
 - Stripe processes reversal, credit deducted from balance
 
-### 2.4 — Learner Dashboard Enhancements ✅ Complete
+### 2.5 — Learner Dashboard Enhancements ✅ Complete
 Surface the new booking system on the existing learner dashboard.
 
 **What was built:**
@@ -149,19 +168,19 @@ Surface the new booking system on the existing learner dashboard.
 - ✅ Upcoming lessons section showing next 5 confirmed bookings with date, time, and instructor name
 - ✅ "Manage" link on each upcoming lesson through to the booking page for cancellations
 
-### 2.5 — Reviews & Testimonials
+### 2.6 — Reviews & Testimonials
 Post-lesson review prompt triggered after a lesson is marked completed.
 - Automated email 24 hours after lesson status → completed
 - Simple star rating + comment
 - Optional: display approved reviews publicly
 
-### 2.6 — Waiting List
+### 2.7 — Waiting List
 Capture leads when all instructors are fully booked.
 - "No slots available" state on calendar triggers a waiting list sign-up
 - Notifies admin when someone joins
 - Admin can manually offer a slot and notify the learner
 
-### 2.7 — Referral System
+### 2.8 — Referral System
 Reward learners for recommending friends.
 - Unique referral link per learner
 - Both referrer and new learner receive a credit bonus on first purchase
