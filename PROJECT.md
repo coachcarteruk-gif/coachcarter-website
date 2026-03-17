@@ -33,7 +33,11 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 | `MAINTENANCE_MODE` | Set to `"true"` to redirect all traffic to maintenance page |
 | `STRIPE_SECRET_KEY` | Stripe payments |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook verification |
-| `RESEND_API_KEY` | Resend email API (booking confirmations, magic links) |
+| `SMTP_HOST` | SMTP email host (booking confirmations, magic links) |
+| `SMTP_PORT` | SMTP port (465 for secure) |
+| `SMTP_USER` | SMTP username |
+| `SMTP_PASS` | SMTP password |
+| `BASE_URL` | Site base URL for magic links (defaults to `https://coachcarter.uk`) |
 
 ---
 
@@ -42,9 +46,10 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 ```
 /
 ├── api/                            # Vercel serverless functions
-│   ├── learner.js                  # Learner auth, sessions, progress
+│   ├── learner.js                  # Learner sessions, progress, profile updates
+│   ├── magic-link.js               # Learner magic-link login: send, validate, verify
 │   ├── credits.js                  # Credit balance, Stripe checkout, bulk discounts
-│   ├── slots.js                    # Slot generation, booking, cancellation, my-bookings
+│   ├── slots.js                    # Slot generation, booking, cancellation, my-bookings, pay-per-slot checkout
 │   ├── instructors.js              # Instructor CRUD + availability (admin-protected)
 │   ├── instructor.js               # Instructor portal: magic-link login, schedule, profile
 │   ├── admin.js                    # Admin auth (JWT), dashboard stats, bookings management
@@ -77,10 +82,12 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   │   └── editor.html             # Admin content editor
 │   ├── learner/
 │   │   ├── index.html              # Learner hub — dashboard (credits, bookings, progress)
-│   │   ├── login.html              # Login / register form
-│   │   ├── book.html               # Lesson booking calendar
+│   │   ├── login.html              # Magic-link login (email or SMS)
+│   │   ├── verify.html             # Token verification page (two-step: validate then verify)
+│   │   ├── book.html               # Lesson booking calendar (credit or pay-per-slot)
 │   │   ├── buy-credits.html        # Buy lesson credits via Stripe
-│   │   └── log-session.html        # Log a driving session
+│   │   ├── log-session.html        # Log a driving session (stepped wizard, emoji ratings)
+│   │   └── videos.html             # Video library (behind login)
 │   ├── instructor/
 │   │   ├── login.html              # Magic-link login for instructors
 │   │   ├── index.html              # Instructor dashboard (schedule, lesson completion)
@@ -165,8 +172,9 @@ Base price: **£82.50 per credit** (set in `api/credits.js` as `CREDIT_PRICE_PEN
 - The slot engine (`api/slots.js`) divides windows into 1.5-hour bookable slots
 - Learners browse the calendar, filter by instructor (optional), and book any available slot
 - Booking is instant — no instructor approval needed
-- 1 credit deducted on booking; returned automatically on 48+ hour cancellations
-- Race condition protection via DB unique index on `(instructor_id, scheduled_date, start_time)`
+- **With credits:** 1 credit deducted on booking; returned automatically on 48+ hour cancellations
+- **Without credits (pay-per-slot):** Slot reserved for 10 minutes during Stripe Checkout; on payment confirmation, 1 credit added + deducted atomically, booking created, .ics calendar attachment sent to both parties
+- Race condition protection via DB unique index on `(instructor_id, scheduled_date, start_time)` + slot reservations table
 
 ### Cancellation policy
 
@@ -179,17 +187,26 @@ Base price: **£82.50 per credit** (set in `api/credits.js` as `CREDIT_PRICE_PEN
 
 ### Authentication
 
-Register/login at `/learner/login.html`. JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls include it as a `Bearer` header.
+Magic-link login at `/learner/login.html` — learner enters email (or phone), receives a link, clicks it to sign in. No password needed. New accounts are created automatically on first login with 1 free trial credit.
+
+JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls include it as a `Bearer` header.
+
+### API — `api/magic-link.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `send-link` | POST | No | Sends magic link to email or phone. Body: `{ email, phone, method }` |
+| `validate` | GET | No | Lightweight token check (does NOT consume). Prevents email prefetchers from burning tokens |
+| `verify` | POST | No | Consumes token, issues JWT, auto-creates account if new. Body: `{ token }` |
 
 ### API — `api/learner.js`
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `register` | POST | No | Create account. Body: `{ name, email, password }` |
-| `login` | POST | No | Returns JWT. Body: `{ email, password }` |
 | `sessions` | GET | Yes | Returns last 20 sessions with skill ratings |
 | `sessions` | POST | Yes | Save a new session |
 | `progress` | GET | Yes | Returns latest skill ratings, stats, current tier |
+| `update-name` | POST | Yes | Set learner name (used after first magic-link login) |
 
 ### API — `api/credits.js`
 
@@ -202,8 +219,9 @@ Register/login at `/learner/login.html`. JWT stored in `localStorage` as `cc_lea
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `available` | GET | Yes | Available slots in date range, grouped by date |
-| `book` | POST | Yes | Book a slot (deducts 1 credit) |
+| `available` | GET | Yes | Available slots in date range, grouped by date (excludes reserved slots) |
+| `book` | POST | Yes | Book a slot using 1 credit |
+| `checkout-slot` | POST | Yes | Pay-per-slot: reserves slot for 10 min, creates Stripe Checkout (£82.50) |
 | `cancel` | POST | Yes | Cancel a booking (returns credit if 48hr+ policy met) |
 | `my-bookings` | GET | Yes | Learner's upcoming confirmed bookings |
 
@@ -254,8 +272,34 @@ start_time TIME
 end_time TIME
 status TEXT             -- 'confirmed', 'completed', 'cancelled'
 credit_returned BOOLEAN DEFAULT FALSE
+stripe_session_id TEXT  -- idempotency key for pay-per-slot bookings
 created_at TIMESTAMPTZ
 -- UNIQUE (instructor_id, scheduled_date, start_time) prevents double-booking
+```
+
+**`slot_reservations`** *(temporary holds during Stripe Checkout)*
+```sql
+id SERIAL PRIMARY KEY
+instructor_id INTEGER
+scheduled_date DATE
+start_time TIME
+end_time TIME
+learner_id INTEGER
+stripe_session_id TEXT
+expires_at TIMESTAMPTZ  -- NOW() + 10 minutes
+created_at TIMESTAMPTZ
+```
+
+**`magic_link_tokens`**
+```sql
+id SERIAL PRIMARY KEY
+token TEXT UNIQUE
+email TEXT
+phone TEXT
+method TEXT             -- 'email' or 'sms'
+expires_at TIMESTAMPTZ  -- 15 minutes from creation
+used BOOLEAN DEFAULT FALSE
+created_at TIMESTAMPTZ
 ```
 
 ### The 10-question self-assessment
@@ -370,8 +414,20 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Mobile autoplay** — browsers require videos to start muted; `video.muted = false` after a user gesture unlocks sound
 - **Klarna** — enabled via Stripe dashboard, not hardcoded; no code changes needed to toggle it
 - **DB migrations** — run manually in Neon SQL Editor; files in `db/migrations/` are numbered sequentially
+- **Magic link tokens** — two-step flow (validate then verify) prevents email-client link prefetchers from consuming tokens; `verify` is POST-only
+- **Slot reservations** — 10-minute TTL; expired reservations are excluded from availability but cleaned up lazily (on next webhook or when table is queried)
 
 ---
+
+## Recent changes (March 2026)
+
+- **Pay-per-slot booking** — learners with 0 credits can now pay £82.50 at the point of booking via Stripe Checkout, with a 10-minute slot reservation during payment
+- **Magic link login fix** — email clients pre-fetching links were consuming tokens; fixed with a two-step validate (GET) → verify (POST) flow
+- **Session logging rebuild** — stepped wizard with emoji-based ratings replacing the original single-page form
+- **Learner portal videos** — classroom videos page added behind login with bottom nav
+- **Homepage quiz update** — quiz results now direct to Learner Hub / Book a Free Trial / Explore Prices
+- **Stale register links** — removed `?tab=register` query params from 9 files (registration is now handled by magic links)
+- **Font consistency** — log-session.html updated to Space Grotesk + Outfit matching the rest of the portal
 
 ## What's still to build
 

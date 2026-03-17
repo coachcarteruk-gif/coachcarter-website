@@ -79,7 +79,16 @@ All tables live in **Neon (PostgreSQL)**. Migration file: `db/migrations/001_boo
 - Unique index prevents double-booking a slot
 
 **`credit_transactions`**
-- Full audit trail: type (purchase/refund), credits, amount in pence, payment method, Stripe IDs
+- Full audit trail: type (purchase/refund/slot_purchase), credits, amount in pence, payment method, Stripe IDs
+
+**`slot_reservations`**
+- Holds slots during Stripe Checkout (10-minute TTL)
+- instructor_id, scheduled_date, start_time, end_time, learner_id, stripe_session_id, expires_at
+- Excluded from availability results; cleaned up after payment or expiry
+
+**`magic_link_tokens`**
+- Token, email, phone, method (email/sms), expires_at (15 min), used flag
+- Two-step verification: validate (GET, read-only) then verify (POST, consumes token)
 
 ---
 
@@ -91,11 +100,19 @@ All tables live in **Neon (PostgreSQL)**. Migration file: `db/migrations/001_boo
 3. Pays via Stripe (card or Klarna)
 4. Stripe webhook confirms payment → credits added to balance, confirmation email sent
 
-**Learner books a lesson:**
+**Learner books a lesson (has credits):**
 1. Learner logs in → opens booking calendar (`/learner/book.html`)
 2. Browses available slots week by week (filter by instructor optional)
 3. Clicks a slot → confirmation modal shows date, time, instructor, credit cost
 4. Confirms → 1 credit deducted, booking confirmed, both parties emailed
+
+**Learner books a lesson (no credits — pay per slot):**
+1. Learner opens booking calendar with 0 credits
+2. Banner shows: "No lessons on your account. No worries — you can pay when you book, or buy a bundle to save."
+3. Clicks a slot → modal shows "Pay £82.50 & book" path instead of credit deduction
+4. Clicks pay → slot reserved for 10 minutes, redirected to Stripe Checkout (£82.50)
+5. Stripe webhook confirms payment → 1 credit added + immediately deducted, booking confirmed, both parties emailed with .ics calendar attachment
+6. If payment cancelled or abandoned → reservation expires after 10 minutes, slot released back to calendar
 
 **Learner cancels a lesson:**
 1. Learner views upcoming bookings at top of calendar page
@@ -168,19 +185,57 @@ Surface the new booking system on the existing learner dashboard.
 - ✅ Upcoming lessons section showing next 5 confirmed bookings with date, time, and instructor name
 - ✅ "Manage" link on each upcoming lesson through to the booking page for cancellations
 
-### 2.6 — Reviews & Testimonials
+### 2.6 — Pay-Per-Slot Booking ✅ Complete
+Allow learners with 0 credits to pay for a single lesson at the point of booking instead of requiring them to buy credits first.
+
+**What was built:**
+- ✅ Dual-path booking modal — detects credit balance and shows either "Confirm booking" (use credit) or "Pay £82.50 & book" (Stripe Checkout)
+- ✅ `api/slots.js` `checkout-slot` action — creates Stripe Checkout session with `payment_type: 'slot_booking'` metadata
+- ✅ Slot reservation system — `slot_reservations` table holds slot for 10 minutes during payment, excluded from availability
+- ✅ `api/webhook.js` `handleSlotBooking` — processes payment, atomically adds/deducts credit, creates booking, sends .ics calendar attachment to both parties
+- ✅ No-credits banner updated from red (alarming) to soft orange with messaging: "No worries — you can pay when you book, or buy a bundle to save."
+- ✅ Success/cancellation toasts on return from Stripe
+
+### 2.7 — Session Logging Rebuild ✅ Complete
+Rebuilt the session logging page as a stepped wizard with emoji-based ratings.
+
+**What was built:**
+- ✅ `public/learner/log-session.html` — multi-step wizard replacing the original form
+- ✅ Emoji-based skill ratings (green/amber/red) with optional notes per skill
+- ✅ Consistent font stack (Space Grotesk + Outfit) matching learner portal design
+
+### 2.8 — Learner Portal Videos ✅ Complete
+Added the classroom/videos page to the learner portal behind login, accessible from the bottom nav.
+
+**What was built:**
+- ✅ `public/learner/videos.html` — video library accessible within the learner portal
+- ✅ Bottom nav pattern shared across all learner portal pages
+
+### 2.9 — Homepage Quiz Update ✅ Complete
+Updated the homepage quiz results to direct learners to the Learner Hub, Book a Free Trial, or Explore Prices instead of just the booking page.
+
+### 2.10 — Magic Link Login Fix ✅ Complete (17 March 2026)
+Fixed magic link login — email clients were pre-fetching the verify link and consuming the token before the learner clicked it.
+
+**What was built:**
+- ✅ New `validate` endpoint (GET) — lightweight token check that does NOT mark it as used
+- ✅ `verify` endpoint changed to POST-only — only browser JavaScript can consume the token
+- ✅ `public/learner/verify.html` — two-step flow: validate (GET) then verify (POST)
+- ✅ Email prefetchers can no longer burn tokens
+
+### 2.11 — Reviews & Testimonials
 Post-lesson review prompt triggered after a lesson is marked completed.
 - Automated email 24 hours after lesson status → completed
 - Simple star rating + comment
 - Optional: display approved reviews publicly
 
-### 2.7 — Waiting List
+### 2.12 — Waiting List
 Capture leads when all instructors are fully booked.
 - "No slots available" state on calendar triggers a waiting list sign-up
 - Notifies admin when someone joins
 - Admin can manually offer a slot and notify the learner
 
-### 2.8 — Referral System
+### 2.13 — Referral System
 Reward learners for recommending friends.
 - Unique referral link per learner
 - Both referrer and new learner receive a credit bonus on first purchase
