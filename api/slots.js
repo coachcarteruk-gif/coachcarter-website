@@ -132,30 +132,50 @@ async function handleAvailable(req, res) {
         `;
 
     // 2. Load all confirmed/completed bookings in the date range
-    const bookings = await sql`
-      SELECT instructor_id,
-             scheduled_date::text AS scheduled_date,
-             start_time::text     AS start_time,
-             end_time::text       AS end_time
-      FROM lesson_bookings
-      WHERE scheduled_date BETWEEN ${from} AND ${to}
-        AND status IN ('confirmed', 'completed')
-        ${instructor_id ? sql`AND instructor_id = ${instructor_id}` : sql``}
-    `;
+    const bookings = instructor_id
+      ? await sql`
+          SELECT instructor_id,
+                 scheduled_date::text AS scheduled_date,
+                 start_time::text     AS start_time,
+                 end_time::text       AS end_time
+          FROM lesson_bookings
+          WHERE scheduled_date BETWEEN ${from} AND ${to}
+            AND status IN ('confirmed', 'completed')
+            AND instructor_id = ${instructor_id}
+        `
+      : await sql`
+          SELECT instructor_id,
+                 scheduled_date::text AS scheduled_date,
+                 start_time::text     AS start_time,
+                 end_time::text       AS end_time
+          FROM lesson_bookings
+          WHERE scheduled_date BETWEEN ${from} AND ${to}
+            AND status IN ('confirmed', 'completed')
+        `;
 
     // 2b. Also load active slot reservations (held during Stripe checkout)
     let reservations = [];
     try {
-      reservations = await sql`
-        SELECT instructor_id,
-               scheduled_date::text AS scheduled_date,
-               start_time::text     AS start_time,
-               end_time::text       AS end_time
-        FROM slot_reservations
-        WHERE scheduled_date BETWEEN ${from} AND ${to}
-          AND expires_at > NOW()
-          ${instructor_id ? sql`AND instructor_id = ${instructor_id}` : sql``}
-      `;
+      reservations = instructor_id
+        ? await sql`
+            SELECT instructor_id,
+                   scheduled_date::text AS scheduled_date,
+                   start_time::text     AS start_time,
+                   end_time::text       AS end_time
+            FROM slot_reservations
+            WHERE scheduled_date BETWEEN ${from} AND ${to}
+              AND expires_at > NOW()
+              AND instructor_id = ${instructor_id}
+          `
+        : await sql`
+            SELECT instructor_id,
+                   scheduled_date::text AS scheduled_date,
+                   start_time::text     AS start_time,
+                   end_time::text       AS end_time
+            FROM slot_reservations
+            WHERE scheduled_date BETWEEN ${from} AND ${to}
+              AND expires_at > NOW()
+          `;
     } catch (e) {
       // Table may not exist yet — that's fine, no reservations
     }
