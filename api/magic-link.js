@@ -15,6 +15,7 @@ module.exports = async (req, res) => {
 
   const action = req.query.action;
   if (action === 'send-link') return handleSendLink(req, res);
+  if (action === 'validate')  return handleValidate(req, res);
   if (action === 'verify')    return handleVerify(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -99,10 +100,36 @@ async function handleSendLink(req, res) {
   }
 }
 
+// ── Validate token (lightweight, does NOT consume it) ────────────────────────
+// Used by the verify page to check if the token is still valid before consuming.
+// This prevents email-client link prefetchers from burning the token.
+async function handleValidate(req, res) {
+  const token = req.query.token;
+  if (!token) return res.status(400).json({ error: 'Token is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      SELECT id FROM magic_link_tokens
+      WHERE token = ${token} AND used = false AND expires_at > NOW()`;
+
+    if (rows.length === 0) {
+      return res.status(400).json({ error: 'expired', message: 'This link has expired or has already been used. Please request a new one.' });
+    }
+
+    return res.json({ valid: true });
+  } catch (err) {
+    console.error('validate error:', err);
+    return res.status(500).json({ error: 'Validation failed' });
+  }
+}
+
 // ── Verify token and issue JWT ──────────────────────────────────────────────
 async function handleVerify(req, res) {
-  // Accept both GET (from email link click) and POST
-  const token = req.query.token || req.body?.token;
+  // Only accept POST — prevents email prefetchers from consuming the token
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const token = req.body?.token;
   if (!token) return res.status(400).json({ error: 'Token is required' });
 
   try {

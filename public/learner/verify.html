@@ -274,7 +274,29 @@
     }
 
     try {
-      const res = await fetch('/api/magic-link?action=verify&token=' + encodeURIComponent(token));
+      // Step 1: Validate the token (lightweight GET — does NOT consume it).
+      // This prevents email-client link prefetchers from burning tokens.
+      const valRes = await fetch('/api/magic-link?action=validate&token=' + encodeURIComponent(token));
+      const valData = await valRes.json();
+
+      if (!valRes.ok) {
+        showState('error');
+        if (valData.error === 'expired') {
+          document.getElementById('error-title').textContent = 'Link expired';
+          document.getElementById('error-sub').textContent = valData.message;
+        } else {
+          document.getElementById('error-title').textContent = 'Verification failed';
+          document.getElementById('error-sub').textContent = valData.message || 'Something went wrong. Please try again.';
+        }
+        return;
+      }
+
+      // Step 2: Consume the token via POST and get the JWT
+      const res = await fetch('/api/magic-link?action=verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
       const data = await res.json();
 
       if (!res.ok) {
