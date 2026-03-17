@@ -419,7 +419,7 @@ footer {
     <a class="nav-link" href="/classroom.html">Free Videos</a>
     <a class="nav-link" href="/learner/login.html">Learner Login</a>
     <a class="nav-link" href="/instructor/login.html">Instructor Login</a>
-    <a class="nav-link primary" href="/learner/login.html?tab=register&redirect=/learner/book.html">Book Free Trial</a>
+    <a class="nav-link primary" href="/learner/login.html?redirect=/learner/book.html">Book Free Trial</a>
   </div>
 </nav>
 
@@ -504,9 +504,9 @@ let quizAnswer1 = null;
 
 const step2Options = {
   learner: [
-    { icon: '🎬', label: 'Scroll through our free videos',  action: () => go('/classroom.html') },
-    { icon: '📅', label: 'Book a free trial lesson',        action: () => bookFreeTrial() },
-    { icon: '💰', label: 'Look at our prices',             action: () => go('/lessons.html') },
+    { icon: '📊', label: 'Go to the Learner Hub',           action: () => goLearner('/learner/') },
+    { icon: '📅', label: 'Book a free trial lesson',        action: () => goLearner('/learner/book.html') },
+    { icon: '💰', label: 'Explore our prices',              action: () => go('/lessons.html') },
   ],
   instructor: [
     { icon: '🔑', label: 'Log in to my portal',            action: () => go('/instructor/login.html') },
@@ -516,9 +516,9 @@ const step2Options = {
 
 function go(url) { window.location.href = url; }
 
-function bookFreeTrial() {
+function goLearner(dest) {
   const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  go(session?.token ? '/learner/book.html' : '/learner/login.html?tab=register&redirect=/learner/book.html');
+  go(session?.token ? dest : '/learner/login.html?redirect=' + encodeURIComponent(dest));
 }
 
 function quizNext(answer) {
