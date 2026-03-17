@@ -23,6 +23,8 @@ module.exports = async (req, res) => {
   if (action === 'progress')          return handleProgress(req, res);
   if (action === 'contact-pref')      return handleContactPref(req, res);
   if (action === 'set-contact-pref')  return handleSetContactPref(req, res);
+  if (action === 'profile')           return handleProfile(req, res);
+  if (action === 'update-profile')    return handleUpdateProfile(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -125,12 +127,14 @@ async function handleProgress(req, res) {
         COUNT(*) FILTER (WHERE session_type = 'private')::int as private_sessions
       FROM driving_sessions WHERE user_id = ${user.id}`;
 
-    const userRow = await sql`SELECT current_tier, name, prefer_contact_before FROM learner_users WHERE id = ${user.id}`;
+    const userRow = await sql`SELECT current_tier, name, phone, pickup_address, prefer_contact_before FROM learner_users WHERE id = ${user.id}`;
     return res.json({
       latest_ratings: latestRatings,
       stats: stats[0],
       current_tier: userRow[0]?.current_tier || 1,
       name: userRow[0]?.name || '',
+      phone: userRow[0]?.phone || '',
+      pickup_address: userRow[0]?.pickup_address || '',
       prefer_contact_before: userRow[0]?.prefer_contact_before || false
     });
   } catch (err) {
@@ -174,5 +178,49 @@ async function handleSetContactPref(req, res) {
   } catch (err) {
     console.error('set-contact-pref error:', err);
     return res.status(500).json({ error: 'Failed to save preference' });
+  }
+}
+
+// ── GET /api/learner?action=profile ──────────────────────────────────────────
+// Returns the learner's profile (name, phone, pickup_address).
+async function handleProfile(req, res) {
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [row] = await sql`
+      SELECT name, email, phone, pickup_address, prefer_contact_before
+      FROM learner_users WHERE id = ${user.id}
+    `;
+    if (!row) return res.status(404).json({ error: 'User not found' });
+    return res.json({ profile: row });
+  } catch (err) {
+    console.error('profile error:', err);
+    return res.status(500).json({ error: 'Failed to load profile' });
+  }
+}
+
+// ── POST /api/learner?action=update-profile ──────────────────────────────────
+// Body: { phone, pickup_address }
+async function handleUpdateProfile(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const { phone, pickup_address } = req.body;
+    const sql = neon(process.env.POSTGRES_URL);
+    const [updated] = await sql`
+      UPDATE learner_users SET
+        phone          = COALESCE(${phone ?? null}, phone),
+        pickup_address = COALESCE(${pickup_address ?? null}, pickup_address)
+      WHERE id = ${user.id}
+      RETURNING name, email, phone, pickup_address
+    `;
+    return res.json({ success: true, profile: updated });
+  } catch (err) {
+    console.error('update-profile error:', err);
+    return res.status(500).json({ error: 'Failed to update profile' });
   }
 }

@@ -490,6 +490,58 @@
       align-items: center;
     }
 
+    /* PROFILE CARD */
+    .profile-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      transition: border-color 0.2s;
+    }
+    .profile-card:hover { border-color: var(--accent); }
+    .profile-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .profile-card-title { font-size: 0.95rem; font-weight: 700; font-family: var(--font-head); }
+    .profile-card-badge {
+      font-size: 0.7rem; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; white-space: nowrap;
+    }
+    .badge-complete { background: rgba(34,197,94,0.1); color: #15803d; }
+    .badge-incomplete { background: rgba(239,68,68,0.1); color: #b91c1c; }
+    .profile-fields { display: flex; flex-direction: column; gap: 10px; }
+    .profile-field label {
+      display: block; font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted); margin-bottom: 4px;
+    }
+    .profile-field input,
+    .profile-field textarea {
+      width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 9px 12px; font-size: 0.88rem; font-family: var(--font-body);
+      background: var(--white); color: var(--primary); outline: none;
+      transition: border-color 0.15s; resize: vertical;
+    }
+    .profile-field input:focus,
+    .profile-field textarea:focus { border-color: var(--accent); }
+    .profile-field textarea { min-height: 60px; }
+    .profile-save-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 12px; gap: 12px;
+    }
+    .profile-save-note { font-size: 0.78rem; color: var(--muted); }
+    .btn-save-profile {
+      background: var(--accent); color: white; border: none;
+      border-radius: 8px; padding: 9px 20px;
+      font-family: var(--font-head); font-size: 0.85rem; font-weight: 700;
+      cursor: pointer; transition: background 0.15s; white-space: nowrap;
+    }
+    .btn-save-profile:hover { background: var(--accent-dk); }
+    .btn-save-profile:disabled { opacity: 0.6; cursor: not-allowed; }
+
     /* CONTACT PREFERENCE CARD */
     .pref-card {
       background: var(--white);
@@ -622,6 +674,28 @@
   <div id="upcoming-section" style="display:none; margin-bottom: 28px;">
     <div class="section-title">Upcoming Lessons</div>
     <div id="upcoming-list"></div>
+  </div>
+
+  <!-- PROFILE (phone + pickup address) -->
+  <div class="profile-card" id="profile-card">
+    <div class="profile-card-header">
+      <div class="profile-card-title">My Details</div>
+      <span class="profile-card-badge badge-incomplete" id="profileBadge">Required for booking</span>
+    </div>
+    <div class="profile-fields">
+      <div class="profile-field">
+        <label for="profilePhone">Phone number</label>
+        <input type="tel" id="profilePhone" placeholder="e.g. 07912 345678">
+      </div>
+      <div class="profile-field">
+        <label for="profileAddress">Pickup address</label>
+        <textarea id="profileAddress" placeholder="Where should your instructor pick you up?"></textarea>
+      </div>
+    </div>
+    <div class="profile-save-row">
+      <span class="profile-save-note" id="profileSaveNote">Required before you can book a lesson.</span>
+      <button class="btn-save-profile" id="btnSaveProfile" onclick="saveProfile()">Save</button>
+    </div>
   </div>
 
   <!-- CONTACT PREFERENCE -->
@@ -766,6 +840,9 @@ function render() {
     // Book button always active — learners can pay per slot even with 0 credits
   }
 
+  // Profile card
+  renderProfile();
+
   // Contact preference
   if (PROGRESS.prefer_contact_before !== undefined) {
     document.getElementById('contactToggle').checked = PROGRESS.prefer_contact_before;
@@ -851,6 +928,55 @@ function renderSessions() {
     const notesHTML = s.notes ? `<div class="session-notes">"${s.notes}"</div>` : '';
     return `<div class="session-card"><div class="session-meta"><span class="session-date">📅 ${dateStr}</span>${typeChip}${durationChip}</div>${ratingsHTML ? `<div class="session-ratings">${ratingsHTML}</div>` : ''}${notesHTML}</div>`;
   }).join('');
+}
+
+// ── Profile (phone + pickup address) ─────────────────────────────────────────
+function renderProfile() {
+  if (!PROGRESS) return;
+  document.getElementById('profilePhone').value = PROGRESS.phone || '';
+  document.getElementById('profileAddress').value = PROGRESS.pickup_address || '';
+  updateProfileBadge();
+}
+
+function updateProfileBadge() {
+  const phone = (document.getElementById('profilePhone').value || '').trim();
+  const address = (document.getElementById('profileAddress').value || '').trim();
+  const badge = document.getElementById('profileBadge');
+  const note = document.getElementById('profileSaveNote');
+  if (phone && address) {
+    badge.textContent = 'Complete';
+    badge.className = 'profile-card-badge badge-complete';
+    note.textContent = 'Your instructor will see these details when you book.';
+  } else {
+    badge.textContent = 'Required for booking';
+    badge.className = 'profile-card-badge badge-incomplete';
+    note.textContent = 'Required before you can book a lesson.';
+  }
+}
+
+async function saveProfile() {
+  const phone = document.getElementById('profilePhone').value.trim();
+  const address = document.getElementById('profileAddress').value.trim();
+  const btn = document.getElementById('btnSaveProfile');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const res = await fetch('/api/learner?action=update-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token },
+      body: JSON.stringify({ phone, pickup_address: address })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    PROGRESS.phone = phone;
+    PROGRESS.pickup_address = address;
+    updateProfileBadge();
+    btn.textContent = 'Saved ✓';
+    setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; }, 2000);
+  } catch (err) {
+    btn.textContent = 'Save'; btn.disabled = false;
+    console.error('save-profile error:', err);
+  }
 }
 
 // ── Contact preference toggle ────────────────────────────────────────────────

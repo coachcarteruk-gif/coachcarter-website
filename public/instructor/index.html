@@ -894,6 +894,7 @@ function renderDaily() {
             <div>
               <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before their first lesson">📞 Contact first</span>' : ''}</div>
               <div class="daily-booking-email">${esc(b.learner_email)}</div>
+              ${b.learner_pickup_address ? `<div class="daily-booking-email">📍 ${esc(b.learner_pickup_address)}</div>` : ''}
             </div>
             <span class="daily-booking-status status-${b.status}">${b.status === 'completed' ? '✓ Completed' : 'Confirmed'}</span>
             ${!isCompleted ? `<button class="btn-complete-sm" id="complete-${b.id}" onclick="markComplete(${b.id})">Mark complete</button>` : ''}
@@ -969,6 +970,7 @@ function openBookingDetail(bookingId) {
     <div class="booking-detail-row"><span class="booking-detail-label">Learner</span><span class="booking-detail-val">${esc(b.learner_name)}</span></div>
     <div class="booking-detail-row"><span class="booking-detail-label">Email</span><span class="booking-detail-val">${esc(b.learner_email)}</span></div>
     ${b.learner_phone ? `<div class="booking-detail-row"><span class="booking-detail-label">Phone</span><span class="booking-detail-val">${esc(b.learner_phone)}</span></div>` : ''}
+    ${b.learner_pickup_address ? `<div class="booking-detail-row"><span class="booking-detail-label">Pickup</span><span class="booking-detail-val">${esc(b.learner_pickup_address)}</span></div>` : ''}
     <div class="booking-detail-row"><span class="booking-detail-label">Status</span><span class="booking-detail-val">${b.status === 'completed' ? '✓ Completed' : 'Confirmed'}</span></div>
     ${b.prefer_contact_before ? `<div class="booking-detail-row"><span class="booking-detail-label">Note</span><span class="booking-detail-val" style="color:var(--accent);">📞 Learner would like a call or message before their first lesson</span></div>` : ''}
   `;

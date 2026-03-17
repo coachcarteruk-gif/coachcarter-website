@@ -266,7 +266,8 @@ async function handleSchedule(req, res) {
         lu.name AS learner_name,
         lu.email AS learner_email,
         lu.phone AS learner_phone,
-        COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before
+        COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
+        lu.pickup_address AS learner_pickup_address
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       WHERE lb.instructor_id = ${instructor.id}
@@ -332,7 +333,8 @@ async function handleScheduleRange(req, res) {
         lu.name  AS learner_name,
         lu.email AS learner_email,
         lu.phone AS learner_phone,
-        COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before
+        COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
+        lu.pickup_address AS learner_pickup_address
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       WHERE lb.instructor_id = ${instructor.id}

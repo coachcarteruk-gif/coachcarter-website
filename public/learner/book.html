@@ -665,6 +665,7 @@ let loadedRanges  = [];
 let pendingSlot   = null;
 let pendingCancel = null;
 let lastBookingId = null;
+let learnerProfile = { phone: '', pickup_address: '' };
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
@@ -687,7 +688,7 @@ function init() {
     window.history.replaceState({}, '', '/learner/book.html');
   }
 
-  Promise.all([loadBalance(), loadInstructors(), loadUpcoming()])
+  Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile()])
     .then(() => {
       cursor = new Date(); cursor.setHours(0,0,0,0);
       setView('daily');
@@ -778,6 +779,20 @@ async function loadUpcoming() {
         </div>`;
     }).join('');
   } catch {}
+}
+
+// ─── Learner profile ─────────────────────────────────────────────────────────
+async function loadLearnerProfile() {
+  try {
+    const res = await fetch('/api/learner?action=profile', { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) return;
+    const data = await res.json();
+    learnerProfile = data.profile || {};
+  } catch {}
+}
+
+function isProfileComplete() {
+  return !!(learnerProfile.phone && learnerProfile.phone.trim() && learnerProfile.pickup_address && learnerProfile.pickup_address.trim());
 }
 
 // ─── View switching ──────────────────────────────────────────────────────────
@@ -1083,6 +1098,10 @@ function drillToDay(ds) {
 
 // ─── Book modal ──────────────────────────────────────────────────────────────
 function openBookModal(el) {
+  if (!isProfileComplete()) {
+    showToast('Please add your phone number and pickup address on your dashboard before booking.', 'error');
+    return;
+  }
   pendingSlot = {
     instructor_id:   el.dataset.instructorId,
     date:            el.dataset.date,
