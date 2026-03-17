@@ -197,7 +197,7 @@ function generateICS(booking) {
     `DTSTART:${dtStart}`,
     `DTEND:${dtEnd}`,
     `SUMMARY:Driving Lesson — ${booking.instructor_name}`,
-    `DESCRIPTION:1.5-hour driving lesson with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before for a full credit refund.`,
+    `DESCRIPTION:1.5-hour driving lesson with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.`,
     `STATUS:${status}`,
     'BEGIN:VALARM',
     'TRIGGER:-PT2H',

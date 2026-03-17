@@ -570,12 +570,12 @@
   <!-- CREDIT BALANCE -->
   <div class="credit-card" id="credit-card">
     <div class="credit-card-left">
-      <div class="credit-label">Credit Balance</div>
+      <div class="credit-label">Lessons Remaining</div>
       <div class="credit-value" id="credit-balance">—</div>
-      <div class="credit-sub" id="credit-sub">lesson credits</div>
+      <div class="credit-sub" id="credit-sub">lessons</div>
     </div>
     <div class="credit-actions">
-      <a href="/learner/buy-credits.html" class="btn-buy">Buy Credits</a>
+      <a href="/learner/buy-credits.html" class="btn-buy">Buy Lessons</a>
       <a href="/learner/book.html" class="btn-book-lesson" id="book-btn">Book a Lesson →</a>
     </div>
   </div>
@@ -699,12 +699,12 @@ function render() {
   if (CREDITS_DATA) {
     const bal = CREDITS_DATA.credit_balance ?? 0;
     document.getElementById('credit-balance').textContent = bal;
-    document.getElementById('credit-sub').textContent = bal === 1 ? 'lesson credit' : 'lesson credits';
+    document.getElementById('credit-sub').textContent = bal === 1 ? 'lesson' : 'lessons';
     if (bal === 0) {
       const bookBtn = document.getElementById('book-btn');
       bookBtn.classList.add('disabled');
       bookBtn.setAttribute('aria-disabled', 'true');
-      bookBtn.title = 'Buy credits to book a lesson';
+      bookBtn.title = 'Buy lessons to start booking';
       bookBtn.addEventListener('click', (e) => { e.preventDefault(); document.querySelector('.btn-buy').focus(); });
     }
   }
@@ -837,7 +837,7 @@ function findQuestionLabel(key) {
   </a>
   <a href="/learner/buy-credits.html" class="bottom-nav-item">
     <span class="bottom-nav-icon">💳</span>
-    <span>Credits</span>
+    <span>Lessons</span>
   </a>
   <a href="/learner/log-session.html" class="bottom-nav-item">
     <span class="bottom-nav-icon">📝</span>

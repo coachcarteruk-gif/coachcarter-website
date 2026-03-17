@@ -528,7 +528,7 @@
   <div class="page-title-row">
     <div>
       <h1>Book a Lesson</h1>
-      <p class="subtitle">Pick any available slot — one credit per 1.5-hour lesson.</p>
+      <p class="subtitle">Pick any available slot — each lesson is 1.5 hours.</p>
     </div>
   </div>
 
@@ -536,7 +536,7 @@
   <div id="welcomeBanner" style="display:none;background:var(--green-lt);border:1.5px solid var(--green);border-radius:var(--radius);padding:20px 24px;margin-bottom:20px">
     <div style="display:flex;align-items:center;gap:12px;justify-content:space-between">
       <div>
-        <strong style="font-family:var(--font-head);font-size:1.05rem">Your free lesson credit is ready!</strong>
+        <strong style="font-family:var(--font-head);font-size:1.05rem">Your free lesson is ready!</strong>
         <p style="font-size:0.875rem;color:var(--muted);margin-top:4px">Pick any slot below to book your first 1.5-hour driving lesson — completely free.</p>
       </div>
       <button onclick="dismissWelcome()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);padding:4px">✕</button>
@@ -545,8 +545,8 @@
 
   <!-- No credits banner (hidden until needed) -->
   <div class="no-credits-banner" id="noCreditsBanner" style="display:none">
-    <p><strong>You have no credits.</strong> Buy credits to start booking lessons.</p>
-    <a href="/learner/buy-credits.html" class="btn-buy-now">Buy Credits</a>
+    <p><strong>You have no lessons remaining.</strong> Buy lessons to start booking.</p>
+    <a href="/learner/buy-credits.html" class="btn-buy-now">Buy Lessons</a>
   </div>
 
   <!-- Upcoming bookings -->
@@ -603,8 +603,8 @@
         </div>
       </div>
       <p class="modal-credit-note">
-        This will use <strong>1 credit</strong> from your balance.
-        You can cancel for a full credit refund up to 48 hours before the lesson.
+        This will use <strong>1 lesson</strong> from your balance.
+        Cancel 48+ hours before and it returns automatically.
       </p>
       <div class="modal-actions">
         <button class="btn-modal-cancel" id="bookModalClose">Cancel</button>
@@ -712,8 +712,8 @@
   function updateCreditBadge() {
     const badge = document.getElementById('creditBadge');
     badge.textContent = creditBalance === 1
-      ? '1 credit'
-      : `${creditBalance} credits`;
+      ? '1 lesson'
+      : `${creditBalance} lessons`;
     badge.className = 'credit-badge' + (creditBalance === 0 ? ' zero' : '');
 
     const banner = document.getElementById('noCreditsBanner');
@@ -918,7 +918,7 @@
 
   // ── No credit alert ───────────────────────────────────────────────────────
   function openNoCreditAlert() {
-    showToast('You need credits to book. Buy some first!', 'error');
+    showToast('You need lessons to book. Buy some first!', 'error');
     setTimeout(() => window.location.href = '/learner/buy-credits.html', 1800);
   }
 
@@ -1069,8 +1069,8 @@
     const willGet   = hoursUntil >= 48;
     policyEl.className = 'cancel-policy' + (willGet ? ' safe' : '');
     policyEl.innerHTML = willGet
-      ? '✓ You are cancelling more than 48 hours before the lesson. <strong>Your credit will be returned automatically.</strong>'
-      : `⚠ This lesson is within 48 hours. <strong>Your credit will be forfeited</strong> in line with the cancellation policy.`;
+      ? '✓ You are cancelling more than 48 hours before the lesson. <strong>Your lesson will be returned automatically.</strong>'
+      : `⚠ This lesson is within 48 hours. <strong>Your lesson will be forfeited</strong> in line with the cancellation policy.`;
 
     document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
     document.getElementById('btnConfirmCancel').disabled  = false;
@@ -1198,7 +1198,7 @@
   </a>
   <a href="/learner/buy-credits.html" class="bottom-nav-item">
     <span class="bottom-nav-icon">💳</span>
-    <span>Credits</span>
+    <span>Lessons</span>
   </a>
   <a href="/learner/log-session.html" class="bottom-nav-item">
     <span class="bottom-nav-icon">📝</span>

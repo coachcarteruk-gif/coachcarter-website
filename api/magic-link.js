@@ -261,12 +261,12 @@ async function sendWelcomeEmail(email) {
   await mailer.sendMail({
     from:    'CoachCarter <bookings@coachcarter.uk>',
     to:      email,
-    subject: 'Welcome to CoachCarter — your free lesson credit is ready',
+    subject: 'Welcome to CoachCarter — your free lesson is ready',
     html: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
         <h1 style="font-size: 1.4rem; color: #262626;">Welcome to CoachCarter!</h1>
         <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
-          Your account is set up and we've added <strong style="color: #f58321;">1 free lesson credit</strong> to get you started.
+          Your account is set up and we've added <strong style="color: #f58321;">1 free lesson</strong> to get you started.
           That's a full 1.5-hour lesson — no payment needed.
         </p>
         <h2 style="font-size: 1rem; color: #262626; margin-top: 24px;">What to do next:</h2>

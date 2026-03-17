@@ -86,29 +86,29 @@ async function handleCreditPurchase(session) {
       WHERE id = ${learnerId}
     `;
 
-    console.log(`✅ Credits added: ${credits} credits → learner #${learnerId} (${learnerEmail})`);
+    console.log(`✅ Lessons added: ${credits} lessons → learner #${learnerId} (${learnerEmail})`);
 
     // 3. Send confirmation email via nodemailer
     const transporter = createTransporter();
-    const plural = credits === 1 ? 'credit' : 'credits';
+    const plural = credits === 1 ? 'lesson' : 'lessons';
 
     await transporter.sendMail({
       from:    'CoachCarter <bookings@coachcarter.uk>',
       to:      learnerEmail,
-      subject: `${credits} lesson ${plural} added to your account`,
+      subject: `${credits} ${plural} added to your account`,
       html: `
-        <h1>Your credits are ready.</h1>
-        <p>We've added <strong>${credits} lesson ${plural}</strong> to your CoachCarter account.</p>
+        <h1>Your lessons are ready to book.</h1>
+        <p>We've added <strong>${credits} ${plural}</strong> to your CoachCarter account.</p>
         <p><strong>Amount paid:</strong> £${(amountPence / 100).toFixed(2)}</p>
-        <p>You can now book your ${plural} directly from your dashboard.</p>
+        <p>Head to your dashboard to book your next lesson.</p>
         <p><a href="https://coachcarter.uk/learner/"
               style="background:#f58321;color:#fff;padding:14px 28px;text-decoration:none;
                      border-radius:8px;display:inline-block;font-weight:bold;">
           Book a lesson →
         </a></p>
         <p style="color:#888;font-size:0.85rem;">
-          Credits are refundable. Cancellations made 48+ hours before a lesson
-          automatically return the credit to your balance.
+          Lessons are fully refundable. Cancel 48+ hours before and the lesson
+          returns to your balance automatically.
         </p>
       `
     });

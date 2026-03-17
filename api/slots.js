@@ -275,7 +275,7 @@ async function handleBook(req, res) {
     if (!learner)
       return res.status(404).json({ error: 'Learner account not found' });
     if (learner.credit_balance < 1)
-      return res.status(402).json({ error: 'Insufficient credits. Please purchase credits to book a lesson.' });
+      return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
 
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
@@ -293,7 +293,7 @@ async function handleBook(req, res) {
       RETURNING credit_balance
     `;
     if (!deducted)
-      return res.status(402).json({ error: 'Insufficient credits. Please purchase credits to book a lesson.' });
+      return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
 
     // 4. Create booking — unique index on (instructor_id, scheduled_date, start_time)
     //    will throw if slot was taken. If so, refund the credit.
@@ -350,10 +350,10 @@ async function handleBook(req, res) {
           <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
           <tr><td><strong>Instructor:</strong></td><td>${instructor.name}</td></tr>
           <tr><td><strong>Duration:</strong></td><td>1.5 hours</td></tr>
-          <tr><td><strong>Credits remaining:</strong></td><td>${updated.credit_balance}</td></tr>
+          <tr><td><strong>Lessons remaining:</strong></td><td>${updated.credit_balance}</td></tr>
         </table>
         <p style="margin-top:16px;font-size:0.875rem;color:#797879">
-          Need to cancel? Do so at least 48 hours before the lesson to get your credit back.
+          Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.
         </p>
         <p>
           <a href="https://coachcarter.uk/learner/"
@@ -468,8 +468,8 @@ async function handleCancel(req, res) {
         <h1>Lesson cancelled.</h1>
         <p>Your lesson on <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
            with ${booking.instructor_name} has been cancelled.</p>
-        <p><strong>Your credit has been returned to your balance.</strong>
-           You now have ${updated.credit_balance} credit${updated.credit_balance !== 1 ? 's' : ''}.</p>
+        <p><strong>Your lesson has been returned to your balance.</strong>
+           You now have ${updated.credit_balance} lesson${updated.credit_balance !== 1 ? 's' : ''} remaining.</p>
         <p><a href="https://coachcarter.uk/learner/"
               style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;
                      border-radius:8px;display:inline-block;font-weight:bold">
@@ -479,7 +479,7 @@ async function handleCancel(req, res) {
         <h1>Lesson cancelled.</h1>
         <p>Your lesson on <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
            with ${booking.instructor_name} has been cancelled.</p>
-        <p><strong>As this was cancelled with less than 48 hours' notice, your credit has been forfeited
+        <p><strong>As this was cancelled with less than 48 hours' notice, your lesson has been forfeited
            in line with our cancellation policy.</strong></p>
         <p>If you believe this is an error, please reply to this email.</p>
       `
@@ -503,8 +503,8 @@ async function handleCancel(req, res) {
       credit_returned: creditReturned,
       credit_balance:  updated.credit_balance,
       message: creditReturned
-        ? 'Booking cancelled and credit returned to your balance.'
-        : `Booking cancelled. Credit forfeited (less than ${CANCEL_HOURS_CUTOFF} hours' notice).`
+        ? 'Booking cancelled and lesson returned to your balance.'
+        : `Booking cancelled. Lesson forfeited (less than ${CANCEL_HOURS_CUTOFF} hours\' notice).`
     });
 
   } catch (err) {
@@ -591,7 +591,7 @@ function generateICS(booking) {
     `DTSTART:${dtStart}`,
     `DTEND:${dtEnd}`,
     `SUMMARY:Driving Lesson — ${booking.instructor_name}`,
-    `DESCRIPTION:1.5-hour driving lesson with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before for a full credit refund.`,
+    `DESCRIPTION:1.5-hour driving lesson with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.`,
     'STATUS:CONFIRMED',
     'BEGIN:VALARM',
     'TRIGGER:-PT2H',

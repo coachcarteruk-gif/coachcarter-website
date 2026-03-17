@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Buy Lesson Credits — CoachCarter</title>
+  <title>Buy Lessons — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
@@ -22,6 +22,7 @@
       --surface:    #f9f9f9;
       --white:      #ffffff;
       --green:      #22c55e;
+      --green-lt:   #f0fdf4;
       --red:        #ef4444;
       --font-head:  'Bricolage Grotesque', sans-serif;
       --font-body:  'Lato', sans-serif;
@@ -121,6 +122,7 @@
       color: var(--muted);
       font-size: 1rem;
       margin-bottom: 40px;
+      line-height: 1.5;
     }
 
     /* ── Current balance card ── */
@@ -143,129 +145,126 @@
     }
     .balance-unit { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
 
-    /* ── Buy card ── */
-    .buy-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
+    /* ── Package cards ── */
+    .packages {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .pkg-card {
+      background: var(--white);
+      border: 2px solid var(--border);
       border-radius: var(--radius);
-      padding: 32px;
-      margin-bottom: 24px;
-    }
-    .buy-card h2 {
-      font-family: var(--font-head);
-      font-size: 1.25rem;
-      font-weight: 700;
-      margin-bottom: 24px;
-    }
-
-    /* ── Quantity selector ── */
-    .qty-row {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 28px;
-    }
-    .qty-label { font-size: 0.9rem; color: var(--muted); min-width: 80px; }
-    .qty-control {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    .qty-btn {
-      width: 44px;
-      height: 44px;
-      background: var(--white);
-      border: none;
-      font-size: 1.25rem;
+      padding: 20px 24px;
       cursor: pointer;
-      color: var(--primary);
-      transition: background 0.15s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      user-select: none;
-    }
-    .qty-btn:hover:not(:disabled) { background: var(--surface); }
-    .qty-btn:disabled { color: var(--border); cursor: default; }
-    .qty-value {
-      width: 56px;
-      height: 44px;
-      text-align: center;
-      font-size: 1.1rem;
-      font-weight: 700;
-      border: none;
-      border-left: 1.5px solid var(--border);
-      border-right: 1.5px solid var(--border);
-      background: var(--white);
-      color: var(--primary);
-      -moz-appearance: textfield;
-    }
-    .qty-value::-webkit-outer-spin-button,
-    .qty-value::-webkit-inner-spin-button { -webkit-appearance: none; }
-
-    /* ── Discount tiers ── */
-    .discount-tiers {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 8px;
-      margin-bottom: 28px;
-    }
-    .tier-card {
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 8px;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.2s, transform 0.15s;
       user-select: none;
       position: relative;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 16px;
     }
-    .tier-card:hover { border-color: var(--accent); background: var(--accent-lt); }
-    .tier-card.active {
+    .pkg-card:hover {
+      border-color: var(--accent);
+      background: var(--accent-lt);
+    }
+    .pkg-card.active {
       border-color: var(--accent);
       background: var(--accent-lt);
       box-shadow: 0 0 0 2px var(--accent);
-      transform: translateY(-2px);
     }
-    .tier-hours {
+
+    .pkg-left { display: flex; flex-direction: column; gap: 4px; }
+
+    .pkg-title {
       font-family: var(--font-head);
-      font-size: 1.1rem;
-      font-weight: 800;
+      font-size: 1.15rem;
+      font-weight: 700;
       color: var(--primary);
-      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    .tier-discount {
+    .pkg-detail {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .pkg-save {
+      display: inline-block;
+      background: var(--green-lt);
+      color: var(--green);
       font-size: 0.72rem;
       font-weight: 700;
-      color: var(--accent);
+      padding: 3px 8px;
+      border-radius: 20px;
+      white-space: nowrap;
     }
-    .tier-credits { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+
+    .pkg-right {
+      text-align: right;
+      min-width: 90px;
+    }
+    .pkg-price {
+      font-family: var(--font-head);
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .pkg-per {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .pkg-was {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+
     .popular-badge {
       position: absolute;
-      top: -9px;
-      left: 50%;
-      transform: translateX(-50%);
+      top: -10px;
+      left: 24px;
       background: var(--accent);
       color: white;
-      font-size: 0.6rem;
+      font-size: 0.65rem;
       font-weight: 700;
-      padding: 2px 7px;
+      padding: 3px 10px;
       border-radius: 10px;
       white-space: nowrap;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
 
-    /* ── Price breakdown ── */
-    .price-breakdown {
-      background: var(--white);
+    /* Single lesson option */
+    .single-lesson {
+      text-align: center;
+      padding: 12px 0 4px;
+      margin-bottom: 24px;
+    }
+    .single-lesson-link {
+      font-size: 0.88rem;
+      color: var(--muted);
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-family: var(--font-body);
+      transition: color 0.15s;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .single-lesson-link:hover { color: var(--accent); }
+
+    /* ── Price summary ── */
+    .price-summary {
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px 20px;
-      margin-bottom: 28px;
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 20px;
     }
     .price-row {
       display: flex;
@@ -285,25 +284,6 @@
       border-top: 1px solid var(--border);
       margin-top: 8px;
       padding-top: 12px;
-    }
-    .saving-badge {
-      display: inline-block;
-      background: var(--green);
-      color: white;
-      font-size: 0.75rem;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 20px;
-      margin-left: 8px;
-      vertical-align: middle;
-    }
-
-    @media (max-width: 500px) {
-      .discount-tiers { grid-template-columns: repeat(5, 1fr); gap: 4px; }
-      .tier-card { padding: 8px 4px; }
-      .tier-hours { font-size: 0.7rem; }
-      .tier-discount { font-size: 0.875rem; }
-      .tier-credits { display: none; }
     }
 
     /* ── Checkout button ── */
@@ -337,6 +317,7 @@
       font-size: 0.8rem;
       color: var(--muted);
       margin-top: 12px;
+      margin-bottom: 28px;
     }
     .klarna-note strong { color: var(--primary); }
 
@@ -403,6 +384,12 @@
       display: none;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 500px) {
+      .pkg-card { padding: 16px 18px; gap: 12px; }
+      .pkg-title { font-size: 1rem; }
+      .pkg-price { font-size: 1.15rem; }
+    }
   </style>
 </head>
 <body>
@@ -422,96 +409,116 @@
 </header>
 
 <main>
-  <h1>Buy Lesson Credits</h1>
-  <p class="subtitle">Each credit = one 1.5-hour driving lesson. Use them to book any available slot.</p>
+  <h1>Buy Lessons</h1>
+  <p class="subtitle">Each lesson is 1.5 hours with a qualified instructor. Pick a package and book whenever you're ready.</p>
 
   <!-- Current balance -->
   <div class="balance-card">
     <div>
-      <div class="balance-label">Your current balance</div>
+      <div class="balance-label">Lessons remaining</div>
       <div class="balance-value" id="balanceValue">—</div>
-      <div class="balance-unit" id="balanceUnit">credits</div>
+      <div class="balance-unit" id="balanceUnit">lessons</div>
     </div>
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#f58321" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
     </svg>
   </div>
 
-  <!-- Buy card -->
-  <div class="buy-card">
-    <h2>Add credits to your account</h2>
-
-    <!-- Discount tier cards -->
-    <div class="discount-tiers">
-      <div class="tier-card" onclick="updateQty(4)"  data-credits="4">
-        <div class="tier-hours">6 hrs</div>
-        <div class="tier-discount">Save 5%</div>
-        <div class="tier-credits">4 credits</div>
+  <!-- Package cards -->
+  <div class="packages" id="packages">
+    <div class="pkg-card" onclick="selectPkg(4)" data-qty="4">
+      <div class="pkg-left">
+        <div class="pkg-title">4 lessons <span class="pkg-save">Save 5%</span></div>
+        <div class="pkg-detail">6 hours of tuition · £78.38 per lesson</div>
       </div>
-      <div class="tier-card" onclick="updateQty(8)"  data-credits="8">
-        <div class="popular-badge">Most popular</div>
-        <div class="tier-hours">12 hrs</div>
-        <div class="tier-discount">Save 10%</div>
-        <div class="tier-credits">8 credits</div>
-      </div>
-      <div class="tier-card" onclick="updateQty(12)" data-credits="12">
-        <div class="tier-hours">18 hrs</div>
-        <div class="tier-discount">Save 15%</div>
-        <div class="tier-credits">12 credits</div>
-      </div>
-      <div class="tier-card" onclick="updateQty(16)" data-credits="16">
-        <div class="tier-hours">24 hrs</div>
-        <div class="tier-discount">Save 20%</div>
-        <div class="tier-credits">16 credits</div>
-      </div>
-      <div class="tier-card" onclick="updateQty(20)" data-credits="20">
-        <div class="tier-hours">30 hrs</div>
-        <div class="tier-discount">Save 25%</div>
-        <div class="tier-credits">20 credits</div>
+      <div class="pkg-right">
+        <div class="pkg-price">£313.50</div>
+        <div class="pkg-was">£330.00</div>
       </div>
     </div>
 
-    <div class="qty-row">
-      <span class="qty-label">Credits</span>
-      <div class="qty-control">
-        <button class="qty-btn" id="btnMinus" aria-label="Decrease">−</button>
-        <input class="qty-value" type="number" id="qtyInput" value="1" min="1" max="20" readonly>
-        <button class="qty-btn" id="btnPlus" aria-label="Increase">+</button>
+    <div class="pkg-card" onclick="selectPkg(8)" data-qty="8">
+      <div class="popular-badge">Most popular</div>
+      <div class="pkg-left">
+        <div class="pkg-title">8 lessons <span class="pkg-save">Save 10%</span></div>
+        <div class="pkg-detail">12 hours of tuition · £74.25 per lesson</div>
+      </div>
+      <div class="pkg-right">
+        <div class="pkg-price">£594.00</div>
+        <div class="pkg-was">£660.00</div>
       </div>
     </div>
 
-    <div class="price-breakdown">
-      <div class="price-row">
-        <span id="pricePerLine">1 credit × £82.50</span>
-        <span id="pricePerValue">£82.50</span>
+    <div class="pkg-card" onclick="selectPkg(12)" data-qty="12">
+      <div class="pkg-left">
+        <div class="pkg-title">12 lessons <span class="pkg-save">Save 15%</span></div>
+        <div class="pkg-detail">18 hours of tuition · £70.13 per lesson</div>
       </div>
-      <div class="price-row discount" id="discountRow" style="display:none">
-        <span id="discountLabel">Bulk discount</span>
-        <span id="discountValue"></span>
-      </div>
-      <div class="price-row total">
-        <span>Total <span class="saving-badge" id="savingBadge" style="display:none"></span></span>
-        <span id="totalValue">£82.50</span>
+      <div class="pkg-right">
+        <div class="pkg-price">£841.50</div>
+        <div class="pkg-was">£990.00</div>
       </div>
     </div>
 
-    <button class="btn-checkout" id="btnCheckout">
-      <span id="btnLabel">Pay securely with Stripe</span>
-      <div class="spinner" id="btnSpinner"></div>
-    </button>
-    <p class="klarna-note">
-      <strong>Pay in 3 with Klarna</strong> available at checkout — split the cost over 3 months, interest-free.
-    </p>
+    <div class="pkg-card" onclick="selectPkg(16)" data-qty="16">
+      <div class="pkg-left">
+        <div class="pkg-title">16 lessons <span class="pkg-save">Save 20%</span></div>
+        <div class="pkg-detail">24 hours of tuition · £66.00 per lesson</div>
+      </div>
+      <div class="pkg-right">
+        <div class="pkg-price">£1,056.00</div>
+        <div class="pkg-was">£1,320.00</div>
+      </div>
+    </div>
+
+    <div class="pkg-card" onclick="selectPkg(20)" data-qty="20">
+      <div class="pkg-left">
+        <div class="pkg-title">20 lessons <span class="pkg-save">Save 25%</span></div>
+        <div class="pkg-detail">30 hours of tuition · £61.88 per lesson</div>
+      </div>
+      <div class="pkg-right">
+        <div class="pkg-price">£1,237.50</div>
+        <div class="pkg-was">£1,650.00</div>
+      </div>
+    </div>
   </div>
+
+  <div class="single-lesson">
+    <button class="single-lesson-link" onclick="selectPkg(1)">Just need a single lesson? £82.50</button>
+  </div>
+
+  <!-- Price summary -->
+  <div class="price-summary" id="priceSummary">
+    <div class="price-row">
+      <span id="summaryLine">8 lessons × £82.50</span>
+      <span id="summarySubtotal">£660.00</span>
+    </div>
+    <div class="price-row discount" id="discountRow" style="display:none">
+      <span id="discountLabel">10% package discount</span>
+      <span id="discountValue"></span>
+    </div>
+    <div class="price-row total">
+      <span>Total</span>
+      <span id="totalValue">£594.00</span>
+    </div>
+  </div>
+
+  <button class="btn-checkout" id="btnCheckout">
+    <span id="btnLabel">Buy 8 lessons — £594.00</span>
+    <div class="spinner" id="btnSpinner"></div>
+  </button>
+  <p class="klarna-note">
+    <strong>Pay in 3 with Klarna</strong> available at checkout — split the cost interest-free.
+  </p>
 
   <!-- Policy card -->
   <div class="policy-card">
-    <h3>How credits work</h3>
+    <h3>Good to know</h3>
     <ul>
-      <li>One credit books one 1.5-hour lesson with any available instructor</li>
-      <li>Credits never expire — use them whenever you're ready</li>
-      <li>Cancel 48+ hours before a lesson and the credit returns to your balance automatically</li>
-      <li>Credits are fully refundable — contact us if you need a cash refund</li>
+      <li>Each lesson is 1.5 hours with a qualified CoachCarter instructor</li>
+      <li>Lessons never expire — use them whenever you're ready</li>
+      <li>Cancel 48+ hours before and the lesson returns to your balance automatically</li>
+      <li>Fully refundable — contact us if you need a cash refund</li>
     </ul>
   </div>
 </main>
@@ -520,31 +527,31 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const PRICE_PENCE = 8250;
-  const MAX_QTY     = 20;
+  const PRICE_PENCE = 8250; // £82.50 per lesson (1.5 hrs)
 
-  const DISCOUNT_TIERS = [
-    { minCredits: 20, pct: 25 },
-    { minCredits: 16, pct: 20 },
-    { minCredits: 12, pct: 15 },
-    { minCredits:  8, pct: 10 },
-    { minCredits:  4, pct:  5 },
+  const PACKAGES = [
+    { qty: 1,  pct: 0  },
+    { qty: 4,  pct: 5  },
+    { qty: 8,  pct: 10 },
+    { qty: 12, pct: 15 },
+    { qty: 16, pct: 20 },
+    { qty: 20, pct: 25 },
   ];
 
-  function getDiscount(q) {
-    const tier = DISCOUNT_TIERS.find(t => q >= t.minCredits);
-    return tier ? tier.pct : 0;
-  }
-
   function calcTotal(q) {
-    const full     = PRICE_PENCE * q;
-    const pct      = getDiscount(q);
-    const saving   = Math.round(full * pct / 100);
-    return { full, pct, saving, total: full - saving };
+    const pkg    = PACKAGES.find(p => p.qty === q) || { qty: q, pct: 0 };
+    const full   = PRICE_PENCE * q;
+    const saving = Math.round(full * pkg.pct / 100);
+    return { full, pct: pkg.pct, saving, total: full - saving };
   }
 
-  let token    = null;
-  let qty      = 1;
+  function fmt(pence) {
+    const pounds = (pence / 100).toFixed(2);
+    return pence >= 100000 ? '£' + Number(pounds).toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '£' + pounds;
+  }
+
+  let token = null;
+  let qty   = 8;
 
   // ── Auth check ──────────────────────────────────────────────────────────────
   function initAuth() {
@@ -568,53 +575,42 @@
 
       const b = data.credit_balance;
       document.getElementById('balanceValue').textContent = b;
-      document.getElementById('balanceUnit').textContent  = b === 1 ? 'credit' : 'credits';
+      document.getElementById('balanceUnit').textContent  = b === 1 ? 'lesson' : 'lessons';
       document.getElementById('headerBalance').textContent =
-        `${b} credit${b === 1 ? '' : 's'}`;
+        `${b} lesson${b === 1 ? '' : 's'}`;
     } catch (err) {
       document.getElementById('balanceValue').textContent = '?';
       document.getElementById('headerBalance').textContent = 'Balance unavailable';
     }
   }
 
-  // ── Quantity controls ───────────────────────────────────────────────────────
-  function updateQty(newQty) {
-    qty = Math.max(1, Math.min(MAX_QTY, newQty));
-    document.getElementById('qtyInput').value    = qty;
-    document.getElementById('btnMinus').disabled = qty <= 1;
-    document.getElementById('btnPlus').disabled  = qty >= MAX_QTY;
+  // ── Select package ──────────────────────────────────────────────────────────
+  function selectPkg(newQty) {
+    qty = newQty;
+
+    // Highlight selected card
+    document.querySelectorAll('.pkg-card').forEach(card => {
+      card.classList.toggle('active', parseInt(card.dataset.qty) === qty);
+    });
 
     const { full, pct, saving, total } = calcTotal(qty);
-    const pp = (PRICE_PENCE / 100).toFixed(2);
 
-    document.getElementById('pricePerLine').textContent  = `${qty} credit${qty > 1 ? 's' : ''} × £${pp}`;
-    document.getElementById('pricePerValue').textContent = `£${(full / 100).toFixed(2)}`;
+    // Update summary
+    document.getElementById('summaryLine').textContent = `${qty} lesson${qty > 1 ? 's' : ''} × £82.50`;
+    document.getElementById('summarySubtotal').textContent = fmt(full);
 
-    // Discount row
-    const discountRow   = document.getElementById('discountRow');
-    const savingBadge   = document.getElementById('savingBadge');
+    const discountRow = document.getElementById('discountRow');
     if (pct > 0) {
       discountRow.style.display = 'flex';
-      document.getElementById('discountLabel').textContent = `${pct}% bulk discount`;
-      document.getElementById('discountValue').textContent = `−£${(saving / 100).toFixed(2)}`;
-      savingBadge.style.display   = 'inline-block';
-      savingBadge.textContent     = `Save £${(saving / 100).toFixed(2)}`;
+      document.getElementById('discountLabel').textContent = `${pct}% package discount`;
+      document.getElementById('discountValue').textContent = `−${fmt(saving)}`;
     } else {
       discountRow.style.display = 'none';
-      savingBadge.style.display = 'none';
     }
 
-    document.getElementById('totalValue').textContent = `£${(total / 100).toFixed(2)}`;
-    document.getElementById('btnLabel').textContent   = `Pay £${(total / 100).toFixed(2)} securely with Stripe`;
-
-    // Highlight the matching tier card
-    document.querySelectorAll('.tier-card').forEach(card => {
-      card.classList.toggle('active', parseInt(card.dataset.credits) === qty);
-    });
+    document.getElementById('totalValue').textContent = fmt(total);
+    document.getElementById('btnLabel').textContent = `Buy ${qty} lesson${qty > 1 ? 's' : ''} — ${fmt(total)}`;
   }
-
-  document.getElementById('btnMinus').addEventListener('click', () => updateQty(qty - 1));
-  document.getElementById('btnPlus').addEventListener('click',  () => updateQty(qty + 1));
 
   // ── Checkout ────────────────────────────────────────────────────────────────
   document.getElementById('btnCheckout').addEventListener('click', async () => {
@@ -639,12 +635,13 @@
     } catch (err) {
       showToast(err.message || 'Something went wrong. Please try again.', 'error');
       btn.disabled     = false;
-      label.textContent = `Pay £${(calcTotal(qty).total / 100).toFixed(2)} securely with Stripe`;
+      const { total } = calcTotal(qty);
+      label.textContent = `Buy ${qty} lesson${qty > 1 ? 's' : ''} — ${fmt(total)}`;
       spinner.style.display = 'none';
     }
   });
 
-  // ── Toast ────────────────────────────────────────────────────────────────────
+  // ── Toast ──────────────────────────────────────────────────────────────────
   function showToast(msg, type = '') {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -654,16 +651,16 @@
     setTimeout(() => t.classList.remove('show'), 3500);
   }
 
-  // ── Check for ?cancelled=true ────────────────────────────────────────────────
+  // ── Check for ?cancelled=true ──────────────────────────────────────────────
   const params = new URLSearchParams(window.location.search);
   if (params.get('cancelled') === 'true') {
     showToast('Payment cancelled — your balance is unchanged.', 'cancelled');
   }
 
-  // ── Init ─────────────────────────────────────────────────────────────────────
+  // ── Init ───────────────────────────────────────────────────────────────────
   if (initAuth()) {
     loadBalance();
-    updateQty(8); // Default to 12hrs / Save 10% — the most popular package
+    selectPkg(8); // Default to most popular
   }
 </script>
 
@@ -678,7 +675,7 @@
   </a>
   <a href="/learner/buy-credits.html" class="bottom-nav-item active">
     <span class="bottom-nav-icon">💳</span>
-    <span>Credits</span>
+    <span>Lessons</span>
   </a>
   <a href="/learner/log-session.html" class="bottom-nav-item">
     <span class="bottom-nav-icon">📝</span>
