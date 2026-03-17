@@ -1,6 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const nodemailer = require('nodemailer');
 const { neon } = require('@neondatabase/serverless');
+const jwt = require('jsonwebtoken');
 
 // In-memory storage for legacy booking flow (pass guarantee / packages)
 // NOTE: this is intentionally kept for the existing flow — the new credit
@@ -34,6 +35,9 @@ module.exports = async (req, res) => {
     if (paymentType === 'credit_purchase') {
       // ── New credit-based booking system ──────────────────────────────────
       await handleCreditPurchase(session);
+    } else if (paymentType === 'slot_booking') {
+      // ── Pay-per-slot: single lesson purchase + instant booking ──────────
+      await handleSlotBooking(session);
     } else {
       // ── Legacy pass guarantee / package flow ──────────────────────────────
       await handleCheckoutComplete(session);
@@ -118,6 +122,217 @@ async function handleCreditPurchase(session) {
     // Don't rethrow — we've already responded 200 to Stripe.
     // A failed DB write here should be caught by Neon error logging / Stripe retry.
   }
+}
+
+// ── Slot booking handler (pay-per-slot) ─────────────────────────────────────
+async function handleSlotBooking(session) {
+  const metadata      = session.metadata || {};
+  const learnerId     = parseInt(metadata.learner_id, 10);
+  const instructorId  = parseInt(metadata.instructor_id, 10);
+  const learnerEmail  = metadata.learner_email || session.customer_email;
+  const instructorName = metadata.instructor_name;
+  const scheduledDate = metadata.scheduled_date;
+  const startTime     = metadata.start_time;
+  const endTime       = metadata.end_time;
+  const amountPence   = parseInt(metadata.amount_pence, 10);
+
+  if (!learnerId || !instructorId || !scheduledDate || !startTime || !endTime) {
+    console.error('❌ slot_booking webhook missing required metadata', metadata);
+    return;
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Idempotency check
+    const [existing] = await sql`
+      SELECT id FROM credit_transactions WHERE stripe_session_id = ${session.id}
+    `;
+    if (existing) {
+      console.log(`⏭️ Duplicate slot_booking webhook for ${session.id} — skipping`);
+      return;
+    }
+
+    // 1. Record the transaction (1 credit purchased for this single lesson)
+    await sql`
+      INSERT INTO credit_transactions
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id)
+      VALUES
+        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id})
+    `;
+
+    // 2. Add 1 credit to the learner's balance
+    await sql`
+      UPDATE learner_users
+      SET credit_balance = credit_balance + 1
+      WHERE id = ${learnerId}
+    `;
+
+    // 3. Immediately deduct 1 credit and create the booking (atomic deduct)
+    const [deducted] = await sql`
+      UPDATE learner_users
+      SET credit_balance = credit_balance - 1
+      WHERE id = ${learnerId} AND credit_balance >= 1
+      RETURNING credit_balance
+    `;
+
+    if (!deducted) {
+      console.error('❌ slot_booking: failed to deduct credit after adding it — race condition?');
+      return;
+    }
+
+    // 4. Create the booking
+    let booking;
+    try {
+      const [b] = await sql`
+        INSERT INTO lesson_bookings
+          (learner_id, instructor_id, scheduled_date, start_time, end_time, status)
+        VALUES
+          (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, 'confirmed')
+        RETURNING id, scheduled_date, start_time::text, end_time::text
+      `;
+      booking = b;
+    } catch (insertErr) {
+      // Slot was taken — refund the credit
+      await sql`
+        UPDATE learner_users SET credit_balance = credit_balance + 1 WHERE id = ${learnerId}
+      `;
+      console.error('❌ slot_booking: slot already taken, credit refunded', insertErr.message);
+      // TODO: could send a "sorry, slot was taken" email here
+      return;
+    }
+
+    // 5. Clean up the reservation
+    try {
+      await sql`DELETE FROM slot_reservations WHERE stripe_session_id = ${session.id}`;
+    } catch (e) {
+      // Table may not exist — that's fine
+    }
+
+    // 6. Get instructor email for notification
+    const [instructor] = await sql`
+      SELECT email FROM instructors WHERE id = ${instructorId}
+    `;
+    const [learner] = await sql`
+      SELECT name, email FROM learner_users WHERE id = ${learnerId}
+    `;
+
+    const creditBalance = deducted.credit_balance;
+
+    // 7. Send confirmation emails
+    const transporter = createTransporter();
+    const lessonDate = new Date(scheduledDate + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const lessonTime = `${startTime} – ${endTime}`;
+
+    // Generate .ics calendar attachment
+    const icsContent = generateICS({
+      id: booking.id,
+      scheduled_date: scheduledDate,
+      start_time: startTime,
+      end_time: endTime,
+      instructor_name: instructorName
+    });
+
+    // Email to learner
+    await transporter.sendMail({
+      from:    'CoachCarter <bookings@coachcarter.uk>',
+      to:      learnerEmail,
+      subject: `Lesson confirmed — ${lessonDate} at ${startTime}`,
+      html: `
+        <h1>Lesson confirmed.</h1>
+        <p>Your payment of <strong>£${(amountPence / 100).toFixed(2)}</strong> was successful and your lesson is booked.</p>
+        <table>
+          <tr><td><strong>Date:</strong></td><td>${lessonDate}</td></tr>
+          <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+          <tr><td><strong>Instructor:</strong></td><td>${instructorName}</td></tr>
+          <tr><td><strong>Duration:</strong></td><td>1.5 hours</td></tr>
+          <tr><td><strong>Lessons remaining:</strong></td><td>${creditBalance}</td></tr>
+        </table>
+        <p style="margin-top:16px;font-size:0.875rem;color:#797879">
+          Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.
+        </p>
+        <p>
+          <a href="https://coachcarter.uk/learner/"
+             style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">
+            View my bookings →
+          </a>
+        </p>
+      `,
+      attachments: [{
+        filename: `coachcarter-lesson-${scheduledDate}.ics`,
+        content:  icsContent,
+        contentType: 'text/calendar; method=PUBLISH'
+      }]
+    });
+
+    // Email to instructor
+    if (instructor?.email) {
+      await transporter.sendMail({
+        from:    'CoachCarter <system@coachcarter.uk>',
+        to:      instructor.email,
+        subject: `New booking — ${lessonDate} at ${startTime}`,
+        html: `
+          <h2>New lesson booked</h2>
+          <table>
+            <tr><td><strong>Learner:</strong></td><td>${learner?.name || 'Unknown'}</td></tr>
+            <tr><td><strong>Email:</strong></td><td>${learnerEmail}</td></tr>
+            <tr><td><strong>Date:</strong></td><td>${lessonDate}</td></tr>
+            <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+          </table>
+          <p style="margin-top:16px">
+            <a href="https://coachcarter.uk/instructor/"
+               style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
+                      border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
+              View my schedule →
+            </a>
+          </p>
+        `
+      });
+    }
+
+    console.log(`✅ Slot booking complete: lesson #${booking.id} for learner #${learnerId}`);
+
+  } catch (err) {
+    console.error('❌ handleSlotBooking error:', err);
+  }
+}
+
+// Generate .ics calendar file for slot bookings
+function generateICS(booking) {
+  const dtStart = toICSDate(booking.scheduled_date, booking.start_time);
+  const dtEnd   = toICSDate(booking.scheduled_date, booking.end_time);
+  const uid     = `booking-${booking.id}@coachcarter.uk`;
+  const now     = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//CoachCarter//Lesson Booking//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${now}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:Driving Lesson — ${booking.instructor_name}`,
+    `DESCRIPTION:1.5-hour driving lesson with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html`,
+    'STATUS:CONFIRMED',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT2H',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Driving lesson in 2 hours',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+}
+
+function toICSDate(dateStr, timeStr) {
+  const d = dateStr.replace(/-/g, '');
+  const t = timeStr.replace(/:/g, '').slice(0, 6);
+  return `${d}T${t.padEnd(6, '0')}`;
 }
 
 // ── Legacy checkout handler ───────────────────────────────────────────────────

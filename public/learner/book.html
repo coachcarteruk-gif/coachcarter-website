@@ -128,8 +128,8 @@
 
     /* ── No credits banner ── */
     .no-credits-banner {
-      background: var(--red-lt);
-      border: 1.5px solid var(--red);
+      background: var(--accent-lt);
+      border: 1.5px solid var(--accent);
       border-radius: var(--radius);
       padding: 20px 24px;
       display: flex;
@@ -139,7 +139,7 @@
       margin-bottom: 28px;
     }
     .no-credits-banner p { font-size: 0.9rem; }
-    .no-credits-banner strong { color: var(--red); }
+    .no-credits-banner strong { color: var(--accent); }
     .btn-buy-now {
       background: var(--accent); color: white; border: none;
       padding: 10px 20px; border-radius: 8px; font-family: var(--font-head);
@@ -283,15 +283,7 @@
       background: var(--accent-lt);
       transform: translateY(-1px);
     }
-    .slot-card.no-credits {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .slot-card.no-credits:hover {
-      border-color: var(--border);
-      background: none;
-      transform: none;
-    }
+    /* no-credits styles removed — all slots are now bookable */
     .slot-time {
       font-family: var(--font-head);
       font-size: 1rem;
@@ -543,10 +535,9 @@
     </div>
   </div>
 
-  <!-- No credits banner (hidden until needed) -->
+  <!-- No credits info (hidden until needed) -->
   <div class="no-credits-banner" id="noCreditsBanner" style="display:none">
-    <p><strong>You have no lessons remaining.</strong> Buy lessons to start booking.</p>
-    <a href="/learner/buy-credits.html" class="btn-buy-now">Buy Lessons</a>
+    <p><strong style="color:var(--accent)">No lessons on your account.</strong> No worries — you can pay when you book, or <a href="/learner/buy-credits.html" style="color:var(--accent);font-weight:700">buy a bundle to save</a>.</p>
   </div>
 
   <!-- Upcoming bookings -->
@@ -602,16 +593,39 @@
           <span>Duration</span><span>1.5 hours</span>
         </div>
       </div>
-      <p class="modal-credit-note">
-        This will use <strong>1 lesson</strong> from your balance.
-        Cancel 48+ hours before and it returns automatically.
-      </p>
-      <div class="modal-actions">
-        <button class="btn-modal-cancel" id="bookModalClose">Cancel</button>
-        <button class="btn-confirm" id="btnConfirmBook">
-          <span id="bookBtnLabel">Confirm booking</span>
-          <div class="modal-spinner" id="bookSpinner"></div>
-        </button>
+      <!-- Dual-path: use credit OR pay now -->
+      <div id="modalCreditPath" style="display:none">
+        <p class="modal-credit-note">
+          This will use <strong>1 lesson</strong> from your balance.
+          Cancel 48+ hours before and it returns automatically.
+        </p>
+        <div class="modal-actions">
+          <button class="btn-modal-cancel" id="bookModalClose">Cancel</button>
+          <button class="btn-confirm" id="btnConfirmBook">
+            <span id="bookBtnLabel">Confirm booking</span>
+            <div class="modal-spinner" id="bookSpinner"></div>
+          </button>
+        </div>
+        <p style="text-align:center;margin-top:12px;font-size:0.8rem;color:var(--muted)">
+          or <a href="/learner/buy-credits.html" style="color:var(--accent);font-weight:600">buy more lessons</a>
+        </p>
+      </div>
+
+      <div id="modalPayPath" style="display:none">
+        <p class="modal-credit-note" style="background:var(--accent-lt);border-color:var(--accent)">
+          You have no lessons on your account. Pay <strong>£82.50</strong> now and we'll book this slot instantly.
+          Cancel 48+ hours before and it returns as a lesson credit.
+        </p>
+        <div class="modal-actions">
+          <button class="btn-modal-cancel" id="bookModalCloseAlt">Cancel</button>
+          <button class="btn-confirm" id="btnPayAndBook">
+            <span id="payBtnLabel">Pay £82.50 & book</span>
+            <div class="modal-spinner" id="paySpinner"></div>
+          </button>
+        </div>
+        <p style="text-align:center;margin-top:12px;font-size:0.8rem;color:var(--muted)">
+          or <a href="/learner/buy-credits.html" style="color:var(--accent);font-weight:600">buy a bundle to save</a>
+        </p>
       </div>
     </div>
     <!-- Success step with calendar options -->
@@ -684,6 +698,18 @@
     if (localStorage.getItem('cc_welcome') === '1') {
       document.getElementById('welcomeBanner').style.display = 'block';
     }
+    // Handle return from Stripe Checkout
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('paid') === '1') {
+      showToast('Payment successful — your lesson is booked! Check your email for details.', 'success');
+      // Clean the URL
+      window.history.replaceState({}, '', '/learner/book.html');
+    }
+    if (params.get('cancelled') === '1') {
+      showToast('Payment cancelled — the slot has been released.', '');
+      window.history.replaceState({}, '', '/learner/book.html');
+    }
+
     Promise.all([loadBalance(), loadInstructors(), loadUpcoming()])
       .then(() => loadWeek());
   }
@@ -899,14 +925,13 @@
     const avatar   = slot.instructor_photo
       ? `<img src="${slot.instructor_photo}" alt="${slot.instructor_name}">`
       : initials;
-    const noCredits = creditBalance < 1;
     const dataAttrs = `data-instructor-id="${slot.instructor_id}" data-date="${slot.date}"
       data-start="${slot.start_time}" data-end="${slot.end_time}"
       data-instructor-name="${slot.instructor_name}"`;
 
     return `
-      <div class="slot-card ${noCredits ? 'no-credits' : ''}"
-           onclick="${noCredits ? 'openNoCreditAlert()' : `openBookModal(this)`}"
+      <div class="slot-card"
+           onclick="openBookModal(this)"
            ${dataAttrs}>
         <div class="slot-time">${slot.start_time} – ${slot.end_time}</div>
         <div class="slot-instructor">
@@ -914,12 +939,6 @@
           ${slot.instructor_name}
         </div>
       </div>`;
-  }
-
-  // ── No credit alert ───────────────────────────────────────────────────────
-  function openNoCreditAlert() {
-    showToast('You need lessons to book. Buy some first!', 'error');
-    setTimeout(() => window.location.href = '/learner/buy-credits.html', 1800);
   }
 
   // ── Book modal ────────────────────────────────────────────────────────────
@@ -937,22 +956,65 @@
     document.getElementById('mdDate').textContent       = dateDisplay;
     document.getElementById('mdTime').textContent       = `${pendingSlot.start_time} – ${pendingSlot.end_time}`;
     document.getElementById('mdInstructor').textContent = pendingSlot.instructor_name;
-    document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
-    document.getElementById('bookSpinner').style.display = 'none';
-    document.getElementById('btnConfirmBook').disabled  = false;
+    // Show the right path based on credit balance
+    const hasCreds = creditBalance >= 1;
+    document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
+    document.getElementById('modalPayPath').style.display    = hasCreds ? 'none'  : 'block';
+
+    if (hasCreds) {
+      document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
+      document.getElementById('bookSpinner').style.display = 'none';
+      document.getElementById('btnConfirmBook').disabled  = false;
+    } else {
+      document.getElementById('payBtnLabel').textContent = 'Pay £82.50 & book';
+      document.getElementById('paySpinner').style.display = 'none';
+      document.getElementById('btnPayAndBook').disabled  = false;
+    }
 
     document.getElementById('bookModal').classList.add('open');
   }
 
-  document.getElementById('bookModalClose').onclick = () => {
+  function closeBookModal() {
     document.getElementById('bookModal').classList.remove('open');
     setTimeout(() => {
       document.getElementById('bookConfirmStep').style.display = 'block';
       document.getElementById('bookSuccessStep').style.display = 'none';
     }, 300);
-  };
+  }
+  document.getElementById('bookModalClose').onclick = closeBookModal;
+  document.getElementById('bookModalCloseAlt').onclick = closeBookModal;
 
   let lastBookingId = null;
+
+  // ── Pay & Book (Stripe Checkout for single lesson) ─────────────────────
+  document.getElementById('btnPayAndBook').onclick = async () => {
+    if (!pendingSlot) return;
+    const btn     = document.getElementById('btnPayAndBook');
+    const label   = document.getElementById('payBtnLabel');
+    const spinner = document.getElementById('paySpinner');
+
+    btn.disabled          = true;
+    label.textContent     = 'Redirecting to payment…';
+    spinner.style.display = 'block';
+
+    try {
+      const res  = await fetch('/api/slots?action=checkout-slot', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body:    JSON.stringify(pendingSlot)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
+    } catch (err) {
+      showToast(err.message || 'Could not start payment. Please try again.', 'error');
+      btn.disabled          = false;
+      label.textContent     = 'Pay £82.50 & book';
+      spinner.style.display = 'none';
+    }
+  };
 
   document.getElementById('btnConfirmBook').onclick = async () => {
     if (!pendingSlot) return;
@@ -1170,13 +1232,7 @@
 
   // ── Close modals on overlay click ────────────────────────────────────────
   document.getElementById('bookModal').addEventListener('click', e => {
-    if (e.target === document.getElementById('bookModal')) {
-      document.getElementById('bookModal').classList.remove('open');
-      setTimeout(() => {
-        document.getElementById('bookConfirmStep').style.display = 'block';
-        document.getElementById('bookSuccessStep').style.display = 'none';
-      }, 300);
-    }
+    if (e.target === document.getElementById('bookModal')) closeBookModal();
   });
   document.getElementById('cancelModal').addEventListener('click', e => {
     if (e.target === document.getElementById('cancelModal'))

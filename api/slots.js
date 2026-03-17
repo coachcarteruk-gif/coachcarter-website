@@ -22,11 +22,14 @@
 const { neon }    = require('@neondatabase/serverless');
 const nodemailer  = require('nodemailer');
 const jwt         = require('jsonwebtoken');
+const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const SLOT_MINUTES        = 90;   // 1.5 hours
 const MAX_DAYS_AHEAD      = 90;   // booking window
 const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get credit back
+const LESSON_PRICE_PENCE  = 8250; // £82.50 per single lesson
+const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -56,10 +59,11 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   const action = req.query.action;
-  if (action === 'available')   return handleAvailable(req, res);
-  if (action === 'book')        return handleBook(req, res);
-  if (action === 'cancel')      return handleCancel(req, res);
-  if (action === 'my-bookings') return handleMyBookings(req, res);
+  if (action === 'available')    return handleAvailable(req, res);
+  if (action === 'book')         return handleBook(req, res);
+  if (action === 'checkout-slot') return handleCheckoutSlot(req, res);
+  if (action === 'cancel')       return handleCancel(req, res);
+  if (action === 'my-bookings')  return handleMyBookings(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -139,9 +143,26 @@ async function handleAvailable(req, res) {
         ${instructor_id ? sql`AND instructor_id = ${instructor_id}` : sql``}
     `;
 
-    // Index bookings by "instructorId|date" for fast lookup
+    // 2b. Also load active slot reservations (held during Stripe checkout)
+    let reservations = [];
+    try {
+      reservations = await sql`
+        SELECT instructor_id,
+               scheduled_date::text AS scheduled_date,
+               start_time::text     AS start_time,
+               end_time::text       AS end_time
+        FROM slot_reservations
+        WHERE scheduled_date BETWEEN ${from} AND ${to}
+          AND expires_at > NOW()
+          ${instructor_id ? sql`AND instructor_id = ${instructor_id}` : sql``}
+      `;
+    } catch (e) {
+      // Table may not exist yet — that's fine, no reservations
+    }
+
+    // Index bookings + reservations by "instructorId|date" for fast lookup
     const bookedIndex = {};
-    for (const b of bookings) {
+    for (const b of [...bookings, ...reservations]) {
       const key = `${b.instructor_id}|${b.scheduled_date}`;
       if (!bookedIndex[key]) bookedIndex[key] = [];
       bookedIndex[key].push({ start: timeToMinutes(b.start_time), end: timeToMinutes(b.end_time) });
@@ -401,6 +422,133 @@ async function handleBook(req, res) {
   } catch (err) {
     console.error('slots book error:', err);
     return res.status(500).json({ error: 'Booking failed', details: err.message });
+  }
+}
+
+// ── POST /api/slots?action=checkout-slot ──────────────────────────────────────
+// Body: { instructor_id, date, start_time, end_time }
+// Creates a Stripe Checkout session for a single lesson (£82.50).
+// Reserves the slot for 10 minutes while the learner pays.
+// The webhook will book the slot and add+deduct a credit on payment completion.
+async function handleCheckoutSlot(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { instructor_id, date, start_time, end_time } = req.body;
+  if (!instructor_id || !date || !start_time || !end_time)
+    return res.status(400).json({ error: 'instructor_id, date, start_time, end_time required' });
+
+  // Validate slot is 90 minutes
+  const startMins = timeToMinutes(start_time);
+  const endMins   = timeToMinutes(end_time);
+  if (endMins - startMins !== SLOT_MINUTES)
+    return res.status(400).json({ error: 'Slot must be exactly 90 minutes' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Ensure reservation table exists
+    await sql`CREATE TABLE IF NOT EXISTS slot_reservations (
+      id SERIAL PRIMARY KEY,
+      learner_id INTEGER NOT NULL,
+      instructor_id INTEGER NOT NULL,
+      scheduled_date DATE NOT NULL,
+      start_time TIME NOT NULL,
+      end_time TIME NOT NULL,
+      stripe_session_id TEXT,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`;
+
+    // Clean up any expired reservations
+    await sql`DELETE FROM slot_reservations WHERE expires_at < NOW()`;
+
+    // Check slot isn't already booked
+    const [existingBooking] = await sql`
+      SELECT id FROM lesson_bookings
+      WHERE instructor_id = ${instructor_id}
+        AND scheduled_date = ${date}
+        AND start_time = ${start_time}::time
+        AND status = 'confirmed'
+    `;
+    if (existingBooking)
+      return res.status(409).json({ error: 'Sorry, that slot is already booked.' });
+
+    // Check slot isn't already reserved by someone else
+    const [existingReservation] = await sql`
+      SELECT id FROM slot_reservations
+      WHERE instructor_id = ${instructor_id}
+        AND scheduled_date = ${date}
+        AND start_time = ${start_time}::time
+        AND expires_at > NOW()
+        AND learner_id != ${user.id}
+    `;
+    if (existingReservation)
+      return res.status(409).json({ error: 'Someone else is currently booking this slot. Try another or wait a few minutes.' });
+
+    // Check instructor is valid
+    const [instructor] = await sql`
+      SELECT id, name FROM instructors WHERE id = ${instructor_id} AND active = true
+    `;
+    if (!instructor)
+      return res.status(404).json({ error: 'Instructor not found' });
+
+    // Get learner email
+    const [learner] = await sql`SELECT email FROM learner_users WHERE id = ${user.id}`;
+    if (!learner)
+      return res.status(404).json({ error: 'Learner not found' });
+
+    // Create Stripe Checkout session
+    const origin = req.headers.origin || 'https://coachcarter.uk';
+    const lessonDate = new Date(date + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{
+        price_data: {
+          currency: 'gbp',
+          unit_amount: LESSON_PRICE_PENCE,
+          product_data: {
+            name: `Driving Lesson — ${lessonDate} ${start_time}–${end_time}`,
+            description: `1.5-hour lesson with ${instructor.name}. Slot held for ${RESERVATION_MINUTES} minutes.`
+          }
+        },
+        quantity: 1
+      }],
+      metadata: {
+        payment_type:    'slot_booking',
+        learner_id:      String(user.id),
+        learner_email:   learner.email,
+        instructor_id:   String(instructor_id),
+        instructor_name: instructor.name,
+        scheduled_date:  date,
+        start_time,
+        end_time,
+        amount_pence:    String(LESSON_PRICE_PENCE)
+      },
+      customer_email: learner.email,
+      billing_address_collection: 'required',
+      success_url: `${origin}/learner/book.html?paid=1`,
+      cancel_url:  `${origin}/learner/book.html?cancelled=1`
+    });
+
+    // Reserve the slot (upsert in case learner retries)
+    await sql`
+      INSERT INTO slot_reservations
+        (learner_id, instructor_id, scheduled_date, start_time, end_time, stripe_session_id, expires_at)
+      VALUES
+        (${user.id}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, ${session.id},
+         NOW() + INTERVAL '10 minutes')
+      ON CONFLICT DO NOTHING
+    `;
+
+    return res.json({ url: session.url });
+  } catch (err) {
+    console.error('checkout-slot error:', err);
+    return res.status(500).json({ error: 'Failed to create checkout', details: err.message });
   }
 }
 
