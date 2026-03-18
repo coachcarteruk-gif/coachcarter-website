@@ -4,20 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Classroom — CoachCarter</title>
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Jost:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --navy:     #262626;
-      --navy-2:   #2e2e2e;
-      --orange:   #f58321;
-      --orange-dk:#e07518;
-      --font-h:   'Jost', sans-serif;
-      --font-b:   'DM Sans', sans-serif;
+      --navy:       #262626;
+      --orange:     #f58321;
+      --orange-dk:  #e07518;
       --primary:    #262626;
       --accent:     #f58321;
       --accent-dk:  #e07518;
@@ -31,336 +26,232 @@
       --font-head:  'Jost', sans-serif;
       --font-body:  'DM Sans', sans-serif;
       --radius:     14px;
-      --header-h:   64px;
-      --tabs-h:     48px;
     }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--primary); min-height: 100vh; }
 
-    html, body {
-      height: 100%;
-      overflow: hidden;
-      font-family: var(--font-body);
-      background: var(--bg);
-      color: var(--primary);
-    }
-
-    /* ── NAV ── */
+    /* ── Nav ─────────────────────────────────────────────────────────────── */
     .site-nav {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 300;
-      padding: 0 32px;
-      height: 64px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(38, 38, 38, 0.92);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      position: fixed; top: 0; left: 0; right: 0; z-index: 300;
+      padding: 0 32px; height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(38,38,38,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .site-nav-logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
-    }
-    .site-nav-logo img {
-      width: 34px; height: 34px;
-      object-fit: contain;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.08);
-      padding: 4px;
-    }
-    .site-nav-logo span {
-      font-family: var(--font-h);
-      font-size: 1.1rem;
-      font-weight: 800;
-      color: #fff;
-      letter-spacing: -0.02em;
-    }
+    .site-nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .site-nav-logo img { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,0.08); padding: 4px; }
+    .site-nav-logo span { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
     .site-nav-logo span em { font-style: normal; color: var(--orange); }
-    .site-nav-links {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+    .site-nav-links { display: flex; align-items: center; gap: 6px; }
     .site-nav-link {
-      color: rgba(255,255,255,0.6);
-      font-family: var(--font-b);
-      font-weight: 500;
-      font-size: 0.83rem;
-      padding: 7px 14px;
-      border-radius: 100px;
-      border: 1px solid transparent;
-      text-decoration: none;
-      transition: all 0.18s;
-      white-space: nowrap;
-      background: transparent;
-      cursor: pointer;
+      color: rgba(255,255,255,0.6); font-family: var(--font-body); font-weight: 500;
+      font-size: 0.83rem; padding: 7px 14px; border-radius: 100px;
+      border: 1px solid transparent; text-decoration: none; transition: all 0.18s;
+      white-space: nowrap; background: transparent; cursor: pointer;
     }
-    .site-nav-link:hover {
-      color: #fff;
-      border-color: rgba(255,255,255,0.15);
-      background: rgba(255,255,255,0.05);
+    .site-nav-link:hover { color: #fff; border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
+    .site-nav-link.primary { background: var(--orange); color: #fff; border-color: var(--orange); font-weight: 600; }
+    .site-nav-link.primary:hover { background: var(--orange-dk); border-color: var(--orange-dk); }
+    @media (max-width: 600px) { .site-nav { padding: 0 16px; } .site-nav-link:not(.primary):not(.back) { display: none; } }
+
+    /* ── Page ────────────────────────────────────────────────────────────── */
+    .page { max-width: 1000px; margin: 0 auto; padding: 24px 16px 60px; margin-top: 64px; }
+
+    /* ── Page header ─────────────────────────────────────────────────────── */
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
     }
-    .site-nav-link.primary {
-      background: var(--orange);
-      color: #fff;
-      border-color: var(--orange);
-      font-weight: 600;
+    .page-title { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; }
+    .page-sub { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── View mode toggle ────────────────────────────────────────────────── */
+    .mode-toggle {
+      display: flex; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 3px; gap: 2px;
     }
-    .site-nav-link.primary:hover {
-      background: var(--orange-dk);
-      border-color: var(--orange-dk);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(245,131,33,0.35);
+    .mode-btn {
+      padding: 7px 14px; border-radius: 7px; border: none;
+      background: transparent; font-family: var(--font-body);
+      font-size: 0.82rem; font-weight: 600; color: var(--muted);
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+      display: flex; align-items: center; gap: 5px;
     }
-    @media (max-width: 600px) {
-      .site-nav { padding: 0 16px; }
-      .site-nav-link:not(.primary):not(.back) { display: none; }
+    .mode-btn.active { background: var(--white); color: var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+
+    /* ── Category filter pills ───────────────────────────────────────────── */
+    .cat-pills {
+      display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;
+      margin-bottom: 20px; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .cat-pills::-webkit-scrollbar { display: none; }
+    .cat-pill {
+      flex-shrink: 0; background: transparent; border: 1.5px solid var(--border);
+      border-radius: 20px; color: var(--muted); font-family: var(--font-body);
+      font-size: 0.78rem; font-weight: 600; padding: 6px 16px;
+      cursor: pointer; white-space: nowrap; transition: all 0.2s;
+    }
+    .cat-pill:hover { background: var(--accent-mid); color: var(--accent-dk); border-color: rgba(245,131,33,0.2); }
+    .cat-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .cat-pill .count { font-size: 0.68rem; opacity: 0.7; margin-left: 3px; }
+
+    /* ── GRID VIEW ───────────────────────────────────────────────────────── */
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .video-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .video-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+    .video-thumb {
+      position: relative; width: 100%; aspect-ratio: 16/9;
+      background: #111; overflow: hidden;
+    }
+    .video-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .video-thumb-play {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.2s;
+    }
+    .video-card:hover .video-thumb-play { opacity: 1; }
+    .video-thumb-play-icon {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: rgba(245,131,33,0.9); color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+    }
+    .video-card-body { padding: 14px 16px; }
+    .video-card-tag {
+      display: inline-block; font-size: 0.68rem; font-weight: 700;
+      padding: 3px 10px; border-radius: 20px; margin-bottom: 6px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .video-card-title { font-family: var(--font-head); font-size: 0.95rem; font-weight: 700; line-height: 1.3; margin-bottom: 4px; }
+    .video-card-desc { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+    .video-card-learner-badge {
+      display: inline-block; font-size: 0.65rem; font-weight: 700;
+      background: rgba(154,117,245,0.12); color: #7c3aed;
+      padding: 2px 8px; border-radius: 12px; margin-left: 6px;
     }
 
-    /* ── TAB BAR ── */
-    .tab-bar {
-      position: fixed;
-      top: var(--header-h);
-      left: 0; right: 0;
-      height: var(--tabs-h);
-      z-index: 200;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 0 16px;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      background: rgba(248,250,252,0.9);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border);
+    /* ── Video player modal ──────────────────────────────────────────────── */
+    .player-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+      z-index: 1000; display: flex; align-items: center; justify-content: center;
+      padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.25s;
     }
-    .tab-bar::-webkit-scrollbar { display: none; }
-    .tab-btn {
-      flex-shrink: 0;
-      background: transparent;
-      border: 1.5px solid var(--border);
-      border-radius: 20px;
-      color: var(--muted);
-      font-family: var(--font-body);
-      font-size: 0.76rem;
-      font-weight: 600;
-      padding: 6px 16px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    .player-overlay.open { opacity: 1; pointer-events: all; }
+    .player-wrap {
+      width: 100%; max-width: 800px; max-height: 90vh;
+      background: #000; border-radius: 12px; overflow: hidden;
+      position: relative;
     }
-    .tab-btn:hover {
-      background: var(--accent-mid);
-      color: var(--accent-dk);
-      border-color: rgba(245,131,33,0.2);
+    .player-video {
+      width: 100%; aspect-ratio: 16/9; background: #000;
     }
-    .tab-btn.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-      box-shadow: 0 2px 10px rgba(245,131,33,0.25);
+    .player-info {
+      background: var(--white); padding: 16px 20px;
     }
+    .player-title { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; margin-bottom: 4px; }
+    .player-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+    .player-close {
+      position: absolute; top: 12px; right: 12px;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(0,0,0,0.6); border: none; color: white;
+      font-size: 1.1rem; cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      transition: background 0.15s; z-index: 10;
+    }
+    .player-close:hover { background: rgba(0,0,0,0.8); }
 
-    /* ── REELS CONTAINER ── */
+    /* ── REELS VIEW ──────────────────────────────────────────────────────── */
+    .reels-fullscreen {
+      position: fixed; inset: 0; z-index: 500; background: #000;
+      display: none;
+    }
+    .reels-fullscreen.open { display: block; }
     .reels-container {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      overflow-y: scroll;
-      scroll-snap-type: y mandatory;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
+      position: absolute; inset: 0;
+      overflow-y: scroll; scroll-snap-type: y mandatory;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
     }
     .reels-container::-webkit-scrollbar { display: none; }
-
-    /* ── REEL ITEM ── */
     .reel-item {
-      position: relative;
-      width: 100%;
-      height: 100dvh;
-      scroll-snap-align: start;
-      scroll-snap-stop: always;
-      background: #000;
-      overflow: hidden;
+      position: relative; width: 100%; height: 100dvh;
+      scroll-snap-align: start; scroll-snap-stop: always;
+      background: #000; overflow: hidden;
     }
-
-    /* ── VIDEO ── */
-    .reel-video {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      background: #000;
-    }
-
-    /* ── INFO OVERLAY ── */
+    .reel-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
     .reel-overlay {
-      position: absolute;
-      left: 0; right: 0; bottom: 0;
+      position: absolute; left: 0; right: 0; bottom: 0;
       padding: 100px 16px 28px;
       background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 50%, transparent 100%);
       pointer-events: none;
     }
     .reel-group-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 0.68rem;
-      font-weight: 700;
-      padding: 4px 12px;
-      border-radius: 20px;
-      margin-bottom: 10px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      font-family: var(--font-body);
+      display: inline-flex; font-size: 0.68rem; font-weight: 700;
+      padding: 4px 12px; border-radius: 20px; margin-bottom: 10px;
+      letter-spacing: 0.06em; text-transform: uppercase;
     }
-    .reel-title {
-      font-size: 1.15rem;
-      font-weight: 700;
-      line-height: 1.3;
-      margin-bottom: 6px;
-      text-shadow: 0 2px 8px rgba(0,0,0,0.5);
-      font-family: var(--font-head);
-      color: #fff;
-      letter-spacing: -0.01em;
-    }
-    .reel-desc {
-      font-size: 0.85rem;
-      color: rgba(255,255,255,0.8);
-      line-height: 1.4;
-      text-shadow: 0 1px 4px rgba(0,0,0,0.5);
-      font-family: var(--font-body);
-    }
-
-    /* ── MUTE BUTTON ── */
+    .reel-title { font-size: 1.15rem; font-weight: 700; line-height: 1.3; margin-bottom: 6px; text-shadow: 0 2px 8px rgba(0,0,0,0.5); font-family: var(--font-head); color: #fff; }
+    .reel-desc { font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.4; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
     .mute-btn {
-      position: absolute;
-      bottom: 28px;
-      right: 16px;
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      background: rgba(15,23,42,0.6);
-      border: 1.5px solid rgba(255,255,255,0.2);
-      color: #fff;
-      font-size: 1.1rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-      z-index: 10;
+      position: absolute; bottom: 28px; right: 16px;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(15,23,42,0.6); border: 1.5px solid rgba(255,255,255,0.2);
+      color: #fff; font-size: 1.1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      transition: all 0.2s; z-index: 10;
     }
-    .mute-btn:hover {
-      background: rgba(15,23,42,0.8);
-      border-color: rgba(245,131,33,0.5);
-      transform: scale(1.08);
+    .mute-btn:hover { background: rgba(15,23,42,0.8); }
+    .reels-exit-btn {
+      position: fixed; top: 16px; left: 16px; z-index: 600;
+      background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.2);
+      color: white; border-radius: 8px; padding: 8px 14px;
+      font-family: var(--font-body); font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; backdrop-filter: blur(8px); transition: background 0.15s;
+      display: none;
     }
+    .reels-fullscreen.open ~ .reels-exit-btn { display: block; }
+    .reels-exit-btn:hover { background: rgba(0,0,0,0.8); }
 
-    /* ── MUTED BANNER ── */
     .muted-banner {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(15,23,42,0.75);
-      border: 1px solid rgba(255,255,255,0.15);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-radius: 12px;
-      padding: 12px 20px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: #fff;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.3s;
-      z-index: 10;
-      white-space: nowrap;
-      font-family: var(--font-body);
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      background: rgba(15,23,42,0.75); border: 1px solid rgba(255,255,255,0.15);
+      backdrop-filter: blur(12px); border-radius: 12px; padding: 12px 20px;
+      font-size: 0.82rem; font-weight: 600; color: #fff;
+      pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 10;
     }
     .muted-banner.show { opacity: 1; }
 
-    /* ── EMPTY STATE ── */
-    .empty-reels {
-      height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      color: var(--muted);
-      padding: 40px;
-      text-align: center;
-      background: var(--bg);
-      font-family: var(--font-body);
-    }
-    .empty-reels .emoji { font-size: 2.5rem; }
-    .empty-reels p { font-size: 0.9rem; line-height: 1.5; }
-
-    /* ── LOADING ── */
-    .loading-screen {
-      position: fixed;
-      inset: 0;
-      background: var(--bg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 300;
-      transition: opacity 0.3s;
-    }
-    .loading-screen.hidden { opacity: 0; pointer-events: none; }
-    .spinner {
-      width: 28px; height: 28px;
-      border: 2.5px solid rgba(245,131,33,0.12);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
+    /* ── Empty / Loading ─────────────────────────────────────────────────── */
+    .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .spinner { width: 28px; height: 28px; border: 2.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
 
-    /* ── GROUP COLOURS ── */
-    .tag-roundabouts    { background: rgba(245,131,33,0.25); color: rgba(255,255,255,0.95); }
-    .tag-manoeuvres     { background: rgba(99,179,237,0.25); color: rgba(255,255,255,0.95); }
-    .tag-lesson-vibes   { background: rgba(154,117,245,0.25); color: rgba(255,255,255,0.95); }
-    .tag-course         { background: rgba(52,211,153,0.25); color: rgba(255,255,255,0.95); }
-
-    /* ── DESKTOP: height-fills viewport, width follows 9:16 ratio ── */
+    /* ── Desktop reels ───────────────────────────────────────────────────── */
     @media (min-width: 768px) {
-      .reels-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        background: #111;
-      }
-      .reel-item {
-        /* Each reel fills the full viewport height, width is capped at the 9:16 ratio */
-        height: 100dvh;
-        width: calc(100dvh * 9 / 16);
-        max-width: 100%;
-        flex-shrink: 0;
-        border-radius: 0;
-      }
-      .empty-reels {
-        width: calc(100dvh * 9 / 16);
-        max-width: 100%;
-      }
+      .reels-container { display: flex; flex-direction: column; align-items: center; background: #111; }
+      .reel-item { height: 100dvh; width: calc(100dvh * 9 / 16); max-width: 100%; flex-shrink: 0; }
+    }
+    @media (max-width: 600px) {
+      .video-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .video-card-body { padding: 10px 12px; }
+      .video-card-title { font-size: 0.85rem; }
+      .video-card-desc { display: none; }
     }
   </style>
 </head>
 <body>
 
-<!-- Loading -->
-<div class="loading-screen" id="loading"><div class="spinner"></div></div>
-
-<!-- Header -->
 <nav class="site-nav">
   <a class="site-nav-logo" href="/">
     <img src="/Logo.png" alt="CoachCarter">
@@ -371,206 +262,286 @@
     <a class="site-nav-link" href="/classroom.html">Free Videos</a>
     <a class="site-nav-link" href="/learner/login.html">Learner Login</a>
     <a class="site-nav-link" href="/instructor/login.html">Instructor Login</a>
-    <a class="site-nav-link primary" href="/learner/book.html">Book Free Trial</a>
+    <a class="site-nav-link primary" href="/learner/login.html?redirect=/learner/book.html">Book Free Trial</a>
   </div>
 </nav>
 
-<!-- Tab bar -->
-<div class="tab-bar" id="tab-bar"></div>
+<div class="page" id="gridPage">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Classroom</div>
+      <div class="page-sub">Free driving lesson videos to help you learn</div>
+    </div>
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="btnGrid" onclick="setMode('grid')">Grid</button>
+      <button class="mode-btn" id="btnReels" onclick="setMode('reels')">Reels</button>
+    </div>
+  </div>
 
-<!-- Reels -->
-<div class="reels-container" id="reels"></div>
+  <div class="cat-pills" id="catPills"></div>
 
-<!-- HLS.js for adaptive streaming on non-Safari browsers -->
+  <div id="gridContent">
+    <div class="loading"><div class="spinner"></div><p>Loading videos…</p></div>
+  </div>
+</div>
+
+<!-- Player modal (grid mode) -->
+<div class="player-overlay" id="playerOverlay" onclick="handlePlayerOverlayClick(event)">
+  <div class="player-wrap">
+    <button class="player-close" onclick="closePlayer()">✕</button>
+    <video class="player-video" id="playerVideo" controls playsinline webkit-playsinline></video>
+    <div class="player-info">
+      <div class="player-title" id="playerTitle"></div>
+      <div class="player-desc" id="playerDesc"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Reels fullscreen mode -->
+<div class="reels-fullscreen" id="reelsFS">
+  <div class="reels-container" id="reelsContainer"></div>
+</div>
+<button class="reels-exit-btn" id="reelsExitBtn" onclick="setMode('grid')">← Back to grid</button>
+
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
-
 <script>
 const CF_BASE = 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com';
 
-const GROUPS = [
-  { key: 'all',          label: 'All' },
-  { key: 'roundabouts',  label: 'Roundabouts' },
-  { key: 'manoeuvres',   label: 'Manoeuvres' },
-  { key: 'lesson-vibes', label: 'Lesson Vibes' },
-  { key: 'course',       label: 'Learn to Drive Course' }
-];
-
-const GROUP_LABELS = {
-  'roundabouts':  'Roundabouts',
-  'manoeuvres':   'Manoeuvres',
-  'lesson-vibes': 'Lesson Vibes',
-  'course':       'Learn to Drive Course'
-};
-
 let allVideos   = [];
-let activeGroup = 'all';
-let observer    = null;
-let globalMuted = true;
-let hlsInstances = {};
-let activeUid    = null;
+let categories  = [];
+let activeCategory = 'all';
+let currentMode = 'grid';
+let playerHls   = null;
 
+// Reels state
+let reelsObserver = null;
+let globalMuted   = true;
+let hlsInstances  = {};
+let activeUid     = null;
+
+// ── Init ─────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   try {
-    const res = await fetch('/videos.json');
-    allVideos = await res.json();
+    const [catRes, vidRes] = await Promise.all([
+      fetch('/api/videos?action=categories'),
+      fetch('/api/videos?action=list')
+    ]);
+    const catData = await catRes.json();
+    const vidData = await vidRes.json();
+    categories = catData.categories || [];
+    allVideos  = vidData.videos || [];
   } catch (e) {
-    allVideos = [];
+    // Fallback to static JSON
+    try {
+      const res = await fetch('/videos.json');
+      const json = await res.json();
+      allVideos = json.map(v => ({
+        cloudflare_uid: v.uid, title: v.title, description: v.description,
+        category_slug: v.group, category_label: v.group, category_color: null
+      }));
+      categories = [...new Set(json.map(v => v.group))].map((g, i) => ({
+        slug: g, label: g, sort_order: i, video_count: json.filter(v => v.group === g).length
+      }));
+    } catch { allVideos = []; categories = []; }
   }
-  buildTabs();
-  renderReels('all');
-  document.getElementById('loading').classList.add('hidden');
+
+  buildCatPills();
+  renderGrid();
 });
 
-function buildTabs() {
-  const bar = document.getElementById('tab-bar');
-  bar.innerHTML = GROUPS.map(g => `
-    <button class="tab-btn${g.key === 'all' ? ' active' : ''}"
-            onclick="selectTab('${g.key}')">
-      ${g.label}
-    </button>`).join('');
+// ── Mode switching ───────────────────────────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btnGrid').classList.toggle('active', mode === 'grid');
+  document.getElementById('btnReels').classList.toggle('active', mode === 'reels');
+
+  if (mode === 'grid') {
+    document.getElementById('gridPage').style.display = 'block';
+    document.getElementById('reelsFS').classList.remove('open');
+    destroyAllHls();
+  } else {
+    document.getElementById('gridPage').style.display = 'none';
+    document.getElementById('reelsFS').classList.add('open');
+    renderReels();
+  }
 }
 
-function selectTab(key) {
-  activeGroup = key;
-  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
-    btn.classList.toggle('active', GROUPS[i].key === key);
+// ── Category pills ───────────────────────────────────────────────────────────
+function buildCatPills() {
+  const total = allVideos.length;
+  let html = `<button class="cat-pill active" onclick="filterCat('all')">All <span class="count">${total}</span></button>`;
+  for (const c of categories) {
+    html += `<button class="cat-pill" onclick="filterCat('${c.slug}')">${esc(c.label)} <span class="count">${c.video_count || 0}</span></button>`;
+  }
+  document.getElementById('catPills').innerHTML = html;
+}
+
+function filterCat(slug) {
+  activeCategory = slug;
+  document.querySelectorAll('.cat-pill').forEach((btn, i) => {
+    if (i === 0) btn.classList.toggle('active', slug === 'all');
+    else btn.classList.toggle('active', categories[i - 1]?.slug === slug);
   });
-  if (observer) observer.disconnect();
-  destroyAllHls();
-  renderReels(key);
+  if (currentMode === 'grid') renderGrid();
+  else renderReels();
 }
 
-function renderReels(group) {
-  const container = document.getElementById('reels');
-  const videos = group === 'all'
-    ? allVideos
-    : allVideos.filter(v => v.group === group);
+// ── Grid view ────────────────────────────────────────────────────────────────
+function renderGrid() {
+  const filtered = activeCategory === 'all' ? allVideos : allVideos.filter(v => v.category_slug === activeCategory);
+  const container = document.getElementById('gridContent');
 
-  if (videos.length === 0) {
-    container.innerHTML = `
-      <div class="empty-reels">
-        <div class="emoji">🎬</div>
-        <p>No videos in this section yet.<br>Check back soon!</p>
-      </div>`;
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🎬</div><p>No videos in this category yet.</p></div>';
     return;
   }
 
-  container.innerHTML = videos.map(v => `
-    <div class="reel-item" id="reel-${v.uid}" data-uid="${v.uid}">
-      <video
-        class="reel-video"
-        id="video-${v.uid}"
-        playsinline
-        webkit-playsinline
-        preload="none"
-        loop
-        muted
-      ></video>
-      <div class="muted-banner" id="banner-${v.uid}">🔇 Tap to unmute</div>
+  container.innerHTML = '<div class="video-grid">' + filtered.map(v => {
+    const thumbUrl = v.thumbnail_url || `${CF_BASE}/${v.cloudflare_uid}/thumbnails/thumbnail.jpg?time=2s&width=480`;
+    const tagColor = v.category_color || 'rgba(245,131,33,0.2)';
+
+    return `
+      <div class="video-card" onclick="openPlayer('${v.cloudflare_uid}', '${esc(v.title)}', '${esc(v.description || '')}')">
+        <div class="video-thumb">
+          <img src="${thumbUrl}" alt="${esc(v.title)}" loading="lazy" onerror="this.style.display='none'">
+          <div class="video-thumb-play"><div class="video-thumb-play-icon">▶</div></div>
+        </div>
+        <div class="video-card-body">
+          <span class="video-card-tag" style="background:${tagColor};color:rgba(255,255,255,0.95)">${esc(v.category_label || v.category_slug)}</span>
+          ${v.learner_only ? '<span class="video-card-learner-badge">Learner only</span>' : ''}
+          <div class="video-card-title">${esc(v.title)}</div>
+          ${v.description ? `<div class="video-card-desc">${esc(v.description)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('') + '</div>';
+}
+
+// ── Player modal ─────────────────────────────────────────────────────────────
+function openPlayer(uid, title, desc) {
+  document.getElementById('playerTitle').textContent = title;
+  document.getElementById('playerDesc').textContent = desc;
+
+  const video = document.getElementById('playerVideo');
+  const hlsUrl = `${CF_BASE}/${uid}/manifest/video.m3u8`;
+
+  if (playerHls) { playerHls.destroy(); playerHls = null; }
+
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = hlsUrl;
+    video.play().catch(() => {});
+  } else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+    playerHls = new Hls({ enableWorker: true, startLevel: -1 });
+    playerHls.loadSource(hlsUrl);
+    playerHls.attachMedia(video);
+    playerHls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+  } else {
+    video.src = hlsUrl;
+    video.play().catch(() => {});
+  }
+
+  document.getElementById('playerOverlay').classList.add('open');
+}
+
+function closePlayer() {
+  const video = document.getElementById('playerVideo');
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+  if (playerHls) { playerHls.destroy(); playerHls = null; }
+  document.getElementById('playerOverlay').classList.remove('open');
+}
+
+function handlePlayerOverlayClick(e) {
+  if (e.target === document.getElementById('playerOverlay')) closePlayer();
+}
+
+// ── Reels view ───────────────────────────────────────────────────────────────
+function renderReels() {
+  const filtered = activeCategory === 'all' ? allVideos : allVideos.filter(v => v.category_slug === activeCategory);
+  const container = document.getElementById('reelsContainer');
+
+  if (reelsObserver) reelsObserver.disconnect();
+  destroyAllHls();
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="height:100dvh;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.5);font-size:0.9rem;padding:40px;text-align:center;">No videos in this category yet.</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(v => `
+    <div class="reel-item" id="reel-${v.cloudflare_uid}" data-uid="${v.cloudflare_uid}">
+      <video class="reel-video" id="video-${v.cloudflare_uid}" playsinline webkit-playsinline preload="none" loop muted></video>
+      <div class="muted-banner" id="banner-${v.cloudflare_uid}">Tap to unmute</div>
       <div class="reel-overlay">
-        <div class="reel-group-tag tag-${v.group}">${GROUP_LABELS[v.group] || v.group}</div>
-        <div class="reel-title">${v.title}</div>
-        ${v.description ? `<div class="reel-desc">${v.description}</div>` : ''}
+        <div class="reel-group-tag" style="background:${v.category_color || 'rgba(245,131,33,0.25)'}; color:rgba(255,255,255,0.95)">${esc(v.category_label || v.category_slug)}</div>
+        <div class="reel-title">${esc(v.title)}</div>
+        ${v.description ? `<div class="reel-desc">${esc(v.description)}</div>` : ''}
       </div>
-      <button class="mute-btn" id="mute-btn-${v.uid}"
-              onclick="toggleMute('${v.uid}')" title="Toggle mute">🔇</button>
+      <button class="mute-btn" id="mute-btn-${v.cloudflare_uid}" onclick="toggleMute('${v.cloudflare_uid}')" title="Toggle mute">🔇</button>
     </div>`).join('');
 
-  videos.forEach(v => {
-    document.getElementById(`reel-${v.uid}`)
-      .addEventListener('click', e => {
-        if (!e.target.closest('.mute-btn')) toggleMute(v.uid);
-      });
+  filtered.forEach(v => {
+    document.getElementById(`reel-${v.cloudflare_uid}`)
+      .addEventListener('click', e => { if (!e.target.closest('.mute-btn')) toggleMute(v.cloudflare_uid); });
   });
 
   container.scrollTop = 0;
-  setupObserver(videos);
+  setupReelsObserver(filtered);
 }
 
 function attachHls(uid) {
   const video = document.getElementById(`video-${uid}`);
   if (!video) return;
   const hlsUrl = `${CF_BASE}/${uid}/manifest/video.m3u8`;
-
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = hlsUrl;
-    video.muted = globalMuted;
-    video.play().catch(() => {});
-    return;
+    video.src = hlsUrl; video.muted = globalMuted; video.play().catch(() => {}); return;
   }
-
   if (typeof Hls !== 'undefined' && Hls.isSupported()) {
     const hls = new Hls({ enableWorker: true, startLevel: -1 });
-    hls.loadSource(hlsUrl);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      video.muted = globalMuted;
-      video.play().catch(() => {});
-    });
-    hlsInstances[uid] = hls;
-    return;
+    hls.loadSource(hlsUrl); hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => { video.muted = globalMuted; video.play().catch(() => {}); });
+    hlsInstances[uid] = hls; return;
   }
-
-  video.src = hlsUrl;
-  video.muted = globalMuted;
-  video.play().catch(() => {});
+  video.src = hlsUrl; video.muted = globalMuted; video.play().catch(() => {});
 }
 
 function detachHls(uid) {
   const video = document.getElementById(`video-${uid}`);
-  if (video) {
-    video.pause();
-    video.removeAttribute('src');
-    video.load();
-  }
-  if (hlsInstances[uid]) {
-    hlsInstances[uid].destroy();
-    delete hlsInstances[uid];
-  }
+  if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+  if (hlsInstances[uid]) { hlsInstances[uid].destroy(); delete hlsInstances[uid]; }
 }
 
 function destroyAllHls() {
   Object.keys(hlsInstances).forEach(uid => detachHls(uid));
-  hlsInstances = {};
-  activeUid = null;
+  hlsInstances = {}; activeUid = null;
 }
 
-function setupObserver(videos) {
-  observer = new IntersectionObserver((entries) => {
+function setupReelsObserver(videos) {
+  reelsObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       const uid = entry.target.dataset.uid;
       if (entry.isIntersecting) {
         if (activeUid && activeUid !== uid) detachHls(activeUid);
-        activeUid = uid;
-        attachHls(uid);
+        activeUid = uid; attachHls(uid);
         setMuteBtn(uid, globalMuted);
         if (globalMuted) showMutedBanner(uid);
       } else if (uid !== activeUid) {
-        detachHls(uid);
-        hideMutedBanner(uid);
+        detachHls(uid); hideMutedBanner(uid);
       }
     });
-  }, {
-    root: document.getElementById('reels'),
-    threshold: 0.6
-  });
+  }, { root: document.getElementById('reelsContainer'), threshold: 0.6 });
 
   videos.forEach(v => {
-    const el = document.getElementById(`reel-${v.uid}`);
-    if (el) observer.observe(el);
+    const el = document.getElementById(`reel-${v.cloudflare_uid}`);
+    if (el) reelsObserver.observe(el);
   });
 }
 
 function toggleMute(uid) {
   globalMuted = !globalMuted;
   const video = document.getElementById(`video-${uid}`);
-  if (video) {
-    video.muted = globalMuted;
-    if (!globalMuted && video.paused) video.play().catch(() => {});
-  }
-  document.querySelectorAll('.mute-btn').forEach(btn => {
-    btn.textContent = globalMuted ? '🔇' : '🔊';
-  });
+  if (video) { video.muted = globalMuted; if (!globalMuted && video.paused) video.play().catch(() => {}); }
+  document.querySelectorAll('.mute-btn').forEach(btn => btn.textContent = globalMuted ? '🔇' : '🔊');
   if (!globalMuted) hideMutedBanner(uid);
 }
 
@@ -580,16 +551,16 @@ function setMuteBtn(uid, muted) {
 }
 
 function showMutedBanner(uid) {
-  const banner = document.getElementById(`banner-${uid}`);
-  if (!banner) return;
-  banner.classList.add('show');
-  setTimeout(() => banner.classList.remove('show'), 3000);
+  const b = document.getElementById(`banner-${uid}`);
+  if (!b) return; b.classList.add('show'); setTimeout(() => b.classList.remove('show'), 3000);
 }
 
 function hideMutedBanner(uid) {
   const el = document.getElementById(`banner-${uid}`);
   if (el) el.classList.remove('show');
 }
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
 </script>
 </body>
 </html>
