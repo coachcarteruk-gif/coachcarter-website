@@ -234,19 +234,89 @@ Redesigned the instructor login page as a choice screen with two paths.
 - ✅ Enquiry goes through existing `api/enquiries.js` → staff email with "Instructor Application" label
 - ✅ `api/enquiries.js` updated with `join-team` enquiry type label
 
-### 2.12 — Reviews & Testimonials
+### 2.12 — Calendar Views (Instructor + Learner) ✅ Complete (18 March 2026)
+Replaced flat list layouts with full calendar interfaces on both the instructor schedule and learner booking pages.
+
+**What was built:**
+- ✅ Instructor schedule: monthly grid (booking pills, click-to-drill), weekly time-grid (positioned event blocks), daily timeline (availability indicators, mark-complete)
+- ✅ Learner booking: same three calendar views with slot count badges (monthly), positioned slot blocks (weekly), and hour-by-hour slot cards (daily)
+- ✅ `api/instructor.js` new `schedule-range` endpoint for date-bounded calendar queries
+- ✅ View toggle (Monthly / Weekly / Daily), navigation arrows, "Today" button, instructor filter in toolbar
+- ✅ Add availability modal accessible directly from instructor daily view
+- ✅ All monthly cells clickable for drill-down (not just days with bookings)
+- ✅ Multiple availability windows per day preserved when adding from modal
+
+**Bug fix:**
+- ✅ Fixed SQL syntax error in `api/slots.js` — Neon serverless driver doesn't support nested `sql` tagged template literals for conditional query fragments; split into separate query branches
+
+### 2.13 — Learner Contact Preference ✅ Complete (18 March 2026)
+Learners can request their instructor contacts them before their first lesson.
+
+**What was built:**
+- ✅ Toggle on learner dashboard: "Contact me before my first lesson"
+- ✅ `api/learner.js` new `contact-pref` (GET) and `set-contact-pref` (POST) endpoints
+- ✅ `prefer_contact_before` returned in existing `progress` endpoint
+- ✅ "📞 Contact first" badge on instructor daily view next to learner name
+- ✅ "📞 Learner would like a call or message before their first lesson" in instructor booking detail modal
+- ✅ `db/migrations/005_contact_preference.sql`
+
+### 2.14 — Phone & Pickup Address Required ✅ Complete (18 March 2026)
+Learners must provide their phone number and pickup address before they can book a lesson.
+
+**What was built:**
+- ✅ "My Details" card on learner dashboard with phone and pickup address fields
+- ✅ Red "Required for booking" / green "Complete" badge
+- ✅ `api/learner.js` new `profile` (GET) and `update-profile` (POST) endpoints
+- ✅ Booking blocker — toast message if learner tries to book without completing profile
+- ✅ Pickup address shown to instructors: "📍" line in daily view, "Pickup" row in booking detail modal
+- ✅ `db/migrations/006_pickup_address.sql`
+
+### 2.15 — Buffer Time Between Lessons ✅ Complete (18 March 2026)
+Configurable rest/travel time between booked slots for instructors.
+
+**What was built:**
+- ✅ `buffer_minutes` column on instructors table (default 30 mins)
+- ✅ Instructor profile: "Scheduling" card with dropdown (0–120 mins)
+- ✅ Admin portal: buffer field in instructor add/edit modal
+- ✅ Slot engine applies buffer after each booked lesson when generating available slots
+- ✅ `db/migrations/007_buffer_minutes.sql`
+
+### 2.16 — Learner Dashboard Upcoming Lessons Upgrade ✅ Complete (18 March 2026)
+Improved the upcoming lessons section on the learner dashboard.
+
+**What was built:**
+- ✅ Rich cards with date block (large day number, month, day-of-week), time, instructor, countdown
+- ✅ Countdown text: "Starting very soon", "In 5 hours", "Tomorrow", "In 3 days"
+- ✅ Calendar download button (📅) on each card
+- ✅ Today's lessons highlighted with green left border
+- ✅ Section always visible with "No upcoming lessons. Book one now →" when empty
+
+### 2.17 — Video Library Rebuild ✅ Complete (18 March 2026)
+Replaced static `videos.json` with a database-backed video library managed from the admin portal.
+
+**What was built:**
+- ✅ `video_categories` and `videos` database tables with ordering, thumbnails, published/unpublished, learner-only flags
+- ✅ `api/videos.js` — public list/categories endpoints + full admin CRUD (create, update, delete, reorder videos and categories)
+- ✅ Classroom page: grid view (thumbnail cards, category tags, click-to-play modal) + reels view (fullscreen vertical swipe), mode toggle, category filter pills
+- ✅ Learner videos page: same dual grid/reels with `learner_only=true` to include exclusive content
+- ✅ Admin portal: Videos section with filterable list, add/edit modal, category management modal
+- ✅ Auto-generated Cloudflare Stream thumbnails as fallback
+- ✅ Graceful fallback to `videos.json` if DB tables don't exist yet
+- ✅ `db/migrations/008_videos.sql` with default category seeds
+
+### 2.18 — Reviews & Testimonials
 Post-lesson review prompt triggered after a lesson is marked completed.
 - Automated email 24 hours after lesson status → completed
 - Simple star rating + comment
 - Optional: display approved reviews publicly
 
-### 2.13 — Waiting List
+### 2.19 — Waiting List
 Capture leads when all instructors are fully booked.
 - "No slots available" state on calendar triggers a waiting list sign-up
 - Notifies admin when someone joins
 - Admin can manually offer a slot and notify the learner
 
-### 2.14 — Referral System
+### 2.20 — Referral System
 Reward learners for recommending friends.
 - Unique referral link per learner
 - Both referrer and new learner receive a credit bonus on first purchase
@@ -269,8 +339,10 @@ Reward learners for recommending friends.
 - **Payments:** Stripe (Klarna enabled via Stripe dashboard — not hardcoded)
 - **Calendar:** Custom-built, no third-party calendar dependency
 - **Slot duration:** 1.5 hours (hardcoded, can be made configurable later)
+- **Buffer time:** Configurable per instructor (default 30 mins), blocks time after each booked slot
 - **Advance booking window:** 90 days
 - **Cancellation policy:** 48 hours minimum notice for credit return
+- **Video hosting:** Cloudflare Stream (HLS adaptive streaming), managed from admin portal
 - **API pattern:** Related endpoints grouped into single files using `?action=` routing
 - **DB migrations:** `db/migrations/` — run manually in Neon SQL Editor
 - **Seed data:** `db/seeds/` — placeholder instructors for testing

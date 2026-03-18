@@ -54,6 +54,7 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   ├── instructor.js               # Instructor portal: magic-link login, schedule, profile
 │   ├── admin.js                    # Admin auth (JWT), dashboard stats, bookings management
 │   ├── calendar.js                 # iCal feed + .ics download for learners
+│   ├── videos.js                   # Video library CRUD (admin) + public listing
 │   ├── availability.js             # Read/write public availability slots
 │   ├── enquiries.js                # Contact form: submit, list, update status
 │   ├── webhook.js                  # Stripe webhook handler
@@ -65,7 +66,7 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │
 ├── public/                         # Static files served directly
 │   ├── index.html                  # Homepage (main marketing page)
-│   ├── classroom.html              # Video reels page (public)
+│   ├── classroom.html              # Video library — grid + reels dual mode (public)
 │   ├── availability.html           # Availability/booking page
 │   ├── learner-journey.html        # Marketing page for the learner portal
 │   ├── lessons.html                # Lessons / pricing page
@@ -77,23 +78,23 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   ├── terms.html
 │   ├── admin/
 │   │   ├── login.html              # Admin login (JWT auth)
-│   │   ├── portal.html             # Full admin portal (dashboard, instructors, availability, bookings)
+│   │   ├── portal.html             # Full admin portal (dashboard, instructors, availability, bookings, videos)
 │   │   ├── dashboard.html          # Admin enquiry dashboard
 │   │   └── editor.html             # Admin content editor
 │   ├── learner/
 │   │   ├── index.html              # Learner hub — dashboard (credits, bookings, progress)
 │   │   ├── login.html              # Magic-link login (email or SMS)
 │   │   ├── verify.html             # Token verification page (two-step: validate then verify)
-│   │   ├── book.html               # Lesson booking calendar (credit or pay-per-slot)
+│   │   ├── book.html               # Lesson booking calendar — monthly/weekly/daily views (credit or pay-per-slot)
 │   │   ├── buy-credits.html        # Buy lesson credits via Stripe
 │   │   ├── log-session.html        # Log a driving session (stepped wizard, emoji ratings)
 │   │   └── videos.html             # Video library (behind login)
 │   ├── instructor/
 │   │   ├── login.html              # Magic-link login for instructors
-│   │   ├── index.html              # Instructor dashboard (schedule, lesson completion)
+│   │   ├── index.html              # Instructor schedule calendar (monthly/weekly/daily views)
 │   │   ├── availability.html       # Instructor sets their own weekly availability
-│   │   └── profile.html            # Instructor updates bio and contact details
-│   ├── videos.json                 # Video library data (edit to add/remove videos)
+│   │   └── profile.html            # Instructor updates bio, contact details, and buffer time
+│   ├── videos.json                 # Legacy video data (fallback — videos now managed in DB via admin portal)
 │   ├── config.json                 # Site config
 │   └── Logo.png                    # CoachCarter logo
 │
@@ -102,7 +103,11 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   │   ├── 001_booking_system.sql  # Core booking tables
 │   │   ├── 002_admin_users.sql     # Admin users table
 │   │   ├── 003_calendar_token.sql  # iCal token column on learner_users
-│   │   └── 004_instructor_portal.sql # Instructor magic-link tokens
+│   │   ├── 004_instructor_portal.sql # Instructor magic-link tokens
+│   │   ├── 005_contact_preference.sql # prefer_contact_before on learner_users
+│   │   ├── 006_pickup_address.sql  # pickup_address on learner_users
+│   │   ├── 007_buffer_minutes.sql  # buffer_minutes on instructors
+│   │   └── 008_videos.sql          # video_categories + videos tables
 │   └── seeds/                      # Placeholder data for testing
 │
 ├── middleware.js                   # Vercel middleware — maintenance mode redirect
@@ -205,8 +210,12 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 |---|---|---|---|
 | `sessions` | GET | Yes | Returns last 20 sessions with skill ratings |
 | `sessions` | POST | Yes | Save a new session |
-| `progress` | GET | Yes | Returns latest skill ratings, stats, current tier |
+| `progress` | GET | Yes | Returns latest skill ratings, stats, current tier, phone, pickup_address, prefer_contact_before |
 | `update-name` | POST | Yes | Set learner name (used after first magic-link login) |
+| `profile` | GET | Yes | Returns learner profile (name, email, phone, pickup_address, prefer_contact_before) |
+| `update-profile` | POST | Yes | Update phone and pickup_address |
+| `contact-pref` | GET | Yes | Returns prefer_contact_before flag |
+| `set-contact-pref` | POST | Yes | Toggle prefer_contact_before. Body: `{ prefer_contact_before: boolean }` |
 
 ### API — `api/credits.js`
 
@@ -245,6 +254,9 @@ phone TEXT
 current_tier INTEGER DEFAULT 1
 credit_balance INTEGER DEFAULT 0   -- DB constraint prevents negative
 calendar_token TEXT UNIQUE         -- for iCal feed polling
+phone TEXT
+pickup_address TEXT
+prefer_contact_before BOOLEAN DEFAULT FALSE
 created_at TIMESTAMPTZ
 ```
 
@@ -328,15 +340,16 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 | `validate-token` | GET | No | Lightweight token check (does NOT consume). Prevents email prefetchers from burning tokens |
 | `verify-token` | POST | No | Consumes token, returns JWT. Body: `{ token }` |
 | `schedule` | GET | JWT | Instructor's upcoming confirmed bookings |
+| `schedule-range` | GET | JWT | Bookings in date range for calendar views. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
 | `complete` | POST | JWT | Mark a lesson as completed |
 | `availability` | GET | JWT | Current weekly availability windows |
 | `set-availability` | POST | JWT | Update weekly availability windows |
 | `profile` | GET | JWT | Profile details |
-| `update-profile` | POST | JWT | Update bio and contact details |
+| `update-profile` | POST | JWT | Update bio, contact details, and buffer_minutes |
 
 ### Database tables
 
-**`instructors`** — name, email, phone, bio, photo_url, active flag
+**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30)
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0–6, start_time, end_time)
 
@@ -364,39 +377,67 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 
 ---
 
-## Classroom (video reels)
+## Classroom (video library)
 
-`/classroom.html` is a full-screen mobile-first page where learners scroll through short driving videos like Instagram Reels / YouTube Shorts.
+`/classroom.html` (public) and `/learner/videos.html` (behind login) both feature a dual-mode video library: **grid view** (thumbnail cards, category tags, click-to-play modal) and **reels view** (fullscreen vertical swipe like TikTok). Videos are managed from the admin portal and stored in the database.
 
 ### Video hosting — Cloudflare Stream
 
 - Customer subdomain: `customer-qn21p6ogmlqlhcv4.cloudflarestream.com`
 - HLS manifest: `https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com/{uid}/manifest/video.m3u8`
+- Thumbnails: `https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com/{uid}/thumbnails/thumbnail.jpg?time=2s&width=480`
 - Videos are publicly accessible — no auth needed
+
+### API — `api/videos.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `list` | GET | No | Published videos (optional `category` and `learner_only` filters) |
+| `categories` | GET | No | All categories with video counts |
+| `create` | POST | Admin JWT | Add a video |
+| `update` | POST | Admin JWT | Edit a video |
+| `delete` | POST | Admin JWT | Delete a video |
+| `reorder` | POST | Admin JWT | Update sort order for multiple videos |
+| `create-category` | POST | Admin JWT | Add a category |
+| `update-category` | POST | Admin JWT | Edit a category |
+| `delete-category` | POST | Admin JWT | Delete a category (only if empty) |
+
+### Database tables
+
+**`video_categories`**
+```sql
+id SERIAL PRIMARY KEY
+slug TEXT UNIQUE       -- e.g. 'roundabouts'
+label TEXT             -- e.g. 'Roundabouts'
+sort_order INTEGER     -- display order
+color TEXT             -- CSS color for tags
+```
+
+**`videos`**
+```sql
+id SERIAL PRIMARY KEY
+cloudflare_uid TEXT    -- Cloudflare Stream video UID
+title TEXT
+description TEXT
+category_slug TEXT     -- FK → video_categories.slug
+thumbnail_url TEXT     -- optional (auto-generated from CF Stream if blank)
+sort_order INTEGER     -- within category
+published BOOLEAN      -- hide without deleting
+learner_only BOOLEAN   -- only shown in learner portal
+```
+
+### Adding videos
+
+Upload to Cloudflare Stream, then add via Admin Portal → Videos → "+ Add Video". Enter the Cloudflare UID, title, description, and category. No code changes or redeployment needed.
 
 ### Technical approach
 
-Native `<video>` elements (iframes were abandoned — Cloudflare Stream's nested frames make mute/unmute via `postMessage` unreliable).
-
 - HLS.js loads manifests on non-Safari; Safari uses native HLS
-- `IntersectionObserver` (threshold 0.6) attaches/detaches HLS on scroll to prevent audio bleed
-- `scroll-snap-type: y mandatory` for snap-scroll behaviour
+- Grid view: click opens a modal player with full controls
+- Reels view: `IntersectionObserver` (threshold 0.6) attaches/detaches HLS on scroll
+- `scroll-snap-type: y mandatory` for snap-scroll in reels mode
 - Global `globalMuted` boolean — user unmutes once; all subsequent videos play with sound
-
-### Adding videos — `public/videos.json`
-
-Upload to Cloudflare Stream, copy the UID, add an entry to `videos.json`, commit and push:
-
-```json
-{
-  "uid": "7e36d845f1a0d80c57ebf7ef969c2572",
-  "title": "Smooth acceleration",
-  "description": "How to build speed progressively from a standstill.",
-  "group": "speed-control"
-}
-```
-
-Valid group values: `speed-control`, `looking-around`, `junctions`, `reversing`
+- Fallback: if DB tables don't exist, both pages fall back to `videos.json`
 
 ---
 
@@ -411,7 +452,8 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **JWT_SECRET must be set in Vercel** — without it, all auth endpoints return 500
 - **Neon Postgres cold starts** — first request after inactivity may be slow (~1–2s)
 - **HLS.js CDN** — classroom loads HLS.js from jsDelivr; consider self-hosting if CDN latency becomes an issue
-- **videos.json is the source of truth** for the classroom — no admin UI for it yet; edit directly and push
+- **Videos are now DB-backed** — managed from admin portal; `videos.json` is a legacy fallback only
+- **Neon sql tagged templates** — the Neon serverless driver does NOT support nested `sql` template literals for conditional queries; always use separate query branches instead
 - **Mobile autoplay** — browsers require videos to start muted; `video.muted = false` after a user gesture unlocks sound
 - **Klarna** — enabled via Stripe dashboard, not hardcoded; no code changes needed to toggle it
 - **DB migrations** — run manually in Neon SQL Editor; files in `db/migrations/` are numbered sequentially
@@ -422,13 +464,18 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 
 ## Recent changes (March 2026)
 
+- **Calendar views** (18 March) — instructor schedule and learner booking pages rebuilt with monthly/weekly/daily views, view toggle, navigation, and drill-down
+- **Contact preference** (18 March) — learners can toggle "Contact me before my first lesson"; shown as badge on instructor schedule
+- **Phone & pickup address** (18 March) — required before booking; shown to instructors on schedule and in booking detail
+- **Buffer time** (18 March) — configurable per-instructor buffer (0–120 mins, default 30) between booked lessons
+- **Upcoming lessons upgrade** (18 March) — rich cards with date block, countdown, calendar download, today highlight
+- **Video library rebuild** (18 March) — replaced static JSON with DB-backed system, grid + reels dual mode, admin management section
+- **Slot engine SQL fix** (18 March) — fixed 500 error caused by nested Neon sql template literals in conditional query fragments
 - **Pay-per-slot booking** — learners with 0 credits can now pay £82.50 at the point of booking via Stripe Checkout, with a 10-minute slot reservation during payment
 - **Magic link login fix** — email clients pre-fetching links were consuming tokens; fixed with a two-step validate (GET) → verify (POST) flow
 - **Session logging rebuild** — stepped wizard with emoji-based ratings replacing the original single-page form
 - **Learner portal videos** — classroom videos page added behind login with bottom nav
 - **Homepage quiz update** — quiz results now direct to Learner Hub / Book a Free Trial / Explore Prices
-- **Stale register links** — removed `?tab=register` query params from 9 files (registration is now handled by magic links)
-- **Font consistency** — log-session.html updated to Space Grotesk + Outfit matching the rest of the portal
 - **Instructor login redesign** — choice screen (Sign In / Join the Team), two-step magic link prefetch fix, and "Join the team" enquiry form for prospective instructors
 
 ## What's still to build
