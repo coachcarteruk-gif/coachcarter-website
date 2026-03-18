@@ -110,7 +110,8 @@ async function handleAvailable(req, res) {
                  ia.start_time::text AS start_time,
                  ia.end_time::text   AS end_time,
                  i.name AS instructor_name,
-                 i.photo_url, i.bio
+                 i.photo_url, i.bio,
+                 COALESCE(i.buffer_minutes, 30) AS buffer_minutes
           FROM instructor_availability ia
           JOIN instructors i ON i.id = ia.instructor_id
           WHERE ia.instructor_id = ${instructor_id}
@@ -123,7 +124,8 @@ async function handleAvailable(req, res) {
                  ia.start_time::text AS start_time,
                  ia.end_time::text   AS end_time,
                  i.name AS instructor_name,
-                 i.photo_url, i.bio
+                 i.photo_url, i.bio,
+                 COALESCE(i.buffer_minutes, 30) AS buffer_minutes
           FROM instructor_availability ia
           JOIN instructors i ON i.id = ia.instructor_id
           WHERE ia.active = true
@@ -193,11 +195,12 @@ async function handleAvailable(req, res) {
     for (const w of windows) {
       if (!byInstructor[w.instructor_id]) {
         byInstructor[w.instructor_id] = {
-          id:       w.instructor_id,
-          name:     w.instructor_name,
-          photo_url: w.photo_url,
-          bio:      w.bio,
-          windows:  []
+          id:             w.instructor_id,
+          name:           w.instructor_name,
+          photo_url:      w.photo_url,
+          bio:            w.bio,
+          buffer_minutes: parseInt(w.buffer_minutes) || 30,
+          windows:        []
         };
       }
       byInstructor[w.instructor_id].windows.push({
@@ -219,6 +222,7 @@ async function handleAvailable(req, res) {
       for (const instructor of Object.values(byInstructor)) {
         const matchingWindows = instructor.windows.filter(w => w.day_of_week === dayOfWeek);
         const bookedSlots     = bookedIndex[`${instructor.id}|${dateStr}`] || [];
+        const buffer          = instructor.buffer_minutes || 0;
 
         for (const window of matchingWindows) {
           let slotStart = window.start;
@@ -226,9 +230,9 @@ async function handleAvailable(req, res) {
           while (slotStart + SLOT_MINUTES <= window.end) {
             const slotEnd = slotStart + SLOT_MINUTES;
 
-            // Check if this slot overlaps any booked slot
+            // Check if this slot overlaps any booked slot (including buffer after each booking)
             const isBooked = bookedSlots.some(
-              b => slotStart < b.end && slotEnd > b.start
+              b => slotStart < (b.end + buffer) && slotEnd > b.start
             );
 
             if (!isBooked) {

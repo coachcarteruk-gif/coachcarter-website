@@ -502,6 +502,18 @@ body {
       <label>Photo URL</label>
       <input type="url" id="inst-photo" placeholder="https://...">
     </div>
+    <div class="form-group">
+      <label>Buffer between lessons</label>
+      <select id="inst-buffer" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
+        <option value="0">No buffer</option>
+        <option value="15">15 minutes</option>
+        <option value="30" selected>30 minutes (default)</option>
+        <option value="45">45 minutes</option>
+        <option value="60">60 minutes</option>
+        <option value="90">90 minutes</option>
+        <option value="120">120 minutes</option>
+      </select>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-instructor')">Cancel</button>
       <button class="btn btn-primary" onclick="saveInstructor()">Save Instructor</button>
@@ -733,6 +745,7 @@ function openAddInstructor() {
   document.getElementById('inst-phone').value = '';
   document.getElementById('inst-bio').value = '';
   document.getElementById('inst-photo').value = '';
+  document.getElementById('inst-buffer').value = '30';
   openModal('modal-instructor');
 }
 
@@ -746,6 +759,7 @@ function openEditInstructor(id) {
   document.getElementById('inst-phone').value = i.phone || '';
   document.getElementById('inst-bio').value = i.bio || '';
   document.getElementById('inst-photo').value = i.photo_url || '';
+  document.getElementById('inst-buffer').value = String(i.buffer_minutes ?? 30);
   openModal('modal-instructor');
 }
 
@@ -757,6 +771,7 @@ async function saveInstructor() {
     phone: document.getElementById('inst-phone').value.trim() || null,
     bio: document.getElementById('inst-bio').value.trim() || null,
     photo_url: document.getElementById('inst-photo').value.trim() || null,
+    buffer_minutes: parseInt(document.getElementById('inst-buffer').value) || 30,
   };
 
   if (!body.name || !body.email) { toast('Name and email are required', 'error'); return; }

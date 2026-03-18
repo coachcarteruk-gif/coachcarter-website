@@ -107,7 +107,7 @@ async function handleCreate(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyAdmin(req))     return res.status(401).json({ error: 'Unauthorised' });
 
-  const { name, email, phone, bio, photo_url } = req.body;
+  const { name, email, phone, bio, photo_url, buffer_minutes } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'name and email are required' });
 
   try {
@@ -117,16 +117,19 @@ async function handleCreate(req, res) {
     if (existing.length > 0)
       return res.status(400).json({ error: 'An instructor with this email already exists' });
 
+    const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null) ? parseInt(buffer_minutes) : 30;
+
     const [instructor] = await sql`
-      INSERT INTO instructors (name, email, phone, bio, photo_url)
+      INSERT INTO instructors (name, email, phone, bio, photo_url, buffer_minutes)
       VALUES (
         ${name.trim()},
         ${email.toLowerCase().trim()},
         ${phone || null},
         ${bio || null},
-        ${photo_url || null}
+        ${photo_url || null},
+        ${bufVal}
       )
-      RETURNING id, name, email, phone, bio, photo_url, active, created_at
+      RETURNING id, name, email, phone, bio, photo_url, active, created_at, buffer_minutes
     `;
     return res.status(201).json({ instructor });
   } catch (err) {
@@ -140,21 +143,24 @@ async function handleUpdate(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyAdmin(req))     return res.status(401).json({ error: 'Unauthorised' });
 
-  const { id, name, email, phone, bio, photo_url, active } = req.body;
+  const { id, name, email, phone, bio, photo_url, active, buffer_minutes } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required' });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null) ? parseInt(buffer_minutes) : null;
+
     const [instructor] = await sql`
       UPDATE instructors SET
-        name      = COALESCE(${name      || null}, name),
-        email     = COALESCE(${email     ? email.toLowerCase().trim() : null}, email),
-        phone     = COALESCE(${phone     || null}, phone),
-        bio       = COALESCE(${bio       || null}, bio),
-        photo_url = COALESCE(${photo_url || null}, photo_url),
-        active    = COALESCE(${active !== undefined ? active : null}, active)
+        name           = COALESCE(${name      || null}, name),
+        email          = COALESCE(${email     ? email.toLowerCase().trim() : null}, email),
+        phone          = COALESCE(${phone     || null}, phone),
+        bio            = COALESCE(${bio       || null}, bio),
+        photo_url      = COALESCE(${photo_url || null}, photo_url),
+        active         = COALESCE(${active !== undefined ? active : null}, active),
+        buffer_minutes = COALESCE(${bufVal}, buffer_minutes)
       WHERE id = ${id}
-      RETURNING id, name, email, phone, bio, photo_url, active
+      RETURNING id, name, email, phone, bio, photo_url, active, COALESCE(buffer_minutes, 30) AS buffer_minutes
     `;
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
     return res.json({ instructor });

@@ -356,6 +356,24 @@
         </div>
       </div>
 
+      <div class="form-card">
+        <div class="form-card-title">Scheduling</div>
+
+        <div class="form-group">
+          <label for="inputBuffer">Buffer time between lessons</label>
+          <select id="inputBuffer" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--primary);font-family:var(--font-body);font-size:0.9rem;padding:10px 13px;outline:none;">
+            <option value="0" ${p.buffer_minutes === 0 ? 'selected' : ''}>No buffer</option>
+            <option value="15" ${p.buffer_minutes === 15 ? 'selected' : ''}>15 minutes</option>
+            <option value="30" ${p.buffer_minutes === 30 || !p.buffer_minutes ? 'selected' : ''}>30 minutes (default)</option>
+            <option value="45" ${p.buffer_minutes === 45 ? 'selected' : ''}>45 minutes</option>
+            <option value="60" ${p.buffer_minutes === 60 ? 'selected' : ''}>60 minutes</option>
+            <option value="90" ${p.buffer_minutes === 90 ? 'selected' : ''}>90 minutes</option>
+            <option value="120" ${p.buffer_minutes === 120 ? 'selected' : ''}>120 minutes</option>
+          </select>
+          <p class="field-hint">Rest or travel time blocked after each booked lesson. Learners won't be able to book within this window.</p>
+        </div>
+      </div>
+
       <button class="btn-save" id="saveBtn" onclick="saveProfile()">Save changes</button>
     `;
   }
@@ -368,10 +386,11 @@
   }
 
   async function saveProfile() {
-    const name      = document.getElementById('inputName').value.trim();
-    const phone     = document.getElementById('inputPhone').value.trim();
-    const bio       = document.getElementById('inputBio').value.trim();
-    const photo_url = document.getElementById('inputPhoto').value.trim();
+    const name           = document.getElementById('inputName').value.trim();
+    const phone          = document.getElementById('inputPhone').value.trim();
+    const bio            = document.getElementById('inputBio').value.trim();
+    const photo_url      = document.getElementById('inputPhoto').value.trim();
+    const buffer_minutes = parseInt(document.getElementById('inputBuffer').value);
 
     if (!name) {
       alert('Name cannot be empty');
@@ -386,7 +405,7 @@
       const res  = await fetch('/api/instructor?action=update-profile', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body:    JSON.stringify({ name, phone: phone || null, bio: bio || null, photo_url: photo_url || null })
+        body:    JSON.stringify({ name, phone: phone || null, bio: bio || null, photo_url: photo_url || null, buffer_minutes })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);

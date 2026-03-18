@@ -490,7 +490,8 @@ async function handleProfile(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [profile] = await sql`
-      SELECT id, name, email, phone, bio, photo_url, active, created_at
+      SELECT id, name, email, phone, bio, photo_url, active, created_at,
+             COALESCE(buffer_minutes, 30) AS buffer_minutes
       FROM instructors WHERE id = ${instructor.id}
     `;
 
@@ -505,7 +506,7 @@ async function handleProfile(req, res) {
 }
 
 // ── POST /api/instructor?action=update-profile ────────────────────────────────
-// Body: { name, phone, bio, photo_url }  (all optional)
+// Body: { name, phone, bio, photo_url, buffer_minutes }  (all optional)
 // Note: email is not editable by the instructor — admin controls that.
 async function handleUpdateProfile(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -513,19 +514,30 @@ async function handleUpdateProfile(req, res) {
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { name, phone, bio, photo_url } = req.body;
+  const { name, phone, bio, photo_url, buffer_minutes } = req.body;
+
+  // Validate buffer_minutes if provided
+  if (buffer_minutes !== undefined && buffer_minutes !== null) {
+    const buf = parseInt(buffer_minutes);
+    if (isNaN(buf) || buf < 0 || buf > 120)
+      return res.status(400).json({ error: 'Buffer time must be between 0 and 120 minutes' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
+    const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null)
+      ? parseInt(buffer_minutes) : null;
+
     const [updated] = await sql`
       UPDATE instructors SET
-        name      = COALESCE(NULLIF(${name      || ''}, ''), name),
-        phone     = COALESCE(${phone     ?? null}, phone),
-        bio       = COALESCE(${bio       ?? null}, bio),
-        photo_url = COALESCE(${photo_url ?? null}, photo_url)
+        name           = COALESCE(NULLIF(${name      || ''}, ''), name),
+        phone          = COALESCE(${phone     ?? null}, phone),
+        bio            = COALESCE(${bio       ?? null}, bio),
+        photo_url      = COALESCE(${photo_url ?? null}, photo_url),
+        buffer_minutes = COALESCE(${bufVal}, buffer_minutes)
       WHERE id = ${instructor.id}
-      RETURNING id, name, email, phone, bio, photo_url
+      RETURNING id, name, email, phone, bio, photo_url, COALESCE(buffer_minutes, 30) AS buffer_minutes
     `;
 
     return res.json({ success: true, instructor: updated });

@@ -364,6 +364,7 @@ async function handleAllInstructors(req, res) {
     const instructors = await sql`
       SELECT
         i.id, i.name, i.email, i.phone, i.bio, i.photo_url, i.active, i.created_at,
+        COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.instructor_id = i.id AND lb.status = 'confirmed'
            AND lb.scheduled_date >= CURRENT_DATE) AS upcoming_bookings,
