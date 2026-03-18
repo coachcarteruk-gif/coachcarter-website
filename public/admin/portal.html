@@ -352,6 +352,9 @@ body {
     <a href="#" onclick="showSection('bookings'); return false;" data-section="bookings">
       <span class="nav-icon">&#x1f4d6;</span> Bookings
     </a>
+    <a href="#" onclick="showSection('videos'); return false;" data-section="videos">
+      <span class="nav-icon">&#x1f3ac;</span> Videos
+    </a>
     <a href="/" target="_blank" style="opacity: 0.5; font-size: 0.82rem;">
       <span class="nav-icon">&#x1f310;</span> View Site
     </a>
@@ -473,7 +476,84 @@ body {
     </div>
   </div>
 
+  <!-- ═══════════ VIDEOS SECTION ═══════════ -->
+  <div class="section" id="section-videos">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Videos</div>
+        <div class="page-subtitle">Manage your classroom video library</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="openCategoryModal()">Manage Categories</button>
+        <button class="btn btn-primary" onclick="openAddVideo()">+ Add Video</button>
+      </div>
+    </div>
+
+    <!-- Category filter -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;" id="video-cat-filter"></div>
+
+    <!-- Videos list -->
+    <div id="videos-list"><div class="empty-state">Loading...</div></div>
+  </div>
+
 </div><!-- /main -->
+
+<!-- ═══════════ ADD/EDIT VIDEO MODAL ═══════════ -->
+<div class="modal-overlay" id="modal-video">
+  <div class="modal">
+    <div class="modal-title" id="video-modal-title">Add Video</div>
+    <input type="hidden" id="video-edit-id">
+    <div class="form-group">
+      <label>Cloudflare Stream UID *</label>
+      <input type="text" id="vid-uid" placeholder="e.g. 7e36d845f1a0d80c57ebf7ef969c2572" style="width:100%;">
+      <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">The video ID from your Cloudflare Stream dashboard.</div>
+    </div>
+    <div class="form-group">
+      <label>Title *</label>
+      <input type="text" id="vid-title" placeholder="e.g. How to approach roundabouts" style="width:100%;">
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="vid-desc" placeholder="Short description of the video..." style="width:100%;min-height:60px;"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Category *</label>
+      <select id="vid-category" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;"></select>
+    </div>
+    <div class="form-group">
+      <label>Thumbnail URL (optional)</label>
+      <input type="url" id="vid-thumb" placeholder="https://... (leave blank for auto-generated)" style="width:100%;">
+    </div>
+    <div style="display:flex;gap:16px;margin-bottom:16px;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;">
+        <input type="checkbox" id="vid-published" checked> Published
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;">
+        <input type="checkbox" id="vid-learner-only"> Learner only
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-video')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveVideo()">Save Video</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MANAGE CATEGORIES MODAL ═══════════ -->
+<div class="modal-overlay" id="modal-categories">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-title">Manage Categories</div>
+    <div id="categories-list" style="margin-bottom:16px;"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">
+      <input type="text" id="new-cat-slug" placeholder="slug (e.g. parking)" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;">
+      <input type="text" id="new-cat-label" placeholder="Label (e.g. Parking)" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;">
+      <button class="btn btn-primary" onclick="addCategory()" style="white-space:nowrap;">+ Add</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-categories')">Done</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════ MODALS ═══════════ -->
 
@@ -593,6 +673,7 @@ function showSection(name) {
   if (name === 'instructors')  loadInstructors();
   if (name === 'availability') loadInstructorSelect();
   if (name === 'bookings')     loadBookings();
+  if (name === 'videos')       loadVideos();
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('open');
@@ -993,6 +1074,218 @@ async function markComplete(bookingId) {
   } catch (err) {
     toast(err.message, 'error');
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// VIDEOS
+// ══════════════════════════════════════════════════════════════════
+const CF_BASE = 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com';
+let videosCache = [];
+let videoCategoriesCache = [];
+let videoFilterCat = 'all';
+
+async function loadVideos() {
+  try {
+    const [catRes, vidRes] = await Promise.all([
+      fetch('/api/videos?action=categories', { headers: HEADERS }),
+      fetch('/api/videos?action=list&learner_only=true', { headers: HEADERS })
+    ]);
+    videoCategoriesCache = (await catRes.json()).categories || [];
+    videosCache = (await vidRes.json()).videos || [];
+    renderVideoCatFilter();
+    renderVideosList();
+  } catch (err) {
+    document.getElementById('videos-list').innerHTML = '<div class="empty-state">Failed to load videos</div>';
+  }
+}
+
+function renderVideoCatFilter() {
+  const el = document.getElementById('video-cat-filter');
+  let html = `<button class="filter-pill ${videoFilterCat === 'all' ? 'active' : ''}" onclick="filterVideoCat('all')">All (${videosCache.length})</button>`;
+  for (const c of videoCategoriesCache) {
+    html += `<button class="filter-pill ${videoFilterCat === c.slug ? 'active' : ''}" onclick="filterVideoCat('${c.slug}')">${esc(c.label)} (${c.video_count || 0})</button>`;
+  }
+  el.innerHTML = html;
+}
+
+function filterVideoCat(slug) {
+  videoFilterCat = slug;
+  renderVideoCatFilter();
+  renderVideosList();
+}
+
+function renderVideosList() {
+  const el = document.getElementById('videos-list');
+  let filtered = videoFilterCat === 'all' ? videosCache : videosCache.filter(v => v.category_slug === videoFilterCat);
+
+  if (filtered.length === 0) {
+    el.innerHTML = '<div class="empty-state">No videos in this category yet. Click "+ Add Video" to get started.</div>';
+    return;
+  }
+
+  el.innerHTML = filtered.map(v => {
+    const thumb = v.thumbnail_url || `${CF_BASE}/${v.cloudflare_uid}/thumbnails/thumbnail.jpg?time=2s&width=240`;
+    const badges = [];
+    if (!v.published) badges.push('<span style="background:var(--red-bg);color:var(--red);font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:12px;">Unpublished</span>');
+    if (v.learner_only) badges.push('<span style="background:rgba(154,117,245,0.12);color:#7c3aed;font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:12px;">Learner only</span>');
+
+    return '<div class="panel-card" style="margin-bottom:10px;padding:14px 16px;">' +
+      '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">' +
+        '<div style="width:120px;height:68px;border-radius:8px;overflow:hidden;background:#111;flex-shrink:0;">' +
+          '<img src="' + thumb + '" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display=\'none\'">' +
+        '</div>' +
+        '<div style="flex:1;min-width:180px;">' +
+          '<div style="font-weight:700;font-size:0.9rem;margin-bottom:3px;">' + esc(v.title) + ' ' + badges.join(' ') + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--muted);margin-bottom:3px;">' + esc(v.description || '') + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--muted);">' + esc(v.category_label || v.category_slug) + ' · Order: ' + v.sort_order + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;flex-shrink:0;">' +
+          '<button class="btn btn-sm" onclick="openEditVideo(' + v.id + ')">Edit</button>' +
+          '<button class="btn btn-sm btn-danger" onclick="deleteVideo(' + v.id + ')">Delete</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function openAddVideo() {
+  document.getElementById('video-modal-title').textContent = 'Add Video';
+  document.getElementById('video-edit-id').value = '';
+  document.getElementById('vid-uid').value = '';
+  document.getElementById('vid-title').value = '';
+  document.getElementById('vid-desc').value = '';
+  document.getElementById('vid-thumb').value = '';
+  document.getElementById('vid-published').checked = true;
+  document.getElementById('vid-learner-only').checked = false;
+  populateVideoCatSelect('');
+  openModal('modal-video');
+}
+
+function openEditVideo(id) {
+  const v = videosCache.find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('video-modal-title').textContent = 'Edit Video';
+  document.getElementById('video-edit-id').value = id;
+  document.getElementById('vid-uid').value = v.cloudflare_uid || '';
+  document.getElementById('vid-title').value = v.title || '';
+  document.getElementById('vid-desc').value = v.description || '';
+  document.getElementById('vid-thumb').value = v.thumbnail_url || '';
+  document.getElementById('vid-published').checked = v.published !== false;
+  document.getElementById('vid-learner-only').checked = v.learner_only === true;
+  populateVideoCatSelect(v.category_slug);
+  openModal('modal-video');
+}
+
+function populateVideoCatSelect(selected) {
+  const sel = document.getElementById('vid-category');
+  sel.innerHTML = videoCategoriesCache.map(c =>
+    '<option value="' + c.slug + '"' + (c.slug === selected ? ' selected' : '') + '>' + esc(c.label) + '</option>'
+  ).join('');
+}
+
+async function saveVideo() {
+  const editId = document.getElementById('video-edit-id').value;
+  const body = {
+    cloudflare_uid: document.getElementById('vid-uid').value.trim(),
+    title: document.getElementById('vid-title').value.trim(),
+    description: document.getElementById('vid-desc').value.trim() || null,
+    category_slug: document.getElementById('vid-category').value,
+    thumbnail_url: document.getElementById('vid-thumb').value.trim() || null,
+    published: document.getElementById('vid-published').checked,
+    learner_only: document.getElementById('vid-learner-only').checked
+  };
+
+  if (!body.cloudflare_uid || !body.title || !body.category_slug) {
+    toast('Cloudflare UID, title and category are required', 'error');
+    return;
+  }
+
+  try {
+    let url;
+    if (editId) {
+      url = '/api/videos?action=update';
+      body.id = parseInt(editId);
+    } else {
+      url = '/api/videos?action=create';
+    }
+    const res = await fetch(url, { method: 'POST', headers: HEADERS, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    toast(editId ? 'Video updated' : 'Video added', 'success');
+    closeModal('modal-video');
+    loadVideos();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function deleteVideo(id) {
+  if (!confirm('Delete this video? This cannot be undone.')) return;
+  try {
+    const res = await fetch('/api/videos?action=delete', {
+      method: 'POST', headers: HEADERS, body: JSON.stringify({ id })
+    });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+    toast('Video deleted', 'success');
+    loadVideos();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+// ── Category management ──
+function openCategoryModal() {
+  renderCategoriesList();
+  openModal('modal-categories');
+}
+
+function renderCategoriesList() {
+  const el = document.getElementById('categories-list');
+  if (videoCategoriesCache.length === 0) {
+    el.innerHTML = '<div style="font-size:0.85rem;color:var(--muted);padding:12px 0;">No categories yet.</div>';
+    return;
+  }
+  el.innerHTML = videoCategoriesCache.map(c =>
+    '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
+      '<span style="flex:1;font-weight:600;font-size:0.88rem;">' + esc(c.label) + '</span>' +
+      '<span style="font-size:0.75rem;color:var(--muted);">' + c.slug + '</span>' +
+      '<span style="font-size:0.75rem;color:var(--muted);">' + (c.video_count || 0) + ' videos</span>' +
+      '<button class="btn btn-sm btn-danger" onclick="deleteCategory(\'' + c.slug + '\')" style="padding:3px 10px;font-size:0.72rem;">Delete</button>' +
+    '</div>'
+  ).join('');
+}
+
+async function addCategory() {
+  const slug = document.getElementById('new-cat-slug').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  const label = document.getElementById('new-cat-label').value.trim();
+  if (!slug || !label) { toast('Slug and label are required', 'error'); return; }
+
+  try {
+    const res = await fetch('/api/videos?action=create-category', {
+      method: 'POST', headers: HEADERS, body: JSON.stringify({ slug, label })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    document.getElementById('new-cat-slug').value = '';
+    document.getElementById('new-cat-label').value = '';
+    toast('Category added', 'success');
+    await loadVideos();
+    renderCategoriesList();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function deleteCategory(slug) {
+  if (!confirm('Delete this category? Only works if no videos use it.')) return;
+  try {
+    const res = await fetch('/api/videos?action=delete-category', {
+      method: 'POST', headers: HEADERS, body: JSON.stringify({ slug })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    toast('Category deleted', 'success');
+    await loadVideos();
+    renderCategoriesList();
+  } catch (err) { toast(err.message, 'error'); }
 }
 
 // ── Escape HTML ───────────────────────────────────────────────────
