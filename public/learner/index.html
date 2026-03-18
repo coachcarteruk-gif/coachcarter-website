@@ -204,40 +204,52 @@
     .upcoming-card {
       background: var(--white);
       border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
       border-radius: 12px;
       padding: 16px 18px;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      gap: 14px;
       flex-wrap: wrap;
       box-shadow: 0 1px 3px rgba(0,0,0,0.04);
       transition: all 0.2s;
     }
     .upcoming-card:hover { border-color: var(--accent); }
-    .upcoming-date { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
-    .upcoming-time { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
-    .upcoming-instructor {
-      font-size: 0.78rem;
-      color: var(--accent);
-      font-weight: 600;
-      margin-top: 2px;
+    .upcoming-card.is-today { border-left-color: var(--green); background: #fafff7; }
+    .upcoming-date-block { min-width: 54px; text-align: center; flex-shrink: 0; }
+    .upcoming-date-day {
+      font-family: var(--font-head); font-size: 1.5rem; font-weight: 700;
+      color: var(--primary); line-height: 1;
     }
+    .upcoming-date-month { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .upcoming-date-dow { font-size: 0.7rem; color: var(--muted); margin-top: 1px; }
+    .upcoming-info { flex: 1; min-width: 140px; }
+    .upcoming-time { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
+    .upcoming-instructor { font-size: 0.82rem; color: var(--accent); font-weight: 600; margin-top: 2px; }
+    .upcoming-countdown { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
+    .upcoming-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .btn-upcoming-cal {
+      font-size: 0.78rem; color: var(--accent);
+      border: 1.5px solid var(--border); background: none;
+      border-radius: 8px; padding: 6px 10px;
+      cursor: pointer; white-space: nowrap; transition: all 0.2s;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .btn-upcoming-cal:hover { border-color: var(--accent); background: var(--accent-lt); }
     .btn-cancel-lesson {
-      font-size: 0.78rem;
-      color: var(--muted);
-      border: 1.5px solid var(--border);
-      background: none;
-      border-radius: 8px;
-      padding: 6px 14px;
-      cursor: pointer;
-      text-decoration: none;
-      white-space: nowrap;
-      transition: all 0.2s;
-      font-weight: 500;
+      font-size: 0.78rem; color: var(--muted);
+      border: 1.5px solid var(--border); background: none;
+      border-radius: 8px; padding: 6px 12px;
+      cursor: pointer; text-decoration: none; white-space: nowrap;
+      transition: all 0.2s; font-weight: 500;
     }
     .btn-cancel-lesson:hover { color: #ef4444; border-color: #ef4444; }
+    .upcoming-empty {
+      text-align: center; padding: 20px;
+      color: var(--muted); font-size: 0.85rem;
+    }
+    .upcoming-empty a { color: var(--accent); font-weight: 600; text-decoration: none; }
 
     /* STATS BAR */
     .stats-bar {
@@ -671,9 +683,11 @@
   </div>
 
   <!-- UPCOMING LESSONS -->
-  <div id="upcoming-section" style="display:none; margin-bottom: 28px;">
+  <div id="upcoming-section" style="margin-bottom: 24px;">
     <div class="section-title">Upcoming Lessons</div>
-    <div id="upcoming-list"></div>
+    <div id="upcoming-list">
+      <div class="upcoming-empty">Loading...</div>
+    </div>
   </div>
 
   <!-- PROFILE (phone + pickup address) -->
@@ -849,18 +863,7 @@ function render() {
     updatePrefSub(PROGRESS.prefer_contact_before);
   }
 
-  if (BOOKINGS_DATA && BOOKINGS_DATA.upcoming && BOOKINGS_DATA.upcoming.length > 0) {
-    const section = document.getElementById('upcoming-section');
-    section.style.display = 'block';
-    const list = document.getElementById('upcoming-list');
-    list.innerHTML = BOOKINGS_DATA.upcoming.slice(0, 5).map(b => {
-      const date = new Date(b.scheduled_date + 'T00:00:00Z');
-      const dateStr = date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-      const start = b.start_time ? b.start_time.slice(0, 5) : '';
-      const end = b.end_time ? b.end_time.slice(0, 5) : '';
-      return `<div class="upcoming-card"><div class="upcoming-card-left"><div class="upcoming-date">📅 ${dateStr}</div><div class="upcoming-time">${start} – ${end}</div><div class="upcoming-instructor">with ${b.instructor_name}</div></div><a href="/learner/book.html" class="btn-cancel-lesson">Manage</a></div>`;
-    }).join('');
-  }
+  renderUpcoming();
 
   const s = PROGRESS.stats;
   document.getElementById('welcome-msg').textContent = `Hi, ${PROGRESS.name} 👋`;
@@ -928,6 +931,84 @@ function renderSessions() {
     const notesHTML = s.notes ? `<div class="session-notes">"${s.notes}"</div>` : '';
     return `<div class="session-card"><div class="session-meta"><span class="session-date">📅 ${dateStr}</span>${typeChip}${durationChip}</div>${ratingsHTML ? `<div class="session-ratings">${ratingsHTML}</div>` : ''}${notesHTML}</div>`;
   }).join('');
+}
+
+// ── Upcoming lessons ─────────────────────────────────────────────────────────
+const MON_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DOW_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function renderUpcoming() {
+  const list = document.getElementById('upcoming-list');
+  const upcoming = (BOOKINGS_DATA && BOOKINGS_DATA.upcoming) ? BOOKINGS_DATA.upcoming : [];
+
+  if (upcoming.length === 0) {
+    list.innerHTML = '<div class="upcoming-empty">No upcoming lessons. <a href="/learner/book.html">Book one now →</a></div>';
+    return;
+  }
+
+  const now = Date.now();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  list.innerHTML = upcoming.map(b => {
+    const date = new Date(b.scheduled_date + 'T00:00:00Z');
+    const dayNum = date.getUTCDate();
+    const month = MON_ABBR[date.getUTCMonth()];
+    const dow = DOW_ABBR[date.getUTCDay()];
+    const start = b.start_time ? b.start_time.slice(0, 5) : '';
+    const end = b.end_time ? b.end_time.slice(0, 5) : '';
+    const isToday = b.scheduled_date === todayStr;
+
+    // Countdown
+    const lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
+    const diffMs = lessonMs - now;
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffHours / 24);
+    let countdown = '';
+    if (diffMs < 0) {
+      countdown = 'In progress or just finished';
+    } else if (diffDays === 0 && diffHours < 24) {
+      countdown = diffHours <= 1 ? 'Starting very soon' : 'In ' + diffHours + ' hours';
+    } else if (diffDays === 1) {
+      countdown = 'Tomorrow';
+    } else {
+      countdown = 'In ' + diffDays + ' days';
+    }
+
+    const canCancel = diffMs > 0;
+
+    return `
+      <div class="upcoming-card ${isToday ? 'is-today' : ''}">
+        <div class="upcoming-date-block">
+          <div class="upcoming-date-day">${dayNum}</div>
+          <div class="upcoming-date-month">${month}</div>
+          <div class="upcoming-date-dow">${dow}</div>
+        </div>
+        <div class="upcoming-info">
+          <div class="upcoming-time">${start} – ${end}</div>
+          <div class="upcoming-instructor">with ${b.instructor_name}</div>
+          <div class="upcoming-countdown">${countdown}</div>
+        </div>
+        <div class="upcoming-actions">
+          ${canCancel ? `<button class="btn-upcoming-cal" onclick="downloadICS(${b.id})" title="Add to calendar">📅</button>` : ''}
+          ${canCancel ? `<a href="/learner/book.html" class="btn-cancel-lesson">Manage</a>` : '<span style="font-size:0.78rem;color:var(--muted)">Done</span>'}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function downloadICS(bookingId) {
+  try {
+    const res = await fetch('/api/calendar?action=download&booking_id=' + bookingId, {
+      headers: { Authorization: 'Bearer ' + AUTH.token }
+    });
+    if (!res.ok) throw new Error('Failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'coachcarter-lesson.ics';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {}
 }
 
 // ── Profile (phone + pickup address) ─────────────────────────────────────────
