@@ -28,6 +28,7 @@ function verifyAdmin(req) {
     try {
       const decoded = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
       if (decoded.role === 'admin' || decoded.role === 'superadmin') return true;
+      if (decoded.role === 'instructor' && decoded.isAdmin === true) return true;
     } catch {}
   }
   const secret = process.env.ADMIN_SECRET;

@@ -35,7 +35,9 @@ function verifyAdmin(req) {
   if (!secret) return false;
   try {
     const payload = jwt.verify(auth.slice(7), secret);
-    return payload.role === 'admin' || payload.role === 'superadmin';
+    if (payload.role === 'admin' || payload.role === 'superadmin') return true;
+    if (payload.role === 'instructor' && payload.isAdmin === true) return true;
+    return false;
   } catch { return false; }
 }
 
