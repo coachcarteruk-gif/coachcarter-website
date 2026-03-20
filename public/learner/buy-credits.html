@@ -44,45 +44,35 @@
       min-height: 100vh;
     }
 
-    /* ── Header ── */
-    header {
-      background: var(--white);
-      border-bottom: 1px solid var(--border);
-      padding: 0 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 60px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
+    /* ── TOP NAV (site-wide) ── */
+    .site-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 0 32px; height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(38, 38, 38, 0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .header-brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
+    .site-nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .site-nav-logo img { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,0.08); padding: 4px; }
+    .site-nav-logo span { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+    .site-nav-logo span em { font-style: normal; color: var(--accent); }
+    .site-nav-links { display: flex; align-items: center; gap: 6px; }
+    .site-nav-link {
+      color: rgba(255,255,255,0.6); font-family: var(--font-body); font-weight: 500; font-size: 0.83rem;
+      padding: 7px 14px; border-radius: 100px; border: 1px solid transparent;
+      text-decoration: none; transition: all 0.18s; white-space: nowrap; background: transparent; cursor: pointer;
     }
-    .header-brand img { height: 36px; width: auto; }
-    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
-    .header-brand-sub  { font-size: 0.7rem; color: var(--muted); }
-    .header-nav { display: flex; align-items: center; gap: 12px; }
-    .header-nav a {
-      font-size: 0.85rem;
-      color: var(--muted);
-      text-decoration: none;
-      padding: 6px 12px;
-      border-radius: 8px;
-      transition: background 0.15s, color 0.15s;
-    }
-    .header-nav a:hover { background: var(--surface); color: var(--primary); }
+    .site-nav-link:hover { color: #fff; border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
+    .site-nav-link.logout { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.1); }
+    .site-nav-link.logout:hover { color: #fff; border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08); }
     .header-balance {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: var(--accent);
-      background: var(--accent-lt);
-      padding: 6px 14px;
-      border-radius: 20px;
+      font-size: 0.82rem; font-weight: 700; color: var(--accent);
+      background: rgba(245,131,33,0.15); padding: 5px 12px;
+      border-radius: 100px; border: 1px solid rgba(245,131,33,0.3);
+    }
+    @media (max-width: 600px) {
+      .site-nav { padding: 0 16px; }
     }
 
     /* BOTTOM NAV */
@@ -118,6 +108,7 @@
       max-width: 680px;
       margin: 0 auto;
       padding: 48px 20px 80px;
+      margin-top: 64px;
     }
 
     h1 {
@@ -402,19 +393,16 @@
 </head>
 <body>
 
-<header>
-  <a class="header-brand" href="/learner/">
+<nav class="site-nav">
+  <a class="site-nav-logo" href="/learner/">
     <img src="/Logo.png" alt="CoachCarter">
-    <div>
-      <div class="header-brand-text">CoachCarter</div>
-      <div class="header-brand-sub">Learner Portal</div>
-    </div>
+    <span>Coach<em>Carter</em></span>
   </a>
-  <nav class="header-nav">
-    <a href="/learner/">← Dashboard</a>
+  <div class="site-nav-links">
     <span class="header-balance" id="headerBalance">⏳ loading…</span>
-  </nav>
-</header>
+    <button class="site-nav-link logout" onclick="window.location='/learner/'">← Dashboard</button>
+  </div>
+</nav>
 
 <main>
   <h1>Buy Lessons</h1>
