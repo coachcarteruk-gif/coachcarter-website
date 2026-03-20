@@ -7,24 +7,27 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
 <style>
 :root {
-  --orange: #f58321;
-  --orange-dk: #e07518;
-  --orange-lt: #fff4ec;
-  --black: #262626;
-  --muted: #797879;
-  --rule: #e0e0e0;
-  --bg: #ffffff;
-  --white: #ffffff;
-  --green: #1a9e5c;
-  --font-head: 'Bricolage Grotesque', sans-serif;
-  --font-body: 'Lato', sans-serif;
+  --primary:    #262626;
+  --accent:     #f58321;
+  --accent-dk:  #e07518;
+  --accent-lt:  #fff4ec;
+  --accent-mid: rgba(245,131,33,0.12);
+  --muted:      #797879;
+  --border:     #e0e0e0;
+  --bg:         #ffffff;
+  --surface:    #f9f9f9;
+  --white:      #ffffff;
+  --green:      #1a9e5c;
+  --font-head:  'Bricolage Grotesque', sans-serif;
+  --font-body:  'Lato', sans-serif;
+  --radius:     14px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   background: var(--bg);
-  color: var(--black);
+  color: var(--primary);
   font-family: var(--font-body);
   min-height: 100vh;
   display: flex;
@@ -35,7 +38,7 @@ body {
 
 .card {
   background: var(--white);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 24px;
   padding: 64px 48px;
   text-align: center;
@@ -82,7 +85,7 @@ p {
   display: flex;
   justify-content: space-between;
   padding: 12px 0;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
   font-size: 0.95rem;
 }
 
@@ -96,11 +99,11 @@ p {
 
 .detail-value {
   font-weight: 700;
-  color: var(--black);
+  color: var(--primary);
 }
 
 .next-box {
-  background: var(--orange-lt);
+  background: var(--accent-lt);
   border: 1px solid rgba(245,131,33,0.2);
   border-radius: 16px;
   padding: 24px;
@@ -110,7 +113,7 @@ p {
 .next-box h3 {
   font-family: var(--font-head);
   font-size: 1.1rem;
-  color: var(--orange-dk);
+  color: var(--accent-dk);
   margin-bottom: 12px;
 }
 
@@ -121,7 +124,7 @@ p {
 
 .btn {
   display: inline-block;
-  background: var(--orange);
+  background: var(--accent);
   color: white;
   font-family: var(--font-head);
   font-weight: 700;
@@ -133,7 +136,7 @@ p {
 }
 
 .btn:hover {
-  background: var(--orange-dk);
+  background: var(--accent-dk);
 }
 
 .loading {
