@@ -144,9 +144,28 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(245,131,33,0.35);
 }
+/* ── Mobile bottom tab bar ── */
+.mobile-tab-bar {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+  background: var(--white); border-top: 1px solid var(--border);
+  padding: 6px 0; padding-bottom: max(6px, env(safe-area-inset-bottom));
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+}
+.mobile-tab-bar a {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  text-decoration: none; color: var(--muted); font-size: 0.62rem;
+  font-weight: 600; gap: 2px; padding: 4px 0; transition: color 0.15s;
+}
+.mobile-tab-bar a:hover { color: var(--primary); }
+.mobile-tab-bar a.active { color: var(--accent); }
+.mobile-tab-bar a.cta { color: var(--accent); }
+.mobile-tab-icon { font-size: 1.2rem; line-height: 1; }
 @media (max-width: 600px) {
   .site-nav { padding: 0 16px; }
-  .site-nav-link:not(.primary):not(.back) { display: none; }
+  .site-nav-link { display: none; }
+  .mobile-tab-bar { display: flex; }
+  footer { margin-bottom: 64px; }
 }
 
 /* ── HERO ── */
@@ -2278,5 +2297,14 @@ document.getElementById('enquiry-form').addEventListener('submit', async functio
 </script>
 <script id="anywhere_book_now_script" type="text/javascript" src="https://assets.setmore.com/integration/book-now/live/v1/anywhere-book-now.js"></script>
 <button style="display: none;" id="Anywhere_button_iframe" class="anywhere-book-now-button" data-booking-url="https://coachcarteruk.setmore.com/services/f92268da-e2cc-4661-8cdd-82afa1b767a0" data-new-tab="false">Book now</button>
+
+<nav class="mobile-tab-bar">
+  <a href="/"><span class="mobile-tab-icon">🏠</span>Home</a>
+  <a href="/learner-journey.html"><span class="mobile-tab-icon">💰</span>Pricing</a>
+  <a href="/classroom.html"><span class="mobile-tab-icon">🎬</span>Videos</a>
+  <a href="/learner/login.html"><span class="mobile-tab-icon">👤</span>Log in</a>
+  <a href="/learner/login.html?redirect=/learner/book.html" class="cta"><span class="mobile-tab-icon">📅</span>Book</a>
+</nav>
+
 </body>
 </html>
