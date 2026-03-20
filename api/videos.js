@@ -143,16 +143,16 @@ async function handleUploadUrl(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { maxDurationSeconds } = req.body || {};
+  const { maxDurationSeconds, fileSize } = req.body || {};
   const maxDuration = maxDurationSeconds || 600;
+  const uploadLength = fileSize ? String(fileSize) : '0';
 
   try {
     const resp = await cfFetch('?direct_user=true', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'Tus-Resumable': '1.0.0',
-        'Upload-Length': '0',
+        'Upload-Length': uploadLength,
         'Upload-Metadata': `maxDurationSeconds ${Buffer.from(String(maxDuration)).toString('base64')}`,
       },
     });
