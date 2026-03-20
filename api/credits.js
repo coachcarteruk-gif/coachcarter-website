@@ -142,6 +142,7 @@ async function handleCheckout(req, res) {
       },
       customer_email: user.email,
       billing_address_collection: 'required',
+      allow_promotion_codes: true,
       success_url: `${origin}/learner/?lessons_added=${qty}`,
       cancel_url:  `${origin}/learner/buy-credits.html?cancelled=true`
     });
