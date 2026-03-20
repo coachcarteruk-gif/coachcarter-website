@@ -358,7 +358,7 @@ Complete rewrite of the session logging system: consolidated from 8 steps to 3, 
 - ✅ `public/learner/index.html` — unlogged booking banner ("You have X lessons to log") with CTA linking to log page
 - ✅ `public/learner/index.html` — progress cards and session history use traffic light dots instead of emojis
 - ✅ `public/instructor/index.html` — collapsible "Learner Self-Assessment" section on completed bookings in daily view and booking detail modal
-- ✅ Font migration: learner portal pages (`index.html`, `log-session.html`) updated from Space Grotesk + Outfit to Jost + DM Sans
+- ✅ Font migration: learner portal pages (`index.html`, `log-session.html`) updated to Bricolage Grotesque + Lato
 
 ### 2.22 — Reviews & Testimonials
 Post-lesson review prompt triggered after a lesson is marked completed.
