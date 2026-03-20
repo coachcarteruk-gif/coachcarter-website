@@ -211,7 +211,8 @@ async function handleVerifyToken(req, res) {
 
     const [row] = await sql`
       SELECT t.id AS token_id, t.expires_at, t.used,
-             i.id AS instructor_id, i.name, i.email, i.photo_url
+             i.id AS instructor_id, i.name, i.email, i.photo_url,
+             COALESCE(i.is_admin, FALSE) AS is_admin
       FROM instructor_login_tokens t
       JOIN instructors i ON i.id = t.instructor_id
       WHERE t.token = ${token}
@@ -228,15 +229,13 @@ async function handleVerifyToken(req, res) {
 
     // Issue a JWT
     const secret   = process.env.JWT_SECRET;
-    const jwtToken = jwt.sign(
-      { id: row.instructor_id, email: row.email, role: 'instructor' },
-      secret,
-      { expiresIn: JWT_EXPIRY }
-    );
+    const jwtPayload = { id: row.instructor_id, email: row.email, role: 'instructor' };
+    if (row.is_admin) jwtPayload.isAdmin = true;
+    const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: JWT_EXPIRY });
 
     return res.json({
       token: jwtToken,
-      instructor: { id: row.instructor_id, name: row.name, email: row.email, photo_url: row.photo_url }
+      instructor: { id: row.instructor_id, name: row.name, email: row.email, photo_url: row.photo_url, is_admin: !!row.is_admin }
     });
 
   } catch (err) {

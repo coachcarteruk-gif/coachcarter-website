@@ -41,7 +41,7 @@ function setCors(res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Admin-Secret');
 }
 
-// Verify admin JWT token
+// Verify admin JWT token (accepts admin/superadmin roles OR instructors with isAdmin flag)
 function verifyAdminJWT(req) {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) return null;
@@ -49,8 +49,9 @@ function verifyAdminJWT(req) {
   if (!secret) return null;
   try {
     const payload = jwt.verify(auth.slice(7), secret);
-    if (payload.role !== 'admin' && payload.role !== 'superadmin') return null;
-    return payload;
+    if (payload.role === 'admin' || payload.role === 'superadmin') return payload;
+    if (payload.role === 'instructor' && payload.isAdmin === true) return payload;
+    return null;
   } catch { return null; }
 }
 
