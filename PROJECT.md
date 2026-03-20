@@ -97,6 +97,8 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   │   ├── index.html              # Instructor schedule calendar (monthly/weekly/daily views)
 │   │   ├── availability.html       # Instructor sets their own weekly availability
 │   │   └── profile.html            # Instructor updates bio, contact details, and buffer time
+│   ├── demo/
+│   │   └── book.html               # Demo booking calendar — real flow with free demo instructor
 │   ├── videos.json                 # Legacy video data (fallback — videos now managed in DB via admin portal)
 │   ├── config.json                 # Site config
 │   └── Logo.png                    # CoachCarter logo
@@ -112,6 +114,8 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   │   ├── 007_buffer_minutes.sql  # buffer_minutes on instructors
 │   │   └── 008_videos.sql          # video_categories + videos tables
 │   └── seeds/                      # Placeholder data for testing
+│       ├── 001_placeholder_instructors.sql
+│       └── 002_demo_instructor.sql # Creates demo instructor with full 7-day availability
 │
 ├── middleware.js                   # Vercel middleware — maintenance mode redirect
 ├── vercel.json                     # Route config
@@ -182,6 +186,7 @@ Base price: **£82.50 per credit** (set in `api/credits.js` as `CREDIT_PRICE_PEN
 - Booking is instant — no instructor approval needed
 - **With credits:** 1 credit deducted on booking; returned automatically on 48+ hour cancellations
 - **Without credits (pay-per-slot):** Slot reserved for 10 minutes during Stripe Checkout; on payment confirmation, 1 credit added + deducted atomically, booking created, .ics calendar attachment sent to both parties
+- **Demo instructor:** Bookings against the demo instructor (email `demo@coachcarter.uk`) are free — no credit check or deduction. The demo instructor is excluded from real booking flows. No emails sent to the demo instructor on book/cancel. Cancel returns no credits (since none were taken).
 - Race condition protection via DB unique index on `(instructor_id, scheduled_date, start_time)` + slot reservations table
 
 ### Cancellation policy
@@ -480,6 +485,7 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 
 ## Recent changes (March 2026)
 
+- **Demo booking system** (20 March) — public demo page at `/demo/book.html` lets users explore the full booking flow (monthly/weekly/daily calendar views) with a dedicated demo instructor. Requires sign-up/login but bookings are free (no credit deduction). Users receive real confirmation emails, calendar invites, and can cancel from the page. Demo instructor (ID 5, email `demo@coachcarter.uk`) has full 7-day availability (07:00–21:00) with zero buffer. Filtered out of real booking flows via email check in `api/instructors.js` and `api/slots.js`. Demo links added to homepage quiz and pricing page. SQL seed at `db/seeds/002_demo_instructor.sql`.
 - **Dynamic Pass Programme pricing** (20 March) — demand-based pricing for the Pass Programme: starts at £1,500, increases £100 per enrolment, caps at £3,000. New `/api/guarantee-price` endpoint with dedicated `guarantee_pricing` DB table, atomic increments via Stripe webhook, manual override in admin editor. Transparent "launch pricing" messaging with progress bar on the learner journey page.
 - **Pricing page restructure** (20 March) — learner-journey.html is now the canonical pricing page (linked from all nav bars site-wide). Features a tabbed hero card (PAYG vs Pass Programme) with live dynamic pricing. The old lessons.html retains PAYG and bulk packages with a redirect banner for the Pass Programme. Comparison table and guarantee calculator removed from lessons.html.
 - **Renamed Pass Guarantee → Pass Programme** (20 March) — all user-facing references renamed across HTML, JS, config, and email templates. Code identifiers (`pass_guarantee`, `isPassGuarantee`) kept for Stripe/webhook compatibility.
