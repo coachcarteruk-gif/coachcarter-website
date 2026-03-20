@@ -1333,7 +1333,7 @@ async function handleVideoFileSelect(e) {
   try {
     // Get upload URL from our API
     const urlRes = await fetch('/api/videos?action=upload-url', {
-      method: 'POST', headers: HEADERS, body: JSON.stringify({ maxDurationSeconds: 600, fileSize: file.size })
+      method: 'POST', headers: HEADERS, body: JSON.stringify({ maxDurationSeconds: 600 })
     });
     const urlData = await urlRes.json();
     if (!urlRes.ok) throw new Error(urlData.error || 'Failed to get upload URL');
@@ -1344,13 +1344,13 @@ async function handleVideoFileSelect(e) {
 
     status.textContent = 'Uploading...';
 
-    // Upload file via XHR for progress tracking
+    // Upload file via XHR FormData POST for progress tracking
+    const formData = new FormData();
+    formData.append('file', file);
+
     await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open('PATCH', uploadUrl, true);
-      xhr.setRequestHeader('Content-Type', 'application/offset+octet-stream');
-      xhr.setRequestHeader('Tus-Resumable', '1.0.0');
-      xhr.setRequestHeader('Upload-Offset', '0');
+      xhr.open('POST', uploadUrl, true);
 
       xhr.upload.onprogress = (evt) => {
         if (evt.lengthComputable) {
@@ -1364,7 +1364,7 @@ async function handleVideoFileSelect(e) {
         else reject(new Error('Upload failed: ' + xhr.status));
       };
       xhr.onerror = () => reject(new Error('Upload network error'));
-      xhr.send(file);
+      xhr.send(formData);
     });
 
     bar.style.width = '100%';
