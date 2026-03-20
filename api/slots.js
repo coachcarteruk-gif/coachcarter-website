@@ -130,6 +130,7 @@ async function handleAvailable(req, res) {
           JOIN instructors i ON i.id = ia.instructor_id
           WHERE ia.active = true
             AND i.active  = true
+            AND i.email  != 'demo@coachcarter.uk'
           ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
         `;
 

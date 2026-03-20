@@ -69,6 +69,7 @@ async function handleList(req, res) {
       SELECT id, name, email, phone, bio, photo_url, active, created_at
       FROM instructors
       WHERE active = true
+        AND email != 'demo@coachcarter.uk'
       ORDER BY name ASC
     `;
     return res.json({ instructors });
