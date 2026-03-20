@@ -29,6 +29,7 @@ module.exports = async (req, res) => {
       custom_fields: custom_fields,
       phone_number_collection: { enabled: true },
       billing_address_collection: 'required',
+      allow_promotion_codes: true,
       custom_text: {
         submit: {
           message: 'You will receive a confirmation email within 5 minutes with next steps.'
