@@ -183,6 +183,31 @@ async function handleAvailable(req, res) {
       // Table may not exist yet — that's fine, no reservations
     }
 
+    // 2c. Load blackout dates in the date range
+    let blackouts = [];
+    try {
+      blackouts = instructor_id
+        ? await sql`
+            SELECT instructor_id, blackout_date::text AS blackout_date
+            FROM instructor_blackout_dates
+            WHERE blackout_date BETWEEN ${from} AND ${to}
+              AND instructor_id = ${instructor_id}
+          `
+        : await sql`
+            SELECT instructor_id, blackout_date::text AS blackout_date
+            FROM instructor_blackout_dates
+            WHERE blackout_date BETWEEN ${from} AND ${to}
+          `;
+    } catch (e) {
+      // Table may not exist yet — that's fine, no blackout dates
+    }
+
+    // Index blackout dates as "instructorId|date" for fast lookup
+    const blackoutIndex = new Set();
+    for (const b of blackouts) {
+      blackoutIndex.add(`${b.instructor_id}|${b.blackout_date}`);
+    }
+
     // Index bookings + reservations by "instructorId|date" for fast lookup
     const bookedIndex = {};
     for (const b of [...bookings, ...reservations]) {
@@ -214,13 +239,22 @@ async function handleAvailable(req, res) {
     // 4. Walk every date in range and generate slots
     const result = {}; // { "YYYY-MM-DD": [ slot, ... ] }
 
+    // For same-day booking: calculate current time in minutes to filter past slots
+    const now          = new Date();
+    const todayStr     = formatDate(today);
+    const nowMinutes   = now.getUTCHours() * 60 + now.getUTCMinutes();
+
     let cursor = new Date(fromDate);
     while (cursor <= toDate) {
       const dateStr    = formatDate(cursor);
       const dayOfWeek  = cursor.getDay(); // 0=Sun … 6=Sat
+      const isToday    = dateStr === todayStr;
       const daySlots   = [];
 
       for (const instructor of Object.values(byInstructor)) {
+        // Skip this instructor on this date if it's a blackout day
+        if (blackoutIndex.has(`${instructor.id}|${dateStr}`)) continue;
+
         const matchingWindows = instructor.windows.filter(w => w.day_of_week === dayOfWeek);
         const bookedSlots     = bookedIndex[`${instructor.id}|${dateStr}`] || [];
         const buffer          = instructor.buffer_minutes || 0;
@@ -230,6 +264,12 @@ async function handleAvailable(req, res) {
 
           while (slotStart + SLOT_MINUTES <= window.end) {
             const slotEnd = slotStart + SLOT_MINUTES;
+
+            // Skip slots that have already started today
+            if (isToday && slotStart <= nowMinutes) {
+              slotStart += SLOT_MINUTES;
+              continue;
+            }
 
             // Check if this slot overlaps any booked slot (including buffer after each booking)
             const isBooked = bookedSlots.some(
@@ -309,6 +349,14 @@ async function handleBook(req, res) {
   const endMins   = timeToMinutes(end_time);
   if (endMins - startMins !== SLOT_MINUTES)
     return res.status(400).json({ error: 'Slot must be exactly 90 minutes' });
+
+  // Reject same-day bookings where the slot has already started
+  if (bookingDate.getTime() === today.getTime()) {
+    const now = new Date();
+    const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    if (startMins <= nowMins)
+      return res.status(400).json({ error: 'This slot has already started. Please choose a later time.' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -483,6 +531,16 @@ async function handleCheckoutSlot(req, res) {
   if (endMins - startMins !== SLOT_MINUTES)
     return res.status(400).json({ error: 'Slot must be exactly 90 minutes' });
 
+  // Reject same-day bookings where the slot has already started
+  const checkoutDate = parseDate(date);
+  const todayStart   = startOfDay(new Date());
+  if (checkoutDate && checkoutDate.getTime() === todayStart.getTime()) {
+    const now = new Date();
+    const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    if (startMins <= nowMins)
+      return res.status(400).json({ error: 'This slot has already started. Please choose a later time.' });
+  }
+
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
@@ -568,6 +626,7 @@ async function handleCheckoutSlot(req, res) {
       },
       customer_email: learner.email,
       billing_address_collection: 'required',
+      allow_promotion_codes: true,
       success_url: `${origin}/learner/book.html?paid=1`,
       cancel_url:  `${origin}/learner/book.html?cancelled=1`
     });

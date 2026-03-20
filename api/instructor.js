@@ -78,6 +78,8 @@ module.exports = async (req, res) => {
   if (action === 'set-availability') return handleSetAvailability(req, res);
   if (action === 'profile')          return handleProfile(req, res);
   if (action === 'update-profile')   return handleUpdateProfile(req, res);
+  if (action === 'blackout-dates')     return handleBlackoutDates(req, res);
+  if (action === 'set-blackout-dates') return handleSetBlackoutDates(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -631,5 +633,106 @@ async function handleUpdateProfile(req, res) {
   } catch (err) {
     console.error('instructor update-profile error:', err);
     return res.status(500).json({ error: 'Failed to update profile' });
+  }
+}
+
+// ── GET /api/instructor?action=blackout-dates ─────────────────────────────────
+// Returns the instructor's blackout dates (future only).
+async function handleBlackoutDates(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Ensure table exists (safe for first run before migration)
+    await sql`CREATE TABLE IF NOT EXISTS instructor_blackout_dates (
+      id SERIAL PRIMARY KEY,
+      instructor_id INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
+      blackout_date DATE NOT NULL,
+      reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uq_blackout_date UNIQUE (instructor_id, blackout_date)
+    )`;
+
+    const dates = await sql`
+      SELECT id, blackout_date::text, reason
+      FROM instructor_blackout_dates
+      WHERE instructor_id = ${instructor.id}
+        AND blackout_date >= CURRENT_DATE
+      ORDER BY blackout_date ASC
+    `;
+
+    return res.json({ blackout_dates: dates });
+
+  } catch (err) {
+    console.error('instructor blackout-dates error:', err);
+    return res.status(500).json({ error: 'Failed to load blackout dates' });
+  }
+}
+
+// ── POST /api/instructor?action=set-blackout-dates ────────────────────────────
+// Body: { dates: [{ date: "YYYY-MM-DD", reason?: "..." }, ...] }
+// Replaces all future blackout dates for this instructor.
+async function handleSetBlackoutDates(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { dates } = req.body;
+  if (!Array.isArray(dates))
+    return res.status(400).json({ error: 'dates must be an array' });
+
+  // Validate each date
+  for (const d of dates) {
+    if (!d.date || !/^\d{4}-\d{2}-\d{2}$/.test(d.date))
+      return res.status(400).json({ error: `Invalid date format: ${d.date}. Use YYYY-MM-DD` });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Ensure table exists
+    await sql`CREATE TABLE IF NOT EXISTS instructor_blackout_dates (
+      id SERIAL PRIMARY KEY,
+      instructor_id INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
+      blackout_date DATE NOT NULL,
+      reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uq_blackout_date UNIQUE (instructor_id, blackout_date)
+    )`;
+
+    // Delete all future blackout dates for this instructor
+    await sql`
+      DELETE FROM instructor_blackout_dates
+      WHERE instructor_id = ${instructor.id}
+        AND blackout_date >= CURRENT_DATE
+    `;
+
+    // Insert new blackout dates
+    for (const d of dates) {
+      await sql`
+        INSERT INTO instructor_blackout_dates (instructor_id, blackout_date, reason)
+        VALUES (${instructor.id}, ${d.date}, ${d.reason || null})
+        ON CONFLICT (instructor_id, blackout_date) DO UPDATE SET reason = EXCLUDED.reason
+      `;
+    }
+
+    const saved = await sql`
+      SELECT id, blackout_date::text, reason
+      FROM instructor_blackout_dates
+      WHERE instructor_id = ${instructor.id}
+        AND blackout_date >= CURRENT_DATE
+      ORDER BY blackout_date ASC
+    `;
+
+    return res.json({ success: true, blackout_dates: saved });
+
+  } catch (err) {
+    console.error('instructor set-blackout-dates error:', err);
+    return res.status(500).json({ error: 'Failed to save blackout dates' });
   }
 }
