@@ -379,7 +379,7 @@ async function handleCheckoutComplete(session) {
   bookings.set(bookingRef, booking);
   console.log('✅ Booking created:', bookingRef, 'for', customerEmail, '- Type:', packageType);
 
-  // If this is a Pass Guarantee purchase, increment the dynamic price
+  // If this is a Pass Programme purchase, increment the dynamic price
   if (isPassGuarantee) {
     try {
       await incrementGuaranteePrice();
@@ -392,7 +392,7 @@ async function handleCheckoutComplete(session) {
   await sendCustomerConfirmation(booking, isCalculatorPackage);
   await notifyStaff(booking, isCalculatorPackage);
 
-  // Delayed availability email for Pass Guarantee and Calculator packages
+  // Delayed availability email for Pass Programme and Calculator packages
   if (isPassGuarantee) {
     await sendAvailabilityFormLink(booking);
   }
@@ -402,7 +402,7 @@ function getPackageDisplayName(packageType) {
   const names = {
     'payg': 'Pay As You Go',
     'bulk': 'Bulk Package',
-    'pass_guarantee': 'Pass Guarantee',
+    'pass_guarantee': 'Pass Programme',
     'core_only': 'Core Programme',
     'core_plus_1': 'Core + 1 Retake',
     'core_plus_2': 'Core + 2 Retakes',
@@ -419,7 +419,7 @@ async function sendCustomerConfirmation(booking, isCalculatorPackage) {
 
   if (isCalculatorPackage) {
     // Calculator-specific email
-    subject = `Pass Guarantee confirmed — ${booking.package_name} — Reference: ${booking.booking_reference}`;
+    subject = `Pass Programme confirmed — ${booking.package_name} — Reference: ${booking.booking_reference}`;
     
     const retakeText = booking.retake_coverage === '0' 
       ? '1 attempt included'
@@ -453,7 +453,7 @@ async function sendCustomerConfirmation(booking, isCalculatorPackage) {
     `;
   } else if (isPassGuarantee) {
     // Legacy pass guarantee email
-    subject = `Pass Guarantee confirmed — Reference: ${booking.booking_reference}`;
+    subject = `Pass Programme confirmed — Reference: ${booking.booking_reference}`;
     html = `
       <h1>You're in, ${booking.customer_name?.split(' ')[0] || 'there'}</h1>
       <p><strong>Reference:</strong> ${booking.booking_reference}<br>
@@ -517,7 +517,7 @@ async function notifyStaff(booking, isCalculatorPackage) {
     to: process.env.STAFF_EMAIL,
     subject: `${isPassGuarantee ? '[ACTION REQUIRED]' : '[NEW BOOKING]'} ${booking.booking_reference} — ${booking.package_name}`,
     html: `
-      <h2>${isPassGuarantee ? 'Pass Guarantee — Verify Required' : 'New Booking'}</h2>
+      <h2>${isPassGuarantee ? 'Pass Programme — Verify Required' : 'New Booking'}</h2>
       <table>
         <tr><td><strong>Reference:</strong></td><td>${booking.booking_reference}</td></tr>
         <tr><td><strong>Customer:</strong></td><td>${booking.customer_name}</td></tr>
@@ -544,7 +544,7 @@ async function notifyStaff(booking, isCalculatorPackage) {
   if (process.env.SLACK_WEBHOOK_URL) {
     const slackText = isCalculatorPackage 
       ? `🎯 New Calculator Booking: ${booking.package_name}`
-      : isPassGuarantee ? '🎯 New Pass Guarantee' : '💳 New Booking';
+      : isPassGuarantee ? '🎯 New Pass Programme' : '💳 New Booking';
     
     await fetch(process.env.SLACK_WEBHOOK_URL, {
       method: 'POST',

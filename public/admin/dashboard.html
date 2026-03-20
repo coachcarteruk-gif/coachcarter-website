@@ -265,7 +265,7 @@ header nav a:hover, header nav a.active {
     </div>
     <div class="stat-card">
       <div class="stat-value" id="pass-guarantees">0</div>
-      <div class="stat-label">Pass Guarantees</div>
+      <div class="stat-label">Pass Programmes</div>
     </div>
   </div>
 
@@ -273,7 +273,7 @@ header nav a:hover, header nav a.active {
     <button class="filter-btn active" data-filter="all">All Bookings</button>
     <button class="filter-btn" data-filter="pending-verification">Needs Verification</button>
     <button class="filter-btn" data-filter="pending-scheduling">Needs Scheduling</button>
-    <button class="filter-btn" data-filter="pass-guarantee">Pass Guarantee</button>
+    <button class="filter-btn" data-filter="pass-guarantee">Pass Programme</button>
   </div>
 
   <div class="bookings-table">
@@ -381,7 +381,7 @@ const demoBookings = [
     name: 'Sarah Johnson',
     email: 'sarah.j@email.com',
     package: 'pass_guarantee',
-    packageDisplay: 'Pass Guarantee',
+    packageDisplay: 'Pass Programme',
     status: 'PAID_PENDING_VERIFICATION',
     statusDisplay: 'Pending Verification',
     amount: 2400,
@@ -667,7 +667,7 @@ async function loadEnquiries() {
     const enquiryTypeLabels = {
       'general': 'General',
       'booking': 'Booking',
-      'pass-guarantee': 'Pass Guarantee',
+      'pass-guarantee': 'Pass Programme',
       'bulk-packages': 'Bulk Package',
       'availability': 'Availability'
     };
@@ -723,7 +723,7 @@ function viewEnquiry(id) {
       const enquiryTypeLabels = {
         'general': 'General Question',
         'booking': 'Booking Enquiry',
-        'pass-guarantee': 'Pass Guarantee Programme',
+        'pass-guarantee': 'Pass Programme Programme',
         'bulk-packages': 'Bulk Packages',
         'availability': 'Check Availability'
       };

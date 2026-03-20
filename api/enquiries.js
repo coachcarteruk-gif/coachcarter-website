@@ -146,7 +146,7 @@ async function handleSubmit(req, res) {
     try {
       const labels = {
         general: 'General Question', booking: 'Booking Enquiry',
-        'pass-guarantee': 'Pass Guarantee', 'bulk-packages': 'Bulk Packages',
+        'pass-guarantee': 'Pass Programme', 'bulk-packages': 'Bulk Packages',
         availability: 'Check Availability'
       };
       const n8nRes = await fetch(process.env.N8N_WEBHOOK_URL, {
@@ -168,7 +168,7 @@ async function handleSubmit(req, res) {
   // Send staff email
   const enquiryTypeLabels = {
     general: 'General Question', booking: 'Booking Enquiry',
-    'pass-guarantee': 'Pass Guarantee Programme', 'bulk-packages': 'Bulk Packages',
+    'pass-guarantee': 'Pass Programme', 'bulk-packages': 'Bulk Packages',
     availability: 'Check Availability', 'join-team': 'Instructor Application'
   };
   const formattedType = enquiryTypeLabels[enquiryType] || enquiryType;
