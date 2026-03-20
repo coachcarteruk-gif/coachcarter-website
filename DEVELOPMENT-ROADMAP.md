@@ -333,19 +333,34 @@ Consolidated pricing into the learner journey page and made it the primary prici
 - ✅ `lessons.html` now focuses on PAYG and bulk packages only
 - ✅ Renamed "Pass Guarantee" → "Pass Programme" across all user-facing text (HTML, JS, config, email templates). Code identifiers kept as `pass_guarantee` / `isPassGuarantee` for Stripe/webhook compatibility
 
-### 2.20 — Reviews & Testimonials
+### 2.20 — Demo Booking System ✅ Complete (20 March 2026)
+A dedicated demo page that lets users (and the site owner) explore the full booking flow with a free demo instructor.
+
+**What was built:**
+- ✅ `public/demo/book.html` — full booking calendar (monthly/weekly/daily views) filtered to the demo instructor only
+- ✅ Requires login (redirects to `/learner/login.html` if not authenticated)
+- ✅ Bookings are real (stored in DB, emails sent, calendar invites generated) but free — no credit deduction
+- ✅ Upcoming demo bookings shown with cancel buttons; cancellation frees the slot with no credit return
+- ✅ Demo instructor (ID 5, `demo@coachcarter.uk`) with full 7-day availability (07:00–21:00), zero buffer time
+- ✅ Demo instructor hidden from real booking flows: email filter in `api/instructors.js` (list) and `api/slots.js` (unfiltered availability)
+- ✅ `api/slots.js` — `handleBook` skips credit check/deduction for demo instructor; `handleCancel` skips credit return; no emails sent to demo instructor
+- ✅ Demo links added to homepage quiz ("Try the booking demo") and pricing page ("try the booking demo")
+- ✅ `db/seeds/002_demo_instructor.sql` — SQL seed for creating the demo instructor and availability
+- ✅ Bottom nav includes Demo tab; demo banner at top of page explains the mode
+
+### 2.21 — Reviews & Testimonials
 Post-lesson review prompt triggered after a lesson is marked completed.
 - Automated email 24 hours after lesson status → completed
 - Simple star rating + comment
 - Optional: display approved reviews publicly
 
-### 2.21 — Waiting List
+### 2.22 — Waiting List
 Capture leads when all instructors are fully booked.
 - "No slots available" state on calendar triggers a waiting list sign-up
 - Notifies admin when someone joins
 - Admin can manually offer a slot and notify the learner
 
-### 2.22 — Referral System
+### 2.23 — Referral System
 Reward learners for recommending friends.
 - Unique referral link per learner
 - Both referrer and new learner receive a credit bonus on first purchase
