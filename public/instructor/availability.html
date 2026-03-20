@@ -218,6 +218,67 @@
     .toast.success { background: #16a34a; }
     .toast.error   { background: var(--red); }
 
+    /* Blackout dates section */
+    .section-divider {
+      margin: 36px 0 24px;
+      border-top: 1px solid var(--border);
+      padding-top: 24px;
+    }
+    .section-divider h2 {
+      font-family: var(--font-head);
+      font-size: 1.3rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .section-divider .subtitle {
+      margin-bottom: 20px;
+    }
+    .blackout-add-row {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .blackout-add-row input[type="date"] {
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 12px; font-size: 0.875rem; font-family: var(--font-body);
+      background: var(--white); color: var(--primary); outline: none;
+      transition: border-color 0.15s;
+    }
+    .blackout-add-row input[type="date"]:focus { border-color: var(--accent); }
+    .blackout-add-row input[type="text"] {
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 12px; font-size: 0.875rem; font-family: var(--font-body);
+      background: var(--white); color: var(--primary); outline: none;
+      flex: 1; min-width: 120px;
+      transition: border-color 0.15s;
+    }
+    .blackout-add-row input[type="text"]:focus { border-color: var(--accent); }
+    .btn-add-blackout {
+      background: var(--accent); color: white; border: none;
+      border-radius: 8px; padding: 8px 16px; font-size: 0.85rem;
+      font-weight: 700; cursor: pointer; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .btn-add-blackout:hover { background: var(--accent-dk); }
+    .blackout-list {
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .blackout-row {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface); border-radius: 8px; padding: 10px 14px;
+    }
+    .blackout-date-label {
+      font-weight: 700; font-size: 0.875rem; min-width: 150px;
+    }
+    .blackout-reason {
+      font-size: 0.825rem; color: var(--muted); flex: 1;
+    }
+    .btn-remove-blackout {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 1rem; padding: 2px 6px; border-radius: 4px; transition: all 0.15s;
+      line-height: 1;
+    }
+    .btn-remove-blackout:hover { color: var(--red); background: var(--red-lt); }
+    .no-blackouts { font-size: 0.825rem; color: var(--muted); font-style: italic; }
+
     .loading { text-align: center; padding: 48px; color: var(--muted); }
     .spinner {
       width: 32px; height: 32px; border: 3px solid var(--border);
@@ -264,6 +325,21 @@
   <div id="availContent">
     <div class="loading"><div class="spinner"></div><p>Loading…</p></div>
   </div>
+
+  <div class="section-divider" id="blackoutSection" style="display:none">
+    <h2>Blackout Dates</h2>
+    <p class="subtitle">Block specific dates when you're unavailable (holidays, sick days, etc.). No slots will be shown to learners on these dates.</p>
+
+    <div class="blackout-add-row">
+      <input type="date" id="blackoutDateInput" min="">
+      <input type="text" id="blackoutReasonInput" placeholder="Reason (optional)">
+      <button class="btn-add-blackout" onclick="addBlackoutDate()">+ Add date</button>
+    </div>
+
+    <div class="blackout-list" id="blackoutList">
+      <p class="no-blackouts">No blackout dates set</p>
+    </div>
+  </div>
 </div>
 
 <!-- Save bar -->
@@ -300,16 +376,22 @@
     { label: 'Sunday',    value: 0 },
   ];
 
-  let token     = null;
-  let windows   = []; // [{ day_of_week, start_time, end_time }]
-  let isDirty   = false;
+  let token         = null;
+  let windows       = []; // [{ day_of_week, start_time, end_time }]
+  let isDirty       = false;
+  let blackoutDates = []; // [{ date, reason }]
 
   function init() {
     const session = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
     token = session?.token || null;
     if (!token) { window.location.href = '/instructor/login.html'; return; }
     document.getElementById('headerName').textContent = session?.instructor?.name || '—';
+    // Set min date on blackout date input to today
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById('blackoutDateInput').min = today;
+    document.getElementById('blackoutDateInput').value = today;
     loadAvailability();
+    loadBlackoutDates();
   }
 
   async function loadAvailability() {
@@ -438,6 +520,100 @@
     void t.offsetWidth;
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  // ─── Blackout dates ────────────────────────────────────────────────────────
+  async function loadBlackoutDates() {
+    try {
+      const res = await fetch('/api/instructor?action=blackout-dates', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (res.status === 401) return;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      blackoutDates = (data.blackout_dates || []).map(d => ({
+        date: d.blackout_date,
+        reason: d.reason || ''
+      }));
+      renderBlackouts();
+      document.getElementById('blackoutSection').style.display = '';
+    } catch (err) {
+      console.error('Failed to load blackout dates:', err);
+      document.getElementById('blackoutSection').style.display = '';
+    }
+  }
+
+  function renderBlackouts() {
+    const list = document.getElementById('blackoutList');
+    if (blackoutDates.length === 0) {
+      list.innerHTML = '<p class="no-blackouts">No blackout dates set</p>';
+      return;
+    }
+    list.innerHTML = blackoutDates.map((d, i) => {
+      const dateObj = new Date(d.date + 'T00:00:00Z');
+      const label = dateObj.toLocaleDateString('en-GB', {
+        weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'
+      });
+      return `
+        <div class="blackout-row">
+          <span class="blackout-date-label">${label}</span>
+          <span class="blackout-reason">${d.reason ? esc(d.reason) : ''}</span>
+          <button class="btn-remove-blackout" onclick="removeBlackout(${i})" title="Remove">✕</button>
+        </div>`;
+    }).join('');
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  async function addBlackoutDate() {
+    const dateInput   = document.getElementById('blackoutDateInput');
+    const reasonInput = document.getElementById('blackoutReasonInput');
+    const date   = dateInput.value;
+    const reason = reasonInput.value.trim();
+
+    if (!date) { showToast('Please select a date', 'error'); return; }
+
+    // Check not already added
+    if (blackoutDates.some(d => d.date === date)) {
+      showToast('That date is already blocked', 'error');
+      return;
+    }
+
+    blackoutDates.push({ date, reason });
+    blackoutDates.sort((a, b) => a.date.localeCompare(b.date));
+    renderBlackouts();
+    reasonInput.value = '';
+    await saveBlackoutDates();
+  }
+
+  async function removeBlackout(idx) {
+    blackoutDates.splice(idx, 1);
+    renderBlackouts();
+    await saveBlackoutDates();
+  }
+
+  async function saveBlackoutDates() {
+    try {
+      const res = await fetch('/api/instructor?action=set-blackout-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ dates: blackoutDates })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      blackoutDates = (data.blackout_dates || []).map(d => ({
+        date: d.blackout_date,
+        reason: d.reason || ''
+      }));
+      renderBlackouts();
+      showToast('Blackout dates saved', 'success');
+    } catch (err) {
+      showToast(err.message || 'Failed to save blackout dates', 'error');
+    }
   }
 
   init();
