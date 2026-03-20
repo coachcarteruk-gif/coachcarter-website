@@ -97,6 +97,39 @@
       margin-top: 124px;
     }
 
+    /* ── Calendar Sync Banner ──────────────────────────────────────────── */
+    .cal-sync-banner {
+      background: var(--accent-lt); border: 1px solid #fcd4b0;
+      border-radius: var(--radius); padding: 14px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .cal-sync-banner-text {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .cal-sync-banner-text strong {
+      font-family: var(--font-head); font-size: 0.92rem; font-weight: 700;
+    }
+    .cal-sync-banner-text span {
+      font-size: 0.82rem; color: var(--muted);
+    }
+    .cal-sync-banner-actions {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .cal-sync-btn {
+      background: var(--accent); color: white; border: none;
+      border-radius: 8px; padding: 8px 18px; font-size: 0.85rem;
+      font-weight: 700; cursor: pointer; text-decoration: none;
+      white-space: nowrap; transition: background 0.15s;
+    }
+    .cal-sync-btn:hover { background: var(--accent-dk); }
+    .cal-sync-dismiss {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 1.1rem; padding: 4px 8px; border-radius: 4px;
+      transition: all 0.15s; line-height: 1;
+    }
+    .cal-sync-dismiss:hover { color: var(--primary); background: rgba(0,0,0,0.05); }
+
     /* ── Calendar Toolbar ─────────────────────────────────────────────────── */
     .cal-toolbar {
       display: flex; align-items: center; justify-content: space-between;
@@ -467,6 +500,18 @@
 </header>
 
 <div class="page">
+  <!-- Calendar sync banner -->
+  <div class="cal-sync-banner" id="calSyncBanner" style="display:none">
+    <div class="cal-sync-banner-text">
+      <strong>Sync your schedule to your phone</strong>
+      <span>All bookings and cancellations will appear in your calendar automatically.</span>
+    </div>
+    <div class="cal-sync-banner-actions">
+      <a class="cal-sync-btn" id="calSyncBtn" href="#">Sync to calendar</a>
+      <button class="cal-sync-dismiss" id="calSyncDismiss" title="Dismiss">✕</button>
+    </div>
+  </div>
+
   <!-- Toolbar -->
   <div class="cal-toolbar">
     <div class="cal-title-block">
@@ -1108,8 +1153,39 @@ function showToast(msg, type = '') {
   setTimeout(() => t.classList.remove('show'), 3500);
 }
 
+// ─── Calendar Sync Banner ──────────────────────────────────────────────────
+function initCalSyncBanner() {
+  const dismissed = localStorage.getItem('cc_instructor_cal_synced') === '1';
+  if (dismissed) return;
+
+  const banner = document.getElementById('calSyncBanner');
+  banner.style.display = 'flex';
+
+  document.getElementById('calSyncBtn').onclick = async function(e) {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/calendar?action=instructor-feed-url', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      localStorage.setItem('cc_instructor_cal_synced', '1');
+      window.location.href = data.webcal_url;
+      setTimeout(() => { banner.style.display = 'none'; }, 1000);
+    } catch (err) {
+      showToast(err.message || 'Could not set up calendar sync', 'error');
+    }
+  };
+
+  document.getElementById('calSyncDismiss').onclick = function() {
+    localStorage.setItem('cc_instructor_cal_synced', '1');
+    banner.style.display = 'none';
+  };
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 init();
+initCalSyncBanner();
 </script>
 </body>
 </html>

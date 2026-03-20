@@ -36,9 +36,11 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   const action = req.query.action;
-  if (action === 'download')  return handleDownload(req, res);
-  if (action === 'feed')      return handleFeed(req, res);
-  if (action === 'feed-url')  return handleFeedUrl(req, res);
+  if (action === 'download')            return handleDownload(req, res);
+  if (action === 'feed')                return handleFeed(req, res);
+  if (action === 'feed-url')            return handleFeedUrl(req, res);
+  if (action === 'instructor-feed')     return handleInstructorFeed(req, res);
+  if (action === 'instructor-feed-url') return handleInstructorFeedUrl(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -174,6 +176,107 @@ async function handleFeedUrl(req, res) {
   }
 }
 
+// ── Instructor auth helper ────────────────────────────────────────────────────
+
+function verifyInstructorAuth(req) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) return null;
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return null;
+  try {
+    const payload = jwt.verify(auth.slice(7), secret);
+    if (payload.role !== 'instructor') return null;
+    return payload;
+  } catch { return null; }
+}
+
+// ── GET /api/calendar?action=instructor-feed&token=X ────────────────────────
+// Returns a full iCal feed of all upcoming bookings for the instructor.
+async function handleInstructorFeed(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const calToken = req.query.token;
+  if (!calToken) return res.status(400).json({ error: 'token required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [instructor] = await sql`
+      SELECT id, name FROM instructors WHERE calendar_token = ${calToken}
+    `;
+    if (!instructor)
+      return res.status(404).send('Invalid calendar token');
+
+    const bookings = await sql`
+      SELECT
+        lb.id,
+        lb.scheduled_date::text AS scheduled_date,
+        lb.start_time::text AS start_time,
+        lb.end_time::text AS end_time,
+        lb.status,
+        lu.name AS learner_name
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      WHERE lb.instructor_id = ${instructor.id}
+        AND lb.status IN ('confirmed', 'completed')
+        AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '7 days')
+      ORDER BY lb.scheduled_date, lb.start_time
+    `;
+
+    const icsContent = generateInstructorFeedICS(bookings, instructor.name);
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.status(200).send(icsContent);
+
+  } catch (err) {
+    console.error('instructor calendar feed error:', err);
+    return res.status(500).send('Failed to generate calendar feed');
+  }
+}
+
+// ── GET /api/calendar?action=instructor-feed-url ────────────────────────────
+// Returns (or creates) the instructor's personal calendar feed URL.
+async function handleInstructorFeedUrl(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = verifyInstructorAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Ensure column exists
+    try {
+      await sql`ALTER TABLE instructors ADD COLUMN IF NOT EXISTS calendar_token TEXT UNIQUE`;
+    } catch (e) { /* column already exists */ }
+
+    const [instructor] = await sql`
+      SELECT calendar_token FROM instructors WHERE id = ${user.id}
+    `;
+
+    let calToken = instructor?.calendar_token;
+
+    if (!calToken) {
+      calToken = crypto.randomBytes(24).toString('hex');
+      await sql`
+        UPDATE instructors SET calendar_token = ${calToken} WHERE id = ${user.id}
+      `;
+    }
+
+    const feedUrl = `https://coachcarter.uk/api/calendar?action=instructor-feed&token=${calToken}`;
+
+    return res.json({
+      feed_url: feedUrl,
+      webcal_url: feedUrl.replace('https://', 'webcal://')
+    });
+
+  } catch (err) {
+    console.error('instructor calendar feed-url error:', err);
+    return res.status(500).json({ error: 'Failed to generate feed URL' });
+  }
+}
+
 // ── ICS generation helpers ────────────────────────────────────────────────────
 
 // Generate a single-event .ics file
@@ -255,6 +358,54 @@ function generateFeedICS(bookings, learnerName) {
     'METHOD:PUBLISH',
     `X-WR-CALNAME:CoachCarter Lessons`,
     `X-WR-CALDESC:Driving lesson schedule for ${learnerName}`,
+    'REFRESH-INTERVAL;VALUE=DURATION:PT4H',
+    'X-PUBLISHED-TTL:PT4H',
+    ...events,
+    'END:VCALENDAR'
+  ].join('\r\n');
+}
+
+// Generate a multi-event feed .ics for instructor (shows learner names)
+function generateInstructorFeedICS(bookings, instructorName) {
+  const now = toICSTimestamp(new Date());
+
+  const events = bookings.map(b => {
+    const dtStart = toICSDate(b.scheduled_date, b.start_time);
+    const dtEnd   = toICSDate(b.scheduled_date, b.end_time);
+    const uid     = `booking-${b.id}-instructor@coachcarter.uk`;
+    const status  = b.status === 'cancelled' ? 'CANCELLED' : 'CONFIRMED';
+
+    return [
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${now}`,
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`,
+      `SUMMARY:Lesson — ${b.learner_name}`,
+      `DESCRIPTION:1.5-hour driving lesson with ${b.learner_name}.\\n\\nManage schedule: https://coachcarter.uk/instructor/`,
+      `STATUS:${status}`,
+      'BEGIN:VALARM',
+      'TRIGGER:-PT2H',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:Lesson with ${b.learner_name} in 2 hours`,
+      'END:VALARM',
+      'BEGIN:VALARM',
+      'TRIGGER:-PT15M',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:Lesson with ${b.learner_name} in 15 minutes`,
+      'END:VALARM',
+      'END:VEVENT'
+    ].join('\r\n');
+  });
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//CoachCarter//Instructor Schedule//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:CoachCarter Schedule`,
+    `X-WR-CALDESC:Lesson schedule for ${instructorName}`,
     'REFRESH-INTERVAL;VALUE=DURATION:PT4H',
     'X-PUBLISHED-TTL:PT4H',
     ...events,
