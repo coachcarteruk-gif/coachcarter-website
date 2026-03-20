@@ -371,6 +371,10 @@
     <span class="bottom-nav-icon">👤</span>
     <span>Profile</span>
   </a>
+  <a href="/admin/portal.html" class="bottom-nav-item" id="admin-tab" style="display:none">
+    <span class="bottom-nav-icon">⚙️</span>
+    <span>Admin</span>
+  </a>
 </nav>
 
 <script>
@@ -394,6 +398,11 @@
     token = session?.token || null;
     if (!token) { window.location.href = '/instructor/login.html'; return; }
     document.getElementById('headerName').textContent = session?.instructor?.name || '—';
+    // Show admin tab if instructor has admin access
+    if (session?.instructor?.is_admin) {
+      const adminTab = document.getElementById('admin-tab');
+      if (adminTab) adminTab.style.display = '';
+    }
     // Set min date on blackout date input to today
     const today = new Date().toISOString().slice(0, 10);
     document.getElementById('blackoutDateInput').min = today;

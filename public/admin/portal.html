@@ -370,7 +370,7 @@ body {
   <div class="sidebar-footer">
     <div class="admin-name" id="admin-name">Admin</div>
     <div class="admin-email" id="admin-email">admin@coachcarter.uk</div>
-    <button class="logout-btn" onclick="logout()">Sign Out</button>
+    <button class="logout-btn" id="logout-btn" onclick="logout()">Sign Out</button>
   </div>
 </aside>
 
@@ -679,27 +679,44 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
 <script>
 // ── Auth ──────────────────────────────────────────────────────────
+// Accept either a direct admin login OR an instructor with is_admin flag
 const adminData = JSON.parse(localStorage.getItem('cc_admin') || 'null');
-if (!adminData?.token) window.location.href = '/admin/login.html';
+const instrData = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
+const isInstructorAdmin = !adminData?.token && instrData?.token && instrData.instructor?.is_admin;
 
-const TOKEN = adminData.token;
+if (!adminData?.token && !isInstructorAdmin) window.location.href = '/admin/login.html';
+
+const TOKEN = isInstructorAdmin ? instrData.token : adminData.token;
 const HEADERS = { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' };
 
 // Set admin info in sidebar
-if (adminData.admin) {
+if (isInstructorAdmin) {
+  document.getElementById('admin-name').textContent = instrData.instructor?.name || 'Admin';
+  document.getElementById('admin-email').textContent = instrData.instructor?.email || '';
+} else if (adminData.admin) {
   document.getElementById('admin-name').textContent = adminData.admin.name || 'Admin';
   document.getElementById('admin-email').textContent = adminData.admin.email || '';
 }
 
 function logout() {
-  localStorage.removeItem('cc_admin');
-  window.location.href = '/admin/login.html';
+  if (isInstructorAdmin) {
+    // Instructor-admins go back to their portal, not the admin login
+    window.location.href = '/instructor/';
+  } else {
+    localStorage.removeItem('cc_admin');
+    window.location.href = '/admin/login.html';
+  }
 }
 
 // Verify token on load
 fetch('/api/admin?action=verify', { headers: HEADERS })
   .then(r => { if (!r.ok) logout(); })
   .catch(() => logout());
+
+// Instructor-admins see "Back to Portal" instead of "Sign Out"
+if (isInstructorAdmin) {
+  document.getElementById('logout-btn').textContent = '← Back to Portal';
+}
 
 // ── Navigation ────────────────────────────────────────────────────
 function showSection(name) {

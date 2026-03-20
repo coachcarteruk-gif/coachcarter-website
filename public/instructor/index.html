@@ -632,6 +632,10 @@
     <span class="bottom-nav-icon">👤</span>
     <span>Profile</span>
   </a>
+  <a href="/admin/portal.html" class="bottom-nav-item" id="admin-tab" style="display:none">
+    <span class="bottom-nav-icon">⚙️</span>
+    <span>Admin</span>
+  </a>
 </nav>
 
 <script>
@@ -660,6 +664,12 @@ function init() {
   instructor = session?.instructor || null;
   if (!token) { window.location.href = '/instructor/login.html'; return; }
   document.getElementById('headerName').textContent = instructor?.name || '—';
+
+  // Show admin tab if instructor has admin access
+  if (instructor?.is_admin) {
+    const adminTab = document.getElementById('admin-tab');
+    if (adminTab) adminTab.style.display = '';
+  }
 
   // Default to today
   cursor = new Date(); cursor.setHours(0,0,0,0);
