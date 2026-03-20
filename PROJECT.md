@@ -156,11 +156,10 @@ The site uses a consistent dark charcoal theme matching the CoachCarter logo exa
 --border:   #e2e4eb   /* dividers on light backgrounds */
 ```
 
-Fonts: **Jost** (headings) + **DM Sans** (body). All pages link to them via:
+Fonts: **Bricolage Grotesque** (headings) + **Lato** (body). All pages link to them via:
 ```html
-<link href="https://fonts.googleapis.com/css2?family=Jost:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Lato:wght@300;400;700&display=swap">
 ```
-Note: Some legacy learner pages previously used Space Grotesk + Outfit — these have been migrated to Jost + DM Sans.
 
 ---
 
@@ -483,6 +482,7 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Slot reservations** — 10-minute TTL; expired reservations are excluded from availability but cleaned up lazily (on next webhook or when table is queried)
 - **Dynamic pricing table** — `guarantee_pricing` is auto-created and seeded on first call to `/api/guarantee-price`; no manual migration needed. The webhook increments the price atomically after each Pass Programme purchase. Admin can override the price via the editor or direct API call.
 - **Pricing page routing** — all site nav "Pricing" links now point to `/learner-journey.html`, not `/lessons.html`. The old lessons page still works for PAYG/bulk but is no longer the primary entry point.
+- **PostHog analytics** — all pages include the PostHog snippet for event tracking and session recording
 
 ---
 
@@ -502,7 +502,7 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Slot engine SQL fix** (18 March) — fixed 500 error caused by nested Neon sql template literals in conditional query fragments
 - **Pay-per-slot booking** — learners with 0 credits can now pay £82.50 at the point of booking via Stripe Checkout, with a 10-minute slot reservation during payment
 - **Magic link login fix** — email clients pre-fetching links were consuming tokens; fixed with a two-step validate (GET) → verify (POST) flow
-- **Session logging rebuild v2** (20 March) — complete rewrite of `log-session.html`: consolidated from 8 steps to 3 (details → rate all skills → notes/save). Replaced emoji ratings (😬/😊/🤩) with Traffic Light system (Red = Needs work, Amber = Getting there, Green = Confident). Sessions now link to completed bookings via `booking_id` column. When instructor marks a lesson complete, learner receives email with direct link to log that session. Dashboard shows "unlogged lessons" banner. Instructor schedule now displays collapsible learner self-assessments on completed bookings. Fonts migrated from Space Grotesk + Outfit to Jost + DM Sans across learner portal. New API endpoint: `unlogged-bookings`. Migration: `009_session_booking_link.sql`
+- **Session logging rebuild v2** (20 March) — complete rewrite of `log-session.html`: consolidated from 8 steps to 3 (details → rate all skills → notes/save). Replaced emoji ratings (😬/😊/🤩) with Traffic Light system (Red = Needs work, Amber = Getting there, Green = Confident). Sessions now link to completed bookings via `booking_id` column. When instructor marks a lesson complete, learner receives email with direct link to log that session. Dashboard shows "unlogged lessons" banner. Instructor schedule now displays collapsible learner self-assessments on completed bookings. Fonts migrated to Bricolage Grotesque + Lato across learner portal. New API endpoint: `unlogged-bookings`. Migration: `009_session_booking_link.sql`
 - **Learner portal videos** — classroom videos page added behind login with bottom nav
 - **Homepage quiz update** — quiz results now direct to Learner Hub / Book a Free Trial / Explore Prices
 - **Instructor login redesign** — choice screen (Sign In / Join the Team), two-step magic link prefetch fix, and "Join the team" enquiry form for prospective instructors
