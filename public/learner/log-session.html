@@ -44,42 +44,42 @@
       min-height: 100vh;
     }
 
-    /* ── HEADER ── */
-    header {
-      background: rgba(255,255,255,0.9);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border);
-      padding: 0 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 60px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
+    /* ── TOP NAV (site-wide) ── */
+    .site-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 0 32px; height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(38, 38, 38, 0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .back-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 0.88rem;
-      font-weight: 500;
-      transition: color 0.2s;
+    .site-nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .site-nav-logo img { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,0.08); padding: 4px; }
+    .site-nav-logo span { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+    .site-nav-logo span em { font-style: normal; color: var(--accent); }
+    .site-nav-links { display: flex; align-items: center; gap: 6px; }
+    .site-nav-link {
+      color: rgba(255,255,255,0.6); font-family: var(--font-body); font-weight: 500; font-size: 0.83rem;
+      padding: 7px 14px; border-radius: 100px; border: 1px solid transparent;
+      text-decoration: none; transition: all 0.18s; white-space: nowrap; background: transparent; cursor: pointer;
     }
-    .back-btn:hover { color: var(--accent); }
+    .site-nav-link:hover { color: #fff; border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
+    .site-nav-link.logout { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.1); }
+    .site-nav-link.logout:hover { color: #fff; border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08); }
     .page-title {
       font-size: 0.95rem;
       font-weight: 700;
       font-family: var(--font-head);
-      color: var(--primary);
+      color: #fff;
+    }
+    @media (max-width: 600px) {
+      .site-nav { padding: 0 16px; }
     }
 
     /* ── PROGRESS BAR ── */
     .progress-wrap {
       padding: 16px 20px 0;
+      margin-top: 64px;
       max-width: 600px;
       margin: 0 auto;
     }
@@ -512,11 +512,16 @@
 </head>
 <body>
 
-<header>
-  <a href="/learner/" class="back-btn">← Dashboard</a>
+<nav class="site-nav">
+  <a class="site-nav-logo" href="/learner/">
+    <img src="/Logo.png" alt="CoachCarter">
+    <span>Coach<em>Carter</em></span>
+  </a>
   <span class="page-title">Log a Session</span>
-  <div style="width:80px"></div>
-</header>
+  <div class="site-nav-links">
+    <button class="site-nav-link logout" onclick="window.location='/learner/'">← Dashboard</button>
+  </div>
+</nav>
 
 <div class="progress-wrap">
   <div class="progress-bar-bg">

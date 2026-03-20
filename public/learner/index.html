@@ -46,62 +46,82 @@
       min-height: 100vh;
     }
 
-    /* HEADER */
-    header {
-      background: var(--white);
-      border-bottom: 1px solid var(--border);
-      padding: 0 20px;
+    /* ── TOP NAV (site-wide) ── */
+    .site-nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 0 32px;
+      height: 64px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      height: 60px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      background: rgba(38, 38, 38, 0.92);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
-      background: rgba(255,255,255,0.9);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .header-brand {
+    .site-nav-logo {
       display: flex;
       align-items: center;
       gap: 10px;
       text-decoration: none;
     }
-    .header-brand img { height: 36px; width: auto; }
-    .header-brand-text {
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: var(--primary);
+    .site-nav-logo img {
+      width: 34px; height: 34px;
+      object-fit: contain;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+      padding: 4px;
+    }
+    .site-nav-logo span {
       font-family: var(--font-head);
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #fff;
       letter-spacing: -0.02em;
     }
-    .header-brand-sub {
-      font-size: 0.68rem;
-      color: var(--accent);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+    .site-nav-logo span em { font-style: normal; color: var(--accent); }
+    .site-nav-links {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
-
-    .header-right { display: flex; align-items: center; gap: 12px; }
-    .header-name { font-size: 0.85rem; color: var(--muted); }
-    .btn-logout {
-      background: none;
-      border: 1.5px solid var(--border);
-      border-radius: 8px;
-      color: var(--muted);
-      font-family: inherit;
-      font-size: 0.8rem;
-      padding: 6px 14px;
-      cursor: pointer;
-      transition: all 0.2s;
+    .site-nav-link {
+      color: rgba(255,255,255,0.6);
+      font-family: var(--font-body);
       font-weight: 500;
+      font-size: 0.83rem;
+      padding: 7px 14px;
+      border-radius: 100px;
+      border: 1px solid transparent;
+      text-decoration: none;
+      transition: all 0.18s;
+      white-space: nowrap;
+      background: transparent;
+      cursor: pointer;
     }
-    .btn-logout:hover { color: var(--primary); border-color: var(--accent); }
+    .site-nav-link:hover {
+      color: #fff;
+      border-color: rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.05);
+    }
+    .site-nav-link.logout {
+      color: rgba(255,255,255,0.5);
+      border-color: rgba(255,255,255,0.1);
+    }
+    .site-nav-link.logout:hover {
+      color: #fff;
+      border-color: rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.08);
+    }
+    @media (max-width: 600px) {
+      .site-nav { padding: 0 16px; }
+      .site-nav-name { display: none; }
+    }
 
     /* MAIN LAYOUT */
-    main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; }
+    main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; margin-top: 64px; }
 
     /* WELCOME */
     .welcome { margin-bottom: 24px; }
@@ -690,19 +710,16 @@
 </head>
 <body>
 
-<header>
-  <a href="/" class="header-brand">
+<nav class="site-nav">
+  <a class="site-nav-logo" href="/learner/">
     <img src="/Logo.png" alt="CoachCarter">
-    <div>
-      <div class="header-brand-text">CoachCarter</div>
-      <div class="header-brand-sub">Learner Portal</div>
-    </div>
+    <span>Coach<em>Carter</em></span>
   </a>
-  <div class="header-right">
-    <span class="header-name" id="header-name"></span>
-    <button class="btn-logout" onclick="logout()">Sign out</button>
+  <div class="site-nav-links">
+    <span class="site-nav-link site-nav-name" id="header-name"></span>
+    <button class="site-nav-link logout" onclick="logout()">Sign out</button>
   </div>
-</header>
+</nav>
 
 <main>
   <div class="welcome">
