@@ -677,6 +677,7 @@ body {
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tus-js-client@4.2.3/dist/tus.min.js"></script>
 <script>
 // ── Auth ──────────────────────────────────────────────────────────
 // Accept either a direct admin login OR an instructor with is_admin flag
@@ -1331,41 +1332,66 @@ async function handleVideoFileSelect(e) {
   status.textContent = 'Getting upload URL...';
 
   try {
-    // Get upload URL from our API
+    // Get upload URL from our API — pass fileSize so server picks form vs TUS
     const urlRes = await fetch('/api/videos?action=upload-url', {
-      method: 'POST', headers: HEADERS, body: JSON.stringify({ maxDurationSeconds: 600 })
+      method: 'POST', headers: HEADERS,
+      body: JSON.stringify({ maxDurationSeconds: 3600, fileSize: file.size })
     });
     const urlData = await urlRes.json();
     if (!urlRes.ok) throw new Error(urlData.error || 'Failed to get upload URL');
 
-    const { uploadUrl, uid } = urlData;
+    const { uploadUrl, uid, method } = urlData;
     document.getElementById('vid-uid-hidden').value = uid;
     document.getElementById('vid-uid').value = uid;
 
     status.textContent = 'Uploading...';
 
-    // Upload file via XHR FormData POST for progress tracking
-    const formData = new FormData();
-    formData.append('file', file);
+    if (method === 'tus') {
+      // TUS resumable upload for large files (>200MB)
+      await new Promise((resolve, reject) => {
+        const upload = new tus.Upload(file, {
+          endpoint: uploadUrl,
+          uploadUrl: uploadUrl,
+          chunkSize: 50 * 1024 * 1024, // 50MB chunks
+          retryDelays: [0, 1000, 3000, 5000],
+          metadata: {
+            filename: file.name,
+            filetype: file.type,
+          },
+          onProgress: (bytesUploaded, bytesTotal) => {
+            const pct = Math.round((bytesUploaded / bytesTotal) * 100);
+            bar.style.width = pct + '%';
+            status.textContent = `Uploading... ${pct}%`;
+          },
+          onSuccess: () => resolve(),
+          onError: (err) => reject(new Error('TUS upload failed: ' + err.message)),
+        });
+        upload.start();
+      });
+    } else {
+      // Simple FormData POST for files ≤200MB
+      const formData = new FormData();
+      formData.append('file', file);
 
-    await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', uploadUrl, true);
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', uploadUrl, true);
 
-      xhr.upload.onprogress = (evt) => {
-        if (evt.lengthComputable) {
-          const pct = Math.round((evt.loaded / evt.total) * 100);
-          bar.style.width = pct + '%';
-          status.textContent = `Uploading... ${pct}%`;
-        }
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 400) resolve();
-        else reject(new Error('Upload failed: ' + xhr.status));
-      };
-      xhr.onerror = () => reject(new Error('Upload network error'));
-      xhr.send(formData);
-    });
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) {
+            const pct = Math.round((evt.loaded / evt.total) * 100);
+            bar.style.width = pct + '%';
+            status.textContent = `Uploading... ${pct}%`;
+          }
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 400) resolve();
+          else reject(new Error('Upload failed: ' + xhr.status));
+        };
+        xhr.onerror = () => reject(new Error('Upload network error'));
+        xhr.send(formData);
+      });
+    }
 
     bar.style.width = '100%';
     status.textContent = 'Upload complete! Processing...';
