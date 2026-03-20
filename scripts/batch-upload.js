@@ -32,7 +32,9 @@ const http = require('http');
 // ── Config ───────────────────────────────────────────────────────────────────
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.mkv', '.avi', '.webm', '.m4v', '.wmv']);
-const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB TUS chunks (server-side, no SSL issues)
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB TUS chunks (smaller = more reliable)
+const MAX_RETRIES = 5;
+const RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000]; // exponential backoff
 const MAX_DURATION_SECONDS = 3600;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -147,7 +149,7 @@ async function uploadToCloudflare(filePath, cfToken, cfAccount) {
     throw new Error('Cloudflare response missing location or stream-media-id header');
   }
 
-  // Step 2: Upload file in chunks via TUS PATCH
+  // Step 2: Upload file in chunks via TUS PATCH with retries
   const fd = fs.openSync(filePath, 'r');
   let offset = 0;
 
@@ -157,33 +159,49 @@ async function uploadToCloudflare(filePath, cfToken, cfAccount) {
       const buffer = Buffer.alloc(chunkLen);
       fs.readSync(fd, buffer, 0, chunkLen, offset);
 
-      const newOffset = await new Promise((resolve, reject) => {
-        const parsed = new URL(uploadUrl);
-        const req = https.request({
-          hostname: parsed.hostname,
-          path: parsed.pathname + parsed.search,
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/offset+octet-stream',
-            'Content-Length': String(chunkLen),
-            'Tus-Resumable': '1.0.0',
-            'Upload-Offset': String(offset),
-          },
-        }, (res) => {
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', () => {
-            if (res.statusCode >= 200 && res.statusCode < 300) {
-              resolve(parseInt(res.headers['upload-offset'] || String(offset + chunkLen), 10));
-            } else {
-              reject(new Error(`TUS PATCH failed (${res.statusCode}): ${data}`));
-            }
+      let lastErr;
+      let newOffset;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        if (attempt > 0) {
+          const delay = RETRY_DELAYS[Math.min(attempt - 1, RETRY_DELAYS.length - 1)];
+          process.stdout.write(`\r  Retry ${attempt}/${MAX_RETRIES} after ${delay/1000}s...          `);
+          await new Promise(r => setTimeout(r, delay));
+        }
+        try {
+          newOffset = await new Promise((resolve, reject) => {
+            const parsed = new URL(uploadUrl);
+            const req = https.request({
+              hostname: parsed.hostname,
+              path: parsed.pathname + parsed.search,
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/offset+octet-stream',
+                'Content-Length': String(chunkLen),
+                'Tus-Resumable': '1.0.0',
+                'Upload-Offset': String(offset),
+              },
+            }, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                  resolve(parseInt(res.headers['upload-offset'] || String(offset + chunkLen), 10));
+                } else {
+                  reject(new Error(`TUS PATCH failed (${res.statusCode}): ${data}`));
+                }
+              });
+            });
+            req.on('error', reject);
+            req.write(buffer);
+            req.end();
           });
-        });
-        req.on('error', reject);
-        req.write(buffer);
-        req.end();
-      });
+          lastErr = null;
+          break; // success, exit retry loop
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      if (lastErr) throw lastErr;
 
       offset = newOffset;
       const pct = Math.round((offset / fileSize) * 100);
