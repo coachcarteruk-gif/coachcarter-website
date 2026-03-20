@@ -10,6 +10,7 @@
         person_profiles: 'identified_only',
     });
 </script>
+<script src="/posthog-tracking.js" defer></script>
 <title>CoachCarter — Learn to Drive in Reading</title>
 <meta name="description" content="CoachCarter Driving School — flexible lessons, a learner portal, and a free classroom packed with driving videos. Based in Reading.">
 <meta property="og:title" content="CoachCarter — Learn to Drive">
@@ -583,6 +584,49 @@ function openSetmoreBooking() {
   if (btn) btn.click();
   else window.open('https://coachcarteruk.setmore.com/services/f92268da-e2cc-4661-8cdd-82afa1b767a0', '_blank');
 }
+
+// ── A/B TEST: Hero Headline & CTA ──────────────────────────
+// Feature flag: "hero-headline-test"
+// Control: current copy
+// Variant: alternative headline + CTA text
+(function () {
+  var titleEl = document.querySelector('.page-title');
+  var subEl = document.querySelector('.page-sub');
+  var ctaLearner = document.querySelector('#step1 .quiz-options .quiz-opt:first-child');
+
+  posthog.onFeatureFlags(function () {
+    var variant = posthog.getFeatureFlag('hero-headline-test');
+
+    if (variant === 'test') {
+      if (titleEl) titleEl.innerHTML = 'Start driving<br><em>with confidence.</em>';
+      if (subEl) subEl.textContent = 'Expert instructors. Flexible lessons. Real results.';
+      if (ctaLearner) {
+        ctaLearner.innerHTML = '<span class="opt-icon">\uD83D\uDE97</span>Get started';
+      }
+    }
+
+    // Track which variant was shown
+    posthog.capture('hero_experiment_viewed', {
+      variant: variant || 'control',
+      page_url: window.location.pathname
+    });
+  });
+
+  // Track CTA clicks as conversion goal
+  var quizOptions = document.querySelector('#step1 .quiz-options');
+  if (quizOptions) {
+    quizOptions.addEventListener('click', function (e) {
+      var btn = e.target.closest('.quiz-opt');
+      if (!btn) return;
+      var btnText = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+      posthog.capture('hero_cta_clicked', {
+        variant: posthog.getFeatureFlag('hero-headline-test') || 'control',
+        button_text: btnText,
+        page_url: window.location.pathname
+      });
+    });
+  }
+})();
 </script>
 
 <nav class="mobile-tab-bar">
