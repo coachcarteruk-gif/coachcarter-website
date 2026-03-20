@@ -431,6 +431,15 @@
       font-size: 0.85rem; line-height: 1.5; margin-bottom: 20px;
     }
     .cancel-policy.safe { background: var(--green-lt); border-color: #86efac; }
+    .cancel-ack {
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: 0.85rem; line-height: 1.4; margin-bottom: 16px;
+      cursor: pointer; user-select: none;
+    }
+    .cancel-ack input[type="checkbox"] {
+      margin-top: 2px; width: 18px; height: 18px; accent-color: var(--red);
+      flex-shrink: 0; cursor: pointer;
+    }
     .btn-confirm-cancel {
       flex: 1; padding: 14px;
       background: var(--red); color: white; border: none;
@@ -614,6 +623,10 @@
       <div class="modal-detail-row"><span>Instructor</span><span id="cmInstructor">—</span></div>
     </div>
     <div class="cancel-policy" id="cancelPolicyNote"></div>
+    <label class="cancel-ack" id="cancelAckLabel" style="display:none">
+      <input type="checkbox" id="cancelAckCheck" onchange="toggleCancelBtn()">
+      <span>I understand my lesson will be forfeited and not returned</span>
+    </label>
     <div class="modal-actions">
       <button class="btn-modal-cancel" id="cancelModalClose">Keep lesson</button>
       <button class="btn-confirm-cancel" id="btnConfirmCancel">
@@ -1262,11 +1275,24 @@ function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil
     ? '✓ You are cancelling more than 48 hours before the lesson. <strong>Your lesson will be returned automatically.</strong>'
     : '⚠ This lesson is within 48 hours. <strong>Your lesson will be forfeited</strong> in line with the cancellation policy.';
 
+  // Show acknowledgment checkbox for sub-48hr cancellations
+  const ackLabel = document.getElementById('cancelAckLabel');
+  const ackCheck = document.getElementById('cancelAckCheck');
+  ackCheck.checked = false;
+  ackLabel.style.display = willGet ? 'none' : 'flex';
+
   document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
-  document.getElementById('btnConfirmCancel').disabled = false;
+  // Disable cancel button until checkbox is checked (for sub-48hr only)
+  document.getElementById('btnConfirmCancel').disabled = !willGet;
   document.getElementById('cancelModal').classList.add('open');
 }
 window.openCancelModal = openCancelModal;
+
+function toggleCancelBtn() {
+  const ackCheck = document.getElementById('cancelAckCheck');
+  document.getElementById('btnConfirmCancel').disabled = !ackCheck.checked;
+}
+window.toggleCancelBtn = toggleCancelBtn;
 
 async function confirmCancel() {
   if (!pendingCancel) return;
