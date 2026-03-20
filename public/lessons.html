@@ -28,31 +28,26 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Jost:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --navy:     #262626;
-  --navy-2:   #2e2e2e;
-  --orange:   #f58321;
-  --orange-dk:#e07518;
-  --font-h:   'Jost', sans-serif;
-  --font-b:   'DM Sans', sans-serif;
   --primary:      #262626;
   --accent:       #f58321;
   --accent-dk:    #e07518;
-  --accent-lt:    #fff7ed;
+  --accent-lt:    #fff4ec;
   --accent-mid:   rgba(245,131,33,0.12);
   --accent-glow:  rgba(245,131,33,0.25);
-  --muted:        #64748b;
-  --border:       #e2e8f0;
-  --bg:           #fafaf9;
+  --muted:        #797879;
+  --border:       #e0e0e0;
+  --bg:           #ffffff;
   --white:        #ffffff;
-  --surface:      #f8fafc;
+  --surface:      #f9f9f9;
   --green:        #10b981;
-  --font-head:    'Jost', sans-serif;
-  --font-body:    'DM Sans', sans-serif;
+  --font-head:    'Bricolage Grotesque', sans-serif;
+  --font-body:    'Lato', sans-serif;
+  --radius:       14px;
 }
 
 html { scroll-behavior: smooth; }
@@ -106,13 +101,13 @@ body {
   padding: 4px;
 }
 .site-nav-logo span {
-  font-family: var(--font-h);
+  font-family: var(--font-head);
   font-size: 1.1rem;
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
 }
-.site-nav-logo span em { font-style: normal; color: var(--orange); }
+.site-nav-logo span em { font-style: normal; color: var(--accent); }
 .site-nav-links {
   display: flex;
   align-items: center;
@@ -120,7 +115,7 @@ body {
 }
 .site-nav-link {
   color: rgba(255,255,255,0.6);
-  font-family: var(--font-b);
+  font-family: var(--font-body);
   font-weight: 500;
   font-size: 0.83rem;
   padding: 7px 14px;
@@ -138,14 +133,14 @@ body {
   background: rgba(255,255,255,0.05);
 }
 .site-nav-link.primary {
-  background: var(--orange);
+  background: var(--accent);
   color: #fff;
-  border-color: var(--orange);
+  border-color: var(--accent);
   font-weight: 600;
 }
 .site-nav-link.primary:hover {
-  background: var(--orange-dk);
-  border-color: var(--orange-dk);
+  background: var(--accent-dk);
+  border-color: var(--accent-dk);
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(245,131,33,0.35);
 }
@@ -499,7 +494,7 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 0.7rem;
-  font-weight: 900;
+  font-weight: 800;
   flex-shrink: 0;
 }
 
@@ -1685,7 +1680,7 @@ footer a:hover { color: var(--accent); }
 <!-- PASS PROGRAMME REDIRECT BANNER -->
 <section class="guarantee-section" id="guarantee" style="padding: 80px 0;">
   <div class="section-wrap">
-    <div class="reveal" style="background: var(--navy); border-radius: 20px; padding: 48px; text-align: center; position: relative; overflow: hidden;">
+    <div class="reveal" style="background: var(--primary); border-radius: 20px; padding: 48px; text-align: center; position: relative; overflow: hidden;">
       <div style="position: absolute; top: -60px; right: -60px; width: 250px; height: 250px; border-radius: 50%; background: radial-gradient(circle, rgba(245,131,33,0.12), transparent 70%); pointer-events: none;"></div>
       <div style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 16px; position: relative;">The Pass Programme</div>
       <h2 style="font-family: var(--font-head); font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 700; color: #fff; letter-spacing: -0.02em; margin-bottom: 12px; position: relative;">Want a structured programme<br>with a <span style="color: var(--accent);">guaranteed result?</span></h2>
@@ -1843,7 +1838,7 @@ footer a:hover { color: var(--accent); }
   </div>
 </section>
 
-<footer style="background: var(--navy); padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
+<footer style="background: var(--primary); padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
   <span style="font-size: 0.75rem; color: rgba(255,255,255,0.25);">© 2026 CoachCarter Driving School · Reading</span>
   <div style="display: flex; gap: 20px;">
     <a href="/privacy.html" style="font-size: 0.75rem; color: rgba(255,255,255,0.3); text-decoration: none;">Privacy</a>
