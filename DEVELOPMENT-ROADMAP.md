@@ -304,19 +304,48 @@ Replaced static `videos.json` with a database-backed video library managed from 
 - ✅ Graceful fallback to `videos.json` if DB tables don't exist yet
 - ✅ `db/migrations/008_videos.sql` with default category seeds
 
-### 2.18 — Reviews & Testimonials
+### 2.18 — Dynamic Pass Programme Pricing ✅ Complete (20 March 2026)
+Demand-based pricing for the Pass Programme that starts low and increases with each enrolment, rewarding early adopters while the programme is proven out.
+
+**What was built:**
+- ✅ `api/guarantee-price.js` — dedicated API endpoint for reading and incrementing the Pass Programme price, with manual admin override support
+- ✅ `guarantee_pricing` database table — auto-created on first API call, stores base price (£1,500), current price, increment (£100), cap (£3,000), and purchase count
+- ✅ Webhook integration — `api/webhook.js` atomically increments the price after each successful Pass Programme purchase via Stripe
+- ✅ Learner journey page updated with tabbed pricing card (PAYG vs Pass Programme) in the hero section, fetching live price from the API
+- ✅ Transparent "launch pricing" messaging — urgency bar explains the mechanic honestly, progress bar shows price journey from £1,500 to £3,000
+- ✅ Admin editor gains a "Dynamic Pricing" section showing live status, purchase count, and manual price override
+- ✅ Config updated: `retake_price` corrected from £0 to £325, guarantee pricing fields added
+
+**Pricing model:**
+- Starts at £1,500 (launch price)
+- Increases by £100 with every enrolment
+- Caps at £3,000 (full price)
+- Only goes up, never decays — but admin can manually override
+- Transparent to visitors — they see the mechanic and progress bar
+
+### 2.19 — Pricing Page Restructure ✅ Complete (20 March 2026)
+Consolidated pricing into the learner journey page and made it the primary pricing destination site-wide.
+
+**What was built:**
+- ✅ Learner journey page hero replaced with tabbed pricing card (Mockup C approach): PAYG tab shows £82.50/lesson with bulk discount grid, Pass Programme tab shows live dynamic price with urgency messaging
+- ✅ All site-wide nav "Pricing" links updated to point to `/learner-journey.html` (homepage, classroom, instructor pages, learner login, terms, privacy)
+- ✅ Old guarantee calculator and comparison table removed from `lessons.html`, replaced with a compact redirect banner pointing to the learner journey page
+- ✅ `lessons.html` now focuses on PAYG and bulk packages only
+- ✅ Renamed "Pass Guarantee" → "Pass Programme" across all user-facing text (HTML, JS, config, email templates). Code identifiers kept as `pass_guarantee` / `isPassGuarantee` for Stripe/webhook compatibility
+
+### 2.20 — Reviews & Testimonials
 Post-lesson review prompt triggered after a lesson is marked completed.
 - Automated email 24 hours after lesson status → completed
 - Simple star rating + comment
 - Optional: display approved reviews publicly
 
-### 2.19 — Waiting List
+### 2.21 — Waiting List
 Capture leads when all instructors are fully booked.
 - "No slots available" state on calendar triggers a waiting list sign-up
 - Notifies admin when someone joins
 - Admin can manually offer a slot and notify the learner
 
-### 2.20 — Referral System
+### 2.22 — Referral System
 Reward learners for recommending friends.
 - Unique referral link per learner
 - Both referrer and new learner receive a credit bonus on first purchase

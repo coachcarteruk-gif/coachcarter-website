@@ -37,6 +37,8 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 | `SMTP_PORT` | SMTP port (465 for secure) |
 | `SMTP_USER` | SMTP username |
 | `SMTP_PASS` | SMTP password |
+| `ADMIN_SECRET` | Admin password for config editor and guarantee price overrides |
+| `STAFF_EMAIL` | Email address for staff notifications (booking alerts, enquiries) |
 | `BASE_URL` | Site base URL for magic links (defaults to `https://coachcarter.uk`) |
 
 ---
@@ -58,7 +60,8 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   ├── availability.js             # Read/write public availability slots
 │   ├── enquiries.js                # Contact form: submit, list, update status
 │   ├── webhook.js                  # Stripe webhook handler
-│   ├── create-checkout-session.js  # Legacy Stripe checkout (pass guarantee / packages)
+│   ├── guarantee-price.js          # Dynamic Pass Programme pricing (read/increment/override)
+│   ├── create-checkout-session.js  # Legacy Stripe checkout (pass programme / packages)
 │   ├── verify-session.js           # Stripe payment verification
 │   ├── update-status.js            # Booking status update
 │   ├── status.js                   # Health check endpoint
@@ -68,8 +71,8 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   ├── index.html                  # Homepage (main marketing page)
 │   ├── classroom.html              # Video library — grid + reels dual mode (public)
 │   ├── availability.html           # Availability/booking page
-│   ├── learner-journey.html        # Marketing page for the learner portal
-│   ├── lessons.html                # Lessons / pricing page
+│   ├── learner-journey.html        # Pricing page — tiers, PAYG, and Pass Programme with dynamic pricing
+│   ├── lessons.html                # PAYG + bulk packages (Pass Programme redirects to learner-journey)
 │   ├── admin.html                  # Redirect shim → /admin/login.html
 │   ├── admin-availability.html     # Standalone admin availability management
 │   ├── success.html                # Post-payment success page
@@ -302,6 +305,17 @@ expires_at TIMESTAMPTZ  -- NOW() + 10 minutes
 created_at TIMESTAMPTZ
 ```
 
+**`guarantee_pricing`** *(auto-created on first API call)*
+```sql
+id            INTEGER PRIMARY KEY DEFAULT 1
+base_price    INTEGER NOT NULL DEFAULT 1500   -- starting price in £
+current_price INTEGER NOT NULL DEFAULT 1500   -- current price in £
+increment     INTEGER NOT NULL DEFAULT 100    -- £ added per purchase
+cap           INTEGER NOT NULL DEFAULT 3000   -- max price in £
+purchases     INTEGER NOT NULL DEFAULT 0      -- total enrolments
+updated_at    TIMESTAMPTZ
+```
+
 **`magic_link_tokens`**
 ```sql
 id SERIAL PRIMARY KEY
@@ -459,11 +473,17 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **DB migrations** — run manually in Neon SQL Editor; files in `db/migrations/` are numbered sequentially
 - **Magic link tokens** — two-step flow (validate then verify) prevents email-client link prefetchers from consuming tokens; `verify` is POST-only
 - **Slot reservations** — 10-minute TTL; expired reservations are excluded from availability but cleaned up lazily (on next webhook or when table is queried)
+- **Dynamic pricing table** — `guarantee_pricing` is auto-created and seeded on first call to `/api/guarantee-price`; no manual migration needed. The webhook increments the price atomically after each Pass Programme purchase. Admin can override the price via the editor or direct API call.
+- **Pricing page routing** — all site nav "Pricing" links now point to `/learner-journey.html`, not `/lessons.html`. The old lessons page still works for PAYG/bulk but is no longer the primary entry point.
 
 ---
 
 ## Recent changes (March 2026)
 
+- **Dynamic Pass Programme pricing** (20 March) — demand-based pricing for the Pass Programme: starts at £1,500, increases £100 per enrolment, caps at £3,000. New `/api/guarantee-price` endpoint with dedicated `guarantee_pricing` DB table, atomic increments via Stripe webhook, manual override in admin editor. Transparent "launch pricing" messaging with progress bar on the learner journey page.
+- **Pricing page restructure** (20 March) — learner-journey.html is now the canonical pricing page (linked from all nav bars site-wide). Features a tabbed hero card (PAYG vs Pass Programme) with live dynamic pricing. The old lessons.html retains PAYG and bulk packages with a redirect banner for the Pass Programme. Comparison table and guarantee calculator removed from lessons.html.
+- **Renamed Pass Guarantee → Pass Programme** (20 March) — all user-facing references renamed across HTML, JS, config, and email templates. Code identifiers (`pass_guarantee`, `isPassGuarantee`) kept for Stripe/webhook compatibility.
+- **Retake price corrected** (20 March) — config `retake_price` updated from £0 to £325
 - **Calendar views** (18 March) — instructor schedule and learner booking pages rebuilt with monthly/weekly/daily views, view toggle, navigation, and drill-down
 - **Contact preference** (18 March) — learners can toggle "Contact me before my first lesson"; shown as badge on instructor schedule
 - **Phone & pickup address** (18 March) — required before booking; shown to instructors on schedule and in booking detail
