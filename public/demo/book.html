@@ -66,6 +66,37 @@
     /* ── Page ──────────────────────────────────────────────────────────────── */
     .page { max-width: 960px; margin: 0 auto; padding: 24px 16px 100px; }
 
+    /* ── Upcoming strip ───────────────────────────────────────────────────── */
+    .upcoming-strip {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 20px; overflow: hidden;
+    }
+    .upcoming-header {
+      padding: 12px 20px; font-family: var(--font-head);
+      font-weight: 800; font-size: 0.9rem;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+    }
+    .upcoming-list { }
+    .upcoming-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 20px; border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .upcoming-item:last-child { border-bottom: none; }
+    .upcoming-date { font-weight: 700; min-width: 90px; }
+    .upcoming-time { color: var(--muted); min-width: 100px; }
+    .upcoming-instructor { color: var(--muted); flex: 1; }
+    .upcoming-cancel {
+      background: none; border: 1px solid var(--red); color: var(--red);
+      padding: 5px 12px; border-radius: 6px; font-size: 0.78rem;
+      font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+    .upcoming-cancel:hover { background: var(--red-lt); }
+    .upcoming-cal-btn {
+      background: none; border: 1px solid var(--border);
+      padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+    }
+
     /* ── Calendar toolbar ────────────────────────────────────────────────── */
     .cal-toolbar {
       display: flex; flex-wrap: wrap; align-items: center;
@@ -205,6 +236,10 @@
     .modal-detail-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 0.85rem; }
     .modal-detail-row span:first-child { color: var(--muted); }
     .modal-detail-row span:last-child { font-weight: 600; }
+    .modal-credit-note {
+      background: var(--green-lt); border: 1.5px solid var(--green);
+      border-radius: 10px; padding: 12px 16px; font-size: 0.85rem; line-height: 1.5;
+    }
     .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
     .btn-modal-cancel {
       flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
@@ -222,6 +257,15 @@
     .btn-confirm:hover { background: var(--accent-dk); }
     .btn-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
     .modal-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; display: none; }
+    .btn-confirm-cancel {
+      flex: 1; padding: 12px; border: none; border-radius: 10px;
+      background: var(--red); color: white; font-family: var(--font-head);
+      font-weight: 700; font-size: 0.9rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-confirm-cancel:disabled { opacity: 0.6; cursor: not-allowed; }
+    .cancel-policy { border-radius: 10px; padding: 12px 16px; font-size: 0.85rem; line-height: 1.5; background: var(--red-lt); border: 1.5px solid var(--red); }
+    .cancel-policy.safe { background: var(--green-lt); border-color: var(--green); }
 
     /* ── Modal success ────────────────────────────────────────────────────── */
     .modal-success { text-align: center; }
@@ -232,13 +276,20 @@
     }
     .modal-success h2 { margin-bottom: 10px; }
     .modal-success p { font-size: 0.88rem; color: var(--muted); line-height: 1.5; margin-bottom: 18px; }
-    .btn-signup-cta {
-      display: block; width: 100%; padding: 14px; border: none; border-radius: 10px;
-      background: var(--accent); color: white; font-family: var(--font-head);
-      font-weight: 700; font-size: 0.95rem; cursor: pointer; text-decoration: none;
-      text-align: center; margin-bottom: 10px; transition: background 0.15s;
+    .btn-add-calendar {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 12px; border: 1.5px solid var(--border);
+      border-radius: 10px; background: var(--white); text-decoration: none;
+      color: var(--primary); font-family: var(--font-head); font-weight: 700;
+      font-size: 0.9rem; margin-bottom: 8px; cursor: pointer; transition: all 0.15s;
     }
-    .btn-signup-cta:hover { background: var(--accent-dk); }
+    .btn-add-calendar:hover { border-color: var(--accent); background: var(--accent-lt); }
+    .btn-add-calendar svg { width: 18px; height: 18px; }
+    .btn-subscribe-calendar {
+      display: block; width: 100%; padding: 10px; border: none;
+      background: none; color: var(--accent); font-family: var(--font-body);
+      font-weight: 600; font-size: 0.85rem; cursor: pointer; margin-bottom: 10px;
+    }
     .btn-done {
       display: block; width: 100%; padding: 12px; border: 1px solid var(--border);
       border-radius: 10px; background: var(--white); font-family: var(--font-head);
@@ -258,23 +309,22 @@
     .toast.success { background: var(--green); }
     .toast.error { background: var(--red); }
 
-    /* ── Bottom CTA bar ──────────────────────────────────────────────────── */
-    .demo-cta-bar {
+    /* ── Bottom Nav ───────────────────────────────────────────────────────── */
+    .bottom-nav {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: var(--white); border-top: 1px solid var(--border);
-      padding: 12px 20px; display: flex; align-items: center;
-      justify-content: center; gap: 12px; z-index: 200;
+      display: flex; z-index: 200;
+      padding-bottom: env(safe-area-inset-bottom);
       box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
-      padding-bottom: max(12px, env(safe-area-inset-bottom));
     }
-    .demo-cta-bar span { font-size: 0.88rem; color: var(--muted); font-weight: 500; }
-    .demo-cta-bar a {
-      background: var(--accent); color: white; border: none;
-      padding: 10px 22px; border-radius: 10px; font-family: var(--font-head);
-      font-size: 0.88rem; font-weight: 700; cursor: pointer; text-decoration: none;
-      transition: background 0.15s; white-space: nowrap;
+    .bottom-nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 10px 8px; text-decoration: none; color: var(--muted);
+      font-size: 0.68rem; font-weight: 600; transition: color 0.15s; gap: 3px;
     }
-    .demo-cta-bar a:hover { background: var(--accent-dk); }
+    .bottom-nav-item:hover { color: var(--primary); }
+    .bottom-nav-item.active { color: var(--accent); }
+    .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
 
     /* ── Responsive ───────────────────────────────────────────────────────── */
     @media (max-width: 700px) {
@@ -288,6 +338,7 @@
       }
       .week-grid { overflow-x: auto; }
       .week-header, .week-body { min-width: 520px; }
+      .upcoming-time, .upcoming-instructor { display: none; }
       .daily-slots-grid { grid-template-columns: 1fr 1fr; }
       .demo-banner { flex-direction: column; align-items: flex-start; gap: 6px; }
     }
@@ -301,7 +352,7 @@
 
 <!-- ── Header ── -->
 <header>
-  <a class="header-brand" href="/">
+  <a class="header-brand" href="/learner/">
     <img src="/Logo.png" alt="CoachCarter">
     <div>
       <div class="header-brand-text">CoachCarter</div>
@@ -309,8 +360,7 @@
     </div>
   </a>
   <div class="header-right">
-    <a href="/">Home</a>
-    <a href="/learner/login.html" style="color:var(--accent);font-weight:600;">Sign up</a>
+    <a href="/learner/">Dashboard</a>
   </div>
 </header>
 
@@ -319,8 +369,13 @@
   <!-- Demo banner -->
   <div class="demo-banner">
     <span class="demo-banner-icon">&#128065;</span>
-    <span>You're exploring a <strong>demo</strong> of our booking system — go ahead and click around!
-    <a href="/learner/login.html">Sign up to book for real &rarr;</a></span>
+    <span>You're using the <strong>demo</strong> booking system — bookings here are free and use the demo instructor. You'll still receive real confirmation emails and calendar invites.</span>
+  </div>
+
+  <!-- Upcoming bookings strip -->
+  <div class="upcoming-strip" id="upcomingStrip" style="display:none">
+    <div class="upcoming-header"><span>Your demo bookings</span></div>
+    <div class="upcoming-list" id="upcomingList"></div>
   </div>
 
   <!-- Toolbar -->
@@ -364,35 +419,70 @@
         <div class="modal-detail-row"><span>Instructor</span><span id="mdInstructor">&mdash;</span></div>
         <div class="modal-detail-row"><span>Duration</span><span>1.5 hours</span></div>
       </div>
-      <p style="font-size:0.85rem;color:var(--muted);margin-bottom:16px;line-height:1.5;">
-        This is a demo — no real booking will be made. In the real system, this would use a lesson credit or payment.
+      <p class="modal-credit-note">
+        This is a <strong>free demo booking</strong>. No lessons will be deducted from your balance.
+        Cancel any time from this page.
       </p>
       <div class="modal-actions">
         <button class="btn-modal-cancel" id="bookModalClose">Cancel</button>
-        <button class="btn-confirm" id="btnDemoBook">
-          <span id="demoBtnLabel">Book this slot</span>
-          <div class="modal-spinner" id="demoSpinner"></div>
+        <button class="btn-confirm" id="btnConfirmBook">
+          <span id="bookBtnLabel">Confirm booking</span>
+          <div class="modal-spinner" id="bookSpinner"></div>
         </button>
       </div>
     </div>
     <div id="bookSuccessStep" class="modal-success" style="display:none">
       <div class="modal-success-icon">&#10003;</div>
       <h2>Lesson booked!</h2>
-      <p>Your lesson on <strong id="successDate">&mdash;</strong> at <strong id="successTime">&mdash;</strong> with <strong id="successInstructor">&mdash;</strong> is confirmed.</p>
-      <p style="font-size:0.82rem;color:var(--muted);margin-bottom:18px;">In the real system, you'd receive a confirmation email with a calendar invite.</p>
-      <a class="btn-signup-cta" href="/learner/login.html">Sign up to book for real</a>
-      <button class="btn-done" id="btnSuccessDone">Continue exploring</button>
+      <p>Your demo lesson on <strong id="successDate">&mdash;</strong> at <strong id="successTime">&mdash;</strong> with <strong id="successInstructor">&mdash;</strong> is confirmed. Check your email for details.</p>
+      <a class="btn-add-calendar" id="btnAddToCalendar" href="#" download>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>
+        Add to iPhone Calendar
+      </a>
+      <button class="btn-subscribe-calendar" id="btnSubscribeCalendar">Subscribe to all lessons (auto-sync)</button>
+      <button class="btn-done" id="btnSuccessDone">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Cancel confirmation modal ── -->
+<div class="modal-overlay" id="cancelModal">
+  <div class="modal cancel-modal">
+    <h2>Cancel demo lesson?</h2>
+    <div class="modal-detail">
+      <div class="modal-detail-row"><span>Date</span><span id="cmDate">&mdash;</span></div>
+      <div class="modal-detail-row"><span>Time</span><span id="cmTime">&mdash;</span></div>
+      <div class="modal-detail-row"><span>Instructor</span><span id="cmInstructor">&mdash;</span></div>
+    </div>
+    <div class="cancel-policy safe">This is a demo booking &mdash; no lessons were used, so nothing to return. The slot will be freed up immediately.</div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" id="cancelModalClose">Keep lesson</button>
+      <button class="btn-confirm-cancel" id="btnConfirmCancel">
+        <span id="cancelBtnLabel">Cancel lesson</span>
+      </button>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<!-- ── Bottom CTA bar ── -->
-<div class="demo-cta-bar">
-  <span>Like what you see?</span>
-  <a href="/learner/login.html">Sign up free</a>
-</div>
+<nav class="bottom-nav">
+  <a href="/learner/" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#128202;</span><span>Dashboard</span>
+  </a>
+  <a href="/learner/book.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#128197;</span><span>Book</span>
+  </a>
+  <a href="/demo/book.html" class="bottom-nav-item active">
+    <span class="bottom-nav-icon">&#128065;</span><span>Demo</span>
+  </a>
+  <a href="/learner/videos.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#127916;</span><span>Videos</span>
+  </a>
+  <a href="/learner/buy-credits.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#128179;</span><span>Lessons</span>
+  </a>
+</nav>
 
 <script>
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -401,30 +491,74 @@ const DAY_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','
 const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MON_FULL  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-// Demo instructor ID — set this after creating the instructor in the database
 const DEMO_INSTRUCTOR_ID = '5';
 
 // ─── State ───────────────────────────────────────────────────────────────────
+let token         = null;
 let currentView   = 'daily';
 let cursor        = new Date(); cursor.setHours(0,0,0,0);
 let slotCache     = {}; // dateStr -> [slot, ...]
 let loadedRanges  = [];
 let pendingSlot   = null;
+let pendingCancel = null;
+let lastBookingId = null;
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
-  cursor = new Date(); cursor.setHours(0,0,0,0);
-  setView('daily');
+  const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  token = session?.token || null;
+  if (!token) { window.location.href = '/learner/login.html?redirect=/demo/book.html'; return; }
+
+  Promise.all([loadUpcoming()])
+    .then(() => {
+      cursor = new Date(); cursor.setHours(0,0,0,0);
+      setView('daily');
+    });
 
   // Wire up modal buttons
   document.getElementById('bookModalClose').onclick = closeBookModal;
-  document.getElementById('btnDemoBook').onclick = confirmDemoBook;
+  document.getElementById('btnConfirmBook').onclick = confirmBookWithCredit;
   document.getElementById('btnSuccessDone').onclick = closeBookModal;
+  document.getElementById('btnAddToCalendar').onclick = handleCalendarDownload;
+  document.getElementById('btnSubscribeCalendar').onclick = handleCalendarSubscribe;
+  document.getElementById('cancelModalClose').onclick = () => document.getElementById('cancelModal').classList.remove('open');
+  document.getElementById('btnConfirmCancel').onclick = confirmCancel;
 
-  // Close modal on overlay click
-  document.getElementById('bookModal').addEventListener('click', e => {
-    if (e.target === document.getElementById('bookModal')) closeBookModal();
-  });
+  // Close modals on overlay click
+  document.getElementById('bookModal').addEventListener('click', e => { if (e.target === document.getElementById('bookModal')) closeBookModal(); });
+  document.getElementById('cancelModal').addEventListener('click', e => { if (e.target === document.getElementById('cancelModal')) document.getElementById('cancelModal').classList.remove('open'); });
+}
+
+// ─── Upcoming bookings ───────────────────────────────────────────────────────
+async function loadUpcoming() {
+  try {
+    const res = await fetch('/api/slots?action=my-bookings', { headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    // Filter to only demo instructor bookings
+    const upcoming = (data.upcoming || []).filter(b => String(b.instructor_id) === DEMO_INSTRUCTOR_ID);
+    const strip = document.getElementById('upcomingStrip');
+    const list  = document.getElementById('upcomingList');
+    if (upcoming.length === 0) { strip.style.display = 'none'; return; }
+
+    strip.style.display = 'block';
+    list.innerHTML = upcoming.map(b => {
+      const dateStr = new Date(b.scheduled_date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
+      const start = b.start_time.slice(0,5);
+      const end = b.end_time.slice(0,5);
+      const lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
+      const hoursUntil = (lessonMs - Date.now()) / 3600000;
+      const canCancel = hoursUntil > 0;
+      return `
+        <div class="upcoming-item">
+          <div class="upcoming-date">${dateStr}</div>
+          <div class="upcoming-time">${start} – ${end}</div>
+          <div class="upcoming-instructor">${b.instructor_name}</div>
+          ${canCancel ? `<button class="upcoming-cal-btn" onclick="downloadCalendar(${b.id})" title="Add to calendar">&#128197;</button>` : ''}
+          ${canCancel ? `<button class="upcoming-cancel" onclick="openCancelModal(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${esc(b.instructor_name)}', ${hoursUntil})">Cancel</button>` : '<span style="font-size:0.8rem;color:var(--muted)">Past</span>'}
+        </div>`;
+    }).join('');
+  } catch {}
 }
 
 // ─── View switching ──────────────────────────────────────────────────────────
@@ -469,12 +603,12 @@ function updateToolbarLabel() {
   } else if (currentView === 'weekly') {
     const mon = getWeekStart(cursor);
     const sun = addDaysLocal(mon, 6);
-    label.textContent = `${mon.getDate()} ${MON_SHORT[mon.getMonth()]} – ${sun.getDate()} ${MON_SHORT[sun.getMonth()]} ${sun.getFullYear()}`;
+    label.textContent = `${mon.getDate()} ${MON_SHORT[mon.getMonth()]} \u2013 ${sun.getDate()} ${MON_SHORT[sun.getMonth()]} ${sun.getFullYear()}`;
     sub.textContent = 'Click a slot to book';
   } else {
     const isToday = fmtDate(cursor) === fmtDate(today);
     label.textContent = `${DAY_SHORT[cursor.getDay()]} ${cursor.getDate()} ${MON_SHORT[cursor.getMonth()]}`;
-    sub.textContent = isToday ? 'Today — pick any slot to book' : `${DAY_FULL[cursor.getDay()]} — pick any slot to book`;
+    sub.textContent = isToday ? 'Today \u2014 pick any slot to book' : `${DAY_FULL[cursor.getDay()]} \u2014 pick any slot to book`;
   }
 }
 
@@ -524,8 +658,7 @@ async function fetchNeededSlots() {
 
   try {
     for (const chunk of chunks) {
-      let url = `/api/slots?action=available&from=${chunk.from}&to=${chunk.to}`;
-      if (DEMO_INSTRUCTOR_ID) url += `&instructor_id=${DEMO_INSTRUCTOR_ID}`;
+      let url = `/api/slots?action=available&from=${chunk.from}&to=${chunk.to}&instructor_id=${DEMO_INSTRUCTOR_ID}`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -548,8 +681,8 @@ async function fetchNeededSlots() {
   }
 }
 
-function showLoading() { document.getElementById('calContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading available slots&hellip;</p></div>'; }
-function showError(msg) { document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">&#9888;&#65039;</div><p>${msg}</p></div>`; }
+function showLoading() { document.getElementById('calContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading available slots\u2026</p></div>'; }
+function showError(msg) { document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">\u26A0\uFE0F</div><p>${msg}</p></div>`; }
 
 // ─── MONTHLY RENDER ──────────────────────────────────────────────────────────
 function renderMonthly() {
@@ -624,7 +757,7 @@ function renderWeekly() {
       const heightPx = ((eh - sh) * 48) + ((em - sm) / 60 * 48);
       const dataAttrs = `data-instructor-id="${s.instructor_id}" data-date="${s.date}" data-start="${s.start_time}" data-end="${s.end_time}" data-instructor-name="${esc(s.instructor_name)}"`;
       html += `<div class="week-slot" style="top:${topPx}px;height:${Math.max(heightPx,22)}px;" onclick="openBookModal(this)" ${dataAttrs}>
-        <div class="week-slot-time">${s.start_time}–${s.end_time}</div>
+        <div class="week-slot-time">${s.start_time}\u2013${s.end_time}</div>
         <div class="week-slot-name">${esc(s.instructor_name)}</div>
       </div>`;
     }
@@ -648,18 +781,18 @@ function renderDaily() {
     <div class="daily-header">
       <div>
         <div class="daily-date-label">${cursor.getDate()} ${MON_FULL[cursor.getMonth()]} ${cursor.getFullYear()}${todayBadge}</div>
-        <div class="daily-date-sub">${DAY_FULL[cursor.getDay()]} &middot; ${slots.length} slot${slots.length !== 1 ? 's' : ''} available</div>
+        <div class="daily-date-sub">${DAY_FULL[cursor.getDay()]} \u00B7 ${slots.length} slot${slots.length !== 1 ? 's' : ''} available</div>
       </div>
     </div>`;
 
   if (isPast) {
-    html += '<div class="empty-state"><div class="empty-icon">&#128197;</div><h3>This date is in the past</h3><p>Navigate forward to find available slots.</p></div>';
+    html += '<div class="empty-state"><div class="empty-icon">\uD83D\uDCC5</div><h3>This date is in the past</h3><p>Navigate forward to find available slots.</p></div>';
     document.getElementById('calContent').innerHTML = html;
     return;
   }
 
   if (slots.length === 0) {
-    html += '<div class="empty-state"><div class="empty-icon">&#128197;</div><h3>No slots available</h3><p>Try a different day.</p></div>';
+    html += '<div class="empty-state"><div class="empty-icon">\uD83D\uDCC5</div><h3>No slots available</h3><p>Try a different day.</p></div>';
     document.getElementById('calContent').innerHTML = html;
     return;
   }
@@ -697,7 +830,7 @@ function renderDaily() {
         const dataAttrs = `data-instructor-id="${s.instructor_id}" data-date="${s.date}" data-start="${s.start_time}" data-end="${s.end_time}" data-instructor-name="${esc(s.instructor_name)}"`;
         html += `
           <div class="daily-slot-card" onclick="openBookModal(this)" ${dataAttrs}>
-            <div class="daily-slot-time">${s.start_time} – ${s.end_time}</div>
+            <div class="daily-slot-time">${s.start_time} \u2013 ${s.end_time}</div>
             <div class="daily-slot-name">
               <span class="slot-avatar" style="display:inline-flex;width:20px;height:20px;font-size:0.65rem;vertical-align:middle;margin-right:4px">${avatar}</span>
               ${esc(s.instructor_name)}
@@ -720,7 +853,7 @@ function drillToDay(ds) {
   setView('daily');
 }
 
-// ─── Book modal (demo) ──────────────────────────────────────────────────────
+// ─── Book modal ──────────────────────────────────────────────────────────────
 function openBookModal(el) {
   pendingSlot = {
     instructor_id:   el.dataset.instructorId,
@@ -732,12 +865,12 @@ function openBookModal(el) {
   const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
   document.getElementById('mdDate').textContent = dateDisplay;
-  document.getElementById('mdTime').textContent = `${pendingSlot.start_time} – ${pendingSlot.end_time}`;
+  document.getElementById('mdTime').textContent = `${pendingSlot.start_time} \u2013 ${pendingSlot.end_time}`;
   document.getElementById('mdInstructor').textContent = pendingSlot.instructor_name;
 
-  document.getElementById('demoBtnLabel').textContent = 'Book this slot';
-  document.getElementById('demoSpinner').style.display = 'none';
-  document.getElementById('btnDemoBook').disabled = false;
+  document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
+  document.getElementById('bookSpinner').style.display = 'none';
+  document.getElementById('btnConfirmBook').disabled = false;
 
   document.getElementById('bookConfirmStep').style.display = 'block';
   document.getElementById('bookSuccessStep').style.display = 'none';
@@ -752,27 +885,127 @@ function closeBookModal() {
   }, 300);
 }
 
-// ─── Demo booking (simulated) ────────────────────────────────────────────────
-function confirmDemoBook() {
+// ─── Confirm booking (real API call — free for demo instructor) ──────────────
+async function confirmBookWithCredit() {
   if (!pendingSlot) return;
-  const btn = document.getElementById('btnDemoBook');
-  const label = document.getElementById('demoBtnLabel');
-  const spinner = document.getElementById('demoSpinner');
+  const btn = document.getElementById('btnConfirmBook');
+  const label = document.getElementById('bookBtnLabel');
+  const spinner = document.getElementById('bookSpinner');
   btn.disabled = true; label.textContent = 'Booking\u2026'; spinner.style.display = 'block';
 
-  setTimeout(() => {
-    showDemoSuccess();
-  }, 700);
+  try {
+    const res = await fetch('/api/slots?action=book', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(pendingSlot)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    lastBookingId = data.booking_id;
+    showBookSuccess();
+    refreshAfterBooking();
+  } catch (err) {
+    showToast(err.message || 'Booking failed. Please try again.', 'error');
+    btn.disabled = false; label.textContent = 'Confirm booking'; spinner.style.display = 'none';
+  }
 }
 
-function showDemoSuccess() {
+function showBookSuccess() {
   const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', timeZone:'UTC' });
   document.getElementById('successDate').textContent = dateDisplay;
   document.getElementById('successTime').textContent = pendingSlot.start_time;
   document.getElementById('successInstructor').textContent = pendingSlot.instructor_name;
+  document.getElementById('btnAddToCalendar').href = `/api/calendar?action=download&booking_id=${lastBookingId}`;
+  document.getElementById('btnAddToCalendar').setAttribute('download', `coachcarter-lesson-${pendingSlot.date}.ics`);
   document.getElementById('bookConfirmStep').style.display = 'none';
   document.getElementById('bookSuccessStep').style.display = 'block';
+}
+
+function refreshAfterBooking() {
+  loadedRanges = []; slotCache = {};
+  Promise.all([loadUpcoming(), renderCurrentView()]);
+}
+
+// ─── Calendar download & subscribe ───────────────────────────────────────────
+async function handleCalendarDownload(e) {
+  e.preventDefault();
+  if (!lastBookingId) return;
+  try {
+    const res = await fetch(`/api/calendar?action=download&booking_id=${lastBookingId}`, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'coachcarter-lesson.ics';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Calendar file downloaded \u2014 open it to add to your calendar', 'success');
+  } catch { showToast('Could not download calendar file', 'error'); }
+}
+
+async function handleCalendarSubscribe() {
+  try {
+    const res = await fetch('/api/calendar?action=feed-url', { headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    window.location.href = data.webcal_url;
+  } catch { showToast('Could not set up calendar subscription', 'error'); }
+}
+
+async function downloadCalendar(bookingId) {
+  try {
+    const res = await fetch(`/api/calendar?action=download&booking_id=${bookingId}`, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'coachcarter-lesson.ics';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Calendar file downloaded', 'success');
+  } catch { showToast('Could not download calendar file', 'error'); }
+}
+window.downloadCalendar = downloadCalendar;
+
+// ─── Cancel modal ────────────────────────────────────────────────────────────
+function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil) {
+  pendingCancel = { bookingId, date, start, end, instructorName, hoursUntil };
+  const dateDisplay = new Date(date + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
+  document.getElementById('cmDate').textContent = dateDisplay;
+  document.getElementById('cmTime').textContent = `${start} \u2013 ${end}`;
+  document.getElementById('cmInstructor').textContent = instructorName;
+
+  document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
+  document.getElementById('btnConfirmCancel').disabled = false;
+  document.getElementById('cancelModal').classList.add('open');
+}
+window.openCancelModal = openCancelModal;
+
+async function confirmCancel() {
+  if (!pendingCancel) return;
+  const btn = document.getElementById('btnConfirmCancel');
+  btn.disabled = true;
+  document.getElementById('cancelBtnLabel').textContent = 'Cancelling\u2026';
+
+  try {
+    const res = await fetch('/api/slots?action=cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ booking_id: pendingCancel.bookingId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    document.getElementById('cancelModal').classList.remove('open');
+    showToast('Demo booking cancelled.', 'success');
+    loadedRanges = []; slotCache = {};
+    await Promise.all([loadUpcoming(), renderCurrentView()]);
+  } catch (err) {
+    showToast(err.message || 'Cancellation failed.', 'error');
+    btn.disabled = false;
+    document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
+  }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
