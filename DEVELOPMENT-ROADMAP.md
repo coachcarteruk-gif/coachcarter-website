@@ -196,13 +196,8 @@ Allow learners with 0 credits to pay for a single lesson at the point of booking
 - ✅ No-credits banner updated from red (alarming) to soft orange with messaging: "No worries — you can pay when you book, or buy a bundle to save."
 - ✅ Success/cancellation toasts on return from Stripe
 
-### 2.7 — Session Logging Rebuild ✅ Complete
-Rebuilt the session logging page as a stepped wizard with emoji-based ratings.
-
-**What was built:**
-- ✅ `public/learner/log-session.html` — multi-step wizard replacing the original form
-- ✅ Emoji-based skill ratings (green/amber/red) with optional notes per skill
-- ✅ Consistent font stack (Space Grotesk + Outfit) matching learner portal design
+### 2.7 — Session Logging Rebuild ✅ Complete (v1 → superseded by 2.21)
+Original rebuild as an 8-step wizard with emoji-based ratings. Superseded by v2 (section 2.21).
 
 ### 2.8 — Learner Portal Videos ✅ Complete
 Added the classroom/videos page to the learner portal behind login, accessible from the bottom nav.
@@ -348,19 +343,36 @@ A dedicated demo page that lets users (and the site owner) explore the full book
 - ✅ `db/seeds/002_demo_instructor.sql` — SQL seed for creating the demo instructor and availability
 - ✅ Bottom nav includes Demo tab; demo banner at top of page explains the mode
 
-### 2.21 — Reviews & Testimonials
+### 2.21 — Session Logging v2 ✅ Complete (20 March 2026)
+Complete rewrite of the session logging system: consolidated from 8 steps to 3, replaced emoji ratings with Traffic Light system, linked sessions to completed bookings, and gave instructors visibility into learner self-assessments.
+
+**What was built:**
+- ✅ `public/learner/log-session.html` — 3-step wizard: details → rate all 7 skills on one page → notes/save
+- ✅ Traffic Light rating system: Red (Needs work → `struggled`), Amber (Getting there → `ok`), Green (Confident → `nailed`)
+- ✅ Booking pre-fill: when accessed via `?booking_id=X`, auto-fills date, time, duration, instructor from the completed booking
+- ✅ `db/migrations/009_session_booking_link.sql` — adds `booking_id` column to `driving_sessions` with unique constraint
+- ✅ `api/learner.js` — `sessions` POST accepts optional `booking_id` with validation (must belong to learner, be completed, not already logged)
+- ✅ `api/learner.js` — new `unlogged-bookings` endpoint returns completed bookings without session logs
+- ✅ `api/instructor.js` — `handleComplete` sends email to learner with direct link to log the session
+- ✅ `api/instructor.js` — schedule/schedule-range queries now JOIN `driving_sessions` and `skill_ratings` to include learner self-assessment data
+- ✅ `public/learner/index.html` — unlogged booking banner ("You have X lessons to log") with CTA linking to log page
+- ✅ `public/learner/index.html` — progress cards and session history use traffic light dots instead of emojis
+- ✅ `public/instructor/index.html` — collapsible "Learner Self-Assessment" section on completed bookings in daily view and booking detail modal
+- ✅ Font migration: learner portal pages (`index.html`, `log-session.html`) updated from Space Grotesk + Outfit to Jost + DM Sans
+
+### 2.22 — Reviews & Testimonials
 Post-lesson review prompt triggered after a lesson is marked completed.
 - Automated email 24 hours after lesson status → completed
 - Simple star rating + comment
 - Optional: display approved reviews publicly
 
-### 2.22 — Waiting List
+### 2.23 — Waiting List
 Capture leads when all instructors are fully booked.
 - "No slots available" state on calendar triggers a waiting list sign-up
 - Notifies admin when someone joins
 - Admin can manually offer a slot and notify the learner
 
-### 2.23 — Referral System
+### 2.24 — Referral System
 Reward learners for recommending friends.
 - Unique referral link per learner
 - Both referrer and new learner receive a credit bonus on first purchase
