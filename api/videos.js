@@ -11,6 +11,10 @@
 //   POST /api/videos?action=update
 //   POST /api/videos?action=delete
 //   POST /api/videos?action=reorder
+//   POST /api/videos?action=upload-url
+//   GET  /api/videos?action=fetch-meta&uid=...
+//   POST /api/videos?action=bulk-update
+//   POST /api/videos?action=bulk-delete
 //   POST /api/videos?action=create-category
 //   POST /api/videos?action=update-category
 //   POST /api/videos?action=delete-category
@@ -35,6 +39,23 @@ function verifyAdmin(req) {
   } catch { return false; }
 }
 
+// ── Cloudflare Stream API helper ─────────────────────────────────────────────
+async function cfFetch(path, options = {}) {
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!token || !accountId) throw new Error('Cloudflare credentials not configured');
+
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/stream${path}`;
+  const resp = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...options.headers,
+    },
+  });
+  return resp;
+}
+
 module.exports = async (req, res) => {
   setCors(res);
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
@@ -50,6 +71,10 @@ module.exports = async (req, res) => {
   if (action === 'update')          return handleUpdate(req, res);
   if (action === 'delete')          return handleDelete(req, res);
   if (action === 'reorder')         return handleReorder(req, res);
+  if (action === 'upload-url')      return handleUploadUrl(req, res);
+  if (action === 'fetch-meta')      return handleFetchMeta(req, res);
+  if (action === 'bulk-update')     return handleBulkUpdate(req, res);
+  if (action === 'bulk-delete')     return handleBulkDelete(req, res);
   if (action === 'create-category') return handleCreateCategory(req, res);
   if (action === 'update-category') return handleUpdateCategory(req, res);
   if (action === 'delete-category') return handleDeleteCategory(req, res);
@@ -62,53 +87,31 @@ async function handleList(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const { category, learner_only } = req.query;
+    const showAll = learner_only === 'true';
 
-    // Build query — no nested sql templates (Neon limitation)
     let videos;
     if (category && category !== 'all') {
-      if (learner_only === 'true') {
-        videos = await sql`
-          SELECT v.id, v.cloudflare_uid, v.title, v.description, v.category_slug,
-                 v.thumbnail_url, v.sort_order, v.learner_only,
-                 c.label AS category_label, c.color AS category_color
-          FROM videos v
-          JOIN video_categories c ON c.slug = v.category_slug
-          WHERE v.published = true AND v.category_slug = ${category}
-          ORDER BY v.sort_order ASC, v.created_at ASC
-        `;
-      } else {
-        videos = await sql`
-          SELECT v.id, v.cloudflare_uid, v.title, v.description, v.category_slug,
-                 v.thumbnail_url, v.sort_order, v.learner_only,
-                 c.label AS category_label, c.color AS category_color
-          FROM videos v
-          JOIN video_categories c ON c.slug = v.category_slug
-          WHERE v.published = true AND v.category_slug = ${category} AND v.learner_only = false
-          ORDER BY v.sort_order ASC, v.created_at ASC
-        `;
-      }
+      videos = await sql`
+        SELECT v.id, v.cloudflare_uid, v.title, v.description, v.category_slug,
+               v.thumbnail_url, v.sort_order, v.learner_only, v.duration_seconds,
+               c.label AS category_label, c.color AS category_color
+        FROM videos v
+        JOIN video_categories c ON c.slug = v.category_slug
+        WHERE v.published = true AND v.category_slug = ${category}
+          AND (${showAll} OR v.learner_only = false)
+        ORDER BY v.sort_order ASC, v.created_at ASC
+      `;
     } else {
-      if (learner_only === 'true') {
-        videos = await sql`
-          SELECT v.id, v.cloudflare_uid, v.title, v.description, v.category_slug,
-                 v.thumbnail_url, v.sort_order, v.learner_only,
-                 c.label AS category_label, c.color AS category_color
-          FROM videos v
-          JOIN video_categories c ON c.slug = v.category_slug
-          WHERE v.published = true
-          ORDER BY c.sort_order ASC, v.sort_order ASC, v.created_at ASC
-        `;
-      } else {
-        videos = await sql`
-          SELECT v.id, v.cloudflare_uid, v.title, v.description, v.category_slug,
-                 v.thumbnail_url, v.sort_order, v.learner_only,
-                 c.label AS category_label, c.color AS category_color
-          FROM videos v
-          JOIN video_categories c ON c.slug = v.category_slug
-          WHERE v.published = true AND v.learner_only = false
-          ORDER BY c.sort_order ASC, v.sort_order ASC, v.created_at ASC
-        `;
-      }
+      videos = await sql`
+        SELECT v.id, v.cloudflare_uid, v.title, v.description, v.category_slug,
+               v.thumbnail_url, v.sort_order, v.learner_only, v.duration_seconds,
+               c.label AS category_label, c.color AS category_color
+        FROM videos v
+        JOIN video_categories c ON c.slug = v.category_slug
+        WHERE v.published = true
+          AND (${showAll} OR v.learner_only = false)
+        ORDER BY c.sort_order ASC, v.sort_order ASC, v.created_at ASC
+      `;
     }
 
     return res.json({ videos });
@@ -135,12 +138,79 @@ async function handleCategories(req, res) {
   }
 }
 
+// ── Admin: get direct upload URL from Cloudflare ─────────────────────────────
+async function handleUploadUrl(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { maxDurationSeconds } = req.body || {};
+  const maxDuration = maxDurationSeconds || 600;
+
+  try {
+    const resp = await cfFetch('?direct_user=true', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Tus-Resumable': '1.0.0',
+        'Upload-Length': '0',
+        'Upload-Metadata': `maxDurationSeconds ${Buffer.from(String(maxDuration)).toString('base64')}`,
+      },
+    });
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      console.error('CF upload-url error:', resp.status, body);
+      return res.status(502).json({ error: 'Failed to get upload URL from Cloudflare' });
+    }
+
+    const uploadUrl = resp.headers.get('location');
+    const uid = resp.headers.get('stream-media-id');
+
+    if (!uploadUrl || !uid) {
+      return res.status(502).json({ error: 'Cloudflare response missing upload URL or UID' });
+    }
+
+    return res.json({ uploadUrl, uid });
+  } catch (err) {
+    console.error('upload-url error:', err);
+    return res.status(500).json({ error: 'Failed to get upload URL', details: err.message });
+  }
+}
+
+// ── Admin: fetch video metadata from Cloudflare ─────────────────────────────
+async function handleFetchMeta(req, res) {
+  if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { uid } = req.query;
+  if (!uid) return res.status(400).json({ error: 'uid is required' });
+
+  try {
+    const resp = await cfFetch(`/${uid}`);
+    if (!resp.ok) {
+      const body = await resp.text();
+      console.error('CF fetch-meta error:', resp.status, body);
+      return res.status(502).json({ error: 'Failed to fetch video metadata from Cloudflare' });
+    }
+
+    const data = await resp.json();
+    const video = data.result;
+    return res.json({
+      duration: video.duration ? Math.round(video.duration) : null,
+      ready: video.readyToStream || false,
+      thumbnail: video.thumbnail || null,
+    });
+  } catch (err) {
+    console.error('fetch-meta error:', err);
+    return res.status(500).json({ error: 'Failed to fetch metadata', details: err.message });
+  }
+}
+
 // ── Admin: create video ──────────────────────────────────────────────────────
 async function handleCreate(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { cloudflare_uid, title, description, category_slug, thumbnail_url, learner_only } = req.body;
+  const { cloudflare_uid, title, description, category_slug, thumbnail_url, learner_only, duration_seconds } = req.body;
   if (!cloudflare_uid || !title || !category_slug)
     return res.status(400).json({ error: 'cloudflare_uid, title, and category_slug are required' });
 
@@ -154,9 +224,10 @@ async function handleCreate(req, res) {
     `;
 
     const [video] = await sql`
-      INSERT INTO videos (cloudflare_uid, title, description, category_slug, thumbnail_url, sort_order, learner_only)
+      INSERT INTO videos (cloudflare_uid, title, description, category_slug, thumbnail_url, sort_order, learner_only, duration_seconds)
       VALUES (${cloudflare_uid}, ${title}, ${description || null}, ${category_slug},
-              ${thumbnail_url || null}, ${maxOrder.next_order}, ${learner_only || false})
+              ${thumbnail_url || null}, ${maxOrder.next_order}, ${learner_only || false},
+              ${duration_seconds || null})
       RETURNING *
     `;
     return res.status(201).json({ video });
@@ -171,20 +242,21 @@ async function handleUpdate(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { id, cloudflare_uid, title, description, category_slug, thumbnail_url, published, learner_only } = req.body;
+  const { id, cloudflare_uid, title, description, category_slug, thumbnail_url, published, learner_only, duration_seconds } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required' });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const [video] = await sql`
       UPDATE videos SET
-        cloudflare_uid = COALESCE(${cloudflare_uid || null}, cloudflare_uid),
-        title          = COALESCE(${title || null}, title),
-        description    = COALESCE(${description ?? null}, description),
-        category_slug  = COALESCE(${category_slug || null}, category_slug),
-        thumbnail_url  = COALESCE(${thumbnail_url ?? null}, thumbnail_url),
-        published      = COALESCE(${published !== undefined ? published : null}, published),
-        learner_only   = COALESCE(${learner_only !== undefined ? learner_only : null}, learner_only)
+        cloudflare_uid   = COALESCE(${cloudflare_uid || null}, cloudflare_uid),
+        title            = COALESCE(${title || null}, title),
+        description      = COALESCE(${description ?? null}, description),
+        category_slug    = COALESCE(${category_slug || null}, category_slug),
+        thumbnail_url    = COALESCE(${thumbnail_url ?? null}, thumbnail_url),
+        published        = COALESCE(${published !== undefined ? published : null}, published),
+        learner_only     = COALESCE(${learner_only !== undefined ? learner_only : null}, learner_only),
+        duration_seconds = COALESCE(${duration_seconds !== undefined ? duration_seconds : null}, duration_seconds)
       WHERE id = ${id}
       RETURNING *
     `;
@@ -206,6 +278,17 @@ async function handleDelete(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    // Fetch cloudflare_uid before deleting
+    const [row] = await sql`SELECT cloudflare_uid FROM videos WHERE id = ${id}`;
+    if (row && row.cloudflare_uid) {
+      try {
+        await cfFetch(`/${row.cloudflare_uid}`, { method: 'DELETE' });
+      } catch (cfErr) {
+        console.warn('CF delete warning (continuing):', cfErr.message);
+      }
+    }
+
     await sql`DELETE FROM videos WHERE id = ${id}`;
     return res.json({ success: true });
   } catch (err) {
@@ -232,6 +315,89 @@ async function handleReorder(req, res) {
   } catch (err) {
     console.error('video reorder error:', err);
     return res.status(500).json({ error: 'Failed to reorder videos' });
+  }
+}
+
+// ── Admin: bulk update videos ────────────────────────────────────────────────
+// Body: { ids: [1,2,3], updates: { published: true } }
+async function handleBulkUpdate(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { ids, updates } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0)
+    return res.status(400).json({ error: 'ids must be a non-empty array' });
+  if (!updates || typeof updates !== 'object')
+    return res.status(400).json({ error: 'updates object is required' });
+
+  const allowed = ['published', 'learner_only', 'category_slug'];
+  const keys = Object.keys(updates).filter(k => allowed.includes(k));
+  if (keys.length === 0)
+    return res.status(400).json({ error: `No valid update fields. Allowed: ${allowed.join(', ')}` });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    let updated = 0;
+    for (const id of ids) {
+      // Build individual updates per field (Neon tagged template limitation)
+      for (const key of keys) {
+        if (key === 'published') {
+          await sql`UPDATE videos SET published = ${updates.published} WHERE id = ${id}`;
+        } else if (key === 'learner_only') {
+          await sql`UPDATE videos SET learner_only = ${updates.learner_only} WHERE id = ${id}`;
+        } else if (key === 'category_slug') {
+          await sql`UPDATE videos SET category_slug = ${updates.category_slug} WHERE id = ${id}`;
+        }
+      }
+      updated++;
+    }
+    return res.json({ success: true, updated });
+  } catch (err) {
+    console.error('bulk update error:', err);
+    return res.status(500).json({ error: 'Failed to bulk update videos' });
+  }
+}
+
+// ── Admin: bulk delete videos ────────────────────────────────────────────────
+// Body: { ids: [1,2,3] }
+async function handleBulkDelete(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0)
+    return res.status(400).json({ error: 'ids must be a non-empty array' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Fetch cloudflare_uids for CF cleanup
+    const rows = [];
+    for (const id of ids) {
+      const [row] = await sql`SELECT cloudflare_uid FROM videos WHERE id = ${id}`;
+      if (row) rows.push(row);
+    }
+
+    // Best-effort Cloudflare cleanup
+    for (const row of rows) {
+      if (row.cloudflare_uid) {
+        try {
+          await cfFetch(`/${row.cloudflare_uid}`, { method: 'DELETE' });
+        } catch (cfErr) {
+          console.warn('CF bulk delete warning (continuing):', cfErr.message);
+        }
+      }
+    }
+
+    // Delete from DB
+    for (const id of ids) {
+      await sql`DELETE FROM videos WHERE id = ${id}`;
+    }
+
+    return res.json({ success: true, deleted: ids.length });
+  } catch (err) {
+    console.error('bulk delete error:', err);
+    return res.status(500).json({ error: 'Failed to bulk delete videos' });
   }
 }
 

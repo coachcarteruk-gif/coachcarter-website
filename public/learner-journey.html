@@ -49,46 +49,85 @@ body {
 }
 
 /* ── NAV ── */
-nav {
-  position: sticky;
-  top: 0;
+.site-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
   z-index: 100;
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 48px;
-  height: 68px;
+  background: rgba(38, 38, 38, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
-.nav-logo {
+.site-nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+.site-nav-logo img {
+  width: 34px; height: 34px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  padding: 4px;
+}
+.site-nav-logo span {
   font-family: var(--font-head);
   font-size: 1.1rem;
   font-weight: 800;
-  color: var(--primary);
-  text-decoration: none;
+  color: #fff;
   letter-spacing: -0.02em;
 }
-.nav-logo span { color: var(--accent); }
-.nav-links { display: flex; gap: 28px; list-style: none; }
-.nav-links a {
-  font-size: 0.88rem; font-weight: 700; color: var(--muted);
-  text-decoration: none; letter-spacing: 0.02em;
-  text-transform: uppercase; transition: color 0.2s;
+.site-nav-logo span em { font-style: normal; color: var(--accent); }
+.site-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.nav-links a:hover { color: var(--accent); }
-.nav-cta {
-  background: var(--accent); color: #fff;
-  font-family: var(--font-head); font-weight: 700; font-size: 0.88rem;
-  padding: 10px 24px; border-radius: 6px; text-decoration: none;
-  border: none; cursor: pointer; transition: background 0.2s, transform 0.15s;
+.site-nav-link {
+  color: rgba(255,255,255,0.6);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.83rem;
+  padding: 7px 14px;
+  border-radius: 100px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition: all 0.18s;
+  white-space: nowrap;
+  background: transparent;
+  cursor: pointer;
 }
-.nav-cta:hover { background: var(--accent-dk); transform: translateY(-1px); }
+.site-nav-link:hover {
+  color: #fff;
+  border-color: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+}
+.site-nav-link.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.site-nav-link.primary:hover {
+  background: var(--accent-dk);
+  border-color: var(--accent-dk);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(245,131,33,0.35);
+}
+@media (max-width: 600px) {
+  .site-nav { padding: 0 16px; }
+  .site-nav-link:not(.primary):not(.back) { display: none; }
+}
 
 /* ── HERO ── */
 .hero {
-  padding: 100px 48px 80px;
+  padding: 164px 48px 80px;
   max-width: 1200px;
   margin: 0 auto;
   display: grid;
@@ -516,10 +555,7 @@ footer a { color: var(--muted); text-decoration: underline; }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
-  nav { padding: 0 20px; }
-  .nav-links { display: none; }
-  .nav-cta { display: none; }
-  .hero { grid-template-columns: 1fr; padding: 80px 20px 60px; gap: 40px; }
+  .hero { grid-template-columns: 1fr; padding: 144px 20px 60px; gap: 40px; }
   .bulk-mini { grid-template-columns: repeat(2, 1fr); }
   .price-urgency { padding: 12px 20px; }
   .price-progress { padding: 0 20px 16px; }
@@ -536,14 +572,18 @@ footer a { color: var(--muted); text-decoration: underline; }
 </head>
 <body>
 
-<nav>
-  <a href="/" class="nav-logo">Coach<span>Carter</span></a>
-  <ul class="nav-links">
-    <li><a href="#tiers">The Three Tiers</a></li>
-    <li><a href="#timeline">Your Journey</a></li>
-    <li><a href="/#guarantee">Pass Programme</a></li>
-  </ul>
-  <a href="/#guarantee" class="nav-cta">Book Now</a>
+<nav class="site-nav">
+  <a class="site-nav-logo" href="/">
+    <img src="/Logo.png" alt="CoachCarter">
+    <span>Coach<em>Carter</em></span>
+  </a>
+  <div class="site-nav-links">
+    <a class="site-nav-link" href="/learner-journey.html">Pricing</a>
+    <a class="site-nav-link" href="/classroom.html">Free Videos</a>
+    <a class="site-nav-link" href="/learner/login.html">Learner Login</a>
+    <a class="site-nav-link" href="/instructor/login.html">Instructor Login</a>
+    <a class="site-nav-link primary" href="/learner/login.html?redirect=/learner/book.html">Book Free Trial</a>
+  </div>
 </nav>
 
 <!-- HERO -->

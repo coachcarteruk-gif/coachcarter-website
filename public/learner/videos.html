@@ -119,6 +119,12 @@
     }
     .video-card-title { font-family: var(--font-head); font-size: 0.9rem; font-weight: 700; line-height: 1.3; margin-bottom: 3px; }
     .video-card-desc { font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
+    .video-duration {
+      position: absolute; bottom: 6px; right: 6px;
+      background: rgba(0,0,0,0.78); color: #fff;
+      font-size: 0.72rem; font-weight: 600;
+      padding: 2px 6px; border-radius: 4px; line-height: 1.3;
+    }
 
     /* Player modal */
     .player-overlay {
@@ -326,7 +332,7 @@ function renderGrid() {
   c.innerHTML = '<div class="video-grid">' + f.map(v => {
     const thumb = v.thumbnail_url || `${CF_BASE}/${v.cloudflare_uid}/thumbnails/thumbnail.jpg?time=2s&width=480`;
     return `<div class="video-card" onclick="openPlayer('${v.cloudflare_uid}','${esc(v.title)}','${esc(v.description||'')}')">
-      <div class="video-thumb"><img src="${thumb}" alt="${esc(v.title)}" loading="lazy" onerror="this.style.display='none'"><div class="video-thumb-play"><div class="video-thumb-play-icon">▶</div></div></div>
+      <div class="video-thumb"><img src="${thumb}" alt="${esc(v.title)}" loading="lazy" onerror="this.style.display='none'"><div class="video-thumb-play"><div class="video-thumb-play-icon">▶</div></div>${v.duration_seconds ? `<span class="video-duration">${formatDuration(v.duration_seconds)}</span>` : ''}</div>
       <div class="video-card-body"><span class="video-card-tag" style="background:${v.category_color||'rgba(245,131,33,0.2)'};color:rgba(255,255,255,0.95)">${esc(v.category_label||v.category_slug)}</span>
       <div class="video-card-title">${esc(v.title)}</div>${v.description ? `<div class="video-card-desc">${esc(v.description)}</div>` : ''}</div></div>`;
   }).join('') + '</div>';
@@ -406,6 +412,11 @@ function showBanner(uid) { const b = document.getElementById(`banner-${uid}`); i
 function hideBanner(uid) { const b = document.getElementById(`banner-${uid}`); if (b) b.classList.remove('show'); }
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+function formatDuration(sec) {
+  if (!sec && sec !== 0) return '';
+  const s = Math.round(sec), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  return h > 0 ? h + ':' + String(m).padStart(2,'0') + ':' + String(ss).padStart(2,'0') : m + ':' + String(ss).padStart(2,'0');
+}
 </script>
 </body>
 </html>
