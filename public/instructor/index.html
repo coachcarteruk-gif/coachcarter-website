@@ -345,6 +345,41 @@
     .btn-complete-sm:hover { background: var(--green-lt); }
     .btn-complete-sm:disabled { opacity: 0.5; cursor: not-allowed; }
 
+    /* Learner self-assessment feedback */
+    .learner-feedback {
+      width: 100%; margin-top: 6px;
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+    }
+    .feedback-toggle {
+      background: none; border: none; cursor: pointer;
+      font-size: 0.75rem; font-weight: 600; color: var(--muted);
+      padding: 4px 0; display: flex; align-items: center; gap: 4px;
+      transition: color 0.15s;
+    }
+    .feedback-toggle:hover { color: var(--primary); }
+    .feedback-body { display: none; margin-top: 6px; }
+    .feedback-body.open { display: block; }
+    .feedback-skills {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .feedback-pill {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 0.72rem; font-weight: 500; padding: 3px 10px;
+      border-radius: 12px; background: var(--bg); border: 1px solid var(--border);
+    }
+    .feedback-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .fd-struggled { background: var(--red); }
+    .fd-ok { background: var(--accent); }
+    .fd-nailed { background: var(--green); }
+    .feedback-notes {
+      font-size: 0.78rem; color: var(--muted); font-style: italic;
+      margin-top: 6px; padding: 6px 10px; background: var(--bg);
+      border-radius: 8px;
+    }
+
     .daily-avail-badge {
       display: inline-flex; align-items: center; gap: 5px;
       background: #f0fdf4; border: 1px solid #bbf7d0;
@@ -898,6 +933,7 @@ function renderDaily() {
             </div>
             <span class="daily-booking-status status-${b.status}">${b.status === 'completed' ? '✓ Completed' : 'Confirmed'}</span>
             ${!isCompleted ? `<button class="btn-complete-sm" id="complete-${b.id}" onclick="markComplete(${b.id})">Mark complete</button>` : ''}
+            ${isCompleted ? renderFeedbackHTML(b) : ''}
           </div>`;
       }
     } else if (inAvail) {
@@ -973,6 +1009,16 @@ function openBookingDetail(bookingId) {
     ${b.learner_pickup_address ? `<div class="booking-detail-row"><span class="booking-detail-label">Pickup</span><span class="booking-detail-val">${esc(b.learner_pickup_address)}</span></div>` : ''}
     <div class="booking-detail-row"><span class="booking-detail-label">Status</span><span class="booking-detail-val">${b.status === 'completed' ? '✓ Completed' : 'Confirmed'}</span></div>
     ${b.prefer_contact_before ? `<div class="booking-detail-row"><span class="booking-detail-label">Note</span><span class="booking-detail-val" style="color:var(--accent);">📞 Learner would like a call or message before their first lesson</span></div>` : ''}
+    ${b.status === 'completed' && b.learner_ratings && b.learner_ratings.length > 0 ? `
+      <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
+        <div style="font-size:0.78rem; font-weight:700; color:var(--muted); margin-bottom:8px;">Learner Self-Assessment</div>
+        <div class="feedback-skills">${b.learner_ratings.map(r => {
+          const label = SKILL_LABELS[r.skill_key] || r.skill_key.replace(/_/g, ' ');
+          const dc = r.rating === 'nailed' ? 'fd-nailed' : r.rating === 'ok' ? 'fd-ok' : 'fd-struggled';
+          return '<div class="feedback-pill"><span class="feedback-dot ' + dc + '"></span> ' + label + '</div>';
+        }).join('')}</div>
+        ${b.session_notes ? '<div class="feedback-notes">"' + esc(b.session_notes) + '"</div>' : ''}
+      </div>` : ''}
   `;
 
   const actions = document.getElementById('bookingModalActions');
@@ -1092,6 +1138,32 @@ function getWeekStart(d) {
   r.setDate(r.getDate() + diff);
   r.setHours(0,0,0,0);
   return r;
+}
+
+const SKILL_LABELS = {
+  speed_choice: 'Speed choice', lane_choice: 'Lane choice', mirrors: 'Mirrors',
+  lane_keeping: 'Lane keeping', stay_or_go: 'Stay or go',
+  roundabouts: 'Roundabouts', manoeuvres: 'Manoeuvres'
+};
+
+function renderFeedbackHTML(b) {
+  if (!b.learner_ratings || b.learner_ratings.length === 0) return '';
+  const uid = 'fb-' + b.id;
+  const pills = b.learner_ratings.map(r => {
+    const label = SKILL_LABELS[r.skill_key] || r.skill_key.replace(/_/g, ' ');
+    const dc = r.rating === 'nailed' ? 'fd-nailed' : r.rating === 'ok' ? 'fd-ok' : 'fd-struggled';
+    return `<div class="feedback-pill"><span class="feedback-dot ${dc}"></span> ${label}</div>`;
+  }).join('');
+  const notes = b.session_notes ? `<div class="feedback-notes">"${esc(b.session_notes)}"</div>` : '';
+  return `<div class="learner-feedback">
+    <button class="feedback-toggle" onclick="document.getElementById('${uid}').classList.toggle('open'); this.querySelector('.chevron').classList.toggle('open');">
+      <span class="chevron" style="font-size:0.65rem;">&#x25BC;</span> Learner self-assessment
+    </button>
+    <div class="feedback-body" id="${uid}">
+      <div class="feedback-skills">${pills}</div>
+      ${notes}
+    </div>
+  </div>`;
 }
 
 function esc(str) {

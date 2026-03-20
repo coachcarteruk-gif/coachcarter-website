@@ -90,7 +90,7 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   │   ├── verify.html             # Token verification page (two-step: validate then verify)
 │   │   ├── book.html               # Lesson booking calendar — monthly/weekly/daily views (credit or pay-per-slot)
 │   │   ├── buy-credits.html        # Buy lesson credits via Stripe
-│   │   ├── log-session.html        # Log a driving session (stepped wizard, emoji ratings)
+│   │   ├── log-session.html        # Log a driving session (3-step wizard, traffic light ratings, booking pre-fill)
 │   │   └── videos.html             # Video library (behind login)
 │   ├── instructor/
 │   │   ├── login.html              # Magic-link login for instructors
@@ -112,7 +112,8 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   │   ├── 005_contact_preference.sql # prefer_contact_before on learner_users
 │   │   ├── 006_pickup_address.sql  # pickup_address on learner_users
 │   │   ├── 007_buffer_minutes.sql  # buffer_minutes on instructors
-│   │   └── 008_videos.sql          # video_categories + videos tables
+│   │   ├── 008_videos.sql          # video_categories + videos tables
+│   │   └── 009_session_booking_link.sql # booking_id on driving_sessions
 │   └── seeds/                      # Placeholder data for testing
 │       ├── 001_placeholder_instructors.sql
 │       └── 002_demo_instructor.sql # Creates demo instructor with full 7-day availability
@@ -155,10 +156,11 @@ The site uses a consistent dark charcoal theme matching the CoachCarter logo exa
 --border:   #e2e4eb   /* dividers on light backgrounds */
 ```
 
-Font: Inter (Google Fonts). All pages link to it via:
+Fonts: **Jost** (headings) + **DM Sans** (body). All pages link to them via:
 ```html
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap">
 ```
+Note: Some legacy learner pages previously used Space Grotesk + Outfit — these have been migrated to Jost + DM Sans.
 
 ---
 
@@ -217,13 +219,14 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `sessions` | GET | Yes | Returns last 20 sessions with skill ratings |
-| `sessions` | POST | Yes | Save a new session |
+| `sessions` | POST | Yes | Save a new session (optional `booking_id` to link to completed booking) |
 | `progress` | GET | Yes | Returns latest skill ratings, stats, current tier, phone, pickup_address, prefer_contact_before |
 | `update-name` | POST | Yes | Set learner name (used after first magic-link login) |
 | `profile` | GET | Yes | Returns learner profile (name, email, phone, pickup_address, prefer_contact_before) |
 | `update-profile` | POST | Yes | Update phone and pickup_address |
 | `contact-pref` | GET | Yes | Returns prefer_contact_before flag |
 | `set-contact-pref` | POST | Yes | Toggle prefer_contact_before. Body: `{ prefer_contact_before: boolean }` |
+| `unlogged-bookings` | GET | Yes | Returns completed bookings that haven't been logged yet |
 
 ### API — `api/credits.js`
 
@@ -268,7 +271,7 @@ prefer_contact_before BOOLEAN DEFAULT FALSE
 created_at TIMESTAMPTZ
 ```
 
-**`driving_sessions`** / **`skill_ratings`** — unchanged from original design (see original schema).
+**`driving_sessions`** / **`skill_ratings`** — session logging tables. `driving_sessions` has optional `booking_id` (FK to `lesson_bookings`) to link sessions to completed bookings. Unique constraint ensures one log per booking. Skill ratings use Traffic Light system: `struggled` (red), `ok` (amber), `nailed` (green).
 
 **`credit_transactions`**
 ```sql
@@ -499,7 +502,7 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Slot engine SQL fix** (18 March) — fixed 500 error caused by nested Neon sql template literals in conditional query fragments
 - **Pay-per-slot booking** — learners with 0 credits can now pay £82.50 at the point of booking via Stripe Checkout, with a 10-minute slot reservation during payment
 - **Magic link login fix** — email clients pre-fetching links were consuming tokens; fixed with a two-step validate (GET) → verify (POST) flow
-- **Session logging rebuild** — stepped wizard with emoji-based ratings replacing the original single-page form
+- **Session logging rebuild v2** (20 March) — complete rewrite of `log-session.html`: consolidated from 8 steps to 3 (details → rate all skills → notes/save). Replaced emoji ratings (😬/😊/🤩) with Traffic Light system (Red = Needs work, Amber = Getting there, Green = Confident). Sessions now link to completed bookings via `booking_id` column. When instructor marks a lesson complete, learner receives email with direct link to log that session. Dashboard shows "unlogged lessons" banner. Instructor schedule now displays collapsible learner self-assessments on completed bookings. Fonts migrated from Space Grotesk + Outfit to Jost + DM Sans across learner portal. New API endpoint: `unlogged-bookings`. Migration: `009_session_booking_link.sql`
 - **Learner portal videos** — classroom videos page added behind login with bottom nav
 - **Homepage quiz update** — quiz results now direct to Learner Hub / Book a Free Trial / Explore Prices
 - **Instructor login redesign** — choice screen (Sign In / Join the Team), two-step magic link prefetch fix, and "Join the team" enquiry form for prospective instructors
