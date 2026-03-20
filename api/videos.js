@@ -141,22 +141,19 @@ async function handleCategories(req, res) {
 }
 
 // ── Admin: get direct upload URL from Cloudflare ─────────────────────────────
+// Uses Cloudflare's non-TUS direct creator upload (simple form POST)
 async function handleUploadUrl(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { maxDurationSeconds, fileSize } = req.body || {};
+  const { maxDurationSeconds } = req.body || {};
   const maxDuration = maxDurationSeconds || 600;
-  const uploadLength = fileSize ? String(fileSize) : '0';
 
   try {
-    const resp = await cfFetch('?direct_user=true', {
+    const resp = await cfFetch('/direct_upload', {
       method: 'POST',
-      headers: {
-        'Tus-Resumable': '1.0.0',
-        'Upload-Length': uploadLength,
-        'Upload-Metadata': `maxDurationSeconds ${Buffer.from(String(maxDuration)).toString('base64')}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxDurationSeconds: maxDuration }),
     });
 
     if (!resp.ok) {
@@ -165,8 +162,9 @@ async function handleUploadUrl(req, res) {
       return res.status(502).json({ error: 'Failed to get upload URL from Cloudflare' });
     }
 
-    const uploadUrl = resp.headers.get('location');
-    const uid = resp.headers.get('stream-media-id');
+    const data = await resp.json();
+    const uploadUrl = data.result?.uploadURL;
+    const uid = data.result?.uid;
 
     if (!uploadUrl || !uid) {
       return res.status(502).json({ error: 'Cloudflare response missing upload URL or UID' });
