@@ -1538,7 +1538,7 @@ footer a:hover { color: var(--accent); }
   <div class="hero-left reveal">
     <div class="hero-tag">CoachCarter Driving School</div>
     <h1 id="hero-headline">Your licence.<br><em>Your way.</em></h1>
-    <p class="hero-sub" id="hero-subheadline">Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.</p>
+    <p class="hero-sub" id="hero-subheadline">Flexible pay-as-you-go lessons or bulk hour packages — choose the option that suits you. Looking for a structured programme? Check out our Pass Guarantee.</p>
     <div class="hero-badges">
       <div class="hero-badge"><div class="dot"></div> DVSA Approved</div>
       <div class="hero-badge"><div class="dot"></div> Pass Guarantee Available</div>
@@ -1682,169 +1682,18 @@ footer a:hover { color: var(--accent); }
   </div>
 </section>
 
-<section class="guarantee-section" id="guarantee">
+<!-- PASS GUARANTEE REDIRECT BANNER -->
+<section class="guarantee-section" id="guarantee" style="padding: 80px 0;">
   <div class="section-wrap">
-    <div class="section-intro reveal">
-      <div class="section-tag-line">Option 3</div>
-      <h2 class="section-title" id="section-guarantee-title">The Pass Guarantee</h2>
-      <p class="section-sub" id="section-guarantee-subtitle">18 weeks to your driving licence — or we keep going until you pass. <a href="learner-journey.html" class="programme-link">See exactly how the programme works →</a></p>
+    <div class="reveal" style="background: var(--navy); border-radius: 20px; padding: 48px; text-align: center; position: relative; overflow: hidden;">
+      <div style="position: absolute; top: -60px; right: -60px; width: 250px; height: 250px; border-radius: 50%; background: radial-gradient(circle, rgba(245,131,33,0.12), transparent 70%); pointer-events: none;"></div>
+      <div style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 16px; position: relative;">The Pass Guarantee</div>
+      <h2 style="font-family: var(--font-head); font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 700; color: #fff; letter-spacing: -0.02em; margin-bottom: 12px; position: relative;">Want a structured programme<br>with a <span style="color: var(--accent);">guaranteed result?</span></h2>
+      <p style="color: rgba(255,255,255,0.5); font-size: 0.95rem; font-weight: 300; margin-bottom: 28px; max-width: 480px; margin-left: auto; margin-right: auto; position: relative;">18 weeks, 3 tiers, milestone sign-offs, mock tests, and your test booked for you. Currently available at launch pricing.</p>
+      <a href="/learner-journey.html" style="display: inline-flex; align-items: center; gap: 8px; background: var(--accent); color: #fff; font-family: var(--font-head); font-weight: 700; font-size: 0.95rem; padding: 14px 36px; border-radius: 10px; text-decoration: none; transition: background 0.2s, transform 0.15s; position: relative;">
+        See the programme &amp; pricing →
+      </a>
     </div>
-
-    <div class="calculator-container reveal">
-      <div class="base-card">
-        <div class="base-header">
-          <div class="base-title">Core Programme</div>
-          <div class="base-price">
-            <div class="base-price-amount" id="core-price-display">£2,400</div>
-            <div class="base-price-note">Everything included</div>
-          </div>
-        </div>
-        <ul class="base-features" id="core-features-list">
-          <li class="base-feature">18-week structured programme</li>
-          <li class="base-feature">~30 hours with expert instructor</li>
-          <li class="base-feature">3 mock driving assessments included</li>
-          <li class="base-feature">Practical test booked for you</li>
-          <li class="base-feature">100% Money Back After First Lesson</li>
-          <li class="base-feature">1st retake fully covered — 15 hrs tuition + test booking included</li>
-        </ul>
-      </div>
-
-      <div class="addons-section">
-        <div class="addon-section-title">Pre-buy Extra Retake Cover</div>
-
-        <div class="addon-card" onclick="toggleAddon(1, this)" data-tier="retake_2" id="addon-card-1">
-          <div class="addon-info">
-            <h3>2nd Retake Cover</h3>
-            <p>If you don't pass on your 2nd attempt, we cover a 3rd — 15 hrs tuition + DVSA test fee (£62) included</p>
-          </div>
-          <div class="addon-price">
-            <div class="addon-price-amount" id="addon-price-1">+£349</div>
-            <div class="addon-checkbox" id="checkbox-1"></div>
-          </div>
-        </div>
-
-        <div class="addon-card" onclick="toggleAddon(2, this)" data-tier="retake_3" id="addon-card-2">
-          <div class="addon-info">
-            <h3>3rd Retake Cover</h3>
-            <p>Covers a 4th attempt if needed — 15 hrs tuition + DVSA test fee (£62) included</p>
-          </div>
-          <div class="addon-price">
-            <div class="addon-price-amount" id="addon-price-2">+£349</div>
-            <div class="addon-checkbox" id="checkbox-2"></div>
-          </div>
-        </div>
-
-        <div class="addon-card" onclick="toggleAddon(3, this)" data-tier="retake_4" id="addon-card-3">
-          <div class="addon-info">
-            <h3>4th Retake Cover</h3>
-            <p>Covers a 5th attempt if needed — 15 hrs tuition + DVSA test fee (£62) included</p>
-          </div>
-          <div class="addon-price">
-            <div class="addon-price-amount" id="addon-price-3">+£349</div>
-            <div class="addon-checkbox" id="checkbox-3"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="total-card">
-        <div class="total-row">
-          <span>Core Programme</span>
-          <span id="total-core-display">£2,400</span>
-        </div>
-        <div class="total-row" id="addon-row-1" style="display: none;">
-          <span>2nd Retake Cover</span>
-          <span id="total-addon-1-display">£349</span>
-        </div>
-        <div class="total-row" id="addon-row-2" style="display: none;">
-          <span>3rd Retake Cover</span>
-          <span id="total-addon-2-display">£349</span>
-        </div>
-        <div class="total-row" id="addon-row-3" style="display: none;">
-          <span>4th Retake Cover</span>
-          <span id="total-addon-3-display">£349</span>
-        </div>
-        <div class="total-row final">
-          <span>Total</span>
-          <span class="total-amount" id="total-amount">£2,400</span>
-        </div>
-      </div>
-
-      <button class="cta-button" id="btn-guarantee" onclick="startCalculatorCheckout()">Continue to Booking →</button>
-
-      <p class="guarantee-note" id="guarantee-note">✓ In 2024 car practical test pass rate was 47%. Choose the protection that feels right for you.</p>
-      <p class="programme-link-wrapper"><a href="learner-journey.html" class="programme-link-secondary">Learn about the 18-week programme structure</a></p>
-    </div>
-  </div>
-</section>
-
-<section class="compare-section" id="compare">
-  <div class="section-wrap">
-    <div class="section-intro reveal">
-      <div class="section-tag-line">Side by Side</div>
-      <h2 class="section-title">Which option is right for you?</h2>
-      <p class="section-sub">Every learner is different. Here's a quick guide to help you decide.</p>
-    </div>
-
-    <table class="compare-table reveal">
-      <thead>
-        <tr>
-          <th></th>
-          <th id="compare-payg-title">Pay As You Go</th>
-          <th id="compare-packages-title">Bulk Package</th>
-          <th class="highlight" id="compare-guarantee-title">Pass Guarantee</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Lesson price</td>
-          <td id="compare-payg-rate">£90</td>
-          <td id="compare-packages-rate">£47–£55</td>
-          <td class="highlight">Included</td>
-        </tr>
-        <tr>
-          <td>Upfront cost</td>
-          <td>None</td>
-          <td id="compare-packages-range">£552–£2,370</td>
-          <td class="highlight" id="compare-guarantee-range">£2,400+</td>
-        </tr>
-        <tr>
-          <td>Tests booked for you</td>
-          <td><span class="cross">✕</span></td>
-          <td><span class="cross">✕</span></td>
-          <td class="highlight"><span class="check">✓</span></td>
-        </tr>
-        <tr>
-          <td>Structured programme</td>
-          <td><span class="cross">✕</span></td>
-          <td><span class="cross">✕</span></td>
-          <td class="highlight"><span class="check">✓</span></td>
-        </tr>
-        <tr>
-          <td>Pass guarantee</td>
-          <td><span class="cross">✕</span></td>
-          <td><span class="cross">✕</span></td>
-          <td class="highlight"><span class="check">✓</span></td>
-        </tr>
-        <tr>
-          <td>Progress tracking</td>
-          <td><span class="partial">Basic</span></td>
-          <td><span class="partial">Basic</span></td>
-          <td class="highlight"><span class="check">Full</span></td>
-        </tr>
-        <tr>
-          <td>Flexible scheduling</td>
-          <td><span class="check">✓</span></td>
-          <td><span class="check">✓</span></td>
-          <td class="highlight"><span class="partial">Structured</span></td>
-        </tr>
-        <tr>
-          <td>Best for</td>
-          <td><span class="best-for">Trying it out</span></td>
-          <td><span class="best-for">Committed learners</span></td>
-          <td class="highlight"><span class="best-for">Best outcome, zero risk</span></td>
-        </tr>
-      </tbody>
-    </table>
   </div>
 </section>
 
@@ -2061,19 +1910,21 @@ function applyConfig() {
     document.getElementById('hero-stat-4-label').textContent = c.hero.stats[3]?.label || 'Structured programme\nto test day';
   }
 
+  // Guarantee elements may not exist (section moved to learner-journey.html)
   const corePriceEl = document.getElementById('core-price-display');
   if (corePriceEl) corePriceEl.textContent = '£' + p.core_programme.toLocaleString();
 
-  document.getElementById('total-core-display').textContent = '£' + p.core_programme.toLocaleString();
+  const totalCoreEl = document.getElementById('total-core-display');
+  if (totalCoreEl) totalCoreEl.textContent = '£' + p.core_programme.toLocaleString();
 
   const rp = p.retake_price || 349;
   addonPrices = { 1: rp, 2: rp, 3: rp };
-  document.getElementById('addon-price-1').textContent = '+£' + rp;
-  document.getElementById('addon-price-2').textContent = '+£' + rp;
-  document.getElementById('addon-price-3').textContent = '+£' + rp;
-  document.getElementById('total-addon-1-display').textContent = '£' + rp;
-  document.getElementById('total-addon-2-display').textContent = '£' + rp;
-  document.getElementById('total-addon-3-display').textContent = '£' + rp;
+  const ap1 = document.getElementById('addon-price-1'); if (ap1) ap1.textContent = '+£' + rp;
+  const ap2 = document.getElementById('addon-price-2'); if (ap2) ap2.textContent = '+£' + rp;
+  const ap3 = document.getElementById('addon-price-3'); if (ap3) ap3.textContent = '+£' + rp;
+  const ta1 = document.getElementById('total-addon-1-display'); if (ta1) ta1.textContent = '£' + rp;
+  const ta2 = document.getElementById('total-addon-2-display'); if (ta2) ta2.textContent = '£' + rp;
+  const ta3 = document.getElementById('total-addon-3-display'); if (ta3) ta3.textContent = '£' + rp;
 
   basePrice = p.core_programme;
 
@@ -2093,8 +1944,10 @@ function applyConfig() {
     document.getElementById('section-payg-subtitle').textContent = c.sections.payg?.subtitle || 'Maximum flexibility.';
     document.getElementById('section-packages-title').textContent = c.sections.packages?.title || 'Bulk Hour Packages';
     document.getElementById('section-packages-subtitle').textContent = c.sections.packages?.subtitle || 'Buy more hours up front and save.';
-    document.getElementById('section-guarantee-title').textContent = c.sections.guarantee?.title || 'The Pass Guarantee';
-    document.getElementById('section-guarantee-subtitle').textContent = c.sections.guarantee?.subtitle || '18 weeks to your driving licence.';
+    const sgt = document.getElementById('section-guarantee-title');
+    if (sgt) sgt.textContent = c.sections.guarantee?.title || 'The Pass Guarantee';
+    const sgs = document.getElementById('section-guarantee-subtitle');
+    if (sgs) sgs.textContent = c.sections.guarantee?.subtitle || '18 weeks to your driving licence.';
   }
 
   if (c.features) {
@@ -2113,7 +1966,8 @@ function applyConfig() {
     document.getElementById('hero-cta').textContent = 'View all options →';
     document.getElementById('btn-payg').textContent = c.cta.payg_button || `Book £${p.payg_hourly} lesson →`;
     document.getElementById('btn-package').textContent = c.cta.package_button || 'Buy this package →';
-    document.getElementById('btn-guarantee').textContent = c.cta.guarantee_button || 'Continue to Booking →';
+    const btnGuarantee = document.getElementById('btn-guarantee');
+    if (btnGuarantee) btnGuarantee.textContent = c.cta.guarantee_button || 'Continue to Booking →';
     document.getElementById('cta-primary').textContent = c.cta.primary || 'Book a lesson now';
     document.getElementById('cta-secondary').textContent = c.cta.secondary || 'Talk to us first';
   }
@@ -2146,20 +2000,7 @@ function applyConfig() {
 }
 
 function updateComparisonTable(pricing) {
-  const paygLesson = pricing.payg_lesson_price || (pricing.payg_hourly ? pricing.payg_hourly * 1.5 : 90);
-  document.getElementById('compare-payg-rate').textContent = '£' + paygLesson;
-
-  if (pricing.bulk_packages && pricing.bulk_packages.length > 0) {
-    const minPrice = pricing.bulk_packages[0].price;
-    const maxPrice = pricing.bulk_packages[pricing.bulk_packages.length - 1].price;
-    document.getElementById('compare-packages-range').textContent = '£' + minPrice + '–£' + maxPrice.toLocaleString();
-    const minPerHour = pricing.bulk_packages[pricing.bulk_packages.length - 1].per_hour;
-    const maxPerHour = pricing.bulk_packages[0].per_hour;
-    document.getElementById('compare-packages-rate').textContent = '£' + minPerHour + '–£' + maxPerHour;
-  }
-
-  const core = pricing.core_programme;
-  document.getElementById('compare-guarantee-range').textContent = '£' + core.toLocaleString() + '+';
+  // Comparison table removed — function kept as no-op for safety
 }
 
 function renderPackages() {
@@ -2277,7 +2118,8 @@ function updateTotal() {
       total += addonPrices[i];
     }
   }
-  document.getElementById('total-amount').textContent = '£' + total.toLocaleString();
+  const totalEl = document.getElementById('total-amount');
+  if (totalEl) totalEl.textContent = '£' + total.toLocaleString();
 }
 
 async function startCheckout(type, pkgIndex = null) {
