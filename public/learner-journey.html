@@ -341,6 +341,127 @@ nav {
   color: var(--accent); border: 1px solid rgba(245,131,33,0.3);
 }
 
+/* ── PRICING TABS (hero right) ── */
+.pricing-comparison {
+  background: var(--primary); border-radius: 24px;
+  overflow: hidden; position: relative;
+}
+.pricing-comparison::before {
+  content: ''; position: absolute; top: -60px; right: -60px;
+  width: 300px; height: 300px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(245,131,33,0.15), transparent 70%);
+  pointer-events: none;
+}
+
+.price-tabs {
+  display: flex; border-bottom: 1px solid rgba(255,255,255,0.08); position: relative;
+}
+.price-tab {
+  flex: 1; padding: 18px 24px;
+  font-family: var(--font-head); font-size: 0.78rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.35); background: none; border: none;
+  cursor: pointer; transition: all 0.3s; position: relative; text-align: center;
+}
+.price-tab:hover { color: rgba(255,255,255,0.6); }
+.price-tab.active { color: var(--accent); }
+.price-tab.active::after {
+  content: ''; position: absolute; bottom: -1px;
+  left: 20%; right: 20%; height: 2px;
+  background: var(--accent); border-radius: 1px;
+}
+
+.price-panel {
+  display: none; padding: 36px 32px; position: relative;
+  animation: fadeUp 0.35s ease;
+}
+.price-panel.active { display: block; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.panel-price-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.panel-price {
+  font-family: var(--font-head); font-size: 2.6rem; font-weight: 800;
+  color: var(--accent); letter-spacing: -0.03em; line-height: 1;
+}
+.panel-price-unit { font-size: 0.82rem; color: rgba(255,255,255,0.35); font-weight: 300; }
+.panel-price-note { font-size: 0.8rem; color: rgba(255,255,255,0.25); margin-bottom: 24px; font-weight: 300; }
+
+.panel-features {
+  list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px;
+}
+.panel-features li {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.82rem; color: rgba(255,255,255,0.55); font-weight: 300;
+}
+.panel-features .pf-dot {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0;
+}
+
+.panel-cta {
+  display: block; text-align: center;
+  background: var(--accent); color: #fff;
+  font-family: var(--font-head); font-weight: 700; font-size: 0.88rem;
+  padding: 13px 28px; border-radius: 8px; text-decoration: none;
+  border: none; cursor: pointer; transition: background 0.2s, transform 0.15s; width: 100%;
+}
+.panel-cta:hover { background: var(--accent-dk); transform: translateY(-1px); }
+.panel-cta.secondary {
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+}
+.panel-cta.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+.bulk-mini {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 24px;
+}
+.bulk-mini-item {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 10px; text-align: center;
+  cursor: default; transition: border-color 0.2s;
+}
+.bulk-mini-item:hover { border-color: rgba(245,131,33,0.3); }
+.bulk-mini-hrs { font-family: var(--font-head); font-size: 0.95rem; font-weight: 800; color: #fff; display: block; }
+.bulk-mini-save { font-size: 0.62rem; color: var(--accent); font-weight: 700; }
+
+/* Dynamic pricing urgency bar */
+.price-urgency {
+  background: rgba(245,131,33,0.08);
+  border-top: 1px solid rgba(245,131,33,0.15);
+  padding: 12px 32px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.72rem; color: rgba(255,255,255,0.45); font-weight: 300;
+}
+.price-urgency strong { color: var(--accent); font-weight: 700; }
+.price-urgency .urgency-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Price progress bar */
+.price-progress {
+  padding: 0 32px 16px;
+}
+.price-progress-bar {
+  height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;
+}
+.price-progress-fill {
+  height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-dk));
+  border-radius: 2px; transition: width 0.6s ease;
+}
+.price-progress-labels {
+  display: flex; justify-content: space-between; margin-top: 6px;
+  font-size: 0.62rem; color: rgba(255,255,255,0.25); font-weight: 300;
+}
+
 /* ── CTA ── */
 .cta-section { padding: 100px 48px; text-align: center; border-top: 1px solid var(--border); }
 .cta-section h2 {
@@ -372,6 +493,9 @@ footer a { color: var(--muted); text-decoration: underline; }
   nav { padding: 0 20px; }
   .nav-links { display: none; }
   .hero { grid-template-columns: 1fr; padding: 80px 20px 60px; gap: 40px; }
+  .bulk-mini { grid-template-columns: repeat(2, 1fr); }
+  .price-urgency { padding: 12px 20px; }
+  .price-progress { padding: 0 20px 16px; }
   .tier-header { grid-template-columns: 1fr; padding: 28px 24px 24px; }
   .tier-body { grid-template-columns: 1fr; padding: 24px; gap: 24px; }
   .tier-weeks { padding: 16px 24px; }
@@ -399,31 +523,98 @@ footer a { color: var(--muted); text-decoration: underline; }
   <div class="hero-left">
     <div class="hero-tag">Your Driving Journey</div>
     <h1>From first drive<br>to <em>test ready.</em></h1>
-    <p class="hero-sub">Our 18-week structured programme builds real skills and real confidence — in the right order, at the right pace. Here's exactly how we get you there.</p>
+    <p class="hero-sub">Our 18-week structured programme builds real skills and real confidence — in the right order, at the right pace. Choose your path and start today.</p>
     <div class="hero-badges">
       <div class="hero-badge"><div class="dot"></div> 3 Clear Tiers</div>
       <div class="hero-badge"><div class="dot"></div> 18-Week Programme</div>
-      <div class="hero-badge"><div class="dot"></div> Progress Tracked</div>
+      <div class="hero-badge"><div class="dot"></div> From £82.50/lesson</div>
     </div>
   </div>
-  <div class="hero-right">
-    <div class="stat-grid">
-      <div class="stat-item">
-        <div class="stat-num">3</div>
-        <div class="stat-label">Structured tiers,<br>each with a clear goal</div>
+
+  <!-- ★ PRICING COMPARISON (replaces stat grid) ★ -->
+  <div class="pricing-comparison">
+    <div class="price-tabs">
+      <button class="price-tab active" onclick="switchTab('payg')">Pay As You Go</button>
+      <button class="price-tab" onclick="switchTab('guarantee')">Pass Guarantee</button>
+    </div>
+
+    <!-- PAYG Panel -->
+    <div class="price-panel active" id="panel-payg">
+      <div class="panel-price-row">
+        <span class="panel-price">£82.50</span>
+        <span class="panel-price-unit">per lesson</span>
       </div>
-      <div class="stat-item">
-        <div class="stat-num">18</div>
-        <div class="stat-label">Weeks to your<br>driving test</div>
+      <div class="panel-price-note">Each lesson = 1.5 hours · No commitment</div>
+
+      <ul class="panel-features">
+        <li><span class="pf-dot"></span> Book one lesson at a time</li>
+        <li><span class="pf-dot"></span> Progress tracked through 3 tiers</li>
+        <li><span class="pf-dot"></span> Flexible scheduling</li>
+        <li><span class="pf-dot"></span> Save more with bulk lessons:</li>
+      </ul>
+
+      <div class="bulk-mini">
+        <div class="bulk-mini-item">
+          <span class="bulk-mini-hrs">4 lessons</span>
+          <span class="bulk-mini-save">Save 5%</span>
+        </div>
+        <div class="bulk-mini-item">
+          <span class="bulk-mini-hrs">8 lessons</span>
+          <span class="bulk-mini-save">Save 10%</span>
+        </div>
+        <div class="bulk-mini-item">
+          <span class="bulk-mini-hrs">12 lessons</span>
+          <span class="bulk-mini-save">Save 15%</span>
+        </div>
+        <div class="bulk-mini-item">
+          <span class="bulk-mini-hrs">16 lessons</span>
+          <span class="bulk-mini-save">Save 20%</span>
+        </div>
+        <div class="bulk-mini-item">
+          <span class="bulk-mini-hrs">20 lessons</span>
+          <span class="bulk-mini-save">Save 25%</span>
+        </div>
       </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <div class="stat-num">~25</div>
-        <div class="stat-label">Typical hours<br>across all tiers</div>
+
+      <a href="/lessons.html#payg" class="panel-cta secondary">Book a lesson →</a>
+    </div>
+
+    <!-- GUARANTEE Panel -->
+    <div class="price-panel" id="panel-guarantee">
+      <div class="panel-price-row">
+        <span class="panel-price" id="guarantee-price-display">£1,500</span>
+        <span class="panel-price-unit">everything included</span>
       </div>
-      <div class="stat-item">
-        <div class="stat-num">100%</div>
-        <div class="stat-label">Structured — nothing<br>left to chance</div>
+      <div class="panel-price-note">18-week structured programme · Everything included</div>
+
+      <ul class="panel-features">
+        <li><span class="pf-dot"></span> All 3 tiers with milestone sign-offs</li>
+        <li><span class="pf-dot"></span> ~30 hours with your instructor</li>
+        <li><span class="pf-dot"></span> 3 mock driving assessments</li>
+        <li><span class="pf-dot"></span> Practical test booking included</li>
+        <li><span class="pf-dot"></span> 1st retake fully covered (15 hrs + test)</li>
+        <li><span class="pf-dot"></span> 100% money back after first lesson</li>
+        <li><span class="pf-dot"></span> Additional retake cover available (£325)</li>
+      </ul>
+
+      <a href="/lessons.html#guarantee" class="panel-cta" id="guarantee-cta">Start the programme →</a>
+    </div>
+
+    <!-- Urgency bar (only shows on Guarantee tab) -->
+    <div class="price-urgency" id="price-urgency" style="display:none;">
+      <span class="urgency-dot"></span>
+      <span><strong>Launch pricing</strong> — This programme is new. Early students get the lowest price while we build our first cohort of results. The price increases by £100 with every enrolment as demand grows.</span>
+    </div>
+
+    <!-- Progress bar toward cap -->
+    <div class="price-progress" id="price-progress" style="display:none;">
+      <div class="price-progress-bar">
+        <div class="price-progress-fill" id="price-progress-fill" style="width:0%"></div>
+      </div>
+      <div class="price-progress-labels">
+        <span id="progress-start">Launch: <strong id="progress-start-price">£1,500</strong></span>
+        <span>You pay: <strong id="progress-current">£1,500</strong></span>
+        <span id="progress-cap">Full price: <strong id="progress-cap-price">£3,000</strong></span>
       </div>
     </div>
   </div>
@@ -665,11 +856,10 @@ footer a { color: var(--muted); text-decoration: underline; }
 <!-- CTA -->
 <section class="cta-section">
   <h2>Ready to start<br>your <em>journey?</em></h2>
-  <p>Every driver begins at Tier 1. Every driver progresses at their own pace. Every driver we pass is genuinely ready.</p>
+  <p>Every driver begins at Tier 1. Every driver progresses at their own pace.</p>
   <div class="cta-buttons">
-  <a href="/#guarantee" class="btn-lg primary">Choose Your Protection Level →</a>
-  <a href="/#packages" class="btn-lg secondary">Explore Other Options</a>
-</div>
+    <a href="/lessons.html#guarantee" class="btn-lg primary">Start the Pass Guarantee →</a>
+    <a href="/lessons.html#payg" class="btn-lg secondary">Book a single lesson</a>
   </div>
 </section>
 
@@ -678,10 +868,59 @@ footer a { color: var(--muted); text-decoration: underline; }
 </footer>
 
 <script>
+  // ── Reveal animations ──
   const observer = new IntersectionObserver(entries => {
     entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
   }, { threshold: 0.1 });
   document.querySelectorAll('.tier-card, .tl-item, .reveal').forEach(el => observer.observe(el));
+
+  // ── Tab switching ──
+  function switchTab(tab) {
+    document.querySelectorAll('.price-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.price-panel').forEach(p => p.classList.remove('active'));
+
+    if (tab === 'payg') {
+      document.querySelectorAll('.price-tab')[0].classList.add('active');
+      document.getElementById('panel-payg').classList.add('active');
+      document.getElementById('price-urgency').style.display = 'none';
+      document.getElementById('price-progress').style.display = 'none';
+    } else {
+      document.querySelectorAll('.price-tab')[1].classList.add('active');
+      document.getElementById('panel-guarantee').classList.add('active');
+      document.getElementById('price-urgency').style.display = 'flex';
+      document.getElementById('price-progress').style.display = 'block';
+    }
+  }
+
+  // ── Load live guarantee price ──
+  async function loadGuaranteePrice() {
+    try {
+      const res = await fetch('/api/guarantee-price?t=' + Date.now());
+      const data = await res.json();
+
+      const price = data.current_price || 1500;
+      const base = data.base_price || 1500;
+      const cap = data.cap || 3000;
+      const purchases = data.purchases || 0;
+
+      // Update displayed price
+      document.getElementById('guarantee-price-display').textContent =
+        '£' + price.toLocaleString('en-GB');
+
+      // Update progress bar
+      const pct = Math.min(((price - base) / (cap - base)) * 100, 100);
+      document.getElementById('price-progress-fill').style.width = pct + '%';
+      document.getElementById('progress-start-price').textContent = '£' + base.toLocaleString('en-GB');
+      document.getElementById('progress-current').textContent = '£' + price.toLocaleString('en-GB');
+      document.getElementById('progress-cap-price').textContent = '£' + cap.toLocaleString('en-GB');
+
+    } catch (err) {
+      console.warn('Could not load guarantee price, using fallback:', err);
+      // Fallback already shows £1,500 from the HTML
+    }
+  }
+
+  loadGuaranteePrice();
 </script>
 </body>
 </html>

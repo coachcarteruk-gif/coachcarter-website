@@ -4,7 +4,14 @@
     "payg_hourly": 55,
     "core_programme": 2400,
     "core_hours": 30,
-    "retake_price": 0,
+    "retake_price": 325,
+    "guarantee": {
+      "base_price": 1500,
+      "current_price": 1500,
+      "increment": 100,
+      "cap": 3000,
+      "purchases": 0
+    },
     "bulk_packages": [
       {
         "hrs": 10,

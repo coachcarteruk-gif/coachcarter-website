@@ -790,6 +790,67 @@ textarea {
     </div>
   </div>
 
+  <!-- DYNAMIC GUARANTEE PRICING -->
+  <div class="editor-section">
+    <h2>Dynamic Guarantee Pricing</h2>
+
+    <div class="calc-note">
+      <strong>📈 Demand-based pricing:</strong> The Pass Guarantee price starts low and increases by £100 with each enrolment. This is managed separately from the static core programme price above — it lives in its own database table and updates automatically via the Stripe webhook.
+    </div>
+
+    <div class="guarantee-calc">
+      <h3>🎯 Live Pricing Status</h3>
+      <div id="dynamic-pricing-status" style="color: rgba(255,255,255,0.5); font-size: 0.9rem; margin-bottom: 20px;">Loading...</div>
+
+      <div class="guarantee-grid">
+        <div class="guarantee-base">
+          <h4>Current State</h4>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div>
+              <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.4); margin-bottom: 4px;">Current Price</div>
+              <div id="dp-current" style="font-family: var(--font-head); font-size: 2rem; font-weight: 800; color: var(--accent);">—</div>
+            </div>
+            <div>
+              <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.4); margin-bottom: 4px;">Purchases So Far</div>
+              <div id="dp-purchases" style="font-family: var(--font-head); font-size: 1.4rem; font-weight: 700; color: #fff;">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="guarantee-base">
+          <h4>Configuration</h4>
+          <div class="guarantee-input-group">
+            <label>Base (starting) price</label>
+            <div style="font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: var(--accent);" id="dp-base">—</div>
+          </div>
+          <div class="guarantee-input-group">
+            <label>Increment per purchase</label>
+            <div style="font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: #fff;" id="dp-increment">—</div>
+          </div>
+          <div class="guarantee-input-group">
+            <label>Price cap (maximum)</label>
+            <div style="font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: #fff;" id="dp-cap">—</div>
+          </div>
+          <p style="font-size: 0.78rem; color: rgba(255,255,255,0.35); margin-top: 12px;">
+            To change these values, update the guarantee_pricing table directly in Neon or contact support.
+          </p>
+        </div>
+      </div>
+
+      <!-- Manual price override -->
+      <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <h4 style="font-family: var(--font-head); color: rgba(255,255,255,0.7); font-size: 0.9rem; margin-bottom: 12px;">Manual Override</h4>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <div class="guarantee-input-group price-input" style="margin: 0; flex: 1;">
+            <label>Set new current price</label>
+            <input type="number" id="dp-override-price" placeholder="e.g. 1500" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px 12px 10px 32px; border-radius: 8px;">
+          </div>
+          <button onclick="overrideGuaranteePrice()" style="background: var(--accent); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-family: var(--font-head); font-weight: 700; font-size: 0.82rem; cursor: pointer; margin-top: 20px; white-space: nowrap;">Update Price</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- HERO SECTION CONTENT -->
   <div class="editor-section">
     <h2>Hero Section</h2>
@@ -995,6 +1056,7 @@ let hourlyRate = 60;
 
 // Initialize
 loadConfig();
+loadDynamicPricing();
 
 async function loadConfig() {
   try {
@@ -1455,6 +1517,65 @@ document.querySelectorAll('input, textarea').forEach(input => {
     }
   });
 });
+
+// ── Dynamic Guarantee Pricing ────────────────────────────────────────────────
+async function loadDynamicPricing() {
+  const statusEl = document.getElementById('dynamic-pricing-status');
+  try {
+    const res = await fetch('/api/guarantee-price?t=' + Date.now());
+    const data = await res.json();
+
+    document.getElementById('dp-current').textContent = '£' + (data.current_price || 0).toLocaleString();
+    document.getElementById('dp-purchases').textContent = data.purchases || 0;
+    document.getElementById('dp-base').textContent = '£' + (data.base_price || 0).toLocaleString();
+    document.getElementById('dp-increment').textContent = '+£' + (data.increment || 0) + ' per purchase';
+    document.getElementById('dp-cap').textContent = '£' + (data.cap || 0).toLocaleString();
+    document.getElementById('dp-override-price').value = data.current_price || '';
+
+    const pct = data.cap > data.base_price
+      ? Math.round(((data.current_price - data.base_price) / (data.cap - data.base_price)) * 100)
+      : 0;
+
+    statusEl.innerHTML = `Price is at <strong style="color:var(--accent);">${pct}%</strong> of cap · <strong>${data.purchases}</strong> enrolments so far`;
+  } catch (err) {
+    statusEl.textContent = 'Could not load dynamic pricing — the guarantee_pricing table may not exist yet. It will be created on first API call.';
+  }
+}
+
+async function overrideGuaranteePrice() {
+  const newPrice = parseInt(document.getElementById('dp-override-price').value);
+  if (!newPrice || newPrice < 0) {
+    alert('Please enter a valid price');
+    return;
+  }
+
+  const password = document.getElementById('password').value;
+  if (!password) {
+    alert('Enter your admin password first (top of the page)');
+    return;
+  }
+
+  try {
+    const { neon } = await import('https://esm.sh/@neondatabase/serverless@0.10.1');
+    // We can't call Neon directly from the browser — use the config API as a proxy.
+    // Instead, we'll call a simple POST to our guarantee-price endpoint with the admin secret.
+    const res = await fetch('/api/guarantee-price', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: password, override_price: newPrice })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to update');
+    }
+
+    showStatus('Guarantee price updated to £' + newPrice.toLocaleString(), 'success');
+    loadDynamicPricing();
+  } catch (err) {
+    showStatus('Error updating guarantee price: ' + err.message, 'error');
+  }
+}
 </script>
 
 </body>

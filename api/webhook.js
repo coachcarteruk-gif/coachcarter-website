@@ -379,6 +379,15 @@ async function handleCheckoutComplete(session) {
   bookings.set(bookingRef, booking);
   console.log('✅ Booking created:', bookingRef, 'for', customerEmail, '- Type:', packageType);
 
+  // If this is a Pass Guarantee purchase, increment the dynamic price
+  if (isPassGuarantee) {
+    try {
+      await incrementGuaranteePrice();
+    } catch (err) {
+      console.error('⚠️ Failed to increment guarantee price (non-fatal):', err.message);
+    }
+  }
+
   // Send emails
   await sendCustomerConfirmation(booking, isCalculatorPackage);
   await notifyStaff(booking, isCalculatorPackage);
@@ -588,6 +597,44 @@ function createTransporter() {
       pass: process.env.SMTP_PASS
     }
   });
+}
+
+// ── Increment guarantee price after a purchase ──────────────────────────────
+async function incrementGuaranteePrice() {
+  const sql = neon(process.env.POSTGRES_URL);
+
+  // Ensure the table exists (idempotent)
+  await sql`
+    CREATE TABLE IF NOT EXISTS guarantee_pricing (
+      id            INTEGER PRIMARY KEY DEFAULT 1,
+      base_price    INTEGER NOT NULL DEFAULT 1500,
+      current_price INTEGER NOT NULL DEFAULT 1500,
+      increment     INTEGER NOT NULL DEFAULT 100,
+      cap           INTEGER NOT NULL DEFAULT 3000,
+      purchases     INTEGER NOT NULL DEFAULT 0,
+      updated_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+
+  // Seed if empty
+  await sql`
+    INSERT INTO guarantee_pricing (id, base_price, current_price, increment, cap, purchases)
+    VALUES (1, 1500, 1500, 100, 3000, 0)
+    ON CONFLICT (id) DO NOTHING
+  `;
+
+  // Atomic increment
+  const [updated] = await sql`
+    UPDATE guarantee_pricing
+    SET
+      current_price = LEAST(current_price + increment, cap),
+      purchases     = purchases + 1,
+      updated_at    = NOW()
+    WHERE id = 1
+    RETURNING current_price, purchases
+  `;
+
+  console.log(`✅ Guarantee price incremented → £${updated.current_price} (purchase #${updated.purchases})`);
 }
 
 // Helper to get raw body for Stripe
