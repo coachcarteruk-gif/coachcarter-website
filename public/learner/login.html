@@ -13,31 +13,25 @@
   <title>Sign In — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --navy:     #262626;
-      --navy-2:   #2e2e2e;
-      --orange:   #f58321;
-      --orange-dk:#e07518;
-      --font-h:   'Jost', sans-serif;
-      --font-b:   'DM Sans', sans-serif;
-      --primary:    #272727;
+      --primary:    #262626;
       --accent:     #f58321;
       --accent-dk:  #e07518;
       --accent-lt:  #fff4ec;
       --accent-mid: rgba(245,131,33,0.12);
       --muted:      #797879;
       --border:     #e0e0e0;
-      --bg:         #f9f9f9;
+      --bg:         #ffffff;
       --surface:    #f9f9f9;
       --white:      #ffffff;
       --green:      #22c55e;
       --red:        #ef4444;
-      --font-head:  'Jost', sans-serif;
-      --font-body:  'DM Sans', sans-serif;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
       --radius:     14px;
     }
 
@@ -82,13 +76,13 @@
       padding: 4px;
     }
     .site-nav-logo span {
-      font-family: var(--font-h);
+      font-family: var(--font-head);
       font-size: 1.1rem;
       font-weight: 800;
       color: #fff;
       letter-spacing: -0.02em;
     }
-    .site-nav-logo span em { font-style: normal; color: var(--orange); }
+    .site-nav-logo span em { font-style: normal; color: var(--accent); }
     .site-nav-links {
       display: flex;
       align-items: center;
@@ -96,7 +90,7 @@
     }
     .site-nav-link {
       color: rgba(255,255,255,0.6);
-      font-family: var(--font-b);
+      font-family: var(--font-body);
       font-weight: 500;
       font-size: 0.83rem;
       padding: 7px 14px;
@@ -114,14 +108,14 @@
       background: rgba(255,255,255,0.05);
     }
     .site-nav-link.primary {
-      background: var(--orange);
+      background: var(--accent);
       color: #fff;
-      border-color: var(--orange);
+      border-color: var(--accent);
       font-weight: 600;
     }
     .site-nav-link.primary:hover {
-      background: var(--orange-dk);
-      border-color: var(--orange-dk);
+      background: var(--accent-dk);
+      border-color: var(--accent-dk);
       transform: translateY(-1px);
       box-shadow: 0 4px 16px rgba(245,131,33,0.35);
     }

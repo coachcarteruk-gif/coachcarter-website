@@ -495,10 +495,29 @@ footer {
 }
 footer a { color: var(--muted); text-decoration: underline; }
 
+/* ── Mobile bottom tab bar ── */
+.mobile-tab-bar {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+  background: #fff; border-top: 1px solid #e0e0e0;
+  padding: 6px 0; padding-bottom: max(6px, env(safe-area-inset-bottom));
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+}
+.mobile-tab-bar a {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  text-decoration: none; color: #797879; font-size: 0.62rem;
+  font-weight: 600; gap: 2px; padding: 4px 0; transition: color 0.15s;
+}
+.mobile-tab-bar a:hover { color: #262626; }
+.mobile-tab-bar a.active { color: var(--accent); }
+.mobile-tab-bar a.cta { color: var(--accent); }
+.mobile-tab-icon { font-size: 1.2rem; line-height: 1; }
+
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
   nav { padding: 0 20px; }
   .nav-links { display: none; }
+  .nav-cta { display: none; }
   .hero { grid-template-columns: 1fr; padding: 80px 20px 60px; gap: 40px; }
   .bulk-mini { grid-template-columns: repeat(2, 1fr); }
   .price-urgency { padding: 12px 20px; }
@@ -509,7 +528,8 @@ footer a { color: var(--muted); text-decoration: underline; }
   .section-wrap { padding: 0 20px; }
   .philosophy-banner { padding: 32px 20px; }
   .cta-section { padding: 80px 20px; }
-  footer { padding: 20px; }
+  footer { padding: 20px; margin-bottom: 64px; }
+  .mobile-tab-bar { display: flex; }
 }
 </style>
 </head>
@@ -929,5 +949,14 @@ footer a { color: var(--muted); text-decoration: underline; }
 
   loadGuaranteePrice();
 </script>
+
+<nav class="mobile-tab-bar">
+  <a href="/"><span class="mobile-tab-icon">🏠</span>Home</a>
+  <a href="/learner-journey.html" class="active"><span class="mobile-tab-icon">💰</span>Pricing</a>
+  <a href="/classroom.html"><span class="mobile-tab-icon">🎬</span>Videos</a>
+  <a href="/learner/login.html"><span class="mobile-tab-icon">👤</span>Log in</a>
+  <a href="/learner/login.html?redirect=/learner/book.html" class="cta"><span class="mobile-tab-icon">📅</span>Book</a>
+</nav>
+
 </body>
 </html>

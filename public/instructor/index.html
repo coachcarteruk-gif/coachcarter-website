@@ -13,23 +13,19 @@
   <title>My Schedule — CoachCarter Instructor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --navy:       #262626;
-      --navy-2:     #2e2e2e;
-      --orange:     #f58321;
-      --orange-dk:  #e07518;
-      --primary:    #272727;
+      --primary:    #262626;
       --accent:     #f58321;
       --accent-dk:  #e07518;
       --accent-lt:  #fff4ec;
       --accent-mid: rgba(245,131,33,0.12);
       --muted:      #797879;
       --border:     #e0e0e0;
-      --bg:         #f9f9f9;
-      --surface:    #ffffff;
+      --bg:         #ffffff;
+      --surface:    #f9f9f9;
       --white:      #ffffff;
       --green:      #22c55e;
       --green-lt:   #f0fdf4;
@@ -37,8 +33,8 @@
       --red-lt:     #fef2f2;
       --blue:       #3b82f6;
       --blue-lt:    #eff6ff;
-      --font-head:  'Jost', sans-serif;
-      --font-body:  'DM Sans', sans-serif;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
       --radius:     14px;
     }
     body { font-family: var(--font-body); background: var(--bg); color: var(--primary); min-height: 100vh; }
@@ -55,7 +51,7 @@
     .site-nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
     .site-nav-logo img { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,0.08); padding: 4px; }
     .site-nav-logo span { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
-    .site-nav-logo span em { font-style: normal; color: var(--orange); }
+    .site-nav-logo span em { font-style: normal; color: var(--accent); }
     .site-nav-links { display: flex; align-items: center; gap: 6px; }
     .site-nav-link {
       color: rgba(255,255,255,0.6); font-family: var(--font-body); font-weight: 500;
@@ -64,8 +60,8 @@
       white-space: nowrap; background: transparent; cursor: pointer;
     }
     .site-nav-link:hover { color: #fff; border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
-    .site-nav-link.primary { background: var(--orange); color: #fff; border-color: var(--orange); font-weight: 600; }
-    .site-nav-link.primary:hover { background: var(--orange-dk); border-color: var(--orange-dk); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.35); }
+    .site-nav-link.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+    .site-nav-link.primary:hover { background: var(--accent-dk); border-color: var(--accent-dk); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.35); }
     @media (max-width: 600px) { .site-nav { padding: 0 16px; } .site-nav-link:not(.primary):not(.back) { display: none; } }
 
     /* ── Portal Header ────────────────────────────────────────────────────── */
@@ -107,6 +103,39 @@
       padding: 24px 16px 100px;
       margin-top: 124px;
     }
+
+    /* ── Calendar Sync Banner ──────────────────────────────────────────── */
+    .cal-sync-banner {
+      background: var(--accent-lt); border: 1px solid #fcd4b0;
+      border-radius: var(--radius); padding: 14px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .cal-sync-banner-text {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .cal-sync-banner-text strong {
+      font-family: var(--font-head); font-size: 0.92rem; font-weight: 700;
+    }
+    .cal-sync-banner-text span {
+      font-size: 0.82rem; color: var(--muted);
+    }
+    .cal-sync-banner-actions {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .cal-sync-btn {
+      background: var(--accent); color: white; border: none;
+      border-radius: 8px; padding: 8px 18px; font-size: 0.85rem;
+      font-weight: 700; cursor: pointer; text-decoration: none;
+      white-space: nowrap; transition: background 0.15s;
+    }
+    .cal-sync-btn:hover { background: var(--accent-dk); }
+    .cal-sync-dismiss {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 1.1rem; padding: 4px 8px; border-radius: 4px;
+      transition: all 0.15s; line-height: 1;
+    }
+    .cal-sync-dismiss:hover { color: var(--primary); background: rgba(0,0,0,0.05); }
 
     /* ── Calendar Toolbar ─────────────────────────────────────────────────── */
     .cal-toolbar {
@@ -478,6 +507,18 @@
 </header>
 
 <div class="page">
+  <!-- Calendar sync banner -->
+  <div class="cal-sync-banner" id="calSyncBanner" style="display:none">
+    <div class="cal-sync-banner-text">
+      <strong>Sync your schedule to your phone</strong>
+      <span>All bookings and cancellations will appear in your calendar automatically.</span>
+    </div>
+    <div class="cal-sync-banner-actions">
+      <a class="cal-sync-btn" id="calSyncBtn" href="#">Sync to calendar</a>
+      <button class="cal-sync-dismiss" id="calSyncDismiss" title="Dismiss">✕</button>
+    </div>
+  </div>
+
   <!-- Toolbar -->
   <div class="cal-toolbar">
     <div class="cal-title-block">
@@ -1119,8 +1160,39 @@ function showToast(msg, type = '') {
   setTimeout(() => t.classList.remove('show'), 3500);
 }
 
+// ─── Calendar Sync Banner ──────────────────────────────────────────────────
+function initCalSyncBanner() {
+  const dismissed = localStorage.getItem('cc_instructor_cal_synced') === '1';
+  if (dismissed) return;
+
+  const banner = document.getElementById('calSyncBanner');
+  banner.style.display = 'flex';
+
+  document.getElementById('calSyncBtn').onclick = async function(e) {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/calendar?action=instructor-feed-url', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      localStorage.setItem('cc_instructor_cal_synced', '1');
+      window.location.href = data.webcal_url;
+      setTimeout(() => { banner.style.display = 'none'; }, 1000);
+    } catch (err) {
+      showToast(err.message || 'Could not set up calendar sync', 'error');
+    }
+  };
+
+  document.getElementById('calSyncDismiss').onclick = function() {
+    localStorage.setItem('cc_instructor_cal_synced', '1');
+    banner.style.display = 'none';
+  };
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 init();
+initCalSyncBanner();
 </script>
 </body>
 </html>
