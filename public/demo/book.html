@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Try Our Booking System — CoachCarter Demo</title>
+  <meta name="description" content="See how easy it is to book driving lessons with CoachCarter. Try our booking system — no sign-up needed.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy:       #262626;
+      --navy-2:     #2e2e2e;
+      --orange:     #f58321;
+      --orange-dk:  #e07518;
+      --primary:    #272727;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #f9f9f9;
+      --surface:    #ffffff;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --green-lt:   #f0fdf4;
+      --red:        #ef4444;
+      --red-lt:     #fef2f2;
+      --blue:       #3b82f6;
+      --blue-lt:    #eff6ff;
+      --font-head:  'Jost', sans-serif;
+      --font-body:  'DM Sans', sans-serif;
+      --radius:     14px;
+    }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--primary); min-height: 100vh; }
+
+    /* ── Header ───────────────────────────────────────────────────────────── */
+    header {
+      background: var(--white); border-bottom: 1px solid var(--border);
+      padding: 0 20px; display: flex; align-items: center;
+      justify-content: space-between; height: 60px;
+      position: sticky; top: 0; z-index: 200;
+    }
+    .header-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .header-brand img { height: 36px; width: auto; }
+    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
+    .header-brand-sub  { font-size: 0.7rem; color: var(--blue); font-weight: 600; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-right a { font-size: 0.85rem; color: var(--muted); text-decoration: none; padding: 6px 12px; border-radius: 8px; transition: background 0.15s; }
+    .header-right a:hover { background: var(--bg); color: var(--primary); }
+
+    /* ── Demo banner ─────────────────────────────────────────────────────── */
+    .demo-banner {
+      background: var(--blue-lt); border: 1.5px solid var(--blue);
+      border-radius: var(--radius); padding: 14px 20px;
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 18px; font-size: 0.875rem; line-height: 1.5;
+    }
+    .demo-banner-icon { font-size: 1.2rem; flex-shrink: 0; }
+    .demo-banner a { color: var(--blue); font-weight: 600; text-decoration: none; }
+    .demo-banner a:hover { text-decoration: underline; }
+
+    /* ── Page ──────────────────────────────────────────────────────────────── */
+    .page { max-width: 960px; margin: 0 auto; padding: 24px 16px 100px; }
+
+    /* ── Upcoming strip ───────────────────────────────────────────────────── */
+    .upcoming-strip {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 20px; overflow: hidden;
+    }
+    .upcoming-header {
+      padding: 12px 20px; font-family: var(--font-head);
+      font-weight: 800; font-size: 0.9rem;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+    }
+    .upcoming-list { }
+    .upcoming-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 20px; border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .upcoming-item:last-child { border-bottom: none; }
+    .upcoming-date { font-weight: 700; min-width: 90px; }
+    .upcoming-time { color: var(--muted); min-width: 100px; }
+    .upcoming-instructor { color: var(--muted); flex: 1; }
+    .upcoming-cancel {
+      background: none; border: 1px solid var(--red); color: var(--red);
+      padding: 5px 12px; border-radius: 6px; font-size: 0.78rem;
+      font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+    .upcoming-cancel:hover { background: var(--red-lt); }
+    .upcoming-cal-btn {
+      background: none; border: 1px solid var(--border);
+      padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+    }
+
+    /* ── Calendar toolbar ────────────────────────────────────────────────── */
+    .cal-toolbar {
+      display: flex; flex-wrap: wrap; align-items: center;
+      justify-content: space-between; gap: 12px; margin-bottom: 20px;
+    }
+    .cal-title-block { display: flex; align-items: center; gap: 14px; }
+    .cal-title { font-family: var(--font-head); font-size: 1.35rem; font-weight: 800; }
+    .cal-subtitle { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+    .cal-controls { display: flex; align-items: center; gap: 8px; }
+    .view-toggle { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .view-btn {
+      padding: 7px 14px; font-size: 0.8rem; font-weight: 600; border: none;
+      background: var(--white); cursor: pointer; color: var(--muted); transition: all 0.15s;
+    }
+    .view-btn:not(:last-child) { border-right: 1px solid var(--border); }
+    .view-btn.active { background: var(--accent); color: white; }
+    .cal-nav { display: flex; align-items: center; gap: 6px; }
+    .cal-nav-btn {
+      width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--white); cursor: pointer; font-size: 1.1rem; color: var(--primary);
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+    }
+    .cal-nav-btn:hover { background: var(--bg); }
+    .cal-nav-label { font-size: 0.9rem; font-weight: 700; min-width: 120px; text-align: center; }
+    .btn-today {
+      padding: 7px 14px; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--white); cursor: pointer; color: var(--primary); transition: all 0.15s;
+    }
+    .btn-today:hover { background: var(--bg); }
+
+    /* ── Loading / empty ─────────────────────────────────────────────────── */
+    .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
+    .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .empty-state h3 { font-family: var(--font-head); font-size: 1.1rem; color: var(--primary); margin-bottom: 6px; }
+
+    /* ── Monthly grid ────────────────────────────────────────────────────── */
+    .month-grid { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .month-dow-row { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--border); }
+    .month-dow { text-align: center; padding: 8px; font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+    .month-days { display: grid; grid-template-columns: repeat(7, 1fr); }
+    .month-cell {
+      min-height: 72px; padding: 6px; border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border); cursor: pointer; position: relative;
+      transition: background 0.12s;
+    }
+    .month-cell:hover { background: var(--bg); }
+    .month-cell:nth-child(7n) { border-right: none; }
+    .month-cell.other-month { background: var(--bg); }
+    .month-cell.other-month .month-day-num { color: var(--border); }
+    .month-cell.is-today .month-day-num {
+      background: var(--accent); color: white; border-radius: 50%;
+      width: 26px; height: 26px; display: flex; align-items: center;
+      justify-content: center; font-size: 0.8rem;
+    }
+    .month-day-num { font-size: 0.82rem; font-weight: 600; margin-bottom: 2px; }
+    .month-slot-badge {
+      font-size: 0.65rem; color: var(--accent); font-weight: 700;
+      background: var(--accent-lt); padding: 1px 6px; border-radius: 4px;
+      display: inline-block;
+    }
+
+    /* ── Weekly grid ─────────────────────────────────────────────────────── */
+    .week-grid { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .week-header {
+      display: grid; grid-template-columns: 50px repeat(7, 1fr);
+      border-bottom: 1px solid var(--border);
+    }
+    .week-header-gutter { background: var(--bg); }
+    .week-header-day { text-align: center; padding: 10px 4px; }
+    .week-header-day.is-today .week-hd-num {
+      background: var(--accent); color: white; border-radius: 50%;
+      width: 28px; height: 28px; display: inline-flex; align-items: center;
+      justify-content: center;
+    }
+    .week-hd-dow { font-size: 0.68rem; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+    .week-hd-num { font-size: 0.95rem; font-weight: 700; }
+    .week-body { display: grid; grid-template-columns: 50px repeat(7, 1fr); }
+    .week-time-col { background: var(--bg); }
+    .week-time-label { height: 48px; font-size: 0.68rem; color: var(--muted); padding: 4px 6px; text-align: right; }
+    .week-day-col { position: relative; border-left: 1px solid var(--border); min-height: 48px; }
+    .week-day-col.is-today { background: rgba(245,131,33,0.03); }
+    .week-hour-slot { height: 48px; border-bottom: 1px solid var(--border); }
+    .week-slot {
+      position: absolute; left: 2px; right: 2px;
+      background: var(--accent-lt); border-left: 3px solid var(--accent);
+      border-radius: 4px; padding: 3px 6px; cursor: pointer;
+      font-size: 0.7rem; overflow: hidden; transition: background 0.12s; z-index: 2;
+    }
+    .week-slot:hover { background: var(--accent-mid); }
+    .week-slot-time { font-weight: 700; color: var(--accent-dk); white-space: nowrap; }
+    .week-slot-name { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ── Daily view ──────────────────────────────────────────────────────── */
+    .daily-header { margin-bottom: 16px; }
+    .daily-date-label { font-family: var(--font-head); font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+    .daily-date-sub { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+    .daily-timeline { display: flex; flex-direction: column; gap: 0; }
+    .daily-hour-row { display: flex; gap: 12px; align-items: flex-start; min-height: 48px; }
+    .daily-time-label { width: 52px; font-size: 0.78rem; font-weight: 600; color: var(--muted); padding-top: 6px; flex-shrink: 0; }
+    .daily-slot-area { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0; }
+    .daily-empty-hour { height: 1px; background: var(--border); width: 100%; margin: 20px 0; opacity: 0.5; }
+    .daily-slot-card {
+      background: var(--white); border: 1.5px solid var(--border); border-radius: 10px;
+      padding: 12px 16px; cursor: pointer; transition: all 0.15s;
+      min-width: 140px; flex: 1; max-width: 220px;
+    }
+    .daily-slot-card:hover { border-color: var(--accent); background: var(--accent-lt); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(245,131,33,0.1); }
+    .daily-slot-time { font-weight: 700; font-size: 0.9rem; margin-bottom: 4px; }
+    .daily-slot-name { font-size: 0.78rem; color: var(--muted); display: flex; align-items: center; }
+    .slot-avatar {
+      width: 22px; height: 22px; border-radius: 50%; background: var(--accent-lt);
+      color: var(--accent); font-weight: 700; display: inline-flex;
+      align-items: center; justify-content: center; font-size: 0.65rem;
+      overflow: hidden; flex-shrink: 0;
+    }
+    .slot-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    /* ── Modal ────────────────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 500; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+      padding: 20px;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal {
+      background: var(--white); border-radius: 16px; padding: 28px 24px;
+      width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      transform: translateY(10px); transition: transform 0.2s;
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+    .modal h2 { font-family: var(--font-head); font-size: 1.2rem; font-weight: 800; margin-bottom: 16px; }
+    .modal-detail { background: var(--bg); border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; }
+    .modal-detail-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 0.85rem; }
+    .modal-detail-row span:first-child { color: var(--muted); }
+    .modal-detail-row span:last-child { font-weight: 600; }
+    .modal-credit-note {
+      background: var(--green-lt); border: 1.5px solid var(--green);
+      border-radius: 10px; padding: 12px 16px; font-size: 0.85rem; line-height: 1.5;
+    }
+    .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+    .btn-modal-cancel {
+      flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--white); font-family: var(--font-head); font-weight: 700;
+      font-size: 0.9rem; cursor: pointer; color: var(--primary); transition: background 0.15s;
+    }
+    .btn-modal-cancel:hover { background: var(--bg); }
+    .btn-confirm {
+      flex: 1; padding: 12px; border: none; border-radius: 10px;
+      background: var(--accent); color: white; font-family: var(--font-head);
+      font-weight: 700; font-size: 0.9rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background 0.15s;
+    }
+    .btn-confirm:hover { background: var(--accent-dk); }
+    .btn-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+    .modal-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; display: none; }
+    .btn-confirm-cancel {
+      flex: 1; padding: 12px; border: none; border-radius: 10px;
+      background: var(--red); color: white; font-family: var(--font-head);
+      font-weight: 700; font-size: 0.9rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-confirm-cancel:disabled { opacity: 0.6; cursor: not-allowed; }
+    .cancel-policy { border-radius: 10px; padding: 12px 16px; font-size: 0.85rem; line-height: 1.5; background: var(--red-lt); border: 1.5px solid var(--red); }
+    .cancel-policy.safe { background: var(--green-lt); border-color: var(--green); }
+
+    /* ── Modal success ────────────────────────────────────────────────────── */
+    .modal-success { text-align: center; }
+    .modal-success-icon {
+      width: 56px; height: 56px; background: var(--green-lt); color: var(--green);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; font-weight: 800; margin: 0 auto 14px;
+    }
+    .modal-success h2 { margin-bottom: 10px; }
+    .modal-success p { font-size: 0.88rem; color: var(--muted); line-height: 1.5; margin-bottom: 18px; }
+    .btn-add-calendar {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 12px; border: 1.5px solid var(--border);
+      border-radius: 10px; background: var(--white); text-decoration: none;
+      color: var(--primary); font-family: var(--font-head); font-weight: 700;
+      font-size: 0.9rem; margin-bottom: 8px; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-add-calendar:hover { border-color: var(--accent); background: var(--accent-lt); }
+    .btn-add-calendar svg { width: 18px; height: 18px; }
+    .btn-subscribe-calendar {
+      display: block; width: 100%; padding: 10px; border: none;
+      background: none; color: var(--accent); font-family: var(--font-body);
+      font-weight: 600; font-size: 0.85rem; cursor: pointer; margin-bottom: 10px;
+    }
+    .btn-done {
+      display: block; width: 100%; padding: 12px; border: 1px solid var(--border);
+      border-radius: 10px; background: var(--white); font-family: var(--font-head);
+      font-weight: 700; font-size: 0.9rem; cursor: pointer; color: var(--primary);
+      transition: background 0.15s;
+    }
+    .btn-done:hover { background: var(--bg); }
+
+    /* ── Toast ────────────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: var(--primary); color: white; padding: 12px 24px; border-radius: 10px;
+      font-size: 0.85rem; font-weight: 500; opacity: 0; transition: all 0.3s;
+      pointer-events: none; z-index: 600; max-width: 90vw; text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.success { background: var(--green); }
+    .toast.error { background: var(--red); }
+
+    /* ── Bottom Nav ───────────────────────────────────────────────────────── */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--white); border-top: 1px solid var(--border);
+      display: flex; z-index: 200;
+      padding-bottom: env(safe-area-inset-bottom);
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+    }
+    .bottom-nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 10px 8px; text-decoration: none; color: var(--muted);
+      font-size: 0.68rem; font-weight: 600; transition: color 0.15s; gap: 3px;
+    }
+    .bottom-nav-item:hover { color: var(--primary); }
+    .bottom-nav-item.active { color: var(--accent); }
+    .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
+
+    /* ── Responsive ───────────────────────────────────────────────────────── */
+    @media (max-width: 700px) {
+      .cal-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .cal-controls { width: 100%; justify-content: space-between; }
+      .month-cell { min-height: 56px; }
+      .month-slot-badge { display: none; }
+      .month-cell.has-slots::after {
+        content: '\25CF'; font-size: 0.55rem; color: var(--accent);
+        position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+      }
+      .week-grid { overflow-x: auto; }
+      .week-header, .week-body { min-width: 520px; }
+      .upcoming-time, .upcoming-instructor { display: none; }
+      .daily-slots-grid { grid-template-columns: 1fr 1fr; }
+      .demo-banner { flex-direction: column; align-items: flex-start; gap: 6px; }
+    }
+    @media (max-width: 480px) {
+      .month-dow { font-size: 0.65rem; padding: 6px 2px; }
+      .daily-slots-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <a class="header-brand" href="/learner/">
+    <img src="/Logo.png" alt="CoachCarter">
+    <div>
+      <div class="header-brand-text">CoachCarter</div>
+      <div class="header-brand-sub">Demo Mode</div>
+    </div>
+  </a>
+  <div class="header-right">
+    <a href="/learner/">Dashboard</a>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- Demo banner -->
+  <div class="demo-banner">
+    <span class="demo-banner-icon">&#128065;</span>
+    <span>You're using the <strong>demo</strong> booking system — bookings here are free and use the demo instructor. You'll still receive real confirmation emails and calendar invites.</span>
+  </div>
+
+  <!-- Upcoming bookings strip -->
+  <div class="upcoming-strip" id="upcomingStrip" style="display:none">
+    <div class="upcoming-header"><span>Your demo bookings</span></div>
+    <div class="upcoming-list" id="upcomingList"></div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="cal-toolbar">
+    <div class="cal-title-block">
+      <div>
+        <div class="cal-title">Book a Lesson</div>
+        <div class="cal-subtitle" id="calSubtitle">Pick any available slot — each lesson is 1.5 hours.</div>
+      </div>
+    </div>
+    <div class="cal-controls">
+      <div class="view-toggle">
+        <button class="view-btn" id="btnMonthly" onclick="setView('monthly')">Monthly</button>
+        <button class="view-btn" id="btnWeekly"  onclick="setView('weekly')">Weekly</button>
+        <button class="view-btn active" id="btnDaily" onclick="setView('daily')">Daily</button>
+      </div>
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="navPrev()" title="Previous">&#8249;</button>
+        <span class="cal-nav-label" id="calNavLabel">&mdash;</span>
+        <button class="cal-nav-btn" onclick="navNext()" title="Next">&#8250;</button>
+      </div>
+      <button class="btn-today" onclick="goToday()">Today</button>
+    </div>
+  </div>
+
+  <!-- Calendar content -->
+  <div id="calContent">
+    <div class="loading"><div class="spinner"></div><p>Loading available slots&hellip;</p></div>
+  </div>
+
+</div>
+
+<!-- ── Book confirmation modal ── -->
+<div class="modal-overlay" id="bookModal">
+  <div class="modal">
+    <div id="bookConfirmStep">
+      <h2>Confirm booking</h2>
+      <div class="modal-detail">
+        <div class="modal-detail-row"><span>Date</span><span id="mdDate">&mdash;</span></div>
+        <div class="modal-detail-row"><span>Time</span><span id="mdTime">&mdash;</span></div>
+        <div class="modal-detail-row"><span>Instructor</span><span id="mdInstructor">&mdash;</span></div>
+        <div class="modal-detail-row"><span>Duration</span><span>1.5 hours</span></div>
+      </div>
+      <p class="modal-credit-note">
+        This is a <strong>free demo booking</strong>. No lessons will be deducted from your balance.
+        Cancel any time from this page.
+      </p>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" id="bookModalClose">Cancel</button>
+        <button class="btn-confirm" id="btnConfirmBook">
+          <span id="bookBtnLabel">Confirm booking</span>
+          <div class="modal-spinner" id="bookSpinner"></div>
+        </button>
+      </div>
+    </div>
+    <div id="bookSuccessStep" class="modal-success" style="display:none">
+      <div class="modal-success-icon">&#10003;</div>
+      <h2>Lesson booked!</h2>
+      <p>Your demo lesson on <strong id="successDate">&mdash;</strong> at <strong id="successTime">&mdash;</strong> with <strong id="successInstructor">&mdash;</strong> is confirmed. Check your email for details.</p>
+      <a class="btn-add-calendar" id="btnAddToCalendar" href="#" download>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>
+        Add to iPhone Calendar
+      </a>
+      <button class="btn-subscribe-calendar" id="btnSubscribeCalendar">Subscribe to all lessons (auto-sync)</button>
+      <button class="btn-done" id="btnSuccessDone">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Cancel confirmation modal ── -->
+<div class="modal-overlay" id="cancelModal">
+  <div class="modal cancel-modal">
+    <h2>Cancel demo lesson?</h2>
+    <div class="modal-detail">
+      <div class="modal-detail-row"><span>Date</span><span id="cmDate">&mdash;</span></div>
+      <div class="modal-detail-row"><span>Time</span><span id="cmTime">&mdash;</span></div>
+      <div class="modal-detail-row"><span>Instructor</span><span id="cmInstructor">&mdash;</span></div>
+    </div>
+    <div class="cancel-policy safe">This is a demo booking &mdash; no lessons were used, so nothing to return. The slot will be freed up immediately.</div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" id="cancelModalClose">Keep lesson</button>
+      <button class="btn-confirm-cancel" id="btnConfirmCancel">
+        <span id="cancelBtnLabel">Cancel lesson</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<nav class="bottom-nav">
+  <a href="/learner/" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#128202;</span><span>Dashboard</span>
+  </a>
+  <a href="/learner/book.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#128197;</span><span>Book</span>
+  </a>
+  <a href="/demo/book.html" class="bottom-nav-item active">
+    <span class="bottom-nav-icon">&#128065;</span><span>Demo</span>
+  </a>
+  <a href="/learner/videos.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#127916;</span><span>Videos</span>
+  </a>
+  <a href="/learner/buy-credits.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#128179;</span><span>Lessons</span>
+  </a>
+</nav>
+
+<script>
+// ─── Constants ───────────────────────────────────────────────────────────────
+const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAY_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MON_FULL  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+const DEMO_INSTRUCTOR_ID = '5';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let token         = null;
+let currentView   = 'daily';
+let cursor        = new Date(); cursor.setHours(0,0,0,0);
+let slotCache     = {}; // dateStr -> [slot, ...]
+let loadedRanges  = [];
+let pendingSlot   = null;
+let pendingCancel = null;
+let lastBookingId = null;
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+function init() {
+  const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  token = session?.token || null;
+  if (!token) { window.location.href = '/learner/login.html?redirect=/demo/book.html'; return; }
+
+  Promise.all([loadUpcoming()])
+    .then(() => {
+      cursor = new Date(); cursor.setHours(0,0,0,0);
+      setView('daily');
+    });
+
+  // Wire up modal buttons
+  document.getElementById('bookModalClose').onclick = closeBookModal;
+  document.getElementById('btnConfirmBook').onclick = confirmBookWithCredit;
+  document.getElementById('btnSuccessDone').onclick = closeBookModal;
+  document.getElementById('btnAddToCalendar').onclick = handleCalendarDownload;
+  document.getElementById('btnSubscribeCalendar').onclick = handleCalendarSubscribe;
+  document.getElementById('cancelModalClose').onclick = () => document.getElementById('cancelModal').classList.remove('open');
+  document.getElementById('btnConfirmCancel').onclick = confirmCancel;
+
+  // Close modals on overlay click
+  document.getElementById('bookModal').addEventListener('click', e => { if (e.target === document.getElementById('bookModal')) closeBookModal(); });
+  document.getElementById('cancelModal').addEventListener('click', e => { if (e.target === document.getElementById('cancelModal')) document.getElementById('cancelModal').classList.remove('open'); });
+}
+
+// ─── Upcoming bookings ───────────────────────────────────────────────────────
+async function loadUpcoming() {
+  try {
+    const res = await fetch('/api/slots?action=my-bookings', { headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    // Filter to only demo instructor bookings
+    const upcoming = (data.upcoming || []).filter(b => String(b.instructor_id) === DEMO_INSTRUCTOR_ID);
+    const strip = document.getElementById('upcomingStrip');
+    const list  = document.getElementById('upcomingList');
+    if (upcoming.length === 0) { strip.style.display = 'none'; return; }
+
+    strip.style.display = 'block';
+    list.innerHTML = upcoming.map(b => {
+      const dateStr = new Date(b.scheduled_date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
+      const start = b.start_time.slice(0,5);
+      const end = b.end_time.slice(0,5);
+      const lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
+      const hoursUntil = (lessonMs - Date.now()) / 3600000;
+      const canCancel = hoursUntil > 0;
+      return `
+        <div class="upcoming-item">
+          <div class="upcoming-date">${dateStr}</div>
+          <div class="upcoming-time">${start} – ${end}</div>
+          <div class="upcoming-instructor">${b.instructor_name}</div>
+          ${canCancel ? `<button class="upcoming-cal-btn" onclick="downloadCalendar(${b.id})" title="Add to calendar">&#128197;</button>` : ''}
+          ${canCancel ? `<button class="upcoming-cancel" onclick="openCancelModal(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${esc(b.instructor_name)}', ${hoursUntil})">Cancel</button>` : '<span style="font-size:0.8rem;color:var(--muted)">Past</span>'}
+        </div>`;
+    }).join('');
+  } catch {}
+}
+
+// ─── View switching ──────────────────────────────────────────────────────────
+function setView(view) {
+  currentView = view;
+  document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
+  document.getElementById('btnWeekly').classList.toggle('active',  view === 'weekly');
+  document.getElementById('btnDaily').classList.toggle('active',   view === 'daily');
+  renderCurrentView();
+}
+function navPrev() {
+  if (currentView === 'monthly') cursor.setMonth(cursor.getMonth() - 1);
+  else if (currentView === 'weekly') cursor.setDate(cursor.getDate() - 7);
+  else cursor.setDate(cursor.getDate() - 1);
+  renderCurrentView();
+}
+function navNext() {
+  if (currentView === 'monthly') cursor.setMonth(cursor.getMonth() + 1);
+  else if (currentView === 'weekly') cursor.setDate(cursor.getDate() + 7);
+  else cursor.setDate(cursor.getDate() + 1);
+  renderCurrentView();
+}
+function goToday() { cursor = new Date(); cursor.setHours(0,0,0,0); renderCurrentView(); }
+
+async function renderCurrentView() {
+  updateToolbarLabel();
+  const ok = await fetchNeededSlots();
+  if (ok === false) return;
+  if (currentView === 'monthly') renderMonthly();
+  else if (currentView === 'weekly') renderWeekly();
+  else renderDaily();
+}
+
+function updateToolbarLabel() {
+  const label = document.getElementById('calNavLabel');
+  const sub   = document.getElementById('calSubtitle');
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  if (currentView === 'monthly') {
+    label.textContent = `${MON_FULL[cursor.getMonth()]} ${cursor.getFullYear()}`;
+    sub.textContent = 'Click a day to view and book available slots';
+  } else if (currentView === 'weekly') {
+    const mon = getWeekStart(cursor);
+    const sun = addDaysLocal(mon, 6);
+    label.textContent = `${mon.getDate()} ${MON_SHORT[mon.getMonth()]} \u2013 ${sun.getDate()} ${MON_SHORT[sun.getMonth()]} ${sun.getFullYear()}`;
+    sub.textContent = 'Click a slot to book';
+  } else {
+    const isToday = fmtDate(cursor) === fmtDate(today);
+    label.textContent = `${DAY_SHORT[cursor.getDay()]} ${cursor.getDate()} ${MON_SHORT[cursor.getMonth()]}`;
+    sub.textContent = isToday ? 'Today \u2014 pick any slot to book' : `${DAY_FULL[cursor.getDay()]} \u2014 pick any slot to book`;
+  }
+}
+
+// ─── Slot fetching ───────────────────────────────────────────────────────────
+async function fetchNeededSlots() {
+  let from, to;
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  if (currentView === 'monthly') {
+    const firstOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const lastOfMonth  = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+    const gridStart = getWeekStart(firstOfMonth);
+    const gridEnd   = addDaysLocal(getWeekStart(lastOfMonth), 6);
+    from = fmtDate(gridStart < today ? today : gridStart);
+    to   = fmtDate(gridEnd);
+  } else if (currentView === 'weekly') {
+    const mon = getWeekStart(cursor);
+    from = fmtDate(mon < today ? today : mon);
+    to   = fmtDate(addDaysLocal(mon, 6));
+  } else {
+    if (cursor < today) { from = fmtDate(cursor); to = from; }
+    else { from = fmtDate(cursor); to = from; }
+  }
+
+  if (to < fmtDate(today)) return true;
+  if (from < fmtDate(today)) from = fmtDate(today);
+
+  const maxDate = fmtDate(addDaysLocal(today, 90));
+  if (from > maxDate) return true;
+  if (to > maxDate) to = maxDate;
+
+  const cacheKey = `${from}|${to}|demo`;
+  if (loadedRanges.includes(cacheKey)) return true;
+
+  showLoading();
+
+  const fromD = new Date(from + 'T00:00:00');
+  const toD   = new Date(to + 'T00:00:00');
+  const chunks = [];
+  let chunkStart = new Date(fromD);
+  while (chunkStart <= toD) {
+    let chunkEnd = addDaysLocal(chunkStart, 30);
+    if (chunkEnd > toD) chunkEnd = new Date(toD);
+    chunks.push({ from: fmtDate(chunkStart), to: fmtDate(chunkEnd) });
+    chunkStart = addDaysLocal(chunkEnd, 1);
+  }
+
+  try {
+    for (const chunk of chunks) {
+      let url = `/api/slots?action=available&from=${chunk.from}&to=${chunk.to}&instructor_id=${DEMO_INSTRUCTOR_ID}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const slots = data.slots || {};
+      for (const ds in slots) {
+        if (!slotCache[ds]) slotCache[ds] = [];
+        for (const s of slots[ds]) {
+          if (!slotCache[ds].find(x => x.date === s.date && x.start_time === s.start_time && x.instructor_id === s.instructor_id)) {
+            slotCache[ds].push(s);
+          }
+        }
+      }
+    }
+    loadedRanges.push(cacheKey);
+    return true;
+  } catch (err) {
+    console.error('fetchNeededSlots error:', err);
+    showError(err.message || 'Failed to load available slots');
+    return false;
+  }
+}
+
+function showLoading() { document.getElementById('calContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading available slots\u2026</p></div>'; }
+function showError(msg) { document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">\u26A0\uFE0F</div><p>${msg}</p></div>`; }
+
+// ─── MONTHLY RENDER ──────────────────────────────────────────────────────────
+function renderMonthly() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const firstOfMon = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const gridStart  = getWeekStart(firstOfMon);
+
+  const cells = [];
+  for (let i = 0; i < 42; i++) cells.push(addDaysLocal(gridStart, i));
+
+  let html = '<div class="month-grid"><div class="month-dow-row">';
+  for (const d of ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']) {
+    html += `<div class="month-dow">${d}</div>`;
+  }
+  html += '</div><div class="month-days">';
+
+  for (const day of cells) {
+    const ds = fmtDate(day);
+    const slots = slotCache[ds] || [];
+    const inMonth = day.getMonth() === cursor.getMonth();
+    const isToday = ds === fmtDate(today);
+    const hasSlots = slots.length > 0;
+
+    let cls = 'month-cell';
+    if (!inMonth) cls += ' other-month';
+    if (isToday) cls += ' is-today';
+    if (hasSlots) cls += ' has-slots';
+
+    html += `<div class="${cls}" onclick="drillToDay('${ds}')">`;
+    html += `<div class="month-day-num">${day.getDate()}</div>`;
+    if (hasSlots) {
+      html += `<div class="month-slot-badge">${slots.length} slot${slots.length !== 1 ? 's' : ''}</div>`;
+    }
+    html += '</div>';
+  }
+
+  html += '</div></div>';
+  document.getElementById('calContent').innerHTML = html;
+}
+
+// ─── WEEKLY RENDER ───────────────────────────────────────────────────────────
+function renderWeekly() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const weekStart = getWeekStart(cursor);
+  const days = Array.from({length:7}, (_,i) => addDaysLocal(weekStart, i));
+  const HOURS = Array.from({length:16}, (_,i) => i + 6);
+
+  let html = '<div class="week-grid"><div class="week-header"><div class="week-header-gutter"></div>';
+  for (const day of days) {
+    const isToday = fmtDate(day) === fmtDate(today);
+    html += `<div class="week-header-day ${isToday ? 'is-today' : ''}">
+      <div class="week-hd-dow">${DAY_SHORT[day.getDay()]}</div>
+      <div class="week-hd-num">${day.getDate()}</div>
+    </div>`;
+  }
+  html += '</div><div class="week-body"><div class="week-time-col">';
+  for (const h of HOURS) html += `<div class="week-time-label">${String(h).padStart(2,'0')}:00</div>`;
+  html += '</div>';
+
+  for (const day of days) {
+    const ds = fmtDate(day);
+    const slots = slotCache[ds] || [];
+    const isToday = ds === fmtDate(today);
+
+    html += `<div class="week-day-col ${isToday ? 'is-today' : ''}">`;
+    for (const h of HOURS) html += '<div class="week-hour-slot"></div>';
+
+    for (const s of slots) {
+      const [sh, sm] = s.start_time.split(':').map(Number);
+      const [eh, em] = s.end_time.split(':').map(Number);
+      const topPx = ((sh - 6) * 48) + (sm / 60 * 48);
+      const heightPx = ((eh - sh) * 48) + ((em - sm) / 60 * 48);
+      const dataAttrs = `data-instructor-id="${s.instructor_id}" data-date="${s.date}" data-start="${s.start_time}" data-end="${s.end_time}" data-instructor-name="${esc(s.instructor_name)}"`;
+      html += `<div class="week-slot" style="top:${topPx}px;height:${Math.max(heightPx,22)}px;" onclick="openBookModal(this)" ${dataAttrs}>
+        <div class="week-slot-time">${s.start_time}\u2013${s.end_time}</div>
+        <div class="week-slot-name">${esc(s.instructor_name)}</div>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div></div>';
+  document.getElementById('calContent').innerHTML = html;
+}
+
+// ─── DAILY RENDER ────────────────────────────────────────────────────────────
+function renderDaily() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const ds = fmtDate(cursor);
+  const slots = slotCache[ds] || [];
+  const isToday = ds === fmtDate(today);
+  const isPast = cursor < today;
+
+  const todayBadge = isToday ? '<span style="background:var(--accent);color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px;">Today</span>' : '';
+
+  let html = `
+    <div class="daily-header">
+      <div>
+        <div class="daily-date-label">${cursor.getDate()} ${MON_FULL[cursor.getMonth()]} ${cursor.getFullYear()}${todayBadge}</div>
+        <div class="daily-date-sub">${DAY_FULL[cursor.getDay()]} \u00B7 ${slots.length} slot${slots.length !== 1 ? 's' : ''} available</div>
+      </div>
+    </div>`;
+
+  if (isPast) {
+    html += '<div class="empty-state"><div class="empty-icon">\uD83D\uDCC5</div><h3>This date is in the past</h3><p>Navigate forward to find available slots.</p></div>';
+    document.getElementById('calContent').innerHTML = html;
+    return;
+  }
+
+  if (slots.length === 0) {
+    html += '<div class="empty-state"><div class="empty-icon">\uD83D\uDCC5</div><h3>No slots available</h3><p>Try a different day.</p></div>';
+    document.getElementById('calContent').innerHTML = html;
+    return;
+  }
+
+  const byHour = {};
+  for (const s of slots) {
+    const h = parseInt(s.start_time.split(':')[0]);
+    if (!byHour[h]) byHour[h] = [];
+    byHour[h].push(s);
+  }
+
+  let minH = 24, maxH = 0;
+  for (const s of slots) {
+    minH = Math.min(minH, parseInt(s.start_time));
+    maxH = Math.max(maxH, parseInt(s.end_time) + 1);
+  }
+  minH = Math.max(0, minH - 1);
+  maxH = Math.min(24, maxH);
+
+  html += '<div class="daily-timeline">';
+  for (let h = minH; h < maxH; h++) {
+    const hLabel = String(h).padStart(2,'0') + ':00';
+    const hSlots = byHour[h] || [];
+
+    html += `<div class="daily-hour-row">
+      <div class="daily-time-label">${hLabel}</div>
+      <div class="daily-slot-area">`;
+
+    if (hSlots.length > 0) {
+      for (const s of hSlots) {
+        const initials = s.instructor_name.split(' ').map(n => n[0]).join('').slice(0,2);
+        const avatar = s.instructor_photo
+          ? `<img src="${s.instructor_photo}" alt="${esc(s.instructor_name)}">`
+          : initials;
+        const dataAttrs = `data-instructor-id="${s.instructor_id}" data-date="${s.date}" data-start="${s.start_time}" data-end="${s.end_time}" data-instructor-name="${esc(s.instructor_name)}"`;
+        html += `
+          <div class="daily-slot-card" onclick="openBookModal(this)" ${dataAttrs}>
+            <div class="daily-slot-time">${s.start_time} \u2013 ${s.end_time}</div>
+            <div class="daily-slot-name">
+              <span class="slot-avatar" style="display:inline-flex;width:20px;height:20px;font-size:0.65rem;vertical-align:middle;margin-right:4px">${avatar}</span>
+              ${esc(s.instructor_name)}
+            </div>
+          </div>`;
+      }
+    } else {
+      html += '<div class="daily-empty-hour"></div>';
+    }
+
+    html += '</div></div>';
+  }
+  html += '</div>';
+  document.getElementById('calContent').innerHTML = html;
+}
+
+// ─── Drill-down ──────────────────────────────────────────────────────────────
+function drillToDay(ds) {
+  cursor = new Date(ds + 'T00:00:00');
+  setView('daily');
+}
+
+// ─── Book modal ──────────────────────────────────────────────────────────────
+function openBookModal(el) {
+  pendingSlot = {
+    instructor_id:   el.dataset.instructorId,
+    date:            el.dataset.date,
+    start_time:      el.dataset.start,
+    end_time:        el.dataset.end,
+    instructor_name: el.dataset.instructorName
+  };
+  const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
+  document.getElementById('mdDate').textContent = dateDisplay;
+  document.getElementById('mdTime').textContent = `${pendingSlot.start_time} \u2013 ${pendingSlot.end_time}`;
+  document.getElementById('mdInstructor').textContent = pendingSlot.instructor_name;
+
+  document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
+  document.getElementById('bookSpinner').style.display = 'none';
+  document.getElementById('btnConfirmBook').disabled = false;
+
+  document.getElementById('bookConfirmStep').style.display = 'block';
+  document.getElementById('bookSuccessStep').style.display = 'none';
+  document.getElementById('bookModal').classList.add('open');
+}
+
+function closeBookModal() {
+  document.getElementById('bookModal').classList.remove('open');
+  setTimeout(() => {
+    document.getElementById('bookConfirmStep').style.display = 'block';
+    document.getElementById('bookSuccessStep').style.display = 'none';
+  }, 300);
+}
+
+// ─── Confirm booking (real API call — free for demo instructor) ──────────────
+async function confirmBookWithCredit() {
+  if (!pendingSlot) return;
+  const btn = document.getElementById('btnConfirmBook');
+  const label = document.getElementById('bookBtnLabel');
+  const spinner = document.getElementById('bookSpinner');
+  btn.disabled = true; label.textContent = 'Booking\u2026'; spinner.style.display = 'block';
+
+  try {
+    const res = await fetch('/api/slots?action=book', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(pendingSlot)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    lastBookingId = data.booking_id;
+    showBookSuccess();
+    refreshAfterBooking();
+  } catch (err) {
+    showToast(err.message || 'Booking failed. Please try again.', 'error');
+    btn.disabled = false; label.textContent = 'Confirm booking'; spinner.style.display = 'none';
+  }
+}
+
+function showBookSuccess() {
+  const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', timeZone:'UTC' });
+  document.getElementById('successDate').textContent = dateDisplay;
+  document.getElementById('successTime').textContent = pendingSlot.start_time;
+  document.getElementById('successInstructor').textContent = pendingSlot.instructor_name;
+  document.getElementById('btnAddToCalendar').href = `/api/calendar?action=download&booking_id=${lastBookingId}`;
+  document.getElementById('btnAddToCalendar').setAttribute('download', `coachcarter-lesson-${pendingSlot.date}.ics`);
+  document.getElementById('bookConfirmStep').style.display = 'none';
+  document.getElementById('bookSuccessStep').style.display = 'block';
+}
+
+function refreshAfterBooking() {
+  loadedRanges = []; slotCache = {};
+  Promise.all([loadUpcoming(), renderCurrentView()]);
+}
+
+// ─── Calendar download & subscribe ───────────────────────────────────────────
+async function handleCalendarDownload(e) {
+  e.preventDefault();
+  if (!lastBookingId) return;
+  try {
+    const res = await fetch(`/api/calendar?action=download&booking_id=${lastBookingId}`, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'coachcarter-lesson.ics';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Calendar file downloaded \u2014 open it to add to your calendar', 'success');
+  } catch { showToast('Could not download calendar file', 'error'); }
+}
+
+async function handleCalendarSubscribe() {
+  try {
+    const res = await fetch('/api/calendar?action=feed-url', { headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    window.location.href = data.webcal_url;
+  } catch { showToast('Could not set up calendar subscription', 'error'); }
+}
+
+async function downloadCalendar(bookingId) {
+  try {
+    const res = await fetch(`/api/calendar?action=download&booking_id=${bookingId}`, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'coachcarter-lesson.ics';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Calendar file downloaded', 'success');
+  } catch { showToast('Could not download calendar file', 'error'); }
+}
+window.downloadCalendar = downloadCalendar;
+
+// ─── Cancel modal ────────────────────────────────────────────────────────────
+function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil) {
+  pendingCancel = { bookingId, date, start, end, instructorName, hoursUntil };
+  const dateDisplay = new Date(date + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
+  document.getElementById('cmDate').textContent = dateDisplay;
+  document.getElementById('cmTime').textContent = `${start} \u2013 ${end}`;
+  document.getElementById('cmInstructor').textContent = instructorName;
+
+  document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
+  document.getElementById('btnConfirmCancel').disabled = false;
+  document.getElementById('cancelModal').classList.add('open');
+}
+window.openCancelModal = openCancelModal;
+
+async function confirmCancel() {
+  if (!pendingCancel) return;
+  const btn = document.getElementById('btnConfirmCancel');
+  btn.disabled = true;
+  document.getElementById('cancelBtnLabel').textContent = 'Cancelling\u2026';
+
+  try {
+    const res = await fetch('/api/slots?action=cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ booking_id: pendingCancel.bookingId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    document.getElementById('cancelModal').classList.remove('open');
+    showToast('Demo booking cancelled.', 'success');
+    loadedRanges = []; slotCache = {};
+    await Promise.all([loadUpcoming(), renderCurrentView()]);
+  } catch (err) {
+    showToast(err.message || 'Cancellation failed.', 'error');
+    btn.disabled = false;
+    document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
+  }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function fmtDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function addDaysLocal(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function getWeekStart(d) {
+  const r = new Date(d);
+  const dow = r.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  r.setDate(r.getDate() + diff);
+  r.setHours(0,0,0,0);
+  return r;
+}
+function esc(str) { return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (type ? ' ' + type : '');
+  void t.offsetWidth;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+// ─── Boot ────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

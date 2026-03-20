@@ -130,6 +130,7 @@ async function handleAvailable(req, res) {
           JOIN instructors i ON i.id = ia.instructor_id
           WHERE ia.active = true
             AND i.active  = true
+            AND i.email  != 'demo@coachcarter.uk'
           ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
         `;
 
@@ -182,6 +183,31 @@ async function handleAvailable(req, res) {
       // Table may not exist yet — that's fine, no reservations
     }
 
+    // 2c. Load blackout dates in the date range
+    let blackouts = [];
+    try {
+      blackouts = instructor_id
+        ? await sql`
+            SELECT instructor_id, blackout_date::text AS blackout_date
+            FROM instructor_blackout_dates
+            WHERE blackout_date BETWEEN ${from} AND ${to}
+              AND instructor_id = ${instructor_id}
+          `
+        : await sql`
+            SELECT instructor_id, blackout_date::text AS blackout_date
+            FROM instructor_blackout_dates
+            WHERE blackout_date BETWEEN ${from} AND ${to}
+          `;
+    } catch (e) {
+      // Table may not exist yet — that's fine, no blackout dates
+    }
+
+    // Index blackout dates as "instructorId|date" for fast lookup
+    const blackoutIndex = new Set();
+    for (const b of blackouts) {
+      blackoutIndex.add(`${b.instructor_id}|${b.blackout_date}`);
+    }
+
     // Index bookings + reservations by "instructorId|date" for fast lookup
     const bookedIndex = {};
     for (const b of [...bookings, ...reservations]) {
@@ -213,13 +239,22 @@ async function handleAvailable(req, res) {
     // 4. Walk every date in range and generate slots
     const result = {}; // { "YYYY-MM-DD": [ slot, ... ] }
 
+    // For same-day booking: calculate current time in minutes to filter past slots
+    const now          = new Date();
+    const todayStr     = formatDate(today);
+    const nowMinutes   = now.getUTCHours() * 60 + now.getUTCMinutes();
+
     let cursor = new Date(fromDate);
     while (cursor <= toDate) {
       const dateStr    = formatDate(cursor);
       const dayOfWeek  = cursor.getDay(); // 0=Sun … 6=Sat
+      const isToday    = dateStr === todayStr;
       const daySlots   = [];
 
       for (const instructor of Object.values(byInstructor)) {
+        // Skip this instructor on this date if it's a blackout day
+        if (blackoutIndex.has(`${instructor.id}|${dateStr}`)) continue;
+
         const matchingWindows = instructor.windows.filter(w => w.day_of_week === dayOfWeek);
         const bookedSlots     = bookedIndex[`${instructor.id}|${dateStr}`] || [];
         const buffer          = instructor.buffer_minutes || 0;
@@ -229,6 +264,12 @@ async function handleAvailable(req, res) {
 
           while (slotStart + SLOT_MINUTES <= window.end) {
             const slotEnd = slotStart + SLOT_MINUTES;
+
+            // Skip slots that have already started today
+            if (isToday && slotStart <= nowMinutes) {
+              slotStart += SLOT_MINUTES;
+              continue;
+            }
 
             // Check if this slot overlaps any booked slot (including buffer after each booking)
             const isBooked = bookedSlots.some(
@@ -309,6 +350,14 @@ async function handleBook(req, res) {
   if (endMins - startMins !== SLOT_MINUTES)
     return res.status(400).json({ error: 'Slot must be exactly 90 minutes' });
 
+  // Reject same-day bookings where the slot has already started
+  if (bookingDate.getTime() === today.getTime()) {
+    const now = new Date();
+    const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    if (startMins <= nowMins)
+      return res.status(400).json({ error: 'This slot has already started. Please choose a later time.' });
+  }
+
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
@@ -319,8 +368,6 @@ async function handleBook(req, res) {
     `;
     if (!learner)
       return res.status(404).json({ error: 'Learner account not found' });
-    if (learner.credit_balance < 1)
-      return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
 
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
@@ -330,15 +377,25 @@ async function handleBook(req, res) {
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found or unavailable' });
 
-    // 3. Deduct credit FIRST (atomically — only if balance >= 1)
-    const [deducted] = await sql`
-      UPDATE learner_users
-      SET credit_balance = credit_balance - 1
-      WHERE id = ${user.id} AND credit_balance >= 1
-      RETURNING credit_balance
-    `;
-    if (!deducted)
-      return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
+    // Demo instructor bookings are free (no credit deduction)
+    const isDemoInstructor = instructor.email === 'demo@coachcarter.uk';
+
+    if (!isDemoInstructor) {
+      if (learner.credit_balance < 1)
+        return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
+    }
+
+    // 3. Deduct credit FIRST (skip for demo instructor)
+    if (!isDemoInstructor) {
+      const [deducted] = await sql`
+        UPDATE learner_users
+        SET credit_balance = credit_balance - 1
+        WHERE id = ${user.id} AND credit_balance >= 1
+        RETURNING credit_balance
+      `;
+      if (!deducted)
+        return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
+    }
 
     // 4. Create booking — unique index on (instructor_id, scheduled_date, start_time)
     //    will throw if slot was taken. If so, refund the credit.
@@ -354,12 +411,14 @@ async function handleBook(req, res) {
       `;
       booking = b;
     } catch (insertErr) {
-      // Refund the credit since booking failed
-      await sql`
-        UPDATE learner_users
-        SET credit_balance = credit_balance + 1
-        WHERE id = ${user.id}
-      `;
+      // Refund the credit since booking failed (not needed for demo)
+      if (!isDemoInstructor) {
+        await sql`
+          UPDATE learner_users
+          SET credit_balance = credit_balance + 1
+          WHERE id = ${user.id}
+        `;
+      }
       if (insertErr.message?.includes('uq_instructor_slot')) {
         return res.status(409).json({ error: 'Sorry, that slot was just booked by someone else. Please choose another.' });
       }
@@ -414,28 +473,30 @@ async function handleBook(req, res) {
       }]
     });
 
-    // Email to instructor
-    await mailer.sendMail({
-      from:    'CoachCarter <system@coachcarter.uk>',
-      to:      instructor.email,
-      subject: `New booking — ${lessonDateStr} at ${start_time}`,
-      html: `
-        <h2>New lesson booked</h2>
-        <table>
-          <tr><td><strong>Learner:</strong></td><td>${learner.name}</td></tr>
-          <tr><td><strong>Email:</strong></td><td>${learner.email}</td></tr>
-          <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
-          <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
-        </table>
-        <p style="margin-top:16px">
-          <a href="https://coachcarter.uk/instructor/"
-             style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
-                    border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
-            View my schedule →
-          </a>
-        </p>
-      `
-    });
+    // Email to instructor (skip for demo instructor)
+    if (!isDemoInstructor) {
+      await mailer.sendMail({
+        from:    'CoachCarter <system@coachcarter.uk>',
+        to:      instructor.email,
+        subject: `New booking — ${lessonDateStr} at ${start_time}`,
+        html: `
+          <h2>New lesson booked</h2>
+          <table>
+            <tr><td><strong>Learner:</strong></td><td>${learner.name}</td></tr>
+            <tr><td><strong>Email:</strong></td><td>${learner.email}</td></tr>
+            <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
+            <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+          </table>
+          <p style="margin-top:16px">
+            <a href="https://coachcarter.uk/instructor/"
+               style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
+                      border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
+              View my schedule →
+            </a>
+          </p>
+        `
+      });
+    }
 
     return res.status(201).json({
       success:        true,
@@ -469,6 +530,16 @@ async function handleCheckoutSlot(req, res) {
   const endMins   = timeToMinutes(end_time);
   if (endMins - startMins !== SLOT_MINUTES)
     return res.status(400).json({ error: 'Slot must be exactly 90 minutes' });
+
+  // Reject same-day bookings where the slot has already started
+  const checkoutDate = parseDate(date);
+  const todayStart   = startOfDay(new Date());
+  if (checkoutDate && checkoutDate.getTime() === todayStart.getTime()) {
+    const now = new Date();
+    const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    if (startMins <= nowMins)
+      return res.status(400).json({ error: 'This slot has already started. Please choose a later time.' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -555,6 +626,7 @@ async function handleCheckoutSlot(req, res) {
       },
       customer_email: learner.email,
       billing_address_collection: 'required',
+      allow_promotion_codes: true,
       success_url: `${origin}/learner/book.html?paid=1`,
       cancel_url:  `${origin}/learner/book.html?cancelled=1`
     });
@@ -609,7 +681,9 @@ async function handleCancel(req, res) {
     // Calculate hours until lesson
     const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}:00Z`);
     const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
-    const creditReturned = hoursUntil >= CANCEL_HOURS_CUTOFF;
+    const isDemoBooking  = booking.instructor_email === 'demo@coachcarter.uk';
+    // Demo bookings are free, so no credit to return
+    const creditReturned = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF;
 
     // Cancel the booking
     await sql`
@@ -618,7 +692,7 @@ async function handleCancel(req, res) {
       WHERE id = ${booking_id}
     `;
 
-    // Return credit if eligible
+    // Return credit if eligible (not for demo bookings)
     if (creditReturned) {
       await sql`
         UPDATE learner_users SET credit_balance = credit_balance + 1
@@ -657,26 +731,30 @@ async function handleCancel(req, res) {
       `
     });
 
-    // Notify instructor
-    await mailer.sendMail({
-      from:    'CoachCarter <system@coachcarter.uk>',
-      to:      booking.instructor_email,
-      subject: `Lesson cancelled — ${lessonDateStr} at ${String(booking.start_time).slice(0,5)}`,
-      html: `
-        <h2>Lesson cancelled</h2>
-        <p>The lesson with <strong>${booking.learner_name}</strong> on
-           <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
-           has been cancelled by the learner.</p>
-      `
-    });
+    // Notify instructor (skip for demo instructor)
+    if (!isDemoBooking) {
+      await mailer.sendMail({
+        from:    'CoachCarter <system@coachcarter.uk>',
+        to:      booking.instructor_email,
+        subject: `Lesson cancelled — ${lessonDateStr} at ${String(booking.start_time).slice(0,5)}`,
+        html: `
+          <h2>Lesson cancelled</h2>
+          <p>The lesson with <strong>${booking.learner_name}</strong> on
+             <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
+             has been cancelled by the learner.</p>
+        `
+      });
+    }
 
     return res.json({
       success:        true,
       credit_returned: creditReturned,
       credit_balance:  updated.credit_balance,
-      message: creditReturned
-        ? 'Booking cancelled and lesson returned to your balance.'
-        : `Booking cancelled. Lesson forfeited (less than ${CANCEL_HOURS_CUTOFF} hours\' notice).`
+      message: isDemoBooking
+        ? 'Demo booking cancelled.'
+        : creditReturned
+          ? 'Booking cancelled and lesson returned to your balance.'
+          : `Booking cancelled. Lesson forfeited (less than ${CANCEL_HOURS_CUTOFF} hours\' notice).`
     });
 
   } catch (err) {

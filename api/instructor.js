@@ -78,6 +78,8 @@ module.exports = async (req, res) => {
   if (action === 'set-availability') return handleSetAvailability(req, res);
   if (action === 'profile')          return handleProfile(req, res);
   if (action === 'update-profile')   return handleUpdateProfile(req, res);
+  if (action === 'blackout-dates')     return handleBlackoutDates(req, res);
+  if (action === 'set-blackout-dates') return handleSetBlackoutDates(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -267,9 +269,12 @@ async function handleSchedule(req, res) {
         lu.email AS learner_email,
         lu.phone AS learner_phone,
         COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
-        lu.pickup_address AS learner_pickup_address
+        lu.pickup_address AS learner_pickup_address,
+        ds.id AS session_log_id,
+        ds.notes AS session_notes
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
+      LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.status IN ('confirmed', 'completed')
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '14 days')
@@ -277,11 +282,30 @@ async function handleSchedule(req, res) {
       LIMIT 60
     `;
 
+    // Fetch skill ratings for any logged sessions
+    const loggedIds = bookings.filter(b => b.session_log_id).map(b => b.session_log_id);
+    let ratingsMap = {};
+    if (loggedIds.length > 0) {
+      const allRatings = await sql`
+        SELECT session_id, skill_key, rating
+        FROM skill_ratings
+        WHERE session_id = ANY(${loggedIds})
+        ORDER BY id`;
+      for (const r of allRatings) {
+        if (!ratingsMap[r.session_id]) ratingsMap[r.session_id] = [];
+        ratingsMap[r.session_id].push({ skill_key: r.skill_key, rating: r.rating });
+      }
+    }
+
     const now      = new Date();
     const upcoming = [];
     const past     = [];
 
     for (const b of bookings) {
+      // Attach learner ratings if session was logged
+      if (b.session_log_id) {
+        b.learner_ratings = ratingsMap[b.session_log_id] || [];
+      }
       const lessonTime = new Date(`${b.scheduled_date}T${b.start_time}Z`);
       if (b.status === 'confirmed' && lessonTime > now) {
         upcoming.push(b);
@@ -334,9 +358,12 @@ async function handleScheduleRange(req, res) {
         lu.email AS learner_email,
         lu.phone AS learner_phone,
         COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
-        lu.pickup_address AS learner_pickup_address
+        lu.pickup_address AS learner_pickup_address,
+        ds.id AS session_log_id,
+        ds.notes AS session_notes
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
+      LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.status IN ('confirmed', 'completed')
         AND lb.scheduled_date >= ${from}::date
@@ -344,6 +371,27 @@ async function handleScheduleRange(req, res) {
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
       LIMIT 500
     `;
+
+    // Fetch skill ratings for any logged sessions
+    const loggedIds = bookings.filter(b => b.session_log_id).map(b => b.session_log_id);
+    let ratingsMap = {};
+    if (loggedIds.length > 0) {
+      const allRatings = await sql`
+        SELECT session_id, skill_key, rating
+        FROM skill_ratings
+        WHERE session_id = ANY(${loggedIds})
+        ORDER BY id`;
+      for (const r of allRatings) {
+        if (!ratingsMap[r.session_id]) ratingsMap[r.session_id] = [];
+        ratingsMap[r.session_id].push({ skill_key: r.skill_key, rating: r.rating });
+      }
+    }
+
+    for (const b of bookings) {
+      if (b.session_log_id) {
+        b.learner_ratings = ratingsMap[b.session_log_id] || [];
+      }
+    }
 
     return res.json({ bookings });
 
@@ -370,9 +418,13 @@ async function handleComplete(req, res) {
 
     // Must belong to this instructor and be a past confirmed booking
     const [booking] = await sql`
-      SELECT id, status, scheduled_date, start_time
-      FROM lesson_bookings
-      WHERE id = ${booking_id} AND instructor_id = ${instructor.id}
+      SELECT lb.id, lb.status, lb.scheduled_date, lb.start_time,
+             lu.email AS learner_email, lu.name AS learner_name,
+             i.name AS instructor_name, i.email AS instructor_email
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN instructors i ON i.id = lb.instructor_id
+      WHERE lb.id = ${booking_id} AND lb.instructor_id = ${instructor.id}
     `;
 
     if (!booking)
@@ -390,6 +442,42 @@ async function handleComplete(req, res) {
     await sql`
       UPDATE lesson_bookings SET status = 'completed' WHERE id = ${booking_id}
     `;
+
+    // Send email to learner prompting them to log the session
+    const isDemoInstructor = booking.instructor_email === 'demo@coachcarter.uk';
+    if (!isDemoInstructor && booking.learner_email) {
+      try {
+        const mailer = createTransporter();
+        const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
+        const dateStr = new Date(booking.scheduled_date + 'T00:00:00Z')
+          .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+        const logUrl = `https://coachcarter.uk/learner/log-session.html?booking_id=${booking_id}`;
+
+        await mailer.sendMail({
+          from: 'CoachCarter <system@coachcarter.uk>',
+          to: booking.learner_email,
+          subject: 'Your lesson is complete — log your session!',
+          html: `
+            <h2>Nice one, ${firstName}!</h2>
+            <p>${booking.instructor_name} has marked your lesson on <strong>${dateStr}</strong> as complete.</p>
+            <p>Take a moment to log how it went — it only takes 30 seconds and helps you track your progress.</p>
+            <p style="margin:28px 0">
+              <a href="${logUrl}"
+                 style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                        border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+                Log my session →
+              </a>
+            </p>
+            <p style="color:#888;font-size:0.85rem;">
+              You can also log sessions from your dashboard at any time.
+            </p>
+          `
+        });
+      } catch (emailErr) {
+        console.error('Failed to send session-log email:', emailErr);
+        // Don't fail the request if email fails
+      }
+    }
 
     return res.json({ success: true });
 
@@ -545,5 +633,106 @@ async function handleUpdateProfile(req, res) {
   } catch (err) {
     console.error('instructor update-profile error:', err);
     return res.status(500).json({ error: 'Failed to update profile' });
+  }
+}
+
+// ── GET /api/instructor?action=blackout-dates ─────────────────────────────────
+// Returns the instructor's blackout dates (future only).
+async function handleBlackoutDates(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Ensure table exists (safe for first run before migration)
+    await sql`CREATE TABLE IF NOT EXISTS instructor_blackout_dates (
+      id SERIAL PRIMARY KEY,
+      instructor_id INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
+      blackout_date DATE NOT NULL,
+      reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uq_blackout_date UNIQUE (instructor_id, blackout_date)
+    )`;
+
+    const dates = await sql`
+      SELECT id, blackout_date::text, reason
+      FROM instructor_blackout_dates
+      WHERE instructor_id = ${instructor.id}
+        AND blackout_date >= CURRENT_DATE
+      ORDER BY blackout_date ASC
+    `;
+
+    return res.json({ blackout_dates: dates });
+
+  } catch (err) {
+    console.error('instructor blackout-dates error:', err);
+    return res.status(500).json({ error: 'Failed to load blackout dates' });
+  }
+}
+
+// ── POST /api/instructor?action=set-blackout-dates ────────────────────────────
+// Body: { dates: [{ date: "YYYY-MM-DD", reason?: "..." }, ...] }
+// Replaces all future blackout dates for this instructor.
+async function handleSetBlackoutDates(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { dates } = req.body;
+  if (!Array.isArray(dates))
+    return res.status(400).json({ error: 'dates must be an array' });
+
+  // Validate each date
+  for (const d of dates) {
+    if (!d.date || !/^\d{4}-\d{2}-\d{2}$/.test(d.date))
+      return res.status(400).json({ error: `Invalid date format: ${d.date}. Use YYYY-MM-DD` });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Ensure table exists
+    await sql`CREATE TABLE IF NOT EXISTS instructor_blackout_dates (
+      id SERIAL PRIMARY KEY,
+      instructor_id INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
+      blackout_date DATE NOT NULL,
+      reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uq_blackout_date UNIQUE (instructor_id, blackout_date)
+    )`;
+
+    // Delete all future blackout dates for this instructor
+    await sql`
+      DELETE FROM instructor_blackout_dates
+      WHERE instructor_id = ${instructor.id}
+        AND blackout_date >= CURRENT_DATE
+    `;
+
+    // Insert new blackout dates
+    for (const d of dates) {
+      await sql`
+        INSERT INTO instructor_blackout_dates (instructor_id, blackout_date, reason)
+        VALUES (${instructor.id}, ${d.date}, ${d.reason || null})
+        ON CONFLICT (instructor_id, blackout_date) DO UPDATE SET reason = EXCLUDED.reason
+      `;
+    }
+
+    const saved = await sql`
+      SELECT id, blackout_date::text, reason
+      FROM instructor_blackout_dates
+      WHERE instructor_id = ${instructor.id}
+        AND blackout_date >= CURRENT_DATE
+      ORDER BY blackout_date ASC
+    `;
+
+    return res.json({ success: true, blackout_dates: saved });
+
+  } catch (err) {
+    console.error('instructor set-blackout-dates error:', err);
+    return res.status(500).json({ error: 'Failed to save blackout dates' });
   }
 }

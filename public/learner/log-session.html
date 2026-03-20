@@ -3,10 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageviewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    posthog.init('phc_JZFh3Xw0qVp167yJzkHaYTm1FT1hpkutpg2VSmJPJH3', {
+        api_host: 'https://eu.i.posthog.com',
+        person_profiles: 'identified_only',
+    });
+</script>
+<script src="/posthog-tracking.js" defer></script>
   <title>Log a Session — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -14,18 +22,18 @@
       --primary:    #262626;
       --accent:     #f58321;
       --accent-dk:  #e07518;
-      --accent-lt:  #fff7ed;
+      --accent-lt:  #fff4ec;
       --accent-mid: rgba(245,131,33,0.12);
-      --muted:      #64748b;
-      --border:     #e2e8f0;
-      --bg:         #f8fafc;
-      --surface:    #f1f5f9;
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #ffffff;
+      --surface:    #f9f9f9;
       --white:      #ffffff;
       --green:      #22c55e;
-      --amber:      #f59e0b;
+      --amber:      #f58321;
       --red:        #ef4444;
-      --font-head:  'Space Grotesk', sans-serif;
-      --font-body:  'Outfit', sans-serif;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
       --radius:     14px;
     }
 
@@ -118,7 +126,7 @@
       text-align: center;
       margin-bottom: 28px;
     }
-    .step-emoji {
+    .step-icon {
       font-size: 2.2rem;
       margin-bottom: 8px;
     }
@@ -159,10 +167,12 @@
       font-weight: 600;
       color: var(--muted);
       margin-bottom: 6px;
-      font-family: var(--font-head);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
     input[type="date"],
     input[type="number"],
+    select,
     textarea {
       width: 100%;
       background: var(--white);
@@ -175,7 +185,7 @@
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
-    input:focus, textarea:focus {
+    input:focus, select:focus, textarea:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(245,131,33,0.1);
     }
@@ -207,31 +217,46 @@
       font-weight: 600;
     }
 
-    /* ── SKILL RATING CARDS ── */
+    /* ── PRE-FILLED BOOKING INFO ── */
+    .booking-info {
+      background: var(--accent-lt);
+      border: 1px solid rgba(245,131,33,0.2);
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .booking-info-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .booking-info-text { font-size: 0.85rem; color: var(--primary); line-height: 1.4; }
+    .booking-info-text strong { color: var(--accent-dk); }
+
+    /* ── TRAFFIC LIGHT SKILL CARDS ── */
     .skill-card {
       background: var(--white);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 18px 20px;
-      margin-bottom: 12px;
+      padding: 16px 18px;
+      margin-bottom: 10px;
       transition: border-color 0.2s;
     }
     .skill-card.rated { border-color: rgba(245,131,33,0.3); }
 
     .skill-label {
       font-family: var(--font-head);
-      font-size: 1rem;
-      font-weight: 600;
+      font-size: 0.95rem;
+      font-weight: 700;
       color: var(--primary);
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
 
-    .emoji-row {
+    .tl-row {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 8px;
     }
-    .emoji-btn {
+    .tl-btn {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -239,40 +264,54 @@
       background: var(--bg);
       border: 2px solid var(--border);
       border-radius: 14px;
-      padding: 16px 8px;
+      padding: 14px 8px;
       cursor: pointer;
       transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
       -webkit-tap-highlight-color: transparent;
     }
-    .emoji-btn:hover {
+    .tl-btn:hover {
       border-color: var(--muted);
       transform: translateY(-1px);
     }
-    .emoji-btn .emoji { font-size: 1.8rem; line-height: 1; }
-    .emoji-btn .emoji-label {
+    .tl-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 3px solid var(--border);
+      transition: all 0.2s;
+    }
+    .tl-btn[data-val="struggled"] .tl-dot { border-color: var(--red); background: rgba(239,68,68,0.15); }
+    .tl-btn[data-val="ok"] .tl-dot { border-color: var(--amber); background: rgba(245,131,33,0.15); }
+    .tl-btn[data-val="nailed"] .tl-dot { border-color: var(--green); background: rgba(34,197,94,0.15); }
+
+    .tl-label {
       font-size: 0.72rem;
       font-weight: 600;
       color: var(--muted);
       font-family: var(--font-body);
     }
 
-    .emoji-btn.sel-struggled {
-      background: rgba(239,68,68,0.08);
+    /* Selected states */
+    .tl-btn.sel-struggled {
+      background: rgba(239,68,68,0.06);
       border-color: var(--red);
     }
-    .emoji-btn.sel-struggled .emoji-label { color: #dc2626; }
+    .tl-btn.sel-struggled .tl-dot { background: var(--red); border-color: var(--red); }
+    .tl-btn.sel-struggled .tl-label { color: #dc2626; }
 
-    .emoji-btn.sel-ok {
-      background: rgba(245,131,33,0.08);
-      border-color: var(--accent);
+    .tl-btn.sel-ok {
+      background: rgba(245,131,33,0.06);
+      border-color: var(--amber);
     }
-    .emoji-btn.sel-ok .emoji-label { color: var(--accent-dk); }
+    .tl-btn.sel-ok .tl-dot { background: var(--amber); border-color: var(--amber); }
+    .tl-btn.sel-ok .tl-label { color: var(--accent-dk); }
 
-    .emoji-btn.sel-nailed {
-      background: rgba(34,197,94,0.08);
+    .tl-btn.sel-nailed {
+      background: rgba(34,197,94,0.06);
       border-color: var(--green);
     }
-    .emoji-btn.sel-nailed .emoji-label { color: #15803d; }
+    .tl-btn.sel-nailed .tl-dot { background: var(--green); border-color: var(--green); }
+    .tl-btn.sel-nailed .tl-label { color: #15803d; }
 
     /* ── NOTES STEP ── */
     .notes-textarea {
@@ -324,12 +363,66 @@
       font-weight: 500;
       color: var(--primary);
     }
-    .summary-skill-emoji { font-size: 1.3rem; }
+    .summary-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .summary-dot.dot-struggled { background: var(--red); }
+    .summary-dot.dot-ok { background: var(--amber); }
+    .summary-dot.dot-nailed { background: var(--green); }
     .summary-skill-skip {
       font-size: 0.78rem;
       color: var(--muted);
       font-style: italic;
     }
+
+    /* ── SUCCESS STATE ── */
+    .success-wrap {
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .success-check {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(34,197,94,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes scaleIn {
+      from { transform: scale(0); }
+      to   { transform: scale(1); }
+    }
+    .success-check svg { width: 36px; height: 36px; color: var(--green); }
+    .success-title {
+      font-family: var(--font-head);
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .success-sub {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+    .btn-dashboard {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      border-radius: var(--radius);
+      padding: 14px 32px;
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 700;
+      transition: background 0.2s;
+    }
+    .btn-dashboard:hover { background: var(--accent-dk); }
 
     /* ── BUTTONS ── */
     .btn-row {
@@ -368,22 +461,6 @@
     .btn-next:hover { background: var(--accent-dk); transform: translateY(-1px); }
     .btn-next:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-    .btn-skip {
-      display: block;
-      text-align: center;
-      margin-top: 12px;
-      color: var(--muted);
-      font-size: 0.82rem;
-      font-weight: 500;
-      cursor: pointer;
-      background: none;
-      border: none;
-      font-family: var(--font-body);
-      transition: color 0.2s;
-      width: 100%;
-    }
-    .btn-skip:hover { color: var(--primary); }
-
     /* ── ERROR ── */
     .error-msg {
       background: rgba(239,68,68,0.08);
@@ -401,7 +478,9 @@
     .bottom-nav {
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      background: var(--white);
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border-top: 1px solid var(--border);
       display: flex;
       z-index: 200;
@@ -441,23 +520,24 @@
 
 <div class="progress-wrap">
   <div class="progress-bar-bg">
-    <div class="progress-bar-fill" id="progress-fill" style="width: 12.5%"></div>
+    <div class="progress-bar-fill" id="progress-fill" style="width: 33%"></div>
   </div>
-  <div class="progress-label" id="progress-label">Step 1 of 8</div>
+  <div class="progress-label" id="progress-label">Step 1 of 3</div>
 </div>
 
 <main>
   <div class="error-msg" id="error-msg"></div>
 
-  <!-- ═══ STEP 1: Session details ═══ -->
+  <!-- ═══ STEP 1: Lesson details ═══ -->
   <div class="step active" id="step-1">
     <div class="step-header">
-      <div class="step-emoji">📋</div>
-      <div class="step-title">Session details</div>
-      <div class="step-sub">Quick basics about today's drive</div>
+      <div class="step-title">Lesson details</div>
+      <div class="step-sub">Quick basics about your drive</div>
     </div>
 
-    <div class="card">
+    <div id="booking-prefill" style="display:none;"></div>
+
+    <div class="card" id="manual-fields">
       <div class="form-row">
         <div class="form-group">
           <label>Date</label>
@@ -482,226 +562,32 @@
     </div>
   </div>
 
-  <!-- ═══ STEP 2: Speed choice ═══ -->
+  <!-- ═══ STEP 2: Rate all skills ═══ -->
   <div class="step" id="step-2">
     <div class="step-header">
-      <div class="step-emoji">⚡</div>
-      <div class="step-title">Speed choice</div>
-      <div class="step-sub">Picking the right speed for the situation</div>
+      <div class="step-title">Rate your skills</div>
+      <div class="step-sub">How did each area feel today?</div>
     </div>
 
-    <div class="skill-card" id="card-speed_choice">
-      <div class="skill-label">Choosing a safe speed</div>
-      <div class="emoji-row">
-        <button class="emoji-btn" onclick="rate('speed_choice','struggled',this)">
-          <span class="emoji">😬</span>
-          <span class="emoji-label">Struggled</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('speed_choice','ok',this)">
-          <span class="emoji">😊</span>
-          <span class="emoji-label">OK</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('speed_choice','nailed',this)">
-          <span class="emoji">🤩</span>
-          <span class="emoji-label">Nailed it</span>
-        </button>
+    <div class="step-header" style="margin-bottom:16px; text-align:left;">
+      <div style="display:flex; gap:16px; justify-content:center; flex-wrap:wrap; font-size:0.78rem; color:var(--muted);">
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--red);vertical-align:middle;margin-right:4px;"></span> Needs work</span>
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--amber);vertical-align:middle;margin-right:4px;"></span> Getting there</span>
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--green);vertical-align:middle;margin-right:4px;"></span> Confident</span>
       </div>
     </div>
 
-    <div class="skill-card" id="card-lane_choice">
-      <div class="skill-label">Slowing for junctions & lanes</div>
-      <div class="emoji-row">
-        <button class="emoji-btn" onclick="rate('lane_choice','struggled',this)">
-          <span class="emoji">😬</span>
-          <span class="emoji-label">Struggled</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('lane_choice','ok',this)">
-          <span class="emoji">😊</span>
-          <span class="emoji-label">OK</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('lane_choice','nailed',this)">
-          <span class="emoji">🤩</span>
-          <span class="emoji-label">Nailed it</span>
-        </button>
-      </div>
-    </div>
+    <div id="skills-container"></div>
 
     <div class="btn-row">
       <button class="btn-back" onclick="goTo(1)">Back</button>
-      <button class="btn-next" onclick="goTo(3)">Next</button>
+      <button class="btn-next" id="btn-step2-next" onclick="goTo(3)">Next</button>
     </div>
-    <button class="btn-skip" onclick="goTo(3)">Skip this step</button>
   </div>
 
-  <!-- ═══ STEP 3: Using mirrors ═══ -->
+  <!-- ═══ STEP 3: Notes + save ═══ -->
   <div class="step" id="step-3">
     <div class="step-header">
-      <div class="step-emoji">🪞</div>
-      <div class="step-title">Using mirrors</div>
-      <div class="step-sub">Checking before you change anything</div>
-    </div>
-
-    <div class="skill-card" id="card-mirrors">
-      <div class="skill-label">Mirror checks</div>
-      <div class="emoji-row">
-        <button class="emoji-btn" onclick="rate('mirrors','struggled',this)">
-          <span class="emoji">😬</span>
-          <span class="emoji-label">Struggled</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('mirrors','ok',this)">
-          <span class="emoji">😊</span>
-          <span class="emoji-label">OK</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('mirrors','nailed',this)">
-          <span class="emoji">🤩</span>
-          <span class="emoji-label">Nailed it</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn-back" onclick="goTo(2)">Back</button>
-      <button class="btn-next" onclick="goTo(4)">Next</button>
-    </div>
-    <button class="btn-skip" onclick="goTo(4)">Skip this step</button>
-  </div>
-
-  <!-- ═══ STEP 4: Staying in lane ═══ -->
-  <div class="step" id="step-4">
-    <div class="step-header">
-      <div class="step-emoji">🛣️</div>
-      <div class="step-title">Staying in lane</div>
-      <div class="step-sub">Holding your position on the road</div>
-    </div>
-
-    <div class="skill-card" id="card-lane_keeping">
-      <div class="skill-label">Lane discipline</div>
-      <div class="emoji-row">
-        <button class="emoji-btn" onclick="rate('lane_keeping','struggled',this)">
-          <span class="emoji">😬</span>
-          <span class="emoji-label">Struggled</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('lane_keeping','ok',this)">
-          <span class="emoji">😊</span>
-          <span class="emoji-label">OK</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('lane_keeping','nailed',this)">
-          <span class="emoji">🤩</span>
-          <span class="emoji-label">Nailed it</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn-back" onclick="goTo(3)">Back</button>
-      <button class="btn-next" onclick="goTo(5)">Next</button>
-    </div>
-    <button class="btn-skip" onclick="goTo(5)">Skip this step</button>
-  </div>
-
-  <!-- ═══ STEP 5: Stay or go decisions ═══ -->
-  <div class="step" id="step-5">
-    <div class="step-header">
-      <div class="step-emoji">🚦</div>
-      <div class="step-title">"Stay or go" decisions</div>
-      <div class="step-sub">Judging gaps and committing confidently</div>
-    </div>
-
-    <div class="skill-card" id="card-stay_or_go">
-      <div class="skill-label">Junction decisions</div>
-      <div class="emoji-row">
-        <button class="emoji-btn" onclick="rate('stay_or_go','struggled',this)">
-          <span class="emoji">😬</span>
-          <span class="emoji-label">Struggled</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('stay_or_go','ok',this)">
-          <span class="emoji">😊</span>
-          <span class="emoji-label">OK</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('stay_or_go','nailed',this)">
-          <span class="emoji">🤩</span>
-          <span class="emoji-label">Nailed it</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn-back" onclick="goTo(4)">Back</button>
-      <button class="btn-next" onclick="goTo(6)">Next</button>
-    </div>
-    <button class="btn-skip" onclick="goTo(6)">Skip this step</button>
-  </div>
-
-  <!-- ═══ STEP 6: Roundabouts ═══ -->
-  <div class="step" id="step-6">
-    <div class="step-header">
-      <div class="step-emoji">🔄</div>
-      <div class="step-title">Roundabouts</div>
-      <div class="step-sub">Lane choice, spacing, and getting round smoothly</div>
-    </div>
-
-    <div class="skill-card" id="card-roundabouts">
-      <div class="skill-label">Roundabout confidence</div>
-      <div class="emoji-row">
-        <button class="emoji-btn" onclick="rate('roundabouts','struggled',this)">
-          <span class="emoji">😬</span>
-          <span class="emoji-label">Struggled</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('roundabouts','ok',this)">
-          <span class="emoji">😊</span>
-          <span class="emoji-label">OK</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('roundabouts','nailed',this)">
-          <span class="emoji">🤩</span>
-          <span class="emoji-label">Nailed it</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn-back" onclick="goTo(5)">Back</button>
-      <button class="btn-next" onclick="goTo(7)">Next</button>
-    </div>
-    <button class="btn-skip" onclick="goTo(7)">Skip this step</button>
-  </div>
-
-  <!-- ═══ STEP 7: Manoeuvres ═══ -->
-  <div class="step" id="step-7">
-    <div class="step-header">
-      <div class="step-emoji">🅿️</div>
-      <div class="step-title">Manoeuvres</div>
-      <div class="step-sub">Reversing, parking, and slow-speed control</div>
-    </div>
-
-    <div class="skill-card" id="card-manoeuvres">
-      <div class="skill-label">Manoeuvre control</div>
-      <div class="emoji-row">
-        <button class="emoji-btn" onclick="rate('manoeuvres','struggled',this)">
-          <span class="emoji">😬</span>
-          <span class="emoji-label">Struggled</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('manoeuvres','ok',this)">
-          <span class="emoji">😊</span>
-          <span class="emoji-label">OK</span>
-        </button>
-        <button class="emoji-btn" onclick="rate('manoeuvres','nailed',this)">
-          <span class="emoji">🤩</span>
-          <span class="emoji-label">Nailed it</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn-back" onclick="goTo(6)">Back</button>
-      <button class="btn-next" onclick="goTo(8)">Next</button>
-    </div>
-    <button class="btn-skip" onclick="goTo(8)">Skip this step</button>
-  </div>
-
-  <!-- ═══ STEP 8: Anything else + save ═══ -->
-  <div class="step" id="step-8">
-    <div class="step-header">
-      <div class="step-emoji">💬</div>
       <div class="step-title">Anything else?</div>
       <div class="step-sub">Jot down anything worth remembering</div>
     </div>
@@ -722,8 +608,22 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn-back" onclick="goTo(7)">Back</button>
+      <button class="btn-back" onclick="goTo(2)">Back</button>
       <button class="btn-next" id="save-btn" onclick="saveSession()">Save Session</button>
+    </div>
+  </div>
+
+  <!-- ═══ SUCCESS ═══ -->
+  <div class="step" id="step-success">
+    <div class="success-wrap">
+      <div class="success-check">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <div class="success-title">Session logged!</div>
+      <div class="success-sub">Your progress has been updated.</div>
+      <a href="/learner/" class="btn-dashboard">Back to Dashboard</a>
     </div>
   </div>
 
@@ -732,37 +632,130 @@
 <script>
 // ── Skills config ──
 const SKILLS = [
-  { key: 'speed_choice', label: 'Speed choice',      step: 2 },
-  { key: 'lane_choice',  label: 'Lane choice',       step: 2 },
-  { key: 'mirrors',      label: 'Using mirrors',     step: 3 },
-  { key: 'lane_keeping', label: 'Staying in lane',   step: 4 },
-  { key: 'stay_or_go',   label: 'Stay or go',        step: 5 },
-  { key: 'roundabouts',  label: 'Roundabouts',       step: 6 },
-  { key: 'manoeuvres',   label: 'Manoeuvres',        step: 7 },
+  { key: 'speed_choice', label: 'Speed choice' },
+  { key: 'lane_choice',  label: 'Lane choice' },
+  { key: 'mirrors',      label: 'Mirrors' },
+  { key: 'lane_keeping', label: 'Lane keeping' },
+  { key: 'stay_or_go',   label: 'Stay or go' },
+  { key: 'roundabouts',  label: 'Roundabouts' },
+  { key: 'manoeuvres',   label: 'Manoeuvres' },
 ];
 
-const EMOJI_MAP = {
-  struggled: '😬',
-  ok:        '😊',
-  nailed:    '🤩'
-};
-
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 3;
 let currentStep = 1;
 let currentType = 'instructor';
 let AUTH;
+let bookingId = null;
+let bookingData = null;
 const ratings = {};
 
-// ── Auth ──
-window.addEventListener('DOMContentLoaded', () => {
+// ── Build skill cards ──
+function buildSkillCards() {
+  const container = document.getElementById('skills-container');
+  container.innerHTML = SKILLS.map(s => `
+    <div class="skill-card" id="card-${s.key}">
+      <div class="skill-label">${s.label}</div>
+      <div class="tl-row">
+        <button class="tl-btn" data-val="struggled" onclick="rate('${s.key}','struggled',this)">
+          <span class="tl-dot"></span>
+          <span class="tl-label">Needs work</span>
+        </button>
+        <button class="tl-btn" data-val="ok" onclick="rate('${s.key}','ok',this)">
+          <span class="tl-dot"></span>
+          <span class="tl-label">Getting there</span>
+        </button>
+        <button class="tl-btn" data-val="nailed" onclick="rate('${s.key}','nailed',this)">
+          <span class="tl-dot"></span>
+          <span class="tl-label">Confident</span>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Auth + init ──
+window.addEventListener('DOMContentLoaded', async () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (!AUTH?.token) { window.location.href = '/learner/login.html?redirect=/learner/log-session.html'; return; }
-  document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
+  if (!AUTH?.token) {
+    const redirect = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = '/learner/login.html?redirect=' + redirect;
+    return;
+  }
+
+  buildSkillCards();
+
+  // Check for booking_id in URL
+  const params = new URLSearchParams(window.location.search);
+  bookingId = params.get('booking_id');
+
+  if (bookingId) {
+    await loadBookingDetails(bookingId);
+  } else {
+    document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
+  }
+
+  updateStep2Button();
 });
+
+// ── Load booking details for pre-fill ──
+async function loadBookingDetails(id) {
+  try {
+    const res = await fetch('/api/learner?action=unlogged-bookings', {
+      headers: { 'Authorization': `Bearer ${AUTH.token}` }
+    });
+    if (!res.ok) return fallbackManual();
+    const data = await res.json();
+    const booking = (data.bookings || []).find(b => String(b.id) === String(id));
+
+    if (!booking) return fallbackManual();
+
+    bookingData = booking;
+
+    // Show pre-filled info
+    const dateObj = new Date(booking.scheduled_date + 'T00:00:00Z');
+    const dateStr = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const start = booking.start_time ? booking.start_time.slice(0, 5) : '';
+    const end = booking.end_time ? booking.end_time.slice(0, 5) : '';
+
+    // Calculate duration from start/end time
+    if (start && end) {
+      const [sh, sm] = start.split(':').map(Number);
+      const [eh, em] = end.split(':').map(Number);
+      const durationMins = (eh * 60 + em) - (sh * 60 + sm);
+      if (durationMins > 0) {
+        document.getElementById('duration').value = durationMins;
+      }
+    }
+
+    document.getElementById('session-date').value = booking.scheduled_date;
+
+    const prefill = document.getElementById('booking-prefill');
+    prefill.style.display = 'block';
+    prefill.innerHTML = `
+      <div class="booking-info">
+        <div class="booking-info-icon">&#x1F4C5;</div>
+        <div class="booking-info-text">
+          Logging lesson on <strong>${dateStr}</strong> ${start ? `at <strong>${start} – ${end}</strong>` : ''}
+          ${booking.instructor_name ? ` with <strong>${booking.instructor_name}</strong>` : ''}
+        </div>
+      </div>`;
+
+    // Hide manual date/type fields since we have booking data
+    currentType = 'instructor';
+
+  } catch {
+    fallbackManual();
+  }
+}
+
+function fallbackManual() {
+  bookingId = null;
+  bookingData = null;
+  document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
+}
 
 // ── Navigation ──
 function goTo(step) {
-  // Validate step 1
   if (currentStep === 1 && step > 1) {
     const date = document.getElementById('session-date').value;
     if (!date) { showError('Please pick a date'); return; }
@@ -774,8 +767,7 @@ function goTo(step) {
   updateProgress();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // Build summary on final step
-  if (step === TOTAL_STEPS) buildSummary();
+  if (step === 3) buildSummary();
 }
 
 function updateProgress() {
@@ -794,13 +786,23 @@ function setType(type) {
 // ── Rate a skill ──
 function rate(key, value, btn) {
   ratings[key] = value;
-  // Clear siblings
   const card = document.getElementById(`card-${key}`);
   card.classList.add('rated');
-  card.querySelectorAll('.emoji-btn').forEach(b => {
-    b.className = 'emoji-btn';
+  card.querySelectorAll('.tl-btn').forEach(b => {
+    b.className = 'tl-btn';
+    b.setAttribute('data-val', b.getAttribute('data-val'));
   });
   btn.classList.add(`sel-${value}`);
+  updateStep2Button();
+}
+
+function updateStep2Button() {
+  const rated = Object.keys(ratings).length;
+  const btn = document.getElementById('btn-step2-next');
+  btn.disabled = rated < SKILLS.length;
+  btn.textContent = rated < SKILLS.length
+    ? `Next (${rated}/${SKILLS.length} rated)`
+    : 'Next';
 }
 
 // ── Summary ──
@@ -820,7 +822,7 @@ function buildSummary() {
     const r = ratings[s.key];
     return `<div class="summary-skill-row">
       <span class="summary-skill-name">${s.label}</span>
-      ${r ? `<span class="summary-skill-emoji">${EMOJI_MAP[r]}</span>` : `<span class="summary-skill-skip">Skipped</span>`}
+      ${r ? `<span class="summary-dot dot-${r}"></span>` : `<span class="summary-skill-skip">Skipped</span>`}
     </div>`;
   }).join('');
 
@@ -844,6 +846,10 @@ async function saveSession() {
     ratings: ratingsList
   };
 
+  if (bookingId) {
+    payload.booking_id = parseInt(bookingId);
+  }
+
   const btn = document.getElementById('save-btn');
   btn.disabled = true;
   btn.textContent = 'Saving...';
@@ -856,11 +862,14 @@ async function saveSession() {
     });
     if (res.status === 401) { window.location.href = '/learner/login.html'; return; }
     const data = await res.json();
-    if (!res.ok) { showError(data.error || 'Failed to save. Please try again.'); return; }
-    window.location.href = '/learner/';
+    if (!res.ok) { showError(data.error || 'Failed to save. Please try again.'); btn.disabled = false; btn.textContent = 'Save Session'; return; }
+
+    // Show success
+    document.getElementById(`step-${currentStep}`).classList.remove('active');
+    document.getElementById('step-success').classList.add('active');
+    document.querySelector('.progress-wrap').style.display = 'none';
   } catch {
     showError('Network error. Please check your connection.');
-  } finally {
     btn.disabled = false;
     btn.textContent = 'Save Session';
   }
@@ -880,23 +889,23 @@ function hideError() {
 
 <nav class="bottom-nav">
   <a href="/learner/" class="bottom-nav-item">
-    <span class="bottom-nav-icon">📊</span>
+    <span class="bottom-nav-icon">&#x1F4CA;</span>
     <span>Dashboard</span>
   </a>
   <a href="/learner/book.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">📅</span>
+    <span class="bottom-nav-icon">&#x1F4C5;</span>
     <span>Book</span>
   </a>
   <a href="/learner/videos.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">🎬</span>
+    <span class="bottom-nav-icon">&#x1F3AC;</span>
     <span>Videos</span>
   </a>
   <a href="/learner/buy-credits.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">💳</span>
+    <span class="bottom-nav-icon">&#x1F4B3;</span>
     <span>Lessons</span>
   </a>
   <a href="/learner/log-session.html" class="bottom-nav-item active">
-    <span class="bottom-nav-icon">📝</span>
+    <span class="bottom-nav-icon">&#x1F4DD;</span>
     <span>Log Session</span>
   </a>
 </nav>

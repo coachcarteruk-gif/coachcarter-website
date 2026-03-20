@@ -90,13 +90,15 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   │   ├── verify.html             # Token verification page (two-step: validate then verify)
 │   │   ├── book.html               # Lesson booking calendar — monthly/weekly/daily views (credit or pay-per-slot)
 │   │   ├── buy-credits.html        # Buy lesson credits via Stripe
-│   │   ├── log-session.html        # Log a driving session (stepped wizard, emoji ratings)
+│   │   ├── log-session.html        # Log a driving session (3-step wizard, traffic light ratings, booking pre-fill)
 │   │   └── videos.html             # Video library (behind login)
 │   ├── instructor/
 │   │   ├── login.html              # Magic-link login for instructors
 │   │   ├── index.html              # Instructor schedule calendar (monthly/weekly/daily views)
 │   │   ├── availability.html       # Instructor sets their own weekly availability
 │   │   └── profile.html            # Instructor updates bio, contact details, and buffer time
+│   ├── demo/
+│   │   └── book.html               # Demo booking calendar — real flow with free demo instructor
 │   ├── videos.json                 # Legacy video data (fallback — videos now managed in DB via admin portal)
 │   ├── config.json                 # Site config
 │   └── Logo.png                    # CoachCarter logo
@@ -110,8 +112,11 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   │   ├── 005_contact_preference.sql # prefer_contact_before on learner_users
 │   │   ├── 006_pickup_address.sql  # pickup_address on learner_users
 │   │   ├── 007_buffer_minutes.sql  # buffer_minutes on instructors
-│   │   └── 008_videos.sql          # video_categories + videos tables
+│   │   ├── 008_videos.sql          # video_categories + videos tables
+│   │   └── 009_session_booking_link.sql # booking_id on driving_sessions
 │   └── seeds/                      # Placeholder data for testing
+│       ├── 001_placeholder_instructors.sql
+│       └── 002_demo_instructor.sql # Creates demo instructor with full 7-day availability
 │
 ├── middleware.js                   # Vercel middleware — maintenance mode redirect
 ├── vercel.json                     # Route config
@@ -151,9 +156,9 @@ The site uses a consistent dark charcoal theme matching the CoachCarter logo exa
 --border:   #e2e4eb   /* dividers on light backgrounds */
 ```
 
-Font: Inter (Google Fonts). All pages link to it via:
+Fonts: **Bricolage Grotesque** (headings) + **Lato** (body). All pages link to them via:
 ```html
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Lato:wght@300;400;700&display=swap">
 ```
 
 ---
@@ -182,6 +187,7 @@ Base price: **£82.50 per credit** (set in `api/credits.js` as `CREDIT_PRICE_PEN
 - Booking is instant — no instructor approval needed
 - **With credits:** 1 credit deducted on booking; returned automatically on 48+ hour cancellations
 - **Without credits (pay-per-slot):** Slot reserved for 10 minutes during Stripe Checkout; on payment confirmation, 1 credit added + deducted atomically, booking created, .ics calendar attachment sent to both parties
+- **Demo instructor:** Bookings against the demo instructor (email `demo@coachcarter.uk`) are free — no credit check or deduction. The demo instructor is excluded from real booking flows. No emails sent to the demo instructor on book/cancel. Cancel returns no credits (since none were taken).
 - Race condition protection via DB unique index on `(instructor_id, scheduled_date, start_time)` + slot reservations table
 
 ### Cancellation policy
@@ -212,13 +218,14 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `sessions` | GET | Yes | Returns last 20 sessions with skill ratings |
-| `sessions` | POST | Yes | Save a new session |
+| `sessions` | POST | Yes | Save a new session (optional `booking_id` to link to completed booking) |
 | `progress` | GET | Yes | Returns latest skill ratings, stats, current tier, phone, pickup_address, prefer_contact_before |
 | `update-name` | POST | Yes | Set learner name (used after first magic-link login) |
 | `profile` | GET | Yes | Returns learner profile (name, email, phone, pickup_address, prefer_contact_before) |
 | `update-profile` | POST | Yes | Update phone and pickup_address |
 | `contact-pref` | GET | Yes | Returns prefer_contact_before flag |
 | `set-contact-pref` | POST | Yes | Toggle prefer_contact_before. Body: `{ prefer_contact_before: boolean }` |
+| `unlogged-bookings` | GET | Yes | Returns completed bookings that haven't been logged yet |
 
 ### API — `api/credits.js`
 
@@ -263,7 +270,7 @@ prefer_contact_before BOOLEAN DEFAULT FALSE
 created_at TIMESTAMPTZ
 ```
 
-**`driving_sessions`** / **`skill_ratings`** — unchanged from original design (see original schema).
+**`driving_sessions`** / **`skill_ratings`** — session logging tables. `driving_sessions` has optional `booking_id` (FK to `lesson_bookings`) to link sessions to completed bookings. Unique constraint ensures one log per booking. Skill ratings use Traffic Light system: `struggled` (red), `ok` (amber), `nailed` (green).
 
 **`credit_transactions`**
 ```sql
@@ -475,11 +482,13 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Slot reservations** — 10-minute TTL; expired reservations are excluded from availability but cleaned up lazily (on next webhook or when table is queried)
 - **Dynamic pricing table** — `guarantee_pricing` is auto-created and seeded on first call to `/api/guarantee-price`; no manual migration needed. The webhook increments the price atomically after each Pass Programme purchase. Admin can override the price via the editor or direct API call.
 - **Pricing page routing** — all site nav "Pricing" links now point to `/learner-journey.html`, not `/lessons.html`. The old lessons page still works for PAYG/bulk but is no longer the primary entry point.
+- **PostHog analytics** — all pages include the PostHog snippet for event tracking and session recording
 
 ---
 
 ## Recent changes (March 2026)
 
+- **Demo booking system** (20 March) — public demo page at `/demo/book.html` lets users explore the full booking flow (monthly/weekly/daily calendar views) with a dedicated demo instructor. Requires sign-up/login but bookings are free (no credit deduction). Users receive real confirmation emails, calendar invites, and can cancel from the page. Demo instructor (ID 5, email `demo@coachcarter.uk`) has full 7-day availability (07:00–21:00) with zero buffer. Filtered out of real booking flows via email check in `api/instructors.js` and `api/slots.js`. Demo links added to homepage quiz and pricing page. SQL seed at `db/seeds/002_demo_instructor.sql`.
 - **Dynamic Pass Programme pricing** (20 March) — demand-based pricing for the Pass Programme: starts at £1,500, increases £100 per enrolment, caps at £3,000. New `/api/guarantee-price` endpoint with dedicated `guarantee_pricing` DB table, atomic increments via Stripe webhook, manual override in admin editor. Transparent "launch pricing" messaging with progress bar on the learner journey page.
 - **Pricing page restructure** (20 March) — learner-journey.html is now the canonical pricing page (linked from all nav bars site-wide). Features a tabbed hero card (PAYG vs Pass Programme) with live dynamic pricing. The old lessons.html retains PAYG and bulk packages with a redirect banner for the Pass Programme. Comparison table and guarantee calculator removed from lessons.html.
 - **Renamed Pass Guarantee → Pass Programme** (20 March) — all user-facing references renamed across HTML, JS, config, and email templates. Code identifiers (`pass_guarantee`, `isPassGuarantee`) kept for Stripe/webhook compatibility.
@@ -493,7 +502,7 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Slot engine SQL fix** (18 March) — fixed 500 error caused by nested Neon sql template literals in conditional query fragments
 - **Pay-per-slot booking** — learners with 0 credits can now pay £82.50 at the point of booking via Stripe Checkout, with a 10-minute slot reservation during payment
 - **Magic link login fix** — email clients pre-fetching links were consuming tokens; fixed with a two-step validate (GET) → verify (POST) flow
-- **Session logging rebuild** — stepped wizard with emoji-based ratings replacing the original single-page form
+- **Session logging rebuild v2** (20 March) — complete rewrite of `log-session.html`: consolidated from 8 steps to 3 (details → rate all skills → notes/save). Replaced emoji ratings (😬/😊/🤩) with Traffic Light system (Red = Needs work, Amber = Getting there, Green = Confident). Sessions now link to completed bookings via `booking_id` column. When instructor marks a lesson complete, learner receives email with direct link to log that session. Dashboard shows "unlogged lessons" banner. Instructor schedule now displays collapsible learner self-assessments on completed bookings. Fonts migrated to Bricolage Grotesque + Lato across learner portal. New API endpoint: `unlogged-bookings`. Migration: `009_session_booking_link.sql`
 - **Learner portal videos** — classroom videos page added behind login with bottom nav
 - **Homepage quiz update** — quiz results now direct to Learner Hub / Book a Free Trial / Explore Prices
 - **Instructor login redesign** — choice screen (Sign In / Join the Team), two-step magic link prefetch fix, and "Join the team" enquiry form for prospective instructors

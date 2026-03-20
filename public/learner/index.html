@@ -3,10 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageviewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    posthog.init('phc_JZFh3Xw0qVp167yJzkHaYTm1FT1hpkutpg2VSmJPJH3', {
+        api_host: 'https://eu.i.posthog.com',
+        person_profiles: 'identified_only',
+    });
+</script>
+<script src="/posthog-tracking.js" defer></script>
   <title>My Progress — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -15,19 +23,19 @@
       --primary:    #262626;
       --accent:     #f58321;
       --accent-dk:  #e07518;
-      --accent-lt:  #fff7ed;
+      --accent-lt:  #fff4ec;
       --accent-mid: rgba(245,131,33,0.12);
       --accent-glow: rgba(245,131,33,0.25);
-      --muted:      #64748b;
-      --border:     #e2e8f0;
-      --bg:         #f8fafc;
-      --surface:    #f1f5f9;
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #ffffff;
+      --surface:    #f9f9f9;
       --white:      #ffffff;
       --green:      #22c55e;
       --amber:      #f59e0b;
       --red:        #ef4444;
-      --font-head:  'Space Grotesk', sans-serif;
-      --font-body:  'Outfit', sans-serif;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
       --radius:     14px;
     }
 
@@ -612,6 +620,39 @@
     .empty-state .emoji { font-size: 2rem; margin-bottom: 10px; }
     .empty-state p { font-size: 0.9rem; }
 
+    /* UNLOGGED BANNER */
+    .unlogged-banner {
+      background: var(--accent-lt);
+      border: 1px solid rgba(245,131,33,0.25);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: none;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .unlogged-banner.show { display: flex; }
+    .unlogged-banner-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .unlogged-banner-text { flex: 1; min-width: 160px; }
+    .unlogged-banner-title { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
+    .unlogged-banner-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+    .btn-log-now {
+      background: var(--accent); color: #fff; border: none; border-radius: 10px;
+      padding: 10px 20px; font-family: var(--font-head); font-size: 0.85rem;
+      font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .btn-log-now:hover { background: var(--accent-dk); }
+
+    /* TRAFFIC LIGHT DOT */
+    .tl-dot-sm {
+      width: 14px; height: 14px; border-radius: 50%; display: inline-block;
+    }
+    .dot-struggled { background: var(--red); }
+    .dot-ok { background: var(--accent); }
+    .dot-nailed { background: var(--green); }
+
     @media (max-width: 480px) {
       .stats-bar { grid-template-columns: repeat(2, 1fr); }
     }
@@ -690,6 +731,16 @@
     </div>
   </div>
 
+  <!-- UNLOGGED BOOKING BANNER -->
+  <div class="unlogged-banner" id="unlogged-banner">
+    <div class="unlogged-banner-icon">&#x1F4DD;</div>
+    <div class="unlogged-banner-text">
+      <div class="unlogged-banner-title" id="unlogged-title"></div>
+      <div class="unlogged-banner-sub" id="unlogged-sub">Your instructor marked it complete — take 30 seconds to log how it went.</div>
+    </div>
+    <a class="btn-log-now" id="unlogged-btn" href="#">Log now</a>
+  </div>
+
   <!-- PROFILE (phone + pickup address) -->
   <div class="profile-card" id="profile-card">
     <div class="profile-card-header">
@@ -754,9 +805,9 @@
   <!-- RECENT SESSIONS -->
   <div class="section-title" style="margin-top: 28px;">Recent Sessions</div>
   <div class="rating-legend">
-    <span>🤩 Nailed it</span>
-    <span>😊 OK</span>
-    <span>😬 Struggled</span>
+    <span><span class="tl-dot-sm dot-nailed" style="vertical-align:middle;margin-right:4px;"></span> Confident</span>
+    <span><span class="tl-dot-sm dot-ok" style="vertical-align:middle;margin-right:4px;"></span> Getting there</span>
+    <span><span class="tl-dot-sm dot-struggled" style="vertical-align:middle;margin-right:4px;"></span> Needs work</span>
   </div>
   <div id="sessions-list"></div>
 </main>
@@ -800,13 +851,13 @@ const LEGACY_LABELS = {
   t1_mirrors: 'Mirror checks', t1_mice: 'MICE routine', t1_eval: 'Overall'
 };
 
-let AUTH, PROGRESS, SESSIONS_DATA, CREDITS_DATA, BOOKINGS_DATA;
+let AUTH, PROGRESS, SESSIONS_DATA, CREDITS_DATA, BOOKINGS_DATA, UNLOGGED_DATA;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
   if (!AUTH?.token) { window.location.href = '/learner/login.html'; return; }
   document.getElementById('header-name').textContent = AUTH.user.name;
-  await Promise.all([loadProgress(), loadSessions(), loadCredits(), loadBookings()]);
+  await Promise.all([loadProgress(), loadSessions(), loadCredits(), loadBookings(), loadUnlogged()]);
   render();
 });
 
@@ -844,6 +895,13 @@ async function loadBookings() {
   } catch (e) { console.error(e); }
 }
 
+async function loadUnlogged() {
+  try {
+    const res = await fetch('/api/learner?action=unlogged-bookings', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
+    if (res.ok) UNLOGGED_DATA = await res.json();
+  } catch (e) { console.error(e); }
+}
+
 function render() {
   if (!PROGRESS) return;
 
@@ -864,6 +922,7 @@ function render() {
   }
 
   renderUpcoming();
+  renderUnlogged();
 
   const s = PROGRESS.stats;
   document.getElementById('welcome-msg').textContent = `Hi, ${PROGRESS.name} 👋`;
@@ -876,7 +935,7 @@ function render() {
   const rated = SKILLS.filter(s => ratingsMap[s.key]).length;
   document.getElementById('welcome-sub').textContent = rated === 0
     ? 'Log your first session to start tracking progress.'
-    : `${nailedit} of ${SKILLS.length} skills at 🤩 — keep going!`;
+    : `${nailedit} of ${SKILLS.length} skills at green — keep going!`;
 
   document.getElementById('stat-sessions').textContent = s.total_sessions;
   document.getElementById('stat-hours').textContent = (s.total_minutes / 60).toFixed(1);
@@ -891,9 +950,12 @@ function renderProgressCards(ratingsMap) {
   const container = document.getElementById('progress-cards');
   container.innerHTML = '';
 
+  const TL_LABELS = { struggled: 'Needs work', ok: 'Getting there', nailed: 'Confident' };
+
   SKILLS.forEach(skill => {
     const rating = ratingsMap[skill.key];
-    const display = rating ? RATING_DISPLAY[rating] : null;
+    const dotClass = rating ? `dot-${rating}` : '';
+    const label = rating ? TL_LABELS[rating] || rating : null;
 
     const card = document.createElement('div');
     card.className = 'progress-card';
@@ -901,8 +963,8 @@ function renderProgressCards(ratingsMap) {
 
     card.innerHTML = `
       <span style="font-size:0.95rem; font-weight:600; color:var(--primary);">${skill.label}</span>
-      ${display
-        ? `<span style="font-size:1.4rem;" title="${display.label}">${display.emoji}</span>`
+      ${rating
+        ? `<span class="tl-dot-sm ${dotClass}" title="${label}"></span>`
         : `<span style="font-size:0.78rem; color:var(--muted); font-style:italic;">Not rated</span>`
       }`;
     container.appendChild(card);
@@ -923,9 +985,9 @@ function renderSessions() {
     const durationChip = s.duration_minutes ? `<span class="session-chip chip-duration">${s.duration_minutes} min</span>` : '';
 
     const ratingsHTML = (s.ratings || []).map(r => {
-      const display = RATING_DISPLAY[r.rating] || { emoji: '❓', label: r.rating, color: '#94a3b8' };
+      const dotClass = r.rating === 'nailed' ? 'dot-nailed' : r.rating === 'ok' ? 'dot-ok' : r.rating === 'struggled' ? 'dot-struggled' : '';
       const label = SKILL_LABELS[r.skill_key] || LEGACY_LABELS[r.skill_key] || r.skill_key.replace(/_/g, ' ');
-      return `<div class="session-skill-pill"><span style="font-size:1rem;">${display.emoji}</span> ${label}</div>`;
+      return `<div class="session-skill-pill"><span class="tl-dot-sm ${dotClass}" style="width:10px;height:10px;"></span> ${label}</div>`;
     }).join('');
 
     const notesHTML = s.notes ? `<div class="session-notes">"${s.notes}"</div>` : '';
@@ -994,6 +1056,19 @@ function renderUpcoming() {
         </div>
       </div>`;
   }).join('');
+}
+
+function renderUnlogged() {
+  const bookings = (UNLOGGED_DATA && UNLOGGED_DATA.bookings) ? UNLOGGED_DATA.bookings : [];
+  const banner = document.getElementById('unlogged-banner');
+  if (bookings.length === 0) { banner.classList.remove('show'); return; }
+
+  const count = bookings.length;
+  document.getElementById('unlogged-title').textContent =
+    count === 1 ? 'You have a lesson to log' : `You have ${count} lessons to log`;
+  document.getElementById('unlogged-btn').href =
+    '/learner/log-session.html?booking_id=' + bookings[0].id;
+  banner.classList.add('show');
 }
 
 async function downloadICS(bookingId) {

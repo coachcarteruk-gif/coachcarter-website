@@ -25,6 +25,7 @@ module.exports = async (req, res) => {
   if (action === 'set-contact-pref')  return handleSetContactPref(req, res);
   if (action === 'profile')           return handleProfile(req, res);
   if (action === 'update-profile')    return handleUpdateProfile(req, res);
+  if (action === 'unlogged-bookings') return handleUnloggedBookings(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -63,6 +64,8 @@ async function handleSessions(req, res) {
     created_at TIMESTAMPTZ DEFAULT NOW())`;
   // Add note column to existing tables that predate this feature
   await sql`ALTER TABLE skill_ratings ADD COLUMN IF NOT EXISTS note TEXT`;
+  // Add booking link column
+  await sql`ALTER TABLE driving_sessions ADD COLUMN IF NOT EXISTS booking_id INTEGER`;
 
   if (req.method === 'GET') {
     try {
@@ -84,12 +87,24 @@ async function handleSessions(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { session_date, duration_minutes, session_type, notes, ratings } = req.body;
+      const { session_date, duration_minutes, session_type, notes, ratings, booking_id } = req.body;
       if (!session_date) return res.status(400).json({ error: 'Session date is required' });
 
+      // Validate booking_id if provided
+      if (booking_id) {
+        const [booking] = await sql`
+          SELECT id FROM lesson_bookings
+          WHERE id = ${booking_id} AND learner_id = ${user.id} AND status = 'completed'`;
+        if (!booking) return res.status(400).json({ error: 'Invalid or incomplete booking' });
+
+        const [existing] = await sql`
+          SELECT id FROM driving_sessions WHERE booking_id = ${booking_id}`;
+        if (existing) return res.status(400).json({ error: 'This booking has already been logged' });
+      }
+
       const sessionRows = await sql`
-        INSERT INTO driving_sessions (user_id, session_date, duration_minutes, session_type, notes)
-        VALUES (${user.id}, ${session_date}, ${duration_minutes || null}, ${session_type || 'instructor'}, ${notes || null})
+        INSERT INTO driving_sessions (user_id, session_date, duration_minutes, session_type, notes, booking_id)
+        VALUES (${user.id}, ${session_date}, ${duration_minutes || null}, ${session_type || 'instructor'}, ${notes || null}, ${booking_id || null})
         RETURNING id`;
       const sessionId = sessionRows[0].id;
 
@@ -198,6 +213,33 @@ async function handleProfile(req, res) {
   } catch (err) {
     console.error('profile error:', err);
     return res.status(500).json({ error: 'Failed to load profile' });
+  }
+}
+
+// ── GET /api/learner?action=unlogged-bookings ────────────────────────────────
+// Returns completed bookings that haven't been logged yet.
+async function handleUnloggedBookings(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const bookings = await sql`
+      SELECT lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
+             i.name AS instructor_name, i.id AS instructor_id
+      FROM lesson_bookings lb
+      JOIN instructors i ON i.id = lb.instructor_id
+      LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
+      WHERE lb.learner_id = ${user.id}
+        AND lb.status = 'completed'
+        AND ds.id IS NULL
+      ORDER BY lb.scheduled_date DESC
+      LIMIT 20`;
+    return res.json({ bookings });
+  } catch (err) {
+    console.error('unlogged-bookings error:', err);
+    return res.status(500).json({ error: 'Failed to load unlogged bookings' });
   }
 }
 
