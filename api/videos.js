@@ -141,36 +141,65 @@ async function handleCategories(req, res) {
 }
 
 // ── Admin: get direct upload URL from Cloudflare ─────────────────────────────
-// Uses Cloudflare's non-TUS direct creator upload (simple form POST)
+// Returns both a simple uploadURL (for files ≤200MB) and a TUS endpoint
 async function handleUploadUrl(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { maxDurationSeconds } = req.body || {};
-  const maxDuration = maxDurationSeconds || 600;
+  const { maxDurationSeconds, fileSize } = req.body || {};
+  const maxDuration = maxDurationSeconds || 3600;
+  const useTus = fileSize && fileSize > 200 * 1024 * 1024; // >200MB needs TUS
 
   try {
-    const resp = await cfFetch('/direct_upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ maxDurationSeconds: maxDuration }),
-    });
+    if (useTus) {
+      // TUS upload for large files
+      const resp = await cfFetch('?direct_user=true', {
+        method: 'POST',
+        headers: {
+          'Tus-Resumable': '1.0.0',
+          'Upload-Length': String(fileSize),
+          'Upload-Metadata': `maxDurationSeconds ${Buffer.from(String(maxDuration)).toString('base64')}`,
+        },
+      });
 
-    if (!resp.ok) {
-      const body = await resp.text();
-      console.error('CF upload-url error:', resp.status, body);
-      return res.status(502).json({ error: 'Failed to get upload URL from Cloudflare' });
+      if (!resp.ok) {
+        const body = await resp.text();
+        console.error('CF TUS upload-url error:', resp.status, body);
+        return res.status(502).json({ error: 'Failed to get upload URL from Cloudflare' });
+      }
+
+      const uploadUrl = resp.headers.get('location');
+      const uid = resp.headers.get('stream-media-id');
+
+      if (!uploadUrl || !uid) {
+        return res.status(502).json({ error: 'Cloudflare response missing upload URL or UID' });
+      }
+
+      return res.json({ uploadUrl, uid, method: 'tus' });
+    } else {
+      // Simple form POST for files ≤200MB
+      const resp = await cfFetch('/direct_upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxDurationSeconds: maxDuration }),
+      });
+
+      if (!resp.ok) {
+        const body = await resp.text();
+        console.error('CF upload-url error:', resp.status, body);
+        return res.status(502).json({ error: 'Failed to get upload URL from Cloudflare' });
+      }
+
+      const data = await resp.json();
+      const uploadUrl = data.result?.uploadURL;
+      const uid = data.result?.uid;
+
+      if (!uploadUrl || !uid) {
+        return res.status(502).json({ error: 'Cloudflare response missing upload URL or UID' });
+      }
+
+      return res.json({ uploadUrl, uid, method: 'form' });
     }
-
-    const data = await resp.json();
-    const uploadUrl = data.result?.uploadURL;
-    const uid = data.result?.uid;
-
-    if (!uploadUrl || !uid) {
-      return res.status(502).json({ error: 'Cloudflare response missing upload URL or UID' });
-    }
-
-    return res.json({ uploadUrl, uid });
   } catch (err) {
     console.error('upload-url error:', err);
     return res.status(500).json({ error: 'Failed to get upload URL', details: err.message });
