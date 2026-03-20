@@ -368,8 +368,6 @@ async function handleBook(req, res) {
     `;
     if (!learner)
       return res.status(404).json({ error: 'Learner account not found' });
-    if (learner.credit_balance < 1)
-      return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
 
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
@@ -379,15 +377,25 @@ async function handleBook(req, res) {
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found or unavailable' });
 
-    // 3. Deduct credit FIRST (atomically — only if balance >= 1)
-    const [deducted] = await sql`
-      UPDATE learner_users
-      SET credit_balance = credit_balance - 1
-      WHERE id = ${user.id} AND credit_balance >= 1
-      RETURNING credit_balance
-    `;
-    if (!deducted)
-      return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
+    // Demo instructor bookings are free (no credit deduction)
+    const isDemoInstructor = instructor.email === 'demo@coachcarter.uk';
+
+    if (!isDemoInstructor) {
+      if (learner.credit_balance < 1)
+        return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
+    }
+
+    // 3. Deduct credit FIRST (skip for demo instructor)
+    if (!isDemoInstructor) {
+      const [deducted] = await sql`
+        UPDATE learner_users
+        SET credit_balance = credit_balance - 1
+        WHERE id = ${user.id} AND credit_balance >= 1
+        RETURNING credit_balance
+      `;
+      if (!deducted)
+        return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
+    }
 
     // 4. Create booking — unique index on (instructor_id, scheduled_date, start_time)
     //    will throw if slot was taken. If so, refund the credit.
@@ -403,12 +411,14 @@ async function handleBook(req, res) {
       `;
       booking = b;
     } catch (insertErr) {
-      // Refund the credit since booking failed
-      await sql`
-        UPDATE learner_users
-        SET credit_balance = credit_balance + 1
-        WHERE id = ${user.id}
-      `;
+      // Refund the credit since booking failed (not needed for demo)
+      if (!isDemoInstructor) {
+        await sql`
+          UPDATE learner_users
+          SET credit_balance = credit_balance + 1
+          WHERE id = ${user.id}
+        `;
+      }
       if (insertErr.message?.includes('uq_instructor_slot')) {
         return res.status(409).json({ error: 'Sorry, that slot was just booked by someone else. Please choose another.' });
       }
@@ -463,28 +473,30 @@ async function handleBook(req, res) {
       }]
     });
 
-    // Email to instructor
-    await mailer.sendMail({
-      from:    'CoachCarter <system@coachcarter.uk>',
-      to:      instructor.email,
-      subject: `New booking — ${lessonDateStr} at ${start_time}`,
-      html: `
-        <h2>New lesson booked</h2>
-        <table>
-          <tr><td><strong>Learner:</strong></td><td>${learner.name}</td></tr>
-          <tr><td><strong>Email:</strong></td><td>${learner.email}</td></tr>
-          <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
-          <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
-        </table>
-        <p style="margin-top:16px">
-          <a href="https://coachcarter.uk/instructor/"
-             style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
-                    border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
-            View my schedule →
-          </a>
-        </p>
-      `
-    });
+    // Email to instructor (skip for demo instructor)
+    if (!isDemoInstructor) {
+      await mailer.sendMail({
+        from:    'CoachCarter <system@coachcarter.uk>',
+        to:      instructor.email,
+        subject: `New booking — ${lessonDateStr} at ${start_time}`,
+        html: `
+          <h2>New lesson booked</h2>
+          <table>
+            <tr><td><strong>Learner:</strong></td><td>${learner.name}</td></tr>
+            <tr><td><strong>Email:</strong></td><td>${learner.email}</td></tr>
+            <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
+            <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+          </table>
+          <p style="margin-top:16px">
+            <a href="https://coachcarter.uk/instructor/"
+               style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
+                      border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
+              View my schedule →
+            </a>
+          </p>
+        `
+      });
+    }
 
     return res.status(201).json({
       success:        true,
@@ -669,7 +681,9 @@ async function handleCancel(req, res) {
     // Calculate hours until lesson
     const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}:00Z`);
     const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
-    const creditReturned = hoursUntil >= CANCEL_HOURS_CUTOFF;
+    const isDemoBooking  = booking.instructor_email === 'demo@coachcarter.uk';
+    // Demo bookings are free, so no credit to return
+    const creditReturned = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF;
 
     // Cancel the booking
     await sql`
@@ -678,7 +692,7 @@ async function handleCancel(req, res) {
       WHERE id = ${booking_id}
     `;
 
-    // Return credit if eligible
+    // Return credit if eligible (not for demo bookings)
     if (creditReturned) {
       await sql`
         UPDATE learner_users SET credit_balance = credit_balance + 1
@@ -717,26 +731,30 @@ async function handleCancel(req, res) {
       `
     });
 
-    // Notify instructor
-    await mailer.sendMail({
-      from:    'CoachCarter <system@coachcarter.uk>',
-      to:      booking.instructor_email,
-      subject: `Lesson cancelled — ${lessonDateStr} at ${String(booking.start_time).slice(0,5)}`,
-      html: `
-        <h2>Lesson cancelled</h2>
-        <p>The lesson with <strong>${booking.learner_name}</strong> on
-           <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
-           has been cancelled by the learner.</p>
-      `
-    });
+    // Notify instructor (skip for demo instructor)
+    if (!isDemoBooking) {
+      await mailer.sendMail({
+        from:    'CoachCarter <system@coachcarter.uk>',
+        to:      booking.instructor_email,
+        subject: `Lesson cancelled — ${lessonDateStr} at ${String(booking.start_time).slice(0,5)}`,
+        html: `
+          <h2>Lesson cancelled</h2>
+          <p>The lesson with <strong>${booking.learner_name}</strong> on
+             <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
+             has been cancelled by the learner.</p>
+        `
+      });
+    }
 
     return res.json({
       success:        true,
       credit_returned: creditReturned,
       credit_balance:  updated.credit_balance,
-      message: creditReturned
-        ? 'Booking cancelled and lesson returned to your balance.'
-        : `Booking cancelled. Lesson forfeited (less than ${CANCEL_HOURS_CUTOFF} hours\' notice).`
+      message: isDemoBooking
+        ? 'Demo booking cancelled.'
+        : creditReturned
+          ? 'Booking cancelled and lesson returned to your balance.'
+          : `Booking cancelled. Lesson forfeited (less than ${CANCEL_HOURS_CUTOFF} hours\' notice).`
     });
 
   } catch (err) {
