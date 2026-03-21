@@ -23,45 +23,30 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'Invalid postcode format' });
   }
 
-  const apiKey = process.env.GETADDRESS_API_KEY;
-  if (!apiKey) {
-    console.error('GETADDRESS_API_KEY not configured');
-    return res.status(503).json({ error: 'Address lookup not available' });
-  }
-
   try {
-    const url = `https://api.getaddress.io/find/${encodeURIComponent(postcode)}?api-key=${apiKey}&expand=true`;
+    // Use postcodes.io (free, no API key needed) to validate and get area info
+    const url = `https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`;
     const resp = await fetch(url);
 
-    console.log('getaddress.io response:', resp.status, 'for postcode:', postcode);
-
-    if (resp.status === 401) {
-      console.error('getaddress.io API key invalid or expired');
-      return res.status(502).json({ error: 'Address lookup configuration error' });
-    }
     if (resp.status === 404) {
-      return res.status(404).json({ error: 'No addresses found for this postcode' });
-    }
-    if (resp.status === 429) {
-      return res.status(429).json({ error: 'Lookup limit reached, please try again later' });
+      return res.status(404).json({ error: 'Postcode not found' });
     }
     if (!resp.ok) {
-      const body = await resp.text();
-      console.error('getaddress.io error:', resp.status, body);
-      return res.status(502).json({ error: 'Address lookup temporarily unavailable' });
+      return res.status(502).json({ error: 'Postcode lookup temporarily unavailable' });
     }
 
     const data = await resp.json();
-    const addresses = (data.addresses || []).map(a => {
-      // getaddress.io with expand=true returns objects; format them as strings
-      if (typeof a === 'string') return a.replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim();
-      const parts = [a.line_1, a.line_2, a.line_3, a.line_4, a.locality, a.town_or_city, a.county].filter(Boolean);
-      return parts.join(', ');
-    }).filter(Boolean);
+    const r = data.result;
 
-    return res.json({ postcode: data.postcode || postcode, addresses });
+    return res.json({
+      postcode: r.postcode,
+      area: [r.parish, r.admin_ward, r.admin_district].filter(Boolean).join(', '),
+      town: r.admin_district || '',
+      county: r.pfa || r.admin_county || '',
+      country: r.country || 'England'
+    });
   } catch (err) {
     console.error('address-lookup error:', err);
-    return res.status(502).json({ error: 'Address lookup temporarily unavailable' });
+    return res.status(502).json({ error: 'Postcode lookup temporarily unavailable' });
   }
 };
