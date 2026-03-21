@@ -555,6 +555,15 @@
     </div>
   </div>
 
+  <!-- Q&A unanswered banner -->
+  <div id="qa-banner" style="display:none;background:var(--accent-lt);border:1.5px solid var(--accent);border-radius:var(--radius);padding:14px 20px;margin-bottom:18px;align-items:center;justify-content:space-between;gap:12px;">
+    <div style="font-size:0.875rem;">
+      <strong style="color:var(--accent);" id="qa-banner-text">You have unanswered questions</strong>
+      <span style="color:var(--muted);font-size:0.82rem;margin-left:6px;">from learners</span>
+    </div>
+    <a href="/instructor/qa.html" style="background:var(--accent);color:white;border:none;padding:8px 18px;border-radius:8px;font-family:var(--font-head);font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;text-decoration:none;">Answer now</a>
+  </div>
+
   <!-- Toolbar -->
   <div class="cal-toolbar">
     <div class="cal-title-block">
@@ -621,19 +630,23 @@
 
 <nav class="bottom-nav">
   <a href="/instructor/" class="bottom-nav-item active">
-    <span class="bottom-nav-icon">📅</span>
+    <span class="bottom-nav-icon">&#x1F4C5;</span>
     <span>Schedule</span>
   </a>
   <a href="/instructor/availability.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">🕐</span>
+    <span class="bottom-nav-icon">&#x1F550;</span>
     <span>Availability</span>
   </a>
+  <a href="/instructor/qa.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#x1F4AC;</span>
+    <span>Q&A</span>
+  </a>
   <a href="/instructor/profile.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">👤</span>
+    <span class="bottom-nav-icon">&#x1F464;</span>
     <span>Profile</span>
   </a>
   <a href="/admin/portal.html" class="bottom-nav-item" id="admin-tab" style="display:none">
-    <span class="bottom-nav-icon">⚙️</span>
+    <span class="bottom-nav-icon">&#x2699;&#xFE0F;</span>
     <span>Admin</span>
   </a>
 </nav>
@@ -675,6 +688,26 @@ function init() {
   cursor = new Date(); cursor.setHours(0,0,0,0);
   setView('daily'); // start in daily view on today
   loadAvailability();
+  loadQABanner();
+}
+
+async function loadQABanner() {
+  try {
+    const res = await fetch('/api/instructor?action=qa-list&status=open&limit=50', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const data = await res.json();
+    if (!res.ok) return;
+    const openCount = (data.questions || []).length;
+    if (openCount > 0) {
+      const banner = document.getElementById('qa-banner');
+      banner.style.display = 'flex';
+      document.getElementById('qa-banner-text').textContent =
+        openCount === 1 ? '1 unanswered question' : openCount + ' unanswered questions';
+    }
+  } catch (err) {
+    console.error('qa-banner error:', err);
+  }
 }
 
 // ─── View switching ──────────────────────────────────────────────────────────

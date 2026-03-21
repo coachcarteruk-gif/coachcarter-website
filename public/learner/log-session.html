@@ -717,7 +717,12 @@
       </div>
       <div class="success-title">Session logged!</div>
       <div class="success-sub">Your progress has been updated.</div>
-      <a href="/learner/log-session.html" class="btn-dashboard">Log Another</a>
+      <div class="qa-prompt" id="qa-prompt" style="margin-top:24px;padding:20px;background:var(--accent-lt);border-radius:var(--radius);border:1px solid rgba(245,131,33,0.2);text-align:left;">
+        <div style="font-weight:700;margin-bottom:6px;">&#x1F4AC; Got a question about today's session?</div>
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:12px;">Your instructor can answer it in the Q&A section.</p>
+        <button class="btn-next" onclick="askSessionQuestion()" style="width:auto;padding:10px 24px;font-size:0.85rem;">Ask a Question</button>
+      </div>
+      <a href="/learner/log-session.html" class="btn-dashboard" style="margin-top:16px;">Log Another</a>
     </div>
   </div>
 
@@ -970,6 +975,10 @@ async function saveSession() {
     const data = await res.json();
     if (!res.ok) { showError(data.error || 'Failed to save. Please try again.'); btn.disabled = false; btn.textContent = 'Save Session'; return; }
 
+    // Store saved session info for Q&A link
+    window._savedSessionId = data.session_id;
+    window._savedBookingId = bookingId ? parseInt(bookingId) : null;
+
     // Show success
     document.getElementById(`step-${currentStep}`).classList.remove('active');
     document.getElementById('step-success').classList.add('active');
@@ -991,6 +1000,14 @@ function showError(msg) {
 }
 function hideError() {
   document.getElementById('error-msg').classList.remove('show');
+}
+
+// ── Ask Q&A after session ──
+function askSessionQuestion() {
+  let url = '/learner/qa.html?ask=1';
+  if (window._savedSessionId) url += '&session_id=' + window._savedSessionId;
+  if (window._savedBookingId) url += '&booking_id=' + window._savedBookingId;
+  window.location.href = url;
 }
 
 // ── Session History ──
@@ -1050,17 +1067,17 @@ function renderSessions(sessions) {
     <span class="bottom-nav-icon">&#x1F4CA;</span>
     <span>Dashboard</span>
   </a>
-  <a href="/learner/book.html" class="bottom-nav-item">
+  <a href="/learner/lessons.html" class="bottom-nav-item">
     <span class="bottom-nav-icon">&#x1F4C5;</span>
-    <span>Book</span>
+    <span>Lessons</span>
   </a>
   <a href="/learner/videos.html" class="bottom-nav-item">
     <span class="bottom-nav-icon">&#x1F3AC;</span>
     <span>Videos</span>
   </a>
-  <a href="/learner/buy-credits.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F4B3;</span>
-    <span>Lessons</span>
+  <a href="/learner/qa.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#x1F4AC;</span>
+    <span>Q&A</span>
   </a>
   <a href="/learner/log-session.html" class="bottom-nav-item active">
     <span class="bottom-nav-icon">&#x1F4DD;</span>
