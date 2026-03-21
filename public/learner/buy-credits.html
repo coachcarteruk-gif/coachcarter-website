@@ -405,6 +405,102 @@
     .toast.error { background: var(--red); }
     .toast.cancelled { background: var(--muted); }
 
+    /* ── Pass Programme section ── */
+    .programme-divider {
+      display: flex; align-items: center; gap: 16px;
+      margin: 40px 0 32px;
+    }
+    .programme-divider-line {
+      flex: 1; height: 1px; background: var(--border);
+    }
+    .programme-divider-text {
+      font-family: var(--font-head); font-size: 0.85rem;
+      font-weight: 700; color: var(--muted); white-space: nowrap;
+    }
+
+    .programme-card {
+      background: var(--primary); color: #fff;
+      border-radius: var(--radius); padding: 32px 28px;
+      margin-bottom: 28px;
+    }
+    .programme-badge {
+      display: inline-block; background: var(--accent); color: #fff;
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; padding: 4px 12px; border-radius: 20px;
+      margin-bottom: 16px;
+    }
+    .programme-title {
+      font-family: var(--font-head); font-size: 1.4rem;
+      font-weight: 800; color: #fff; margin-bottom: 6px;
+    }
+    .programme-sub {
+      font-size: 0.88rem; color: rgba(255,255,255,0.5);
+      margin-bottom: 24px; line-height: 1.5;
+    }
+    .programme-price-row {
+      display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;
+    }
+    .programme-price {
+      font-family: var(--font-head); font-size: 2.4rem;
+      font-weight: 800; color: var(--accent); letter-spacing: -0.03em;
+    }
+    .programme-price-unit {
+      font-size: 0.82rem; color: rgba(255,255,255,0.35);
+    }
+    .programme-urgency {
+      display: flex; align-items: flex-start; gap: 8px;
+      background: rgba(245,131,33,0.08); border-radius: 8px;
+      padding: 10px 14px; margin-bottom: 16px;
+      font-size: 0.75rem; color: rgba(255,255,255,0.5);
+    }
+    .programme-urgency strong { color: var(--accent); }
+    .programme-urgency-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); margin-top: 4px; flex-shrink: 0;
+      animation: pulse-dot 2s ease infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.4); }
+    }
+    .programme-progress { margin-bottom: 24px; }
+    .programme-progress-bar {
+      height: 4px; background: rgba(255,255,255,0.08);
+      border-radius: 2px; overflow: hidden;
+    }
+    .programme-progress-fill {
+      height: 100%; border-radius: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-dk));
+      transition: width 0.6s ease;
+    }
+    .programme-progress-labels {
+      display: flex; justify-content: space-between;
+      margin-top: 6px; font-size: 0.65rem; color: rgba(255,255,255,0.3);
+    }
+    .programme-progress-labels strong { color: rgba(255,255,255,0.5); }
+    .programme-benefits {
+      list-style: none; display: flex; flex-direction: column;
+      gap: 10px; margin-bottom: 28px;
+    }
+    .programme-benefits li {
+      display: flex; gap: 10px; font-size: 0.85rem;
+      color: rgba(255,255,255,0.6); line-height: 1.4;
+    }
+    .programme-benefits li::before {
+      content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0;
+    }
+    .btn-programme {
+      width: 100%; padding: 16px;
+      background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.3);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      font-family: var(--font-head); font-size: 1.05rem; font-weight: 700;
+      cursor: not-allowed;
+    }
+    .programme-cta-note {
+      text-align: center; font-size: 0.75rem;
+      color: rgba(255,255,255,0.25); margin-top: 10px;
+    }
+
     /* ── Loading spinner ── */
     .spinner {
       width: 18px; height: 18px;
@@ -420,6 +516,9 @@
       .pkg-card { padding: 16px 18px; gap: 12px; }
       .pkg-title { font-size: 1rem; }
       .pkg-price { font-size: 1.15rem; }
+      .programme-card { padding: 24px 20px; }
+      .programme-title { font-size: 1.2rem; }
+      .programme-price { font-size: 2rem; }
     }
   </style>
 </head>
@@ -555,6 +654,54 @@
   <p class="klarna-note">
     <strong>Pay in 3 with Klarna</strong> available at checkout — split the cost interest-free.
   </p>
+
+  <!-- Pass Programme section -->
+  <div class="programme-divider">
+    <span class="programme-divider-line"></span>
+    <span class="programme-divider-text">Or go all in</span>
+    <span class="programme-divider-line"></span>
+  </div>
+
+  <div class="programme-card">
+    <div class="programme-badge">Pass Programme</div>
+    <h2 class="programme-title">The complete route to your licence</h2>
+    <p class="programme-sub">18-week structured programme — everything you need, nothing you don't.</p>
+
+    <div class="programme-price-row">
+      <span class="programme-price" id="programmePrice">£1,500</span>
+      <span class="programme-price-unit">all-inclusive</span>
+    </div>
+
+    <div class="programme-urgency">
+      <span class="programme-urgency-dot"></span>
+      <span><strong>Launch pricing</strong> — price increases £100 with every enrolment</span>
+    </div>
+
+    <div class="programme-progress">
+      <div class="programme-progress-bar">
+        <div class="programme-progress-fill" id="programmeProgressFill" style="width:0%"></div>
+      </div>
+      <div class="programme-progress-labels">
+        <span>Launch: <strong id="programmeStartPrice">£1,500</strong></span>
+        <span>You pay: <strong id="programmeCurrentPrice">£1,500</strong></span>
+        <span>Full price: <strong id="programmeCapPrice">£3,000</strong></span>
+      </div>
+    </div>
+
+    <ul class="programme-benefits">
+      <li>18 lessons (27 hrs) with a qualified instructor</li>
+      <li>18-week structured programme across 3 tiers</li>
+      <li>3 mock driving assessments built in</li>
+      <li>Practical test booking included</li>
+      <li>1st retake fully covered (15 hrs + test)</li>
+      <li>100% money back after first lesson</li>
+    </ul>
+
+    <button class="btn-programme" id="btnProgramme" disabled>
+      <span id="btnProgrammeLabel">Coming soon</span>
+    </button>
+    <p class="programme-cta-note">Checkout for the Pass Programme is launching shortly.</p>
+  </div>
 
   <!-- Policy card -->
   <div class="policy-card">
@@ -717,9 +864,36 @@
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
+  // Load Pass Programme price
+  async function loadProgrammePrice() {
+    try {
+      const res = await fetch('/api/guarantee-price?t=' + Date.now());
+      const data = await res.json();
+
+      const price = data.current_price || 1500;
+      const base  = data.base_price || 1500;
+      const cap   = data.cap || 3000;
+
+      document.getElementById('programmePrice').textContent =
+        '£' + price.toLocaleString('en-GB');
+      document.getElementById('programmeStartPrice').textContent =
+        '£' + base.toLocaleString('en-GB');
+      document.getElementById('programmeCurrentPrice').textContent =
+        '£' + price.toLocaleString('en-GB');
+      document.getElementById('programmeCapPrice').textContent =
+        '£' + cap.toLocaleString('en-GB');
+
+      const pct = base === cap ? 100 : Math.min(((price - base) / (cap - base)) * 100, 100);
+      document.getElementById('programmeProgressFill').style.width = pct + '%';
+    } catch (err) {
+      console.warn('Could not load programme price:', err);
+    }
+  }
+
   if (initAuth()) {
     loadBalance();
     selectPkg(8); // Default to most popular
+    loadProgrammePrice();
   }
 </script>
 
