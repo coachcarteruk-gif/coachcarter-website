@@ -583,6 +583,30 @@
     .profile-field input:focus,
     .profile-field textarea:focus { border-color: var(--accent); }
     .profile-field textarea { min-height: 60px; }
+    .profile-field select {
+      width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 9px 12px; font-size: 0.88rem; font-family: var(--font-body);
+      background: var(--white); color: var(--primary); outline: none;
+      transition: border-color 0.15s; cursor: pointer;
+    }
+    .profile-field select:focus { border-color: var(--accent); }
+    .postcode-lookup-row {
+      display: flex; gap: 8px; margin-bottom: 6px;
+    }
+    .postcode-lookup-row input {
+      flex: 1; text-transform: uppercase;
+    }
+    .btn-lookup {
+      background: var(--accent); color: white; border: none;
+      border-radius: 8px; padding: 9px 16px;
+      font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
+      cursor: pointer; transition: background 0.15s; white-space: nowrap;
+    }
+    .btn-lookup:hover { background: var(--accent-dk); }
+    .btn-lookup:disabled { opacity: 0.6; cursor: not-allowed; }
+    .postcode-error {
+      font-size: 0.78rem; color: var(--red); margin-top: 2px;
+    }
     .profile-save-row {
       display: flex; align-items: center; justify-content: space-between;
       margin-top: 12px; gap: 12px;
@@ -810,7 +834,15 @@
       </div>
       <div class="profile-field">
         <label for="profileAddress">Pickup address</label>
-        <textarea id="profileAddress" placeholder="Where should your instructor pick you up?"></textarea>
+        <div class="postcode-lookup-row">
+          <input type="text" id="postcodeInput" placeholder="Enter postcode" maxlength="8">
+          <button type="button" class="btn-lookup" id="btnLookup" onclick="lookupPostcode()">Find address</button>
+        </div>
+        <select id="addressSelect" style="display:none" onchange="onAddressSelected()">
+          <option value="">-- Select your address --</option>
+        </select>
+        <div class="postcode-error" id="postcodeError" style="display:none"></div>
+        <textarea id="profileAddress" placeholder="Or type your address manually"></textarea>
       </div>
     </div>
     <div class="profile-save-row">
@@ -1086,6 +1118,53 @@ async function downloadICS(bookingId) {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } catch {}
+}
+
+// ── Postcode address lookup ──────────────────────────────────────────────────
+async function lookupPostcode() {
+  const input = document.getElementById('postcodeInput');
+  const btn = document.getElementById('btnLookup');
+  const select = document.getElementById('addressSelect');
+  const error = document.getElementById('postcodeError');
+  const postcode = input.value.trim().replace(/\s+/g, '');
+
+  error.style.display = 'none';
+  if (!/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/i.test(postcode)) {
+    error.textContent = 'Please enter a valid UK postcode';
+    error.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Looking up…';
+  try {
+    const res = await fetch('/api/address-lookup?postcode=' + encodeURIComponent(postcode), {
+      headers: { Authorization: 'Bearer ' + AUTH.token }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Lookup failed');
+
+    select.innerHTML = '<option value="">-- Select your address --</option>';
+    data.addresses.forEach(addr => {
+      const opt = document.createElement('option');
+      opt.value = addr; opt.textContent = addr;
+      select.appendChild(opt);
+    });
+    select.style.display = 'block';
+    select.focus();
+  } catch (err) {
+    error.textContent = err.message || 'Lookup unavailable — type your address manually';
+    error.style.display = 'block';
+    select.style.display = 'none';
+  }
+  btn.disabled = false; btn.textContent = 'Find address';
+}
+
+function onAddressSelected() {
+  const select = document.getElementById('addressSelect');
+  if (select.value) {
+    document.getElementById('profileAddress').value = select.value;
+    updateProfileBadge();
+  }
 }
 
 // ── Profile (phone + pickup address) ─────────────────────────────────────────
