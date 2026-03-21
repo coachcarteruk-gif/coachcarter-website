@@ -609,18 +609,18 @@
   <!-- Pass Programme section -->
   <div class="programme-divider">
     <span class="programme-divider-line"></span>
-    <span class="programme-divider-text">Or go all in</span>
+    <span class="programme-divider-text">Or stop paying by the hour</span>
     <span class="programme-divider-line"></span>
   </div>
 
   <div class="programme-card">
     <div class="programme-badge">Pass Programme</div>
-    <h2 class="programme-title">The complete route to your licence</h2>
-    <p class="programme-sub">18-week structured programme — everything you need, nothing you don't.</p>
+    <h2 class="programme-title">Pass your test — guaranteed</h2>
+    <p class="programme-sub">You pay once. We teach you until you're ready, book your test, and if you need a retake — that's on us too.</p>
 
     <div class="programme-price-row">
       <span class="programme-price" id="programmePrice">£1,500</span>
-      <span class="programme-price-unit">all-inclusive</span>
+      <span class="programme-price-unit">one fixed price</span>
     </div>
 
     <div class="programme-urgency">
@@ -639,14 +639,43 @@
       </div>
     </div>
 
+    <!-- Why this beats hourly lessons -->
+    <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 16px 18px; margin-bottom: 24px;">
+      <p style="font-size: 0.78rem; font-weight: 700; color: rgba(255,255,255,0.7); margin-bottom: 12px; font-family: var(--font-head);">Why hourly lessons cost you more</p>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+        <div style="flex: 1; text-align: center; padding: 12px 8px; background: rgba(255,255,255,0.04); border-radius: 8px;">
+          <div style="font-size: 0.65rem; color: rgba(255,255,255,0.35); margin-bottom: 4px;">Typical PAYG cost to pass</div>
+          <div style="font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: rgba(255,255,255,0.5); text-decoration: line-through;">£2,000+</div>
+          <div style="font-size: 0.6rem; color: rgba(255,255,255,0.25); margin-top: 2px;">45hrs + retakes, no guarantee</div>
+        </div>
+        <div style="font-size: 1.2rem; color: rgba(255,255,255,0.2);">vs</div>
+        <div style="flex: 1; text-align: center; padding: 12px 8px; background: rgba(245,131,33,0.1); border: 1px solid rgba(245,131,33,0.2); border-radius: 8px;">
+          <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 4px;">Pass Programme</div>
+          <div style="font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: var(--accent);" id="programmeComparePrice">£1,500</div>
+          <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 2px;">fixed price, retake included</div>
+        </div>
+      </div>
+    </div>
+
     <ul class="programme-benefits">
-      <li>18 lessons (27 hrs) with a qualified instructor</li>
-      <li>18-week structured programme across 3 tiers</li>
-      <li>3 mock driving assessments built in</li>
-      <li>Practical test booking included</li>
-      <li>1st retake fully covered (15 hrs + test)</li>
-      <li>100% money back after first lesson</li>
+      <li>Minimum 18 lessons (27 hrs) — structured across 3 tiers</li>
+      <li>3 formal driving assessments — your instructor schedules extra lessons after each one if needed, at no extra cost</li>
+      <li>You only take the test when your instructor says you're ready — not before</li>
+      <li>Practical test booking included — we handle the DVSA admin</li>
+      <li>1st retake fully covered (15 hrs + test) — if you need it, it's on us</li>
+      <li>100% money back after your first lesson — no risk, no lock-in</li>
+      <li>One fixed price — no surprise costs, no matter how many lessons it takes</li>
     </ul>
+
+    <div style="background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.15); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start;">
+      <span style="color: var(--green); font-weight: 700; flex-shrink: 0;">75%+</span>
+      <span style="font-size: 0.8rem; color: rgba(255,255,255,0.55); line-height: 1.5;">of our learners pass first time — vs the national average of 49%. Our structured programme is designed to get you test-ready, not just clock hours.</span>
+    </div>
+
+    <div style="background: rgba(245,131,33,0.06); border: 1px solid rgba(245,131,33,0.12); border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; display: flex; gap: 10px; align-items: flex-start;">
+      <span style="font-size: 0.85rem; flex-shrink: 0;">🤝</span>
+      <span style="font-size: 0.78rem; color: rgba(255,255,255,0.5); line-height: 1.5;"><strong style="color: rgba(255,255,255,0.7);">Our interests are aligned.</strong> With hourly lessons, a school earns more the longer you take. With the Pass Programme, you pay a fixed price — so every extra lesson and every retake comes out of our pocket, not yours. The faster you pass, the better it is for both of us.</span>
+    </div>
 
     <button class="btn-programme" id="btnProgramme" disabled>
       <span id="btnProgrammeLabel">Coming soon</span>
@@ -819,6 +848,8 @@
         '£' + price.toLocaleString('en-GB');
       document.getElementById('programmeCapPrice').textContent =
         '£' + cap.toLocaleString('en-GB');
+      document.getElementById('programmeComparePrice').textContent =
+        '£' + price.toLocaleString('en-GB');
 
       const pct = base === cap ? 100 : Math.min(((price - base) / (cap - base)) * 100, 100);
       document.getElementById('programmeProgressFill').style.width = pct + '%';
