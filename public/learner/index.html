@@ -761,8 +761,8 @@
       <div class="credit-sub" id="credit-sub">lessons</div>
     </div>
     <div class="credit-actions">
-      <a href="/learner/buy-credits.html" class="btn-buy">Buy Lessons</a>
-      <a href="/learner/book.html" class="btn-book-lesson" id="book-btn">Book a Lesson →</a>
+      <a href="/learner/lessons.html?tab=buy" class="btn-buy">Buy Lessons</a>
+      <a href="/learner/lessons.html" class="btn-book-lesson" id="book-btn">Book a Lesson →</a>
       <a href="/demo/book.html" class="btn-book-lesson" style="border-color: rgba(245,131,33,0.3); color: var(--accent);">Try Demo →</a>
     </div>
   </div>
@@ -783,6 +783,18 @@
       <div class="unlogged-banner-sub" id="unlogged-sub">Your instructor marked it complete — take 30 seconds to log how it went.</div>
     </div>
     <a class="btn-log-now" id="unlogged-btn" href="#">Log now</a>
+  </div>
+
+  <!-- Q&A QUICK ACCESS -->
+  <div id="qa-card" style="display:none;background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-family:var(--font-head);font-weight:700;font-size:0.95rem;">Recent Questions</div>
+      <a href="/learner/qa.html" style="font-size:0.8rem;font-weight:600;color:var(--accent);text-decoration:none;">View all →</a>
+    </div>
+    <div id="qa-list-preview"></div>
+    <div style="margin-top:12px;">
+      <a href="/learner/qa.html?ask=1" style="display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border-radius:100px;padding:8px 18px;font-size:0.82rem;font-weight:700;text-decoration:none;transition:all 0.18s;">+ Ask a Question</a>
+    </div>
   </div>
 
   <!-- PROFILE (phone + pickup address) -->
@@ -904,6 +916,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('header-name').textContent = AUTH.user.name;
   await Promise.all([loadProgress(), loadCredits(), loadBookings(), loadUnlogged()]);
   render();
+  loadQAPreview();
 });
 
 function logout() {
@@ -1152,27 +1165,67 @@ async function toggleContactPref() {
     console.error('contact-pref error:', err);
   }
 }
+
+// ── Q&A Preview ──
+async function loadQAPreview() {
+  try {
+    const res = await fetch('/api/learner?action=qa-list&limit=3', {
+      headers: { Authorization: 'Bearer ' + AUTH.token }
+    });
+    const data = await res.json();
+    if (!res.ok) return;
+    const questions = data.questions || [];
+    const card = document.getElementById('qa-card');
+    const list = document.getElementById('qa-list-preview');
+
+    // Always show the card (even if empty, the "Ask a Question" CTA is valuable)
+    card.style.display = '';
+
+    if (questions.length === 0) {
+      list.innerHTML = '<div style="font-size:0.85rem;color:var(--muted);padding:4px 0;">No questions yet. Ask your instructor anything!</div>';
+      return;
+    }
+
+    list.innerHTML = questions.map(q => {
+      const statusColor = q.status === 'open' ? 'var(--accent)' : q.status === 'answered' ? 'var(--green)' : 'var(--muted)';
+      const statusBg = q.status === 'open' ? 'var(--accent-lt)' : q.status === 'answered' ? 'var(--green-lt)' : 'var(--surface)';
+      return `<a href="/learner/qa.html" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);text-decoration:none;color:inherit;">
+        <span style="font-size:0.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escH(q.title)}</span>
+        <span style="font-size:0.68rem;font-weight:700;text-transform:uppercase;padding:2px 8px;border-radius:100px;background:${statusBg};color:${statusColor};white-space:nowrap;">${q.status}</span>
+      </a>`;
+    }).join('');
+  } catch (err) {
+    console.error('qa-preview error:', err);
+  }
+}
+
+function escH(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
 </script>
 
 <nav class="bottom-nav">
   <a href="/learner/" class="bottom-nav-item active">
-    <span class="bottom-nav-icon">📊</span>
+    <span class="bottom-nav-icon">&#x1F4CA;</span>
     <span>Dashboard</span>
   </a>
-  <a href="/learner/book.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">📅</span>
-    <span>Book</span>
-  </a>
-  <a href="/learner/videos.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">🎬</span>
-    <span>Videos</span>
-  </a>
-  <a href="/learner/buy-credits.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">💳</span>
+  <a href="/learner/lessons.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#x1F4C5;</span>
     <span>Lessons</span>
   </a>
+  <a href="/learner/videos.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#x1F3AC;</span>
+    <span>Videos</span>
+  </a>
+  <a href="/learner/qa.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#x1F4AC;</span>
+    <span>Q&A</span>
+  </a>
   <a href="/learner/log-session.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">📝</span>
+    <span class="bottom-nav-icon">&#x1F4DD;</span>
     <span>Session Log</span>
   </a>
 </nav>

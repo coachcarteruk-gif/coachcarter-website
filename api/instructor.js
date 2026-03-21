@@ -80,6 +80,9 @@ module.exports = async (req, res) => {
   if (action === 'update-profile')   return handleUpdateProfile(req, res);
   if (action === 'blackout-dates')     return handleBlackoutDates(req, res);
   if (action === 'set-blackout-dates') return handleSetBlackoutDates(req, res);
+  if (action === 'qa-list')            return handleQAList(req, res);
+  if (action === 'qa-detail')          return handleQADetail(req, res);
+  if (action === 'qa-reply')           return handleQAReply(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -733,5 +736,122 @@ async function handleSetBlackoutDates(req, res) {
   } catch (err) {
     console.error('instructor set-blackout-dates error:', err);
     return res.status(500).json({ error: 'Failed to save blackout dates' });
+  }
+}
+
+// ── Q&A: List questions (all, public) ───────────────────────────────────────
+async function handleQAList(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const status = req.query.status;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 50);
+
+    let questions;
+    if (status) {
+      questions = await sql`
+        SELECT q.id, q.learner_id, q.title, q.body, q.status, q.booking_id, q.session_id,
+               q.created_at, q.updated_at,
+               lu.name AS learner_name,
+               COUNT(a.id)::int AS answer_count
+        FROM qa_questions q
+        JOIN learner_users lu ON lu.id = q.learner_id
+        LEFT JOIN qa_answers a ON a.question_id = q.id
+        WHERE q.status = ${status}
+        GROUP BY q.id, lu.name
+        ORDER BY q.created_at DESC
+        LIMIT ${limit}`;
+    } else {
+      questions = await sql`
+        SELECT q.id, q.learner_id, q.title, q.body, q.status, q.booking_id, q.session_id,
+               q.created_at, q.updated_at,
+               lu.name AS learner_name,
+               COUNT(a.id)::int AS answer_count
+        FROM qa_questions q
+        JOIN learner_users lu ON lu.id = q.learner_id
+        LEFT JOIN qa_answers a ON a.question_id = q.id
+        GROUP BY q.id, lu.name
+        ORDER BY q.created_at DESC
+        LIMIT ${limit}`;
+    }
+    return res.json({ questions });
+  } catch (err) {
+    console.error('instructor qa-list error:', err);
+    return res.status(500).json({ error: 'Failed to load questions' });
+  }
+}
+
+// ── Q&A: Question detail with answers ───────────────────────────────────────
+async function handleQADetail(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const questionId = req.query.question_id;
+  if (!questionId) return res.status(400).json({ error: 'question_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [question] = await sql`
+      SELECT q.*, lu.name AS learner_name
+      FROM qa_questions q
+      JOIN learner_users lu ON lu.id = q.learner_id
+      WHERE q.id = ${questionId}`;
+    if (!question) return res.status(404).json({ error: 'Question not found' });
+
+    const answers = await sql`
+      SELECT a.*,
+        CASE WHEN a.author_type = 'learner' THEN lu.name
+             WHEN a.author_type = 'instructor' THEN i.name
+             ELSE 'Unknown' END AS author_name
+      FROM qa_answers a
+      LEFT JOIN learner_users lu ON a.author_type = 'learner' AND lu.id = a.author_id
+      LEFT JOIN instructors i ON a.author_type = 'instructor' AND i.id = a.author_id
+      WHERE a.question_id = ${questionId}
+      ORDER BY a.created_at ASC`;
+
+    return res.json({ question, answers });
+  } catch (err) {
+    console.error('instructor qa-detail error:', err);
+    return res.status(500).json({ error: 'Failed to load question' });
+  }
+}
+
+// ── Q&A: Instructor answer ──────────────────────────────────────────────────
+async function handleQAReply(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { question_id, body } = req.body;
+  if (!question_id) return res.status(400).json({ error: 'question_id required' });
+  if (!body || !body.trim()) return res.status(400).json({ error: 'Reply body is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [question] = await sql`SELECT id, status FROM qa_questions WHERE id = ${question_id}`;
+    if (!question) return res.status(404).json({ error: 'Question not found' });
+
+    const [answer] = await sql`
+      INSERT INTO qa_answers (question_id, author_type, author_id, body)
+      VALUES (${question_id}, 'instructor', ${instructor.id}, ${body.trim()})
+      RETURNING id, created_at`;
+
+    // Auto-mark as answered when instructor replies
+    if (question.status === 'open') {
+      await sql`UPDATE qa_questions SET status = 'answered', updated_at = NOW() WHERE id = ${question_id}`;
+    } else {
+      await sql`UPDATE qa_questions SET updated_at = NOW() WHERE id = ${question_id}`;
+    }
+
+    return res.json({ success: true, answer_id: answer.id });
+  } catch (err) {
+    console.error('instructor qa-reply error:', err);
+    return res.status(500).json({ error: 'Failed to post reply' });
   }
 }

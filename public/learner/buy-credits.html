@@ -118,12 +118,29 @@
     .bottom-nav-item.active { color: var(--accent); }
     .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
 
+    /* ── Sub-tabs ── */
+    .sub-tabs {
+      display: flex; max-width: 680px; margin: 0 auto; padding: 0 20px; margin-top: 64px;
+      border-bottom: 1px solid var(--border); background: var(--white);
+    }
+    .sub-tab {
+      flex: 1; padding: 14px 8px; text-align: center;
+      font-family: var(--font-head); font-size: 0.85rem; font-weight: 700;
+      color: var(--muted); text-decoration: none; position: relative;
+      transition: color 0.2s;
+    }
+    .sub-tab:hover { color: var(--primary); }
+    .sub-tab.active { color: var(--accent); }
+    .sub-tab.active::after {
+      content: ''; position: absolute; bottom: -1px; left: 20%; right: 20%;
+      height: 2px; background: var(--accent); border-radius: 1px;
+    }
+
     /* ── Page layout ── */
     main {
       max-width: 680px;
       margin: 0 auto;
       padding: 48px 20px 80px;
-      margin-top: 64px;
     }
 
     h1 {
@@ -431,6 +448,11 @@
   <button onclick="logout()">Sign out</button>
 </div>
 
+<div class="sub-tabs">
+  <a href="/learner/book.html" class="sub-tab">Book a Lesson</a>
+  <a href="/learner/buy-credits.html" class="sub-tab active">Buy Credits</a>
+</div>
+
 <main>
   <h1>Buy Lessons</h1>
   <p class="subtitle">Each lesson is 1.5 hours with a qualified instructor. Pick a package and book whenever you're ready.</p>
@@ -703,23 +725,23 @@
 
 <nav class="bottom-nav">
   <a href="/learner/" class="bottom-nav-item">
-    <span class="bottom-nav-icon">📊</span>
+    <span class="bottom-nav-icon">&#x1F4CA;</span>
     <span>Dashboard</span>
   </a>
-  <a href="/learner/book.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">📅</span>
-    <span>Book</span>
-  </a>
-  <a href="/learner/videos.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">🎬</span>
-    <span>Videos</span>
-  </a>
-  <a href="/learner/buy-credits.html" class="bottom-nav-item active">
-    <span class="bottom-nav-icon">💳</span>
+  <a href="/learner/lessons.html" class="bottom-nav-item active">
+    <span class="bottom-nav-icon">&#x1F4C5;</span>
     <span>Lessons</span>
   </a>
+  <a href="/learner/videos.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#x1F3AC;</span>
+    <span>Videos</span>
+  </a>
+  <a href="/learner/qa.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon">&#x1F4AC;</span>
+    <span>Q&A</span>
+  </a>
   <a href="/learner/log-session.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">📝</span>
+    <span class="bottom-nav-icon">&#x1F4DD;</span>
     <span>Session Log</span>
   </a>
 </nav>

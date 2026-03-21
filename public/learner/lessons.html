@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lessons — CoachCarter</title>
+  <script>
+    // Redirect to the appropriate sub-tab
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'buy') {
+      window.location.replace('/learner/buy-credits.html');
+    } else {
+      window.location.replace('/learner/book.html');
+    }
+  </script>
+</head>
+<body>
+  <p>Redirecting...</p>
+</body>
+</html>
