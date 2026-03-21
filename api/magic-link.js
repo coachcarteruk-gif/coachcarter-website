@@ -2,8 +2,19 @@ const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const twilio = require('twilio');
 
 const FREE_TRIAL_CREDITS = 1;
+
+// Normalize UK phone numbers to E.164 format for Twilio
+function normalizeUKPhone(phone) {
+  const digits = phone.replace(/[\s\-()]/g, '');
+  if (digits.startsWith('+44')) return digits;
+  if (digits.startsWith('44') && digits.length >= 12) return '+' + digits;
+  if (digits.startsWith('07') && digits.length === 11) return '+44' + digits.slice(1);
+  if (digits.startsWith('7') && digits.length === 10) return '+44' + digits;
+  return null; // not a valid UK mobile
+}
 const TOKEN_EXPIRY_MINUTES = 15;
 
 // ── CORS + routing ──────────────────────────────────────────────────────────
@@ -77,8 +88,19 @@ async function handleSendLink(req, res) {
         });
       }
 
-      // TODO: Wire up Twilio or your preferred SMS provider here
-      console.log(`[SMS] Magic link for ${cleanPhone}: ${magicUrl}`);
+      const e164Phone = normalizeUKPhone(cleanPhone);
+      if (!e164Phone) {
+        return res.status(400).json({
+          error: 'Please enter a valid UK mobile number (e.g. 07700 900000).'
+        });
+      }
+
+      const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH);
+      await client.messages.create({
+        body: `Your CoachCarter login link (expires in 15 min): ${magicUrl}`,
+        from: process.env.TWILIO_FROM,
+        to: e164Phone
+      });
 
       return res.json({
         success: true,
