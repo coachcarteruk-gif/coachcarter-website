@@ -23,6 +23,7 @@ module.exports = async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       line_items: line_items,
       mode: 'payment',
+      payment_method_types: ['card', 'klarna'],
       success_url: success_url,
       cancel_url: cancel_url,
       metadata: metadata,

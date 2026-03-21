@@ -388,9 +388,9 @@
     </div>
     <div class="cal-controls">
       <div class="view-toggle">
+        <button class="view-btn" id="btnDaily" onclick="setView('daily')">Daily</button>
+        <button class="view-btn active" id="btnWeekly"  onclick="setView('weekly')">Weekly</button>
         <button class="view-btn" id="btnMonthly" onclick="setView('monthly')">Monthly</button>
-        <button class="view-btn" id="btnWeekly"  onclick="setView('weekly')">Weekly</button>
-        <button class="view-btn active" id="btnDaily" onclick="setView('daily')">Daily</button>
       </div>
       <div class="cal-nav">
         <button class="cal-nav-btn" onclick="navPrev()" title="Previous">&#8249;</button>
@@ -495,7 +495,7 @@ const DEMO_INSTRUCTOR_ID = '5';
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let token         = null;
-let currentView   = 'daily';
+let currentView   = 'weekly';
 let cursor        = new Date(); cursor.setHours(0,0,0,0);
 let slotCache     = {}; // dateStr -> [slot, ...]
 let loadedRanges  = [];
@@ -512,7 +512,7 @@ function init() {
   Promise.all([loadUpcoming()])
     .then(() => {
       cursor = new Date(); cursor.setHours(0,0,0,0);
-      setView('daily');
+      setView('weekly');
     });
 
   // Wire up modal buttons
