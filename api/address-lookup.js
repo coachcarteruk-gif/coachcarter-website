@@ -33,6 +33,12 @@ module.exports = async (req, res) => {
     const url = `https://api.getaddress.io/find/${encodeURIComponent(postcode)}?api-key=${apiKey}&expand=true`;
     const resp = await fetch(url);
 
+    console.log('getaddress.io response:', resp.status, 'for postcode:', postcode);
+
+    if (resp.status === 401) {
+      console.error('getaddress.io API key invalid or expired');
+      return res.status(502).json({ error: 'Address lookup configuration error' });
+    }
     if (resp.status === 404) {
       return res.status(404).json({ error: 'No addresses found for this postcode' });
     }
@@ -40,6 +46,8 @@ module.exports = async (req, res) => {
       return res.status(429).json({ error: 'Lookup limit reached, please try again later' });
     }
     if (!resp.ok) {
+      const body = await resp.text();
+      console.error('getaddress.io error:', resp.status, body);
       return res.status(502).json({ error: 'Address lookup temporarily unavailable' });
     }
 
