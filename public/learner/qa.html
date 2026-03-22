@@ -210,19 +210,24 @@
 
     /* ── BOTTOM NAV ── */
     .bottom-nav {
-      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-      display: flex; justify-content: space-around; align-items: center;
-      background: var(--white); border-top: 1px solid var(--border);
-      padding: 6px 0 max(6px, env(safe-area-inset-bottom));
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(255,255,255,0.95); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border-top: 1px solid rgba(0,0,0,0.06);
+      display: flex; z-index: 200;
+      padding-bottom: env(safe-area-inset-bottom);
+      box-shadow: 0 -4px 24px rgba(245,131,33,0.04);
     }
     .bottom-nav-item {
-      display: flex; flex-direction: column; align-items: center;
-      text-decoration: none; color: var(--muted);
-      font-size: 0.68rem; font-weight: 600; transition: color 0.2s; gap: 3px;
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 8px 8px 6px; text-decoration: none; color: var(--muted);
+      font-size: 0.68rem; font-weight: 600; transition: color 0.2s, transform 0.2s; gap: 4px;
+      -webkit-tap-highlight-color: transparent;
     }
     .bottom-nav-item:hover { color: var(--primary); }
+    .bottom-nav-item:active { transform: scale(0.92); }
     .bottom-nav-item.active { color: var(--accent); }
-    .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
+    .bottom-nav-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+    .bottom-nav-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
     @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fadeUp 0.35s ease; }
@@ -289,19 +294,24 @@
 
 <nav class="bottom-nav">
   <a href="/learner/" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F4CA;</span><span>Dashboard</span>
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+    <span>Dashboard</span>
   </a>
   <a href="/learner/lessons.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F4C5;</span><span>Lessons</span>
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+    <span>Lessons</span>
   </a>
   <a href="/learner/videos.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F3AC;</span><span>Videos</span>
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"/></svg></span>
+    <span>Videos</span>
   </a>
   <a href="/learner/qa.html" class="bottom-nav-item active">
-    <span class="bottom-nav-icon">&#x1F4AC;</span><span>Q&A</span>
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+    <span>Q&A</span>
   </a>
   <a href="/learner/log-session.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F4DD;</span><span>Session Log</span>
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
+    <span>Session Log</span>
   </a>
 </nav>
 
