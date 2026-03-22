@@ -55,6 +55,7 @@
       { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
       { icon: 'message', label: 'Q&A', href: '/learner/qa.html' },
       'divider',
+      { icon: 'user', label: 'My Profile', href: '/learner/profile.html' },
       { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html' }
     ],
     instructor: [

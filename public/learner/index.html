@@ -351,6 +351,39 @@
     }
     .log-btn:hover { background: var(--accent-dk); transform: translateY(-2px); box-shadow: 0 8px 24px var(--accent-glow); }
 
+    /* QUICK ACTIONS */
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .quick-action-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 12px;
+      text-align: center;
+      text-decoration: none;
+      color: var(--primary);
+      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .quick-action-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(245,131,33,0.08);
+    }
+    .quick-action-icon {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+    }
+    .quick-action-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      font-family: var(--font-head);
+    }
+
     /* SECTION TITLE */
     .section-title {
       font-size: 0.72rem;
@@ -734,10 +767,6 @@
     .dot-ok { background: var(--accent); }
     .dot-nailed { background: var(--green); }
 
-    @media (max-width: 480px) {
-      .stats-bar { grid-template-columns: repeat(2, 1fr); }
-    }
-
     /* BOTTOM NAV */
     .bottom-nav {
       position: fixed;
@@ -847,69 +876,21 @@
     </div>
   </div>
 
-  <!-- PROFILE (phone + pickup address) -->
-  <div class="profile-card" id="profile-card">
-    <div class="profile-card-header">
-      <div class="profile-card-title">My Details</div>
-      <span class="profile-card-badge badge-incomplete" id="profileBadge">Required for booking</span>
-    </div>
-    <div class="profile-fields">
-      <div class="profile-field">
-        <label for="profilePhone">Phone number</label>
-        <input type="tel" id="profilePhone" placeholder="e.g. 07912 345678">
-      </div>
-      <div class="profile-field">
-        <label for="profileAddress">Pickup address</label>
-        <div class="postcode-lookup-row">
-          <input type="text" id="postcodeInput" placeholder="Enter postcode" maxlength="8">
-          <button type="button" class="btn-lookup" id="btnLookup" onclick="lookupPostcode()">Find address</button>
-        </div>
-        <div class="postcode-error" id="postcodeError" style="display:none"></div>
-        <div class="postcode-confirmed" id="postcodeConfirmed" style="display:none"></div>
-        <input type="text" id="addressLine" style="display:none" placeholder="House number/name and street" oninput="buildFullAddress()">
-        <input type="hidden" id="profileAddress" value="">
-      </div>
-    </div>
-    <div class="profile-save-row">
-      <span class="profile-save-note" id="profileSaveNote">Required before you can book a lesson.</span>
-      <button class="btn-save-profile" id="btnSaveProfile" onclick="saveProfile()">Save</button>
-    </div>
+  <!-- QUICK ACTIONS -->
+  <div class="quick-actions">
+    <a href="/learner/qa.html?ask=1" class="quick-action-card">
+      <div class="quick-action-icon">💬</div>
+      <div class="quick-action-label">Ask a Question</div>
+    </a>
+    <a href="/learner/log-session.html" class="quick-action-card">
+      <div class="quick-action-icon">📝</div>
+      <div class="quick-action-label">Log a Session</div>
+    </a>
+    <a href="/learner/profile.html" class="quick-action-card">
+      <div class="quick-action-icon">👤</div>
+      <div class="quick-action-label">My Profile</div>
+    </a>
   </div>
-
-  <!-- CONTACT PREFERENCE -->
-  <div class="pref-card" id="pref-card">
-    <div class="pref-card-left">
-      <div class="pref-card-title">Contact me before my first lesson</div>
-      <div class="pref-card-sub" id="pref-sub">Let your instructor know you'd like a call or message before your first session.</div>
-    </div>
-    <label class="toggle-wrap">
-      <input type="checkbox" id="contactToggle" onchange="toggleContactPref()">
-      <span class="toggle-slider"></span>
-    </label>
-  </div>
-
-  <!-- STATS -->
-  <div class="stats-bar">
-    <div class="stat-pill">
-      <div class="num" id="stat-sessions">—</div>
-      <div class="lbl">Sessions</div>
-    </div>
-    <div class="stat-pill">
-      <div class="num" id="stat-hours">—</div>
-      <div class="lbl">Hours logged</div>
-    </div>
-    <div class="stat-pill">
-      <div class="num" id="stat-instructor">—</div>
-      <div class="lbl">With instructor</div>
-    </div>
-    <div class="stat-pill">
-      <div class="num" id="stat-private">—</div>
-      <div class="lbl">Private practice</div>
-    </div>
-  </div>
-
-  <!-- LOG SESSION BUTTON -->
-  <a href="/learner/log-session.html" class="log-btn">+ Log a Session</a>
 
 </main>
 
@@ -1021,19 +1002,9 @@ function render() {
     // Book button always active — learners can pay per slot even with 0 credits
   }
 
-  // Profile card
-  renderProfile();
-
-  // Contact preference
-  if (PROGRESS.prefer_contact_before !== undefined) {
-    document.getElementById('contactToggle').checked = PROGRESS.prefer_contact_before;
-    updatePrefSub(PROGRESS.prefer_contact_before);
-  }
-
   renderUpcoming();
   renderUnlogged();
 
-  const s = PROGRESS.stats;
   document.getElementById('welcome-msg').textContent = `Hi, ${PROGRESS.name} 👋`;
 
   // Count "nailed" or legacy "always" across latest ratings
@@ -1045,11 +1016,6 @@ function render() {
   document.getElementById('welcome-sub').textContent = rated === 0
     ? 'Log your first session to start tracking progress.'
     : `${nailedit} of ${SKILLS.length} skills at green — keep going!`;
-
-  document.getElementById('stat-sessions').textContent = s.total_sessions;
-  document.getElementById('stat-hours').textContent = (s.total_minutes / 60).toFixed(1);
-  document.getElementById('stat-instructor').textContent = s.instructor_sessions;
-  document.getElementById('stat-private').textContent = s.private_sessions;
 
 }
 
@@ -1143,147 +1109,6 @@ async function downloadICS(bookingId) {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } catch {}
-}
-
-// ── Postcode address lookup ──────────────────────────────────────────────────
-let confirmedPostcodeData = null;
-
-async function lookupPostcode() {
-  const input = document.getElementById('postcodeInput');
-  const btn = document.getElementById('btnLookup');
-  const error = document.getElementById('postcodeError');
-  const confirmed = document.getElementById('postcodeConfirmed');
-  const addressLine = document.getElementById('addressLine');
-  const postcode = input.value.trim().replace(/\s+/g, '');
-
-  error.style.display = 'none';
-  confirmed.style.display = 'none';
-
-  if (!/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/i.test(postcode)) {
-    error.textContent = 'Please enter a valid UK postcode';
-    error.style.display = 'block';
-    return;
-  }
-
-  btn.disabled = true; btn.textContent = 'Looking up…';
-  try {
-    const res = await fetch('/api/address-lookup?postcode=' + encodeURIComponent(postcode), {
-      headers: { Authorization: 'Bearer ' + AUTH.token }
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Lookup failed');
-
-    confirmedPostcodeData = data;
-    confirmed.textContent = '✓ ' + data.area + ', ' + data.postcode;
-    confirmed.style.display = 'block';
-    addressLine.style.display = 'block';
-    addressLine.focus();
-    buildFullAddress();
-  } catch (err) {
-    error.textContent = err.message || 'Lookup unavailable';
-    error.style.display = 'block';
-    addressLine.style.display = 'none';
-    confirmedPostcodeData = null;
-  }
-  btn.disabled = false; btn.textContent = 'Find address';
-}
-
-function buildFullAddress() {
-  const line = (document.getElementById('addressLine').value || '').trim();
-  if (confirmedPostcodeData) {
-    const parts = [line, confirmedPostcodeData.area, confirmedPostcodeData.postcode].filter(Boolean);
-    document.getElementById('profileAddress').value = parts.join(', ');
-  } else {
-    document.getElementById('profileAddress').value = line;
-  }
-  updateProfileBadge();
-}
-
-// ── Profile (phone + pickup address) ─────────────────────────────────────────
-function renderProfile() {
-  if (!PROGRESS) return;
-  document.getElementById('profilePhone').value = PROGRESS.phone || '';
-  const saved = PROGRESS.pickup_address || '';
-  document.getElementById('profileAddress').value = saved;
-  if (saved) {
-    // Show saved address: put the full address in the street line and show it
-    document.getElementById('addressLine').value = saved;
-    document.getElementById('addressLine').style.display = 'block';
-    document.getElementById('postcodeConfirmed').textContent = '✓ Saved address (enter postcode to update)';
-    document.getElementById('postcodeConfirmed').style.display = 'block';
-    confirmedPostcodeData = null; // no area data yet, typing won't overwrite until they look up
-  }
-  updateProfileBadge();
-}
-
-function updateProfileBadge() {
-  const phone = (document.getElementById('profilePhone').value || '').trim();
-  const address = (document.getElementById('profileAddress').value || '').trim();
-  const badge = document.getElementById('profileBadge');
-  const note = document.getElementById('profileSaveNote');
-  if (phone && address) {
-    badge.textContent = 'Complete';
-    badge.className = 'profile-card-badge badge-complete';
-    note.textContent = 'Your instructor will see these details when you book.';
-  } else {
-    badge.textContent = 'Required for booking';
-    badge.className = 'profile-card-badge badge-incomplete';
-    note.textContent = 'Required before you can book a lesson.';
-  }
-}
-
-async function saveProfile() {
-  const phone = document.getElementById('profilePhone').value.trim();
-  const address = document.getElementById('profileAddress').value.trim();
-  const btn = document.getElementById('btnSaveProfile');
-  btn.disabled = true; btn.textContent = 'Saving…';
-
-  try {
-    const res = await fetch('/api/learner?action=update-profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token },
-      body: JSON.stringify({ phone, pickup_address: address })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    PROGRESS.phone = phone;
-    PROGRESS.pickup_address = address;
-    updateProfileBadge();
-    btn.textContent = 'Saved ✓';
-    setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; }, 2000);
-  } catch (err) {
-    btn.textContent = 'Save'; btn.disabled = false;
-    console.error('save-profile error:', err);
-  }
-}
-
-// ── Contact preference toggle ────────────────────────────────────────────────
-function updatePrefSub(isOn) {
-  const sub = document.getElementById('pref-sub');
-  sub.textContent = isOn
-    ? 'Your instructor will be notified to contact you before your first session.'
-    : 'Let your instructor know you\'d like a call or message before your first session.';
-}
-
-async function toggleContactPref() {
-  const toggle = document.getElementById('contactToggle');
-  const val = toggle.checked;
-  updatePrefSub(val);
-
-  try {
-    const res = await fetch('/api/learner?action=set-contact-pref', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token },
-      body: JSON.stringify({ prefer_contact_before: val })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-  } catch (err) {
-    // Revert on failure
-    toggle.checked = !val;
-    updatePrefSub(!val);
-    console.error('contact-pref error:', err);
-  }
 }
 
 // ── Q&A Preview ──
