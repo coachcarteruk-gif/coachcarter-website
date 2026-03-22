@@ -26,7 +26,7 @@
   --accent-dk:  #e07518;
   --accent-lt:  #fff4ec;
   --accent-mid: rgba(245,131,33,0.12);
-  --muted:      #797879;
+  --muted:      #5a5b5c;
   --border:     #e0e0e0;
   --bg:         #ffffff;
   --surface:    #f9f9f9;
@@ -38,12 +38,23 @@
 
 html { scroll-behavior: smooth; }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  html { scroll-behavior: auto; }
+  .fade-up { opacity: 1; transform: none; }
+}
+
 body {
   font-family: var(--font-body);
   background: var(--bg);
   color: var(--primary);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
 }
 
 a { color: inherit; }
@@ -444,9 +455,14 @@ a { color: inherit; }
 }
 
 .trust-icon {
-  font-size: 1.1rem;
   display: flex;
   align-items: center;
+  color: var(--accent);
+}
+.trust-icon svg {
+  width: 18px; height: 18px;
+  stroke: currentColor; stroke-width: 2;
+  fill: none; stroke-linecap: round; stroke-linejoin: round;
 }
 
 .trust-stars {
@@ -503,8 +519,13 @@ a { color: inherit; }
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
   margin-bottom: 16px;
+  color: var(--accent);
+}
+.feature-icon svg {
+  width: 22px; height: 22px;
+  stroke: currentColor; stroke-width: 2;
+  fill: none; stroke-linecap: round; stroke-linejoin: round;
 }
 
 .feature-card h3 {
@@ -703,10 +724,17 @@ a { color: inherit; }
 }
 
 .quiz-opt .opt-icon {
-  font-size: 1.2rem;
   flex-shrink: 0;
-  width: 28px;
-  text-align: center;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-mid);
+  border-radius: 8px;
+  color: var(--accent);
+}
+.quiz-opt .opt-icon svg {
+  width: 16px; height: 16px;
+  stroke: currentColor; stroke-width: 2;
+  fill: none; stroke-linecap: round; stroke-linejoin: round;
 }
 
 .quiz-back {
@@ -1062,12 +1090,14 @@ a { color: inherit; }
 .mobile-tab-bar a {
   flex: 1; display: flex; flex-direction: column; align-items: center;
   text-decoration: none; color: var(--muted); font-size: 0.62rem;
-  font-weight: 600; gap: 2px; padding: 4px 0; transition: color 0.15s;
+  font-weight: 600; gap: 2px; padding: 6px 0; min-height: 44px;
+  justify-content: center; transition: color 0.15s;
 }
 .mobile-tab-bar a:hover { color: var(--primary); }
 .mobile-tab-bar a.active { color: var(--accent); }
 .mobile-tab-bar a.cta { color: var(--accent); }
-.mobile-tab-icon { font-size: 1.2rem; line-height: 1; }
+.mobile-tab-icon { line-height: 1; display: flex; align-items: center; justify-content: center; }
+.mobile-tab-icon svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ═══════════════════════════════════════
    RESPONSIVE
@@ -1178,7 +1208,7 @@ a:focus-visible, button:focus-visible {
 <div class="trust-strip fade-up" role="complementary" aria-label="Trust signals">
   <div class="trust-inner">
     <div class="trust-item">
-      <span class="trust-icon">🛡️</span>
+      <span class="trust-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
       DVSA Approved Instructor
     </div>
     <div class="trust-divider" aria-hidden="true"></div>
@@ -1188,12 +1218,12 @@ a:focus-visible, button:focus-visible {
     </div>
     <div class="trust-divider" aria-hidden="true"></div>
     <div class="trust-item">
-      <span class="trust-icon">📍</span>
+      <span class="trust-icon"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
       Based in Reading &amp; surrounding areas
     </div>
     <div class="trust-divider" aria-hidden="true"></div>
     <div class="trust-item">
-      <span class="trust-icon">🎬</span>
+      <span class="trust-icon"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
       50+ free driving videos
     </div>
   </div>
@@ -1212,37 +1242,37 @@ a:focus-visible, button:focus-visible {
 
     <div class="features-grid">
       <a href="/learner/login.html" class="feature-card fade-up" style="transition-delay: 0.05s">
-        <div class="feature-icon">📊</div>
+        <div class="feature-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
         <h3>Learner Portal</h3>
         <p>Track your progress, book lessons, and buy credits — all in one place. Your driving journey, organised.</p>
       </a>
 
       <a href="/classroom.html" class="feature-card fade-up" style="transition-delay: 0.1s">
-        <div class="feature-icon">🎬</div>
+        <div class="feature-icon"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
         <h3>Free Video Classroom</h3>
         <p>50+ driving videos to watch anytime. Reinforce what you learn in lessons and study at your own pace.</p>
       </a>
 
       <a href="/learner-journey.html" class="feature-card fade-up" style="transition-delay: 0.15s">
-        <div class="feature-icon">🎯</div>
+        <div class="feature-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg></div>
         <h3>Pass Programme</h3>
         <p>Our structured programme gets you test-ready with a clear plan, dynamic pricing, and guaranteed progress.</p>
       </a>
 
       <div class="feature-card fade-up" style="transition-delay: 0.2s">
-        <div class="feature-icon">📅</div>
+        <div class="feature-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
         <h3>Flexible Scheduling</h3>
         <p>Book lessons that fit around your life. Morning, evening, weekends — you choose when you learn.</p>
       </div>
 
       <div class="feature-card fade-up" style="transition-delay: 0.25s">
-        <div class="feature-icon">🎓</div>
+        <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/></svg></div>
         <h3>Expert Instructors</h3>
         <p>DVSA approved, patient, and friendly. Our instructors are passionate about helping you succeed.</p>
       </div>
 
       <a href="/learner-journey.html" class="feature-card fade-up" style="transition-delay: 0.3s">
-        <div class="feature-icon">💳</div>
+        <div class="feature-icon"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg></div>
         <h3>Pay As You Go</h3>
         <p>No long-term commitment required. Pay per lesson or save with credit bundles — the choice is yours.</p>
       </a>
@@ -1321,11 +1351,11 @@ a:focus-visible, button:focus-visible {
           <p class="quiz-q">Are you a learner or an instructor?</p>
           <div class="quiz-options">
             <button class="quiz-opt" onclick="quizNext('learner')">
-              <span class="opt-icon">🚗</span>
+              <span class="opt-icon"><svg viewBox="0 0 24 24"><path d="M5 17h2m10 0h2M7 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0zm6 0a2 2 0 1 0 4 0 2 2 0 0 0-4 0z"/><path d="M5 17H3v-4l2-5h9l4 5h3v4h-2"/><path d="M5 12h14"/></svg></span>
               I'm a learner
             </button>
             <button class="quiz-opt" onclick="quizNext('instructor')">
-              <span class="opt-icon">🎓</span>
+              <span class="opt-icon"><svg viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/></svg></span>
               I'm an instructor
             </button>
           </div>
@@ -1514,11 +1544,11 @@ a:focus-visible, button:focus-visible {
 
 <!-- Mobile tab bar -->
 <nav class="mobile-tab-bar" aria-label="Mobile navigation">
-  <a href="/" class="active"><span class="mobile-tab-icon">🏠</span>Home</a>
-  <a href="/learner-journey.html"><span class="mobile-tab-icon">💰</span>Pricing</a>
-  <a href="/classroom.html"><span class="mobile-tab-icon">🎬</span>Videos</a>
-  <a href="/learner/login.html"><span class="mobile-tab-icon">👤</span>Log in</a>
-  <a href="/learner/login.html?redirect=/learner/book.html" class="cta"><span class="mobile-tab-icon">📅</span>Book</a>
+  <a href="/" class="active"><span class="mobile-tab-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>Home</a>
+  <a href="/learner-journey.html"><span class="mobile-tab-icon"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>Pricing</a>
+  <a href="/classroom.html"><span class="mobile-tab-icon"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>Videos</a>
+  <a href="/learner/login.html"><span class="mobile-tab-icon"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>Log in</a>
+  <a href="/learner/login.html?redirect=/learner/book.html" class="cta"><span class="mobile-tab-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>Book</a>
 </nav>
 
 <script>
@@ -1539,16 +1569,25 @@ document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
 // ── QUIZ ─────────────────────────────────────────────────
 let quizAnswer1 = null;
 
+const svgIcons = {
+  hub: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  calendar: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+  eye: '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+  tag: '<svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  key: '<svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>',
+  clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
+};
+
 const step2Options = {
   learner: [
-    { icon: '📊', label: 'Go to the Learner Hub',    action: () => goLearner('/learner/') },
-    { icon: '📅', label: 'Book a free trial lesson',  action: () => goLearner('/learner/book.html') },
-    { icon: '👀', label: 'Try the booking demo',      action: () => go('/demo/book.html') },
-    { icon: '💰', label: 'Explore our prices',        action: () => go('/learner-journey.html') },
+    { icon: svgIcons.hub,       label: 'Go to the Learner Hub',    action: () => goLearner('/learner/') },
+    { icon: svgIcons.calendar,  label: 'Book a free trial lesson',  action: () => goLearner('/learner/book.html') },
+    { icon: svgIcons.eye,       label: 'Try the booking demo',      action: () => go('/demo/book.html') },
+    { icon: svgIcons.tag,       label: 'Explore our prices',        action: () => go('/learner-journey.html') },
   ],
   instructor: [
-    { icon: '🔑', label: 'Log in to my portal',      action: () => go('/instructor/login.html') },
-    { icon: '🗓️', label: 'View my schedule',         action: () => go('/instructor/') },
+    { icon: svgIcons.key,       label: 'Log in to my portal',       action: () => go('/instructor/login.html') },
+    { icon: svgIcons.clock,     label: 'View my schedule',          action: () => go('/instructor/') },
   ],
 };
 
