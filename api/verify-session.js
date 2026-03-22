@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
       const hours = metadata.hours || 'Custom';
       packageName = `${hours} Hour Package`;
     } else if (packageType === 'pass_guarantee') {
-      packageName = '18-Week Pass Programme';
+      packageName = '18-Week Test Ready Guarantee';
     } else if (packageType === 'core_only') {
       packageName = 'Core Programme — 18 Week Guarantee';
     } else if (packageType === 'core_plus_1') {

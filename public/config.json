@@ -48,7 +48,7 @@
   "content": {
     "hero": {
       "headline": "Your licence, secured",
-      "subheadline": "Choose how you want to learn. From flexible pay-per-lesson to our 18-week pass programme. Choose from our range of test fail insurance covers",
+      "subheadline": "Choose how you want to learn. From flexible pay-per-lesson to our Test Ready Guarantee. Choose from our range of test fail insurance covers",
       "stats": [
         {
           "value": "£55",
@@ -60,7 +60,7 @@
         },
         {
           "value": "£2,400",
-          "label": "Full Pass Programme programme"
+          "label": "Test Ready Guarantee"
         },
         {
           "value": "18 Weeks",
@@ -78,8 +78,8 @@
         "subtitle": "Buy more hours up front and save up to 21%. The more committed you are, the better the deal."
       },
       "guarantee": {
-        "title": "The Pass Programme",
-        "subtitle": "18 weeks to your driving licence - choose your guarantee level"
+        "title": "Test Ready Guarantee",
+        "subtitle": "Minimum 18 lessons (27 hrs) — structured, assessed, and guaranteed"
       }
     },
     "features": {
@@ -91,12 +91,11 @@
         "Upgrade to a package anytime"
       ],
       "core": [
-        "18-week structured programme",
-        "~30 hours with expert instructor",
-        "3 mock driving assessments included",
-        "Practical test booked for you",
-        "100% Money Back After First Lesson",
-        "1st retake fully covered — 15 hrs tuition + test booking included"
+        "Minimum 18 lessons (27 hrs)",
+        "3 driving assessments with an instructor who isn't your regular one",
+        "Instructor will provide any extra lessons after each assessment to keep you on track for being Test Ready — all included in the package",
+        "1st retake reassurance: 8 extra lessons before next test attempt, if first test results in a fail",
+        "100% money back after your first lesson for remaining lessons"
       ]
     },
     "cta": {

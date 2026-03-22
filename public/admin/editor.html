@@ -699,9 +699,9 @@ textarea {
     </table>
   </div>
 
-  <!-- PASS PROGRAMME SECTION -->
+  <!-- TEST READY GUARANTEE SECTION -->
   <div class="editor-section">
-    <h2>Pass Programme Pricing</h2>
+    <h2>Test Ready Guarantee Pricing</h2>
     
     <div class="calc-note">
       <strong>💡 Interconnected pricing:</strong> Changing the Core Programme price updates all addon totals. Changing an addon price updates its total. All values stay in sync.
@@ -807,7 +807,7 @@ textarea {
     <h2>Dynamic Guarantee Pricing</h2>
 
     <div class="calc-note">
-      <strong>📈 Demand-based pricing:</strong> The Pass Programme price starts low and increases by £100 with each enrolment. This is managed separately from the static core programme price above — it lives in its own database table and updates automatically via the Stripe webhook.
+      <strong>📈 Demand-based pricing:</strong> The Test Ready Guarantee price starts low and increases by £100 with each enrolment. This is managed separately from the static core programme price above — it lives in its own database table and updates automatically via the Stripe webhook.
     </div>
 
     <div class="guarantee-calc">
@@ -873,7 +873,7 @@ textarea {
       </div>
       <div class="form-group full-width">
         <label>Subheadline</label>
-        <textarea id="heroSubheadline">Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.</textarea>
+        <textarea id="heroSubheadline">Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week Test Ready Guarantee. Expert instructors, real results.</textarea>
       </div>
       <div class="form-group">
         <label>Stat 1 - Value</label>
@@ -897,7 +897,7 @@ textarea {
       </div>
       <div class="form-group">
         <label>Stat 3 - Label</label>
-        <input type="text" id="heroStat3Label" value="Full Pass Programme programme">
+        <input type="text" id="heroStat3Label" value="Full Test Ready Guarantee programme">
       </div>
       <div class="form-group">
         <label>Stat 4 - Value</label>
@@ -932,7 +932,7 @@ textarea {
       </div>
       <div class="form-group">
         <label>Guarantee Section Title</label>
-        <input type="text" id="sectionGuaranteeTitle" value="The Pass Programme">
+        <input type="text" id="sectionGuaranteeTitle" value="The Test Ready Guarantee">
       </div>
       <div class="form-group">
         <label>Guarantee Section Subtitle</label>
@@ -1104,18 +1104,18 @@ function getDefaultConfig() {
     content: {
       hero: {
         headline: "Your licence. Your way.",
-        subheadline: "Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week pass programme. Expert instructors, real results.",
+        subheadline: "Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week Test Ready Guarantee. Expert instructors, real results.",
         stats: [
           { value: "£90", label: "Per 1.5hr lesson" },
           { value: "21%", label: "Max discount on bulk packages" },
-          { value: "£2,400", label: "Full Pass Programme programme" },
+          { value: "£2,400", label: "Full Test Ready Guarantee programme" },
           { value: "18wk", label: "Structured programme to test day" }
         ]
       },
       sections: {
         payg: { title: "Pay As You Go", subtitle: "Maximum flexibility. Book when you need, cancel when life happens." },
         packages: { title: "Bulk Hour Packages", subtitle: "Buy more hours up front and save up to 21%. The more committed you are, the better the deal." },
-        guarantee: { title: "The Pass Programme", subtitle: "18 weeks to your driving licence — or we keep going until you pass." }
+        guarantee: { title: "The Test Ready Guarantee", subtitle: "18 weeks to your driving licence — or we keep going until you pass." }
       },
       features: {
         payg: ["Qualified ADI instructor every time", "Book online or by phone", "Lesson length to suit you", "Progress tracked between lessons", "Upgrade to a package anytime"],
@@ -1161,7 +1161,7 @@ function populateForm() {
     document.getElementById('heroStat2Value').value = c.hero.stats[1]?.value || '15%';
     document.getElementById('heroStat2Label').value = c.hero.stats[1]?.label || 'Max discount on bulk packages';
     document.getElementById('heroStat3Value').value = c.hero.stats[2]?.value || '£2,400';
-    document.getElementById('heroStat3Label').value = c.hero.stats[2]?.label || 'Full Pass Programme programme';
+    document.getElementById('heroStat3Label').value = c.hero.stats[2]?.label || 'Full Test Ready Guarantee programme';
     document.getElementById('heroStat4Value').value = c.hero.stats[3]?.value || '18wk';
     document.getElementById('heroStat4Label').value = c.hero.stats[3]?.label || 'Structured programme to test day';
   }
