@@ -1374,7 +1374,7 @@ a:focus-visible, button:focus-visible {
       <p class="section-subtitle">Don't just take our word for it — hear from people who passed with CoachCarter.</p>
     </div>
 
-    <div class="testimonial-grid">
+    <div class="testimonial-grid" id="testimonialGrid">
       <div class="testimonial-card fade-up" style="transition-delay: 0.05s">
         <div class="testimonial-stars">★★★★★</div>
         <blockquote>"Fraser made me feel so comfortable from day one. The video classroom was a game-changer — I could practise theory any time. Passed first time!"</blockquote>
@@ -1629,6 +1629,94 @@ window.addEventListener('scroll', () => {
   }
   lastScroll = scrollY;
 }, { passive: true });
+
+// ── GOOGLE REVIEWS ──────────────────────────────────────
+(async function loadGoogleReviews() {
+  try {
+    const resp = await fetch('/api/reviews');
+    if (!resp.ok) return;
+
+    const data = await resp.json();
+    if (!data.reviews || data.reviews.length === 0) return;
+
+    const grid = document.getElementById('testimonialGrid');
+    const googleCards = data.reviews
+      .filter(r => r.rating >= 4 && r.text)
+      .map((r, i) => {
+        const stars = '\u2605'.repeat(r.rating) + '\u2606'.repeat(5 - r.rating);
+        const initials = r.author_name.split(' ').map(w => w[0]).join('').toUpperCase();
+        const photo = r.profile_photo_url
+          ? '<img src="' + r.profile_photo_url + '" alt="' + r.author_name + '" referrerpolicy="no-referrer">'
+          : initials;
+        const text = r.text.length > 200 ? r.text.substring(0, 197) + '...' : r.text;
+        const timeAgo = r.relative_time || '';
+
+        const card = document.createElement('div');
+        card.className = 'testimonial-card fade-up';
+        card.style.transitionDelay = (0.05 + i * 0.1) + 's';
+        card.innerHTML =
+          '<div class="testimonial-stars">' + stars + '</div>' +
+          '<blockquote>\u201c' + text.replace(/"/g, '').replace(/</g, '&lt;') + '\u201d</blockquote>' +
+          '<div class="testimonial-author">' +
+            '<div class="testimonial-avatar">' + photo + '</div>' +
+            '<div>' +
+              '<div class="testimonial-name">' + r.author_name.replace(/</g, '&lt;') + '</div>' +
+              '<div class="testimonial-detail">Google Review \u00b7 ' + timeAgo + '</div>' +
+            '</div>' +
+          '</div>';
+        return card;
+      });
+
+    if (googleCards.length > 0) {
+      grid.innerHTML = '';
+      googleCards.forEach(card => grid.appendChild(card));
+
+      // Add "See all reviews" footer
+      const footer = document.createElement('div');
+      footer.style.cssText = 'text-align:center; margin-top:24px; grid-column:1/-1;';
+      let footerHtml = '';
+      if (data.overall_rating && data.total_reviews) {
+        footerHtml += '<p style="font-size:0.95rem; color:var(--muted); margin-bottom:8px;">Rated ' +
+          data.overall_rating + '/5 from ' + data.total_reviews + ' reviews on Google</p>';
+      }
+      footerHtml += '<a href="https://search.google.com/local/writereview?placeid=' +
+        (data.place_id || '') + '" target="_blank" rel="noopener noreferrer" ' +
+        'style="color:var(--accent); font-size:0.9rem; text-decoration:underline;">Leave us a review on Google</a>';
+      footer.innerHTML = footerHtml;
+      grid.appendChild(footer);
+
+      // Re-observe new cards for fade-up animation
+      grid.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+      // Add Schema.org structured data
+      const schema = {
+        '@context': 'https://schema.org',
+        '@type': 'DrivingSchool',
+        'name': data.place_name || 'Coach Carter UK',
+        'aggregateRating': {
+          '@type': 'AggregateRating',
+          'ratingValue': data.overall_rating,
+          'reviewCount': data.total_reviews,
+          'bestRating': 5,
+          'worstRating': 1
+        },
+        'review': data.reviews.map(r => ({
+          '@type': 'Review',
+          'author': { '@type': 'Person', 'name': r.author_name },
+          'reviewRating': { '@type': 'Rating', 'ratingValue': r.rating },
+          'reviewBody': r.text,
+          'datePublished': r.publish_time
+        }))
+      };
+      const scriptEl = document.createElement('script');
+      scriptEl.type = 'application/ld+json';
+      scriptEl.textContent = JSON.stringify(schema);
+      document.head.appendChild(scriptEl);
+    }
+  } catch (e) {
+    // Static testimonials remain visible — graceful degradation
+  }
+})();
 </script>
 
 </body>
