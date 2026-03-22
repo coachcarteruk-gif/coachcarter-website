@@ -55,9 +55,9 @@ body {
   z-index: 100;
   padding: 0 32px;
   height: 64px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   background: rgba(38, 38, 38, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -87,14 +87,19 @@ body {
 .site-nav-links {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 4px;
+}
+.site-nav-cta {
+  display: flex;
+  justify-content: flex-end;
 }
 .site-nav-link {
   color: rgba(255,255,255,0.6);
   font-family: var(--font-body);
   font-weight: 500;
-  font-size: 0.83rem;
-  padding: 7px 14px;
+  font-size: 0.85rem;
+  padding: 8px 16px;
   border-radius: 100px;
   border: 1px solid transparent;
   text-decoration: none;
@@ -119,10 +124,6 @@ body {
   border-color: var(--accent-dk);
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(245,131,33,0.35);
-}
-@media (max-width: 600px) {
-  .site-nav { padding: 0 16px; }
-  .site-nav-link:not(.primary):not(.back) { display: none; }
 }
 
 /* ── HERO ── */
@@ -555,6 +556,9 @@ footer a { color: var(--muted); text-decoration: underline; }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
+  .site-nav { padding: 0 16px; }
+  .site-nav-links, .site-nav-cta { display: none; }
+  .mobile-tab-bar { display: flex; }
   .hero { grid-template-columns: 1fr; padding: 144px 20px 60px; gap: 40px; }
   .bulk-mini { grid-template-columns: repeat(2, 1fr); }
   .price-urgency { padding: 12px 20px; }
@@ -566,7 +570,6 @@ footer a { color: var(--muted); text-decoration: underline; }
   .philosophy-banner { padding: 32px 20px; }
   .cta-section { padding: 80px 20px; }
   footer { padding: 20px; margin-bottom: 64px; }
-  .mobile-tab-bar { display: flex; }
 }
 </style>
 </head>
@@ -578,11 +581,13 @@ footer a { color: var(--muted); text-decoration: underline; }
     <span>Coach<em>Carter</em></span>
   </a>
   <div class="site-nav-links">
+    <a class="site-nav-link" href="/">Home</a>
     <a class="site-nav-link" href="/learner-journey.html">Pricing</a>
-    <a class="site-nav-link" href="/classroom.html">Free Videos</a>
-    <a class="site-nav-link" href="/learner/login.html">Learner Login</a>
-    <a class="site-nav-link" href="/instructor/login.html">Instructor Login</a>
-    <a class="site-nav-link primary" href="/learner/login.html?redirect=/learner/book.html">Book Free Trial</a>
+    <a class="site-nav-link" href="/classroom.html">Videos</a>
+    <a class="site-nav-link" href="/learner/login.html?redirect=/learner/book.html">Book</a>
+  </div>
+  <div class="site-nav-cta">
+    <a class="site-nav-link primary" href="/learner/login.html">Login</a>
   </div>
 </nav>
 

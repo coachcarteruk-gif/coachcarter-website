@@ -36,21 +36,36 @@
 
     /* ── Nav ─────────────────────────────────────────────────────────────── */
     .site-nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 300;
-      padding: 0 32px; height: 64px;
-      display: flex; align-items: center; justify-content: space-between;
-      background: rgba(38,38,38,0.92);
-      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 0 32px;
+      height: 64px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      background: rgba(38, 38, 38, 0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid rgba(255,255,255,0.06);
     }
     .site-nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
     .site-nav-logo img { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,0.08); padding: 4px; }
     .site-nav-logo span { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
     .site-nav-logo span em { font-style: normal; color: var(--accent); }
-    .site-nav-links { display: flex; align-items: center; gap: 6px; }
+    .site-nav-links {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .site-nav-cta {
+      display: flex;
+      justify-content: flex-end;
+    }
     .site-nav-link {
       color: rgba(255,255,255,0.6); font-family: var(--font-body); font-weight: 500;
-      font-size: 0.83rem; padding: 7px 14px; border-radius: 100px;
+      font-size: 0.85rem; padding: 8px 16px; border-radius: 100px;
       border: 1px solid transparent; text-decoration: none; transition: all 0.18s;
       white-space: nowrap; background: transparent; cursor: pointer;
     }
@@ -74,9 +89,9 @@
     .mobile-tab-bar a.active { color: var(--accent); }
     .mobile-tab-bar a.cta { color: var(--accent); }
     .mobile-tab-icon { font-size: 1.2rem; line-height: 1; }
-    @media (max-width: 600px) {
+    @media (max-width: 900px) {
       .site-nav { padding: 0 16px; }
-      .site-nav-link { display: none; }
+      .site-nav-links, .site-nav-cta { display: none; }
       .mobile-tab-bar { display: flex; }
     }
 
@@ -291,11 +306,13 @@
     <span>Coach<em>Carter</em></span>
   </a>
   <div class="site-nav-links">
+    <a class="site-nav-link" href="/">Home</a>
     <a class="site-nav-link" href="/learner-journey.html">Pricing</a>
-    <a class="site-nav-link" href="/classroom.html">Free Videos</a>
-    <a class="site-nav-link" href="/learner/login.html">Learner Login</a>
-    <a class="site-nav-link" href="/instructor/login.html">Instructor Login</a>
-    <a class="site-nav-link primary" href="/learner/login.html?redirect=/learner/book.html">Book Free Trial</a>
+    <a class="site-nav-link" href="/classroom.html">Videos</a>
+    <a class="site-nav-link" href="/learner/login.html?redirect=/learner/book.html">Book</a>
+  </div>
+  <div class="site-nav-cta">
+    <a class="site-nav-link primary" href="/learner/login.html">Login</a>
   </div>
 </nav>
 

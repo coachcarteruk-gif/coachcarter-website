@@ -87,9 +87,9 @@ body {
   z-index: 100;
   padding: 0 32px;
   height: 64px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   background: rgba(38, 38, 38, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -119,14 +119,19 @@ body {
 .site-nav-links {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 4px;
+}
+.site-nav-cta {
+  display: flex;
+  justify-content: flex-end;
 }
 .site-nav-link {
   color: rgba(255,255,255,0.6);
   font-family: var(--font-body);
   font-weight: 500;
-  font-size: 0.83rem;
-  padding: 7px 14px;
+  font-size: 0.85rem;
+  padding: 8px 16px;
   border-radius: 100px;
   border: 1px solid transparent;
   text-decoration: none;
@@ -169,9 +174,9 @@ body {
 .mobile-tab-bar a.active { color: var(--accent); }
 .mobile-tab-bar a.cta { color: var(--accent); }
 .mobile-tab-icon { font-size: 1.2rem; line-height: 1; }
-@media (max-width: 600px) {
+@media (max-width: 900px) {
   .site-nav { padding: 0 16px; }
-  .site-nav-link { display: none; }
+  .site-nav-links, .site-nav-cta { display: none; }
   .mobile-tab-bar { display: flex; }
   footer { margin-bottom: 64px; }
 }
@@ -1548,11 +1553,13 @@ footer a:hover { color: var(--accent); }
     <span>Coach<em>Carter</em></span>
   </a>
   <div class="site-nav-links">
+    <a class="site-nav-link" href="/">Home</a>
     <a class="site-nav-link" href="/learner-journey.html">Pricing</a>
-    <a class="site-nav-link" href="/classroom.html">Free Videos</a>
-    <a class="site-nav-link" href="/learner/login.html">Learner Login</a>
-    <a class="site-nav-link" href="/instructor/login.html">Instructor Login</a>
-    <a class="site-nav-link primary" href="/learner/login.html?redirect=/learner/book.html">Book Free Trial</a>
+    <a class="site-nav-link" href="/classroom.html">Videos</a>
+    <a class="site-nav-link" href="/learner/login.html?redirect=/learner/book.html">Book</a>
+  </div>
+  <div class="site-nav-cta">
+    <a class="site-nav-link primary" href="/learner/login.html">Login</a>
   </div>
 </nav>
 
