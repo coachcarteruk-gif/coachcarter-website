@@ -147,9 +147,9 @@ a { color: inherit; }
   z-index: 100;
   padding: 0 32px;
   height: 64px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   background: rgba(38, 38, 38, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -188,15 +188,21 @@ a { color: inherit; }
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 4px;
+}
+
+.nav-cta {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .nav-link {
   color: rgba(255,255,255,0.6);
   font-family: var(--font-body);
   font-weight: 500;
-  font-size: 0.83rem;
-  padding: 7px 14px;
+  font-size: 0.85rem;
+  padding: 8px 16px;
   border-radius: 100px;
   border: 1px solid transparent;
   text-decoration: none;
@@ -1103,6 +1109,9 @@ a { color: inherit; }
    RESPONSIVE
 ═══════════════════════════════════════ */
 @media (max-width: 900px) {
+  .nav { padding: 0 16px; }
+  .nav-links, .nav-cta { display: none; }
+  .mobile-tab-bar { display: flex; }
   .hero-layout { grid-template-columns: 1fr; text-align: center; gap: 32px; }
   .hero-logo { margin: 0 auto 24px; }
   .hero-image { max-width: 480px; margin: 0 auto; }
@@ -1116,9 +1125,6 @@ a { color: inherit; }
 }
 
 @media (max-width: 600px) {
-  .nav { padding: 0 16px; }
-  .nav-link { display: none; }
-  .mobile-tab-bar { display: flex; }
   .hero { padding: 80px 20px 48px; min-height: auto; }
   .hero-layout { grid-template-columns: 1fr; text-align: center; gap: 32px; }
   .hero-logo { margin: 0 auto 24px; }
@@ -1156,11 +1162,13 @@ a:focus-visible, button:focus-visible {
     <span>Coach<em>Carter</em></span>
   </a>
   <div class="nav-links">
+    <a class="nav-link" href="/">Home</a>
     <a class="nav-link" href="/learner-journey.html">Pricing</a>
-    <a class="nav-link" href="/classroom.html">Free Videos</a>
-    <a class="nav-link" href="/learner/login.html">Learner Login</a>
-    <a class="nav-link" href="/instructor/login.html">Instructor Login</a>
-    <a class="nav-link primary" href="/learner/login.html?redirect=/learner/book.html">Book Free Trial</a>
+    <a class="nav-link" href="/classroom.html">Videos</a>
+    <a class="nav-link" href="/learner/login.html?redirect=/learner/book.html">Book</a>
+  </div>
+  <div class="nav-cta">
+    <a class="nav-link primary" href="/learner/login.html">Login</a>
   </div>
 </nav>
 
