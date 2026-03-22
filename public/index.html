@@ -1649,7 +1649,6 @@ window.addEventListener('scroll', () => {
           ? '<img src="' + r.profile_photo_url + '" alt="' + r.author_name + '" referrerpolicy="no-referrer">'
           : initials;
         const text = r.text.length > 200 ? r.text.substring(0, 197) + '...' : r.text;
-        const timeAgo = r.relative_time || '';
 
         const card = document.createElement('div');
         card.className = 'testimonial-card fade-up';
@@ -1661,7 +1660,7 @@ window.addEventListener('scroll', () => {
             '<div class="testimonial-avatar">' + photo + '</div>' +
             '<div>' +
               '<div class="testimonial-name">' + r.author_name.replace(/</g, '&lt;') + '</div>' +
-              '<div class="testimonial-detail">Google Review \u00b7 ' + timeAgo + '</div>' +
+              '<div class="testimonial-detail">Google Review</div>' +
             '</div>' +
           '</div>';
         return card;
