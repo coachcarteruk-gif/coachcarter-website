@@ -152,9 +152,9 @@
     /* CREDIT BALANCE CARD */
     .credit-card {
       background: var(--primary);
-      border-radius: var(--radius);
+      border-radius: 16px;
       padding: 24px;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -162,17 +162,23 @@
       flex-wrap: wrap;
       position: relative;
       overflow: hidden;
+      box-shadow: 0 8px 32px rgba(38,38,38,0.25), 0 0 0 1px rgba(255,255,255,0.04) inset;
     }
     .credit-card::before {
       content: '';
       position: absolute;
       top: -40px;
       right: -40px;
-      width: 160px;
-      height: 160px;
+      width: 180px;
+      height: 180px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(245,131,33,0.2), transparent 70%);
+      background: radial-gradient(circle, rgba(245,131,33,0.25), transparent 70%);
       pointer-events: none;
+      animation: glow-pulse 4s ease-in-out infinite;
+    }
+    @keyframes glow-pulse {
+      0%, 100% { opacity: 0.7; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.08); }
     }
     .credit-card::after {
       content: '';
@@ -249,16 +255,16 @@
       border: 1px solid var(--border);
       border-left: 4px solid var(--accent);
       border-radius: 12px;
-      padding: 16px 18px;
-      margin-bottom: 10px;
+      padding: 16px;
+      margin-bottom: 8px;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 16px;
       flex-wrap: wrap;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .upcoming-card:hover { border-color: var(--accent); }
+    .upcoming-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
     .upcoming-card.is-today { border-left-color: var(--green); background: #fafff7; }
     .upcoming-date-block { min-width: 54px; text-align: center; flex-shrink: 0; }
     .upcoming-date-day {
@@ -289,38 +295,43 @@
     }
     .btn-cancel-lesson:hover { color: #ef4444; border-color: #ef4444; }
     .upcoming-empty {
-      text-align: center; padding: 20px;
+      text-align: center; padding: 32px 16px;
       color: var(--muted); font-size: 0.85rem;
+      line-height: 1.5;
     }
+    .upcoming-empty .upcoming-empty-icon { font-size: 2rem; margin-bottom: 8px; display: block; opacity: 0.6; }
     .upcoming-empty a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    .upcoming-empty a:hover { text-decoration: underline; }
 
     /* STATS BAR */
     .stats-bar {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
+      gap: 8px;
       margin-bottom: 24px;
     }
     .stat-pill {
       background: var(--white);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 14px 12px;
+      padding: 16px 12px;
       text-align: center;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .stat-pill:hover {
       border-color: var(--accent);
-      transform: translateY(-1px);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(245,131,33,0.08);
     }
     .stat-pill .num {
       font-size: 1.4rem;
       font-weight: 700;
       color: var(--primary);
       font-family: var(--font-head);
+      font-variant-numeric: tabular-nums;
     }
-    .stat-pill .lbl { font-size: 0.68rem; color: var(--muted); margin-top: 2px; font-weight: 500; }
+    .stat-pill .lbl { font-size: 0.68rem; color: var(--muted); margin-top: 4px; font-weight: 500; }
 
     /* LOG SESSION BUTTON */
     .log-btn {
@@ -356,12 +367,12 @@
       background: var(--white);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .progress-card:hover { border-color: rgba(245,131,33,0.2); }
+    .progress-card:hover { border-color: rgba(245,131,33,0.2); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
     .progress-header {
       display: flex;
       align-items: center;
@@ -445,8 +456,8 @@
     .score-bar-fill {
       height: 100%;
       border-radius: 4px;
-      background: var(--green);
-      transition: width 0.6s ease;
+      background: linear-gradient(90deg, var(--green), #4ade80);
+      transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .score-note {
       font-size: 0.75rem;
@@ -487,12 +498,12 @@
       background: var(--white);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 16px 18px;
+      padding: 16px;
       margin-bottom: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .session-card:hover { border-color: rgba(245,131,33,0.2); }
+    .session-card:hover { border-color: rgba(245,131,33,0.2); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
     .session-meta {
       display: flex;
       align-items: center;
@@ -550,12 +561,12 @@
       background: var(--white);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-      transition: border-color 0.2s;
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
+      transition: all 0.25s;
     }
-    .profile-card:hover { border-color: var(--accent); }
+    .profile-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
     .profile-card-header {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 14px;
@@ -623,16 +634,16 @@
       background: var(--white);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 16px 20px;
-      margin-bottom: 20px;
+      padding: 16px 24px;
+      margin-bottom: 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-      transition: border-color 0.2s;
+      gap: 16px;
+      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
+      transition: all 0.25s;
     }
-    .pref-card:hover { border-color: var(--accent); }
+    .pref-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
     .pref-card-left { flex: 1; }
     .pref-card-title { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
     .pref-card-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
@@ -670,11 +681,25 @@
 
     .empty-state {
       text-align: center;
-      padding: 40px 20px;
+      padding: 48px 24px;
       color: var(--muted);
     }
-    .empty-state .emoji { font-size: 2rem; margin-bottom: 10px; }
-    .empty-state p { font-size: 0.9rem; }
+    .empty-state .emoji { font-size: 2.5rem; margin-bottom: 12px; display: block; }
+    .empty-state p { font-size: 0.9rem; line-height: 1.5; }
+    .empty-state .empty-cta {
+      display: inline-block;
+      margin-top: 16px;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 10px;
+      font-family: var(--font-head);
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .empty-state .empty-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px var(--accent-glow); }
 
     /* UNLOGGED BANNER */
     .unlogged-banner {
@@ -717,31 +742,34 @@
     .bottom-nav {
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      background: rgba(255,255,255,0.92);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-top: 1px solid var(--border);
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-top: 1px solid rgba(0,0,0,0.06);
       display: flex;
       z-index: 200;
       padding-bottom: env(safe-area-inset-bottom);
-      box-shadow: 0 -2px 16px rgba(0,0,0,0.04);
+      box-shadow: 0 -4px 24px rgba(245,131,33,0.04);
     }
     .bottom-nav-item {
       flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 10px 8px;
+      padding: 8px 8px 6px;
       text-decoration: none;
       color: var(--muted);
       font-size: 0.68rem;
       font-weight: 600;
-      transition: color 0.2s;
-      gap: 3px;
+      transition: color 0.2s, transform 0.2s;
+      gap: 4px;
+      -webkit-tap-highlight-color: transparent;
     }
     .bottom-nav-item:hover { color: var(--primary); }
+    .bottom-nav-item:active { transform: scale(0.92); }
     .bottom-nav-item.active { color: var(--accent); }
-    .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
+    .bottom-nav-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+    .bottom-nav-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   </style>
 </head>
 <body>
@@ -1300,23 +1328,23 @@ function escH(s) {
 
 <nav class="bottom-nav">
   <a href="/learner/" class="bottom-nav-item active">
-    <span class="bottom-nav-icon">&#x1F4CA;</span>
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
     <span>Dashboard</span>
   </a>
   <a href="/learner/lessons.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F4C5;</span>
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
     <span>Lessons</span>
   </a>
   <a href="/learner/videos.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F3AC;</span>
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"/></svg></span>
     <span>Videos</span>
   </a>
   <a href="/learner/qa.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F4AC;</span>
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
     <span>Q&A</span>
   </a>
   <a href="/learner/log-session.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F4DD;</span>
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
     <span>Session Log</span>
   </a>
 </nav>

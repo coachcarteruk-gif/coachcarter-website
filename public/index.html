@@ -504,6 +504,7 @@ a { color: inherit; }
   transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   text-decoration: none;
   display: block;
+  text-align: center;
 }
 
 .feature-card:hover {
@@ -519,7 +520,7 @@ a { color: inherit; }
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
+  margin: 0 auto 16px;
   color: var(--accent);
 }
 .feature-icon svg {
@@ -1107,7 +1108,7 @@ a { color: inherit; }
   .hero-logo { margin: 0 auto 24px; }
   .hero-image { max-width: 480px; margin: 0 auto; }
   .hero { padding: 100px 24px 64px; min-height: auto; }
-  .features-grid { grid-template-columns: repeat(2, 1fr); }
+  .features-grid { grid-template-columns: 1fr; }
   .testimonial-grid { grid-template-columns: repeat(2, 1fr); }
   .pricing-cards { grid-template-columns: repeat(2, 1fr); }
   .steps { grid-template-columns: repeat(2, 1fr); gap: 32px; }
@@ -1257,24 +1258,6 @@ a:focus-visible, button:focus-visible {
         <div class="feature-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg></div>
         <h3>Pass Programme</h3>
         <p>Our structured programme gets you test-ready with a clear plan, dynamic pricing, and guaranteed progress.</p>
-      </a>
-
-      <div class="feature-card fade-up" style="transition-delay: 0.2s">
-        <div class="feature-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
-        <h3>Flexible Scheduling</h3>
-        <p>Book lessons that fit around your life. Morning, evening, weekends — you choose when you learn.</p>
-      </div>
-
-      <div class="feature-card fade-up" style="transition-delay: 0.25s">
-        <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/></svg></div>
-        <h3>Expert Instructors</h3>
-        <p>DVSA approved, patient, and friendly. Our instructors are passionate about helping you succeed.</p>
-      </div>
-
-      <a href="/learner-journey.html" class="feature-card fade-up" style="transition-delay: 0.3s">
-        <div class="feature-icon"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg></div>
-        <h3>Pay As You Go</h3>
-        <p>No long-term commitment required. Pay per lesson or save with credit bundles — the choice is yours.</p>
       </a>
     </div>
   </div>
