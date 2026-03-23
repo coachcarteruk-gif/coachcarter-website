@@ -55,7 +55,7 @@
       { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
       { icon: 'message', label: 'Q&A', href: '/learner/qa.html' },
       'divider',
-      { icon: 'user', label: 'My Profile', href: '/learner/profile.html' },
+      { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true },
       { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html' }
     ],
     instructor: [
@@ -85,11 +85,14 @@
   function buildNavHTML() {
     var items = navItems[context] || navItems.public;
     var html = '';
+    var _s; try { _s = JSON.parse(localStorage.getItem('cc_learner') || 'null'); } catch(e) {}
+    var isLoggedIn = !!(_s && _s.token);
     for (var i = 0; i < items.length; i++) {
       if (items[i] === 'divider') {
         html += '<div class="cc-sb-divider"></div>';
       } else {
         var item = items[i];
+        if (item.authOnly && !isLoggedIn) continue;
         var active = isActive(item.href) ? ' active' : '';
         html += '<a href="' + item.href + '" class="cc-sb-link' + active + '">' +
           '<span class="cc-sb-icon">' + icons[item.icon] + '</span>' +
