@@ -351,6 +351,51 @@
     }
     .log-btn:hover { background: var(--accent-dk); transform: translateY(-2px); box-shadow: 0 8px 24px var(--accent-glow); }
 
+    /* PROFILE COMPLETION CARD */
+    .profile-card {
+      background: var(--accent-lt); border: 1px solid rgba(245,131,33,0.2);
+      border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
+      display: none;
+    }
+    .profile-card.show { display: block; }
+    .profile-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .profile-card-title {
+      font-family: var(--font-head); font-weight: 700; font-size: 0.95rem;
+    }
+    .profile-card-dismiss {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 0.8rem; padding: 4px 8px;
+    }
+    .profile-bar-bg {
+      height: 8px; background: rgba(245,131,33,0.15); border-radius: 8px;
+      overflow: hidden; margin-bottom: 8px;
+    }
+    .profile-bar-fill {
+      height: 100%; background: var(--accent); border-radius: 8px;
+      transition: width 0.6s ease;
+    }
+    .profile-pct {
+      font-size: 0.78rem; font-weight: 600; color: var(--accent-dk);
+      margin-bottom: 12px;
+    }
+    .profile-steps { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .profile-step {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.82rem; color: var(--muted);
+    }
+    .profile-step.done { color: var(--primary); }
+    .profile-step-icon { width: 18px; text-align: center; }
+    .profile-card .btn-complete {
+      display: inline-block; background: var(--accent); color: #fff;
+      border-radius: 100px; padding: 10px 24px; font-size: 0.85rem;
+      font-weight: 700; text-decoration: none; transition: all 0.18s;
+      font-family: var(--font-head);
+    }
+    .profile-card .btn-complete:hover { background: var(--accent-dk); }
+
     /* QUICK ACTIONS */
     .quick-actions {
       display: grid;
@@ -836,6 +881,18 @@
     <p id="welcome-sub"></p>
   </div>
 
+  <!-- PROFILE COMPLETION -->
+  <div class="profile-card" id="profile-card">
+    <div class="profile-card-header">
+      <div class="profile-card-title">👋 Build Your Driving Profile</div>
+      <button class="profile-card-dismiss" onclick="dismissProfile()">Dismiss</button>
+    </div>
+    <div class="profile-bar-bg"><div class="profile-bar-fill" id="profile-bar-fill" style="width:0%"></div></div>
+    <div class="profile-pct" id="profile-pct">0% complete</div>
+    <div class="profile-steps" id="profile-steps"></div>
+    <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete Next Step →</a>
+  </div>
+
   <!-- CREDIT BALANCE -->
   <div class="credit-card" id="credit-card">
     <div class="credit-card-left">
@@ -1002,7 +1059,59 @@ window.addEventListener('DOMContentLoaded', async () => {
   await Promise.all([loadProgress(), loadCredits(), loadBookings(), loadUnlogged()]);
   render();
   loadQAPreview();
+  loadProfileCompleteness();
 });
+
+// ── Profile Completion Card ──
+async function loadProfileCompleteness() {
+  if (!AUTH?.token) return;
+  if (localStorage.getItem('cc_profile_dismissed') === 'true') return;
+  try {
+    const res = await fetch('/api/learner?action=profile-completeness', {
+      headers: { 'Authorization': 'Bearer ' + AUTH.token }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.percentage >= 100) return; // Fully complete — don't show
+
+    const card = document.getElementById('profile-card');
+    card.classList.add('show');
+    document.getElementById('profile-bar-fill').style.width = data.percentage + '%';
+    document.getElementById('profile-pct').textContent = data.percentage + '% complete';
+
+    const stepLabels = {
+      account_created: 'Account created',
+      prior_experience: 'Prior experience added',
+      initial_assessment: 'Initial skill assessment',
+      first_session: 'First session logged',
+      first_quiz: 'First examiner quiz taken'
+    };
+    const stepsEl = document.getElementById('profile-steps');
+    stepsEl.innerHTML = Object.entries(data.steps).map(function(entry) {
+      var key = entry[0], done = entry[1];
+      return '<div class="profile-step ' + (done ? 'done' : '') + '">' +
+        '<span class="profile-step-icon">' + (done ? '✅' : '⬜') + '</span>' +
+        '<span>' + (stepLabels[key] || key) + '</span></div>';
+    }).join('');
+
+    // Point CTA to the most useful next step
+    if (!data.steps.prior_experience || !data.steps.initial_assessment) {
+      document.getElementById('profile-cta').href = '/learner/onboarding.html';
+      document.getElementById('profile-cta').textContent = 'Complete Your Profile →';
+    } else if (!data.steps.first_session) {
+      document.getElementById('profile-cta').href = '/learner/log-session.html';
+      document.getElementById('profile-cta').textContent = 'Log Your First Session →';
+    } else if (!data.steps.first_quiz) {
+      document.getElementById('profile-cta').href = '/learner/examiner-quiz.html';
+      document.getElementById('profile-cta').textContent = 'Take the Examiner Quiz →';
+    }
+  } catch (e) { console.warn('Profile completeness check failed:', e); }
+}
+
+function dismissProfile() {
+  localStorage.setItem('cc_profile_dismissed', 'true');
+  document.getElementById('profile-card').classList.remove('show');
+}
 
 function logout() {
   localStorage.removeItem('cc_learner');

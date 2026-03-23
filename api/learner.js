@@ -34,6 +34,8 @@ module.exports = async (req, res) => {
   if (action === 'mock-test-faults') return handleMockTestFaults(req, res);
   if (action === 'quiz-results')     return handleQuizResults(req, res);
   if (action === 'competency')       return handleCompetency(req, res);
+  if (action === 'onboarding')       return handleOnboarding(req, res);
+  if (action === 'profile-completeness') return handleProfileCompleteness(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -699,5 +701,114 @@ async function handleCompetency(req, res) {
   } catch (err) {
     console.error('competency error:', err);
     return res.status(500).json({ error: 'Failed to load competency data' });
+  }
+}
+
+// ── Onboarding ──────────────────────────────────────────────────────────────
+// GET: returns existing onboarding data (or null)
+// POST: saves/updates onboarding data + optional initial assessment ratings
+async function handleOnboarding(req, res) {
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const sql = neon(process.env.POSTGRES_URL);
+
+  if (req.method === 'GET') {
+    try {
+      const [row] = await sql`SELECT * FROM learner_onboarding WHERE learner_id = ${user.id}`;
+      return res.json({ onboarding: row || null });
+    } catch (err) {
+      console.error('onboarding GET error:', err);
+      return res.status(500).json({ error: 'Failed to load onboarding data' });
+    }
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const { prior_hours_pro, prior_hours_private, previous_tests, transmission,
+              test_booked, test_date, main_concerns, initial_ratings } = req.body;
+
+      // Upsert onboarding record
+      await sql`
+        INSERT INTO learner_onboarding (learner_id, prior_hours_pro, prior_hours_private,
+          previous_tests, transmission, test_booked, test_date, main_concerns, completed_at)
+        VALUES (${user.id}, ${prior_hours_pro || 0}, ${prior_hours_private || 0},
+          ${previous_tests || 0}, ${transmission || 'manual'},
+          ${test_booked || false}, ${test_date || null}, ${main_concerns || null}, NOW())
+        ON CONFLICT (learner_id) DO UPDATE SET
+          prior_hours_pro = ${prior_hours_pro || 0},
+          prior_hours_private = ${prior_hours_private || 0},
+          previous_tests = ${previous_tests || 0},
+          transmission = ${transmission || 'manual'},
+          test_booked = ${test_booked || false},
+          test_date = ${test_date || null},
+          main_concerns = ${main_concerns || null},
+          completed_at = NOW()`;
+
+      // Save initial self-assessment as a special "onboarding" session
+      if (initial_ratings?.length > 0) {
+        // Check if an onboarding session already exists
+        const [existing] = await sql`
+          SELECT id FROM driving_sessions WHERE user_id = ${user.id} AND session_type = 'onboarding'`;
+
+        let sessionId;
+        if (existing) {
+          sessionId = existing.id;
+          // Clear old ratings for this session
+          await sql`DELETE FROM skill_ratings WHERE session_id = ${sessionId}`;
+        } else {
+          const [newSession] = await sql`
+            INSERT INTO driving_sessions (user_id, session_date, duration_minutes, session_type, notes)
+            VALUES (${user.id}, CURRENT_DATE, 0, 'onboarding', 'Initial self-assessment during onboarding')
+            RETURNING id`;
+          sessionId = newSession.id;
+        }
+
+        for (const r of initial_ratings) {
+          await sql`INSERT INTO skill_ratings (session_id, user_id, tier, skill_key, rating)
+            VALUES (${sessionId}, ${user.id}, 0, ${r.skill_key}, ${r.rating})`;
+        }
+      }
+
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('onboarding POST error:', err);
+      return res.status(500).json({ error: 'Failed to save onboarding data' });
+    }
+  }
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
+// ── Profile Completeness ────────────────────────────────────────────────────
+// GET: returns completion status for each onboarding step
+async function handleProfileCompleteness(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [onboarding] = await sql`SELECT id FROM learner_onboarding WHERE learner_id = ${user.id}`;
+    const [assessment] = await sql`
+      SELECT ds.id FROM driving_sessions ds WHERE ds.user_id = ${user.id} AND ds.session_type = 'onboarding'`;
+    const [session] = await sql`
+      SELECT id FROM driving_sessions WHERE user_id = ${user.id} AND session_type != 'onboarding' LIMIT 1`;
+    const [quiz] = await sql`SELECT id FROM quiz_results WHERE learner_id = ${user.id} LIMIT 1`;
+
+    const steps = {
+      account_created: true,
+      prior_experience: !!onboarding,
+      initial_assessment: !!assessment,
+      first_session: !!session,
+      first_quiz: !!quiz
+    };
+
+    const completed = Object.values(steps).filter(Boolean).length;
+    const total = Object.keys(steps).length;
+
+    return res.json({ steps, completed, total, percentage: Math.round((completed / total) * 100) });
+  } catch (err) {
+    console.error('profile-completeness error:', err);
+    return res.status(500).json({ error: 'Failed to check profile completeness' });
   }
 }
