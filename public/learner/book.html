@@ -538,6 +538,7 @@
     }
   </style>
 <script src="/sidebar.js"></script>
+<script src="/auth-gate.js"></script>
 </head>
 <body>
 
@@ -779,7 +780,7 @@ let learnerProfile = { phone: '', pickup_address: '' };
 function init() {
   const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
   token = session?.token || null;
-  if (!token) { window.location.href = '/learner/login.html?redirect=/learner/book.html'; return; }
+  if (!token) { window.ccAuth && window.ccAuth.requireAuth(); return; }
 
   if (localStorage.getItem('cc_welcome') === '1') {
     document.getElementById('welcomeBanner').style.display = 'flex';

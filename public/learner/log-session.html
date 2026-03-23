@@ -605,6 +605,7 @@
     }
   </style>
 <script src="/sidebar.js"></script>
+<script src="/auth-gate.js"></script>
 </head>
 <body>
 
@@ -820,8 +821,7 @@ function buildSkillCards() {
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
   if (!AUTH?.token) {
-    const redirect = encodeURIComponent(window.location.pathname + window.location.search);
-    window.location.href = '/learner/login.html?redirect=' + redirect;
+    window.ccAuth && window.ccAuth.requireAuth();
     return;
   }
 

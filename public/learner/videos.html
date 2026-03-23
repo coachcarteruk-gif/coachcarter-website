@@ -245,6 +245,7 @@
     .bottom-nav-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   </style>
 <script src="/sidebar.js"></script>
+<script src="/auth-gate.js"></script>
 </head>
 <body>
 
@@ -341,9 +342,8 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// Auth
+// Auth (optional — page is viewable without login)
 const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-if (!session?.token) { window.location.href = '/learner/login.html?redirect=/learner/videos.html'; }
 if (session?.user?.name) document.getElementById('user-name').textContent = session.user.name;
 function logout() { localStorage.removeItem('cc_learner'); window.location.href = '/learner/login.html'; }
 

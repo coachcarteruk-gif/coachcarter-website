@@ -277,6 +277,7 @@
     }
   </style>
   <script src="/sidebar.js"></script>
+  <script src="/auth-gate.js"></script>
 </head>
 <body>
 
@@ -386,7 +387,7 @@ let AUTH, PROGRESS;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (!AUTH?.token) { window.location.href = '/learner/login.html'; return; }
+  if (!AUTH?.token) { window.ccAuth && window.ccAuth.requireAuth(); return; }
   await loadProgress();
   render();
 });

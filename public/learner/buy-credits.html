@@ -515,6 +515,7 @@
     }
   </style>
 <script src="/sidebar.js"></script>
+<script src="/auth-gate.js"></script>
 </head>
 <body>
 
@@ -792,7 +793,7 @@
     const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
     token = session?.token || null;
     if (!token) {
-      window.location.href = '/learner/login.html?redirect=/learner/buy-credits.html';
+      window.ccAuth && window.ccAuth.requireAuth();
       return false;
     }
     return true;
