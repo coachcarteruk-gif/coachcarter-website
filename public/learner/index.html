@@ -886,7 +886,7 @@
       <div class="quick-action-icon">📝</div>
       <div class="quick-action-label">Log a Session</div>
     </a>
-    <a href="/learner/profile.html" class="quick-action-card">
+    <a href="/learner/profile.html" class="quick-action-card" id="qa-profile-link">
       <div class="quick-action-icon">👤</div>
       <div class="quick-action-label">My Profile</div>
     </a>
@@ -960,7 +960,27 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  if (!AUTH?.token) return; // page renders, but no data loaded
+  if (!AUTH?.token) {
+    document.getElementById('welcome-msg').textContent = 'Welcome!';
+    document.getElementById('welcome-sub').textContent = 'Create a free account to track your progress and book lessons.';
+    document.getElementById('upcoming-list').innerHTML =
+      '<div class="upcoming-empty">Once you create your account, you\'ll see all your upcoming lessons here.</div>';
+    // Hide My Profile quick action
+    var profileLink = document.getElementById('qa-profile-link');
+    if (profileLink) profileLink.style.display = 'none';
+    // Replace credit card with a sign-up prompt
+    var creditCard = document.querySelector('.credit-card');
+    if (creditCard) {
+      creditCard.innerHTML =
+        '<div style="text-align:center;padding:24px 16px;">' +
+          '<div style="font-size:1.1rem;font-weight:700;margin-bottom:8px;">Ready to start learning?</div>' +
+          '<a href="/learner/login.html" style="display:inline-block;background:var(--accent);color:#fff;' +
+            'padding:12px 24px;border-radius:10px;font-weight:700;text-decoration:none;font-family:var(--font-head);' +
+            'transition:background 0.2s;">Create your free account</a>' +
+        '</div>';
+    }
+    return;
+  }
   document.getElementById('header-name').textContent = AUTH.user.name;
   await Promise.all([loadProgress(), loadCredits(), loadBookings(), loadUnlogged()]);
   render();
