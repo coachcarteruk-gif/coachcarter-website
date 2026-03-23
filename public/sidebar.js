@@ -54,6 +54,8 @@
       'divider',
       { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
       { icon: 'message', label: 'Q&A', href: '/learner/qa.html' },
+      { icon: 'clipboard', label: 'Examiner Quiz', href: '/learner/examiner-quiz.html' },
+      { icon: 'message', label: 'Ask the Examiner', href: '/learner/ask-examiner.html' },
       'divider',
       { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true },
       { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html' }
