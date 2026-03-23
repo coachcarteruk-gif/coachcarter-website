@@ -15,346 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --primary:    #262626;
-      --accent:     #f58321;
-      --accent-dk:  #e07518;
-      --accent-lt:  #fff4ec;
-      --accent-mid: rgba(245,131,33,0.12);
-      --muted:      #797879;
-      --border:     #e0e0e0;
-      --bg:         #ffffff;
-      --surface:    #f9f9f9;
-      --white:      #ffffff;
-      --green:      #22c55e;
-      --red:        #ef4444;
-      --font-head:  'Bricolage Grotesque', sans-serif;
-      --font-body:  'Lato', sans-serif;
-      --radius:     14px;
-    }
-
-    body {
-      font-family: var(--font-body);
-      background: var(--bg);
-      color: var(--primary);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 24px 16px;
-      padding-top: 88px;
-    }
-
-    .site-nav {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 100;
-      padding: 0 32px;
-      height: 64px;
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      align-items: center;
-      background: rgba(38, 38, 38, 0.92);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .site-nav-logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
-    }
-    .site-nav-logo img {
-      width: 34px; height: 34px;
-      object-fit: contain;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.08);
-      padding: 4px;
-    }
-    .site-nav-logo span {
-      font-family: var(--font-head);
-      font-size: 1.1rem;
-      font-weight: 800;
-      color: #fff;
-      letter-spacing: -0.02em;
-    }
-    .site-nav-logo span em { font-style: normal; color: var(--accent); }
-    .site-nav-links {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-    }
-    .site-nav-cta {
-      display: flex;
-      justify-content: flex-end;
-    }
-    .site-nav-link {
-      color: rgba(255,255,255,0.6);
-      font-family: var(--font-body);
-      font-weight: 500;
-      font-size: 0.85rem;
-      padding: 8px 16px;
-      border-radius: 100px;
-      border: 1px solid transparent;
-      text-decoration: none;
-      transition: all 0.18s;
-      white-space: nowrap;
-      background: transparent;
-      cursor: pointer;
-    }
-    .site-nav-link:hover {
-      color: #fff;
-      border-color: rgba(255,255,255,0.15);
-      background: rgba(255,255,255,0.05);
-    }
-    .site-nav-link.primary {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
-      font-weight: 600;
-    }
-    .site-nav-link.primary:hover {
-      background: var(--accent-dk);
-      border-color: var(--accent-dk);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(245,131,33,0.35);
-    }
-    @media (max-width: 900px) {
-      .site-nav { padding: 0 16px; }
-      .site-nav-links, .site-nav-cta { display: none; }
-    }
-
-    .card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      width: 100%;
-      max-width: 420px;
-      overflow: hidden;
-      box-shadow: 0 4px 24px rgba(245,131,33,0.06), 0 1px 3px rgba(0,0,0,0.04);
-      padding: 32px;
-    }
-
-    .card-title {
-      font-size: 1.35rem;
-      font-weight: 700;
-      margin-bottom: 6px;
-      font-family: var(--font-head);
-      color: var(--primary);
-    }
-    .card-sub {
-      font-size: 0.85rem;
-      color: var(--muted);
-      margin-bottom: 28px;
-      line-height: 1.5;
-    }
-
-    /* Method toggle */
-    .method-toggle {
-      display: flex;
-      gap: 0;
-      background: var(--surface);
-      border-radius: 10px;
-      padding: 4px;
-      margin-bottom: 24px;
-      border: 1px solid var(--border);
-    }
-    .method-btn {
-      flex: 1;
-      padding: 10px 12px;
-      border: none;
-      background: transparent;
-      border-radius: 7px;
-      font-family: var(--font-body);
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: var(--muted);
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-    }
-    .method-btn.active {
-      background: var(--white);
-      color: var(--primary);
-      font-weight: 600;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
-    .method-btn svg {
-      width: 16px;
-      height: 16px;
-      flex-shrink: 0;
-    }
-
-    .form-group { margin-bottom: 16px; }
-    label {
-      display: block;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 6px;
-      font-family: var(--font-body);
-    }
-    input[type="text"],
-    input[type="email"],
-    input[type="tel"] {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--primary);
-      font-family: var(--font-body);
-      font-size: 0.95rem;
-      padding: 12px 14px;
-      outline: none;
-      transition: border-color 0.2s, background-color 0.2s;
-    }
-    input::placeholder { color: var(--muted); }
-    input:focus {
-      border-color: var(--accent);
-      background: var(--white);
-    }
-
-    .btn-primary {
-      width: 100%;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      font-family: var(--font-head);
-      font-size: 0.95rem;
-      font-weight: 700;
-      padding: 14px;
-      cursor: pointer;
-      margin-top: 8px;
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-      box-shadow: 0 2px 8px rgba(245,131,33,0.2), inset 0 1px 0 rgba(255,255,255,0.15);
-    }
-    .btn-primary:hover { background: var(--accent-dk); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(245,131,33,0.3), inset 0 1px 0 rgba(255,255,255,0.15); }
-    .btn-primary:active { transform: scale(0.98) translateY(0); }
-    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
-
-    .error-msg {
-      background: rgba(239, 68, 68, 0.08);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #c41e1e;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 0.85rem;
-      margin-bottom: 16px;
-      display: none;
-      font-family: var(--font-body);
-    }
-    .error-msg.show { display: block; }
-
-    .back-link {
-      margin-top: 20px;
-      font-size: 0.8rem;
-      color: var(--muted);
-      text-decoration: none;
-      font-family: var(--font-body);
-    }
-    .back-link:hover { color: var(--primary); }
-
-    /* Sent state */
-    .sent-state {
-      display: none;
-      text-align: center;
-      padding: 8px 0;
-    }
-    .sent-state.show { display: block; }
-    .sent-icon {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      background: var(--accent-lt);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 20px;
-      box-shadow: 0 0 0 8px rgba(245,131,33,0.06), 0 0 0 16px rgba(245,131,33,0.03);
-      animation: sent-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    @keyframes sent-pop {
-      0% { transform: scale(0.5); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    .sent-icon svg {
-      width: 28px;
-      height: 28px;
-      color: var(--accent);
-    }
-    .sent-title {
-      font-family: var(--font-head);
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: var(--primary);
-      margin-bottom: 8px;
-    }
-    .sent-sub {
-      font-size: 0.88rem;
-      color: var(--muted);
-      line-height: 1.5;
-      margin-bottom: 24px;
-    }
-    .sent-sub strong {
-      color: var(--primary);
-      font-weight: 600;
-    }
-    .resend-link {
-      font-size: 0.82rem;
-      color: var(--muted);
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-family: var(--font-body);
-      padding: 0;
-      transition: color 0.2s;
-    }
-    .resend-link:hover { color: var(--accent); }
-    .resend-link:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .form-state { display: block; }
-    .form-state.hide { display: none; }
-
-    .hint {
-      text-align: center;
-      font-size: 0.78rem;
-      color: var(--muted);
-      margin-top: 20px;
-      line-height: 1.5;
-    }
-
-    .free-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      background: var(--accent-lt);
-      color: var(--accent-dk);
-      font-size: 0.78rem;
-      font-weight: 600;
-      padding: 5px 12px;
-      border-radius: 100px;
-      margin-bottom: 20px;
-    }
-    .free-badge svg {
-      width: 14px;
-      height: 14px;
-    }
-  </style>
+  <link rel="stylesheet" href="/shared-auth.css">
 <script src="/sidebar.js"></script>
 </head>
 <body>
@@ -376,8 +37,11 @@
 </nav>
 
 <div class="card">
-  <!-- Form state -->
-  <div class="form-state" id="form-state">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 1 — Enter email or phone
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen active" id="screen-form">
     <div class="card-title">Sign in or create account</div>
     <div class="card-sub">Enter your email or phone number and we'll send you a link to sign in. No password needed.</div>
 
@@ -400,31 +64,29 @@
     <div class="error-msg" id="error-msg"></div>
 
     <form onsubmit="handleSendLink(event)">
-      <!-- Email input -->
       <div class="form-group" id="email-group">
         <label>Email address</label>
         <input type="email" id="input-email" placeholder="your@email.com" autocomplete="email">
       </div>
-
-      <!-- Phone input (hidden by default) -->
       <div class="form-group" id="phone-group" style="display:none;">
         <label>Phone number</label>
         <input type="tel" id="input-phone" placeholder="07700 900000" autocomplete="tel">
       </div>
-
       <button type="submit" class="btn-primary" id="send-btn">Send login link</button>
     </form>
 
     <p class="hint">We'll send a one-time link that expires in 15 minutes.<br>Click it to sign in — no password to remember.</p>
   </div>
 
-  <!-- Sent confirmation state -->
-  <div class="sent-state" id="sent-state">
-    <div class="sent-icon">
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 2 — Link sent confirmation
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-sent" style="text-align:center;">
+    <div class="result-icon orange">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9z"/></svg>
     </div>
-    <div class="sent-title">Check your <span id="sent-method-label">email</span></div>
-    <div class="sent-sub">
+    <div class="result-title">Check your <span id="sent-method-label">email</span></div>
+    <div class="result-sub">
       We sent a login link to<br>
       <strong id="sent-destination"></strong>
     </div>
@@ -433,20 +95,85 @@
     </button>
     <p class="hint" style="margin-top: 16px;">The link expires in 15 minutes and can only be used once.</p>
   </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 3 — Verifying token (spinner)
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-verifying" style="text-align:center;">
+    <div class="spinner"></div>
+    <div class="result-title">Signing you in…</div>
+    <div class="result-sub">Verifying your login link.</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 4 — Success (existing user)
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-success" style="text-align:center;">
+    <div class="result-icon green">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+    </div>
+    <div class="result-title">You're signed in!</div>
+    <div class="result-sub">Redirecting to your dashboard…</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 5 — New user (collect name)
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-new-user" style="text-align:center;">
+    <div class="result-icon green">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26z"/></svg>
+    </div>
+    <div class="result-title">Welcome to CoachCarter!</div>
+    <div class="result-sub">Your free lesson is ready. Just tell us your name and you're all set.</div>
+    <div class="name-form">
+      <label>Your name</label>
+      <input type="text" id="input-name" placeholder="e.g. Alex Smith" autofocus>
+      <button class="btn-primary" onclick="handleSetName()">Continue</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 6 — Error
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-error" style="text-align:center;">
+    <div class="result-icon red">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+    </div>
+    <div class="result-title" id="error-title">Link expired</div>
+    <div class="result-sub" id="error-sub">This login link has expired or has already been used. Please request a new one.</div>
+    <button class="btn-primary" onclick="showScreen('form')" style="display:inline-block;width:auto;padding:12px 28px;">Request a new link</button>
+  </div>
+
 </div>
 
 <a href="/" class="back-link">&larr; Back to home</a>
 
 <script>
-  // Redirect if already logged in
-  const existing = JSON.parse(localStorage.getItem('cc_learner') || 'null');
   const urlParams = new URLSearchParams(window.location.search);
+  const token     = urlParams.get('token');
   const redirectTo = urlParams.get('redirect') || '/learner/';
-  if (existing?.token) { window.location.href = redirectTo; }
+
+  // Redirect if already logged in (and not verifying a new token)
+  const existing = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  if (existing?.token && !token) { window.location.href = redirectTo; }
 
   let currentMethod = 'email';
   let lastPayload = null;
+  let sessionData = null;
 
+  // ── Screen management ──────────────────────────────────────────
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + id).classList.add('active');
+  }
+
+  // ── If magic link token is in URL, verify immediately ──────────
+  if (token) {
+    showScreen('verifying');
+    verifyToken(token);
+  }
+
+  // ── Method toggle (email / SMS) ────────────────────────────────
   function switchMethod(method) {
     currentMethod = method;
     document.getElementById('method-email').classList.toggle('active', method === 'email');
@@ -465,13 +192,7 @@
     document.getElementById('error-msg').classList.remove('show');
   }
 
-  function showSentState(destination, methodLabel) {
-    document.getElementById('form-state').classList.add('hide');
-    document.getElementById('sent-state').classList.add('show');
-    document.getElementById('sent-destination').textContent = destination;
-    document.getElementById('sent-method-label').textContent = methodLabel;
-  }
-
+  // ── Send magic link ────────────────────────────────────────────
   async function handleSendLink(e) {
     e.preventDefault();
     clearError();
@@ -514,7 +235,9 @@
 
       const destination = currentMethod === 'email' ? email : phone;
       const methodLabel = currentMethod === 'email' ? 'email' : 'phone';
-      showSentState(destination, methodLabel);
+      document.getElementById('sent-destination').textContent = destination;
+      document.getElementById('sent-method-label').textContent = methodLabel;
+      showScreen('sent');
 
     } catch {
       showError('Network error. Please check your connection and try again.');
@@ -524,6 +247,7 @@
     }
   }
 
+  // ── Resend magic link ──────────────────────────────────────────
   async function handleResend() {
     if (!lastPayload) return;
     const btn = document.getElementById('resend-btn');
@@ -551,6 +275,110 @@
       btn.disabled = false;
     }
   }
+
+  // ── Verify magic link token (two-step: validate then verify) ───
+  async function verifyToken(token) {
+    try {
+      // Step 1: Validate (GET — does NOT consume the token)
+      const valRes = await fetch('/api/magic-link?action=validate&token=' + encodeURIComponent(token));
+      const valData = await valRes.json();
+
+      if (!valRes.ok) {
+        showScreen('error');
+        if (valData.error === 'expired') {
+          document.getElementById('error-title').textContent = 'Link expired';
+          document.getElementById('error-sub').textContent = valData.message;
+        } else {
+          document.getElementById('error-title').textContent = 'Verification failed';
+          document.getElementById('error-sub').textContent = valData.message || 'Something went wrong. Please try again.';
+        }
+        return;
+      }
+
+      // Step 2: Consume (POST — marks token as used, returns JWT)
+      const res = await fetch('/api/magic-link?action=verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showScreen('error');
+        if (data.error === 'expired') {
+          document.getElementById('error-title').textContent = 'Link expired';
+          document.getElementById('error-sub').textContent = data.message;
+        } else {
+          document.getElementById('error-title').textContent = 'Verification failed';
+          document.getElementById('error-sub').textContent = data.message || 'Something went wrong. Please try again.';
+        }
+        return;
+      }
+
+      // Store the session
+      sessionData = data;
+      localStorage.setItem('cc_learner', JSON.stringify({
+        token: data.token,
+        user: data.user
+      }));
+
+      // New user without a name? Collect it
+      if (data.is_new_user && data.needs_name) {
+        localStorage.setItem('cc_welcome', '1');
+        showScreen('new-user');
+        return;
+      }
+
+      // Existing user — show success and redirect
+      showScreen('success');
+      if (data.is_new_user) {
+        localStorage.setItem('cc_welcome', '1');
+        setTimeout(() => { window.location.href = '/learner/book.html'; }, 800);
+      } else {
+        setTimeout(() => { window.location.href = redirectTo; }, 800);
+      }
+    } catch {
+      showScreen('error');
+      document.getElementById('error-title').textContent = 'Connection error';
+      document.getElementById('error-sub').textContent = 'Could not reach the server. Please check your connection and try again.';
+    }
+  }
+
+  // ── Set name for new users ─────────────────────────────────────
+  async function handleSetName() {
+    const name = document.getElementById('input-name').value.trim();
+    if (!name) {
+      document.getElementById('input-name').focus();
+      return;
+    }
+
+    try {
+      const stored = JSON.parse(localStorage.getItem('cc_learner') || '{}');
+      await fetch('/api/learner?action=update-name', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + stored.token
+        },
+        body: JSON.stringify({ name })
+      });
+
+      stored.user.name = name;
+      localStorage.setItem('cc_learner', JSON.stringify(stored));
+
+      showScreen('success');
+      setTimeout(() => { window.location.href = '/learner/book.html'; }, 800);
+    } catch {
+      // Even if name update fails, still redirect
+      showScreen('success');
+      setTimeout(() => { window.location.href = '/learner/book.html'; }, 800);
+    }
+  }
+
+  // Handle Enter key in name input
+  document.getElementById('input-name')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); handleSetName(); }
+  });
 </script>
 </body>
 </html>
