@@ -510,6 +510,46 @@
       .month-dow { font-size: 0.65rem; padding: 6px 2px; }
       .month-day-num { font-size: 0.78rem; }
     }
+
+    /* ── Today at a Glance ── */
+    .glance-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .glance-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
+    .glance-num { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; color: var(--primary); line-height: 1; }
+    .glance-num.accent { color: var(--accent); }
+    .glance-label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+
+    /* ── Next Lesson Card ── */
+    .next-lesson { background: linear-gradient(135deg, var(--accent-lt), #fff); border: 1.5px solid var(--accent); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 20px; display: none; }
+    .next-lesson-label { font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+    .next-lesson-time { font-family: var(--font-head); font-size: 1.15rem; font-weight: 700; color: var(--primary); }
+    .next-lesson-details { font-size: 0.85rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .next-lesson-details strong { color: var(--primary); }
+
+    /* ── New Bookings Banner ── */
+    .new-bookings-banner { display: none; background: var(--green-lt); border: 1.5px solid var(--green); border-radius: var(--radius); padding: 14px 20px; margin-bottom: 18px; align-items: center; justify-content: space-between; gap: 12px; }
+    .new-bookings-banner strong { color: var(--green); font-size: 0.875rem; }
+
+    /* ── Instructor Notes Textarea ── */
+    .notes-field { width: 100%; min-height: 60px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-body); font-size: 0.85rem; color: var(--primary); resize: vertical; background: var(--bg); margin-top: 8px; }
+    .notes-field::placeholder { color: var(--muted); }
+    .notes-label { font-size: 0.78rem; font-weight: 700; color: var(--muted); margin-top: 12px; }
+
+    /* ── Learner History Modal ── */
+    .history-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .history-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--accent-lt); display: flex; align-items: center; justify-content: center; font-family: var(--font-head); font-weight: 700; color: var(--accent); font-size: 1.1rem; flex-shrink: 0; }
+    .history-name { font-family: var(--font-head); font-weight: 700; font-size: 1rem; }
+    .history-meta { font-size: 0.78rem; color: var(--muted); }
+    .history-list { max-height: 360px; overflow-y: auto; }
+    .history-item { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    .history-item:last-child { border-bottom: none; }
+    .history-item-date { font-weight: 700; color: var(--primary); }
+    .history-item-notes { color: var(--muted); font-size: 0.8rem; margin-top: 4px; font-style: italic; }
+    .history-item .feedback-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+
+    /* ── Cancel Modal ── */
+    .cancel-reason { width: 100%; min-height: 50px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-body); font-size: 0.85rem; resize: vertical; margin-top: 8px; }
+    .btn-cancel-danger { background: var(--red); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-family: var(--font-head); font-weight: 700; font-size: 0.88rem; cursor: pointer; transition: background 0.15s; }
+    .btn-cancel-danger:hover { background: #dc2626; }
   </style>
 <script src="/sidebar.js"></script>
 </head>
@@ -554,6 +594,27 @@
       <a class="cal-sync-btn" id="calSyncBtn" href="#">Sync to calendar</a>
       <button class="cal-sync-dismiss" id="calSyncDismiss" title="Dismiss">✕</button>
     </div>
+  </div>
+
+  <!-- Today at a Glance -->
+  <div class="glance-row" id="glanceRow" style="display:none">
+    <div class="glance-card"><div class="glance-num accent" id="glToday">—</div><div class="glance-label">Today</div></div>
+    <div class="glance-card"><div class="glance-num" id="glWeek">—</div><div class="glance-label">This week</div></div>
+    <div class="glance-card"><div class="glance-num" id="glMonth">—</div><div class="glance-label">This month</div></div>
+    <div class="glance-card"><div class="glance-num" id="glAllTime">—</div><div class="glance-label">All time</div></div>
+  </div>
+
+  <!-- Next Lesson Card -->
+  <div class="next-lesson" id="nextLessonCard">
+    <div class="next-lesson-label">Next lesson</div>
+    <div class="next-lesson-time" id="nextLessonTime"></div>
+    <div class="next-lesson-details" id="nextLessonDetails"></div>
+  </div>
+
+  <!-- New Bookings Banner -->
+  <div class="new-bookings-banner" id="newBookingsBanner">
+    <strong id="newBookingsText"></strong>
+    <button onclick="goToday()" style="background:var(--green);color:white;border:none;padding:8px 18px;border-radius:8px;font-family:var(--font-head);font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">View schedule</button>
   </div>
 
   <!-- Q&A unanswered banner -->
@@ -629,6 +690,33 @@
   </div>
 </div>
 
+<!-- Learner History Modal -->
+<div class="modal-overlay" id="historyModal" onclick="if(event.target===this)closeHistoryModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">Learner History</div>
+    <div id="historyContent"><div class="loading"><div class="spinner"></div><p>Loading…</p></div></div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeHistoryModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cancel Booking Modal -->
+<div class="modal-overlay" id="cancelModal" onclick="if(event.target===this)closeCancelModal()">
+  <div class="modal">
+    <div class="modal-title">Cancel Lesson</div>
+    <div class="modal-sub" id="cancelSubtitle">This will cancel the lesson and refund the learner's credit.</div>
+    <div>
+      <div class="notes-label">Reason (optional — will be shared with the learner)</div>
+      <textarea class="cancel-reason" id="cancelReason" placeholder="e.g. Car in for service, feeling unwell…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeCancelModal()">Go back</button>
+      <button class="btn-cancel-danger" id="cancelConfirmBtn" onclick="confirmCancel()">Cancel this lesson</button>
+    </div>
+  </div>
+</div>
+
 <nav class="bottom-nav">
   <a href="/instructor/" class="bottom-nav-item active">
     <span class="bottom-nav-icon">&#x1F4C5;</span>
@@ -690,6 +778,7 @@ function init() {
   setView('daily'); // start in daily view on today
   loadAvailability();
   loadQABanner();
+  loadStats();
 }
 
 async function loadQABanner() {
@@ -1056,81 +1145,11 @@ function drillToDay(ds) {
 async function markComplete(bookingId) {
   const btn = document.getElementById(`complete-${bookingId}`);
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-
   try {
-    const res  = await fetch('/api/instructor?action=complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ booking_id: bookingId })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-
-    // Update cache
-    for (const ds in bookingCache) {
-      const bk = bookingCache[ds].find(b => b.id === bookingId);
-      if (bk) { bk.status = 'completed'; break; }
-    }
-    showToast('Lesson marked as complete ✓', 'success');
-    renderCurrentView();
+    await markCompleteWithNotes(bookingId, null);
   } catch (err) {
-    showToast(err.message || 'Failed to mark as complete', 'error');
     if (btn) { btn.disabled = false; btn.textContent = 'Mark complete'; }
   }
-}
-
-// ─── Booking detail modal ─────────────────────────────────────────────────────
-function openBookingDetail(bookingId) {
-  // Find in cache
-  let b = null;
-  for (const ds in bookingCache) {
-    b = bookingCache[ds].find(x => x.id === bookingId);
-    if (b) break;
-  }
-  if (!b) return;
-
-  selectedBooking = b;
-  const dateObj = new Date(b.scheduled_date + 'T00:00:00');
-  const dateLabel = `${DAY_FULL[dateObj.getDay()]}, ${dateObj.getDate()} ${MON_FULL[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
-
-  document.getElementById('bookingDetailContent').innerHTML = `
-    <div class="booking-detail-row"><span class="booking-detail-label">Date</span><span class="booking-detail-val">${dateLabel}</span></div>
-    <div class="booking-detail-row"><span class="booking-detail-label">Time</span><span class="booking-detail-val">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</span></div>
-    <div class="booking-detail-row"><span class="booking-detail-label">Learner</span><span class="booking-detail-val">${esc(b.learner_name)}</span></div>
-    <div class="booking-detail-row"><span class="booking-detail-label">Email</span><span class="booking-detail-val">${esc(b.learner_email)}</span></div>
-    ${b.learner_phone ? `<div class="booking-detail-row"><span class="booking-detail-label">Phone</span><span class="booking-detail-val">${esc(b.learner_phone)}</span></div>` : ''}
-    ${b.learner_pickup_address ? `<div class="booking-detail-row"><span class="booking-detail-label">Pickup</span><span class="booking-detail-val">${esc(b.learner_pickup_address)}</span></div>` : ''}
-    <div class="booking-detail-row"><span class="booking-detail-label">Status</span><span class="booking-detail-val">${b.status === 'completed' ? '✓ Completed' : 'Confirmed'}</span></div>
-    ${b.prefer_contact_before ? `<div class="booking-detail-row"><span class="booking-detail-label">Note</span><span class="booking-detail-val" style="color:var(--accent);">📞 Learner would like a call or message before their first lesson</span></div>` : ''}
-    ${b.status === 'completed' && b.learner_ratings && b.learner_ratings.length > 0 ? `
-      <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
-        <div style="font-size:0.78rem; font-weight:700; color:var(--muted); margin-bottom:8px;">Learner Self-Assessment</div>
-        <div class="feedback-skills">${b.learner_ratings.map(r => {
-          const label = SKILL_LABELS[r.skill_key] || r.skill_key.replace(/_/g, ' ');
-          const dc = r.rating === 'nailed' ? 'fd-nailed' : r.rating === 'ok' ? 'fd-ok' : 'fd-struggled';
-          return '<div class="feedback-pill"><span class="feedback-dot ' + dc + '"></span> ' + label + '</div>';
-        }).join('')}</div>
-        ${b.session_notes ? '<div class="feedback-notes">"' + esc(b.session_notes) + '"</div>' : ''}
-      </div>` : ''}
-  `;
-
-  const actions = document.getElementById('bookingModalActions');
-  if (b.status !== 'completed') {
-    actions.innerHTML = `
-      <button class="btn-modal-cancel" onclick="closeBookingModal()">Close</button>
-      <button class="btn-modal-save" id="detailCompleteBtn" onclick="markCompleteFromModal(${b.id})">Mark complete</button>`;
-  } else {
-    actions.innerHTML = `<button class="btn-modal-cancel" onclick="closeBookingModal()">Close</button>`;
-  }
-
-  document.getElementById('bookingModal').classList.add('open');
-}
-
-async function markCompleteFromModal(bookingId) {
-  const btn = document.getElementById('detailCompleteBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  await markComplete(bookingId);
-  closeBookingModal();
 }
 
 function closeBookingModal() {
@@ -1305,6 +1324,260 @@ function initCalSyncBanner() {
     localStorage.setItem('cc_instructor_cal_synced', '1');
     banner.style.display = 'none';
   };
+}
+
+// ─── Stats + Dashboard ───────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const res = await fetch('/api/instructor?action=stats', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const data = await res.json();
+    if (!res.ok) return;
+
+    document.getElementById('glToday').textContent = data.today;
+    document.getElementById('glWeek').textContent = data.thisWeek;
+    document.getElementById('glMonth').textContent = (data.thisMonth.completed + data.thisMonth.upcoming);
+    document.getElementById('glAllTime').textContent = data.allTimeCompleted;
+    document.getElementById('glanceRow').style.display = '';
+
+    // New bookings banner
+    if (data.newBookingsLast24h > 0) {
+      const banner = document.getElementById('newBookingsBanner');
+      banner.style.display = 'flex';
+      document.getElementById('newBookingsText').textContent =
+        data.newBookingsLast24h === 1
+          ? '1 new booking in the last 24 hours'
+          : data.newBookingsLast24h + ' new bookings in the last 24 hours';
+    }
+
+    // Next lesson card — find from today's cache after data loads
+    setTimeout(showNextLesson, 500);
+  } catch (err) {
+    console.error('stats error:', err);
+  }
+}
+
+function showNextLesson() {
+  const now = new Date();
+  const todayDS = dateStr(now);
+  const todayBookings = bookingCache[todayDS] || [];
+
+  // Find next confirmed lesson today
+  let next = null;
+  for (const b of todayBookings) {
+    if (b.status !== 'confirmed') continue;
+    const [h, m] = b.start_time.split(':').map(Number);
+    const lessonTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
+    if (lessonTime > now) { next = b; break; }
+  }
+
+  if (!next) return;
+
+  const card = document.getElementById('nextLessonCard');
+  card.style.display = '';
+  document.getElementById('nextLessonTime').textContent =
+    next.start_time.slice(0,5) + ' – ' + next.end_time.slice(0,5);
+
+  let details = '<strong>' + esc(next.learner_name) + '</strong>';
+  if (next.learner_pickup_address) details += ' · 📍 ' + esc(next.learner_pickup_address);
+  if (next.learner_phone) details += ' · 📞 ' + esc(next.learner_phone);
+  if (next.prefer_contact_before) details += '<br><span style="color:var(--accent)">📞 Wants a call/message before first lesson</span>';
+  document.getElementById('nextLessonDetails').innerHTML = details;
+}
+
+// ─── Instructor Notes in Complete Flow ───────────────────────────────────────
+function openBookingDetail(bookingId) {
+  let b = null;
+  for (const ds in bookingCache) {
+    b = bookingCache[ds].find(x => x.id === bookingId);
+    if (b) break;
+  }
+  if (!b) return;
+
+  selectedBooking = b;
+  const dateObj = new Date(b.scheduled_date + 'T00:00:00');
+  const dateLabel = `${DAY_FULL[dateObj.getDay()]}, ${dateObj.getDate()} ${MON_FULL[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+
+  document.getElementById('bookingDetailContent').innerHTML = `
+    <div class="booking-detail-row"><span class="booking-detail-label">Date</span><span class="booking-detail-val">${dateLabel}</span></div>
+    <div class="booking-detail-row"><span class="booking-detail-label">Time</span><span class="booking-detail-val">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</span></div>
+    <div class="booking-detail-row"><span class="booking-detail-label">Learner</span><span class="booking-detail-val"><a href="#" onclick="openLearnerHistory(${b.learner_id});return false" style="color:var(--accent);text-decoration:underline">${esc(b.learner_name)}</a></span></div>
+    <div class="booking-detail-row"><span class="booking-detail-label">Email</span><span class="booking-detail-val">${esc(b.learner_email)}</span></div>
+    ${b.learner_phone ? `<div class="booking-detail-row"><span class="booking-detail-label">Phone</span><span class="booking-detail-val"><a href="tel:${esc(b.learner_phone)}" style="color:var(--accent)">${esc(b.learner_phone)}</a></span></div>` : ''}
+    ${b.learner_pickup_address ? `<div class="booking-detail-row"><span class="booking-detail-label">Pickup</span><span class="booking-detail-val">📍 ${esc(b.learner_pickup_address)}</span></div>` : ''}
+    <div class="booking-detail-row"><span class="booking-detail-label">Status</span><span class="booking-detail-val">${b.status === 'completed' ? '✓ Completed' : b.status === 'cancelled' ? '✕ Cancelled' : 'Confirmed'}</span></div>
+    ${b.prefer_contact_before ? `<div class="booking-detail-row"><span class="booking-detail-label">Note</span><span class="booking-detail-val" style="color:var(--accent);">📞 Learner would like a call or message before their first lesson</span></div>` : ''}
+    ${b.instructor_notes ? `<div class="booking-detail-row"><span class="booking-detail-label">Your notes</span><span class="booking-detail-val" style="font-style:italic">${esc(b.instructor_notes)}</span></div>` : ''}
+    ${b.status !== 'completed' ? `
+      <div class="notes-label">Lesson notes (saved when you mark complete)</div>
+      <textarea class="notes-field" id="detailNotes" placeholder="e.g. Worked on roundabouts, needs more mirror checks…"></textarea>
+    ` : ''}
+    ${b.status === 'completed' && b.learner_ratings && b.learner_ratings.length > 0 ? `
+      <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
+        <div style="font-size:0.78rem; font-weight:700; color:var(--muted); margin-bottom:8px;">Learner Self-Assessment</div>
+        <div class="feedback-skills">${b.learner_ratings.map(r => {
+          const label = SKILL_LABELS[r.skill_key] || r.skill_key.replace(/_/g, ' ');
+          const dc = r.rating === 'nailed' ? 'fd-nailed' : r.rating === 'ok' ? 'fd-ok' : 'fd-struggled';
+          return '<div class="feedback-pill"><span class="feedback-dot ' + dc + '"></span> ' + label + '</div>';
+        }).join('')}</div>
+        ${b.session_notes ? '<div class="feedback-notes">"' + esc(b.session_notes) + '"</div>' : ''}
+      </div>` : ''}
+  `;
+
+  const actions = document.getElementById('bookingModalActions');
+  if (b.status === 'confirmed') {
+    actions.innerHTML = `
+      <button class="btn-modal-cancel" style="color:var(--red)" onclick="openCancelModal(${b.id})">Cancel lesson</button>
+      <button class="btn-modal-cancel" onclick="closeBookingModal()">Close</button>
+      <button class="btn-modal-save" id="detailCompleteBtn" onclick="markCompleteFromModal(${b.id})">Mark complete</button>`;
+  } else {
+    actions.innerHTML = `<button class="btn-modal-cancel" onclick="closeBookingModal()">Close</button>`;
+  }
+
+  document.getElementById('bookingModal').classList.add('open');
+}
+
+async function markCompleteFromModal(bookingId) {
+  const btn = document.getElementById('detailCompleteBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  const notesEl = document.getElementById('detailNotes');
+  const notes = notesEl ? notesEl.value.trim() : '';
+  await markCompleteWithNotes(bookingId, notes);
+  closeBookingModal();
+}
+
+async function markCompleteWithNotes(bookingId, instructorNotes) {
+  try {
+    const res = await fetch('/api/instructor?action=complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ booking_id: bookingId, instructor_notes: instructorNotes || null })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    for (const ds in bookingCache) {
+      const bk = bookingCache[ds].find(b => b.id === bookingId);
+      if (bk) { bk.status = 'completed'; bk.instructor_notes = instructorNotes; break; }
+    }
+    showToast('Lesson marked as complete ✓', 'success');
+    renderCurrentView();
+  } catch (err) {
+    showToast(err.message || 'Failed to mark as complete', 'error');
+  }
+}
+
+// ─── Learner History ──────────────────────────────────────────────────────────
+async function openLearnerHistory(learnerId) {
+  document.getElementById('historyModal').classList.add('open');
+  document.getElementById('historyContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading…</p></div>';
+
+  try {
+    const res = await fetch(`/api/instructor?action=learner-history&learner_id=${learnerId}`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const l = data.learner;
+    const initials = l.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
+
+    let html = `
+      <div class="history-header">
+        <div class="history-avatar">${initials}</div>
+        <div>
+          <div class="history-name">${esc(l.name)}</div>
+          <div class="history-meta">${esc(l.email)}${l.phone ? ' · ' + esc(l.phone) : ''}</div>
+          <div class="history-meta">${data.totalLessons} completed lesson${data.totalLessons !== 1 ? 's' : ''} with you${l.tier ? ' · ' + esc(l.tier) : ''}</div>
+        </div>
+      </div>
+      <div class="history-list">`;
+
+    if (data.bookings.length === 0) {
+      html += '<div style="text-align:center;color:var(--muted);padding:20px">No lesson history yet.</div>';
+    }
+
+    for (const b of data.bookings) {
+      const d = new Date(b.scheduled_date + 'T00:00:00');
+      const dateLabel = `${d.getDate()} ${MON_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+      const statusBadge = b.status === 'completed' ? '<span style="color:var(--green);font-size:0.75rem">✓</span>'
+        : b.status === 'cancelled' ? '<span style="color:var(--red);font-size:0.75rem">✕ cancelled</span>'
+        : '<span style="color:var(--blue);font-size:0.75rem">upcoming</span>';
+
+      html += `<div class="history-item">
+        <div class="history-item-date">${dateLabel} · ${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)} ${statusBadge}</div>`;
+
+      if (b.instructor_notes) html += `<div class="history-item-notes">📝 ${esc(b.instructor_notes)}</div>`;
+      if (b.session_notes) html += `<div class="history-item-notes">💬 "${esc(b.session_notes)}"</div>`;
+
+      if (b.learner_ratings && b.learner_ratings.length > 0) {
+        html += '<div class="feedback-pills">';
+        for (const r of b.learner_ratings) {
+          const label = SKILL_LABELS[r.skill_key] || r.skill_key.replace(/_/g, ' ');
+          const dc = r.rating === 'nailed' ? 'fd-nailed' : r.rating === 'ok' ? 'fd-ok' : 'fd-struggled';
+          html += `<div class="feedback-pill" style="font-size:0.72rem"><span class="feedback-dot ${dc}"></span> ${label}</div>`;
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
+    html += '</div>';
+    document.getElementById('historyContent').innerHTML = html;
+  } catch (err) {
+    document.getElementById('historyContent').innerHTML = '<div style="color:var(--red);padding:20px">' + (err.message || 'Failed to load') + '</div>';
+  }
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').classList.remove('open');
+}
+
+// ─── Cancel Booking ───────────────────────────────────────────────────────────
+let cancelBookingId = null;
+
+function openCancelModal(bookingId) {
+  cancelBookingId = bookingId;
+  closeBookingModal();
+  document.getElementById('cancelReason').value = '';
+  document.getElementById('cancelModal').classList.add('open');
+}
+
+function closeCancelModal() {
+  document.getElementById('cancelModal').classList.remove('open');
+  cancelBookingId = null;
+}
+
+async function confirmCancel() {
+  if (!cancelBookingId) return;
+  const btn = document.getElementById('cancelConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Cancelling…';
+  const reason = document.getElementById('cancelReason').value.trim();
+
+  try {
+    const res = await fetch('/api/instructor?action=cancel-booking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ booking_id: cancelBookingId, reason: reason || null })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // Update cache
+    for (const ds in bookingCache) {
+      const bk = bookingCache[ds].find(b => b.id === cancelBookingId);
+      if (bk) { bk.status = 'cancelled'; break; }
+    }
+
+    closeCancelModal();
+    showToast('Lesson cancelled — learner notified and credit refunded', 'success');
+    renderCurrentView();
+  } catch (err) {
+    showToast(err.message || 'Failed to cancel', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Cancel this lesson';
+  }
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────

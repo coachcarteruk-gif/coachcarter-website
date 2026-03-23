@@ -368,9 +368,14 @@
         </div>
 
         <div class="form-group">
-          <label for="inputPhoto">Photo URL</label>
-          <input type="url" id="inputPhoto" value="${esc(p.photo_url || '')}" placeholder="https://…" oninput="previewPhoto(this.value)">
-          <p class="field-hint">Direct link to a photo (JPG or PNG). Contact admin to upload a new image.</p>
+          <label>Profile photo</label>
+          <input type="file" id="inputPhotoFile" accept="image/jpeg,image/png,image/webp" onchange="handlePhotoUpload(this)" style="display:none">
+          <input type="hidden" id="inputPhoto" value="${esc(p.photo_url || '')}">
+          <button type="button" onclick="document.getElementById('inputPhotoFile').click()" style="background:var(--accent-lt);color:var(--accent);border:1.5px dashed var(--accent);border-radius:8px;padding:12px;width:100%;font-family:var(--font-body);font-size:0.85rem;font-weight:600;cursor:pointer;transition:background 0.15s;">
+            ${p.photo_url ? 'Change photo' : 'Upload a photo'}
+          </button>
+          <div id="uploadStatus" style="font-size:0.78rem;color:var(--muted);margin-top:6px;display:none"></div>
+          <p class="field-hint">JPG, PNG or WebP, max 2MB.</p>
         </div>
       </div>
 
@@ -401,6 +406,44 @@
     const avatarEl = document.getElementById('avatarEl');
     if (!avatarEl) return;
     avatarEl.innerHTML = `<img src="${url}" alt="preview" onerror="this.style.display='none'">`;
+  }
+
+  async function handlePhotoUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image too large — max 2MB'); return;
+    }
+    const status = document.getElementById('uploadStatus');
+    status.style.display = ''; status.textContent = 'Uploading…';
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        const res = await fetch('/api/instructor?action=upload-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ image: e.target.result })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        document.getElementById('inputPhoto').value = data.photo_url;
+        previewPhoto(data.photo_url);
+        status.textContent = '✓ Photo uploaded';
+        status.style.color = 'var(--green)';
+
+        // Update local session
+        const session = JSON.parse(localStorage.getItem('cc_instructor') || '{}');
+        if (session.instructor) {
+          session.instructor.photo_url = data.photo_url;
+          localStorage.setItem('cc_instructor', JSON.stringify(session));
+        }
+      } catch (err) {
+        status.textContent = 'Upload failed: ' + (err.message || 'Unknown error');
+        status.style.color = 'var(--red)';
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   async function saveProfile() {

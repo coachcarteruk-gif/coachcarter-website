@@ -73,6 +73,10 @@ module.exports = async (req, res) => {
   if (action === 'qa-list')            return handleQAList(req, res);
   if (action === 'qa-detail')          return handleQADetail(req, res);
   if (action === 'qa-reply')           return handleQAReply(req, res);
+  if (action === 'learner-history')    return handleLearnerHistory(req, res);
+  if (action === 'cancel-booking')     return handleCancelBooking(req, res);
+  if (action === 'stats')              return handleStats(req, res);
+  if (action === 'upload-photo')       return handleUploadPhoto(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -263,7 +267,8 @@ async function handleSchedule(req, res) {
         COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
         lu.pickup_address AS learner_pickup_address,
         ds.id AS session_log_id,
-        ds.notes AS session_notes
+        ds.notes AS session_notes,
+        lb.instructor_notes
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
@@ -352,7 +357,8 @@ async function handleScheduleRange(req, res) {
         COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
         lu.pickup_address AS learner_pickup_address,
         ds.id AS session_log_id,
-        ds.notes AS session_notes
+        ds.notes AS session_notes,
+        lb.instructor_notes
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
@@ -402,7 +408,7 @@ async function handleComplete(req, res) {
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { booking_id } = req.body;
+  const { booking_id, instructor_notes } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
 
   try {
@@ -431,8 +437,13 @@ async function handleComplete(req, res) {
     if (lessonTime > new Date())
       return res.status(400).json({ error: 'Cannot mark a future lesson as complete' });
 
+    // Add instructor_notes column if it doesn't exist yet
+    await sql`ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS instructor_notes TEXT`;
+
     await sql`
-      UPDATE lesson_bookings SET status = 'completed' WHERE id = ${booking_id}
+      UPDATE lesson_bookings SET status = 'completed',
+        instructor_notes = ${instructor_notes ? instructor_notes.trim() : null}
+      WHERE id = ${booking_id}
     `;
 
     // Send email to learner prompting them to log the session
@@ -843,5 +854,244 @@ async function handleQAReply(req, res) {
   } catch (err) {
     console.error('instructor qa-reply error:', err);
     return res.status(500).json({ error: 'Failed to post reply' });
+  }
+}
+
+// ── GET /api/instructor?action=learner-history&learner_id=X ──────────────────
+// Returns a learner's full lesson history with this instructor.
+async function handleLearnerHistory(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const learnerId = req.query.learner_id;
+  if (!learnerId) return res.status(400).json({ error: 'learner_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [learner] = await sql`
+      SELECT id, name, email, phone, tier, created_at,
+             pickup_address, prefer_contact_before
+      FROM learner_users WHERE id = ${learnerId}
+    `;
+    if (!learner) return res.status(404).json({ error: 'Learner not found' });
+
+    const bookings = await sql`
+      SELECT lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
+             lb.status, lb.instructor_notes,
+             ds.id AS session_log_id, ds.notes AS session_notes
+      FROM lesson_bookings lb
+      LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
+      WHERE lb.instructor_id = ${instructor.id}
+        AND lb.learner_id = ${learnerId}
+        AND lb.status IN ('confirmed', 'completed', 'cancelled')
+      ORDER BY lb.scheduled_date DESC, lb.start_time DESC
+      LIMIT 100
+    `;
+
+    // Fetch skill ratings
+    const loggedIds = bookings.filter(b => b.session_log_id).map(b => b.session_log_id);
+    let ratingsMap = {};
+    if (loggedIds.length > 0) {
+      const allRatings = await sql`
+        SELECT session_id, skill_key, rating FROM skill_ratings
+        WHERE session_id = ANY(${loggedIds}) ORDER BY id`;
+      for (const r of allRatings) {
+        if (!ratingsMap[r.session_id]) ratingsMap[r.session_id] = [];
+        ratingsMap[r.session_id].push({ skill_key: r.skill_key, rating: r.rating });
+      }
+    }
+    for (const b of bookings) {
+      if (b.session_log_id) b.learner_ratings = ratingsMap[b.session_log_id] || [];
+    }
+
+    const totalLessons = bookings.filter(b => b.status === 'completed').length;
+
+    return res.json({ learner, bookings, totalLessons });
+  } catch (err) {
+    console.error('instructor learner-history error:', err);
+    return res.status(500).json({ error: 'Failed to load learner history' });
+  }
+}
+
+// ── POST /api/instructor?action=cancel-booking ──────────────────────────────
+// Body: { booking_id, reason }
+// Cancels a confirmed booking and refunds the learner's credit.
+async function handleCancelBooking(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { booking_id, reason } = req.body;
+  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [booking] = await sql`
+      SELECT lb.id, lb.status, lb.learner_id, lb.scheduled_date, lb.start_time,
+             lu.name AS learner_name, lu.email AS learner_email,
+             i.name AS instructor_name
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN instructors i ON i.id = lb.instructor_id
+      WHERE lb.id = ${booking_id} AND lb.instructor_id = ${instructor.id}
+    `;
+
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== 'confirmed')
+      return res.status(400).json({ error: `Cannot cancel a booking with status "${booking.status}"` });
+
+    // Cancel the booking
+    await sql`
+      UPDATE lesson_bookings SET status = 'cancelled',
+        instructor_notes = ${reason ? 'Cancelled: ' + reason.trim() : 'Cancelled by instructor'}
+      WHERE id = ${booking_id}
+    `;
+
+    // Refund the learner's credit
+    await sql`
+      UPDATE learner_users SET credits = credits + 1
+      WHERE id = ${booking.learner_id}
+    `;
+
+    // Email the learner
+    try {
+      const mailer = createTransporter();
+      const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
+      const dateObj = new Date(booking.scheduled_date + 'T00:00:00Z');
+      const dateStr = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+      const timeStr = booking.start_time.slice(0, 5);
+
+      await mailer.sendMail({
+        from: 'CoachCarter <system@coachcarter.uk>',
+        to: booking.learner_email,
+        subject: `Lesson on ${dateStr} has been cancelled`,
+        html: `
+          <h2>Hi ${firstName},</h2>
+          <p>Your lesson on <strong>${dateStr} at ${timeStr}</strong> with ${booking.instructor_name} has been cancelled.</p>
+          ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+          <p>Your lesson credit has been refunded automatically. You can rebook at any time from your dashboard.</p>
+          <p style="margin:28px 0">
+            <a href="https://coachcarter.uk/learner/book.html"
+               style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                      border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+              Rebook a lesson →
+            </a>
+          </p>
+        `
+      });
+    } catch (emailErr) {
+      console.error('Failed to send cancellation email:', emailErr);
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('instructor cancel-booking error:', err);
+    return res.status(500).json({ error: 'Failed to cancel booking' });
+  }
+}
+
+// ── GET /api/instructor?action=stats ────────────────────────────────────────
+// Returns summary statistics for the instructor.
+async function handleStats(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Today's lessons
+    const [todayStats] = await sql`
+      SELECT COUNT(*)::int AS count FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id} AND status IN ('confirmed','completed')
+        AND scheduled_date = CURRENT_DATE
+    `;
+
+    // This week (Mon-Sun)
+    const [weekStats] = await sql`
+      SELECT COUNT(*)::int AS count FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id} AND status IN ('confirmed','completed')
+        AND scheduled_date >= date_trunc('week', CURRENT_DATE)
+        AND scheduled_date < date_trunc('week', CURRENT_DATE) + INTERVAL '7 days'
+    `;
+
+    // This month
+    const [monthStats] = await sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
+        COUNT(*) FILTER (WHERE status = 'confirmed')::int AS upcoming,
+        COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled
+      FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id}
+        AND scheduled_date >= date_trunc('month', CURRENT_DATE)
+        AND scheduled_date < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+    `;
+
+    // Total all-time
+    const [allTime] = await sql`
+      SELECT COUNT(*)::int AS total_completed FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id} AND status = 'completed'
+    `;
+
+    // Unique learners this month
+    const [learnerCount] = await sql`
+      SELECT COUNT(DISTINCT learner_id)::int AS count FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id} AND status IN ('confirmed','completed')
+        AND scheduled_date >= date_trunc('month', CURRENT_DATE)
+    `;
+
+    // New bookings since last visit (last 24h)
+    const [newBookings] = await sql`
+      SELECT COUNT(*)::int AS count FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id} AND status = 'confirmed'
+        AND created_at >= NOW() - INTERVAL '24 hours'
+    `;
+
+    return res.json({
+      today: todayStats.count,
+      thisWeek: weekStats.count,
+      thisMonth: monthStats,
+      allTimeCompleted: allTime.total_completed,
+      uniqueLearnersThisMonth: learnerCount.count,
+      newBookingsLast24h: newBookings.count
+    });
+  } catch (err) {
+    console.error('instructor stats error:', err);
+    return res.status(500).json({ error: 'Failed to load stats' });
+  }
+}
+
+// ── POST /api/instructor?action=upload-photo ────────────────────────────────
+// Accepts a base64-encoded image and stores it as a data URL.
+// Body: { image } (base64 data URL like "data:image/jpeg;base64,...")
+async function handleUploadPhoto(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { image } = req.body;
+  if (!image || !image.startsWith('data:image/'))
+    return res.status(400).json({ error: 'image must be a data:image/* base64 string' });
+
+  // Limit to ~2MB
+  if (image.length > 2 * 1024 * 1024)
+    return res.status(400).json({ error: 'Image too large (max 2MB)' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [updated] = await sql`
+      UPDATE instructors SET photo_url = ${image}
+      WHERE id = ${instructor.id}
+      RETURNING id, name, photo_url
+    `;
+
+    return res.json({ success: true, photo_url: updated.photo_url });
+  } catch (err) {
+    console.error('instructor upload-photo error:', err);
+    return res.status(500).json({ error: 'Failed to upload photo' });
   }
 }
