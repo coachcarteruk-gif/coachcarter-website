@@ -42,6 +42,7 @@
       { icon: 'play', label: 'Free Videos', href: '/classroom.html' },
       'divider',
       { icon: 'calendar', label: 'Book a Lesson', href: '/learner/login.html?redirect=/learner/book.html' },
+      { icon: 'message', label: 'Lesson Advisor', href: '/learner/advisor.html' },
       { icon: 'logIn', label: 'Login', href: '/learner/login.html' },
       'divider',
       { icon: 'shield', label: 'Privacy Policy', href: '/privacy.html' },
@@ -62,6 +63,7 @@
       { icon: 'message', label: 'Q&A', href: '/learner/qa.html' },
       { icon: 'clipboard', label: 'Examiner Quiz', href: '/learner/examiner-quiz.html' },
       { icon: 'message', label: 'Ask the Examiner', href: '/learner/ask-examiner.html' },
+      { icon: 'tag', label: 'Lesson Advisor', href: '/learner/advisor.html' },
       'divider',
       { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true }
     ],
