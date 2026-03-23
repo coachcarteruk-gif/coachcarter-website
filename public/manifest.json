@@ -1,0 +1,40 @@
+{
+  "name": "CoachCarter Driving School",
+  "short_name": "CoachCarter",
+  "description": "Track your driving progress, take mock tests, and get AI-powered examiner guidance.",
+  "start_url": "/learner/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#262626",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["education", "lifestyle"],
+  "lang": "en-GB",
+  "dir": "ltr"
+}
