@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { neon } = require('@neondatabase/serverless');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 function verifyAuth(req) {
@@ -7,6 +8,102 @@ function verifyAuth(req) {
   const secret = process.env.JWT_SECRET;
   if (!secret) return null;
   try { return jwt.verify(auth.slice(7), secret); } catch { return null; }
+}
+
+// ── Skill labels for readable context ────────────────────────────────────────
+const SKILL_LABELS = {
+  accelerator_12a: 'Accelerator', clutch_12b: 'Clutch', gears_12c: 'Gears',
+  footbrake_12d: 'Footbrake', parking_brake_12e: 'Parking Brake', steering_12f: 'Steering',
+  mirrors_14: 'Use of Mirrors', signals_15: 'Signals', awareness_26: 'Awareness & Planning',
+  signs_signals_17: 'Signs & Signals', positioning_23: 'Positioning', clearance_16: 'Clearance',
+  following_19: 'Following Distance', junctions_21: 'Junctions', judgement_22: 'Judgement',
+  speed_18: 'Use of Speed', pedestrians_24: 'Pedestrian Crossings', progress_20: 'Progress',
+  controlled_stop_2: 'Controlled Stop', reverse_right_4: 'Reverse Right',
+  reverse_park_5: 'Reverse Park', forward_park_8: 'Forward Park', move_off_13: 'Move Off'
+};
+
+const RATING_LABELS = { struggled: 'Needs work (weak)', ok: 'Getting there (developing)', nailed: 'Confident (strong)' };
+
+// ── Build learner context for the AI ─────────────────────────────────────────
+async function buildLearnerContext(userId) {
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Latest lesson rating per skill
+    const lessonData = await sql`
+      SELECT DISTINCT ON (skill_key) skill_key, rating, driving_faults, serious_faults, dangerous_faults, created_at
+      FROM skill_ratings WHERE user_id = ${userId}
+      ORDER BY skill_key, created_at DESC`;
+
+    // Quiz accuracy per skill
+    const quizData = await sql`
+      SELECT skill_key, COUNT(*)::int AS attempts, COUNT(*) FILTER (WHERE correct)::int AS correct_count
+      FROM quiz_results WHERE learner_id = ${userId}
+      GROUP BY skill_key`;
+
+    // Mock test summary
+    const [mockData] = await sql`
+      SELECT COUNT(*)::int AS total_tests, COUNT(*) FILTER (WHERE result = 'pass')::int AS passes
+      FROM mock_tests WHERE learner_id = ${userId} AND completed_at IS NOT NULL`;
+
+    // Session stats
+    const [stats] = await sql`
+      SELECT COUNT(*)::int AS total_sessions, COALESCE(SUM(duration_minutes), 0)::int AS total_minutes
+      FROM driving_sessions WHERE user_id = ${userId}`;
+
+    // Learner name
+    const [learner] = await sql`SELECT name FROM learner_users WHERE id = ${userId}`;
+
+    // Nothing to report
+    if ((!lessonData || lessonData.length === 0) && (!quizData || quizData.length === 0) && (!mockData || mockData.total_tests === 0)) {
+      return learner?.name ? `\n\nLEARNER CONTEXT:\nThis learner's name is ${learner.name}. They haven't logged any sessions, quiz results, or mock tests yet. This is likely a new learner — be encouraging and suggest they start with the Examiner Quiz or log their first lesson.` : '';
+    }
+
+    let ctx = `\n\nLEARNER CONTEXT (use this to personalise your responses — reference specific areas when relevant):\n`;
+    if (learner?.name) ctx += `Name: ${learner.name}\n`;
+    ctx += `Sessions logged: ${stats?.total_sessions || 0} (${Math.round((stats?.total_minutes || 0) / 60 * 10) / 10} hours)\n`;
+    if (mockData?.total_tests > 0) ctx += `Mock tests: ${mockData.passes}/${mockData.total_tests} passed\n`;
+
+    // Lesson ratings
+    if (lessonData.length > 0) {
+      ctx += `\nLatest lesson self-assessment:\n`;
+      const weak = [], developing = [], strong = [];
+      for (const r of lessonData) {
+        const label = SKILL_LABELS[r.skill_key] || r.skill_key;
+        const ratingLabel = RATING_LABELS[r.rating] || r.rating;
+        const faultNote = (r.driving_faults > 0 || r.serious_faults > 0 || r.dangerous_faults > 0)
+          ? ` [${r.driving_faults}D ${r.serious_faults}S ${r.dangerous_faults}✕ faults logged]` : '';
+        if (r.rating === 'struggled') weak.push(`  - ${label}: ${ratingLabel}${faultNote}`);
+        else if (r.rating === 'ok') developing.push(`  - ${label}: ${ratingLabel}${faultNote}`);
+        else strong.push(`  - ${label}: ${ratingLabel}${faultNote}`);
+      }
+      if (weak.length > 0) ctx += `WEAK areas:\n${weak.join('\n')}\n`;
+      if (developing.length > 0) ctx += `DEVELOPING areas:\n${developing.join('\n')}\n`;
+      if (strong.length > 0) ctx += `STRONG areas:\n${strong.join('\n')}\n`;
+    }
+
+    // Quiz accuracy
+    if (quizData.length > 0) {
+      const lowAccuracy = quizData
+        .map(q => ({ ...q, pct: Math.round(100 * q.correct_count / q.attempts) }))
+        .filter(q => q.pct < 70)
+        .sort((a, b) => a.pct - b.pct);
+
+      if (lowAccuracy.length > 0) {
+        ctx += `\nExaminer Quiz weak areas (below 70% accuracy):\n`;
+        for (const q of lowAccuracy.slice(0, 5)) {
+          ctx += `  - ${SKILL_LABELS[q.skill_key] || q.skill_key}: ${q.correct_count}/${q.attempts} correct (${q.pct}%)\n`;
+        }
+      }
+    }
+
+    ctx += `\nWhen this learner asks questions, proactively connect your answers to their weak areas. For example, if they ask about roundabouts and their Junctions score is weak, emphasise the observation and approach speed aspects. If they're strong in an area, acknowledge it briefly. Be specific — reference their actual data.`;
+
+    return ctx;
+  } catch (err) {
+    console.error('Failed to build learner context:', err);
+    return ''; // Gracefully degrade — AI still works without personalisation
+  }
 }
 
 // ── DVSA Examiner Knowledge Base System Prompt ──────────────────────────────
@@ -175,6 +272,10 @@ module.exports = async (req, res) => {
   }
 
   try {
+    // Build personalised context from learner's competency data
+    const learnerContext = await buildLearnerContext(user.id);
+    const personalizedPrompt = SYSTEM_PROMPT + learnerContext;
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -185,7 +286,7 @@ module.exports = async (req, res) => {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 1024,
-        system: SYSTEM_PROMPT,
+        system: personalizedPrompt,
         messages: messages.slice(-20)
       })
     });
