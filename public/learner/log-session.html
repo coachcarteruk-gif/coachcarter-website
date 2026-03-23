@@ -820,12 +820,14 @@ function buildSkillCards() {
 // ── Auth + init ──
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (!AUTH?.token) {
-    window.ccAuth && window.ccAuth.requireAuth();
-    return;
-  }
 
+  // Always render the form UI
   buildSkillCards();
+  document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
+  updateStep2Button();
+
+  if (!AUTH?.token) return; // form visible, submit gated
+
   loadSessions();
 
   // Check for booking_id in URL
@@ -834,11 +836,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   if (bookingId) {
     await loadBookingDetails(bookingId);
-  } else {
-    document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
   }
-
-  updateStep2Button();
 });
 
 // ── Load booking details for pre-fill ──
@@ -975,6 +973,7 @@ function buildSummary() {
 
 // ── Save ──
 async function saveSession() {
+  if (window.ccAuth && !window.ccAuth.requireAuth()) return;
   const date = document.getElementById('session-date').value;
   if (!date) { showError('Session date is missing'); return; }
 

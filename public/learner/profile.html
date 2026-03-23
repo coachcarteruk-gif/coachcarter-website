@@ -387,7 +387,7 @@ let AUTH, PROGRESS;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (!AUTH?.token) { window.ccAuth && window.ccAuth.requireAuth(); return; }
+  if (!AUTH?.token) return; // form visible, save gated
   await loadProgress();
   render();
 });
@@ -522,6 +522,7 @@ function updateProfileBadge() {
 }
 
 async function saveProfile() {
+  if (window.ccAuth && !window.ccAuth.requireAuth()) return;
   const phone = document.getElementById('profilePhone').value.trim();
   const address = document.getElementById('profileAddress').value.trim();
   const btn = document.getElementById('btnSaveProfile');
@@ -589,6 +590,7 @@ function updateTestCountdown() {
 }
 
 async function saveTest() {
+  if (window.ccAuth && !window.ccAuth.requireAuth()) return;
   const testDate = document.getElementById('testDate').value;
   const testTime = document.getElementById('testTime').value;
   const btn = document.getElementById('btnSaveTest');
