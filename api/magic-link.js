@@ -66,6 +66,20 @@ async function handleSendLink(req, res) {
     const cleanEmail = email ? email.toLowerCase().trim() : null;
     const cleanPhone = phone ? phone.replace(/\s+/g, '').trim() : null;
 
+    // Check if this email belongs to an instructor — redirect them early
+    if (cleanEmail) {
+      const instructorMatch = await sql`
+        SELECT id FROM instructors
+        WHERE LOWER(email) = LOWER(${cleanEmail}) AND active = TRUE`;
+      if (instructorMatch.length > 0) {
+        return res.status(400).json({
+          error: 'instructor_account',
+          message: 'This email is linked to an instructor account. Please use the instructor login instead.',
+          redirect: '/instructor/login.html'
+        });
+      }
+    }
+
     // Store the token
     await sql`
       INSERT INTO magic_link_tokens (token, email, phone, method, expires_at)
@@ -201,7 +215,19 @@ async function handleVerify(req, res) {
       if (existing.length > 0) {
         user = existing[0];
       } else {
-        // Auto-create new account
+        // Check if this email belongs to an instructor
+        const instructorMatch = await sql`
+          SELECT id FROM instructors
+          WHERE LOWER(email) = LOWER(${linkRecord.email}) AND active = TRUE`;
+        if (instructorMatch.length > 0) {
+          return res.status(400).json({
+            error: 'instructor_account',
+            message: 'This email is linked to an instructor account. Please use the instructor login instead.',
+            redirect: '/instructor/login.html'
+          });
+        }
+
+        // Auto-create new learner account
         isNewUser = true;
         const newRows = await sql`
           INSERT INTO learner_users (email, credit_balance)
