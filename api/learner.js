@@ -118,8 +118,9 @@ async function handleSessions(req, res) {
 
       if (ratings?.length > 0) {
         for (const r of ratings) {
-          await sql`INSERT INTO skill_ratings (session_id, user_id, tier, skill_key, rating, note)
-            VALUES (${sessionId}, ${user.id}, ${r.tier}, ${r.skill_key}, ${r.rating}, ${r.note || null})`;
+          await sql`INSERT INTO skill_ratings (session_id, user_id, tier, skill_key, rating, note, driving_faults, serious_faults, dangerous_faults)
+            VALUES (${sessionId}, ${user.id}, ${r.tier}, ${r.skill_key}, ${r.rating}, ${r.note || null},
+                    ${r.driving_faults || 0}, ${r.serious_faults || 0}, ${r.dangerous_faults || 0})`;
         }
       }
       return res.json({ success: true, session_id: sessionId });
