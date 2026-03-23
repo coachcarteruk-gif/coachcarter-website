@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Ask the Examiner — AI Driving Test Help | Coach Carter Reading</title>
+  <meta name="description" content="Ask any question about the UK driving test marking scheme and get instant, accurate answers powered by AI. Grounded in real DVSA examiner guidance. Free from Coach Carter Driving School.">
+<script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageviewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    posthog.init('phc_JZFh3Xw0qVp167yJzkHaYTm1FT1hpkutpg2VSmJPJH3', {
+        api_host: 'https://eu.i.posthog.com',
+        person_profiles: 'identified_only',
+    });
+</script>
+<script src="/posthog-tracking.js" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    :root {
+      --primary:    #262626;
+      --accent:     #f58321;
+      --accent-dk:  #e07518;
+      --accent-lt:  #fff4ec;
+      --accent-mid: rgba(245,131,33,0.12);
+      --muted:      #797879;
+      --border:     #e0e0e0;
+      --bg:         #ffffff;
+      --surface:    #f9f9f9;
+      --white:      #ffffff;
+      --green:      #22c55e;
+      --red:        #ef4444;
+      --font-head:  'Bricolage Grotesque', sans-serif;
+      --font-body:  'Lato', sans-serif;
+      --radius:     14px;
+    }
+
+    body { font-family: var(--font-body); background: var(--bg); color: var(--primary); min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── TOP NAV ── */
+    .site-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 0 32px; height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(38, 38, 38, 0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .site-nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .site-nav-logo img { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,0.08); padding: 4px; }
+    .site-nav-logo span { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+    .site-nav-logo span em { font-style: normal; color: var(--accent); }
+    .site-nav-links { display: flex; align-items: center; gap: 6px; }
+    .site-nav-link {
+      color: rgba(255,255,255,0.6); font-family: var(--font-body); font-weight: 500;
+      font-size: 0.83rem; padding: 7px 14px; border-radius: 100px;
+      border: 1px solid transparent; text-decoration: none; transition: all 0.18s;
+      white-space: nowrap; background: transparent; cursor: pointer;
+    }
+    .site-nav-link:hover { color: #fff; border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
+    .site-nav-link.logout { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.1); }
+    .site-nav-link.logout:hover { color: #fff; border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08); }
+    @media (max-width: 600px) { .site-nav { padding: 0 16px; } .site-nav-name { display: none; } }
+
+    /* ── CHAT LAYOUT ── */
+    .chat-container {
+      flex: 1; display: flex; flex-direction: column;
+      max-width: 720px; width: 100%; margin: 0 auto;
+      padding-top: 64px; padding-bottom: 130px;
+    }
+
+    .chat-header {
+      padding: 20px 16px 16px; text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .chat-header h1 { font-family: var(--font-head); font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+    .chat-header h1 em { font-style: normal; color: var(--accent); }
+    .chat-header p { color: var(--muted); font-size: 0.82rem; line-height: 1.5; }
+
+    /* ── MESSAGES ── */
+    .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+
+    .msg { display: flex; gap: 10px; max-width: 90%; animation: fadeIn 0.3s ease; }
+    .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+    .msg.assistant { align-self: flex-start; }
+
+    .msg-avatar {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700;
+    }
+    .msg.assistant .msg-avatar { background: var(--accent-lt); color: var(--accent); }
+    .msg.user .msg-avatar { background: var(--surface); color: var(--muted); }
+
+    .msg-bubble {
+      padding: 12px 16px; border-radius: 16px; font-size: 0.9rem; line-height: 1.6;
+      word-wrap: break-word; white-space: pre-wrap;
+    }
+    .msg.user .msg-bubble { background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+    .msg.assistant .msg-bubble {
+      background: var(--white); border: 1px solid var(--border);
+      border-left: 3px solid var(--accent); border-bottom-left-radius: 4px;
+    }
+
+    /* ── TYPING INDICATOR ── */
+    .typing-indicator { display: none; align-self: flex-start; padding: 0 16px; }
+    .typing-indicator.show { display: flex; }
+    .typing-indicator .msg-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-lt); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
+    .typing-dots { display: flex; gap: 4px; padding: 14px 16px; background: var(--white); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 16px; border-bottom-left-radius: 4px; margin-left: 10px; }
+    .typing-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: bounce 1.4s infinite; }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ── STARTER CHIPS ── */
+    .starter-chips {
+      display: flex; flex-wrap: wrap; gap: 8px; padding: 16px;
+      justify-content: center;
+    }
+    .starter-chip {
+      padding: 8px 16px; border-radius: 100px; border: 1px solid var(--border);
+      background: var(--white); font-family: var(--font-body); font-size: 0.8rem;
+      color: var(--muted); cursor: pointer; transition: all 0.18s;
+      white-space: nowrap;
+    }
+    .starter-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-lt); }
+
+    /* ── INPUT AREA ── */
+    .chat-input-area {
+      position: fixed; bottom: 68px; left: 0; right: 0;
+      background: var(--white); border-top: 1px solid var(--border);
+      padding: 12px 16px; z-index: 50;
+    }
+    .chat-input-wrap {
+      max-width: 720px; margin: 0 auto;
+      display: flex; gap: 8px; align-items: center;
+    }
+    .chat-input {
+      flex: 1; padding: 12px 16px; border-radius: 100px;
+      border: 1px solid var(--border); font-family: var(--font-body);
+      font-size: 0.9rem; outline: none; transition: border-color 0.18s;
+      background: var(--surface);
+    }
+    .chat-input:focus { border-color: var(--accent); background: var(--white); }
+    .chat-input::placeholder { color: #aaa; }
+    .chat-send {
+      width: 44px; height: 44px; border-radius: 50%; border: none;
+      background: var(--accent); color: #fff; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.18s; flex-shrink: 0;
+    }
+    .chat-send:hover { background: var(--accent-dk); transform: scale(1.05); }
+    .chat-send:disabled { background: var(--border); cursor: default; transform: none; }
+    .chat-send svg { width: 20px; height: 20px; fill: currentColor; }
+
+    .chat-hint { text-align: center; font-size: 0.7rem; color: #bbb; margin-top: 6px; }
+
+    /* ── BOTTOM NAV ── */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(255,255,255,0.95); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      display: flex; justify-content: space-around; align-items: stretch;
+      padding: 4px 0 max(4px, env(safe-area-inset-bottom));
+      border-top: 1px solid rgba(0,0,0,0.06);
+      box-shadow: 0 -4px 24px rgba(245,131,33,0.04);
+      z-index: 60;
+    }
+    .bottom-nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 8px 8px 6px; text-decoration: none; color: var(--muted);
+      font-size: 0.65rem; font-weight: 600; gap: 3px; transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bottom-nav-item:hover { color: var(--primary); }
+    .bottom-nav-item:active { transform: scale(0.92); }
+    .bottom-nav-item.active { color: var(--accent); }
+    .bottom-nav-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+    .bottom-nav-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+    .error-msg { color: var(--red); font-size: 0.82rem; text-align: center; padding: 8px; display: none; }
+    .error-msg.show { display: block; }
+  </style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="site-nav-logo" href="/learner/">
+    <img src="/Logo.png" alt="CoachCarter">
+    <span>Coach<em>Carter</em></span>
+  </a>
+  <div class="site-nav-links">
+    <span class="site-nav-link site-nav-name" id="header-name"></span>
+    <button class="site-nav-link logout" onclick="logout()">Sign out</button>
+  </div>
+</nav>
+
+<div class="chat-container">
+  <div class="chat-header">
+    <h1>Ask the <em>Examiner</em></h1>
+    <p>AI-powered answers based on real DVSA examiner marking guidelines</p>
+  </div>
+
+  <div class="chat-messages" id="chat-messages">
+    <div class="starter-chips" id="starter-chips">
+      <button class="starter-chip" onclick="askChip(this)">What happens if I stall?</button>
+      <button class="starter-chip" onclick="askChip(this)">How are manoeuvres marked?</button>
+      <button class="starter-chip" onclick="askChip(this)">Can I fail for driving too slowly?</button>
+      <button class="starter-chip" onclick="askChip(this)">What does the examiner look for at junctions?</button>
+      <button class="starter-chip" onclick="askChip(this)">How many minors can I get?</button>
+    </div>
+  </div>
+
+  <div class="typing-indicator" id="typing-indicator">
+    <div class="msg-avatar">CC</div>
+    <div class="typing-dots"><span></span><span></span><span></span></div>
+  </div>
+
+  <div class="error-msg" id="error-msg"></div>
+</div>
+
+<div class="chat-input-area">
+  <div class="chat-input-wrap">
+    <input type="text" class="chat-input" id="chat-input" placeholder="Ask about the driving test marking scheme..." autocomplete="off">
+    <button class="chat-send" id="chat-send" onclick="handleSend()">
+      <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+    </button>
+  </div>
+  <div class="chat-hint">Press Enter to send</div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="/learner/" class="bottom-nav-item">
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+    <span>Dashboard</span>
+  </a>
+  <a href="/learner/lessons.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+    <span>Lessons</span>
+  </a>
+  <a href="/learner/videos.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"/></svg></span>
+    <span>Videos</span>
+  </a>
+  <a href="/learner/qa.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+    <span>Q&A</span>
+  </a>
+  <a href="/learner/log-session.html" class="bottom-nav-item">
+    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
+    <span>Session Log</span>
+  </a>
+</nav>
+
+<script>
+let AUTH;
+let conversationHistory = [];
+let isSending = false;
+
+// ── Auth ──
+window.addEventListener('DOMContentLoaded', () => {
+  AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  if (!AUTH?.token) {
+    window.location.href = '/learner/login.html?redirect=/learner/ask-examiner.html';
+    return;
+  }
+  document.getElementById('header-name').textContent = AUTH.user?.name || '';
+
+  // Enter key to send
+  document.getElementById('chat-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  });
+});
+
+function logout() {
+  localStorage.removeItem('cc_learner');
+  window.location.href = '/learner/login.html';
+}
+
+// ── Starter chip click ──
+function askChip(btn) {
+  const text = btn.textContent;
+  document.getElementById('starter-chips').remove();
+  sendMessage(text);
+
+  if (typeof posthog !== 'undefined') {
+    posthog.capture('ask_examiner_chip_clicked', { chip_text: text });
+  }
+}
+
+// ── Handle send ──
+function handleSend() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || isSending) return;
+  input.value = '';
+
+  // Remove starter chips if still present
+  const chips = document.getElementById('starter-chips');
+  if (chips) chips.remove();
+
+  sendMessage(text);
+}
+
+// ── Send message ──
+async function sendMessage(text) {
+  if (isSending) return;
+  isSending = true;
+
+  const sendBtn = document.getElementById('chat-send');
+  sendBtn.disabled = true;
+  hideError();
+
+  // Add user message to UI
+  appendMessage('user', text);
+
+  // Add to conversation history
+  conversationHistory.push({ role: 'user', content: text });
+
+  // Show typing indicator
+  const typing = document.getElementById('typing-indicator');
+  typing.classList.add('show');
+  scrollToBottom();
+
+  try {
+    const res = await fetch('/api/ask-examiner', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + AUTH.token
+      },
+      body: JSON.stringify({ messages: conversationHistory })
+    });
+
+    typing.classList.remove('show');
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Something went wrong');
+    }
+
+    const data = await res.json();
+    const reply = data.reply;
+
+    // Add assistant message to UI and history
+    appendMessage('assistant', reply);
+    conversationHistory.push({ role: 'assistant', content: reply });
+
+    if (typeof posthog !== 'undefined') {
+      posthog.capture('ask_examiner_message_sent', {
+        message_length: text.length,
+        conversation_length: conversationHistory.length
+      });
+    }
+  } catch (err) {
+    typing.classList.remove('show');
+    showError(err.message || 'Something went wrong. Please try again.');
+  }
+
+  isSending = false;
+  sendBtn.disabled = false;
+  document.getElementById('chat-input').focus();
+}
+
+// ── Append message to chat ──
+function appendMessage(role, text) {
+  const messages = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.textContent = role === 'assistant' ? 'CC' : (AUTH.user?.name?.[0]?.toUpperCase() || 'U');
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.textContent = text;
+
+  div.appendChild(avatar);
+  div.appendChild(bubble);
+  messages.appendChild(div);
+
+  scrollToBottom();
+}
+
+// ── Scroll to bottom ──
+function scrollToBottom() {
+  const messages = document.getElementById('chat-messages');
+  requestAnimationFrame(() => {
+    messages.scrollTop = messages.scrollHeight;
+  });
+}
+
+// ── Error handling ──
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function hideError() {
+  document.getElementById('error-msg').classList.remove('show');
+}
+</script>
+</body>
+</html>
