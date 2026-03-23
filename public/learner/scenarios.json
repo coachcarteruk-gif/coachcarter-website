@@ -1,0 +1,502 @@
+[
+  {
+    "id": 1,
+    "category": "Controlled Stop",
+    "dl25_ref": "2 — Controlled Stop",
+    "tier": 1,
+    "scenario": "During the emergency stop exercise, you brake firmly. The wheels lock briefly and the car skids for a short distance, but you release and reapply the brake and regain full control.",
+    "correct_answer": "driving_fault",
+    "explanation": "Brief wheel lock with effective recovery is a driving fault. You demonstrated you could regain control. If the car had continued to skid with no attempt to correct, that would be serious.",
+    "examiner_note": "The examiner is assessing whether you can stop safely, promptly, and under full control. Brief skids with good recovery show competence."
+  },
+  {
+    "id": 2,
+    "category": "Controlled Stop",
+    "dl25_ref": "2 — Controlled Stop",
+    "tier": 2,
+    "scenario": "During the emergency stop, you brake very harshly. The wheels lock, the car skids significantly, and you make no attempt to regain control. The car comes to a stop well past where it should have.",
+    "correct_answer": "serious",
+    "explanation": "Very harsh braking with sustained loss of control and no attempt to correct is a serious fault. The key distinction from a driving fault is the lack of recovery — you didn't demonstrate the skill to regain control.",
+    "examiner_note": "If this loss of control had caused actual danger to anyone — examiner, public, property — it would escalate to dangerous."
+  },
+  {
+    "id": 3,
+    "category": "Reverse Right",
+    "dl25_ref": "4 — Reverse Right — Observation",
+    "tier": 2,
+    "scenario": "You're pulling across to the right side of the road. You misjudge the speed of a car approaching from behind, but it doesn't have to change speed or direction.",
+    "correct_answer": "driving_fault",
+    "explanation": "A misjudgement of speed and distance when moving to the right, but with no impact on other road users' safety, is a driving fault under Observation.",
+    "examiner_note": "The test is whether other road users had to alter their course or speed. If not, it's minor."
+  },
+  {
+    "id": 4,
+    "category": "Reverse Right",
+    "dl25_ref": "4 — Reverse Right — Observation",
+    "tier": 2,
+    "scenario": "You pull across to the right side of the road. An approaching car has to brake heavily to let you across because you misjudged its speed and distance.",
+    "correct_answer": "serious",
+    "explanation": "Causing another driver to brake heavily due to your misjudgement is a serious fault. The other road user's safety was compromised by your actions.",
+    "examiner_note": "The escalation from driving fault to serious is based on the effect on other road users — did they have to take evasive action?"
+  },
+  {
+    "id": 5,
+    "category": "Reverse Right",
+    "dl25_ref": "4 — Reverse Right — Control",
+    "tier": 1,
+    "scenario": "While reversing on the right, you clearly scrub the kerb with your rear tyre but correct and complete the manoeuvre.",
+    "correct_answer": "driving_fault",
+    "explanation": "Scrubbing or brushing the kerb during a manoeuvre is a control driving fault. If the wheel had mounted the pavement, it would escalate to serious.",
+    "examiner_note": "Control and observation can both be marked on the same manoeuvre — this is not double marking."
+  },
+  {
+    "id": 6,
+    "category": "Reverse Right",
+    "dl25_ref": "4 — Reverse Right — Control",
+    "tier": 2,
+    "scenario": "While reversing on the right, your rear wheel clearly mounts the pavement.",
+    "correct_answer": "serious",
+    "explanation": "Mounting the pavement during a manoeuvre is a serious fault — it shows a significant loss of control beyond a minor scrub.",
+    "examiner_note": "If mounting the pavement caused the examiner to intervene to prevent damage to the car or property, it would be dangerous."
+  },
+  {
+    "id": 7,
+    "category": "Reverse Park",
+    "dl25_ref": "5 — Reverse Park — Control",
+    "tier": 1,
+    "scenario": "You're reverse parking into a bay. You need to pull forward once to adjust your position, then complete the park neatly within the bay.",
+    "correct_answer": "driving_fault",
+    "explanation": "Needing to reposition to correct a loss of accuracy is a driving fault. One correction is fine — excessive repositioning to correct a complete misjudgement would be serious.",
+    "examiner_note": "Examiners expect some adjustment. The question is the degree — one pull-forward vs multiple shunts back and forth."
+  },
+  {
+    "id": 8,
+    "category": "Reverse Park",
+    "dl25_ref": "5 — Reverse Park — Control",
+    "tier": 2,
+    "scenario": "You're reverse parking into a bay. After multiple corrections, shunting back and forth, you end up with the car clearly outside the bay lines.",
+    "correct_answer": "serious",
+    "explanation": "Excessive repositioning with a final position outside the bay is a serious fault. Parking outside the bay is explicitly unacceptable in the examiner guidance.",
+    "examiner_note": "The examiner considers whether the car could reasonably be left in that position in that car park. Outside the bay = serious."
+  },
+  {
+    "id": 9,
+    "category": "Reverse Park",
+    "dl25_ref": "5 — Reverse Park — Observation",
+    "tier": 2,
+    "scenario": "You're reversing into a bay in the test centre car park. You don't check your blind spot at all during the manoeuvre, but there's nobody around.",
+    "correct_answer": "serious",
+    "explanation": "Missing essential observations during a manoeuvre is serious regardless of whether anyone was actually there. The examiner guidance is clear: the question is not whether there is anybody there, but whether you took adequate observations to ensure safety.",
+    "examiner_note": "This is a critical point many learners miss. Observations are assessed as though someone could have been there, not based on whether someone was."
+  },
+  {
+    "id": 10,
+    "category": "Reverse Park",
+    "dl25_ref": "5 — Reverse Park — Observation",
+    "tier": 1,
+    "scenario": "You're parallel parking behind a car on the road. You check your blind spot but slightly late — just after you've started reversing rather than before.",
+    "correct_answer": "driving_fault",
+    "explanation": "Late but present observation during a manoeuvre is a driving fault. The observation was there, just marginally mistimed.",
+    "examiner_note": "The distinction is late observation (driving fault) vs missed observation (serious). Timing matters."
+  },
+  {
+    "id": 11,
+    "category": "Vehicle Checks",
+    "dl25_ref": "7 — Vehicle Checks",
+    "tier": 1,
+    "scenario": "You answer the 'tell me' question incorrectly, but demonstrate the 'show me' question on the move without any loss of vehicle control.",
+    "correct_answer": "driving_fault",
+    "explanation": "Getting one or both safety questions wrong results in a single driving fault. It's only one fault total regardless of whether you get one or both wrong.",
+    "examiner_note": "The show me question is demonstrated while driving. Loss of control during this demonstration is assessed separately and can be serious."
+  },
+  {
+    "id": 12,
+    "category": "Vehicle Checks",
+    "dl25_ref": "7 — Vehicle Checks",
+    "tier": 2,
+    "scenario": "While demonstrating the on-road 'show me' question, you lose significant control of the vehicle — the car veers noticeably toward the kerb.",
+    "correct_answer": "serious",
+    "explanation": "A serious loss of control while demonstrating the show me question is a serious fault. The show me is done on the move, so control must be maintained.",
+    "examiner_note": "If the examiner had to take action to prevent a collision, it would escalate to dangerous."
+  },
+  {
+    "id": 13,
+    "category": "Forward Park",
+    "dl25_ref": "8 — Forward Park — Control",
+    "tier": 1,
+    "scenario": "You drive forward into a parking bay and finish with one wheel sitting on the bay line.",
+    "correct_answer": "driving_fault",
+    "explanation": "Finishing with one or two wheels on the line is a driving fault for control. If you'd ended up fully in the adjacent bay, that would be serious.",
+    "examiner_note": "The examiner considers whether the car could reasonably be left in that position."
+  },
+  {
+    "id": 14,
+    "category": "Forward Park",
+    "dl25_ref": "8 — Forward Park — Control",
+    "tier": 2,
+    "scenario": "You drive forward into a parking bay but end up with one wheel clearly in the bay next to the one you were aiming for.",
+    "correct_answer": "serious",
+    "explanation": "Finishing with wheels fully in the adjacent bay shows a complete misjudgement of the manoeuvre and is a serious fault.",
+    "examiner_note": "If there was a vehicle in the adjacent bay and the examiner had to intervene to prevent contact, it would be dangerous."
+  },
+  {
+    "id": 15,
+    "category": "Precautions",
+    "dl25_ref": "11 — Precautions",
+    "tier": 1,
+    "scenario": "After stalling at a junction, you apply the handbrake but try to restart the engine while the car is still in gear.",
+    "correct_answer": "driving_fault",
+    "explanation": "Attempting to start the engine while in gear — after securing the car with the handbrake — is a driving fault. The handbrake prevented the car moving, so there was no danger.",
+    "examiner_note": "If the engine had been started in gear without the handbrake, causing the car to lurch into the junction, it would escalate based on the effect."
+  },
+  {
+    "id": 16,
+    "category": "Precautions",
+    "dl25_ref": "11 — Precautions",
+    "tier": 2,
+    "scenario": "At a junction, you start the engine while in gear without the handbrake on. The car lurches forward into the new road, putting other road users at risk.",
+    "correct_answer": "serious",
+    "explanation": "Starting the engine in gear with the car unsecured, resulting in the vehicle entering the road and posing a risk to others, is a serious fault.",
+    "examiner_note": "If this caused actual danger — the examiner having to grab the wheel or use dual controls — it would be dangerous with an ETA recorded."
+  },
+  {
+    "id": 17,
+    "category": "Control — Gears",
+    "dl25_ref": "12 — Control — Gears",
+    "tier": 1,
+    "scenario": "You select the wrong gear approaching a roundabout. The car slows noticeably, but there are no vehicles behind you.",
+    "correct_answer": "driving_fault",
+    "explanation": "Selecting the wrong gear causing a speed reduction, but with no risk to following vehicles, is a driving fault.",
+    "examiner_note": "The assessment hinges on the effect — did the gear error affect other road users? No following traffic = no escalation."
+  },
+  {
+    "id": 18,
+    "category": "Control — Gears",
+    "dl25_ref": "12 — Control — Gears",
+    "tier": 2,
+    "scenario": "You select the wrong gear on a busy road. The car suddenly slows, causing the vehicle behind to brake sharply and swerve slightly to avoid you.",
+    "correct_answer": "serious",
+    "explanation": "An incorrect gear selection that causes following traffic to alter speed or direction is serious. The effect on other road users is what escalates it.",
+    "examiner_note": "If the following vehicle had actually collided or the examiner had to intervene, it would be dangerous."
+  },
+  {
+    "id": 19,
+    "category": "Control — Steering",
+    "dl25_ref": "12 — Control — Steering",
+    "tier": 1,
+    "scenario": "You turn right at a junction and steer slightly late, creating a 'swan neck' line, but you recover smoothly and no other road users are affected.",
+    "correct_answer": "driving_fault",
+    "explanation": "A swan neck steering line that is recovered is a driving fault. The examiner only assesses whether the steering is smooth, safe, and under control — not hand position.",
+    "examiner_note": "The examiner does NOT mark you for hand position (ten-to-two, crossing hands etc). Only the outcome matters: was steering smooth, safe, and controlled?"
+  },
+  {
+    "id": 20,
+    "category": "Control — Steering",
+    "dl25_ref": "12 — Control — Steering",
+    "tier": 2,
+    "scenario": "You turn left at a junction and steer significantly early, causing your nearside wheel to mount the pavement.",
+    "correct_answer": "serious",
+    "explanation": "Mounting the pavement due to a steering error is a serious fault. If there had been a pedestrian nearby causing actual danger, it would escalate to dangerous.",
+    "examiner_note": "Steering too early on left turns is a common serious fault. The wheel mounting the pavement is the key threshold."
+  },
+  {
+    "id": 21,
+    "category": "Control — Clutch",
+    "dl25_ref": "12 — Control — Clutch",
+    "tier": 1,
+    "scenario": "You're coming to a stop and forget to press the clutch down in time. The engine stalls, but no other traffic is affected.",
+    "correct_answer": "driving_fault",
+    "explanation": "Stalling because the clutch wasn't depressed before stopping is a driving fault when no other road users are affected.",
+    "examiner_note": "If this happened habitually throughout the test, the repeated driving faults would be assessed as a serious fault — demonstrating an inability to deal with the situation."
+  },
+  {
+    "id": 22,
+    "category": "Control — Parking Brake",
+    "dl25_ref": "12 — Control — Parking Brake",
+    "tier": 1,
+    "scenario": "You stop on a hill for a hill start. You don't apply the parking brake and the car rolls back a short distance before you catch it with the footbrake.",
+    "correct_answer": "driving_fault",
+    "explanation": "Short rollback due to not applying the parking brake, caught quickly, is a driving fault.",
+    "examiner_note": "If the car rolled back a significant distance, it would be serious. If it rolled back toward a vehicle or pedestrian behind, it would be dangerous."
+  },
+  {
+    "id": 23,
+    "category": "Move Off — Safely",
+    "dl25_ref": "13 — Move Off — Safely",
+    "tier": 1,
+    "scenario": "You move off from the kerb. You check your blind spot, but the timing is off — you check after the car has already started to move.",
+    "correct_answer": "driving_fault",
+    "explanation": "Incorrectly timed blind spot check with no risk to other road users is a driving fault. The observation happened, just not at the right moment.",
+    "examiner_note": "The ideal timing is: observation, then move. If you move first, then check — that's the wrong order, but only a minor if nobody was affected."
+  },
+  {
+    "id": 24,
+    "category": "Move Off — Safely",
+    "dl25_ref": "13 — Move Off — Safely",
+    "tier": 2,
+    "scenario": "You move off from the kerb without checking your blind spot at all. A cyclist is passing and has to swerve to avoid you.",
+    "correct_answer": "dangerous",
+    "explanation": "Moving off without observation directly causing actual danger to another road user is a dangerous fault. The cyclist had to take evasive action because of your failure to observe.",
+    "examiner_note": "This would likely also result in an ETA (Examiner Took Action) being recorded — verbal or physical intervention."
+  },
+  {
+    "id": 25,
+    "category": "Move Off — Control",
+    "dl25_ref": "13 — Move Off — Under Control",
+    "tier": 1,
+    "scenario": "You attempt to move off and stall the engine. No other road users are affected. You restart and move off normally.",
+    "correct_answer": "driving_fault",
+    "explanation": "A single stall with no impact on other road users is a driving fault under move off control.",
+    "examiner_note": "Repeated stalling throughout the test would be assessed as a serious fault — it demonstrates an inability to deal with the situation."
+  },
+  {
+    "id": 26,
+    "category": "Mirrors",
+    "dl25_ref": "14 — Mirrors — Change Direction",
+    "tier": 1,
+    "scenario": "You use your exterior mirror late before changing direction. No other road users are affected.",
+    "correct_answer": "driving_fault",
+    "explanation": "Late mirror use before a change of direction, with no effect on other road users, is a driving fault.",
+    "examiner_note": "The MSM routine (Mirror, Signal, Manoeuvre) should be displayed effectively. Late mirrors break the routine but may not compromise safety."
+  },
+  {
+    "id": 27,
+    "category": "Mirrors",
+    "dl25_ref": "14 — Mirrors — Change Direction",
+    "tier": 2,
+    "scenario": "You don't check your exterior mirror at all before making a significant change in direction.",
+    "correct_answer": "serious",
+    "explanation": "Completely omitting the exterior mirror check before a significant direction change is a serious fault — it's a fundamental part of the MSM routine.",
+    "examiner_note": "If this omission caused a vehicle behind to abandon an overtake, creating actual danger, it would be dangerous."
+  },
+  {
+    "id": 28,
+    "category": "Signals — Necessary",
+    "dl25_ref": "15 — Signals — Necessary",
+    "tier": 1,
+    "scenario": "You apply your signal to turn but cancel it before you've completed the turn. Another road user is present but isn't affected.",
+    "correct_answer": "driving_fault",
+    "explanation": "Cancelling a signal before the direction change is complete, where another road user is present who would benefit from the signal, is a driving fault.",
+    "examiner_note": "The assessment is about whether the signal was necessary and whether its early cancellation could mislead."
+  },
+  {
+    "id": 29,
+    "category": "Signals — Necessary",
+    "dl25_ref": "15 — Signals — Necessary",
+    "tier": 2,
+    "scenario": "You change direction at a busy junction without signalling at all. A road user who needed to know your intention is significantly affected.",
+    "correct_answer": "serious",
+    "explanation": "Omitting an essential signal that would have informed other road users of your change in direction is a serious fault.",
+    "examiner_note": "If the omission caused actual danger — e.g. a collision or near-miss requiring examiner action — it would be dangerous."
+  },
+  {
+    "id": 30,
+    "category": "Clearance",
+    "dl25_ref": "16 — Clearance / Obstructions",
+    "tier": 1,
+    "scenario": "You pass a parked car a bit too closely when the road was wide enough to give more room. Nothing happens.",
+    "correct_answer": "driving_fault",
+    "explanation": "Passing too close to a stationary vehicle when road conditions allowed better clearance is a driving fault.",
+    "examiner_note": "The examiner expects you to be ready for doors opening, children running out, or vehicles pulling away. Extra space shows awareness."
+  },
+  {
+    "id": 31,
+    "category": "Clearance",
+    "dl25_ref": "16 — Clearance / Obstructions",
+    "tier": 2,
+    "scenario": "You pass a parked car extremely closely on a clear road, narrowly avoiding a collision with its wing mirror.",
+    "correct_answer": "serious",
+    "explanation": "Narrowly avoiding a collision with a stationary vehicle when road conditions allowed a safe course is a serious fault.",
+    "examiner_note": "If you'd actually struck the vehicle or the examiner had to intervene, it would be dangerous."
+  },
+  {
+    "id": 32,
+    "category": "Traffic Lights",
+    "dl25_ref": "17 — Traffic Lights",
+    "tier": 1,
+    "scenario": "The traffic light turns amber and you react a bit late — you could have stopped more smoothly — but there's no safety issue.",
+    "correct_answer": "driving_fault",
+    "explanation": "A late reaction to an amber traffic light with no effect on safety is a driving fault.",
+    "examiner_note": "The examiner assesses your reaction to traffic signals. Late but safe = driving fault. Running a red = serious or dangerous."
+  },
+  {
+    "id": 33,
+    "category": "Traffic Lights",
+    "dl25_ref": "17 — Traffic Lights",
+    "tier": 3,
+    "scenario": "The traffic light is clearly red. You fail to stop and drive through the junction.",
+    "correct_answer": "serious",
+    "explanation": "Failing to comply with a red traffic light is a breach of a legal requirement and is a serious fault at minimum.",
+    "examiner_note": "If this caused actual danger, it would be dangerous. The examiner may also need to take action (ETA) to prevent the breach."
+  },
+  {
+    "id": 34,
+    "category": "Use of Speed",
+    "dl25_ref": "18 — Use of Speed",
+    "tier": 1,
+    "scenario": "You drive slightly too fast for the road conditions for a short period, but correct yourself. No danger is created.",
+    "correct_answer": "driving_fault",
+    "explanation": "Driving too fast for conditions for a short period is a driving fault. The key phrase is 'short period' — sustained excess speed escalates.",
+    "examiner_note": "Speed limits are not the only factor. Road conditions, weather, and traffic all matter. The examiner has very little tolerance for exceeding the speed limit."
+  },
+  {
+    "id": 35,
+    "category": "Use of Speed",
+    "dl25_ref": "18 — Use of Speed",
+    "tier": 2,
+    "scenario": "You drive through a 30mph zone at 40mph. There's traffic around and the road conditions don't justify the speed.",
+    "correct_answer": "serious",
+    "explanation": "Exceeding the speed limit in normal conditions is a serious fault. The examiner guidance states the tolerance threshold over any speed limit must be quite small.",
+    "examiner_note": "The examiner may take action (ETA) to prevent a legal requirement being breached if you're significantly over the limit."
+  },
+  {
+    "id": 36,
+    "category": "Following Distance",
+    "dl25_ref": "19 — Following Distance",
+    "tier": 1,
+    "scenario": "You don't quite maintain the full separation distance from the car ahead on a dry road, but there's still a reasonable gap.",
+    "correct_answer": "driving_fault",
+    "explanation": "Not maintaining the full required separation distance is a driving fault when there's still some margin.",
+    "examiner_note": "On wet or slippery roads, the expected following distance increases significantly."
+  },
+  {
+    "id": 37,
+    "category": "Following Distance",
+    "dl25_ref": "19 — Following Distance",
+    "tier": 2,
+    "scenario": "You drive very close to the vehicle ahead on a main road, leaving almost no margin for error if they braked suddenly.",
+    "correct_answer": "serious",
+    "explanation": "Driving too close with little margin for error is a serious fault. The examiner guidance states the separation distance left little margin for error.",
+    "examiner_note": "If the examiner had to take action to increase the separation distance, it would be dangerous and an ETA would be recorded."
+  },
+  {
+    "id": 38,
+    "category": "Progress — Undue Hesitation",
+    "dl25_ref": "20 — Progress — Undue Hesitation",
+    "tier": 2,
+    "scenario": "You're at a junction. The road is clearly safe to proceed, but you sit and wait for several seconds before pulling out.",
+    "correct_answer": "driving_fault",
+    "explanation": "Not proceeding when it is safe and correct to do so is a driving fault for undue hesitation. A lack of judgement rather than a safety issue.",
+    "examiner_note": "Examiners distinguish between appropriate caution and over-caution. Stopping at every junction 'just in case' is not acceptable driving."
+  },
+  {
+    "id": 39,
+    "category": "Progress — Undue Hesitation",
+    "dl25_ref": "20 — Progress — Undue Hesitation",
+    "tier": 3,
+    "scenario": "You repeatedly stop and wait at junctions when it's clearly safe and reasonable to proceed. Other road users behind you are becoming frustrated and trying to overtake.",
+    "correct_answer": "serious",
+    "explanation": "Persistent hesitation that creates situations encouraging other road users to take risks is a serious fault.",
+    "examiner_note": "Undue hesitation is unlikely to be dangerous in itself unless it creates situations that encourage other road users to put themselves at risk."
+  },
+  {
+    "id": 40,
+    "category": "Junctions — Turning Right",
+    "dl25_ref": "21 — Turning Right",
+    "tier": 1,
+    "scenario": "You approach a T-junction to turn right and position the car slightly over the central road marking. No other road users are present or affected.",
+    "correct_answer": "driving_fault",
+    "explanation": "Positioning part way over the centre line when turning right, with no effect on any road user, is a driving fault.",
+    "examiner_note": "The correct position for turning right is towards the centre of the road. Slightly over the line with no traffic = minor."
+  },
+  {
+    "id": 41,
+    "category": "Junctions — Cutting Corners",
+    "dl25_ref": "21 — Cutting Corners",
+    "tier": 2,
+    "scenario": "You turn right from a major road into a minor road and position the car completely on the wrong side of the road in the minor road. There are no mitigating circumstances.",
+    "correct_answer": "serious",
+    "explanation": "Being completely on the wrong side of the road when turning right, with no mitigating circumstances, is a serious fault.",
+    "examiner_note": "If there had been oncoming traffic in the minor road, this would be dangerous. The lack of mitigating circumstances is key to the serious assessment."
+  },
+  {
+    "id": 42,
+    "category": "Judgement — Crossing",
+    "dl25_ref": "22 — Crossing Traffic",
+    "tier": 2,
+    "scenario": "You turn right across the path of an oncoming vehicle. The driver has to slow down, but not significantly.",
+    "correct_answer": "driving_fault",
+    "explanation": "Misjudging the speed and distance of an approaching vehicle, causing them to slow but not significantly, is a driving fault for crossing traffic.",
+    "examiner_note": "When turning right, other vehicles should not have to stop, slow down, or swerve to allow you to complete the turn."
+  },
+  {
+    "id": 43,
+    "category": "Judgement — Crossing",
+    "dl25_ref": "22 — Crossing Traffic",
+    "tier": 3,
+    "scenario": "You turn right across the path of an oncoming vehicle. The driver has to brake hard and swerve to avoid a collision.",
+    "correct_answer": "dangerous",
+    "explanation": "Turning right across the path of oncoming traffic, forcing them to brake hard and swerve, creates actual danger and is a dangerous fault.",
+    "examiner_note": "The examiner would likely record an ETA here and may have already taken verbal or physical action."
+  },
+  {
+    "id": 44,
+    "category": "Positioning — Normal Driving",
+    "dl25_ref": "23 — Normal Driving",
+    "tier": 1,
+    "scenario": "You drive in the right-hand lane of a dual carriageway for a while when the left lane is available. No other traffic is affected.",
+    "correct_answer": "driving_fault",
+    "explanation": "Remaining in the right-hand lane of a dual carriageway when the left lane is available is a positioning driving fault.",
+    "examiner_note": "The correct position is the left lane unless overtaking. Persistent right-lane driving would escalate."
+  },
+  {
+    "id": 45,
+    "category": "Positioning — Lane Discipline",
+    "dl25_ref": "23 — Lane Discipline",
+    "tier": 2,
+    "scenario": "You approach a roundabout and straddle two clearly marked lanes, affecting the traffic behind you.",
+    "correct_answer": "serious",
+    "explanation": "Straddling marked lanes impacting following traffic is a serious lane discipline fault. Where lanes are marked, you should be positioned in the middle of the lane.",
+    "examiner_note": "Cutting across the normal road position at roundabouts without lane markings is assessed under normal driving, not lane discipline."
+  },
+  {
+    "id": 46,
+    "category": "Pedestrian Crossings",
+    "dl25_ref": "24 — Pedestrian Crossings",
+    "tier": 1,
+    "scenario": "At a pelican crossing, the amber light is flashing. You're a bit late to react, but you do stop and the crossing is clear.",
+    "correct_answer": "driving_fault",
+    "explanation": "A late reaction to flashing amber at a pelican crossing is a driving fault when the situation is resolved safely.",
+    "examiner_note": "At flashing amber, you must give way to any pedestrians still on the crossing."
+  },
+  {
+    "id": 47,
+    "category": "Pedestrian Crossings",
+    "dl25_ref": "24 — Pedestrian Crossings",
+    "tier": 3,
+    "scenario": "You approach a zebra crossing with pedestrians waiting to cross. You make no attempt to slow down.",
+    "correct_answer": "dangerous",
+    "explanation": "Making no attempt to slow for pedestrians at a crossing creates actual danger and is a dangerous fault.",
+    "examiner_note": "The examiner would very likely take action here — verbal or physical — to prevent harm."
+  },
+  {
+    "id": 48,
+    "category": "Awareness / Planning",
+    "dl25_ref": "26 — Awareness / Planning",
+    "tier": 2,
+    "scenario": "A car ahead is signalling to turn right. You react a bit late and have to brake more firmly than ideal, but there's no drama.",
+    "correct_answer": "driving_fault",
+    "explanation": "A late reaction to what other road users are doing, without compromising safety, is a driving fault for awareness and planning.",
+    "examiner_note": "The examiner wants to see anticipation — reading the road ahead and predicting what other road users will do — rather than last-minute reactions."
+  },
+  {
+    "id": 49,
+    "category": "Awareness / Planning",
+    "dl25_ref": "26 — Awareness / Planning",
+    "tier": 3,
+    "scenario": "A bus ahead is signalling to pull out. You don't react at all until the last second, braking suddenly and swerving, compromising the safety of the car behind you.",
+    "correct_answer": "serious",
+    "explanation": "A last-minute sudden reaction to other road users that compromises their safety is a serious fault for awareness and planning.",
+    "examiner_note": "If this had caused actual danger — a collision or the examiner intervening — it would be dangerous."
+  },
+  {
+    "id": 50,
+    "category": "Normal Stops",
+    "dl25_ref": "25 — Position / Normal Stops",
+    "tier": 1,
+    "scenario": "When asked to pull up on the left, you stop partially blocking a driveway. No vehicles are trying to use it.",
+    "correct_answer": "driving_fault",
+    "explanation": "Stopping partially across a driveway with no inconvenience to other road users is a driving fault. You should choose a safe, legal, and convenient place to stop.",
+    "examiner_note": "If a vehicle had been trying to exit the driveway and was blocked, it would escalate."
+  }
+]
