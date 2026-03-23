@@ -11,6 +11,7 @@
     });
 </script>
 <script src="/posthog-tracking.js" defer></script>
+<script src="/competency-config.js"></script>
   <title>Session Log — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -336,6 +337,28 @@
     .booking-info-text { font-size: 0.85rem; color: var(--primary); line-height: 1.4; }
     .booking-info-text strong { color: var(--accent-dk); }
 
+    /* ── COMPETENCY AREA GROUPS ── */
+    .area-group { margin-bottom: 12px; }
+    .area-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; cursor: pointer;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); user-select: none;
+      transition: all 0.2s;
+    }
+    .area-header:hover { border-color: var(--accent); }
+    .area-icon { font-size: 1.1rem; }
+    .area-label { font-family: var(--font-head); font-weight: 700; font-size: 0.9rem; flex: 1; }
+    .area-count { font-size: 0.75rem; color: var(--muted); font-weight: 600; }
+    .area-chevron {
+      width: 16px; height: 16px; transition: transform 0.25s ease;
+      color: var(--muted);
+    }
+    .area-chevron svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
+    .area-group.open .area-chevron { transform: rotate(90deg); }
+    .area-skills { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
+    .area-group.open .area-skills { max-height: 2000px; }
+
     /* ── TRAFFIC LIGHT SKILL CARDS ── */
     .skill-card {
       background: var(--white);
@@ -343,9 +366,36 @@
       border-radius: var(--radius);
       padding: 16px 18px;
       margin-bottom: 10px;
+      margin-top: 8px;
       transition: border-color 0.2s;
     }
+    .skill-card:first-child { margin-top: 10px; }
     .skill-card.rated { border-color: rgba(245,131,33,0.3); }
+
+    /* ── FAULT COUNTERS ── */
+    .fault-row {
+      display: flex; gap: 8px; margin-top: 10px; padding-top: 10px;
+      border-top: 1px solid var(--border); align-items: center;
+    }
+    .fault-label { font-size: 0.72rem; color: var(--muted); font-weight: 600; margin-right: auto; }
+    .fault-counter {
+      display: flex; align-items: center; gap: 4px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 4px 8px; min-width: 52px;
+      justify-content: center; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: all 0.15s; user-select: none;
+    }
+    .fault-counter:active { transform: scale(0.95); }
+    .fault-counter .fc-badge {
+      font-family: var(--font-head); font-weight: 700; font-size: 0.85rem;
+      min-width: 16px; text-align: center;
+    }
+    .fault-counter .fc-type { font-size: 0.68rem; font-weight: 700; }
+    .fault-counter.has-faults { border-color: var(--red); background: rgba(239,68,68,0.06); }
+    .fault-counter.fc-driving .fc-type { color: #f59e0b; }
+    .fault-counter.fc-serious .fc-type { color: #ef4444; }
+    .fault-counter.fc-dangerous .fc-type { color: #991b1b; }
 
     .skill-label {
       font-family: var(--font-head);
@@ -774,16 +824,9 @@ document.addEventListener('click', function(e) {
 });
 function logout() { localStorage.removeItem('cc_learner'); window.location.href = '/learner/login.html'; }
 
-// ── Skills config ──
-const SKILLS = [
-  { key: 'speed_choice', label: 'Speed choice' },
-  { key: 'lane_choice',  label: 'Lane choice' },
-  { key: 'mirrors',      label: 'Mirrors' },
-  { key: 'lane_keeping', label: 'Lane keeping' },
-  { key: 'stay_or_go',   label: 'Stay or go' },
-  { key: 'roundabouts',  label: 'Roundabouts' },
-  { key: 'manoeuvres',   label: 'Manoeuvres' },
-];
+// ── Skills from shared competency config ──
+const CC = window.CC_COMPETENCY;
+const SKILLS = CC.SKILLS;
 
 const TOTAL_STEPS = 3;
 let currentStep = 1;
@@ -792,29 +835,89 @@ let AUTH;
 let bookingId = null;
 let bookingData = null;
 const ratings = {};
+const faults = {}; // { skill_key: { driving: 0, serious: 0, dangerous: 0 } }
 
-// ── Build skill cards ──
+// ── Build skill cards grouped by competency area ──
 function buildSkillCards() {
   const container = document.getElementById('skills-container');
-  container.innerHTML = SKILLS.map(s => `
-    <div class="skill-card" id="card-${s.key}">
-      <div class="skill-label">${s.label}</div>
-      <div class="tl-row">
-        <button class="tl-btn" data-val="struggled" onclick="rate('${s.key}','struggled',this)">
-          <span class="tl-dot"></span>
-          <span class="tl-label">Needs work</span>
-        </button>
-        <button class="tl-btn" data-val="ok" onclick="rate('${s.key}','ok',this)">
-          <span class="tl-dot"></span>
-          <span class="tl-label">Getting there</span>
-        </button>
-        <button class="tl-btn" data-val="nailed" onclick="rate('${s.key}','nailed',this)">
-          <span class="tl-dot"></span>
-          <span class="tl-label">Confident</span>
-        </button>
-      </div>
-    </div>
-  `).join('');
+  container.innerHTML = CC.AREAS.map(area => {
+    const areaSkills = CC.getSkillsByArea(area.id);
+    return `
+      <div class="area-group" id="area-${area.id}">
+        <div class="area-header" onclick="toggleArea('${area.id}')">
+          <span class="area-icon">${area.icon}</span>
+          <span class="area-label">${area.label}</span>
+          <span class="area-count" id="area-count-${area.id}">0/${areaSkills.length}</span>
+          <span class="area-chevron"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
+        </div>
+        <div class="area-skills">
+          ${areaSkills.map(s => `
+            <div class="skill-card" id="card-${s.key}">
+              <div class="skill-label">${s.label}</div>
+              <div class="tl-row">
+                <button class="tl-btn" data-val="struggled" onclick="rate('${s.key}','struggled',this)">
+                  <span class="tl-dot"></span>
+                  <span class="tl-label">Needs work</span>
+                </button>
+                <button class="tl-btn" data-val="ok" onclick="rate('${s.key}','ok',this)">
+                  <span class="tl-dot"></span>
+                  <span class="tl-label">Getting there</span>
+                </button>
+                <button class="tl-btn" data-val="nailed" onclick="rate('${s.key}','nailed',this)">
+                  <span class="tl-dot"></span>
+                  <span class="tl-label">Confident</span>
+                </button>
+              </div>
+              <div class="fault-row">
+                <span class="fault-label">Faults (optional)</span>
+                <div class="fault-counter fc-driving" onclick="incFault('${s.key}','driving',this)" oncontextmenu="event.preventDefault();resetFault('${s.key}','driving',this)">
+                  <span class="fc-type">D</span><span class="fc-badge" id="fc-${s.key}-driving">·</span>
+                </div>
+                <div class="fault-counter fc-serious" onclick="incFault('${s.key}','serious',this)" oncontextmenu="event.preventDefault();resetFault('${s.key}','serious',this)">
+                  <span class="fc-type">S</span><span class="fc-badge" id="fc-${s.key}-serious">·</span>
+                </div>
+                <div class="fault-counter fc-dangerous" onclick="incFault('${s.key}','dangerous',this)" oncontextmenu="event.preventDefault();resetFault('${s.key}','dangerous',this)">
+                  <span class="fc-type">✕</span><span class="fc-badge" id="fc-${s.key}-dangerous">·</span>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
+  // Set up long-press for mobile fault reset
+  document.querySelectorAll('.fault-counter').forEach(el => {
+    let timer;
+    el.addEventListener('touchstart', function(e) {
+      const parts = this.querySelector('.fc-badge').id.split('-');
+      const sk = parts.slice(1, -1).join('-');
+      const ft = parts[parts.length - 1];
+      timer = setTimeout(() => { resetFault(sk, ft, this); e.preventDefault(); }, 500);
+    }, { passive: false });
+    el.addEventListener('touchend', () => clearTimeout(timer));
+    el.addEventListener('touchmove', () => clearTimeout(timer));
+  });
+}
+
+function toggleArea(areaId) {
+  document.getElementById('area-' + areaId).classList.toggle('open');
+}
+
+function incFault(skillKey, type, el) {
+  if (!faults[skillKey]) faults[skillKey] = { driving: 0, serious: 0, dangerous: 0 };
+  faults[skillKey][type]++;
+  const badge = document.getElementById('fc-' + skillKey + '-' + type);
+  badge.textContent = faults[skillKey][type];
+  el.classList.add('has-faults');
+}
+
+function resetFault(skillKey, type, el) {
+  if (!faults[skillKey]) return;
+  faults[skillKey][type] = 0;
+  const badge = document.getElementById('fc-' + skillKey + '-' + type);
+  badge.textContent = '·';
+  el.classList.remove('has-faults');
 }
 
 // ── Auth + init ──
@@ -935,16 +1038,27 @@ function rate(key, value, btn) {
     b.setAttribute('data-val', b.getAttribute('data-val'));
   });
   btn.classList.add(`sel-${value}`);
+
+  // Update area count
+  const skill = CC.getSkill(key);
+  if (skill) {
+    const areaSkills = CC.getSkillsByArea(skill.area);
+    const areaRated = areaSkills.filter(s => ratings[s.key]).length;
+    const countEl = document.getElementById('area-count-' + skill.area);
+    if (countEl) countEl.textContent = areaRated + '/' + areaSkills.length;
+  }
+
   updateStep2Button();
 }
 
 function updateStep2Button() {
   const rated = Object.keys(ratings).length;
   const btn = document.getElementById('btn-step2-next');
-  btn.disabled = rated < SKILLS.length;
-  btn.textContent = rated < SKILLS.length
-    ? `Next (${rated}/${SKILLS.length} rated)`
-    : 'Next';
+  // Require at least 1 rating (not all 17 — learners may not practise every skill)
+  btn.disabled = rated < 1;
+  btn.textContent = rated < 1
+    ? 'Rate at least 1 skill'
+    : `Next (${rated} skill${rated !== 1 ? 's' : ''} rated)`;
 }
 
 // ── Summary ──
@@ -953,18 +1067,30 @@ function buildSummary() {
   const duration = document.getElementById('duration').value;
   const dateStr = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
+  // Count total faults
+  let totalD = 0, totalS = 0, totalX = 0;
+  Object.values(faults).forEach(f => { totalD += f.driving; totalS += f.serious; totalX += f.dangerous; });
+  const hasFaults = totalD + totalS + totalX > 0;
+
   document.getElementById('summary-meta').innerHTML = `
     <div class="summary-pill"><div class="val">${dateStr}</div><div class="lbl">Date</div></div>
     <div class="summary-pill"><div class="val">${duration ? duration + ' min' : '—'}</div><div class="lbl">Duration</div></div>
     <div class="summary-pill"><div class="val">${currentType === 'instructor' ? 'Instructor' : 'Private'}</div><div class="lbl">Type</div></div>
-    <div class="summary-pill"><div class="val">${Object.keys(ratings).length}/${SKILLS.length}</div><div class="lbl">Skills rated</div></div>
+    <div class="summary-pill"><div class="val">${Object.keys(ratings).length}</div><div class="lbl">Skills rated</div></div>
+    ${hasFaults ? `<div class="summary-pill"><div class="val" style="color:var(--red)">${totalD}D · ${totalS}S · ${totalX}✕</div><div class="lbl">Faults logged</div></div>` : ''}
   `;
 
-  document.getElementById('summary-skills').innerHTML = SKILLS.map(s => {
+  // Only show rated skills in summary
+  const ratedSkills = SKILLS.filter(s => ratings[s.key]);
+  document.getElementById('summary-skills').innerHTML = ratedSkills.map(s => {
     const r = ratings[s.key];
+    const f = faults[s.key];
+    const faultStr = f && (f.driving + f.serious + f.dangerous > 0)
+      ? `<span style="font-size:0.72rem;color:var(--red);margin-left:8px;">${f.driving}D ${f.serious}S ${f.dangerous}✕</span>`
+      : '';
     return `<div class="summary-skill-row">
-      <span class="summary-skill-name">${s.label}</span>
-      ${r ? `<span class="summary-dot dot-${r}"></span>` : `<span class="summary-skill-skip">Skipped</span>`}
+      <span class="summary-skill-name">${s.label}${faultStr}</span>
+      ${r ? `<span class="summary-dot dot-${r}"></span>` : ''}
     </div>`;
   }).join('');
 
@@ -977,9 +1103,15 @@ async function saveSession() {
   const date = document.getElementById('session-date').value;
   if (!date) { showError('Session date is missing'); return; }
 
-  const ratingsList = Object.entries(ratings).map(([skill_key, rating]) => ({
-    tier: 0, skill_key, rating, note: null
-  }));
+  const ratingsList = Object.entries(ratings).map(([skill_key, rating]) => {
+    const f = faults[skill_key] || { driving: 0, serious: 0, dangerous: 0 };
+    return {
+      tier: 0, skill_key, rating, note: null,
+      driving_faults: f.driving || 0,
+      serious_faults: f.serious || 0,
+      dangerous_faults: f.dangerous || 0
+    };
+  });
 
   const payload = {
     session_date: date,
@@ -1046,6 +1178,9 @@ function askSessionQuestion() {
 const SKILL_LABELS = {};
 SKILLS.forEach(s => { SKILL_LABELS[s.key] = s.label; });
 const LEGACY_LABELS = {
+  speed_choice: 'Speed choice', lane_choice: 'Lane choice', mirrors: 'Mirrors',
+  lane_keeping: 'Lane keeping', stay_or_go: 'Stay or go', roundabouts: 'Roundabouts',
+  manoeuvres: 'Manoeuvres',
   q1_speed_react: 'Speed & react', q2_speed_lane: 'Slowing for lanes',
   q3_mirrors_routine: 'Mirror routine', q4_mirrors_unexp: 'Mirrors (unexpected)',
   q5_awareness: 'Awareness', q6_mice_order: 'MICE order',
