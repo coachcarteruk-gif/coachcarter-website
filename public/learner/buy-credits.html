@@ -849,6 +849,7 @@
 
   // ── Checkout ────────────────────────────────────────────────────────────────
   document.getElementById('btnCheckout').addEventListener('click', async () => {
+    if (window.ccAuth && !window.ccAuth.requireAuth()) return;
     const btn     = document.getElementById('btnCheckout');
     const label   = document.getElementById('btnLabel');
     const spinner = document.getElementById('btnSpinner');
@@ -921,11 +922,10 @@
     }
   }
 
-  if (initAuth()) {
-    loadBalance();
-    selectPkg(8); // Default to most popular
-    loadProgrammePrice();
-  }
+  initAuth(); // check but don't block
+  selectPkg(8); // Default to most popular
+  loadProgrammePrice();
+  if (token) loadBalance();
 </script>
 
 <nav class="bottom-nav">

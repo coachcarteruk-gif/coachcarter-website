@@ -951,7 +951,17 @@ let AUTH, PROGRESS, SESSIONS_DATA, CREDITS_DATA, BOOKINGS_DATA, UNLOGGED_DATA;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (!AUTH?.token) { window.ccAuth && window.ccAuth.requireAuth(); return; }
+
+  // Gate action links behind auth
+  document.querySelectorAll('.quick-actions a, .credit-actions a, a[href*="qa.html?ask=1"]').forEach(link => {
+    link.addEventListener('click', function (e) {
+      if (!window.ccAuth || window.ccAuth.isLoggedIn) return; // let it through
+      e.preventDefault();
+      window.ccAuth.requireAuth();
+    });
+  });
+
+  if (!AUTH?.token) return; // page renders, but no data loaded
   document.getElementById('header-name').textContent = AUTH.user.name;
   await Promise.all([loadProgress(), loadCredits(), loadBookings(), loadUnlogged()]);
   render();

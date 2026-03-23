@@ -780,7 +780,6 @@ let learnerProfile = { phone: '', pickup_address: '' };
 function init() {
   const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
   token = session?.token || null;
-  if (!token) { window.ccAuth && window.ccAuth.requireAuth(); return; }
 
   if (localStorage.getItem('cc_welcome') === '1') {
     document.getElementById('welcomeBanner').style.display = 'flex';
@@ -795,6 +794,13 @@ function init() {
   if (params.get('cancelled') === '1') {
     showToast('Payment cancelled — the slot has been released.', '');
     window.history.replaceState({}, '', '/learner/book.html');
+  }
+
+  if (!token) {
+    // Still render the calendar UI, but skip data loading
+    cursor = new Date(); cursor.setHours(0,0,0,0);
+    setView('weekly');
+    return;
   }
 
   Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile()])
@@ -1206,6 +1212,7 @@ function drillToDay(ds) {
 
 // ─── Book modal ──────────────────────────────────────────────────────────────
 function openBookModal(el) {
+  if (window.ccAuth && !window.ccAuth.requireAuth()) return;
   if (!isProfileComplete()) {
     showToast('Please add your phone number and pickup address on your dashboard before booking.', 'error');
     return;
