@@ -29,6 +29,7 @@
     user: '<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
     settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
     logOut: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+    chevron: '<svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>',
     hamburger: '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
     close: '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
   };
@@ -48,8 +49,11 @@
     ],
     learner: [
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
-      { icon: 'calendarPlus', label: 'Book Lessons', href: '/learner/book.html' },
-      { icon: 'list', label: 'My Lessons', href: '/learner/lessons.html' },
+      { icon: 'calendar', label: 'Lessons', children: [
+        { icon: 'calendarPlus', label: 'Book Lessons', href: '/learner/book.html' },
+        { icon: 'creditCard', label: 'Purchase Lessons', href: '/learner/buy-credits.html' },
+        { icon: 'list', label: 'Upcoming Lessons', href: '/learner/lessons.html' }
+      ]},
       { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
       'divider',
       { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
@@ -57,8 +61,7 @@
       { icon: 'clipboard', label: 'Examiner Quiz', href: '/learner/examiner-quiz.html' },
       { icon: 'message', label: 'Ask the Examiner', href: '/learner/ask-examiner.html' },
       'divider',
-      { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true },
-      { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html' }
+      { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true }
     ],
     instructor: [
       { icon: 'calendar', label: 'My Calendar', href: '/instructor/' },
@@ -95,10 +98,36 @@
       } else {
         var item = items[i];
         if (item.authOnly && !isLoggedIn) continue;
-        var active = isActive(item.href) ? ' active' : '';
-        html += '<a href="' + item.href + '" class="cc-sb-link' + active + '">' +
-          '<span class="cc-sb-icon">' + icons[item.icon] + '</span>' +
-          '<span>' + item.label + '</span></a>';
+
+        // Collapsible group with children
+        if (item.children) {
+          var childActive = false;
+          for (var c = 0; c < item.children.length; c++) {
+            if (isActive(item.children[c].href)) { childActive = true; break; }
+          }
+          var openClass = childActive ? ' open' : '';
+          html += '<div class="cc-sb-group' + openClass + '">' +
+            '<button class="cc-sb-link cc-sb-group-toggle" type="button">' +
+              '<span class="cc-sb-icon">' + icons[item.icon] + '</span>' +
+              '<span>' + item.label + '</span>' +
+              '<span class="cc-sb-chevron">' + icons.chevron + '</span>' +
+            '</button>' +
+            '<div class="cc-sb-group-children">';
+          for (var j = 0; j < item.children.length; j++) {
+            var child = item.children[j];
+            if (child.authOnly && !isLoggedIn) continue;
+            var cActive = isActive(child.href) ? ' active' : '';
+            html += '<a href="' + child.href + '" class="cc-sb-link cc-sb-child' + cActive + '">' +
+              '<span class="cc-sb-icon">' + icons[child.icon] + '</span>' +
+              '<span>' + child.label + '</span></a>';
+          }
+          html += '</div></div>';
+        } else {
+          var active = isActive(item.href) ? ' active' : '';
+          html += '<a href="' + item.href + '" class="cc-sb-link' + active + '">' +
+            '<span class="cc-sb-icon">' + icons[item.icon] + '</span>' +
+            '<span>' + item.label + '</span></a>';
+        }
       }
     }
     return html;
@@ -152,6 +181,21 @@
     '.cc-sb-icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2;',
     '  stroke-linecap: round; stroke-linejoin: round; }',
     '.cc-sb-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 8px 20px; }',
+
+    /* Collapsible group */
+    '.cc-sb-group-toggle { width: 100%; background: none; border: none; cursor: pointer; position: relative; }',
+    '.cc-sb-chevron { margin-left: auto; width: 16px; height: 16px; display: flex; align-items: center;',
+    '  justify-content: center; transition: transform 0.25s ease; }',
+    '.cc-sb-chevron svg { width: 14px; height: 14px; stroke: currentColor; fill: none;',
+    '  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }',
+    '.cc-sb-group.open .cc-sb-chevron { transform: rotate(90deg); }',
+    '.cc-sb-group-children { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }',
+    '.cc-sb-group.open .cc-sb-group-children { max-height: 200px; }',
+    '.cc-sb-child { padding-left: 36px !important; font-size: 0.82rem !important; }',
+    '.cc-sb-child .cc-sb-icon { width: 16px; height: 16px; }',
+    '.cc-sb-child .cc-sb-icon svg { width: 14px; height: 14px; }',
+    '.cc-sb-group-toggle.cc-sb-link { color: rgba(255,255,255,0.6); }',
+    '.cc-sb-group.open .cc-sb-group-toggle { color: #fff; }',
 
     /* Footer */
     '.cc-sb-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.08); }',
@@ -269,6 +313,14 @@
     window.addEventListener('resize', function() {
       if (window.innerWidth >= 960) closeSidebar();
     });
+
+    // ── Collapsible group toggles ────────────────────────────────
+    var toggles = document.querySelectorAll('.cc-sb-group-toggle');
+    for (var t = 0; t < toggles.length; t++) {
+      toggles[t].addEventListener('click', function() {
+        this.parentElement.classList.toggle('open');
+      });
+    }
 
     // ── Auth-aware footer ──────────────────────────────────────
     if (context === 'learner') {
