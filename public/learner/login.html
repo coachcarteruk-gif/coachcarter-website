@@ -229,6 +229,11 @@
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.error === 'instructor_account') {
+          showError('This email is linked to an instructor account.');
+          setTimeout(() => { window.location.href = data.redirect || '/instructor/login.html'; }, 2000);
+          return;
+        }
         showError(data.error || 'Something went wrong. Please try again.');
         return;
       }
@@ -304,6 +309,10 @@
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.error === 'instructor_account') {
+          window.location.href = data.redirect || '/instructor/login.html';
+          return;
+        }
         showScreen('error');
         if (data.error === 'expired') {
           document.getElementById('error-title').textContent = 'Link expired';
