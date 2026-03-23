@@ -30,6 +30,10 @@ module.exports = async (req, res) => {
   if (action === 'qa-detail')        return handleQADetail(req, res);
   if (action === 'qa-ask')           return handleQAAsk(req, res);
   if (action === 'qa-reply')         return handleQAReply(req, res);
+  if (action === 'mock-tests')       return handleMockTests(req, res);
+  if (action === 'mock-test-faults') return handleMockTestFaults(req, res);
+  if (action === 'quiz-results')     return handleQuizResults(req, res);
+  if (action === 'competency')       return handleCompetency(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -455,5 +459,244 @@ async function handleQAReply(req, res) {
   } catch (err) {
     console.error('qa-reply error:', err);
     return res.status(500).json({ error: 'Failed to post reply' });
+  }
+}
+
+// ── Mock Tests ──────────────────────────────────────────────────────────────
+// GET: list learner's mock tests
+// POST: create a new mock test (returns id), or complete one (body.complete = true)
+async function handleMockTests(req, res) {
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const sql = neon(process.env.POSTGRES_URL);
+
+  if (req.method === 'GET') {
+    try {
+      const tests = await sql`
+        SELECT mt.*,
+          COALESCE(json_agg(
+            json_build_object(
+              'part', f.part, 'skill_key', f.skill_key,
+              'driving_faults', f.driving_faults,
+              'serious_faults', f.serious_faults,
+              'dangerous_faults', f.dangerous_faults
+            ) ORDER BY f.part, f.skill_key
+          ) FILTER (WHERE f.id IS NOT NULL), '[]') AS faults
+        FROM mock_tests mt
+        LEFT JOIN mock_test_faults f ON f.mock_test_id = mt.id
+        WHERE mt.learner_id = ${user.id}
+        GROUP BY mt.id
+        ORDER BY mt.started_at DESC
+        LIMIT 20`;
+      return res.json({ mock_tests: tests });
+    } catch (err) {
+      console.error('mock-tests GET error:', err);
+      return res.status(500).json({ error: 'Failed to load mock tests' });
+    }
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const { mock_test_id, complete, notes } = req.body;
+
+      // Complete an existing mock test
+      if (complete && mock_test_id) {
+        // Sum faults from mock_test_faults
+        const [totals] = await sql`
+          SELECT
+            COALESCE(SUM(driving_faults), 0)::int AS total_d,
+            COALESCE(SUM(serious_faults), 0)::int AS total_s,
+            COALESCE(SUM(dangerous_faults), 0)::int AS total_x
+          FROM mock_test_faults WHERE mock_test_id = ${mock_test_id}`;
+
+        const result = (totals.total_s > 0 || totals.total_x > 0 || totals.total_d > 15)
+          ? 'fail' : 'pass';
+
+        await sql`
+          UPDATE mock_tests SET
+            completed_at = NOW(),
+            result = ${result},
+            total_driving_faults = ${totals.total_d},
+            total_serious_faults = ${totals.total_s},
+            total_dangerous_faults = ${totals.total_x},
+            notes = ${notes || null}
+          WHERE id = ${mock_test_id} AND learner_id = ${user.id}`;
+
+        return res.json({ success: true, mock_test_id, result, totals });
+      }
+
+      // Create new mock test
+      const [row] = await sql`
+        INSERT INTO mock_tests (learner_id)
+        VALUES (${user.id})
+        RETURNING id, started_at`;
+
+      return res.json({ success: true, mock_test_id: row.id, started_at: row.started_at });
+    } catch (err) {
+      console.error('mock-tests POST error:', err);
+      return res.status(500).json({ error: 'Failed to save mock test' });
+    }
+  }
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
+// ── Mock Test Faults (save faults for a part) ───────────────────────────────
+// POST: { mock_test_id, part (1-3), faults: [{ skill_key, driving, serious, dangerous }] }
+async function handleMockTestFaults(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const { mock_test_id, part, faults } = req.body;
+    if (!mock_test_id || !part || part < 1 || part > 3)
+      return res.status(400).json({ error: 'mock_test_id and part (1-3) required' });
+
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Verify ownership
+    const [test] = await sql`
+      SELECT id FROM mock_tests WHERE id = ${mock_test_id} AND learner_id = ${user.id}`;
+    if (!test) return res.status(404).json({ error: 'Mock test not found' });
+
+    // Clear any existing faults for this part (allow re-recording)
+    await sql`DELETE FROM mock_test_faults WHERE mock_test_id = ${mock_test_id} AND part = ${part}`;
+
+    // Insert new faults (only skills that had faults)
+    if (faults?.length > 0) {
+      for (const f of faults) {
+        if ((f.driving || 0) + (f.serious || 0) + (f.dangerous || 0) > 0) {
+          await sql`
+            INSERT INTO mock_test_faults (mock_test_id, part, skill_key, driving_faults, serious_faults, dangerous_faults)
+            VALUES (${mock_test_id}, ${part}, ${f.skill_key}, ${f.driving || 0}, ${f.serious || 0}, ${f.dangerous || 0})`;
+        }
+      }
+    }
+
+    return res.json({ success: true, part });
+  } catch (err) {
+    console.error('mock-test-faults error:', err);
+    return res.status(500).json({ error: 'Failed to save faults' });
+  }
+}
+
+// ── Quiz Results (persist per-question answers) ─────────────────────────────
+// POST: { results: [{ question_id, skill_key, correct, learner_answer, correct_answer }] }
+// GET: returns quiz history for this learner
+async function handleQuizResults(req, res) {
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const sql = neon(process.env.POSTGRES_URL);
+
+  if (req.method === 'GET') {
+    try {
+      // Per-skill accuracy
+      const accuracy = await sql`
+        SELECT skill_key,
+          COUNT(*)::int AS attempts,
+          COUNT(*) FILTER (WHERE correct)::int AS correct_count,
+          ROUND(100.0 * COUNT(*) FILTER (WHERE correct) / NULLIF(COUNT(*), 0), 1) AS accuracy_pct
+        FROM quiz_results
+        WHERE learner_id = ${user.id}
+        GROUP BY skill_key
+        ORDER BY accuracy_pct ASC`;
+
+      // Recent results (last 50)
+      const recent = await sql`
+        SELECT question_id, skill_key, correct, learner_answer, correct_answer, answered_at
+        FROM quiz_results
+        WHERE learner_id = ${user.id}
+        ORDER BY answered_at DESC
+        LIMIT 50`;
+
+      return res.json({ accuracy, recent });
+    } catch (err) {
+      console.error('quiz-results GET error:', err);
+      return res.status(500).json({ error: 'Failed to load quiz results' });
+    }
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const { results } = req.body;
+      if (!results?.length) return res.status(400).json({ error: 'results array required' });
+
+      for (const r of results) {
+        await sql`
+          INSERT INTO quiz_results (learner_id, question_id, skill_key, correct, learner_answer, correct_answer)
+          VALUES (${user.id}, ${r.question_id}, ${r.skill_key}, ${r.correct}, ${r.learner_answer || null}, ${r.correct_answer || null})`;
+      }
+
+      return res.json({ success: true, saved: results.length });
+    } catch (err) {
+      console.error('quiz-results POST error:', err);
+      return res.status(500).json({ error: 'Failed to save quiz results' });
+    }
+  }
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
+// ── Competency Profile (aggregated view for dashboard / AI) ─────────────────
+// GET: returns the full competency profile for this learner
+async function handleCompetency(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Latest 3 lesson ratings per skill (new keys only, ignoring legacy)
+    const lessonData = await sql`
+      SELECT skill_key, rating, created_at
+      FROM skill_ratings
+      WHERE user_id = ${user.id}
+      ORDER BY skill_key, created_at DESC`;
+
+    // Quiz accuracy per skill
+    const quizData = await sql`
+      SELECT skill_key,
+        COUNT(*)::int AS attempts,
+        COUNT(*) FILTER (WHERE correct)::int AS correct_count
+      FROM quiz_results
+      WHERE learner_id = ${user.id}
+      GROUP BY skill_key`;
+
+    // Mock test summary
+    const mockData = await sql`
+      SELECT
+        COUNT(*)::int AS total_tests,
+        COUNT(*) FILTER (WHERE result = 'pass')::int AS passes,
+        COUNT(*) FILTER (WHERE result = 'fail')::int AS fails
+      FROM mock_tests
+      WHERE learner_id = ${user.id} AND completed_at IS NOT NULL`;
+
+    // Mock test faults aggregated by skill
+    const mockFaults = await sql`
+      SELECT f.skill_key,
+        SUM(f.driving_faults)::int AS total_driving,
+        SUM(f.serious_faults)::int AS total_serious,
+        SUM(f.dangerous_faults)::int AS total_dangerous
+      FROM mock_test_faults f
+      JOIN mock_tests mt ON mt.id = f.mock_test_id
+      WHERE mt.learner_id = ${user.id}
+      GROUP BY f.skill_key`;
+
+    // Session stats
+    const stats = await sql`
+      SELECT COUNT(*)::int as total_sessions,
+        COALESCE(SUM(duration_minutes), 0)::int as total_minutes
+      FROM driving_sessions WHERE user_id = ${user.id}`;
+
+    return res.json({
+      lesson_ratings: lessonData,
+      quiz_accuracy: quizData,
+      mock_summary: mockData[0] || { total_tests: 0, passes: 0, fails: 0 },
+      mock_faults: mockFaults,
+      session_stats: stats[0] || { total_sessions: 0, total_minutes: 0 }
+    });
+  } catch (err) {
+    console.error('competency error:', err);
+    return res.status(500).json({ error: 'Failed to load competency data' });
   }
 }
