@@ -30,8 +30,7 @@
 
 const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
-const crypto     = require('crypto');
+const { createTransporter, generateToken } = require('./_auth-helpers');
 
 const TOKEN_EXPIRY_MINUTES = 30;
 const JWT_EXPIRY           = '7d';
@@ -52,15 +51,6 @@ function verifyInstructorAuth(req) {
     if (payload.role !== 'instructor') return null;
     return payload;
   } catch { return null; }
-}
-
-function createTransporter() {
-  return nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT),
-    secure: process.env.SMTP_PORT === '465',
-    auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
 }
 
 module.exports = async (req, res) => {
@@ -122,7 +112,7 @@ async function handleRequestLogin(req, res) {
     }
 
     // Generate a secure random token
-    const token     = crypto.randomBytes(32).toString('hex');
+    const token     = generateToken();
     const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
 
     // Invalidate any existing unused tokens for this instructor

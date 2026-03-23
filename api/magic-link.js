@@ -1,8 +1,7 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
-const crypto = require('crypto');
 const twilio = require('twilio');
+const { createTransporter, generateToken } = require('./_auth-helpers');
 
 const FREE_TRIAL_CREDITS = 1;
 
@@ -61,7 +60,7 @@ async function handleSendLink(req, res) {
       )`;
 
     // Generate a secure random token
-    const token = crypto.randomBytes(32).toString('hex');
+    const token = generateToken();
     const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
 
     const cleanEmail = email ? email.toLowerCase().trim() : null;
@@ -77,7 +76,7 @@ async function handleSendLink(req, res) {
 
     // Send the link
     const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
-    const magicUrl = `${baseUrl}/learner/verify.html?token=${token}`;
+    const magicUrl = `${baseUrl}/learner/login.html?token=${token}`;
 
     if (method === 'sms') {
       // SMS delivery — requires TWILIO_SID, TWILIO_AUTH, TWILIO_FROM env vars
@@ -269,15 +268,6 @@ async function handleVerify(req, res) {
 }
 
 // ── Email helpers ───────────────────────────────────────────────────────────
-function createTransporter() {
-  return nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT),
-    secure: process.env.SMTP_PORT === '465',
-    auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
-}
-
 async function sendMagicLinkEmail(email, magicUrl) {
   const mailer = createTransporter();
   await mailer.sendMail({

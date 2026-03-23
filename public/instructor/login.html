@@ -15,275 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --primary:    #262626;
-      --accent:     #f58321;
-      --accent-dk:  #e07518;
-      --accent-lt:  #fff4ec;
-      --accent-mid: rgba(245,131,33,0.12);
-      --muted:      #797879;
-      --border:     #e0e0e0;
-      --bg:         #ffffff;
-      --surface:    #f9f9f9;
-      --white:      #ffffff;
-      --green:      #22c55e;
-      --green-lt:   #f0fdf4;
-      --red:        #ef4444;
-      --font-head:  'Bricolage Grotesque', sans-serif;
-      --font-body:  'Lato', sans-serif;
-      --radius:     14px;
-    }
-    body {
-      font-family: var(--font-body);
-      background: var(--bg);
-      color: var(--primary);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 24px 16px;
-      padding-top: 88px;
-    }
-
-    .site-nav {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 100;
-      padding: 0 32px;
-      height: 64px;
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      align-items: center;
-      background: rgba(38, 38, 38, 0.92);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .site-nav-logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
-    }
-    .site-nav-logo img {
-      width: 34px; height: 34px;
-      object-fit: contain;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.08);
-      padding: 4px;
-    }
-    .site-nav-logo span {
-      font-family: var(--font-head);
-      font-size: 1.1rem;
-      font-weight: 800;
-      color: #fff;
-      letter-spacing: -0.02em;
-    }
-    .site-nav-logo span em { font-style: normal; color: var(--accent); }
-    .site-nav-links {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-    }
-    .site-nav-cta {
-      display: flex;
-      justify-content: flex-end;
-    }
-    .site-nav-link {
-      color: rgba(255,255,255,0.6);
-      font-family: var(--font-body);
-      font-weight: 500;
-      font-size: 0.85rem;
-      padding: 8px 16px;
-      border-radius: 100px;
-      border: 1px solid transparent;
-      text-decoration: none;
-      transition: all 0.18s;
-      white-space: nowrap;
-      background: transparent;
-      cursor: pointer;
-    }
-    .site-nav-link:hover {
-      color: #fff;
-      border-color: rgba(255,255,255,0.15);
-      background: rgba(255,255,255,0.05);
-    }
-    .site-nav-link.primary {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
-      font-weight: 600;
-    }
-    .site-nav-link.primary:hover {
-      background: var(--accent-dk);
-      border-color: var(--accent-dk);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(245,131,33,0.35);
-    }
-    @media (max-width: 900px) {
-      .site-nav { padding: 0 16px; }
-      .site-nav-links, .site-nav-cta { display: none; }
-    }
-
-    .card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      width: 100%; max-width: 420px;
-      padding: 32px 28px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .card-title { font-family: var(--font-head); font-size: 1.35rem; font-weight: 800; margin-bottom: 6px; }
-    .card-sub   { font-size: 0.85rem; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
-
-    /* ── Choice screen ───────────────────────────────────────────── */
-    .choice-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .choice-card {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 18px 20px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-decoration: none;
-      color: inherit;
-      background: var(--white);
-    }
-    .choice-card:hover {
-      border-color: var(--accent);
-      background: var(--accent-lt);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(245,131,33,0.1);
-    }
-    .choice-icon {
-      width: 48px; height: 48px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-    .choice-icon svg { width: 24px; height: 24px; }
-    .choice-icon.sign-in { background: var(--accent-lt); color: var(--accent); }
-    .choice-icon.join    { background: #f0f0f0; color: var(--primary); }
-    .choice-label { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
-    .choice-desc  { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
-
-    /* ── Shared form styles ──────────────────────────────────────── */
-    .screen { display: none; }
-    .screen.active { display: block; }
-
-    label {
-      display: block; font-size: 0.8rem; font-weight: 600;
-      color: var(--muted); text-transform: uppercase;
-      letter-spacing: 0.05em; margin-bottom: 6px;
-    }
-    input[type="email"],
-    input[type="text"],
-    input[type="tel"],
-    textarea {
-      width: 100%; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--primary); font-family: var(--font-body);
-      font-size: 0.95rem; padding: 11px 14px; outline: none;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    input:focus, textarea:focus { border-color: var(--accent); background: var(--white); }
-    input::placeholder, textarea::placeholder { color: var(--muted); }
-    textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
-
-    .form-group { margin-bottom: 16px; }
-    .form-row { display: flex; gap: 12px; }
-    .form-row .form-group { flex: 1; }
-
-    .btn-primary {
-      width: 100%; background: var(--accent); color: #fff; border: none;
-      border-radius: 8px; font-family: var(--font-body); font-size: 0.95rem;
-      font-weight: 700; padding: 13px; cursor: pointer; margin-top: 8px;
-      transition: background 0.2s, opacity 0.2s, transform 0.15s;
-    }
-    .btn-primary:hover    { background: var(--accent-dk); }
-    .btn-primary:active   { transform: scale(0.98); }
-    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-    .btn-back {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: 0.82rem; color: var(--muted); background: none;
-      border: none; cursor: pointer; padding: 0; margin-bottom: 20px;
-      font-family: var(--font-body); transition: color 0.2s;
-    }
-    .btn-back:hover { color: var(--primary); }
-    .btn-back svg { width: 16px; height: 16px; }
-
-    .error-msg {
-      background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
-      color: #c41e1e; border-radius: 8px; padding: 10px 14px;
-      font-size: 0.85rem; margin-bottom: 16px; display: none;
-    }
-    .error-msg.show { display: block; }
-
-    /* ── Sent / success states ───────────────────────────────────── */
-    .result-icon {
-      width: 56px; height: 56px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 20px;
-    }
-    .result-icon svg { width: 28px; height: 28px; }
-    .result-icon.orange { background: var(--accent-lt); color: var(--accent); }
-    .result-icon.green  { background: rgba(34,197,94,0.1); color: var(--green); }
-    .result-title {
-      font-family: var(--font-head); font-size: 1.2rem;
-      font-weight: 700; margin-bottom: 8px; text-align: center;
-    }
-    .result-sub {
-      font-size: 0.88rem; color: var(--muted);
-      line-height: 1.5; text-align: center;
-    }
-    .result-sub strong { color: var(--primary); font-weight: 600; }
-
-    .resend-link {
-      display: inline-block; margin-top: 20px; font-size: 0.82rem;
-      color: var(--muted); cursor: pointer; background: none; border: none;
-      font-family: var(--font-body); transition: color 0.2s;
-    }
-    .resend-link:hover { color: var(--accent); }
-    .resend-link:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    /* ── Verifying spinner ───────────────────────────────────────── */
-    .spinner {
-      width: 40px; height: 40px;
-      border: 3px solid var(--border); border-top-color: var(--accent);
-      border-radius: 50%; animation: spin 0.7s linear infinite;
-      margin: 0 auto 20px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .hint {
-      text-align: center; font-size: 0.78rem;
-      color: var(--muted); margin-top: 20px; line-height: 1.5;
-    }
-
-    .back-link {
-      margin-top: 20px;
-      font-size: 0.8rem;
-      color: var(--muted);
-      text-decoration: none;
-      font-family: var(--font-body);
-    }
-    .back-link:hover { color: var(--primary); }
-  </style>
+  <link rel="stylesheet" href="/shared-auth.css">
 <script src="/sidebar.js"></script>
 </head>
 <body>
@@ -378,6 +110,18 @@
     <div class="spinner"></div>
     <div class="result-title">Signing you in…</div>
     <div class="result-sub">Verifying your login link.</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 2d — Verify error
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-verify-error" style="text-align:center;">
+    <div class="result-icon red">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+    </div>
+    <div class="result-title" id="verifyErrorTitle">Link expired</div>
+    <div class="result-sub" id="verifyErrorSub">This login link has expired or has already been used.</div>
+    <button class="btn-primary" onclick="showScreen('sign-in')" style="display:inline-block;width:auto;padding:12px 28px;">Request a new link</button>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════
@@ -521,10 +265,9 @@
       const valData = await valRes.json();
 
       if (!valRes.ok) {
-        showScreen('sign-in');
-        const err = document.getElementById('loginError');
-        err.textContent = (valData.error || 'Invalid link') + ' Please request a new sign-in link.';
-        err.classList.add('show');
+        showScreen('verify-error');
+        document.getElementById('verifyErrorTitle').textContent = 'Invalid link';
+        document.getElementById('verifyErrorSub').textContent = (valData.error || 'Invalid link') + ' Please request a new sign-in link.';
         return;
       }
 
@@ -537,10 +280,9 @@
       const data = await res.json();
 
       if (!res.ok) {
-        showScreen('sign-in');
-        const err = document.getElementById('loginError');
-        err.textContent = (data.error || 'Invalid link') + ' Please request a new sign-in link.';
-        err.classList.add('show');
+        showScreen('verify-error');
+        document.getElementById('verifyErrorTitle').textContent = 'Verification failed';
+        document.getElementById('verifyErrorSub').textContent = (data.error || 'Invalid link') + ' Please request a new sign-in link.';
         return;
       }
 
@@ -548,10 +290,9 @@
       localStorage.setItem('cc_instructor', JSON.stringify(data));
       window.location.href = '/instructor/';
     } catch {
-      showScreen('sign-in');
-      const err = document.getElementById('loginError');
-      err.textContent = 'Could not reach the server. Please check your connection and try again.';
-      err.classList.add('show');
+      showScreen('verify-error');
+      document.getElementById('verifyErrorTitle').textContent = 'Connection error';
+      document.getElementById('verifyErrorSub').textContent = 'Could not reach the server. Please check your connection and try again.';
     }
   }
 
