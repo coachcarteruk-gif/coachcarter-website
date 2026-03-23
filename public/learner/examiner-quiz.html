@@ -13,6 +13,7 @@
     });
 </script>
 <script src="/posthog-tracking.js" defer></script>
+<script src="/competency-config.js"></script>
 <script src="/sidebar.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -499,6 +500,28 @@ function showResults() {
 
   if (typeof posthog !== 'undefined') {
     posthog.capture('examiner_quiz_completed', { score, total, percentage: pct, time_taken_seconds: elapsed, tier: selectedTier });
+  }
+
+  // Persist quiz results to competency record
+  if (AUTH?.token && typeof CC_COMPETENCY !== 'undefined') {
+    try {
+      const quizResults = answers.map(a => {
+        const scenario = quizScenarios.find(s => s.id === a.id);
+        const skillKey = scenario ? CC_COMPETENCY.quizRefToSkill(scenario.dl25_ref) : null;
+        return {
+          question_id: a.id,
+          skill_key: skillKey || 'awareness_26',
+          correct: a.is_correct,
+          learner_answer: a.selected,
+          correct_answer: a.correct_answer
+        };
+      });
+      fetch('/api/learner?action=quiz-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AUTH.token },
+        body: JSON.stringify({ results: quizResults })
+      }).catch(e => console.warn('Failed to persist quiz results:', e));
+    } catch (e) { console.warn('Quiz persistence error:', e); }
   }
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
