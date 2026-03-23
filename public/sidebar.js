@@ -56,6 +56,7 @@
       ]},
       { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
       { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
+      { icon: 'dashboard', label: 'My Progress', href: '/learner/progress.html' },
       'divider',
       { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
       { icon: 'message', label: 'Q&A', href: '/learner/qa.html' },
