@@ -30,6 +30,12 @@
 //
 //   POST /api/admin?action=toggle-instructor
 //     → activate or deactivate an instructor account (admin JWT required)
+//
+//   GET  /api/admin?action=all-learners
+//     → all learners with aggregated stats (admin JWT required)
+//
+//   GET  /api/admin?action=learner-detail
+//     → booking history, credit transactions, progress for one learner (admin JWT required)
 
 const { neon }   = require('@neondatabase/serverless');
 const bcrypt     = require('bcryptjs');
@@ -78,6 +84,8 @@ module.exports = async (req, res) => {
   if (action === 'create-instructor') return handleCreateInstructor(req, res);
   if (action === 'update-instructor') return handleUpdateInstructor(req, res);
   if (action === 'toggle-instructor') return handleToggleInstructor(req, res);
+  if (action === 'all-learners')      return handleAllLearners(req, res);
+  if (action === 'learner-detail')    return handleLearnerDetail(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -505,5 +513,98 @@ async function handleToggleInstructor(req, res) {
   } catch (err) {
     console.error('admin toggle-instructor error:', err);
     return res.status(500).json({ error: 'Failed to update instructor', details: err.message });
+  }
+}
+
+// ── GET /api/admin?action=all-learners ──────────────────────────────────────
+// Returns ALL learners with aggregated booking/session stats
+async function handleAllLearners(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const learners = await sql`
+      SELECT
+        lu.id, lu.name, lu.email, lu.phone,
+        lu.current_tier, lu.credit_balance,
+        lu.pickup_address, lu.prefer_contact_before,
+        lu.created_at,
+        (SELECT COUNT(*)::int FROM lesson_bookings lb
+         WHERE lb.learner_id = lu.id) AS total_bookings,
+        (SELECT COUNT(*)::int FROM lesson_bookings lb
+         WHERE lb.learner_id = lu.id AND lb.status = 'confirmed'
+           AND lb.scheduled_date >= CURRENT_DATE) AS upcoming_bookings,
+        (SELECT MAX(lb.scheduled_date)::text FROM lesson_bookings lb
+         WHERE lb.learner_id = lu.id) AS last_booking_date,
+        (SELECT COUNT(*)::int FROM driving_sessions ds
+         WHERE ds.user_id = lu.id) AS total_sessions
+      FROM learner_users lu
+      ORDER BY lu.created_at DESC
+    `;
+
+    return res.json({ learners });
+  } catch (err) {
+    console.error('admin all-learners error:', err);
+    return res.status(500).json({ error: 'Failed to load learners', details: err.message });
+  }
+}
+
+// ── GET /api/admin?action=learner-detail ────────────────────────────────────
+// Returns booking history, credit transactions, and progress for one learner
+async function handleLearnerDetail(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  const learnerId = parseInt(req.query.learner_id);
+  if (!learnerId) return res.status(400).json({ error: 'learner_id is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const bookings = await sql`
+      SELECT
+        lb.id,
+        lb.scheduled_date::text,
+        lb.start_time::text,
+        lb.end_time::text,
+        lb.status,
+        lb.notes,
+        lb.created_at,
+        i.name AS instructor_name
+      FROM lesson_bookings lb
+      JOIN instructors i ON i.id = lb.instructor_id
+      WHERE lb.learner_id = ${learnerId}
+      ORDER BY lb.scheduled_date DESC, lb.start_time DESC
+    `;
+
+    const transactions = await sql`
+      SELECT id, type, credits, amount_pence, payment_method, created_at
+      FROM credit_transactions
+      WHERE learner_id = ${learnerId}
+      ORDER BY created_at DESC
+    `;
+
+    const progress = await sql`
+      SELECT
+        COUNT(*)::int AS total_sessions,
+        COALESCE(SUM(duration_minutes), 0)::int AS total_minutes
+      FROM driving_sessions
+      WHERE user_id = ${learnerId}
+    `;
+
+    return res.json({
+      bookings,
+      transactions,
+      progress: progress[0] || { total_sessions: 0, total_minutes: 0 }
+    });
+  } catch (err) {
+    console.error('admin learner-detail error:', err);
+    return res.status(500).json({ error: 'Failed to load learner details', details: err.message });
   }
 }

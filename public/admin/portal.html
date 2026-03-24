@@ -360,6 +360,9 @@ body {
     <a href="#" onclick="showSection('bookings'); return false;" data-section="bookings">
       <span class="nav-icon">&#x1f4d6;</span> Bookings
     </a>
+    <a href="#" onclick="showSection('learners'); return false;" data-section="learners">
+      <span class="nav-icon">&#x1f9d1;&#x200d;&#x1f393;</span> Learners
+    </a>
     <a href="#" onclick="showSection('videos'); return false;" data-section="videos">
       <span class="nav-icon">&#x1f3ac;</span> Videos
     </a>
@@ -502,6 +505,59 @@ body {
 
     <!-- Videos list -->
     <div id="videos-list"><div class="empty-state">Loading...</div></div>
+  </div>
+
+  <!-- ═══════════ LEARNERS SECTION ═══════════ -->
+  <div class="section" id="section-learners">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Learners</div>
+        <div class="page-subtitle">View all registered learners</div>
+      </div>
+      <button class="btn" onclick="loadLearners()">Refresh</button>
+    </div>
+
+    <div style="margin-bottom: 16px;">
+      <input type="text" id="learner-search" placeholder="Search by name, email, or phone..."
+             oninput="renderLearners()"
+             style="width: 100%; max-width: 400px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem;">
+    </div>
+
+    <div class="filter-bar" id="learner-filters">
+      <button class="filter-pill active" onclick="filterLearnerTier(this, 0)">All</button>
+      <button class="filter-pill" onclick="filterLearnerTier(this, 1)">Tier 1</button>
+      <button class="filter-pill" onclick="filterLearnerTier(this, 2)">Tier 2</button>
+      <button class="filter-pill" onclick="filterLearnerTier(this, 3)">Tier 3</button>
+    </div>
+
+    <div class="panel-card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Email</th><th>Phone</th>
+              <th>Tier</th><th>Credits</th><th>Bookings</th>
+              <th>Last Booking</th><th>Signed Up</th>
+            </tr>
+          </thead>
+          <tbody id="learners-body">
+            <tr><td colspan="8" class="empty-state">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="learner-detail-panel" style="display: none; margin-top: 24px;">
+      <div class="panel-card">
+        <div class="panel-card-header">
+          <span class="panel-card-title" id="learner-detail-name">Learner Details</span>
+          <button class="btn" onclick="closeLearnerDetail()">Close</button>
+        </div>
+        <div style="padding: 20px;" id="learner-detail-content">
+          Loading...
+        </div>
+      </div>
+    </div>
   </div>
 
 </div><!-- /main -->
@@ -731,6 +787,7 @@ function showSection(name) {
   if (name === 'availability') loadInstructorSelect();
   if (name === 'bookings')     loadBookings();
   if (name === 'videos')       loadVideos();
+  if (name === 'learners')     loadLearners();
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('open');
@@ -1131,6 +1188,150 @@ async function markComplete(bookingId) {
   } catch (err) {
     toast(err.message, 'error');
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LEARNERS
+// ══════════════════════════════════════════════════════════════════
+let allLearners = [];
+let currentLearnerTierFilter = 0;
+
+async function loadLearners() {
+  try {
+    const res = await fetch('/api/admin?action=all-learners', { headers: HEADERS });
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    allLearners = data.learners;
+    renderLearners();
+  } catch (err) {
+    document.getElementById('learners-body').innerHTML =
+      '<tr><td colspan="8" class="empty-state">Failed to load learners</td></tr>';
+  }
+}
+
+function filterLearnerTier(btn, tier) {
+  document.querySelectorAll('#learner-filters .filter-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  currentLearnerTierFilter = tier;
+  renderLearners();
+}
+
+function renderLearners() {
+  const body = document.getElementById('learners-body');
+  let filtered = allLearners;
+  const search = (document.getElementById('learner-search')?.value || '').toLowerCase();
+
+  if (currentLearnerTierFilter) {
+    filtered = filtered.filter(l => l.current_tier === currentLearnerTierFilter);
+  }
+  if (search) {
+    filtered = filtered.filter(l =>
+      (l.name || '').toLowerCase().includes(search) ||
+      (l.email || '').toLowerCase().includes(search) ||
+      (l.phone || '').toLowerCase().includes(search)
+    );
+  }
+
+  if (filtered.length === 0) {
+    body.innerHTML = '<tr><td colspan="8" class="empty-state">No learners found</td></tr>';
+    return;
+  }
+
+  const tierLabels = { 1: 'TIER 1', 2: 'TIER 2', 3: 'TIER 3' };
+  const tierClasses = { 1: 'badge-green', 2: 'badge-amber', 3: 'badge-blue' };
+
+  body.innerHTML = filtered.map(l => {
+    const tier = l.current_tier || 1;
+    return '<tr style="cursor:pointer;" onclick="showLearnerDetail(' + l.id + ')">' +
+      '<td><strong>' + esc(l.name || 'Unnamed') + '</strong></td>' +
+      '<td>' + esc(l.email || '-') + '</td>' +
+      '<td>' + esc(l.phone || '-') + '</td>' +
+      '<td><span class="badge ' + (tierClasses[tier] || 'badge-gray') + '">' + (tierLabels[tier] || 'T' + tier) + '</span></td>' +
+      '<td>' + (l.credit_balance || 0) + '</td>' +
+      '<td>' + (l.total_bookings || 0) + (l.upcoming_bookings ? ' <span style="color:var(--green);font-size:0.78rem;">(' + l.upcoming_bookings + ' upcoming)</span>' : '') + '</td>' +
+      '<td>' + (l.last_booking_date ? formatDate(l.last_booking_date) : '-') + '</td>' +
+      '<td>' + (l.created_at ? formatDate(l.created_at.slice(0, 10)) : '-') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function showLearnerDetail(id) {
+  const panel = document.getElementById('learner-detail-panel');
+  const content = document.getElementById('learner-detail-content');
+  const nameEl = document.getElementById('learner-detail-name');
+
+  const learner = allLearners.find(l => l.id === id);
+  nameEl.textContent = learner ? (learner.name || learner.email) : 'Learner Details';
+  content.innerHTML = '<div class="empty-state">Loading...</div>';
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth' });
+
+  try {
+    const res = await fetch('/api/admin?action=learner-detail&learner_id=' + id, { headers: HEADERS });
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+
+    const tierLabels = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' };
+    let html = '';
+
+    // Learner info
+    if (learner) {
+      html += '<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:20px;font-size:0.85rem;color:var(--muted);">';
+      if (learner.email) html += '<div><strong>Email:</strong> ' + esc(learner.email) + '</div>';
+      if (learner.phone) html += '<div><strong>Phone:</strong> ' + esc(learner.phone) + '</div>';
+      if (learner.pickup_address) html += '<div><strong>Pickup:</strong> ' + esc(learner.pickup_address) + '</div>';
+      html += '<div><strong>Contact before lesson:</strong> ' + (learner.prefer_contact_before ? 'Yes' : 'No') + '</div>';
+      html += '</div>';
+    }
+
+    // Stats cards
+    html += '<div class="stats-grid" style="margin-bottom: 20px;">';
+    html += '<div class="stat-card"><div class="stat-value">' + (tierLabels[learner?.current_tier] || 'N/A') + '</div><div class="stat-label">Current Tier</div></div>';
+    html += '<div class="stat-card"><div class="stat-value">' + (learner?.credit_balance || 0) + '</div><div class="stat-label">Credit Balance</div></div>';
+    html += '<div class="stat-card"><div class="stat-value">' + (data.progress?.total_sessions || 0) + '</div><div class="stat-label">Sessions Logged</div></div>';
+    html += '<div class="stat-card"><div class="stat-value">' + Math.round((data.progress?.total_minutes || 0) / 60 * 10) / 10 + 'h</div><div class="stat-label">Total Hours</div></div>';
+    html += '</div>';
+
+    // Booking history
+    html += '<h3 style="font-family:var(--font-head);margin-bottom:12px;">Booking History</h3>';
+    if (data.bookings.length === 0) {
+      html += '<div class="empty-state" style="margin-bottom:24px;">No bookings</div>';
+    } else {
+      html += '<div class="table-wrap" style="margin-bottom:24px;"><table class="data-table"><thead><tr><th>Date</th><th>Time</th><th>Instructor</th><th>Status</th><th>Notes</th></tr></thead><tbody>';
+      html += data.bookings.map(b =>
+        '<tr><td>' + formatDate(b.scheduled_date) + '</td>' +
+        '<td>' + formatTime(b.start_time) + ' – ' + formatTime(b.end_time) + '</td>' +
+        '<td>' + esc(b.instructor_name) + '</td>' +
+        '<td>' + statusBadge(b.status) + '</td>' +
+        '<td>' + esc(b.notes || '') + '</td></tr>'
+      ).join('');
+      html += '</tbody></table></div>';
+    }
+
+    // Credit transactions
+    html += '<h3 style="font-family:var(--font-head);margin-bottom:12px;">Credit Transactions</h3>';
+    if (data.transactions.length === 0) {
+      html += '<div class="empty-state">No transactions</div>';
+    } else {
+      html += '<div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Type</th><th>Credits</th><th>Amount</th><th>Method</th></tr></thead><tbody>';
+      html += data.transactions.map(t =>
+        '<tr><td>' + new Date(t.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + '</td>' +
+        '<td><span class="badge ' + (t.type === 'purchase' ? 'badge-green' : 'badge-amber') + '">' + t.type.toUpperCase() + '</span></td>' +
+        '<td>' + t.credits + '</td>' +
+        '<td>' + (t.amount_pence ? '\u00a3' + (t.amount_pence / 100).toFixed(2) : '-') + '</td>' +
+        '<td>' + esc(t.payment_method || '-') + '</td></tr>'
+      ).join('');
+      html += '</tbody></table></div>';
+    }
+
+    content.innerHTML = html;
+  } catch (err) {
+    content.innerHTML = '<div class="empty-state">Failed to load learner details</div>';
+  }
+}
+
+function closeLearnerDetail() {
+  document.getElementById('learner-detail-panel').style.display = 'none';
 }
 
 // ══════════════════════════════════════════════════════════════════
