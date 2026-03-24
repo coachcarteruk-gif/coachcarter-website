@@ -6,13 +6,15 @@ A complete reference for the CoachCarter driving instructor website. Use this wh
 
 ## What the site is
 
-A driving instructor website for CoachCarter (Fraser). It has five distinct areas:
+A driving instructor website for CoachCarter (Fraser). It has seven distinct areas:
 
-- **Public marketing site** — homepage, pricing, availability, about, contact
-- **Learner portal** — private area where learners log driving sessions, track progress, buy credits, and book lessons
-- **Instructor portal** — private area where instructors view their schedule, manage availability, and update their profile
-- **Admin portal** — internal tool for managing instructors, bookings, and availability
-- **Classroom** — a public video library with a mobile-first reels-style UI
+- **Public marketing site** — homepage, pricing, availability, about, contact, Google Reviews
+- **Learner portal** — dashboard, lesson booking, session logging, progress tracking, examiner quiz, AI examiner chat, AI lesson advisor, mock driving tests, onboarding, Q&A, videos, profile
+- **Instructor portal** — schedule, availability, profile, Q&A management
+- **Admin portal** — instructors, bookings, availability, videos, dashboard
+- **Classroom** — public video library with grid + reels UI
+- **Examiner Knowledge Base** — interactive quiz + AI Q&A based on DVSA DL25 marking sheet
+- **AI Lesson Advisor** — conversational AI sales assistant with Stripe checkout integration
 
 ---
 
@@ -40,6 +42,8 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 | `ADMIN_SECRET` | Admin password for config editor and guarantee price overrides |
 | `STAFF_EMAIL` | Email address for staff notifications (booking alerts, enquiries) |
 | `BASE_URL` | Site base URL for magic links (defaults to `https://coachcarter.uk`) |
+| `ANTHROPIC_API_KEY` | Claude AI for Ask the Examiner and Lesson Advisor |
+| `GOOGLE_PLACES_API_KEY` | Google Places API for address autocomplete (if used) |
 
 ---
 
@@ -48,7 +52,9 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 ```
 /
 ├── api/                            # Vercel serverless functions
-│   ├── learner.js                  # Learner sessions, progress, profile updates
+│   ├── _auth-helpers.js            # Shared JWT verification helper
+│   ├── _shared.js                  # Shared utilities (sendMail etc.)
+│   ├── learner.js                  # Learner sessions, progress, profile, competency, onboarding, Q&A
 │   ├── magic-link.js               # Learner magic-link login: send, validate, verify
 │   ├── credits.js                  # Credit balance, Stripe checkout, bulk discounts
 │   ├── slots.js                    # Slot generation, booking, cancellation, my-bookings, pay-per-slot checkout
@@ -64,6 +70,11 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   ├── create-checkout-session.js  # Legacy Stripe checkout (pass programme / packages)
 │   ├── verify-session.js           # Stripe payment verification
 │   ├── update-status.js            # Booking status update
+│   ├── advisor.js                  # AI Lesson Advisor with Stripe tool_use checkout
+│   ├── ask-examiner.js             # AI examiner Q&A with personalised learner context
+│   ├── address-lookup.js           # Address autocomplete API
+│   ├── qa-digest.js                # Q&A weekly digest emails
+│   ├── reviews.js                  # Google Reviews API
 │   ├── status.js                   # Health check endpoint
 │   └── config.js                   # Shared config helpers
 │
@@ -79,6 +90,15 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   ├── maintenance.html            # Maintenance mode page
 │   ├── privacy.html
 │   ├── terms.html
+│   ├── auth-gate.js                # Shared auth gate for login-required pages
+│   ├── competency-config.js        # 17 DL25-aligned skill definitions, areas, ratings, fault types
+│   ├── manifest.json               # PWA manifest
+│   ├── pwa.js                      # PWA install prompt + service worker registration
+│   ├── sw.js                       # Service worker (cache shell + network-first strategy)
+│   ├── sidebar.js                  # Context-aware sidebar navigation (public/learner/instructor)
+│   ├── posthog-tracking.js         # PostHog analytics
+│   ├── offline.html                # Branded offline fallback page
+│   ├── icons/                      # PWA icons (multiple sizes + maskable variants)
 │   ├── admin/
 │   │   ├── login.html              # Admin login (JWT auth)
 │   │   ├── portal.html             # Full admin portal (dashboard, instructors, availability, bookings, videos)
@@ -90,13 +110,23 @@ A driving instructor website for CoachCarter (Fraser). It has five distinct area
 │   │   ├── verify.html             # Token verification page (two-step: validate then verify)
 │   │   ├── book.html               # Lesson booking calendar — monthly/weekly/daily views (credit or pay-per-slot)
 │   │   ├── buy-credits.html        # Buy lesson credits via Stripe
-│   │   ├── log-session.html        # Log a driving session (3-step wizard, traffic light ratings, booking pre-fill)
-│   │   └── videos.html             # Video library (behind login)
+│   │   ├── log-session.html        # Log a driving session (3-step wizard, 17 skills, fault tallies)
+│   │   ├── videos.html             # Video library (behind login)
+│   │   ├── advisor.html            # AI Lesson Advisor chat page
+│   │   ├── ask-examiner.html       # Ask the Examiner AI chat
+│   │   ├── examiner-quiz.html      # 50-question interactive examiner quiz
+│   │   ├── mock-test.html          # Mock driving test (3 × 10-min parts with DL25 fault recording)
+│   │   ├── onboarding.html         # "Build Your Driving Profile" — 3-step onboarding flow
+│   │   ├── progress.html           # My Progress — radar chart, skill breakdown, readiness scores
+│   │   ├── profile.html            # Learner profile page
+│   │   ├── lessons.html            # Upcoming lessons view
+│   │   └── qa.html                 # Q&A forum
 │   ├── instructor/
 │   │   ├── login.html              # Magic-link login for instructors
 │   │   ├── index.html              # Instructor schedule calendar (monthly/weekly/daily views)
 │   │   ├── availability.html       # Instructor sets their own weekly availability
-│   │   └── profile.html            # Instructor updates bio, contact details, and buffer time
+│   │   ├── profile.html            # Instructor updates bio, contact details, and buffer time
+│   │   └── qa.html                 # Instructor Q&A management
 │   ├── demo/
 │   │   └── book.html               # Demo booking calendar — real flow with free demo instructor
 │   ├── videos.json                 # Legacy video data (fallback — videos now managed in DB via admin portal)
@@ -163,6 +193,55 @@ Fonts: **Bricolage Grotesque** (headings) + **Lato** (body). All pages link to t
 
 ---
 
+## Navigation
+
+The site uses a **sidebar navigation** system (`public/sidebar.js`) that replaces all previous nav patterns (bottom tabs, top nav, hamburger menus). It's a single self-contained IIFE that:
+
+- Detects context from URL path (public/learner/instructor)
+- Renders appropriate nav items per context
+- Supports collapsible groups (Lessons tab has 3 sub-items)
+- Auth-aware (hides profile link when logged out, shows admin link for admin instructors)
+- Mobile responsive with hamburger toggle at 960px breakpoint
+- Shows user name, credit balance, and logout in footer
+
+---
+
+## Competency system
+
+The site uses a unified 17-skill competency framework aligned to the DVSA DL25 marking sheet. All skills are defined in `public/competency-config.js` which is shared across:
+
+- Log Session (self-assessment ratings + fault tallies)
+- Mock Test (per-skill fault recording across 3 parts)
+- Examiner Quiz (per-question skill mapping)
+- My Progress (radar chart + readiness calculation)
+- Ask the Examiner (AI context injection)
+- Onboarding (initial self-assessment)
+
+### The 17 skills (grouped into 5 areas)
+
+**Vehicle Control**: Accelerator, Clutch, Gears, Footbrake, Parking Brake, Steering
+
+**Observation**: Mirrors, Signals, Awareness & Planning
+
+**Road Procedure**: Signs & Signals, Positioning, Clearance, Following Distance
+
+**Junctions & Speed**: Junctions, Judgement, Use of Speed, Pedestrian Crossings
+
+### Rating system
+
+- `struggled` (red) = Needs work
+- `ok` (amber) = Getting there
+- `nailed` (green) = Confident
+
+### Fault types (DL25)
+
+- **D** = Driving fault (minor)
+- **S** = Serious fault
+- **X** = Dangerous fault
+- Pass criteria: <=15 driving faults, 0 serious, 0 dangerous
+
+---
+
 ## Booking & credit system
 
 ### How credits work
@@ -187,13 +266,13 @@ Base price: **£82.50 per credit** (set in `api/credits.js` as `CREDIT_PRICE_PEN
 - Booking is instant — no instructor approval needed
 - **With credits:** 1 credit deducted on booking; returned automatically on 48+ hour cancellations
 - **Without credits (pay-per-slot):** Slot reserved for 10 minutes during Stripe Checkout; on payment confirmation, 1 credit added + deducted atomically, booking created, .ics calendar attachment sent to both parties
-- **Demo instructor:** Bookings against the demo instructor (email `demo@coachcarter.uk`) are free — no credit check or deduction. The demo instructor is excluded from real booking flows. No emails sent to the demo instructor on book/cancel. Cancel returns no credits (since none were taken).
+- **Demo instructor:** Bookings against the demo instructor (email `demo@coachcarter.uk`) are free — no credit check or deduction. The demo instructor is excluded from real booking flows via email check in `api/instructors.js` and `api/slots.js`. No emails sent to the demo instructor on book/cancel. Cancel returns no credits (since none were taken).
 - Race condition protection via DB unique index on `(instructor_id, scheduled_date, start_time)` + slot reservations table
 
 ### Cancellation policy
 
-- 48+ hours notice → credit returned automatically
-- Under 48 hours → credit forfeited, learner informed at time of cancellation
+- 48+ hours notice — credit returned automatically
+- Under 48 hours — credit forfeited, learner informed at time of cancellation
 
 ---
 
@@ -226,6 +305,16 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | `contact-pref` | GET | Yes | Returns prefer_contact_before flag |
 | `set-contact-pref` | POST | Yes | Toggle prefer_contact_before. Body: `{ prefer_contact_before: boolean }` |
 | `unlogged-bookings` | GET | Yes | Returns completed bookings that haven't been logged yet |
+| `mock-tests` | GET/POST | Yes | Create and list mock tests |
+| `mock-test-faults` | GET/POST | Yes | Record/retrieve per-skill faults for mock test parts |
+| `quiz-results` | GET/POST | Yes | Persist per-question examiner quiz results |
+| `competency` | GET | Yes | Full competency dashboard data (lesson ratings, quiz accuracy, mock summary, faults) |
+| `onboarding` | GET/POST | Yes | Get/save onboarding profile (prior experience + initial self-assessment) |
+| `profile-completeness` | GET | Yes | Returns 5-step profile completion status for dashboard card |
+| `qa-list` | GET | Yes | List Q&A questions |
+| `qa-detail` | GET | Yes | Get single Q&A thread |
+| `qa-ask` | POST | Yes | Submit a question |
+| `qa-reply` | POST | Yes | Reply to a question |
 
 ### API — `api/credits.js`
 
@@ -252,6 +341,24 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | `feed` | GET | Token | iCal feed for Apple/Google Calendar subscription (no JWT — uses per-learner token) |
 | `feed-url` | GET | JWT | Returns the learner's personalised iCal feed URL |
 
+### API — `api/ask-examiner.js`
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| (single endpoint) | POST | Yes | AI examiner chat — sends conversation to Claude with DVSA knowledge base system prompt + personalised learner context (onboarding, competency, quiz data) |
+
+### API — `api/advisor.js`
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| (single endpoint) | POST | Yes | AI lesson advisor chat with Claude tool_use — can recommend packages and create Stripe Checkout sessions within pricing bounds (£82.50 base, up to 25% discount, 1-50 lessons) |
+
+### API — `api/reviews.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `list` | GET | No | Returns cached Google Reviews |
+
 ### Database tables
 
 **`learner_users`**
@@ -264,13 +371,12 @@ phone TEXT
 current_tier INTEGER DEFAULT 1
 credit_balance INTEGER DEFAULT 0   -- DB constraint prevents negative
 calendar_token TEXT UNIQUE         -- for iCal feed polling
-phone TEXT
 pickup_address TEXT
 prefer_contact_before BOOLEAN DEFAULT FALSE
 created_at TIMESTAMPTZ
 ```
 
-**`driving_sessions`** / **`skill_ratings`** — session logging tables. `driving_sessions` has optional `booking_id` (FK to `lesson_bookings`) to link sessions to completed bookings. Unique constraint ensures one log per booking. Skill ratings use Traffic Light system: `struggled` (red), `ok` (amber), `nailed` (green).
+**`driving_sessions`** / **`skill_ratings`** — session logging tables. `driving_sessions` has optional `booking_id` (FK to `lesson_bookings`) to link sessions to completed bookings. Unique constraint ensures one log per booking. Skill ratings use Traffic Light system: `struggled` (red), `ok` (amber), `nailed` (green). `skill_ratings` also has `driving_faults`, `serious_faults`, and `dangerous_faults` columns for DL25 fault tracking.
 
 **`credit_transactions`**
 ```sql
@@ -335,17 +441,21 @@ used BOOLEAN DEFAULT FALSE
 created_at TIMESTAMPTZ
 ```
 
-### The 10-question self-assessment
+**`mock_tests`** — id, learner_id, started_at, completed_at, result (pass/fail), total_driving/serious/dangerous_faults, notes
 
-When logging a session, learners answer 10 questions across 4 groups (green/amber/red + optional note per question):
+**`mock_test_faults`** — id, mock_test_id, part (1-3), skill_key, driving/serious/dangerous_faults
 
-**Speed & Control** — Acceleration smoothly, Braking progressively, Appropriate speed for conditions
+**`quiz_results`** — id, learner_id, question_id, skill_key, correct, learner_answer, correct_answer, answered_at
 
-**Looking Around** — Effective observation at junctions, Checking mirrors regularly, Awareness of road positioning
+**`competency_snapshots`** — id, learner_id, skill_key, lesson_avg, quiz_accuracy, quiz_attempts, fault counts, readiness_score, last_practised
 
-**Junctions & Roundabouts** — Correct approach and positioning, Giving way correctly
+**`learner_onboarding`** — id, learner_id (unique), prior_hours_pro, prior_hours_private, previous_tests, transmission, test_booked, test_date, main_concerns, completed_at
 
-**Reversing** — Controlled speed when reversing, Effective all-round observation
+**`qa_questions`** — Q&A forum questions table
+
+**`qa_replies`** — Q&A forum replies table
+
+**`google_reviews`** — Cached Google Reviews
 
 ---
 
@@ -372,7 +482,7 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 
 **`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30)
 
-**`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0–6, start_time, end_time)
+**`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
 
 **`instructor_login_tokens`** — magic-link tokens with expiry and used flag
 
@@ -462,6 +572,19 @@ Upload to Cloudflare Stream, then add via Admin Portal → Videos → "+ Add Vid
 
 ---
 
+## PWA
+
+The site is a Progressive Web App:
+
+- `manifest.json` — app name, icons, standalone display mode, start_url: /learner/
+- `sw.js` — service worker caching app shell + network-first for dynamic content
+- `pwa.js` — handles beforeinstallprompt event, shows custom install banner
+- `offline.html` — branded offline fallback page
+- Icons generated in 6 sizes (48-512px) with maskable variants
+- Works on Chrome, Edge, Safari (iOS 16.4+), Samsung Internet
+
+---
+
 ## Maintenance mode
 
 Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visitors to `/maintenance.html`. API routes (`/api/*`) are exempt. Handled by `middleware.js`.
@@ -471,7 +594,8 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 ## Known gotchas
 
 - **JWT_SECRET must be set in Vercel** — without it, all auth endpoints return 500
-- **Neon Postgres cold starts** — first request after inactivity may be slow (~1–2s)
+- **ANTHROPIC_API_KEY must be set** — without it, Ask the Examiner and Lesson Advisor return "AI service not configured"
+- **Neon Postgres cold starts** — first request after inactivity may be slow (~1-2s)
 - **HLS.js CDN** — classroom loads HLS.js from jsDelivr; consider self-hosting if CDN latency becomes an issue
 - **Videos are now DB-backed** — managed from admin portal; `videos.json` is a legacy fallback only
 - **Neon sql tagged templates** — the Neon serverless driver does NOT support nested `sql` template literals for conditional queries; always use separate query branches instead
@@ -483,36 +607,39 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Dynamic pricing table** — `guarantee_pricing` is auto-created and seeded on first call to `/api/guarantee-price`; no manual migration needed. The webhook increments the price atomically after each Pass Programme purchase. Admin can override the price via the editor or direct API call.
 - **Pricing page routing** — all site nav "Pricing" links now point to `/learner-journey.html`, not `/lessons.html`. The old lessons page still works for PAYG/bulk but is no longer the primary entry point.
 - **PostHog analytics** — all pages include the PostHog snippet for event tracking and session recording
+- **competency-config.js** — shared across 6 pages; changes affect quiz, mock test, log session, progress, onboarding, and AI context
+- **sidebar.js** — used on all 22+ pages; changes affect entire site navigation
+- **PWA caching** — service worker caches app shell; update CACHE_NAME version string in sw.js to bust cache on deploy
+- **Stripe tool_use** — the AI Advisor uses Claude's tool_use to create checkouts; pricing bounds enforced server-side in api/advisor.js
 
 ---
 
 ## Recent changes (March 2026)
 
-- **Demo booking system** (20 March) — public demo page at `/demo/book.html` lets users explore the full booking flow (monthly/weekly/daily calendar views) with a dedicated demo instructor. Requires sign-up/login but bookings are free (no credit deduction). Users receive real confirmation emails, calendar invites, and can cancel from the page. Demo instructor (ID 5, email `demo@coachcarter.uk`) has full 7-day availability (07:00–21:00) with zero buffer. Filtered out of real booking flows via email check in `api/instructors.js` and `api/slots.js`. Demo links added to homepage quiz and pricing page. SQL seed at `db/seeds/002_demo_instructor.sql`.
-- **Dynamic Pass Programme pricing** (20 March) — demand-based pricing for the Pass Programme: starts at £1,500, increases £100 per enrolment, caps at £3,000. New `/api/guarantee-price` endpoint with dedicated `guarantee_pricing` DB table, atomic increments via Stripe webhook, manual override in admin editor. Transparent "launch pricing" messaging with progress bar on the learner journey page.
-- **Pricing page restructure** (20 March) — learner-journey.html is now the canonical pricing page (linked from all nav bars site-wide). Features a tabbed hero card (PAYG vs Pass Programme) with live dynamic pricing. The old lessons.html retains PAYG and bulk packages with a redirect banner for the Pass Programme. Comparison table and guarantee calculator removed from lessons.html.
-- **Renamed Pass Guarantee → Pass Programme** (20 March) — all user-facing references renamed across HTML, JS, config, and email templates. Code identifiers (`pass_guarantee`, `isPassGuarantee`) kept for Stripe/webhook compatibility.
-- **Retake price corrected** (20 March) — config `retake_price` updated from £0 to £325
-- **Calendar views** (18 March) — instructor schedule and learner booking pages rebuilt with monthly/weekly/daily views, view toggle, navigation, and drill-down
-- **Contact preference** (18 March) — learners can toggle "Contact me before my first lesson"; shown as badge on instructor schedule
-- **Phone & pickup address** (18 March) — required before booking; shown to instructors on schedule and in booking detail
-- **Buffer time** (18 March) — configurable per-instructor buffer (0–120 mins, default 30) between booked lessons
-- **Upcoming lessons upgrade** (18 March) — rich cards with date block, countdown, calendar download, today highlight
-- **Video library rebuild** (18 March) — replaced static JSON with DB-backed system, grid + reels dual mode, admin management section
-- **Slot engine SQL fix** (18 March) — fixed 500 error caused by nested Neon sql template literals in conditional query fragments
-- **Pay-per-slot booking** — learners with 0 credits can now pay £82.50 at the point of booking via Stripe Checkout, with a 10-minute slot reservation during payment
-- **Magic link login fix** — email clients pre-fetching links were consuming tokens; fixed with a two-step validate (GET) → verify (POST) flow
-- **Session logging rebuild v2** (20 March) — complete rewrite of `log-session.html`: consolidated from 8 steps to 3 (details → rate all skills → notes/save). Replaced emoji ratings (😬/😊/🤩) with Traffic Light system (Red = Needs work, Amber = Getting there, Green = Confident). Sessions now link to completed bookings via `booking_id` column. When instructor marks a lesson complete, learner receives email with direct link to log that session. Dashboard shows "unlogged lessons" banner. Instructor schedule now displays collapsible learner self-assessments on completed bookings. Fonts migrated to Bricolage Grotesque + Lato across learner portal. New API endpoint: `unlogged-bookings`. Migration: `009_session_booking_link.sql`
-- **Learner portal videos** — classroom videos page added behind login with bottom nav
-- **Homepage quiz update** — quiz results now direct to Learner Hub / Book a Free Trial / Explore Prices
-- **Instructor login redesign** — choice screen (Sign In / Join the Team), two-step magic link prefetch fix, and "Join the team" enquiry form for prospective instructors
+- **PWA support** (#62) — manifest, service worker, install prompt, offline page, generated icons
+- **Codebase cleanup** (#61) — fixed migration numbering, extracted shared auth/mail helpers, removed dead files
+- **AI Lesson Advisor** (#60) — conversational AI sales assistant using Claude tool_use to recommend lesson packages and create Stripe checkouts dynamically within pricing bounds
+- **Learner onboarding** (#59) — 3-step "Build Your Driving Profile" flow (prior experience, initial 17-skill self-assessment), dashboard profile completion card, AI personalisation (Ask the Examiner now reads full learner profile)
+- **My Progress page** (#57) — radar chart, skill breakdown table, mock test history, readiness scores, session timeline
+- **Mock Test & Log Session upgrade** (#56) — mock driving test with 3 x 10-min parts and full DL25 fault recording, log session upgraded to 17 skills with fault tallies
+- **DL25 competency system** (#55) — competency-config.js (17 skills, 5 areas, fault types), database tables (mock_tests, mock_test_faults, quiz_results, competency_snapshots), skill_ratings fault columns
+- **Sidebar navigation** (#53, #54) — replaced all nav patterns with context-aware sidebar, collapsible Lessons group with sub-tabs
+- **Examiner Knowledge Base** (#52) — 50-question interactive quiz + AI-powered Ask the Examiner chat, both based on DVSA DL25 marking sheet
+- **Dashboard improvements** (#51) — prevented instructor emails creating learner accounts, UI polish
+- **Learner hub logged-out experience** (#50) — improved landing for unauthenticated visitors
+- **Sidebar profile visibility** (#49) — hide My Profile link when not logged in
+- **Google Reviews** — embedded Google Reviews on public pages
+- **Q&A system** — learner/instructor Q&A forum with question threads and replies
+
+---
 
 ## What's still to build
 
-See `DEVELOPMENT-ROADMAP.md` for the full prioritised list. Key remaining items:
-
-- **Refund flow** — learner requests cash refund, admin approves, Stripe reverses the charge
-- **Automated reminders** — 24-hour email to learner and instructor before each lesson (needs a Vercel cron job)
-- **Reviews & testimonials** — post-lesson email prompt, star rating + comment, optional public display
-- **Waiting list** — capture leads when calendar is fully booked
-- **Referral system** — unique links per learner, credit bonuses for both parties on first referral purchase
+- **Refund flow** — learner requests cash refund, admin approves, Stripe reverses
+- **Automated reminders** — 24-hour email/SMS before lessons (Vercel cron)
+- **Waiting list** — capture leads when fully booked
+- **Referral system** — unique links, credit bonuses for both parties
+- **Push notifications** — lesson reminders, quiz nudges, new message alerts (PWA)
+- **Capacitor native wrapper** — App Store / Play Store submission
+- **Instructor dashboard** — earnings tracking, lesson stats, learner progress overview
+- **Theory test prep** — built-in revision tools
