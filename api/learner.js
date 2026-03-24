@@ -544,7 +544,7 @@ async function handleMockTests(req, res) {
 }
 
 // ── Mock Test Faults (save faults for a part) ───────────────────────────────
-// POST: { mock_test_id, part (1-3), faults: [{ skill_key, driving, serious, dangerous }] }
+// POST: { mock_test_id, part (1-3), faults: [{ skill_key, sub_key?, driving, serious, dangerous }] }
 async function handleMockTestFaults(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyAuth(req);
@@ -570,8 +570,8 @@ async function handleMockTestFaults(req, res) {
       for (const f of faults) {
         if ((f.driving || 0) + (f.serious || 0) + (f.dangerous || 0) > 0) {
           await sql`
-            INSERT INTO mock_test_faults (mock_test_id, part, skill_key, driving_faults, serious_faults, dangerous_faults)
-            VALUES (${mock_test_id}, ${part}, ${f.skill_key}, ${f.driving || 0}, ${f.serious || 0}, ${f.dangerous || 0})`;
+            INSERT INTO mock_test_faults (mock_test_id, part, skill_key, sub_key, driving_faults, serious_faults, dangerous_faults)
+            VALUES (${mock_test_id}, ${part}, ${f.skill_key}, ${f.sub_key || null}, ${f.driving || 0}, ${f.serious || 0}, ${f.dangerous || 0})`;
         }
       }
     }

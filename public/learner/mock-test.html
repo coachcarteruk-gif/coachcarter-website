@@ -218,6 +218,33 @@
       flex: 1; font-size: 0.84rem; font-weight: 600; line-height: 1.3;
     }
     .skill-dl25 { font-size: 0.7rem; color: var(--muted); font-weight: 400; }
+
+    /* Expandable subcategory chevron */
+    .skill-row.has-subs { cursor: pointer; }
+    .skill-row.has-subs .skill-name::before {
+      content: '▸'; display: inline-block; margin-right: 4px;
+      transition: transform 0.2s; font-size: 0.7rem; color: var(--muted);
+    }
+    .skill-row.has-subs.subs-open .skill-name::before { transform: rotate(90deg); }
+
+    /* Subcategory container */
+    .subs-container {
+      max-height: 0; overflow: hidden; transition: max-height 0.25s ease;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+    }
+    .subs-container.expanded { max-height: 600px; }
+    .sub-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px 8px 32px; border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    }
+    .sub-row .skill-name {
+      font-size: 0.78rem; font-weight: 500; color: var(--muted);
+    }
+    .sub-row .fault-counter {
+      width: 38px; height: 38px; border-radius: 8px;
+    }
+    .sub-row .fault-counter .fc-type { font-size: 0.55rem; }
+    .sub-row .fault-counter .fc-val { font-size: 0.85rem; }
     .fault-counters { display: flex; gap: 6px; }
     .fault-counter {
       width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--border);
@@ -773,7 +800,14 @@ function showFaultScreen() {
   // Initialize fault data for this part if empty
   if (Object.keys(partFaults[currentPart]).length === 0) {
     SKILLS.forEach(function(skill) {
-      partFaults[currentPart][skill.key] = { driving: 0, serious: 0, dangerous: 0 };
+      var entry = { driving: 0, serious: 0, dangerous: 0 };
+      if (skill.subs) {
+        entry.subs = {};
+        skill.subs.forEach(function(sub) {
+          entry.subs[sub.key] = { driving: 0, serious: 0, dangerous: 0 };
+        });
+      }
+      partFaults[currentPart][skill.key] = entry;
     });
   }
 
@@ -805,12 +839,19 @@ function renderFaultAreas() {
 
     skills.forEach(function(skill) {
       var f = partFaults[currentPart][skill.key];
-      html += '<div class="skill-row">';
+      var hasSubs = skill.subs && skill.subs.length > 0;
+
+      // Parent skill row
+      html += '<div class="skill-row' + (hasSubs ? ' has-subs' : '') + '"' + (hasSubs ? ' onclick="toggleSubs(\'' + skill.key + '\')"' : '') + '>';
       html += '<div class="skill-name">' + skill.label + '<br><span class="skill-dl25">DL25: ' + skill.dl25 + '</span></div>';
-      html += '<div class="fault-counters">';
+      html += '<div class="fault-counters"' + (hasSubs ? ' onclick="event.stopPropagation()"' : '') + '>';
 
       FAULT_TYPES.forEach(function(ft) {
+        // Parent total = direct faults + all sub faults
         var val = f[ft.key];
+        if (hasSubs && f.subs) {
+          Object.keys(f.subs).forEach(function(sk) { val += f.subs[sk][ft.key]; });
+        }
         html += '<div class="fault-counter' + (val > 0 ? ' has-val' : '') + '" data-type="' + ft.key + '" data-skill="' + skill.key + '"';
         html += ' onpointerdown="fcDown(this)" onpointerup="fcUp(this)" onpointerleave="fcCancel(this)"';
         html += ' role="button" aria-label="' + skill.label + ' ' + ft.label + ': ' + val + '">';
@@ -821,6 +862,31 @@ function renderFaultAreas() {
 
       html += '</div>';
       html += '</div>';
+
+      // Subcategory rows (hidden by default)
+      if (hasSubs) {
+        html += '<div class="subs-container" id="subs-' + skill.key + '">';
+        skill.subs.forEach(function(sub) {
+          var sf = f.subs ? f.subs[sub.key] : { driving: 0, serious: 0, dangerous: 0 };
+          html += '<div class="sub-row">';
+          html += '<div class="skill-name">' + sub.label + '</div>';
+          html += '<div class="fault-counters">';
+
+          FAULT_TYPES.forEach(function(ft) {
+            var sval = sf[ft.key];
+            html += '<div class="fault-counter' + (sval > 0 ? ' has-val' : '') + '" data-type="' + ft.key + '" data-skill="' + skill.key + '" data-sub="' + sub.key + '"';
+            html += ' onpointerdown="fcDown(this)" onpointerup="fcUp(this)" onpointerleave="fcCancel(this)"';
+            html += ' role="button" aria-label="' + sub.label + ' ' + ft.label + ': ' + sval + '">';
+            html += '<span class="fc-type">' + ft.shortLabel + '</span>';
+            html += '<span class="fc-val">' + sval + '</span>';
+            html += '</div>';
+          });
+
+          html += '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
     });
 
     html += '</div></div></div>';
@@ -834,16 +900,32 @@ function toggleArea(btn) {
   group.classList.toggle('open');
 }
 
+function toggleSubs(skillKey) {
+  var container = document.getElementById('subs-' + skillKey);
+  if (!container) return;
+  container.classList.toggle('expanded');
+  // Toggle chevron on parent row
+  var row = container.previousElementSibling;
+  if (row) row.classList.toggle('subs-open');
+}
+
 /* Fault counter touch/click */
 function fcDown(el) {
   longPressTimer = setTimeout(function() {
     // Long press: reset to 0
     var skillKey = el.getAttribute('data-skill');
     var type = el.getAttribute('data-type');
-    partFaults[currentPart][skillKey][type] = 0;
+    var subKey = el.getAttribute('data-sub');
+
+    if (subKey) {
+      partFaults[currentPart][skillKey].subs[subKey][type] = 0;
+    } else {
+      partFaults[currentPart][skillKey][type] = 0;
+    }
     el.querySelector('.fc-val').textContent = '0';
     el.classList.remove('has-val');
-    el.setAttribute('aria-label', getAriaLabel(skillKey, type, 0));
+    el.setAttribute('aria-label', getAriaLabel(skillKey, type, 0, subKey));
+    if (subKey) refreshParentCounters(skillKey);
     updateAreaCount(skillKey);
     updateFaultTotals();
     longPressTimer = null;
@@ -857,14 +939,45 @@ function fcUp(el) {
     // Short tap: increment
     var skillKey = el.getAttribute('data-skill');
     var type = el.getAttribute('data-type');
-    partFaults[currentPart][skillKey][type]++;
-    var val = partFaults[currentPart][skillKey][type];
-    el.querySelector('.fc-val').textContent = val;
-    if (val > 0) el.classList.add('has-val');
-    el.setAttribute('aria-label', getAriaLabel(skillKey, type, val));
+    var subKey = el.getAttribute('data-sub');
+
+    if (subKey) {
+      partFaults[currentPart][skillKey].subs[subKey][type]++;
+      var val = partFaults[currentPart][skillKey].subs[subKey][type];
+      el.querySelector('.fc-val').textContent = val;
+      if (val > 0) el.classList.add('has-val');
+      el.setAttribute('aria-label', getAriaLabel(skillKey, type, val, subKey));
+      refreshParentCounters(skillKey);
+    } else {
+      partFaults[currentPart][skillKey][type]++;
+      var val = partFaults[currentPart][skillKey][type];
+      el.querySelector('.fc-val').textContent = val;
+      if (val > 0) el.classList.add('has-val');
+      el.setAttribute('aria-label', getAriaLabel(skillKey, type, val));
+    }
     updateAreaCount(skillKey);
     updateFaultTotals();
   }
+}
+
+/** Refresh parent row counters to show totals (direct + sub faults) */
+function refreshParentCounters(skillKey) {
+  var f = partFaults[currentPart][skillKey];
+  var skill = CC_COMPETENCY.getSkill(skillKey);
+  if (!skill || !skill.subs) return;
+
+  FAULT_TYPES.forEach(function(ft) {
+    var total = f[ft.key];
+    if (f.subs) {
+      Object.keys(f.subs).forEach(function(sk) { total += f.subs[sk][ft.key]; });
+    }
+    var parentEl = document.querySelector('.skill-row.has-subs .fault-counter[data-skill="' + skillKey + '"][data-type="' + ft.key + '"]:not([data-sub])');
+    if (parentEl) {
+      parentEl.querySelector('.fc-val').textContent = total;
+      if (total > 0) parentEl.classList.add('has-val');
+      else parentEl.classList.remove('has-val');
+    }
+  });
 }
 
 function fcCancel(el) {
@@ -874,10 +987,15 @@ function fcCancel(el) {
   }
 }
 
-function getAriaLabel(skillKey, type, val) {
+function getAriaLabel(skillKey, type, val, subKey) {
   var skill = CC_COMPETENCY.getSkill(skillKey);
   var ft = FAULT_TYPES.find(function(f) { return f.key === type; });
-  return (skill ? skill.label : skillKey) + ' ' + (ft ? ft.label : type) + ': ' + val;
+  var label = skill ? skill.label : skillKey;
+  if (subKey && skill && skill.subs) {
+    var sub = skill.subs.find(function(s) { return s.key === subKey; });
+    if (sub) label = skill.label + ' — ' + sub.label;
+  }
+  return label + ' ' + (ft ? ft.label : type) + ': ' + val;
 }
 
 function updateAreaCount(skillKey) {
@@ -889,6 +1007,13 @@ function updateAreaCount(skillKey) {
   skills.forEach(function(s) {
     var f = partFaults[currentPart][s.key];
     total += f.driving + f.serious + f.dangerous;
+    // Include sub faults
+    if (f.subs) {
+      Object.keys(f.subs).forEach(function(sk) {
+        var sf = f.subs[sk];
+        total += sf.driving + sf.serious + sf.dangerous;
+      });
+    }
   });
   var badge = document.querySelector('[data-area-count="' + areaId + '"]');
   if (badge) {
@@ -905,6 +1030,15 @@ function updateFaultTotals() {
     totals.driving += faults[key].driving;
     totals.serious += faults[key].serious;
     totals.dangerous += faults[key].dangerous;
+    // Include sub faults
+    if (faults[key].subs) {
+      Object.keys(faults[key].subs).forEach(function(sk) {
+        var sf = faults[key].subs[sk];
+        totals.driving += sf.driving;
+        totals.serious += sf.serious;
+        totals.dangerous += sf.dangerous;
+      });
+    }
   });
 
   var part = MOCK_TEST.parts[currentPart];
@@ -919,13 +1053,23 @@ async function saveFaults() {
   btn.disabled = true;
   btn.textContent = 'Saving...';
 
-  // Build fault array (only non-zero)
+  // Build fault array (only non-zero), including sub_key for subcategory faults
   var faultArray = [];
   var faults = partFaults[currentPart];
   Object.keys(faults).forEach(function(key) {
     var f = faults[key];
+    // Direct parent-level faults
     if (f.driving > 0 || f.serious > 0 || f.dangerous > 0) {
-      faultArray.push({ skill_key: key, driving: f.driving, serious: f.serious, dangerous: f.dangerous });
+      faultArray.push({ skill_key: key, sub_key: null, driving: f.driving, serious: f.serious, dangerous: f.dangerous });
+    }
+    // Subcategory faults
+    if (f.subs) {
+      Object.keys(f.subs).forEach(function(sk) {
+        var sf = f.subs[sk];
+        if (sf.driving > 0 || sf.serious > 0 || sf.dangerous > 0) {
+          faultArray.push({ skill_key: key, sub_key: sk, driving: sf.driving, serious: sf.serious, dangerous: sf.dangerous });
+        }
+      });
     }
   });
 
