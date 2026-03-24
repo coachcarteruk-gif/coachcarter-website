@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const twilio = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 
-const FREE_TRIAL_CREDITS = 1;
+const FREE_TRIAL_CREDITS = 0;
 
 // Normalize UK phone numbers to E.164 format for Twilio
 function normalizeUKPhone(phone) {
@@ -427,25 +427,24 @@ async function sendWelcomeEmail(email) {
   await mailer.sendMail({
     from:    'CoachCarter <bookings@coachcarter.uk>',
     to:      email,
-    subject: 'Welcome to CoachCarter — your free lesson is ready',
+    subject: 'Welcome to CoachCarter',
     html: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
         <h1 style="font-size: 1.4rem; color: #262626;">Welcome to CoachCarter!</h1>
         <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
-          Your account is set up and we've added <strong style="color: #f58321;">1 free lesson</strong> to get you started.
-          That's a full 1.5-hour lesson — no payment needed.
+          Your account is set up and you're ready to go.
         </p>
         <h2 style="font-size: 1rem; color: #262626; margin-top: 24px;">What to do next:</h2>
         <ol style="color: #555; font-size: 0.95rem; line-height: 1.8; padding-left: 20px;">
-          <li><strong>Pick a slot</strong> — Browse available times and book your free lesson</li>
+          <li><strong>Buy lessons</strong> — Choose a package that suits you</li>
+          <li><strong>Pick a slot</strong> — Browse available times and book</li>
           <li><strong>Turn up and drive</strong> — Meet your instructor and get behind the wheel</li>
-          <li><strong>Decide what's next</strong> — No pressure, no auto-billing</li>
         </ol>
         <div style="text-align: center; margin: 28px 0;">
           <a href="https://coachcarter.uk/learner/book.html"
              style="background: #f58321; color: white; padding: 14px 28px; text-decoration: none;
                     border-radius: 8px; display: inline-block; font-weight: 600;">
-            Book your free lesson →
+            Book a lesson →
           </a>
         </div>
         <p style="color: #999; font-size: 0.8rem; margin-top: 20px;">
