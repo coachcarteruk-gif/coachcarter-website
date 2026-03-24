@@ -1304,9 +1304,17 @@ function showToast(msg, type = '') {
 }
 
 // ─── Calendar Sync Banner ──────────────────────────────────────────────────
+function shouldShowInstructorCalSync() {
+  const val = localStorage.getItem('cc_instructor_cal_synced');
+  if (!val) return true;
+  if (val === '1') return false; // legacy permanent dismiss
+  const ts = parseInt(val, 10);
+  if (isNaN(ts)) return true;
+  return Date.now() - ts > 30 * 24 * 60 * 60 * 1000; // 30 days
+}
+
 function initCalSyncBanner() {
-  const dismissed = localStorage.getItem('cc_instructor_cal_synced') === '1';
-  if (dismissed) return;
+  if (!shouldShowInstructorCalSync()) return;
 
   const banner = document.getElementById('calSyncBanner');
   banner.style.display = 'flex';
@@ -1319,7 +1327,7 @@ function initCalSyncBanner() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      localStorage.setItem('cc_instructor_cal_synced', '1');
+      localStorage.setItem('cc_instructor_cal_synced', String(Date.now()));
       window.location.href = data.webcal_url;
       setTimeout(() => { banner.style.display = 'none'; }, 1000);
     } catch (err) {
@@ -1328,7 +1336,7 @@ function initCalSyncBanner() {
   };
 
   document.getElementById('calSyncDismiss').onclick = function() {
-    localStorage.setItem('cc_instructor_cal_synced', '1');
+    localStorage.setItem('cc_instructor_cal_synced', String(Date.now()));
     banner.style.display = 'none';
   };
 }
