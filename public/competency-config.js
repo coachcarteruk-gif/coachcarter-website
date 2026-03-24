@@ -1,7 +1,7 @@
 /**
  * CoachCarter Competency Framework
  * ─────────────────────────────────
- * Single source of truth for the 17 DL25-aligned driving skills
+ * Single source of truth for the 28 DL25-aligned driving skills
  * used across Log Session, Examiner Quiz, Mock Test, My Progress,
  * and Ask the Examiner AI.
  *
@@ -11,16 +11,17 @@
 window.CC_COMPETENCY = (function () {
   'use strict';
 
-  // ── 5 Competency Areas ─────────────────────────────────────────
+  // ── 6 Competency Areas ─────────────────────────────────────────
   var AREAS = [
     { id: 'vehicle_control',     label: 'Vehicle Control',       icon: '🚗', colour: '#6366f1' },
     { id: 'awareness_planning',  label: 'Awareness & Planning',  icon: '👁️', colour: '#0ea5e9' },
     { id: 'road_positioning',    label: 'Road Positioning',      icon: '🛣️', colour: '#8b5cf6' },
     { id: 'decision_making',     label: 'Decision Making',       icon: '⚡', colour: '#f59e0b' },
-    { id: 'manoeuvres',          label: 'Manoeuvres',            icon: '🅿️', colour: '#10b981' }
+    { id: 'manoeuvres',          label: 'Manoeuvres',            icon: '🅿️', colour: '#10b981' },
+    { id: 'pre_test',            label: 'Pre-Test Checks',       icon: '✅', colour: '#64748b' }
   ];
 
-  // ── 17 Skills (DL25-aligned) ───────────────────────────────────
+  // ── 28 Skills (DL25-aligned) ───────────────────────────────────
   //
   //  key          – unique identifier, stored in DB (skill_ratings.skill_key)
   //  label        – plain-English name shown to learner
@@ -28,8 +29,17 @@ window.CC_COMPETENCY = (function () {
   //  dl25Label    – official DL25 category name
   //  area         – parent competency area id
   //  description  – one-liner shown in tooltips / AI context
+  //  subs         – (optional) DL25 subcategories for detailed fault recording
   //
   var SKILLS = [
+    // ── Pre-Test Checks ──────────────────────────────────────────
+    { key: 'eyesight_1',     label: 'Eyesight Test',      dl25: '1',  dl25Label: 'Eyesight Test',
+      area: 'pre_test',
+      description: 'Reading a number plate at the required distance (20m)' },
+    { key: 'show_tell_7',   label: 'Show Me / Tell Me',   dl25: '7',  dl25Label: 'Show Me / Tell Me',
+      area: 'pre_test',
+      description: 'Vehicle safety questions — identifying and demonstrating safety checks' },
+
     // ── Vehicle Control ──────────────────────────────────────────
     { key: 'accelerator_12a', label: 'Accelerator',     dl25: '12a', dl25Label: 'Control — Accelerator',
       area: 'vehicle_control',
@@ -49,24 +59,49 @@ window.CC_COMPETENCY = (function () {
     { key: 'steering_12f',    label: 'Steering',         dl25: '12f', dl25Label: 'Control — Steering',
       area: 'vehicle_control',
       description: 'Smooth steering inputs, correct hand positioning, no arm-crossing on turns' },
+    { key: 'ancillary_27',    label: 'Ancillary Controls', dl25: '27', dl25Label: 'Ancillary Controls',
+      area: 'vehicle_control',
+      description: 'Correct use of indicators, wipers, lights, demisters, and heated screens' },
 
     // ── Awareness & Planning ─────────────────────────────────────
     { key: 'mirrors_14',      label: 'Use of Mirrors',    dl25: '14', dl25Label: 'Use of Mirrors',
       area: 'awareness_planning',
+      subs: [
+        { key: 'change_dir',   label: 'Change direction' },
+        { key: 'change_speed', label: 'Change speed' }
+      ],
       description: 'Checking mirrors before signalling, changing direction, speed, or lane' },
     { key: 'signals_15',      label: 'Signals',           dl25: '15', dl25Label: 'Signals',
       area: 'awareness_planning',
+      subs: [
+        { key: 'necessary', label: 'Necessary' },
+        { key: 'correctly', label: 'Correctly' }
+      ],
       description: 'Timely, correct signals — not too early, late, or misleading' },
     { key: 'awareness_26',    label: 'Awareness & Planning', dl25: '26', dl25Label: 'Awareness / Planning',
       area: 'awareness_planning',
       description: 'Anticipating hazards, planning ahead, defensive driving awareness' },
     { key: 'signs_signals_17', label: 'Signs & Signals', dl25: '17', dl25Label: 'Response to Signs / Signals',
       area: 'awareness_planning',
+      subs: [
+        { key: 'traffic_signs',       label: 'Traffic signs' },
+        { key: 'road_markings',       label: 'Road markings' },
+        { key: 'traffic_lights',      label: 'Traffic lights' },
+        { key: 'traffic_controllers', label: 'Traffic controllers' },
+        { key: 'other_road_users',    label: 'Other road users' }
+      ],
       description: 'Correct response to traffic lights, road signs, markings, and signals' },
+    { key: 'precautions_11',  label: 'Precautions',       dl25: '11', dl25Label: 'Precautions',
+      area: 'awareness_planning',
+      description: 'Checking surroundings before opening doors, moving off, and reversing' },
 
     // ── Road Positioning ─────────────────────────────────────────
     { key: 'positioning_23',  label: 'Positioning',       dl25: '23', dl25Label: 'Positioning',
       area: 'road_positioning',
+      subs: [
+        { key: 'normal_driving',  label: 'Normal driving' },
+        { key: 'lane_discipline', label: 'Lane discipline' }
+      ],
       description: 'Correct lane positioning for road layout, turns, and traffic conditions' },
     { key: 'clearance_16',    label: 'Clearance',         dl25: '16', dl25Label: 'Clearance / Obstructions',
       area: 'road_positioning',
@@ -74,13 +109,28 @@ window.CC_COMPETENCY = (function () {
     { key: 'following_19',    label: 'Following Distance', dl25: '19', dl25Label: 'Following Distance',
       area: 'road_positioning',
       description: 'Maintaining safe stopping distance from the vehicle ahead' },
+    { key: 'normal_stop_25',  label: 'Normal Stop',       dl25: '25', dl25Label: 'Position / Normal Stop',
+      area: 'road_positioning',
+      description: 'Selecting a safe, legal, and convenient place to stop and pulling up accurately' },
 
     // ── Decision Making ──────────────────────────────────────────
     { key: 'junctions_21',    label: 'Junctions',         dl25: '21', dl25Label: 'Junctions',
       area: 'decision_making',
+      subs: [
+        { key: 'approach_speed',  label: 'Approach speed' },
+        { key: 'observation',     label: 'Observation' },
+        { key: 'turning_right',   label: 'Turning right' },
+        { key: 'turning_left',    label: 'Turning left' },
+        { key: 'cutting_corners', label: 'Cutting corners' }
+      ],
       description: 'Correct approach, observation, and timing at junctions and roundabouts' },
     { key: 'judgement_22',    label: 'Judgement',          dl25: '22', dl25Label: 'Judgement',
       area: 'decision_making',
+      subs: [
+        { key: 'overtaking', label: 'Overtaking' },
+        { key: 'meeting',    label: 'Meeting' },
+        { key: 'crossing',   label: 'Crossing' }
+      ],
       description: 'Assessing gaps, speeds, and distances — overtaking, meeting traffic, crossroads' },
     { key: 'speed_18',        label: 'Use of Speed',       dl25: '18', dl25Label: 'Use of Speed',
       area: 'decision_making',
@@ -90,23 +140,47 @@ window.CC_COMPETENCY = (function () {
       description: 'Safe approach and response at all types of pedestrian crossings' },
     { key: 'progress_20',     label: 'Progress',           dl25: '20', dl25Label: 'Progress',
       area: 'decision_making',
+      subs: [
+        { key: 'appropriate_speed', label: 'Appropriate speed' },
+        { key: 'undue_hesitation',  label: 'Undue hesitation' }
+      ],
       description: 'Making reasonable progress without unnecessary hesitation or delay' },
 
     // ── Manoeuvres ───────────────────────────────────────────────
     { key: 'controlled_stop_2', label: 'Controlled Stop', dl25: '2', dl25Label: 'Controlled Stop',
       area: 'manoeuvres',
+      subs: [
+        { key: 'control', label: 'Control' },
+        { key: 'timed',   label: 'Timed' }
+      ],
       description: 'Emergency/controlled stop — firm, prompt, and under full control' },
     { key: 'reverse_right_4', label: 'Reverse Right',     dl25: '4', dl25Label: 'Reverse Right',
       area: 'manoeuvres',
+      subs: [
+        { key: 'control',     label: 'Control' },
+        { key: 'observation', label: 'Observation' }
+      ],
       description: 'Pull up on the right, reverse two car lengths, rejoin traffic safely' },
     { key: 'reverse_park_5',  label: 'Reverse Park',      dl25: '5', dl25Label: 'Reverse Park',
       area: 'manoeuvres',
+      subs: [
+        { key: 'control',     label: 'Control' },
+        { key: 'observation', label: 'Observation' }
+      ],
       description: 'Reverse parallel park — control, accuracy, observation throughout' },
     { key: 'forward_park_8',  label: 'Forward Park',      dl25: '8', dl25Label: 'Forward Park / Taxi',
       area: 'manoeuvres',
+      subs: [
+        { key: 'control',     label: 'Control' },
+        { key: 'observation', label: 'Observation' }
+      ],
       description: 'Forward bay park — accurate positioning and safe approach' },
     { key: 'move_off_13',     label: 'Move Off',          dl25: '13', dl25Label: 'Move Off',
       area: 'manoeuvres',
+      subs: [
+        { key: 'control', label: 'Control' },
+        { key: 'safety',  label: 'Safety' }
+      ],
       description: 'Moving off safely — flat, uphill, downhill, and at an angle' }
   ];
 
@@ -156,9 +230,10 @@ window.CC_COMPETENCY = (function () {
     '2':   'controlled_stop_2',
     '4':   'reverse_right_4',
     '5':   'reverse_park_5',
-    '7':   'awareness_26',       // Vehicle checks → awareness
+    '1':   'eyesight_1',
+    '7':   'show_tell_7',
     '8':   'forward_park_8',
-    '11':  'awareness_26',       // Precautions → awareness
+    '11':  'precautions_11',
     '12a': 'accelerator_12a',
     '12b': 'clutch_12b',
     '12c': 'gears_12c',
@@ -177,9 +252,9 @@ window.CC_COMPETENCY = (function () {
     '22':  'judgement_22',
     '23':  'positioning_23',
     '24':  'pedestrians_24',
-    '25':  'positioning_23',     // Normal stops → positioning
+    '25':  'normal_stop_25',
     '26':  'awareness_26',
-    '27':  'awareness_26'        // Ancillary controls → awareness
+    '27':  'ancillary_27'
   };
 
   // ── Helper Functions ───────────────────────────────────────────
@@ -225,9 +300,15 @@ window.CC_COMPETENCY = (function () {
     return LEGACY_MAP[oldKey] || oldKey;
   }
 
+  /** Check if a skill has DL25 subcategories */
+  function hasSubs(skillKey) {
+    var skill = getSkill(skillKey);
+    return skill && skill.subs && skill.subs.length > 0;
+  }
+
   /** Calculate mock test result */
   function mockTestResult(faults) {
-    // faults = { skill_key: { driving: n, serious: n, dangerous: n }, ... }
+    // faults = { skill_key: { driving: n, serious: n, dangerous: n, subs?: { sub_key: {...} } }, ... }
     var totals = { driving: 0, serious: 0, dangerous: 0 };
     var keys = Object.keys(faults);
     for (var i = 0; i < keys.length; i++) {
@@ -235,6 +316,16 @@ window.CC_COMPETENCY = (function () {
       totals.driving   += (f.driving || 0);
       totals.serious   += (f.serious || 0);
       totals.dangerous += (f.dangerous || 0);
+      // Include subcategory faults
+      if (f.subs) {
+        var subKeys = Object.keys(f.subs);
+        for (var j = 0; j < subKeys.length; j++) {
+          var sf = f.subs[subKeys[j]];
+          totals.driving   += (sf.driving || 0);
+          totals.serious   += (sf.serious || 0);
+          totals.dangerous += (sf.dangerous || 0);
+        }
+      }
     }
     var passed = totals.driving <= MOCK_TEST.maxDrivingFaults
               && totals.serious <= MOCK_TEST.maxSeriousFaults
@@ -310,6 +401,7 @@ window.CC_COMPETENCY = (function () {
     getAreaForSkill: getAreaForSkill,
     quizRefToSkill:  quizRefToSkill,
     mapLegacySkill:  mapLegacySkill,
+    hasSubs:         hasSubs,
     mockTestResult:  mockTestResult,
     readinessScore:  readinessScore
   };
