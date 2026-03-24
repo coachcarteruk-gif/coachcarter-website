@@ -50,7 +50,7 @@
        ═══════════════════════════════════════════════════════════════ -->
   <div class="screen active" id="screen-form">
     <div class="card-title">Sign in or create account</div>
-    <div class="card-sub">Enter your email or phone number and we'll send you a link to sign in. No password needed.</div>
+    <div class="card-sub">Enter your email or phone number and we'll help you sign in. No password needed.</div>
 
     <div class="free-badge">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26z"/></svg>
@@ -82,7 +82,7 @@
       <button type="submit" class="btn-primary" id="send-btn">Send login link</button>
     </form>
 
-    <p class="hint">We'll send a one-time link that expires in 15 minutes.<br>Click it to sign in — no password to remember.</p>
+    <p class="hint" id="method-hint">We'll send a one-time link that expires in 15 minutes.<br>Click it to sign in — no password to remember.</p>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════
@@ -101,6 +101,34 @@
       Didn't get it? Send again
     </button>
     <p class="hint" style="margin-top: 16px;">The link expires in 15 minutes and can only be used once.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 2b — SMS code entry
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-code" style="text-align:center;">
+    <div class="result-icon orange">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+    </div>
+    <div class="result-title">Enter your code</div>
+    <div class="result-sub">
+      We sent a 6-digit code to<br>
+      <strong id="code-destination"></strong>
+    </div>
+    <div class="code-inputs" id="code-inputs">
+      <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" data-idx="0">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="1">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="2">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="3">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="4">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="5">
+    </div>
+    <div class="code-error" id="code-error"></div>
+    <button class="btn-primary" id="verify-code-btn" onclick="handleVerifyCode()" disabled>Verify code</button>
+    <button class="resend-link" id="code-resend-btn" onclick="handleResend()" style="margin-top: 16px;">
+      Didn't get it? Send again
+    </button>
+    <p class="hint" style="margin-top: 12px;">The code expires in 15 minutes.</p>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════
@@ -167,6 +195,7 @@
   let currentMethod = 'email';
   let lastPayload = null;
   let sessionData = null;
+  let smsPhone = null;
 
   // ── Screen management ──────────────────────────────────────────
   function showScreen(id) {
@@ -187,6 +216,11 @@
     document.getElementById('method-sms').classList.toggle('active', method === 'sms');
     document.getElementById('email-group').style.display = method === 'email' ? 'block' : 'none';
     document.getElementById('phone-group').style.display = method === 'sms' ? 'block' : 'none';
+    document.getElementById('send-btn').textContent = method === 'sms' ? 'Send code' : 'Send login link';
+    const hint = document.getElementById('method-hint');
+    hint.innerHTML = method === 'sms'
+      ? "We'll text you a 6-digit code that expires in 15 minutes."
+      : "We'll send a one-time link that expires in 15 minutes.<br>Click it to sign in — no password to remember.";
     clearError();
   }
 
@@ -245,24 +279,34 @@
         return;
       }
 
-      const destination = currentMethod === 'email' ? email : phone;
-      const methodLabel = currentMethod === 'email' ? 'email' : 'phone';
-      document.getElementById('sent-destination').textContent = destination;
-      document.getElementById('sent-method-label').textContent = methodLabel;
-      showScreen('sent');
+      if (currentMethod === 'sms') {
+        smsPhone = phone;
+        document.getElementById('code-destination').textContent = phone;
+        showScreen('code');
+        setTimeout(() => {
+          const first = document.querySelector('#code-inputs input[data-idx="0"]');
+          if (first) first.focus();
+        }, 100);
+      } else {
+        document.getElementById('sent-destination').textContent = email;
+        document.getElementById('sent-method-label').textContent = 'email';
+        showScreen('sent');
+      }
 
     } catch {
       showError('Network error. Please check your connection and try again.');
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Send login link';
+      btn.textContent = currentMethod === 'sms' ? 'Send code' : 'Send login link';
     }
   }
 
-  // ── Resend magic link ──────────────────────────────────────────
+  // ── Resend magic link / code ──────────────────────────────────
   async function handleResend() {
     if (!lastPayload) return;
-    const btn = document.getElementById('resend-btn');
+    const btn = document.getElementById('screen-code')?.classList.contains('active')
+      ? document.getElementById('code-resend-btn')
+      : document.getElementById('resend-btn');
     btn.disabled = true;
     btn.textContent = 'Sending…';
 
@@ -274,6 +318,15 @@
       });
       if (res.ok) {
         btn.textContent = 'Sent! Check again';
+        // Clear code inputs on resend
+        document.querySelectorAll('#code-inputs input').forEach(i => {
+          i.value = '';
+          i.classList.remove('filled');
+        });
+        const codeError = document.getElementById('code-error');
+        if (codeError) codeError.textContent = '';
+        const verifyBtn = document.getElementById('verify-code-btn');
+        if (verifyBtn) verifyBtn.disabled = true;
         setTimeout(() => {
           btn.textContent = "Didn't get it? Send again";
           btn.disabled = false;
@@ -285,6 +338,114 @@
     } catch {
       btn.textContent = 'Failed — try again';
       btn.disabled = false;
+    }
+  }
+
+  // ── SMS code input handling ─────────────────────────────────────
+  (function setupCodeInputs() {
+    const container = document.getElementById('code-inputs');
+    if (!container) return;
+    const inputs = container.querySelectorAll('input');
+    const verifyBtn = document.getElementById('verify-code-btn');
+
+    function getCode() {
+      return Array.from(inputs).map(i => i.value).join('');
+    }
+
+    function updateVerifyBtn() {
+      verifyBtn.disabled = getCode().length < 6;
+      inputs.forEach(i => i.classList.toggle('filled', i.value.length > 0));
+    }
+
+    inputs.forEach((input, idx) => {
+      input.addEventListener('input', (e) => {
+        const val = e.target.value.replace(/\D/g, '');
+        e.target.value = val.slice(0, 1);
+        updateVerifyBtn();
+        if (val && idx < inputs.length - 1) inputs[idx + 1].focus();
+        if (getCode().length === 6) handleVerifyCode();
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !input.value && idx > 0) {
+          inputs[idx - 1].focus();
+          inputs[idx - 1].value = '';
+          updateVerifyBtn();
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (getCode().length === 6) handleVerifyCode();
+        }
+      });
+
+      input.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const pasted = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+        if (pasted.length >= 1) {
+          pasted.split('').forEach((digit, i) => { if (inputs[i]) inputs[i].value = digit; });
+          inputs[Math.min(pasted.length, inputs.length - 1)].focus();
+          updateVerifyBtn();
+          if (pasted.length === 6) handleVerifyCode();
+        }
+      });
+    });
+  })();
+
+  // ── Verify SMS code ─────────────────────────────────────────────
+  async function handleVerifyCode() {
+    const inputs = document.querySelectorAll('#code-inputs input');
+    const code = Array.from(inputs).map(i => i.value).join('');
+    if (code.length < 6) return;
+
+    const btn = document.getElementById('verify-code-btn');
+    const errorEl = document.getElementById('code-error');
+    btn.disabled = true;
+    btn.textContent = 'Verifying…';
+    errorEl.textContent = '';
+
+    try {
+      const res = await fetch('/api/magic-link?action=verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, phone: smsPhone })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        errorEl.textContent = data.message || 'Invalid code. Please try again.';
+        btn.disabled = false;
+        btn.textContent = 'Verify code';
+        inputs.forEach(i => { i.value = ''; i.classList.remove('filled'); });
+        inputs[0].focus();
+        return;
+      }
+
+      // Store the session
+      localStorage.setItem('cc_learner', JSON.stringify({
+        token: data.token,
+        user: data.user
+      }));
+
+      // New user? Collect name
+      if (data.is_new_user && data.needs_name) {
+        localStorage.setItem('cc_welcome', '1');
+        showScreen('new-user');
+        return;
+      }
+
+      // Existing user — redirect
+      btn.textContent = 'Signed in!';
+      showScreen('success');
+      if (data.is_new_user) {
+        localStorage.setItem('cc_welcome', '1');
+        setTimeout(() => { window.location.href = '/learner/book.html'; }, 800);
+      } else {
+        setTimeout(() => { window.location.href = redirectTo; }, 800);
+      }
+    } catch {
+      errorEl.textContent = 'Network error. Please check your connection.';
+      btn.disabled = false;
+      btn.textContent = 'Verify code';
     }
   }
 
