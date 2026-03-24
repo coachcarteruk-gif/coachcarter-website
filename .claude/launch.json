@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "static-server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/serve/build/main.js", "public"],
+      "port": 3000,
+      "autoPort": true
+    }
+  ]
+}
