@@ -27,6 +27,9 @@
 //
 //   POST /api/instructor?action=update-profile  (JWT auth required)
 //     → updates name, phone, bio, photo_url
+//
+//   GET  /api/instructor?action=my-learners     (JWT auth required)
+//     → returns learners who have booked with this instructor, with aggregated stats
 
 const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
@@ -83,6 +86,7 @@ module.exports = async (req, res) => {
   if (action === 'qa-list')            return handleQAList(req, res);
   if (action === 'qa-detail')          return handleQADetail(req, res);
   if (action === 'qa-reply')           return handleQAReply(req, res);
+  if (action === 'my-learners')        return handleMyLearners(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -853,5 +857,39 @@ async function handleQAReply(req, res) {
   } catch (err) {
     console.error('instructor qa-reply error:', err);
     return res.status(500).json({ error: 'Failed to post reply' });
+  }
+}
+
+// ── GET /api/instructor?action=my-learners ──────────────────────────────────
+// Returns learners who have booked at least once with this instructor
+async function handleMyLearners(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const learners = await sql`
+      SELECT
+        lu.id, lu.name, lu.email, lu.phone,
+        lu.current_tier, lu.pickup_address, lu.prefer_contact_before,
+        COUNT(lb.id)::int AS total_lessons,
+        COUNT(lb.id) FILTER (WHERE lb.status = 'completed')::int AS completed_lessons,
+        COUNT(lb.id) FILTER (WHERE lb.status = 'confirmed' AND lb.scheduled_date >= CURRENT_DATE)::int AS upcoming_lessons,
+        MAX(lb.scheduled_date)::text AS last_lesson_date,
+        MIN(lb.scheduled_date)::text AS first_lesson_date
+      FROM learner_users lu
+      JOIN lesson_bookings lb ON lb.learner_id = lu.id
+      WHERE lb.instructor_id = ${instructor.id}
+      GROUP BY lu.id
+      ORDER BY MAX(lb.scheduled_date) DESC
+    `;
+
+    return res.json({ learners });
+  } catch (err) {
+    console.error('instructor my-learners error:', err);
+    return res.status(500).json({ error: 'Failed to load learners' });
   }
 }
