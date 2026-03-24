@@ -93,10 +93,6 @@
           '<line x1="15" y1="12" x2="3" y2="12"/>' +
         '</svg>' +
       '</div>' +
-      '<div class="cc-auth-free">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26z"/></svg>' +
-        'New accounts get a free 1.5-hour lesson' +
-      '</div>' +
       '<div class="cc-auth-title">Sign in to continue</div>' +
       '<div class="cc-auth-sub">Create a free account or sign in to access this feature. No password needed — we\'ll send you a magic link.</div>' +
       '<a class="cc-auth-btn" id="cc-auth-signin">Sign in or create account</a>' +
