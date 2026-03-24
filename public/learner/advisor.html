@@ -85,8 +85,20 @@
 
     .msg-bubble {
       padding: 12px 16px; border-radius: 16px; font-size: 0.9rem; line-height: 1.6;
-      word-wrap: break-word; white-space: pre-wrap;
+      word-wrap: break-word;
     }
+    /* ── MARKDOWN IN CHAT BUBBLES ── */
+    .msg-bubble h4 { font-family: var(--font-head); font-size: 1rem; font-weight: 700; margin: 8px 0 4px; }
+    .msg-bubble h4:first-child { margin-top: 0; }
+    .msg-bubble h5 { font-family: var(--font-head); font-size: 0.92rem; font-weight: 700; margin: 6px 0 3px; }
+    .msg-bubble h5:first-child { margin-top: 0; }
+    .msg-bubble strong { font-weight: 700; }
+    .msg-bubble em { font-style: italic; }
+    .msg-bubble code { background: var(--surface); padding: 1px 5px; border-radius: 4px; font-size: 0.84rem; }
+    .msg-bubble ul, .msg-bubble ol { margin: 4px 0 4px 20px; }
+    .msg-bubble li { margin-bottom: 2px; }
+    .msg-bubble p { margin-bottom: 6px; }
+    .msg-bubble p:last-child { margin-bottom: 0; }
     .msg.user .msg-bubble { background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
     .msg.assistant .msg-bubble {
       background: var(--white); border: 1px solid var(--border);
@@ -446,6 +458,50 @@ function renderAuthCard() {
   scrollToBottom();
 }
 
+// ── Lightweight markdown → HTML (XSS-safe) ──
+function renderMarkdown(text) {
+  // Escape HTML first to prevent XSS
+  let s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Split into lines for block-level processing
+  const lines = s.split('\n');
+  const out = [];
+  let inUl = false, inOl = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Headings
+    if (/^### (.+)/.test(trimmed)) { closeList(); out.push('<h5>' + RegExp.$1 + '</h5>'); continue; }
+    if (/^## (.+)/.test(trimmed))  { closeList(); out.push('<h4>' + RegExp.$1 + '</h4>'); continue; }
+    // Unordered list
+    if (/^[-*] (.+)/.test(trimmed)) {
+      if (!inUl) { closeList(); out.push('<ul>'); inUl = true; }
+      out.push('<li>' + inline(RegExp.$1) + '</li>'); continue;
+    }
+    // Ordered list
+    if (/^\d+\. (.+)/.test(trimmed)) {
+      if (!inOl) { closeList(); out.push('<ol>'); inOl = true; }
+      out.push('<li>' + inline(RegExp.$1) + '</li>'); continue;
+    }
+    // Empty line → close lists, add break
+    if (trimmed === '') { closeList(); out.push('<br>'); continue; }
+    // Normal paragraph line
+    closeList();
+    out.push('<p>' + inline(trimmed) + '</p>');
+  }
+  closeList();
+  return out.join('');
+
+  function closeList() {
+    if (inUl) { out.push('</ul>'); inUl = false; }
+    if (inOl) { out.push('</ol>'); inOl = false; }
+  }
+  function inline(t) {
+    return t
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code>$1</code>');
+  }
+}
+
 // ── Append message to chat ──
 function appendMessage(role, text, isRestore) {
   const messages = document.getElementById('chat-messages');
@@ -459,7 +515,11 @@ function appendMessage(role, text, isRestore) {
 
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble';
-  bubble.textContent = text;
+  if (role === 'assistant') {
+    bubble.innerHTML = renderMarkdown(text);
+  } else {
+    bubble.textContent = text;
+  }
 
   div.appendChild(avatar);
   div.appendChild(bubble);
