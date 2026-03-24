@@ -139,6 +139,58 @@
       margin-left: 4px; vertical-align: middle;
     }
 
+    /* ── Detail View ── */
+    .detail-view { display: none; }
+    .detail-view.show { display: block; }
+    .detail-back {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.83rem; font-weight: 600; color: var(--accent);
+      cursor: pointer; background: none; border: none; padding: 0;
+      margin-bottom: 16px; font-family: var(--font-body);
+    }
+    .detail-back:hover { text-decoration: underline; }
+    .detail-header { margin-bottom: 20px; }
+    .detail-name { font-family: var(--font-head); font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
+    .detail-info { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); margin-bottom: 12px; }
+    .detail-info a { color: var(--accent); text-decoration: none; }
+    .detail-info a:hover { text-decoration: underline; }
+    .detail-stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px; margin-bottom: 24px;
+    }
+    .detail-stat {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; text-align: center;
+    }
+    .detail-stat-value { font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: var(--accent); }
+    .detail-stat-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em; margin-top: 2px; }
+
+    .section-title { font-family: var(--font-head); font-size: 1rem; font-weight: 700; margin-bottom: 12px; }
+
+    .booking-card {
+      background: var(--white); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px; margin-bottom: 10px;
+    }
+    .booking-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+    .booking-date { font-weight: 700; font-size: 0.88rem; }
+    .booking-time { font-size: 0.82rem; color: var(--muted); }
+    .status-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 100px;
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .status-confirmed { background: var(--blue-lt); color: var(--blue); }
+    .status-completed { background: var(--green-lt); color: var(--green); }
+    .status-cancelled { background: var(--red-lt); color: var(--red); }
+    .booking-notes { font-size: 0.82rem; color: var(--muted); margin-top: 6px; font-style: italic; }
+    .skill-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .skill-pill {
+      display: inline-block; padding: 2px 8px; border-radius: 100px;
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    }
+    .skill-nailed { background: var(--green-lt); color: var(--green); }
+    .skill-ok { background: var(--amber-lt); color: var(--amber); }
+    .skill-struggled { background: var(--red-lt); color: var(--red); }
+
     /* ── Empty State ── */
     .empty-state { text-align: center; padding: 48px 20px; }
     .empty-state-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
@@ -207,14 +259,23 @@
 </header>
 
 <div class="page">
-  <div class="page-header">
-    <h1>My Learners</h1>
-    <span id="learner-count" style="font-size:0.85rem;color:var(--muted);"></span>
+  <!-- LIST VIEW -->
+  <div id="list-view">
+    <div class="page-header">
+      <h1>My Learners</h1>
+      <span id="learner-count" style="font-size:0.85rem;color:var(--muted);"></span>
+    </div>
+
+    <input type="text" class="search-input" id="learner-search" placeholder="Search by name, email, or phone..." oninput="renderLearners()">
+
+    <div id="learners-list"></div>
   </div>
 
-  <input type="text" class="search-input" id="learner-search" placeholder="Search by name, email, or phone..." oninput="renderLearners()">
-
-  <div id="learners-list"></div>
+  <!-- DETAIL VIEW -->
+  <div class="detail-view" id="detail-view">
+    <button class="detail-back" onclick="showList()">&#8249; Back to learners</button>
+    <div id="detail-content"></div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -329,7 +390,7 @@ function renderLearners() {
     if (l.pickup_address) contact.push('<span>Pickup: ' + esc(l.pickup_address) + '</span>');
 
     return `
-      <div class="learner-card fade-in">
+      <div class="learner-card fade-in" style="cursor:pointer" onclick="openLearner(${l.id})">
         <div class="learner-card-top">
           <span class="learner-name">${esc(l.name || 'Unnamed')}${l.prefer_contact_before ? '<span class="contact-pref-badge">Contact first</span>' : ''}</span>
           <span class="tier-badge tier-${tier}">${tierLabels[tier] || 'Tier ' + tier}</span>
@@ -343,6 +404,94 @@ function renderLearners() {
         </div>
       </div>`;
   }).join('');
+}
+
+// ── Detail view ──
+async function openLearner(id) {
+  document.getElementById('list-view').style.display = 'none';
+  const dv = document.getElementById('detail-view');
+  dv.classList.add('show');
+  dv.querySelector('#detail-content').innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading...</div>';
+  window.scrollTo(0, 0);
+
+  try {
+    const res = await fetch('/api/instructor?action=learner-history&learner_id=' + id, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const data = await res.json();
+    if (res.status === 401) { signOut(); return; }
+    if (!res.ok) throw new Error(data.error);
+    renderDetail(data);
+  } catch (err) {
+    dv.querySelector('#detail-content').innerHTML = '<div style="color:var(--red);padding:24px;text-align:center">Failed to load learner details.</div>';
+  }
+}
+
+function renderDetail(data) {
+  const l = data.learner;
+  const tierLabels = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' };
+  const tier = l.current_tier || 1;
+
+  // Contact info
+  const info = [];
+  if (l.phone) info.push('<a href="tel:' + esc(l.phone) + '">' + esc(l.phone) + '</a>');
+  if (l.email) info.push('<a href="mailto:' + esc(l.email) + '">' + esc(l.email) + '</a>');
+  if (l.pickup_address) info.push('Pickup: ' + esc(l.pickup_address));
+  if (l.prefer_contact_before) info.push('<span class="contact-pref-badge">Contact first</span>');
+
+  // Stats
+  const firstDate = data.bookings.length ? data.bookings[data.bookings.length - 1].scheduled_date : null;
+  const lastDate = data.bookings.length ? data.bookings[0].scheduled_date : null;
+
+  let html = '<div class="fade-in">';
+
+  // Header
+  html += '<div class="detail-header">';
+  html += '<div class="detail-name">' + esc(l.name || 'Unnamed') + ' <span class="tier-badge tier-' + tier + '">' + (tierLabels[tier] || 'Tier ' + tier) + '</span></div>';
+  if (info.length) html += '<div class="detail-info">' + info.join(' &middot; ') + '</div>';
+  html += '</div>';
+
+  // Stats cards
+  html += '<div class="detail-stats">';
+  html += '<div class="detail-stat"><div class="detail-stat-value">' + data.totalLessons + '</div><div class="detail-stat-label">Completed</div></div>';
+  html += '<div class="detail-stat"><div class="detail-stat-value">' + data.bookings.length + '</div><div class="detail-stat-label">Total Bookings</div></div>';
+  if (firstDate) html += '<div class="detail-stat"><div class="detail-stat-value">' + formatDate(firstDate) + '</div><div class="detail-stat-label">First Lesson</div></div>';
+  if (lastDate) html += '<div class="detail-stat"><div class="detail-stat-value">' + formatDate(lastDate) + '</div><div class="detail-stat-label">Last Lesson</div></div>';
+  html += '</div>';
+
+  // Booking history
+  html += '<div class="section-title">Lesson History</div>';
+  if (data.bookings.length === 0) {
+    html += '<div class="empty-state"><p>No lessons yet.</p></div>';
+  } else {
+    html += data.bookings.map(b => {
+      let card = '<div class="booking-card">';
+      card += '<div class="booking-card-top">';
+      card += '<div><span class="booking-date">' + formatDate(b.scheduled_date) + '</span> <span class="booking-time">' + (b.start_time || '').slice(0, 5) + ' \u2013 ' + (b.end_time || '').slice(0, 5) + '</span></div>';
+      card += '<span class="status-badge status-' + b.status + '">' + b.status + '</span>';
+      card += '</div>';
+      if (b.session_notes) {
+        card += '<div class="booking-notes">' + esc(b.session_notes) + '</div>';
+      }
+      if (b.learner_ratings && b.learner_ratings.length > 0) {
+        card += '<div class="skill-pills">';
+        card += b.learner_ratings.map(r =>
+          '<span class="skill-pill skill-' + r.rating + '">' + esc(r.skill_key.replace(/_/g, ' ')) + '</span>'
+        ).join('');
+        card += '</div>';
+      }
+      card += '</div>';
+      return card;
+    }).join('');
+  }
+
+  html += '</div>';
+  document.getElementById('detail-content').innerHTML = html;
+}
+
+function showList() {
+  document.getElementById('detail-view').classList.remove('show');
+  document.getElementById('list-view').style.display = 'block';
 }
 
 // ── Helpers ──
