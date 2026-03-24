@@ -485,6 +485,31 @@
     }
     .btn-done:hover { background: var(--accent-dk); }
 
+    /* Calendar sync page banner */
+    .cal-sync-banner {
+      background: var(--accent-lt); border: 1px solid #fcd4b0;
+      border-radius: var(--radius, 14px); padding: 14px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .cal-sync-banner-text { display: flex; flex-direction: column; gap: 2px; }
+    .cal-sync-banner-text strong { font-family: var(--font-head); font-size: 0.92rem; font-weight: 700; }
+    .cal-sync-banner-text span { font-size: 0.82rem; color: var(--muted); }
+    .cal-sync-banner-actions { display: flex; align-items: center; gap: 8px; }
+    .cal-sync-page-btn {
+      background: var(--accent); color: white; border: none;
+      border-radius: 8px; padding: 8px 18px; font-size: 0.85rem;
+      font-weight: 700; cursor: pointer; text-decoration: none;
+      white-space: nowrap; transition: background 0.15s;
+    }
+    .cal-sync-page-btn:hover { background: var(--accent-dk); }
+    .cal-sync-dismiss {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 1.1rem; padding: 4px 8px; border-radius: 4px;
+      transition: all 0.15s; line-height: 1;
+    }
+    .cal-sync-dismiss:hover { color: var(--primary); background: rgba(0,0,0,0.05); }
+
     /* Cancel modal */
     .cancel-modal h2 { color: var(--red); }
     .cancel-policy {
@@ -598,6 +623,18 @@
   <div class="upcoming-strip" id="upcomingStrip" style="display:none">
     <div class="upcoming-header"><span>Upcoming lessons</span></div>
     <div class="upcoming-list" id="upcomingList"></div>
+  </div>
+
+  <!-- Calendar sync banner (persistent) -->
+  <div class="cal-sync-banner" id="calSyncPageBanner" style="display:none">
+    <div class="cal-sync-banner-text">
+      <strong>Sync lessons to your phone calendar</strong>
+      <span>All bookings and cancellations will appear automatically — with reminders.</span>
+    </div>
+    <div class="cal-sync-banner-actions">
+      <a class="cal-sync-page-btn" id="calSyncPageBtn" href="#">Sync Calendar</a>
+      <button class="cal-sync-dismiss" id="calSyncPageDismiss" title="Dismiss">&times;</button>
+    </div>
   </div>
 
   <!-- Toolbar -->
@@ -814,6 +851,7 @@ function init() {
     .then(() => {
       cursor = new Date(); cursor.setHours(0,0,0,0);
       setView('weekly');
+      initCalSyncPageBanner();
     });
 
   // Wire up modal buttons
@@ -1323,9 +1361,9 @@ function showBookSuccess() {
   document.getElementById('successInstructor').textContent = pendingSlot.instructor_name;
 
   // Show sync prompt or synced message based on whether they've subscribed before
-  const hasSubscribed = localStorage.getItem('cc_cal_subscribed') === '1';
-  document.getElementById('calSyncPrompt').style.display = hasSubscribed ? 'none' : 'block';
-  document.getElementById('calSyncedNote').style.display = hasSubscribed ? 'block' : 'none';
+  const showSync = shouldShowCalSync();
+  document.getElementById('calSyncPrompt').style.display = showSync ? 'block' : 'none';
+  document.getElementById('calSyncedNote').style.display = showSync ? 'none' : 'block';
 
   document.getElementById('bookConfirmStep').style.display = 'none';
   document.getElementById('bookSuccessStep').style.display = 'block';
@@ -1353,20 +1391,44 @@ async function handleCalendarDownload(e) {
   } catch { showToast('Could not download calendar file', 'error'); }
 }
 
+function shouldShowCalSync() {
+  const val = localStorage.getItem('cc_cal_subscribed');
+  if (!val) return true;
+  if (val === '1') return false; // legacy permanent dismiss
+  const ts = parseInt(val, 10);
+  if (isNaN(ts)) return true;
+  return Date.now() - ts > 30 * 24 * 60 * 60 * 1000; // 30 days
+}
+
 async function handleCalendarSubscribe(e) {
   if (e) e.preventDefault();
   try {
     const res = await fetch('/api/calendar?action=feed-url', { headers: { Authorization: 'Bearer ' + token } });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
-    localStorage.setItem('cc_cal_subscribed', '1');
+    localStorage.setItem('cc_cal_subscribed', String(Date.now()));
     window.location.href = data.webcal_url;
     // After a short delay, update the modal to show synced state
     setTimeout(() => {
       document.getElementById('calSyncPrompt').style.display = 'none';
       document.getElementById('calSyncedNote').style.display = 'block';
+      var pageBanner = document.getElementById('calSyncPageBanner');
+      if (pageBanner) pageBanner.style.display = 'none';
     }, 1000);
   } catch { showToast('Could not set up calendar sync', 'error'); }
+}
+
+function initCalSyncPageBanner() {
+  if (!shouldShowCalSync() || !token) return;
+  var banner = document.getElementById('calSyncPageBanner');
+  if (!banner) return;
+  banner.style.display = 'flex';
+
+  document.getElementById('calSyncPageBtn').onclick = handleCalendarSubscribe;
+  document.getElementById('calSyncPageDismiss').onclick = function() {
+    localStorage.setItem('cc_cal_subscribed', String(Date.now()));
+    banner.style.display = 'none';
+  };
 }
 
 async function downloadCalendar(bookingId) {

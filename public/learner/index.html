@@ -310,6 +310,31 @@
     .upcoming-empty a { color: var(--accent); font-weight: 600; text-decoration: none; }
     .upcoming-empty a:hover { text-decoration: underline; }
 
+    /* CALENDAR SYNC BANNER */
+    .cal-sync-banner {
+      background: var(--accent-lt); border: 1px solid #fcd4b0;
+      border-radius: var(--radius); padding: 14px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .cal-sync-banner-text { display: flex; flex-direction: column; gap: 2px; }
+    .cal-sync-banner-text strong { font-family: var(--font-head); font-size: 0.92rem; font-weight: 700; }
+    .cal-sync-banner-text span { font-size: 0.82rem; color: var(--muted); }
+    .cal-sync-banner-actions { display: flex; align-items: center; gap: 8px; }
+    .cal-sync-btn {
+      background: var(--accent); color: white; border: none;
+      border-radius: 8px; padding: 8px 18px; font-size: 0.85rem;
+      font-weight: 700; cursor: pointer; text-decoration: none;
+      white-space: nowrap; transition: background 0.15s;
+    }
+    .cal-sync-btn:hover { background: var(--accent-dk); }
+    .cal-sync-dismiss {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 1.1rem; padding: 4px 8px; border-radius: 4px;
+      transition: all 0.15s; line-height: 1;
+    }
+    .cal-sync-dismiss:hover { color: var(--primary); background: rgba(0,0,0,0.05); }
+
     /* STATS BAR */
     .stats-bar {
       display: grid;
@@ -916,6 +941,17 @@
   <!-- UPCOMING LESSONS -->
   <div id="upcoming-section" style="margin-bottom: 24px;">
     <div class="section-title">Upcoming Lessons</div>
+    <!-- Calendar sync banner -->
+    <div class="cal-sync-banner" id="calSyncBanner" style="display:none">
+      <div class="cal-sync-banner-text">
+        <strong>Sync lessons to your phone calendar</strong>
+        <span>All bookings and cancellations will appear automatically — with reminders.</span>
+      </div>
+      <div class="cal-sync-banner-actions">
+        <a class="cal-sync-btn" id="calSyncBtn" href="#">Sync Calendar</a>
+        <button class="cal-sync-dismiss" id="calSyncDismiss" title="Dismiss">&times;</button>
+      </div>
+    </div>
     <div id="upcoming-list">
       <div class="upcoming-empty">Loading...</div>
     </div>
@@ -1065,6 +1101,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('header-name').textContent = AUTH.user.name;
   await Promise.all([loadProgress(), loadCredits(), loadBookings(), loadUnlogged()]);
   render();
+  initCalSyncBanner();
   loadQAPreview();
   loadProfileCompleteness();
 });
@@ -1272,6 +1309,44 @@ async function downloadICS(bookingId) {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } catch {}
+}
+
+// ── Calendar Sync Banner ──
+function shouldShowCalSync() {
+  const val = localStorage.getItem('cc_cal_subscribed');
+  if (!val) return true;
+  if (val === '1') return false; // legacy permanent dismiss
+  const ts = parseInt(val, 10);
+  if (isNaN(ts)) return true;
+  return Date.now() - ts > 30 * 24 * 60 * 60 * 1000; // 30 days
+}
+
+function initCalSyncBanner() {
+  if (!shouldShowCalSync()) return;
+  const banner = document.getElementById('calSyncBanner');
+  if (!banner) return;
+  banner.style.display = 'flex';
+
+  document.getElementById('calSyncBtn').onclick = async function(e) {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/calendar?action=feed-url', {
+        headers: { Authorization: 'Bearer ' + AUTH.token }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      localStorage.setItem('cc_cal_subscribed', String(Date.now()));
+      window.location.href = data.webcal_url;
+      setTimeout(() => { banner.style.display = 'none'; }, 1000);
+    } catch (err) {
+      showToast(err.message || 'Could not set up calendar sync', 'error');
+    }
+  };
+
+  document.getElementById('calSyncDismiss').onclick = function() {
+    localStorage.setItem('cc_cal_subscribed', String(Date.now()));
+    banner.style.display = 'none';
+  };
 }
 
 // ── Q&A Preview ──
