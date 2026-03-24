@@ -21,7 +21,10 @@
 </script>
 <script src="/posthog-tracking.js" defer></script>
 <script src="/competency-config.js"></script>
+<script src="/test-routes.js"></script>
 <script src="/sidebar.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
@@ -362,6 +365,97 @@
       .result-totals { gap: 8px; }
       .result-total-item { min-width: 80px; padding: 10px 14px; }
     }
+
+    /* ── ROUTE SELECTION ── */
+    .route-screen { padding: 30px 0 20px; }
+    .route-screen h2 {
+      font-family: var(--font-head); font-size: 1.4rem; font-weight: 700;
+      margin-bottom: 8px; text-align: center;
+    }
+    .route-subtitle {
+      color: var(--muted); font-size: 0.9rem; text-align: center;
+      margin-bottom: 24px; line-height: 1.5;
+    }
+    .route-list { display: flex; flex-direction: column; gap: 8px; }
+    .route-card {
+      display: block; width: 100%; text-align: left; padding: 14px 18px;
+      border-radius: var(--radius); border: 2px solid var(--border);
+      background: var(--white); cursor: pointer; transition: all 0.18s;
+      font-family: var(--font-body); font-size: 0.92rem; font-weight: 600;
+      color: var(--primary);
+    }
+    .route-card:hover { border-color: var(--accent); }
+    .route-card.selected {
+      border-color: var(--accent); background: var(--accent-lt);
+      box-shadow: 0 0 0 3px rgba(245,131,33,0.12);
+    }
+    .route-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+    .btn-maps {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      background: var(--white); border: 1.5px solid var(--accent);
+      color: var(--accent); padding: 12px 24px; border-radius: 10px;
+      font-family: var(--font-head); font-size: 0.95rem; font-weight: 700;
+      cursor: pointer; transition: all 0.15s; text-decoration: none;
+    }
+    .btn-maps:hover { background: var(--accent-lt); }
+    .btn-skip { color: var(--muted); font-size: 0.85rem; text-align: center; margin-top: 8px; background: none; border: none; cursor: pointer; text-decoration: underline; font-family: var(--font-body); }
+    .btn-skip:hover { color: var(--primary); }
+
+    /* ── FAULT MAP ── */
+    .map-screen { padding: 20px 0; }
+    .map-screen h2 {
+      font-family: var(--font-head); font-size: 1.3rem; font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .map-subtitle {
+      color: var(--muted); font-size: 0.88rem; margin-bottom: 16px; line-height: 1.5;
+    }
+    #map-container { height: 400px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); margin-bottom: 16px; }
+    .fault-placement-panel {
+      background: var(--accent-lt); border: 1px solid var(--accent);
+      border-radius: var(--radius); padding: 14px 18px; margin-bottom: 12px;
+    }
+    .fault-placement-panel h3 {
+      font-family: var(--font-head); font-size: 0.88rem; font-weight: 700;
+      margin-bottom: 10px; color: var(--accent-dk);
+    }
+    .fault-placement-list {
+      display: flex; flex-direction: column; gap: 6px;
+      max-height: 240px; overflow-y: auto; margin-bottom: 12px;
+    }
+    .fault-place-btn {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--white); cursor: pointer; font-size: 0.85rem;
+      font-family: var(--font-body); font-weight: 600; text-align: left;
+      transition: all 0.15s; width: 100%;
+    }
+    .fault-place-btn:hover { border-color: var(--accent); background: var(--accent-lt); }
+    .fault-place-btn.active-placement { border-color: var(--accent); background: var(--accent-lt); box-shadow: 0 0 0 2px var(--accent); }
+    .fpb-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; border-radius: 6px; font-size: 0.7rem;
+      font-weight: 800; color: #fff; flex-shrink: 0;
+    }
+    .fpb-badge.driving { background: #f59e0b; }
+    .fpb-badge.serious { background: #ef4444; }
+    .fpb-badge.dangerous { background: #991b1b; }
+    .placed-faults-summary {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px 18px; margin-bottom: 12px;
+    }
+    .placed-faults-summary h3 {
+      font-family: var(--font-head); font-size: 0.88rem; font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .placed-faults-summary ul { list-style: none; }
+    .placed-fault-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; font-size: 0.85rem; border-bottom: 1px solid var(--border);
+    }
+    .placed-fault-item:last-child { border-bottom: none; }
+    .fault-map-label { display: flex; align-items: center; justify-content: center; background: none !important; border: none !important; }
+    .map-actions { display: flex; flex-direction: column; gap: 10px; }
   </style>
 </head>
 <body>
@@ -389,7 +483,21 @@
         <div class="step-item" data-step="4"><span class="step-num">&#10003;</span> Results</div>
       </div>
 
-      <button class="btn-primary" onclick="beginMockTest()" id="btn-begin">Begin Mock Test</button>
+      <button class="btn-primary" onclick="showRouteSelection()" id="btn-begin">Begin Mock Test</button>
+    </div>
+  </section>
+
+  <!-- ── SCREEN 1b: ROUTE SELECTION ── -->
+  <section id="screen-route" class="screen hidden">
+    <div class="route-screen">
+      <h2>Choose Your Test Route</h2>
+      <p class="route-subtitle">Select the route your supervising driver will follow, then open it in Google Maps before starting.</p>
+      <div id="route-list" class="route-list"></div>
+      <div id="route-actions" class="route-actions hidden">
+        <a id="btn-open-maps" href="#" target="_blank" rel="noopener" class="btn-maps">&#128205; Open Route in Google Maps</a>
+        <button class="btn-primary" onclick="beginMockTest()" id="btn-begin-route">Begin Mock Test</button>
+      </div>
+      <button class="btn-skip" onclick="skipRouteSelection()">Skip &mdash; I know my route</button>
     </div>
   </section>
 
@@ -454,9 +562,38 @@
       </div>
 
       <div class="results-actions">
-        <a href="/learner/progress.html" class="btn-primary">View My Progress</a>
+        <button class="btn-primary hidden" id="btn-show-map" onclick="showFaultMap()">&#128205; Place Faults on Map</button>
+        <a href="/learner/progress.html" class="btn-secondary">View My Progress</a>
         <button class="btn-secondary" onclick="location.reload()">Try Again</button>
         <a href="/learner/" class="btn-secondary">Back to Dashboard</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SCREEN 5: FAULT MAP ── -->
+  <section id="screen-map" class="screen hidden">
+    <div class="map-screen">
+      <h2>Place Faults on Your Route</h2>
+      <p class="map-subtitle">Tap a fault below, then tap the route on the map to place it where it happened.</p>
+
+      <div id="map-container"></div>
+
+      <div class="fault-placement-panel" id="fault-placement-panel">
+        <h3>Faults to Place</h3>
+        <div id="fault-placement-list" class="fault-placement-list"></div>
+      </div>
+
+      <div class="placed-faults-summary" id="placed-faults-summary">
+        <h3>Placed Faults</h3>
+        <ul id="placed-faults-list">
+          <li style="color:var(--muted);">No faults placed yet. Tap a fault above, then tap the route.</li>
+        </ul>
+      </div>
+
+      <div class="map-actions">
+        <button class="btn-secondary" onclick="undoLastPlacement()" id="btn-undo-placement">Undo Last Pin</button>
+        <a href="/learner/progress.html" class="btn-primary">Done &mdash; View My Progress</a>
+        <a href="/learner/" class="btn-secondary" onclick="releaseWakeLock()">Back to Dashboard</a>
       </div>
     </div>
   </section>
@@ -473,6 +610,23 @@ let isDriving = false;
 let partTimes = [0, 0, 0]; // elapsed seconds per part
 let partFaults = [{}, {}, {}]; // per-part: { skill_key: { driving, serious, dangerous } }
 let longPressTimer = null;
+
+// Route selection
+let selectedRoute = null;
+let selectedCentre = null;
+
+// GPS tracking
+let gpsTrack = [];
+let gpsWatchId = null;
+
+// Wake Lock
+let wakeLock = null;
+
+// Fault map
+let faultMap = null;
+let routePolyline = null;
+let placedFaultMarkers = [];
+let pendingFaultPlacement = null;
 
 const AREAS = CC_COMPETENCY.AREAS;
 const SKILLS = CC_COMPETENCY.SKILLS;
@@ -496,7 +650,7 @@ function formatTime(seconds) {
 }
 
 function showScreen(id) {
-  ['screen-start', 'screen-part', 'screen-faults', 'screen-results'].forEach(function(sid) {
+  ['screen-start', 'screen-route', 'screen-part', 'screen-faults', 'screen-results', 'screen-map'].forEach(function(sid) {
     document.getElementById(sid).classList.add('hidden');
   });
   document.getElementById(id).classList.remove('hidden');
@@ -589,6 +743,9 @@ function startDriving() {
 
   document.getElementById('timer-label').textContent = 'Driving...';
 
+  startGpsTracking();
+  requestWakeLock();
+
   timerInterval = setInterval(function() {
     timerSeconds++;
     document.getElementById('timer-display').textContent = formatTime(timerSeconds);
@@ -602,6 +759,7 @@ function startDriving() {
 function pullOver() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   isDriving = false;
+  stopGpsTracking();
   partTimes[currentPart] = timerSeconds;
   showFaultScreen();
 }
@@ -942,7 +1100,260 @@ function showResults() {
     });
   }
 
+  // Show map button if GPS data was recorded
+  if (gpsTrack.length > 0) {
+    document.getElementById('btn-show-map').classList.remove('hidden');
+  }
+
   showScreen('screen-results');
+}
+
+/* ── Route Selection ── */
+function showRouteSelection() {
+  var centres = CC_TEST_ROUTES.CENTRES;
+  selectedCentre = centres[0]; // default to first (only one for now)
+  renderRouteList();
+  showScreen('screen-route');
+}
+
+function renderRouteList() {
+  var container = document.getElementById('route-list');
+  if (!selectedCentre) { container.innerHTML = ''; return; }
+
+  container.innerHTML = selectedCentre.routes.map(function(route) {
+    var isSelected = selectedRoute && selectedRoute.id === route.id;
+    return '<button class="route-card' + (isSelected ? ' selected' : '') + '" onclick="selectRoute(\'' + route.id + '\')">' +
+      route.name + '</button>';
+  }).join('');
+}
+
+function selectRoute(routeId) {
+  selectedRoute = CC_TEST_ROUTES.getRoute(selectedCentre.id, routeId);
+  renderRouteList();
+  var actions = document.getElementById('route-actions');
+  actions.classList.remove('hidden');
+  document.getElementById('btn-open-maps').href = selectedRoute.mapsUrl;
+}
+
+function skipRouteSelection() {
+  selectedRoute = null;
+  beginMockTest();
+}
+
+/* ── GPS Tracking ── */
+function startGpsTracking() {
+  if (!navigator.geolocation) return;
+  stopGpsTracking();
+  gpsWatchId = navigator.geolocation.watchPosition(
+    function(pos) {
+      gpsTrack.push({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        timestamp: pos.timestamp,
+        part: currentPart
+      });
+    },
+    function(err) { console.warn('GPS error:', err.code, err.message); },
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+  );
+}
+
+function stopGpsTracking() {
+  if (gpsWatchId !== null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+}
+
+/* ── Wake Lock ── */
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+  } catch (err) { console.warn('Wake Lock failed:', err); }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible' && isDriving && !wakeLock) {
+    requestWakeLock();
+  }
+});
+
+/* ── Fault Map ── */
+function showFaultMap() {
+  releaseWakeLock();
+  showScreen('screen-map');
+
+  if (faultMap) { faultMap.remove(); faultMap = null; }
+
+  faultMap = L.map('map-container');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(faultMap);
+
+  if (gpsTrack.length > 0) {
+    var latLngs = gpsTrack
+      .filter(function(pt) { return pt.accuracy < 50; })
+      .map(function(pt) { return [pt.lat, pt.lng]; });
+
+    if (latLngs.length < 2) {
+      latLngs = gpsTrack.map(function(pt) { return [pt.lat, pt.lng]; });
+    }
+
+    if (latLngs.length >= 2) {
+      routePolyline = L.polyline(latLngs, { color: '#f58321', weight: 5, opacity: 0.8 }).addTo(faultMap);
+      faultMap.fitBounds(routePolyline.getBounds(), { padding: [30, 30] });
+    }
+
+    faultMap.on('click', function(e) {
+      if (!pendingFaultPlacement) return;
+      var snapped = latLngs.length > 0 ? snapToPolyline(e.latlng, latLngs) : e.latlng;
+      placeFaultOnMap(snapped);
+    });
+  } else if (selectedRoute && selectedCentre) {
+    faultMap.setView([selectedCentre.centre.lat, selectedCentre.centre.lng], selectedCentre.zoom || 13);
+    faultMap.on('click', function(e) {
+      if (!pendingFaultPlacement) return;
+      placeFaultOnMap(e.latlng);
+    });
+  } else {
+    faultMap.setView([51.454, -1.005], 13);
+  }
+
+  buildFaultPlacementList();
+  placedFaultMarkers = [];
+  updatePlacedFaultsSummary();
+}
+
+function snapToPolyline(clickLatLng, latLngs) {
+  var minDist = Infinity, closest = clickLatLng;
+  for (var i = 0; i < latLngs.length; i++) {
+    var pt = L.latLng(latLngs[i][0], latLngs[i][1]);
+    var dist = clickLatLng.distanceTo(pt);
+    if (dist < minDist) { minDist = dist; closest = pt; }
+  }
+  return closest;
+}
+
+function buildFaultPlacementList() {
+  var allFaults = {};
+  SKILLS.forEach(function(skill) {
+    allFaults[skill.key] = { driving: 0, serious: 0, dangerous: 0 };
+  });
+  for (var p = 0; p < 3; p++) {
+    Object.keys(partFaults[p]).forEach(function(key) {
+      var f = partFaults[p][key];
+      allFaults[key].driving += f.driving;
+      allFaults[key].serious += f.serious;
+      allFaults[key].dangerous += f.dangerous;
+    });
+  }
+
+  var container = document.getElementById('fault-placement-list');
+  var html = '';
+  SKILLS.forEach(function(skill) {
+    var f = allFaults[skill.key];
+    FAULT_TYPES.forEach(function(ft) {
+      var count = f[ft.key];
+      for (var i = 0; i < count; i++) {
+        html += '<button class="fault-place-btn" data-skill="' + skill.key + '" data-type="' + ft.key + '"' +
+          ' onclick="selectFaultToPlace(this, \'' + skill.key + '\', \'' + ft.key + '\', \'' + skill.label + '\')">' +
+          '<span class="fpb-badge ' + ft.key + '">' + ft.shortLabel + '</span> ' +
+          skill.label + '</button>';
+      }
+    });
+  });
+
+  if (!html) {
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;">No faults to place &mdash; clean sheet!</p>';
+    document.getElementById('fault-placement-panel').style.display = 'none';
+  } else {
+    container.innerHTML = html;
+  }
+}
+
+function selectFaultToPlace(btnEl, skillKey, faultType, skillLabel) {
+  var ft = FAULT_TYPES.find(function(f) { return f.key === faultType; });
+  pendingFaultPlacement = { skillKey: skillKey, faultType: faultType, skillLabel: skillLabel, shortLabel: ft ? ft.shortLabel : 'F', btnEl: btnEl };
+
+  // Highlight the selected button
+  document.querySelectorAll('.fault-place-btn').forEach(function(b) { b.classList.remove('active-placement'); });
+  btnEl.classList.add('active-placement');
+}
+
+function placeFaultOnMap(latlng) {
+  if (!pendingFaultPlacement) return;
+
+  var colours = { driving: '#f59e0b', serious: '#ef4444', dangerous: '#991b1b' };
+  var colour = colours[pendingFaultPlacement.faultType] || '#f59e0b';
+
+  var marker = L.circleMarker(latlng, {
+    radius: 14, fillColor: colour, color: '#fff', weight: 2, fillOpacity: 0.9
+  }).addTo(faultMap);
+
+  marker.bindTooltip(pendingFaultPlacement.shortLabel + ' — ' + pendingFaultPlacement.skillLabel, {
+    permanent: false, direction: 'top', offset: [0, -10]
+  });
+
+  var labelMarker = L.marker(latlng, {
+    icon: L.divIcon({
+      className: 'fault-map-label',
+      html: '<span style="color:#fff;font-weight:800;font-size:12px;">' + pendingFaultPlacement.shortLabel + '</span>',
+      iconSize: [28, 28], iconAnchor: [14, 14]
+    })
+  }).addTo(faultMap);
+
+  placedFaultMarkers.push({
+    marker: marker, labelMarker: labelMarker,
+    faultType: pendingFaultPlacement.faultType,
+    skillKey: pendingFaultPlacement.skillKey,
+    skillLabel: pendingFaultPlacement.skillLabel,
+    shortLabel: pendingFaultPlacement.shortLabel
+  });
+
+  // Remove the button from placement list
+  if (pendingFaultPlacement.btnEl) pendingFaultPlacement.btnEl.remove();
+
+  pendingFaultPlacement = null;
+  document.querySelectorAll('.fault-place-btn').forEach(function(b) { b.classList.remove('active-placement'); });
+  updatePlacedFaultsSummary();
+}
+
+function undoLastPlacement() {
+  if (placedFaultMarkers.length === 0) return;
+  var last = placedFaultMarkers.pop();
+  faultMap.removeLayer(last.marker);
+  faultMap.removeLayer(last.labelMarker);
+
+  // Re-add the fault button
+  var container = document.getElementById('fault-placement-list');
+  var ft = FAULT_TYPES.find(function(f) { return f.key === last.faultType; });
+  var btn = document.createElement('button');
+  btn.className = 'fault-place-btn';
+  btn.setAttribute('data-skill', last.skillKey);
+  btn.setAttribute('data-type', last.faultType);
+  btn.onclick = function() { selectFaultToPlace(btn, last.skillKey, last.faultType, last.skillLabel); };
+  btn.innerHTML = '<span class="fpb-badge ' + last.faultType + '">' + last.shortLabel + '</span> ' + last.skillLabel;
+  container.appendChild(btn);
+
+  updatePlacedFaultsSummary();
+}
+
+function updatePlacedFaultsSummary() {
+  var list = document.getElementById('placed-faults-list');
+  if (placedFaultMarkers.length === 0) {
+    list.innerHTML = '<li style="color:var(--muted);">No faults placed yet. Tap a fault above, then tap the route.</li>';
+    return;
+  }
+  list.innerHTML = placedFaultMarkers.map(function(item) {
+    return '<li class="placed-fault-item"><span class="fpb-badge ' + item.faultType + '">' + item.shortLabel + '</span> ' + item.skillLabel + '</li>';
+  }).join('');
 }
 </script>
 </body>
