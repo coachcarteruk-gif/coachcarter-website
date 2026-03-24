@@ -452,3 +452,43 @@ textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
 .choice-icon.join    { background: #f0f0f0; color: var(--primary); }
 .choice-label { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
 .choice-desc  { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+
+/* ── SMS code input ──────────────────────────────────────────────── */
+.code-inputs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 20px 0 8px;
+}
+.code-inputs input[data-idx] {
+  width: 46px !important;
+  min-width: 46px;
+  max-width: 46px;
+  height: 56px;
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-family: var(--font-head);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--primary);
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+  padding: 0;
+}
+.code-inputs input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: 0 0 0 3px rgba(245,131,33,0.1);
+}
+.code-inputs input.filled {
+  border-color: var(--accent);
+  background: var(--accent-lt);
+}
+.code-error {
+  color: var(--red, #ef4444);
+  font-size: 0.82rem;
+  margin-bottom: 12px;
+  min-height: 1.2em;
+}

@@ -1,5 +1,6 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const twilio = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 
@@ -16,6 +17,11 @@ function normalizeUKPhone(phone) {
 }
 const TOKEN_EXPIRY_MINUTES = 15;
 
+// Generate a 6-digit numeric code for SMS verification
+function generateSmsCode() {
+  return crypto.randomInt(100000, 999999).toString();
+}
+
 // ── CORS + routing ──────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,9 +30,10 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   const action = req.query.action;
-  if (action === 'send-link') return handleSendLink(req, res);
-  if (action === 'validate')  return handleValidate(req, res);
-  if (action === 'verify')    return handleVerify(req, res);
+  if (action === 'send-link')   return handleSendLink(req, res);
+  if (action === 'validate')    return handleValidate(req, res);
+  if (action === 'verify')      return handleVerify(req, res);
+  if (action === 'verify-code') return handleVerifyCode(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -108,16 +115,20 @@ async function handleSendLink(req, res) {
         });
       }
 
+      // Generate a 6-digit code and store it alongside the token
+      const smsCode = generateSmsCode();
+      await sql`UPDATE magic_link_tokens SET token = ${smsCode} WHERE token = ${token}`;
+
       const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH);
       await client.messages.create({
-        body: `Your CoachCarter login link (expires in 15 min): ${magicUrl}`,
+        body: `Your CoachCarter sign-in code is: ${smsCode}\n\nExpires in 15 minutes. Don't share this code.`,
         from: process.env.TWILIO_FROM,
         to: e164Phone
       });
 
       return res.json({
         success: true,
-        message: 'A login link has been sent to your phone.',
+        message: 'A sign-in code has been sent to your phone.',
         method: 'sms'
       });
     } else {
@@ -289,6 +300,93 @@ async function handleVerify(req, res) {
     });
   } catch (err) {
     console.error('verify error:', err);
+    return res.status(500).json({ error: 'Verification failed' });
+  }
+}
+
+// ── Verify SMS code and issue JWT ─────────────────────────────────────────────
+async function handleVerifyCode(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { code, phone } = req.body || {};
+  if (!code || !phone) return res.status(400).json({ error: 'Code and phone number are required' });
+
+  try {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return res.status(500).json({ error: 'JWT_SECRET not configured' });
+
+    const cleanPhone = phone.replace(/\s+/g, '').trim();
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Look up the code (stored in the token column)
+    const rows = await sql`
+      SELECT * FROM magic_link_tokens
+      WHERE token = ${code.trim()} AND phone = ${cleanPhone} AND method = 'sms'
+        AND used = false AND expires_at > NOW()`;
+
+    if (rows.length === 0) {
+      return res.status(400).json({ error: 'invalid_code', message: 'Invalid or expired code. Please try again or request a new one.' });
+    }
+
+    const linkRecord = rows[0];
+
+    // Mark as used
+    await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
+
+    // Ensure learner_users table exists
+    await sql`
+      CREATE TABLE IF NOT EXISTS learner_users (
+        id SERIAL PRIMARY KEY, name TEXT, email TEXT UNIQUE,
+        phone TEXT, password_hash TEXT,
+        current_tier INTEGER DEFAULT 1,
+        credit_balance INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS phone TEXT`;
+    try { await sql`ALTER TABLE learner_users ADD CONSTRAINT learner_users_phone_unique UNIQUE (phone)`; } catch {};
+    try { await sql`ALTER TABLE learner_users ALTER COLUMN name DROP NOT NULL`; } catch {};
+    try { await sql`ALTER TABLE learner_users ALTER COLUMN password_hash DROP NOT NULL`; } catch {};
+
+    // Look up or create the user by phone
+    let user;
+    let isNewUser = false;
+
+    const existing = await sql`SELECT * FROM learner_users WHERE phone = ${linkRecord.phone}`;
+    if (existing.length > 0) {
+      user = existing[0];
+    } else {
+      isNewUser = true;
+      const newRows = await sql`
+        INSERT INTO learner_users (phone, credit_balance)
+        VALUES (${linkRecord.phone}, ${FREE_TRIAL_CREDITS})
+        RETURNING *`;
+      user = newRows[0];
+
+      await sql`
+        INSERT INTO credit_transactions
+          (learner_id, type, credits, amount_pence, payment_method)
+        VALUES
+          (${user.id}, 'purchase', ${FREE_TRIAL_CREDITS}, 0, 'free_trial')`;
+    }
+
+    // Issue JWT
+    const jwtPayload = { id: user.id, email: user.email || null };
+    const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '30d' });
+
+    return res.json({
+      success: true,
+      token: jwtToken,
+      user: {
+        id: user.id,
+        name: user.name || null,
+        email: user.email || null,
+        tier: user.current_tier
+      },
+      is_new_user: isNewUser,
+      needs_name: !user.name
+    });
+  } catch (err) {
+    console.error('verify-code error:', err);
     return res.status(500).json({ error: 'Verification failed' });
   }
 }
