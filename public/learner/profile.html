@@ -550,6 +550,11 @@ async function saveProfile() {
     setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; }, 2000);
   } catch (err) {
     btn.textContent = 'Save'; btn.disabled = false;
+    const note = document.getElementById('profileSaveNote');
+    if (note) {
+      note.textContent = err.message || 'Failed to save. Please try again.';
+      note.style.color = '#e74c3c';
+    }
     console.error('save-profile error:', err);
   }
 }

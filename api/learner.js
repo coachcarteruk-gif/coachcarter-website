@@ -277,7 +277,11 @@ async function handleUpdateProfile(req, res) {
     `;
     return res.json({ success: true, profile: updated });
   } catch (err) {
-    console.error('update-profile error:', err.message, JSON.stringify(err));
+    console.error('update-profile error:', err.message);
+    // Unique constraint on phone number
+    if (err.message && err.message.includes('duplicate') && err.message.includes('phone')) {
+      return res.status(409).json({ error: 'This phone number is already linked to another account.' });
+    }
     return res.status(500).json({ error: 'Failed to update profile', details: err.message });
   }
 }
