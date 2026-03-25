@@ -1294,7 +1294,11 @@ async function showLearnerDetail(id) {
     // Stats cards
     html += '<div class="stats-grid" style="margin-bottom: 20px;">';
     html += '<div class="stat-card"><div class="stat-value">' + (tierLabels[learner?.current_tier] || 'N/A') + '</div><div class="stat-label">Current Tier</div></div>';
-    html += '<div class="stat-card"><div class="stat-value">' + (learner?.credit_balance || 0) + '</div><div class="stat-label">Credit Balance</div></div>';
+    html += '<div class="stat-card" style="cursor:pointer;position:relative;" onclick="openAdjustCredits(\'' + learnerId + '\', ' + (learner?.credit_balance || 0) + ')">' +
+      '<div class="stat-value">' + (learner?.credit_balance || 0) + '</div>' +
+      '<div class="stat-label">Credit Balance</div>' +
+      '<div style="font-size:0.7rem;color:var(--accent);margin-top:4px;">Click to adjust</div>' +
+      '</div>';
     html += '<div class="stat-card"><div class="stat-value">' + (data.progress?.total_sessions || 0) + '</div><div class="stat-label">Sessions Logged</div></div>';
     html += '<div class="stat-card"><div class="stat-value">' + Math.round((data.progress?.total_minutes || 0) / 60 * 10) / 10 + 'h</div><div class="stat-label">Total Hours</div></div>';
     html += '</div>';
@@ -1339,6 +1343,90 @@ async function showLearnerDetail(id) {
 
 function closeLearnerDetail() {
   document.getElementById('learner-detail-panel').style.display = 'none';
+}
+
+// ── Credit adjustment ──
+let _adjustLearnerId = null;
+
+function openAdjustCredits(learnerId, currentBalance) {
+  _adjustLearnerId = learnerId;
+  // Remove existing modal if any
+  let m = document.getElementById('adjust-credits-modal');
+  if (m) m.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'adjust-credits-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+      <h3 style="font-family:var(--font-head);margin:0 0 8px;">Adjust Credits</h3>
+      <p style="color:var(--muted);font-size:0.85rem;margin:0 0 20px;">Current balance: <strong>${currentBalance}</strong></p>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button onclick="setAdjustType('add')" id="adj-add-btn" style="flex:1;padding:10px;border-radius:8px;border:2px solid var(--accent);background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">+ Add</button>
+        <button onclick="setAdjustType('remove')" id="adj-remove-btn" style="flex:1;padding:10px;border-radius:8px;border:2px solid #ef4444;background:transparent;color:#ef4444;font-weight:600;cursor:pointer;">− Remove</button>
+      </div>
+      <input type="number" id="adj-credits-input" min="1" max="100" value="1" placeholder="Number of credits"
+        style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:1rem;margin-bottom:12px;box-sizing:border-box;">
+      <input type="text" id="adj-reason-input" placeholder="Reason (e.g. Free trial, Refund, Goodwill)"
+        style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;margin-bottom:20px;box-sizing:border-box;">
+      <div style="display:flex;gap:8px;">
+        <button onclick="closeAdjustCredits()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;">Cancel</button>
+        <button onclick="submitAdjustCredits()" id="adj-submit-btn" style="flex:1;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">Add Credits</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.querySelector('#adj-credits-input').focus();
+  window._adjustType = 'add';
+}
+
+function setAdjustType(type) {
+  window._adjustType = type;
+  const addBtn = document.getElementById('adj-add-btn');
+  const removeBtn = document.getElementById('adj-remove-btn');
+  const submitBtn = document.getElementById('adj-submit-btn');
+  if (type === 'add') {
+    addBtn.style.background = 'var(--accent)'; addBtn.style.color = '#fff';
+    removeBtn.style.background = 'transparent'; removeBtn.style.color = '#ef4444';
+    submitBtn.textContent = 'Add Credits'; submitBtn.style.background = 'var(--accent)';
+  } else {
+    removeBtn.style.background = '#ef4444'; removeBtn.style.color = '#fff';
+    addBtn.style.background = 'transparent'; addBtn.style.color = 'var(--accent)';
+    submitBtn.textContent = 'Remove Credits'; submitBtn.style.background = '#ef4444';
+  }
+}
+
+function closeAdjustCredits() {
+  const m = document.getElementById('adjust-credits-modal');
+  if (m) m.remove();
+  _adjustLearnerId = null;
+}
+
+async function submitAdjustCredits() {
+  const amount = parseInt(document.getElementById('adj-credits-input').value, 10);
+  const reason = document.getElementById('adj-reason-input').value.trim();
+  if (!amount || amount < 1) return alert('Enter a valid number of credits');
+
+  const credits = window._adjustType === 'add' ? amount : -amount;
+
+  try {
+    const res = await fetch('/api/admin?action=adjust-credits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ADMIN_TOKEN },
+      body: JSON.stringify({ learner_id: _adjustLearnerId, credits, reason: reason || undefined })
+    });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error || 'Failed to adjust credits');
+
+    const refreshId = _adjustLearnerId;
+    alert((credits > 0 ? 'Added ' : 'Removed ') + Math.abs(credits) + ' credit(s). New balance: ' + data.new_balance);
+    closeAdjustCredits();
+    // Refresh the detail view and learners table
+    showLearnerDetail(refreshId);
+    if (typeof loadLearners === 'function') loadLearners();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════

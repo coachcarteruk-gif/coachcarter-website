@@ -36,6 +36,9 @@
 //
 //   GET  /api/admin?action=learner-detail
 //     → booking history, credit transactions, progress for one learner (admin JWT required)
+//
+//   POST /api/admin?action=adjust-credits
+//     → add or remove lesson credits for a learner (admin JWT required)
 
 const { neon }   = require('@neondatabase/serverless');
 const bcrypt     = require('bcryptjs');
@@ -86,6 +89,7 @@ module.exports = async (req, res) => {
   if (action === 'toggle-instructor') return handleToggleInstructor(req, res);
   if (action === 'all-learners')      return handleAllLearners(req, res);
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
+  if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -606,5 +610,57 @@ async function handleLearnerDetail(req, res) {
   } catch (err) {
     console.error('admin learner-detail error:', err);
     return res.status(500).json({ error: 'Failed to load learner details', details: err.message });
+  }
+}
+
+// ── POST /api/admin?action=adjust-credits ─────────────────────────────────────
+async function handleAdjustCredits(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+
+  const { learner_id, credits, reason } = req.body;
+  if (!learner_id || credits === undefined || credits === 0)
+    return res.status(400).json({ error: 'learner_id and non-zero credits are required' });
+
+  const amount = parseInt(credits, 10);
+  if (isNaN(amount) || amount === 0)
+    return res.status(400).json({ error: 'credits must be a non-zero integer' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Check learner exists
+    const [learner] = await sql`SELECT id, credit_balance FROM learner_users WHERE id = ${learner_id}`;
+    if (!learner) return res.status(404).json({ error: 'Learner not found' });
+
+    // Prevent negative balance
+    if (amount < 0 && learner.credit_balance + amount < 0)
+      return res.status(400).json({ error: 'Cannot reduce below 0. Current balance: ' + learner.credit_balance });
+
+    // Update balance
+    const [updated] = await sql`
+      UPDATE learner_users
+      SET credit_balance = credit_balance + ${amount}
+      WHERE id = ${learner_id}
+      RETURNING credit_balance
+    `;
+
+    // Log transaction
+    await sql`
+      INSERT INTO credit_transactions (learner_id, type, credits, amount_pence, payment_method)
+      VALUES (${learner_id}, ${amount > 0 ? 'admin_add' : 'admin_remove'}, ${amount}, 0, ${reason || 'Admin adjustment'})
+    `;
+
+    return res.json({
+      success: true,
+      previous_balance: learner.credit_balance,
+      new_balance: updated.credit_balance,
+      adjusted_by: amount
+    });
+  } catch (err) {
+    console.error('admin adjust-credits error:', err);
+    return res.status(500).json({ error: 'Failed to adjust credits', details: err.message });
   }
 }
