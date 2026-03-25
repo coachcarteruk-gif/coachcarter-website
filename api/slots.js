@@ -523,11 +523,12 @@ async function handleBook(req, res) {
     sendWhatsApp(learner.phone,
       `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
     );
-    if (!isDemoInstructor) {
-      sendWhatsApp(instructor.phone,
-        `📋 New booking!\n\n👤 ${learner.name}\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`
-      );
-    }
+    // Instructor WhatsApp disabled for now — enable when ready
+    // if (!isDemoInstructor) {
+    //   sendWhatsApp(instructor.phone,
+    //     `📋 New booking!\n\n👤 ${learner.name}\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`
+    //   );
+    // }
 
     return res.status(201).json({
       success:        true,
@@ -785,11 +786,12 @@ async function handleCancel(req, res) {
         ? `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nYour lesson has been returned to your balance. You now have ${updated.credit_balance} lesson(s) remaining.\n\nRebook: https://coachcarter.uk/learner/book.html`
         : `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nAs this was less than 48 hours' notice, the lesson has been forfeited.`
     );
-    if (!isDemoBooking) {
-      sendWhatsApp(booking.instructor_phone,
-        `❌ Lesson cancelled\n\n👤 ${booking.learner_name}\n📅 ${lessonDateStr} at ${cancelTime}\n\nThis slot is now free.`
-      );
-    }
+    // Instructor WhatsApp disabled for now — enable when ready
+    // if (!isDemoBooking) {
+    //   sendWhatsApp(booking.instructor_phone,
+    //     `❌ Lesson cancelled\n\n👤 ${booking.learner_name}\n📅 ${lessonDateStr} at ${cancelTime}\n\nThis slot is now free.`
+    //   );
+    // }
 
     return res.json({
       success:        true,
