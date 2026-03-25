@@ -524,13 +524,13 @@ async function handleBook(req, res) {
       });
     }
 
-    // WhatsApp notifications (non-blocking, fire-and-forget)
-    sendWhatsApp(learner.phone,
+    // WhatsApp notification — must await so Vercel doesn't kill the function
+    await sendWhatsApp(learner.phone,
       `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
     );
     // Instructor WhatsApp disabled for now — enable when ready
     // if (!isDemoInstructor) {
-    //   sendWhatsApp(instructor.phone,
+    //   await sendWhatsApp(instructor.phone,
     //     `📋 New booking!\n\n👤 ${learner.name}\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`
     //   );
     // }
@@ -786,7 +786,7 @@ async function handleCancel(req, res) {
 
     // WhatsApp cancellation notifications
     const cancelTime = String(booking.start_time).slice(0, 5);
-    sendWhatsApp(booking.learner_phone,
+    await sendWhatsApp(booking.learner_phone,
       creditReturned
         ? `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nYour lesson has been returned to your balance. You now have ${updated.credit_balance} lesson(s) remaining.\n\nRebook: https://coachcarter.uk/learner/book.html`
         : `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nAs this was less than 48 hours' notice, the lesson has been forfeited.`
