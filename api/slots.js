@@ -35,8 +35,10 @@ function sendWhatsApp(to, message) {
     return Promise.resolve();
   }
 
-  // Normalise phone: ensure it starts with +
-  const phone = to.startsWith('+') ? to : `+${to}`;
+  // Normalise phone to E.164: UK numbers starting with 0 → +44
+  let phone = to.replace(/\s+/g, ''); // strip spaces
+  if (phone.startsWith('0')) phone = '+44' + phone.slice(1);
+  else if (!phone.startsWith('+')) phone = '+' + phone;
 
   const client = twilio(sid, auth);
   return client.messages.create({

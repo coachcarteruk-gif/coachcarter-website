@@ -10,7 +10,10 @@ function sendWhatsApp(to, message) {
   const auth = process.env.TWILIO_AUTH;
   const from = process.env.TWILIO_WHATSAPP_FROM;
   if (!sid || !auth || !from || !to) return Promise.resolve();
-  const phone = to.startsWith('+') ? to : `+${to}`;
+  // Normalise phone to E.164: UK numbers starting with 0 → +44
+  let phone = to.replace(/\s+/g, '');
+  if (phone.startsWith('0')) phone = '+44' + phone.slice(1);
+  else if (!phone.startsWith('+')) phone = '+' + phone;
   const client = twilio(sid, auth);
   return client.messages.create({
     from: `whatsapp:${from}`,
