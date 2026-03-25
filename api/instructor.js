@@ -346,88 +346,29 @@ async function handleScheduleRange(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Core booking query — driving_sessions join is optional
-    let bookings;
-    try {
-      bookings = await sql`
-        SELECT
-          lb.id,
-          lb.scheduled_date::text,
-          lb.start_time::text,
-          lb.end_time::text,
-          lb.status,
-          lb.notes,
-          lu.id    AS learner_id,
-          lu.name  AS learner_name,
-          lu.email AS learner_email,
-          lu.phone AS learner_phone,
-          COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
-          lu.pickup_address AS learner_pickup_address,
-          ds.id AS session_log_id,
-          ds.notes AS session_notes,
-          lb.instructor_notes
-        FROM lesson_bookings lb
-        JOIN learner_users lu ON lu.id = lb.learner_id
-        LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
-        WHERE lb.instructor_id = ${instructor.id}
-          AND lb.status IN ('confirmed', 'completed')
-          AND lb.scheduled_date >= ${from}::date
-          AND lb.scheduled_date <= ${to}::date
-        ORDER BY lb.scheduled_date ASC, lb.start_time ASC
-        LIMIT 500
-      `;
-    } catch (joinErr) {
-      // Fallback: driving_sessions table may not exist
-      console.warn('schedule-range fallback (no driving_sessions):', joinErr.message);
-      bookings = await sql`
-        SELECT
-          lb.id,
-          lb.scheduled_date::text,
-          lb.start_time::text,
-          lb.end_time::text,
-          lb.status,
-          lb.notes,
-          lu.id    AS learner_id,
-          lu.name  AS learner_name,
-          lu.email AS learner_email,
-          lu.phone AS learner_phone,
-          lu.pickup_address AS learner_pickup_address,
-          NULL AS session_log_id,
-          NULL AS session_notes,
-          lb.instructor_notes
-        FROM lesson_bookings lb
-        JOIN learner_users lu ON lu.id = lb.learner_id
-        WHERE lb.instructor_id = ${instructor.id}
-          AND lb.status IN ('confirmed', 'completed')
-          AND lb.scheduled_date >= ${from}::date
-          AND lb.scheduled_date <= ${to}::date
-        ORDER BY lb.scheduled_date ASC, lb.start_time ASC
-        LIMIT 500
-      `;
-    }
-
-    // Fetch skill ratings for any logged sessions (non-critical)
-    const loggedIds = bookings.filter(b => b.session_log_id).map(b => b.session_log_id);
-    let ratingsMap = {};
-    if (loggedIds.length > 0) {
-      try {
-        const allRatings = await sql`
-          SELECT session_id, skill_key, rating
-          FROM skill_ratings
-          WHERE session_id = ANY(${loggedIds})
-          ORDER BY id`;
-        for (const r of allRatings) {
-          if (!ratingsMap[r.session_id]) ratingsMap[r.session_id] = [];
-          ratingsMap[r.session_id].push({ skill_key: r.skill_key, rating: r.rating });
-        }
-      } catch (e) { console.warn('skill_ratings query skipped:', e.message); }
-    }
-
-    for (const b of bookings) {
-      if (b.session_log_id) {
-        b.learner_ratings = ratingsMap[b.session_log_id] || [];
-      }
-    }
+    // Simple core query — only uses tables we know exist
+    const bookings = await sql`
+      SELECT
+        lb.id,
+        lb.scheduled_date::text,
+        lb.start_time::text,
+        lb.end_time::text,
+        lb.status,
+        lb.notes,
+        lu.id    AS learner_id,
+        lu.name  AS learner_name,
+        lu.email AS learner_email,
+        lu.phone AS learner_phone,
+        lu.pickup_address AS learner_pickup_address
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      WHERE lb.instructor_id = ${instructor.id}
+        AND lb.status IN ('confirmed', 'completed')
+        AND lb.scheduled_date >= ${from}::date
+        AND lb.scheduled_date <= ${to}::date
+      ORDER BY lb.scheduled_date ASC, lb.start_time ASC
+      LIMIT 500
+    `;
 
     return res.json({ bookings });
 
