@@ -513,6 +513,32 @@ Housekeeping and code quality improvements.
 - ✅ Extracted shared auth helpers (`api/_auth-helpers.js`) and mail utilities (`api/_shared.js`)
 - ✅ Removed dead/unused files
 
+### 2.35 — Foundation Cleanup ✅ Complete (25 March 2026)
+
+Three-part cleanup to eliminate technical debt that was slowing down development.
+
+**Part 1: Centralised DB Migration**
+- ✅ `db/migration.sql` — single idempotent file defining all 23 tables the app needs (safe to re-run)
+- ✅ `api/migrate.js` — protected endpoint to run migrations (requires `MIGRATION_SECRET` env var)
+- ✅ Removed all scattered `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ADD COLUMN IF NOT EXISTS` from 11 API files (264 lines removed)
+- ✅ Removed try/catch fallbacks for missing tables (`credit_transactions`, `driving_sessions`)
+- ✅ All queries now assume tables exist — no more defensive schema checks at runtime
+
+**Part 2: Shared CSS/JS Extraction**
+- ✅ `public/shared/learner.css` — CSS variables, reset, body styles, site-nav styles, utilities
+- ✅ `public/shared/instructor.css` — CSS variables, reset, body styles, site-nav styles, portal header
+- ✅ `public/shared/learner-auth.js` — `ccAuth.getAuth()`, `ccAuth.logout()`, `ccAuth.requireAuth()`, `ccAuth.getToken()`
+- ✅ `public/shared/instructor-auth.js` — same API for instructor portal
+- ✅ Updated 13 learner pages and 5 instructor pages to use shared CSS (~984 lines of duplicated CSS removed)
+- ✅ Updated 13 learner pages and 5 instructor pages to use shared auth JS (inline localStorage reads/logout functions replaced with `ccAuth` calls)
+
+**Part 3: Email Error Alerts**
+- ✅ `api/_error-alert.js` — fire-and-forget `reportError()` utility using existing SMTP config
+- ✅ Added `reportError()` before every `res.status(500)` call across 21 API files
+- ✅ Sends formatted email with endpoint, error message, and stack trace
+- ✅ Requires `ERROR_ALERT_EMAIL` env var (silently no-ops if not set)
+- ✅ Non-blocking — does not await, does not slow error responses
+
 ---
 
 ## Phase 3: Next Up (Prioritised)
@@ -563,11 +589,13 @@ Unique referral link per learner. Both referrer and new learner receive credit b
 - **Cancellation policy:** 48 hours minimum notice for credit return
 - **Video hosting:** Cloudflare Stream (HLS adaptive streaming), managed from admin portal
 - **API pattern:** Related endpoints grouped into single files using `?action=` routing
-- **DB migrations:** `db/migrations/` — run manually in Neon SQL Editor
+- **DB migrations:** `db/migration.sql` — single idempotent file, run via `GET /api/migrate?secret=MIGRATION_SECRET`
 - **Seed data:** `db/seeds/` — placeholder instructors for testing
 - **AI:** Claude API (Anthropic) for Ask the Examiner, Lesson Advisor, with `tool_use` for dynamic checkout
 - **Competency:** 17-skill DL25-aligned framework defined in `competency-config.js`, shared across 6 features
 - **Navigation:** Context-aware sidebar (`sidebar.js`) replaces all previous nav patterns
 - **PWA:** Installable with service worker caching, offline support, custom install prompt
 - **Analytics:** PostHog for event tracking and session recording
-- **Shared code:** Auth helpers in `api/_auth-helpers.js`, mail utilities in `api/_shared.js`
+- **Shared code:** Auth helpers in `api/_auth-helpers.js`, mail utilities in `api/_shared.js`, error alerts in `api/_error-alert.js`
+- **Shared frontend:** CSS in `public/shared/learner.css` + `instructor.css`, auth JS in `public/shared/learner-auth.js` + `instructor-auth.js`
+- **Error alerting:** Email alerts on 500 errors via `api/_error-alert.js` (requires `ERROR_ALERT_EMAIL` env var)
