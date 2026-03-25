@@ -1,4 +1,5 @@
 const { verifyAuth, buildLearnerContext } = require('./_shared');
+const { reportError } = require('./_slack');
 
 // ── DVSA Examiner Knowledge Base System Prompt ──────────────────────────────
 const SYSTEM_PROMPT = `You are the Coach Carter Driving Test Expert — an AI assistant on the Coach Carter Driving School website. You help learner drivers understand the UK driving test marking scheme, the DL25 marking sheet, and how examiners assess faults.
@@ -200,6 +201,7 @@ module.exports = async (req, res) => {
     return res.json({ reply });
   } catch (err) {
     console.error('Ask examiner error:', err);
+    reportError('/api/ask-examiner', err);
     return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 };

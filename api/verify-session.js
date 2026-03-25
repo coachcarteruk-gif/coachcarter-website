@@ -1,4 +1,5 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { reportError } = require('./_slack');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -63,6 +64,7 @@ module.exports = async (req, res) => {
     
   } catch (err) {
     console.error('Error verifying session:', err);
+    reportError('/api/verify-session', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };

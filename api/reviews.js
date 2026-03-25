@@ -1,4 +1,5 @@
 const { neon } = require('@neondatabase/serverless');
+const { reportError } = require('./_slack');
 
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -132,6 +133,7 @@ module.exports = async (req, res) => {
 
     } catch (err) {
       console.error('reviews GET error:', err);
+      reportError('/api/reviews', err);
       return res.status(500).json({ error: 'Failed to load reviews', details: err.message });
     }
   }
@@ -153,6 +155,7 @@ module.exports = async (req, res) => {
 
     } catch (err) {
       console.error('reviews POST error:', err);
+      reportError('/api/reviews', err);
       return res.status(500).json({ error: 'Failed to refresh reviews', details: err.message });
     }
   }

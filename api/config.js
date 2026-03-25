@@ -1,4 +1,5 @@
 const { neon } = require('@neondatabase/serverless');
+const { reportError } = require('./_slack');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -35,6 +36,7 @@ module.exports = async (req, res) => {
 
     } catch (err) {
       console.error('config GET error:', err);
+      reportError('/api/config', err);
       return res.status(500).json({ error: 'Failed to load config', details: err.message });
     }
   }
@@ -80,6 +82,7 @@ module.exports = async (req, res) => {
 
     } catch (err) {
       console.error('config POST error:', err);
+      reportError('/api/config', err);
       return res.status(500).json({ error: 'Failed to save config', details: err.message });
     }
   }

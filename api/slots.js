@@ -24,6 +24,7 @@ const nodemailer  = require('nodemailer');
 const jwt         = require('jsonwebtoken');
 const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const twilio      = require('twilio');
+const { reportError } = require('./_slack');
 
 // ── WhatsApp helper ──────────────────────────────────────────────────────────
 function sendWhatsApp(to, message) {
@@ -338,6 +339,7 @@ async function handleAvailable(req, res) {
 
   } catch (err) {
     console.error('slots available error:', err);
+    reportError('/api/slots', err);
     return res.status(500).json({ error: 'Failed to generate slots', details: err.message });
   }
 }
@@ -539,6 +541,7 @@ async function handleBook(req, res) {
 
   } catch (err) {
     console.error('slots book error:', err);
+    reportError('/api/slots', err);
     return res.status(500).json({ error: 'Booking failed', details: err.message });
   }
 }
@@ -678,6 +681,7 @@ async function handleCheckoutSlot(req, res) {
     return res.json({ url: session.url });
   } catch (err) {
     console.error('checkout-slot error:', err);
+    reportError('/api/slots', err);
     return res.status(500).json({ error: 'Failed to create checkout', details: err.message });
   }
 }
@@ -806,6 +810,7 @@ async function handleCancel(req, res) {
 
   } catch (err) {
     console.error('slots cancel error:', err);
+    reportError('/api/slots', err);
     return res.status(500).json({ error: 'Cancellation failed', details: err.message });
   }
 }
@@ -864,6 +869,7 @@ async function handleMyBookings(req, res) {
 
   } catch (err) {
     console.error('slots my-bookings error:', err);
+    reportError('/api/slots', err);
     return res.status(500).json({ error: 'Failed to load bookings', details: err.message });
   }
 }

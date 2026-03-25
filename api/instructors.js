@@ -16,6 +16,7 @@
 
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
+const { reportError } = require('./_slack');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -76,6 +77,7 @@ async function handleList(req, res) {
     return res.json({ instructors });
   } catch (err) {
     console.error('instructors list error:', err);
+    reportError('/api/instructors', err);
     return res.status(500).json({ error: 'Failed to load instructors', details: err.message });
   }
 }
@@ -100,6 +102,7 @@ async function handleAvailability(req, res) {
     return res.json({ windows });
   } catch (err) {
     console.error('instructors availability error:', err);
+    reportError('/api/instructors', err);
     return res.status(500).json({ error: 'Failed to load availability', details: err.message });
   }
 }
@@ -136,6 +139,7 @@ async function handleCreate(req, res) {
     return res.status(201).json({ instructor });
   } catch (err) {
     console.error('instructors create error:', err);
+    reportError('/api/instructors', err);
     return res.status(500).json({ error: 'Failed to create instructor', details: err.message });
   }
 }
@@ -168,6 +172,7 @@ async function handleUpdate(req, res) {
     return res.json({ instructor });
   } catch (err) {
     console.error('instructors update error:', err);
+    reportError('/api/instructors', err);
     return res.status(500).json({ error: 'Failed to update instructor', details: err.message });
   }
 }
@@ -228,6 +233,7 @@ async function handleSetAvailability(req, res) {
     return res.json({ success: true, windows: saved });
   } catch (err) {
     console.error('instructors set-availability error:', err);
+    reportError('/api/instructors', err);
     return res.status(500).json({ error: 'Failed to save availability', details: err.message });
   }
 }

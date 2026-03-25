@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const twilio = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
+const { reportError } = require('./_slack');
 
 const FREE_TRIAL_CREDITS = 0;
 
@@ -142,6 +143,7 @@ async function handleSendLink(req, res) {
     }
   } catch (err) {
     console.error('send-link error:', err);
+    reportError('/api/magic-link', err);
     return res.status(500).json({ error: 'Failed to send login link' });
   }
 }
@@ -166,6 +168,7 @@ async function handleValidate(req, res) {
     return res.json({ valid: true });
   } catch (err) {
     console.error('validate error:', err);
+    reportError('/api/magic-link', err);
     return res.status(500).json({ error: 'Validation failed' });
   }
 }
@@ -300,6 +303,7 @@ async function handleVerify(req, res) {
     });
   } catch (err) {
     console.error('verify error:', err);
+    reportError('/api/magic-link', err);
     return res.status(500).json({ error: 'Verification failed' });
   }
 }
@@ -387,6 +391,7 @@ async function handleVerifyCode(req, res) {
     });
   } catch (err) {
     console.error('verify-code error:', err);
+    reportError('/api/magic-link', err);
     return res.status(500).json({ error: 'Verification failed' });
   }
 }

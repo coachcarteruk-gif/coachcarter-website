@@ -1,5 +1,6 @@
 const { Resend } = require('resend');
 const { neon } = require('@neondatabase/serverless');
+const { reportError } = require('./_slack');
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -40,6 +41,7 @@ module.exports = async (req, res) => {
         pagination: { total: parseInt(countResult[0].total), limit: parseInt(limit), offset: parseInt(offset) }
       });
     } catch (err) {
+      reportError('/api/availability', err);
       return res.status(500).json({ error: err.message });
     }
   }
@@ -132,6 +134,7 @@ module.exports = async (req, res) => {
 
   } catch (err) {
     console.error('Error processing availability:', err);
+    reportError('/api/availability', err);
     res.status(500).json({ error: err.message });
   }
 };

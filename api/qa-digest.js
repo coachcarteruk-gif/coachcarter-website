@@ -5,6 +5,7 @@
 
 const { neon } = require('@neondatabase/serverless');
 const { createTransporter } = require('./_auth-helpers');
+const { reportError } = require('./_slack');
 
 module.exports = async (req, res) => {
   // Protect with a secret key
@@ -87,6 +88,7 @@ module.exports = async (req, res) => {
 
   } catch (err) {
     console.error('qa-digest error:', err);
+    reportError('/api/qa-digest', err);
     return res.status(500).json({ error: 'Failed to send digest' });
   }
 };

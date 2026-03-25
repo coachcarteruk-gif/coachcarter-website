@@ -21,6 +21,7 @@
 
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
+const { reportError } = require('./_slack');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -119,6 +120,7 @@ async function handleList(req, res) {
     return res.json({ videos });
   } catch (err) {
     console.error('videos list error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to load videos', details: err.message });
   }
 }
@@ -136,6 +138,7 @@ async function handleCategories(req, res) {
     return res.json({ categories });
   } catch (err) {
     console.error('categories error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to load categories' });
   }
 }
@@ -174,6 +177,7 @@ async function handleUploadUrl(req, res) {
     return res.json({ uploadUrl, uid });
   } catch (err) {
     console.error('upload-url error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to get upload URL', details: err.message });
   }
 }
@@ -202,6 +206,7 @@ async function handleFetchMeta(req, res) {
     });
   } catch (err) {
     console.error('fetch-meta error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to fetch metadata', details: err.message });
   }
 }
@@ -234,6 +239,7 @@ async function handleCreate(req, res) {
     return res.status(201).json({ video });
   } catch (err) {
     console.error('video create error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to create video', details: err.message });
   }
 }
@@ -265,6 +271,7 @@ async function handleUpdate(req, res) {
     return res.json({ video });
   } catch (err) {
     console.error('video update error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to update video' });
   }
 }
@@ -294,6 +301,7 @@ async function handleDelete(req, res) {
     return res.json({ success: true });
   } catch (err) {
     console.error('video delete error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to delete video' });
   }
 }
@@ -315,6 +323,7 @@ async function handleReorder(req, res) {
     return res.json({ success: true });
   } catch (err) {
     console.error('video reorder error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to reorder videos' });
   }
 }
@@ -355,6 +364,7 @@ async function handleBulkUpdate(req, res) {
     return res.json({ success: true, updated });
   } catch (err) {
     console.error('bulk update error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to bulk update videos' });
   }
 }
@@ -398,6 +408,7 @@ async function handleBulkDelete(req, res) {
     return res.json({ success: true, deleted: ids.length });
   } catch (err) {
     console.error('bulk delete error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to bulk delete videos' });
   }
 }
@@ -421,6 +432,7 @@ async function handleCreateCategory(req, res) {
     return res.status(201).json({ category: cat });
   } catch (err) {
     console.error('category create error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to create category', details: err.message });
   }
 }
@@ -447,6 +459,7 @@ async function handleUpdateCategory(req, res) {
     return res.json({ category: cat });
   } catch (err) {
     console.error('category update error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to update category' });
   }
 }
@@ -469,6 +482,7 @@ async function handleDeleteCategory(req, res) {
     return res.json({ success: true });
   } catch (err) {
     console.error('category delete error:', err);
+    reportError('/api/videos', err);
     return res.status(500).json({ error: 'Failed to delete category' });
   }
 }

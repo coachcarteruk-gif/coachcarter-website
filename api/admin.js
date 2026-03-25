@@ -43,6 +43,7 @@
 const { neon }   = require('@neondatabase/serverless');
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
+const { reportError } = require('./_slack');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -146,6 +147,7 @@ async function handleLogin(req, res) {
     });
   } catch (err) {
     console.error('admin login error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Login failed', details: err.message });
   }
 }
@@ -196,6 +198,7 @@ async function handleCreateAdmin(req, res) {
     return res.status(201).json({ admin });
   } catch (err) {
     console.error('admin create error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to create admin', details: err.message });
   }
 }
@@ -280,6 +283,7 @@ async function handleDashboardStats(req, res) {
     });
   } catch (err) {
     console.error('admin dashboard-stats error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load stats', details: err.message });
   }
 }
@@ -329,6 +333,7 @@ async function handleAllBookings(req, res) {
     return res.json({ bookings });
   } catch (err) {
     console.error('admin all-bookings error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load bookings', details: err.message });
   }
 }
@@ -360,6 +365,7 @@ async function handleMarkComplete(req, res) {
     return res.json({ success: true, booking_id });
   } catch (err) {
     console.error('admin mark-complete error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to mark complete', details: err.message });
   }
 }
@@ -411,6 +417,7 @@ async function handleAllInstructors(req, res) {
     return res.json({ instructors: result });
   } catch (err) {
     console.error('admin all-instructors error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load instructors', details: err.message });
   }
 }
@@ -450,6 +457,7 @@ async function handleCreateInstructor(req, res) {
     return res.status(201).json({ success: true, instructor: rows[0] });
   } catch (err) {
     console.error('admin create-instructor error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to create instructor', details: err.message });
   }
 }
@@ -491,6 +499,7 @@ async function handleUpdateInstructor(req, res) {
     return res.json({ success: true, instructor: rows[0] });
   } catch (err) {
     console.error('admin update-instructor error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to update instructor', details: err.message });
   }
 }
@@ -517,6 +526,7 @@ async function handleToggleInstructor(req, res) {
     return res.json({ success: true, instructor: rows[0] });
   } catch (err) {
     console.error('admin toggle-instructor error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to update instructor', details: err.message });
   }
 }
@@ -554,6 +564,7 @@ async function handleAllLearners(req, res) {
     return res.json({ learners });
   } catch (err) {
     console.error('admin all-learners error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load learners', details: err.message });
   }
 }
@@ -616,6 +627,7 @@ async function handleLearnerDetail(req, res) {
     });
   } catch (err) {
     console.error('admin learner-detail error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load learner details', details: err.message });
   }
 }
@@ -670,6 +682,7 @@ async function handleAdjustCredits(req, res) {
     });
   } catch (err) {
     console.error('admin adjust-credits error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to adjust credits', details: err.message });
   }
 }
@@ -715,6 +728,7 @@ async function handleDeleteLearner(req, res) {
     return res.json({ success: true, deleted: { id: learner.id, name: learner.name, email: learner.email } });
   } catch (err) {
     console.error('admin delete-learner error:', err);
+    reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to delete learner', details: err.message });
   }
 }
