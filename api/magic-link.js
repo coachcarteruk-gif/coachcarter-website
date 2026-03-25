@@ -53,19 +53,6 @@ async function handleSendLink(req, res) {
 
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Ensure magic_link_tokens table exists
-    await sql`
-      CREATE TABLE IF NOT EXISTS magic_link_tokens (
-        id SERIAL PRIMARY KEY,
-        token TEXT UNIQUE NOT NULL,
-        email TEXT,
-        phone TEXT,
-        method TEXT NOT NULL DEFAULT 'email',
-        expires_at TIMESTAMPTZ NOT NULL,
-        used BOOLEAN DEFAULT false,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )`;
-
     // Generate a secure random token
     const token = generateToken();
     const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
@@ -199,24 +186,6 @@ async function handleVerify(req, res) {
     // Mark token as used immediately (prevents reuse)
     await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
 
-    // Ensure learner_users table exists (with optional password_hash for legacy)
-    await sql`
-      CREATE TABLE IF NOT EXISTS learner_users (
-        id SERIAL PRIMARY KEY, name TEXT, email TEXT UNIQUE,
-        phone TEXT, password_hash TEXT,
-        current_tier INTEGER DEFAULT 1,
-        credit_balance INTEGER DEFAULT 0,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )`;
-
-    // Add phone column if it doesn't exist (for existing databases)
-    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS phone TEXT`;
-    // Ensure phone uniqueness (ignore error if constraint already exists)
-    try { await sql`ALTER TABLE learner_users ADD CONSTRAINT learner_users_phone_unique UNIQUE (phone)`; } catch {};
-    // Drop NOT NULL constraints that conflict with magic link signup (name + password collected later or not at all)
-    try { await sql`ALTER TABLE learner_users ALTER COLUMN name DROP NOT NULL`; } catch {};
-    try { await sql`ALTER TABLE learner_users ALTER COLUMN password_hash DROP NOT NULL`; } catch {};
-
     // Look up or create the user
     let user;
     let isNewUser = false;
@@ -332,20 +301,6 @@ async function handleVerifyCode(req, res) {
 
     // Mark as used
     await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
-
-    // Ensure learner_users table exists
-    await sql`
-      CREATE TABLE IF NOT EXISTS learner_users (
-        id SERIAL PRIMARY KEY, name TEXT, email TEXT UNIQUE,
-        phone TEXT, password_hash TEXT,
-        current_tier INTEGER DEFAULT 1,
-        credit_balance INTEGER DEFAULT 0,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )`;
-    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS phone TEXT`;
-    try { await sql`ALTER TABLE learner_users ADD CONSTRAINT learner_users_phone_unique UNIQUE (phone)`; } catch {};
-    try { await sql`ALTER TABLE learner_users ALTER COLUMN name DROP NOT NULL`; } catch {};
-    try { await sql`ALTER TABLE learner_users ALTER COLUMN password_hash DROP NOT NULL`; } catch {};
 
     // Look up or create the user by phone
     let user;
