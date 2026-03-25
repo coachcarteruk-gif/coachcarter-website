@@ -41,7 +41,7 @@ function sendWhatsApp(to, message) {
     to:   `whatsapp:${phone}`,
     body: message
   }).catch(err => {
-    console.warn('WhatsApp send failed (non-critical):', err.message);
+    console.warn('WhatsApp send failed (non-critical):', err.message, 'code:', err.code, 'status:', err.status, 'to:', phone, 'from:', from);
   });
 }
 
