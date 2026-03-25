@@ -23,6 +23,27 @@ const { neon }    = require('@neondatabase/serverless');
 const nodemailer  = require('nodemailer');
 const jwt         = require('jsonwebtoken');
 const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const twilio      = require('twilio');
+
+// ── WhatsApp helper ──────────────────────────────────────────────────────────
+function sendWhatsApp(to, message) {
+  const sid  = process.env.TWILIO_SID;
+  const auth = process.env.TWILIO_AUTH;
+  const from = process.env.TWILIO_WHATSAPP_FROM;
+  if (!sid || !auth || !from || !to) return Promise.resolve();
+
+  // Normalise phone: ensure it starts with +
+  const phone = to.startsWith('+') ? to : `+${to}`;
+
+  const client = twilio(sid, auth);
+  return client.messages.create({
+    from: `whatsapp:${from}`,
+    to:   `whatsapp:${phone}`,
+    body: message
+  }).catch(err => {
+    console.warn('WhatsApp send failed (non-critical):', err.message);
+  });
+}
 
 const SLOT_MINUTES        = 90;   // 1.5 hours
 const MAX_DAYS_AHEAD      = 90;   // booking window
@@ -371,7 +392,7 @@ async function handleBook(req, res) {
 
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
-      SELECT id, name, email FROM instructors
+      SELECT id, name, email, phone FROM instructors
       WHERE id = ${instructor_id} AND active = true
     `;
     if (!instructor)
@@ -496,6 +517,16 @@ async function handleBook(req, res) {
           </p>
         `
       });
+    }
+
+    // WhatsApp notifications (non-blocking, fire-and-forget)
+    sendWhatsApp(learner.phone,
+      `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
+    );
+    if (!isDemoInstructor) {
+      sendWhatsApp(instructor.phone,
+        `📋 New booking!\n\n👤 ${learner.name}\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`
+      );
     }
 
     return res.status(201).json({
@@ -666,8 +697,8 @@ async function handleCancel(req, res) {
 
     // Load booking — must belong to this learner
     const [booking] = await sql`
-      SELECT lb.*, i.name AS instructor_name, i.email AS instructor_email,
-             lu.name AS learner_name, lu.email AS learner_email
+      SELECT lb.*, i.name AS instructor_name, i.email AS instructor_email, i.phone AS instructor_phone,
+             lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone
       FROM lesson_bookings lb
       JOIN instructors i    ON i.id  = lb.instructor_id
       JOIN learner_users lu ON lu.id = lb.learner_id
@@ -745,6 +776,19 @@ async function handleCancel(req, res) {
              has been cancelled by the learner.</p>
         `
       });
+    }
+
+    // WhatsApp cancellation notifications
+    const cancelTime = String(booking.start_time).slice(0, 5);
+    sendWhatsApp(booking.learner_phone,
+      creditReturned
+        ? `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nYour lesson has been returned to your balance. You now have ${updated.credit_balance} lesson(s) remaining.\n\nRebook: https://coachcarter.uk/learner/book.html`
+        : `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nAs this was less than 48 hours' notice, the lesson has been forfeited.`
+    );
+    if (!isDemoBooking) {
+      sendWhatsApp(booking.instructor_phone,
+        `❌ Lesson cancelled\n\n👤 ${booking.learner_name}\n📅 ${lessonDateStr} at ${cancelTime}\n\nThis slot is now free.`
+      );
     }
 
     return res.json({
