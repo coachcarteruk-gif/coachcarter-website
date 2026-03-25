@@ -90,6 +90,7 @@ module.exports = async (req, res) => {
   if (action === 'all-learners')      return handleAllLearners(req, res);
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
   if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
+  if (action === 'delete-learner')    return handleDeleteLearner(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -670,5 +671,50 @@ async function handleAdjustCredits(req, res) {
   } catch (err) {
     console.error('admin adjust-credits error:', err);
     return res.status(500).json({ error: 'Failed to adjust credits', details: err.message });
+  }
+}
+
+// ── POST /api/admin?action=delete-learner ────────────────────────────────────
+// Body: { learner_id }
+// Deletes a learner and all their associated data.
+async function handleDeleteLearner(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+
+  const { learner_id } = req.body;
+  if (!learner_id) return res.status(400).json({ error: 'learner_id is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Verify learner exists
+    const [learner] = await sql`SELECT id, name, email FROM learner_users WHERE id = ${learner_id}`;
+    if (!learner) return res.status(404).json({ error: 'Learner not found' });
+
+    // Delete associated data (order matters for foreign keys)
+    const tables = [
+      { name: 'skill_ratings', col: 'user_id' },
+      { name: 'driving_sessions', col: 'user_id' },
+      { name: 'credit_transactions', col: 'learner_id' },
+      { name: 'lesson_bookings', col: 'learner_id' },
+      { name: 'qa_questions', col: 'user_id' },
+    ];
+
+    for (const t of tables) {
+      try {
+        await sql(`DELETE FROM ${t.name} WHERE ${t.col} = $1`, [learner_id]);
+      } catch (e) { console.warn(`delete from ${t.name} skipped:`, e.message); }
+    }
+
+    // Delete the learner
+    await sql`DELETE FROM learner_users WHERE id = ${learner_id}`;
+
+    console.log(`Admin deleted learner: ${learner.name} (${learner.email}) id=${learner_id}`);
+    return res.json({ success: true, deleted: { id: learner.id, name: learner.name, email: learner.email } });
+  } catch (err) {
+    console.error('admin delete-learner error:', err);
+    return res.status(500).json({ error: 'Failed to delete learner', details: err.message });
   }
 }

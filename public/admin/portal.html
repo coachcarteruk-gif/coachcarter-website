@@ -1335,9 +1335,38 @@ async function showLearnerDetail(id) {
       html += '</tbody></table></div>';
     }
 
+    // Delete button
+    html += '<div style="margin-top:32px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.06);">';
+    html += '<button onclick="confirmDeleteLearner(\'' + id + '\', \'' + esc(learner?.name || learner?.email || '') + '\')" style="background:#e74c3c;color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600;">🗑 Delete Learner</button>';
+    html += '<span style="margin-left:12px;font-size:0.78rem;color:var(--muted);">Permanently removes this learner and all their data.</span>';
+    html += '</div>';
+
     content.innerHTML = html;
   } catch (err) {
     content.innerHTML = '<div class="empty-state">Failed to load learner details</div>';
+  }
+}
+
+function confirmDeleteLearner(id, name) {
+  if (!confirm('Are you sure you want to permanently delete ' + (name || 'this learner') + '? This will remove all their bookings, sessions, credits and cannot be undone.')) return;
+  if (!confirm('This is irreversible. Type OK to confirm you want to delete ' + (name || 'this learner') + '.')) return;
+  deleteLearner(id);
+}
+
+async function deleteLearner(id) {
+  try {
+    const res = await fetch('/api/admin?action=delete-learner', {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ learner_id: id })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    alert('Learner deleted: ' + (data.deleted?.name || data.deleted?.email));
+    closeLearnerDetail();
+    loadLearners(); // refresh the list
+  } catch (err) {
+    alert('Failed to delete: ' + err.message);
   }
 }
 
