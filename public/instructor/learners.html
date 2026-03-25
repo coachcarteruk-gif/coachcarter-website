@@ -174,6 +174,7 @@
     @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fadeUp 0.35s ease; }
   </style>
+<script src="/shared/instructor-auth.js"></script>
 </head>
 <body>
 
@@ -260,7 +261,7 @@ let allLearners = [];
 
 // ── Init ──
 function init() {
-  const session = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
+  const session = ccAuth.getAuth();
   token = session?.token || null;
   instructor = session?.instructor || null;
   if (!token) { window.location.href = '/instructor/login.html'; return; }
@@ -275,8 +276,7 @@ function init() {
 }
 
 function signOut() {
-  localStorage.removeItem('cc_instructor');
-  window.location.href = '/instructor/login.html';
+  ccAuth.logout();
 }
 
 // ── Load learners ──
