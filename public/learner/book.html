@@ -1259,7 +1259,7 @@ function drillToDay(ds) {
 function openBookModal(el) {
   if (window.ccAuth && !window.ccAuth.requireAuth()) return;
   if (!isProfileComplete()) {
-    showToast('Please add your phone number and pickup address on your dashboard before booking.', 'error');
+    showToast('Please add your phone number and pickup address in your Profile before booking.', 'error');
     return;
   }
   pendingSlot = {

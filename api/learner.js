@@ -216,12 +216,7 @@ async function handleProfile(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Ensure columns exist
-    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS pickup_address TEXT`;
-    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS prefer_contact_before BOOLEAN DEFAULT false`;
-    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS test_date TEXT`;
-    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS test_time TEXT`;
-
+    // Columns already exist in learner_users — no migrations needed
     const [row] = await sql`
       SELECT name, email, phone, pickup_address, prefer_contact_before, test_date, test_time
       FROM learner_users WHERE id = ${user.id}
@@ -272,20 +267,17 @@ async function handleUpdateProfile(req, res) {
     const { phone, pickup_address } = req.body;
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Ensure pickup_address column exists
-    try { await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS pickup_address TEXT`; }
-    catch (e) { console.warn('pickup_address migration:', e.message); }
-
+    // No migration needed — pickup_address column already exists in learner_users
     const [updated] = await sql`
       UPDATE learner_users SET
-        phone          = COALESCE(${phone ?? null}, phone),
-        pickup_address = COALESCE(${pickup_address ?? null}, pickup_address)
+        phone          = COALESCE(${phone || null}, phone),
+        pickup_address = COALESCE(${pickup_address || null}, pickup_address)
       WHERE id = ${user.id}
       RETURNING name, email, phone, pickup_address
     `;
     return res.json({ success: true, profile: updated });
   } catch (err) {
-    console.error('update-profile error:', err.message);
+    console.error('update-profile error:', err.message, JSON.stringify(err));
     return res.status(500).json({ error: 'Failed to update profile', details: err.message });
   }
 }
