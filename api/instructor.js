@@ -97,17 +97,6 @@ async function handleRequestLogin(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Ensure the token table exists
-    await sql`
-      CREATE TABLE IF NOT EXISTS instructor_login_tokens (
-        id            SERIAL PRIMARY KEY,
-        instructor_id INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
-        token         TEXT    NOT NULL UNIQUE,
-        expires_at    TIMESTAMPTZ NOT NULL,
-        used          BOOLEAN NOT NULL DEFAULT FALSE,
-        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )`;
-
     // Look up instructor by email
     const [instructor] = await sql`
       SELECT id, name, email FROM instructors
@@ -416,9 +405,6 @@ async function handleComplete(req, res) {
     if (lessonTime > new Date())
       return res.status(400).json({ error: 'Cannot mark a future lesson as complete' });
 
-    // Add instructor_notes column if it doesn't exist yet
-    await sql`ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS instructor_notes TEXT`;
-
     await sql`
       UPDATE lesson_bookings SET status = 'completed',
         instructor_notes = ${instructor_notes ? instructor_notes.trim() : null}
@@ -629,16 +615,6 @@ async function handleBlackoutDates(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Ensure table exists (safe for first run before migration)
-    await sql`CREATE TABLE IF NOT EXISTS instructor_blackout_dates (
-      id SERIAL PRIMARY KEY,
-      instructor_id INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
-      blackout_date DATE NOT NULL,
-      reason TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      CONSTRAINT uq_blackout_date UNIQUE (instructor_id, blackout_date)
-    )`;
-
     const dates = await sql`
       SELECT id, blackout_date::text, reason
       FROM instructor_blackout_dates
@@ -676,16 +652,6 @@ async function handleSetBlackoutDates(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-
-    // Ensure table exists
-    await sql`CREATE TABLE IF NOT EXISTS instructor_blackout_dates (
-      id SERIAL PRIMARY KEY,
-      instructor_id INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
-      blackout_date DATE NOT NULL,
-      reason TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      CONSTRAINT uq_blackout_date UNIQUE (instructor_id, blackout_date)
-    )`;
 
     // Delete all future blackout dates for this instructor
     await sql`

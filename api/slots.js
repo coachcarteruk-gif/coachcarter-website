@@ -577,19 +577,6 @@ async function handleCheckoutSlot(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Ensure reservation table exists
-    await sql`CREATE TABLE IF NOT EXISTS slot_reservations (
-      id SERIAL PRIMARY KEY,
-      learner_id INTEGER NOT NULL,
-      instructor_id INTEGER NOT NULL,
-      scheduled_date DATE NOT NULL,
-      start_time TIME NOT NULL,
-      end_time TIME NOT NULL,
-      stripe_session_id TEXT,
-      expires_at TIMESTAMPTZ NOT NULL,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )`;
-
     // Clean up any expired reservations
     await sql`DELETE FROM slot_reservations WHERE expires_at < NOW()`;
 

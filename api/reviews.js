@@ -81,22 +81,6 @@ module.exports = async (req, res) => {
   // ── GET: return cached reviews ────────────────────────────────────────
   if (req.method === 'GET') {
     try {
-      // Ensure tables exist
-      await sql`
-        CREATE TABLE IF NOT EXISTS google_reviews (
-          id SERIAL PRIMARY KEY, review_id TEXT UNIQUE NOT NULL,
-          author_name TEXT NOT NULL, rating SMALLINT NOT NULL,
-          text TEXT, relative_time TEXT, publish_time TIMESTAMPTZ,
-          profile_photo_url TEXT, cached_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-      `;
-      await sql`
-        CREATE TABLE IF NOT EXISTS google_reviews_meta (
-          id INTEGER PRIMARY KEY DEFAULT 1, last_fetched_at TIMESTAMPTZ,
-          place_id TEXT, place_name TEXT, overall_rating NUMERIC(2,1), total_reviews INTEGER
-        )
-      `;
-
       // Check if cache is stale
       const [meta] = await sql`SELECT last_fetched_at FROM google_reviews_meta WHERE id = 1`;
       const lastFetched = meta?.last_fetched_at ? new Date(meta.last_fetched_at) : null;
