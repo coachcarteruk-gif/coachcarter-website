@@ -387,7 +387,7 @@ async function handleBook(req, res) {
 
     // 1. Check learner has enough credits
     const [learner] = await sql`
-      SELECT id, name, email, credit_balance
+      SELECT id, name, email, phone, credit_balance
       FROM learner_users WHERE id = ${user.id}
     `;
     if (!learner)
