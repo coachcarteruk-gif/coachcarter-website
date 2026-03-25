@@ -2,6 +2,24 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const nodemailer = require('nodemailer');
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
+const twilio = require('twilio');
+
+// ── WhatsApp helper ──────────────────────────────────────────────────────────
+function sendWhatsApp(to, message) {
+  const sid  = process.env.TWILIO_SID;
+  const auth = process.env.TWILIO_AUTH;
+  const from = process.env.TWILIO_WHATSAPP_FROM;
+  if (!sid || !auth || !from || !to) return Promise.resolve();
+  const phone = to.startsWith('+') ? to : `+${to}`;
+  const client = twilio(sid, auth);
+  return client.messages.create({
+    from: `whatsapp:${from}`,
+    to:   `whatsapp:${phone}`,
+    body: message
+  }).catch(err => {
+    console.warn('WhatsApp send failed (non-critical):', err.message);
+  });
+}
 
 // In-memory storage for legacy booking flow (pass guarantee / packages)
 // NOTE: this is intentionally kept for the existing flow — the new credit
@@ -209,12 +227,12 @@ async function handleSlotBooking(session) {
       // Table may not exist — that's fine
     }
 
-    // 6. Get instructor email for notification
+    // 6. Get instructor & learner details for notifications
     const [instructor] = await sql`
-      SELECT email FROM instructors WHERE id = ${instructorId}
+      SELECT email, phone FROM instructors WHERE id = ${instructorId}
     `;
     const [learner] = await sql`
-      SELECT name, email FROM learner_users WHERE id = ${learnerId}
+      SELECT name, email, phone FROM learner_users WHERE id = ${learnerId}
     `;
 
     const creditBalance = deducted.credit_balance;
@@ -290,6 +308,14 @@ async function handleSlotBooking(session) {
         `
       });
     }
+
+    // WhatsApp notifications (non-blocking)
+    sendWhatsApp(learner?.phone,
+      `✅ Lesson confirmed!\n\n📅 ${lessonDate}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructorName}\n\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
+    );
+    sendWhatsApp(instructor?.phone,
+      `📋 New booking!\n\n👤 ${learner?.name || 'Unknown'}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`
+    );
 
     console.log(`✅ Slot booking complete: lesson #${booking.id} for learner #${learnerId}`);
 
