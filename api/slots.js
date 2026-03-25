@@ -44,9 +44,11 @@ function sendWhatsApp(to, message) {
     to:   `whatsapp:${phone}`,
     body: message
   }).then(msg => {
-    console.log('WhatsApp sent OK, sid:', msg?.sid, 'to:', phone);
+    console.log('WA_OK sid=' + (msg?.sid || 'none'));
   }).catch(err => {
-    console.error('WHATSAPP_FAIL', JSON.stringify({ message: err.message, code: err.code, status: err.status, moreInfo: err.moreInfo, to: phone, from }));
+    console.error('WA_ERR msg=' + err.message);
+    console.error('WA_ERR code=' + err.code + ' status=' + err.status);
+    console.error('WA_ERR to=' + phone + ' from=' + from);
   });
 }
 
