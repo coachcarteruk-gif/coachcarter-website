@@ -504,6 +504,7 @@
     .btn-cancel-danger:hover { background: #dc2626; }
   </style>
 <script src="/sidebar.js"></script>
+<script src="/shared/instructor-auth.js"></script>
 </head>
 <body>
 
@@ -717,7 +718,7 @@ let selectedBooking = null;
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
-  const session = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
+  const session = ccAuth.getAuth();
   token      = session?.token || null;
   instructor = session?.instructor || null;
   if (!token) { window.location.href = '/instructor/login.html'; return; }
@@ -1239,8 +1240,7 @@ function esc(str) {
 }
 
 function signOut() {
-  localStorage.removeItem('cc_instructor');
-  window.location.href = '/instructor/login.html';
+  ccAuth.logout();
 }
 
 function showToast(msg, type = '') {

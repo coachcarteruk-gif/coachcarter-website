@@ -507,6 +507,7 @@
     }
   </style>
 <script src="/sidebar.js"></script>
+<script src="/shared/learner-auth.js"></script>
 <script src="/auth-gate.js"></script>
 </head>
 <body>
@@ -736,7 +737,7 @@ document.addEventListener('click', function(e) {
     document.querySelector('.nav-menu-toggle')?.setAttribute('aria-expanded', 'false');
   }
 });
-function logout() { localStorage.removeItem('cc_learner'); window.location.href = '/learner/login.html'; }
+function logout() { ccAuth.logout(); }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -759,7 +760,7 @@ let learnerProfile = { phone: '', pickup_address: '' };
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
-  const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  const session = ccAuth.getAuth();
   token = session?.token || null;
 
   if (localStorage.getItem('cc_welcome') === '1') {
@@ -1460,7 +1461,7 @@ function getWeekStart(d) {
 }
 function esc(str) { return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-function signOut() { localStorage.removeItem('cc_learner'); window.location.href = '/learner/login.html'; }
+function signOut() { ccAuth.logout(); }
 
 function showToast(msg, type = '') {
   const t = document.getElementById('toast');

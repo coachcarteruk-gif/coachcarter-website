@@ -23,6 +23,7 @@
 <script src="/competency-config.js"></script>
 <script src="/test-routes.js"></script>
 <script src="/sidebar.js"></script>
+<script src="/shared/learner-auth.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -635,7 +636,7 @@ const MOCK_TEST = CC_COMPETENCY.MOCK_TEST;
 
 /* ── Auth ── */
 window.addEventListener('DOMContentLoaded', () => {
-  AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  AUTH = ccAuth.getAuth();
   if (!AUTH || !AUTH.token) {
     window.location.href = '/learner/login.html?redirect=/learner/mock-test.html';
     return;

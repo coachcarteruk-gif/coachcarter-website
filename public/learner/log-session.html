@@ -595,6 +595,7 @@
     }
   </style>
 <script src="/sidebar.js"></script>
+<script src="/shared/learner-auth.js"></script>
 <script src="/auth-gate.js"></script>
 </head>
 <body>
@@ -762,7 +763,7 @@ document.addEventListener('click', function(e) {
     document.querySelector('.nav-menu-toggle')?.setAttribute('aria-expanded', 'false');
   }
 });
-function logout() { localStorage.removeItem('cc_learner'); window.location.href = '/learner/login.html'; }
+function logout() { ccAuth.logout(); }
 
 // ── Skills from shared competency config ──
 const CC = window.CC_COMPETENCY;
@@ -862,7 +863,7 @@ function resetFault(skillKey, type, el) {
 
 // ── Auth + init ──
 window.addEventListener('DOMContentLoaded', async () => {
-  AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  AUTH = ccAuth.getAuth();
 
   // Always render the form UI
   buildSkillCards();

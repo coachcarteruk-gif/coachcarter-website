@@ -22,6 +22,7 @@
 <script src="/posthog-tracking.js" defer></script>
 <script src="/competency-config.js"></script>
 <script src="/sidebar.js"></script>
+<script src="/shared/learner-auth.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
@@ -468,7 +469,7 @@
 
   // ── Auth ──────────────────────────────────────────────────────────
   var AUTH;
-  try { AUTH = JSON.parse(localStorage.getItem('cc_learner')); } catch(e) { AUTH = null; }
+  AUTH = ccAuth.getAuth();
   if (!AUTH || !AUTH.token) { window.location.href = '/learner/login.html'; return; }
 
   // ── State ─────────────────────────────────────────────────────────

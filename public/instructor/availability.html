@@ -206,6 +206,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 <script src="/sidebar.js"></script>
+<script src="/shared/instructor-auth.js"></script>
 </head>
 <body>
 
@@ -313,7 +314,7 @@
   let blackoutDates = []; // [{ date, reason }]
 
   function init() {
-    const session = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
+    const session = ccAuth.getAuth();
     token = session?.token || null;
     if (!token) { window.location.href = '/instructor/login.html'; return; }
     document.getElementById('headerName').textContent = session?.instructor?.name || '—';
@@ -445,8 +446,7 @@
   }
 
   function signOut() {
-    localStorage.removeItem('cc_instructor');
-    window.location.href = '/instructor/login.html';
+    ccAuth.logout();
   }
 
   function showToast(msg, type = '') {

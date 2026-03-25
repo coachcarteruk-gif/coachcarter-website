@@ -191,6 +191,7 @@
     .fade-in { animation: fadeUp 0.35s ease; }
   </style>
 <script src="/sidebar.js"></script>
+<script src="/shared/learner-auth.js"></script>
 <script src="/auth-gate.js"></script>
 </head>
 <body>
@@ -284,7 +285,7 @@ let askBookingId = null;
 
 // ── Auth (optional — browsing is allowed without login) ──
 window.addEventListener('DOMContentLoaded', () => {
-  AUTH = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+  AUTH = ccAuth.getAuth();
   if (AUTH?.user?.name) document.getElementById('header-name').textContent = AUTH.user.name;
 
   // Check URL params
@@ -298,10 +299,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadQuestions();
 });
 
-function logout() {
-  localStorage.removeItem('cc_learner');
-  window.location.href = '/learner/login.html';
-}
+function logout() { ccAuth.logout(); }
 
 // ── Load questions ──
 async function loadQuestions() {
