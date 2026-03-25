@@ -30,7 +30,10 @@ function sendWhatsApp(to, message) {
   const sid  = process.env.TWILIO_SID;
   const auth = process.env.TWILIO_AUTH;
   const from = process.env.TWILIO_WHATSAPP_FROM;
-  if (!sid || !auth || !from || !to) return Promise.resolve();
+  if (!sid || !auth || !from || !to) {
+    console.warn('WhatsApp skipped — missing:', !sid ? 'SID' : '', !auth ? 'AUTH' : '', !from ? 'FROM' : '', !to ? 'TO(phone)' : '', 'to value:', to);
+    return Promise.resolve();
+  }
 
   // Normalise phone: ensure it starts with +
   const phone = to.startsWith('+') ? to : `+${to}`;
