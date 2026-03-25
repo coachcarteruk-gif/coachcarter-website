@@ -11,7 +11,7 @@ const { Resend }     = require('resend');
 const nodemailer     = require('nodemailer');
 const { neon }       = require('@neondatabase/serverless');
 const jwt            = require('jsonwebtoken');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 

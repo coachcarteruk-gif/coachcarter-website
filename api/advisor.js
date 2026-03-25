@@ -1,6 +1,6 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { verifyAuth, buildLearnerContext } = require('./_shared');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 // ── Pricing config ───────────────────────────────────────────────────────────
 const LESSON_PRICE_PENCE = 8250; // £82.50 per 1.5hr lesson

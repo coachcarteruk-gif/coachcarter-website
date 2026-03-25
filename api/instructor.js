@@ -34,7 +34,7 @@
 const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
 const { createTransporter, generateToken } = require('./_auth-helpers');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 const TOKEN_EXPIRY_MINUTES = 30;
 const JWT_EXPIRY           = '7d';

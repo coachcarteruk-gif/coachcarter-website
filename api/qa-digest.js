@@ -5,7 +5,7 @@
 
 const { neon } = require('@neondatabase/serverless');
 const { createTransporter } = require('./_auth-helpers');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 module.exports = async (req, res) => {
   // Protect with a secret key

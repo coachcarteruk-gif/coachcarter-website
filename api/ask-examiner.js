@@ -1,5 +1,5 @@
 const { verifyAuth, buildLearnerContext } = require('./_shared');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 // ── DVSA Examiner Knowledge Base System Prompt ──────────────────────────────
 const SYSTEM_PROMPT = `You are the Coach Carter Driving Test Expert — an AI assistant on the Coach Carter Driving School website. You help learner drivers understand the UK driving test marking scheme, the DL25 marking sheet, and how examiners assess faults.

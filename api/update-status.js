@@ -1,6 +1,6 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 function verifyAdmin(req) {
   const auth = req.headers.authorization;

@@ -43,7 +43,7 @@
 const { neon }   = require('@neondatabase/serverless');
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

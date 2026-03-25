@@ -1,5 +1,5 @@
 const { neon } = require('@neondatabase/serverless');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 /**
  * GET  /api/guarantee-price  → returns current guarantee pricing state

@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const twilio = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 const FREE_TRIAL_CREDITS = 0;
 

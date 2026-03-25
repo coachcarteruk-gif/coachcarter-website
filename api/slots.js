@@ -24,7 +24,7 @@ const nodemailer  = require('nodemailer');
 const jwt         = require('jsonwebtoken');
 const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const twilio      = require('twilio');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 // ── WhatsApp helper ──────────────────────────────────────────────────────────
 function sendWhatsApp(to, message) {

@@ -1,5 +1,5 @@
 const { neon } = require('@neondatabase/serverless');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 

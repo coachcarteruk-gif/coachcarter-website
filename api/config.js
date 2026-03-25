@@ -1,5 +1,5 @@
 const { neon } = require('@neondatabase/serverless');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');

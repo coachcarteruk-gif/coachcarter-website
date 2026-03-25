@@ -1,6 +1,6 @@
 const { Resend } = require('resend');
 const { neon } = require('@neondatabase/serverless');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);

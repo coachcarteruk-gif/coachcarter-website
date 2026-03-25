@@ -1,7 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 const LESSON_PRICE_PENCE = 8250; // £82.50 per lesson (1.5 hrs)
 const MAX_LESSONS_PER_PURCHASE = 20;

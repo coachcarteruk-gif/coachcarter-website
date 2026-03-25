@@ -14,7 +14,7 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
 const crypto   = require('crypto');
-const { reportError } = require('./_slack');
+const { reportError } = require('./_error-alert');
 
 const SLOT_MINUTES = 90;
 
