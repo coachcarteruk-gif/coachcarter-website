@@ -11,6 +11,7 @@ const { Resend }     = require('resend');
 const nodemailer     = require('nodemailer');
 const { neon }       = require('@neondatabase/serverless');
 const jwt            = require('jsonwebtoken');
+const { reportError } = require('./_error-alert');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -74,6 +75,7 @@ async function handleList(req, res) {
     return res.json({ enquiries });
   } catch (err) {
     console.error('enquiries list error:', err);
+    reportError('/api/enquiries', err);
     return res.status(500).json({ error: 'Database error', details: err.message });
   }
 }
@@ -90,6 +92,7 @@ async function handleGet(req, res) {
     return res.json({ enquiry });
   } catch (err) {
     console.error('enquiries get error:', err);
+    reportError('/api/enquiries', err);
     return res.status(500).json({ error: 'Failed to load enquiry' });
   }
 }
@@ -241,6 +244,7 @@ async function handleUpdateStatus(req, res) {
     return res.json({ success: true });
   } catch (err) {
     console.error('enquiries update-status error:', err);
+    reportError('/api/enquiries', err);
     return res.status(500).json({ error: 'Failed to update status' });
   }
 }

@@ -1,5 +1,6 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
+const { reportError } = require('./_error-alert');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 function verifyAuth(req) {
@@ -54,6 +55,7 @@ async function handleUpdateName(req, res) {
     return res.json({ success: true, name: name.trim() });
   } catch (err) {
     console.error('update-name error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to update name' });
   }
 }
@@ -79,6 +81,7 @@ async function handleSessions(req, res) {
         GROUP BY s.id ORDER BY s.session_date DESC, s.created_at DESC LIMIT 20`;
       return res.json({ sessions });
     } catch (err) {
+      reportError('/api/learner', err);
       return res.status(500).json({ error: 'Failed to load sessions', details: err.message });
     }
   }
@@ -115,6 +118,7 @@ async function handleSessions(req, res) {
       }
       return res.json({ success: true, session_id: sessionId });
     } catch (err) {
+      reportError('/api/learner', err);
       return res.status(500).json({ error: 'Failed to save session', details: err.message });
     }
   }
@@ -152,6 +156,7 @@ async function handleProgress(req, res) {
       prefer_contact_before: userRow[0]?.prefer_contact_before || false
     });
   } catch (err) {
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to load progress', details: err.message });
   }
 }
@@ -170,6 +175,7 @@ async function handleContactPref(req, res) {
     return res.json({ prefer_contact_before: row?.prefer_contact_before || false });
   } catch (err) {
     console.error('contact-pref error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to load preference' });
   }
 }
@@ -191,6 +197,7 @@ async function handleSetContactPref(req, res) {
     return res.json({ success: true, prefer_contact_before: val });
   } catch (err) {
     console.error('set-contact-pref error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to save preference' });
   }
 }
@@ -213,6 +220,7 @@ async function handleProfile(req, res) {
     return res.json({ profile: row });
   } catch (err) {
     console.error('profile error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to load profile' });
   }
 }
@@ -240,6 +248,7 @@ async function handleUnloggedBookings(req, res) {
     return res.json({ bookings });
   } catch (err) {
     console.error('unlogged-bookings error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to load unlogged bookings' });
   }
 }
@@ -270,6 +279,7 @@ async function handleUpdateProfile(req, res) {
     if (err.message && err.message.includes('duplicate') && err.message.includes('phone')) {
       return res.status(409).json({ error: 'This phone number is already linked to another account.' });
     }
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to update profile', details: err.message });
   }
 }
@@ -315,6 +325,7 @@ async function handleQAList(req, res) {
     return res.json({ questions });
   } catch (err) {
     console.error('qa-list error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to load questions' });
   }
 }
@@ -352,6 +363,7 @@ async function handleQADetail(req, res) {
     return res.json({ question, answers });
   } catch (err) {
     console.error('qa-detail error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to load question' });
   }
 }
@@ -416,6 +428,7 @@ async function handleQAAsk(req, res) {
     return res.json({ success: true, question_id: question.id });
   } catch (err) {
     console.error('qa-ask error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to create question' });
   }
 }
@@ -446,6 +459,7 @@ async function handleQAReply(req, res) {
     return res.json({ success: true, answer_id: answer.id });
   } catch (err) {
     console.error('qa-reply error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to post reply' });
   }
 }
@@ -479,6 +493,7 @@ async function handleMockTests(req, res) {
       return res.json({ mock_tests: tests });
     } catch (err) {
       console.error('mock-tests GET error:', err);
+      reportError('/api/learner', err);
       return res.status(500).json({ error: 'Failed to load mock tests' });
     }
   }
@@ -522,6 +537,7 @@ async function handleMockTests(req, res) {
       return res.json({ success: true, mock_test_id: row.id, started_at: row.started_at });
     } catch (err) {
       console.error('mock-tests POST error:', err);
+      reportError('/api/learner', err);
       return res.status(500).json({ error: 'Failed to save mock test' });
     }
   }
@@ -564,6 +580,7 @@ async function handleMockTestFaults(req, res) {
     return res.json({ success: true, part });
   } catch (err) {
     console.error('mock-test-faults error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to save faults' });
   }
 }
@@ -600,6 +617,7 @@ async function handleQuizResults(req, res) {
       return res.json({ accuracy, recent });
     } catch (err) {
       console.error('quiz-results GET error:', err);
+      reportError('/api/learner', err);
       return res.status(500).json({ error: 'Failed to load quiz results' });
     }
   }
@@ -618,6 +636,7 @@ async function handleQuizResults(req, res) {
       return res.json({ success: true, saved: results.length });
     } catch (err) {
       console.error('quiz-results POST error:', err);
+      reportError('/api/learner', err);
       return res.status(500).json({ error: 'Failed to save quiz results' });
     }
   }
@@ -685,6 +704,7 @@ async function handleCompetency(req, res) {
     });
   } catch (err) {
     console.error('competency error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to load competency data' });
   }
 }
@@ -703,6 +723,7 @@ async function handleOnboarding(req, res) {
       return res.json({ onboarding: row || null });
     } catch (err) {
       console.error('onboarding GET error:', err);
+      reportError('/api/learner', err);
       return res.status(500).json({ error: 'Failed to load onboarding data' });
     }
   }
@@ -757,6 +778,7 @@ async function handleOnboarding(req, res) {
       return res.json({ success: true });
     } catch (err) {
       console.error('onboarding POST error:', err);
+      reportError('/api/learner', err);
       return res.status(500).json({ error: 'Failed to save onboarding data' });
     }
   }
@@ -794,6 +816,7 @@ async function handleProfileCompleteness(req, res) {
     return res.json({ steps, completed, total, percentage: Math.round((completed / total) * 100) });
   } catch (err) {
     console.error('profile-completeness error:', err);
+    reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to check profile completeness' });
   }
 }

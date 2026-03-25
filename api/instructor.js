@@ -34,6 +34,7 @@
 const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
 const { createTransporter, generateToken } = require('./_auth-helpers');
+const { reportError } = require('./_error-alert');
 
 const TOKEN_EXPIRY_MINUTES = 30;
 const JWT_EXPIRY           = '7d';
@@ -156,6 +157,7 @@ async function handleRequestLogin(req, res) {
 
   } catch (err) {
     console.error('instructor request-login error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to send login link' });
   }
 }
@@ -183,6 +185,7 @@ async function handleValidateToken(req, res) {
     return res.json({ valid: true });
   } catch (err) {
     console.error('instructor validate-token error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Validation failed' });
   }
 }
@@ -230,6 +233,7 @@ async function handleVerifyToken(req, res) {
 
   } catch (err) {
     console.error('instructor verify-token error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Verification failed' });
   }
 }
@@ -314,6 +318,7 @@ async function handleSchedule(req, res) {
 
   } catch (err) {
     console.error('instructor schedule error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load schedule' });
   }
 }
@@ -363,6 +368,7 @@ async function handleScheduleRange(req, res) {
 
   } catch (err) {
     console.error('schedule-range err:', err.message);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load schedule', details: err.message });
   }
 }
@@ -451,6 +457,7 @@ async function handleComplete(req, res) {
 
   } catch (err) {
     console.error('instructor complete error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to mark booking as complete' });
   }
 }
@@ -477,6 +484,7 @@ async function handleAvailability(req, res) {
 
   } catch (err) {
     console.error('instructor availability error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load availability' });
   }
 }
@@ -531,6 +539,7 @@ async function handleSetAvailability(req, res) {
 
   } catch (err) {
     console.error('instructor set-availability error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to save availability' });
   }
 }
@@ -557,6 +566,7 @@ async function handleProfile(req, res) {
 
   } catch (err) {
     console.error('instructor profile error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load profile' });
   }
 }
@@ -600,6 +610,7 @@ async function handleUpdateProfile(req, res) {
 
   } catch (err) {
     console.error('instructor update-profile error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to update profile' });
   }
 }
@@ -627,6 +638,7 @@ async function handleBlackoutDates(req, res) {
 
   } catch (err) {
     console.error('instructor blackout-dates error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load blackout dates' });
   }
 }
@@ -681,6 +693,7 @@ async function handleSetBlackoutDates(req, res) {
 
   } catch (err) {
     console.error('instructor set-blackout-dates error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to save blackout dates' });
   }
 }
@@ -726,6 +739,7 @@ async function handleQAList(req, res) {
     return res.json({ questions });
   } catch (err) {
     console.error('instructor qa-list error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load questions' });
   }
 }
@@ -763,6 +777,7 @@ async function handleQADetail(req, res) {
     return res.json({ question, answers });
   } catch (err) {
     console.error('instructor qa-detail error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load question' });
   }
 }
@@ -798,6 +813,7 @@ async function handleQAReply(req, res) {
     return res.json({ success: true, answer_id: answer.id });
   } catch (err) {
     console.error('instructor qa-reply error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to post reply' });
   }
 }
@@ -856,6 +872,7 @@ async function handleLearnerHistory(req, res) {
     return res.json({ learner, bookings, totalLessons });
   } catch (err) {
     console.error('instructor learner-history error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load learner history' });
   }
 }
@@ -934,6 +951,7 @@ async function handleCancelBooking(req, res) {
     return res.json({ success: true });
   } catch (err) {
     console.error('instructor cancel-booking error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to cancel booking' });
   }
 }
@@ -1005,6 +1023,7 @@ async function handleStats(req, res) {
     });
   } catch (err) {
     console.error('instructor stats error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load stats' });
   }
 }
@@ -1037,6 +1056,7 @@ async function handleUploadPhoto(req, res) {
     return res.json({ success: true, photo_url: updated.photo_url });
   } catch (err) {
     console.error('instructor upload-photo error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to upload photo' });
   }
 }
@@ -1071,6 +1091,7 @@ async function handleMyLearners(req, res) {
     return res.json({ learners });
   } catch (err) {
     console.error('instructor my-learners error:', err);
+    reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load learners' });
   }
 }

@@ -1,6 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
+const { reportError } = require('./_error-alert');
 
 const LESSON_PRICE_PENCE = 8250; // £82.50 per lesson (1.5 hrs)
 const MAX_LESSONS_PER_PURCHASE = 20;
@@ -86,6 +87,7 @@ async function handleBalance(req, res) {
     });
   } catch (err) {
     console.error('credits balance error:', err);
+    reportError('/api/credits', err);
     return res.status(500).json({ error: 'Failed to load balance', details: err.message });
   }
 }
@@ -151,6 +153,7 @@ async function handleCheckout(req, res) {
     return res.json({ url: session.url });
   } catch (err) {
     console.error('credits checkout error:', err);
+    reportError('/api/credits', err);
     return res.status(500).json({ error: 'Failed to create checkout session', details: err.message });
   }
 }

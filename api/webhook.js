@@ -3,6 +3,7 @@ const nodemailer = require('nodemailer');
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const twilio = require('twilio');
+const { reportError } = require('./_error-alert');
 
 // ── WhatsApp helper ──────────────────────────────────────────────────────────
 function sendWhatsApp(to, message) {

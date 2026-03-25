@@ -1,5 +1,6 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
+const { reportError } = require('./_error-alert');
 
 function verifyAdmin(req) {
   const auth = req.headers.authorization;
@@ -57,6 +58,7 @@ module.exports = async (req, res) => {
     res.status(200).json({ success: true, submission: result[0] });
   } catch (error) {
     console.error('Error updating status:', error);
+    reportError('/api/update-status', error);
     res.status(500).json({ error: 'Failed to update status' });
   }
 };

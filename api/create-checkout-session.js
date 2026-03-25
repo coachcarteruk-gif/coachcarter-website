@@ -1,4 +1,5 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { reportError } = require('./_error-alert');
 
 module.exports = async (req, res) => {
   // Enable CORS
@@ -41,6 +42,7 @@ module.exports = async (req, res) => {
     res.json({ url: session.url });
   } catch (err) {
     console.error('Error creating checkout session:', err);
+    reportError('/api/create-checkout-session', err);
     res.status(500).json({ error: err.message });
   }
 };

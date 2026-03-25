@@ -14,6 +14,7 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
 const crypto   = require('crypto');
+const { reportError } = require('./_error-alert');
 
 const SLOT_MINUTES = 90;
 
@@ -84,6 +85,7 @@ async function handleDownload(req, res) {
 
   } catch (err) {
     console.error('calendar download error:', err);
+    reportError('/api/calendar', err);
     return res.status(500).json({ error: 'Failed to generate calendar file' });
   }
 }
@@ -132,6 +134,7 @@ async function handleFeed(req, res) {
 
   } catch (err) {
     console.error('calendar feed error:', err);
+    reportError('/api/calendar', err);
     return res.status(500).send('Failed to generate calendar feed');
   }
 }
@@ -172,6 +175,7 @@ async function handleFeedUrl(req, res) {
 
   } catch (err) {
     console.error('calendar feed-url error:', err);
+    reportError('/api/calendar', err);
     return res.status(500).json({ error: 'Failed to generate feed URL' });
   }
 }
@@ -231,6 +235,7 @@ async function handleInstructorFeed(req, res) {
 
   } catch (err) {
     console.error('instructor calendar feed error:', err);
+    reportError('/api/calendar', err);
     return res.status(500).send('Failed to generate calendar feed');
   }
 }
@@ -268,6 +273,7 @@ async function handleInstructorFeedUrl(req, res) {
 
   } catch (err) {
     console.error('instructor calendar feed-url error:', err);
+    reportError('/api/calendar', err);
     return res.status(500).json({ error: 'Failed to generate feed URL' });
   }
 }

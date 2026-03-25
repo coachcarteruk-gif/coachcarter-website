@@ -1,5 +1,6 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { verifyAuth, buildLearnerContext } = require('./_shared');
+const { reportError } = require('./_error-alert');
 
 // ── Pricing config ───────────────────────────────────────────────────────────
 const LESSON_PRICE_PENCE = 8250; // £82.50 per 1.5hr lesson
@@ -271,6 +272,7 @@ module.exports = async (req, res) => {
         });
       } catch (err) {
         console.error('Stripe checkout error:', err);
+        reportError('/api/advisor', err);
         return res.status(500).json({ error: 'Failed to create checkout session', details: err.message });
       }
     }
@@ -284,6 +286,7 @@ module.exports = async (req, res) => {
     return res.json({ type: 'message', reply });
   } catch (err) {
     console.error('Advisor error:', err);
+    reportError('/api/advisor', err);
     return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 };

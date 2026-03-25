@@ -1,4 +1,5 @@
 const { neon } = require('@neondatabase/serverless');
+const { reportError } = require('./_error-alert');
 
 /**
  * GET  /api/guarantee-price  → returns current guarantee pricing state
@@ -46,6 +47,7 @@ module.exports = async (req, res) => {
       });
     } catch (err) {
       console.error('guarantee-price GET error:', err);
+      reportError('/api/guarantee-price', err);
       return res.status(500).json({ error: 'Failed to load guarantee pricing' });
     }
   }
@@ -99,6 +101,7 @@ module.exports = async (req, res) => {
       });
     } catch (err) {
       console.error('guarantee-price POST error:', err);
+      reportError('/api/guarantee-price', err);
       return res.status(500).json({ error: 'Failed to increment guarantee price' });
     }
   }
