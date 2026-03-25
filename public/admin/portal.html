@@ -1412,7 +1412,7 @@ async function submitAdjustCredits() {
   try {
     const res = await fetch('/api/admin?action=adjust-credits', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ADMIN_TOKEN },
+      headers: HEADERS,
       body: JSON.stringify({ learner_id: _adjustLearnerId, credits, reason: reason || undefined })
     });
     const data = await res.json();
