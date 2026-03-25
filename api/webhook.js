@@ -19,10 +19,8 @@ function sendWhatsApp(to, message) {
     from: `whatsapp:${from}`,
     to:   `whatsapp:${phone}`,
     body: message
-  }).then(msg => {
-    console.log('WhatsApp sent OK, sid:', msg?.sid, 'to:', phone);
   }).catch(err => {
-    console.error('WHATSAPP_FAIL', JSON.stringify({ message: err.message, code: err.code, status: err.status, moreInfo: err.moreInfo, to: phone, from }));
+    console.warn('WhatsApp failed:', err.message);
   });
 }
 

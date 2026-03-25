@@ -30,13 +30,10 @@ function sendWhatsApp(to, message) {
   const sid  = process.env.TWILIO_SID;
   const auth = process.env.TWILIO_AUTH;
   const from = process.env.TWILIO_WHATSAPP_FROM;
-  if (!sid || !auth || !from || !to) {
-    console.warn('WhatsApp skipped — missing:', !sid ? 'SID' : '', !auth ? 'AUTH' : '', !from ? 'FROM' : '', !to ? 'TO(phone)' : '', 'to value:', to);
-    return Promise.resolve();
-  }
+  if (!sid || !auth || !from || !to) return Promise.resolve();
 
   // Normalise phone to E.164: UK numbers starting with 0 → +44
-  let phone = to.replace(/\s+/g, ''); // strip spaces
+  let phone = to.replace(/\s+/g, '');
   if (phone.startsWith('0')) phone = '+44' + phone.slice(1);
   else if (!phone.startsWith('+')) phone = '+' + phone;
 
@@ -45,12 +42,8 @@ function sendWhatsApp(to, message) {
     from: `whatsapp:${from}`,
     to:   `whatsapp:${phone}`,
     body: message
-  }).then(msg => {
-    console.log('WA_OK sid=' + (msg?.sid || 'none'));
   }).catch(err => {
-    console.error('WA_ERR msg=' + err.message);
-    console.error('WA_ERR code=' + err.code + ' status=' + err.status);
-    console.error('WA_ERR to=' + phone + ' from=' + from);
+    console.warn('WhatsApp failed:', err.message);
   });
 }
 
