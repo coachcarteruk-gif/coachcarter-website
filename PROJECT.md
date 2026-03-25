@@ -44,6 +44,8 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 | `BASE_URL` | Site base URL for magic links (defaults to `https://coachcarter.uk`) |
 | `ANTHROPIC_API_KEY` | Claude AI for Ask the Examiner and Lesson Advisor |
 | `GOOGLE_PLACES_API_KEY` | Google Places API for address autocomplete (if used) |
+| `MIGRATION_SECRET` | Secret for running DB migrations via `/api/migrate?secret=` |
+| `ERROR_ALERT_EMAIL` | Email address for 500 error alerts (uses SMTP config) |
 
 ---
 
@@ -52,8 +54,10 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 ```
 /
 ├── api/                            # Vercel serverless functions
-│   ├── _auth-helpers.js            # Shared JWT verification helper
-│   ├── _shared.js                  # Shared utilities (sendMail etc.)
+│   ├── _auth-helpers.js            # Shared JWT verification + nodemailer transporter
+│   ├── _shared.js                  # Shared utilities (learner context builder etc.)
+│   ├── _error-alert.js             # Fire-and-forget email error alerting (500 errors)
+│   ├── migrate.js                  # DB migration runner (protected by MIGRATION_SECRET)
 │   ├── learner.js                  # Learner sessions, progress, profile, competency, onboarding, Q&A
 │   ├── magic-link.js               # Learner magic-link login: send, validate, verify
 │   ├── credits.js                  # Credit balance, Stripe checkout, bulk discounts
@@ -90,6 +94,11 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── maintenance.html            # Maintenance mode page
 │   ├── privacy.html
 │   ├── terms.html
+│   ├── shared/
+│   │   ├── learner.css             # Shared learner CSS (variables, reset, nav)
+│   │   ├── instructor.css          # Shared instructor CSS (variables, reset, nav, portal header)
+│   │   ├── learner-auth.js         # Shared learner auth (ccAuth.getAuth, logout, requireAuth)
+│   │   └── instructor-auth.js      # Shared instructor auth (ccAuth.getAuth, logout, requireAuth)
 │   ├── auth-gate.js                # Shared auth gate for login-required pages
 │   ├── competency-config.js        # 17 DL25-aligned skill definitions, areas, ratings, fault types
 │   ├── manifest.json               # PWA manifest
@@ -134,16 +143,8 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   └── Logo.png                    # CoachCarter logo
 │
 ├── db/
-│   ├── migrations/                 # SQL files — run manually in Neon SQL Editor
-│   │   ├── 001_booking_system.sql  # Core booking tables
-│   │   ├── 002_admin_users.sql     # Admin users table
-│   │   ├── 003_calendar_token.sql  # iCal token column on learner_users
-│   │   ├── 004_instructor_portal.sql # Instructor magic-link tokens
-│   │   ├── 005_contact_preference.sql # prefer_contact_before on learner_users
-│   │   ├── 006_pickup_address.sql  # pickup_address on learner_users
-│   │   ├── 007_buffer_minutes.sql  # buffer_minutes on instructors
-│   │   ├── 008_videos.sql          # video_categories + videos tables
-│   │   └── 009_session_booking_link.sql # booking_id on driving_sessions
+│   ├── migration.sql               # Single idempotent migration — all 23 tables (run via /api/migrate)
+│   ├── migrations/                 # Legacy per-feature SQL files (superseded by migration.sql)
 │   └── seeds/                      # Placeholder data for testing
 │       ├── 001_placeholder_instructors.sql
 │       └── 002_demo_instructor.sql # Creates demo instructor with full 7-day availability
@@ -601,7 +602,7 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Neon sql tagged templates** — the Neon serverless driver does NOT support nested `sql` template literals for conditional queries; always use separate query branches instead
 - **Mobile autoplay** — browsers require videos to start muted; `video.muted = false` after a user gesture unlocks sound
 - **Klarna** — enabled via Stripe dashboard, not hardcoded; no code changes needed to toggle it
-- **DB migrations** — run manually in Neon SQL Editor; files in `db/migrations/` are numbered sequentially
+- **DB migrations** — single file `db/migration.sql` covers all tables; run via `GET /api/migrate?secret=MIGRATION_SECRET`. Legacy per-feature files in `db/migrations/` are superseded
 - **Magic link tokens** — two-step flow (validate then verify) prevents email-client link prefetchers from consuming tokens; `verify` is POST-only
 - **Slot reservations** — 10-minute TTL; expired reservations are excluded from availability but cleaned up lazily (on next webhook or when table is queried)
 - **Dynamic pricing table** — `guarantee_pricing` is auto-created and seeded on first call to `/api/guarantee-price`; no manual migration needed. The webhook increments the price atomically after each Pass Programme purchase. Admin can override the price via the editor or direct API call.
@@ -616,6 +617,7 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 
 ## Recent changes (March 2026)
 
+- **Foundation cleanup** (#75–78) — centralised DB migration (`db/migration.sql` + `/api/migrate`), extracted shared CSS/JS into `public/shared/` (removed ~984 lines of duplicated CSS), wired up shared auth JS (`ccAuth.getAuth()`, `ccAuth.logout()`), added email error alerts on all 500 errors (`api/_error-alert.js`)
 - **PWA support** (#62) — manifest, service worker, install prompt, offline page, generated icons
 - **Codebase cleanup** (#61) — fixed migration numbering, extracted shared auth/mail helpers, removed dead files
 - **AI Lesson Advisor** (#60) — conversational AI sales assistant using Claude tool_use to recommend lesson packages and create Stripe checkouts dynamically within pricing bounds
