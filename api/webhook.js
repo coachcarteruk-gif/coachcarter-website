@@ -318,10 +318,9 @@ async function handleSlotBooking(session) {
     sendWhatsApp(learner?.phone,
       `✅ Lesson confirmed!\n\n📅 ${lessonDate}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructorName}\n\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
     );
-    // Instructor WhatsApp disabled for now — enable when ready
-    // sendWhatsApp(instructor?.phone,
-    //   `📋 New booking!\n\n👤 ${learner?.name || 'Unknown'}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`
-    // );
+    sendWhatsApp(instructor?.phone,
+      `📋 New booking!\n\n👤 ${learner?.name || 'Unknown'}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`
+    );
 
     console.log(`✅ Slot booking complete: lesson #${booking.id} for learner #${learnerId}`);
 
