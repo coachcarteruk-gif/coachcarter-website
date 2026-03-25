@@ -63,29 +63,12 @@ module.exports = async (req, res) => {
   return res.status(400).json({ error: 'Unknown action' });
 };
 
-// ── Ensure table exists ───────────────────────────────────────────────────────
-async function ensureTable(sql) {
-  await sql`
-    CREATE TABLE IF NOT EXISTS enquiries (
-      id                SERIAL PRIMARY KEY,
-      name              VARCHAR(255) NOT NULL,
-      email             VARCHAR(255) NOT NULL,
-      phone             VARCHAR(50)  NOT NULL,
-      enquiry_type      VARCHAR(100) NOT NULL,
-      message           TEXT,
-      marketing_consent BOOLEAN      DEFAULT false,
-      submitted_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-      status            VARCHAR(50)  DEFAULT 'new'
-    )
-  `;
-}
-
 // ── GET /api/enquiries?action=list ────────────────────────────────────────────
 async function handleList(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    await ensureTable(sql);
+
     const enquiries = await sql`
       SELECT * FROM enquiries ORDER BY submitted_at DESC LIMIT 50
     `;
@@ -129,7 +112,7 @@ async function handleSubmit(req, res) {
   // Save to DB
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    await ensureTable(sql);
+
     const result = await sql`
       INSERT INTO enquiries (name, email, phone, enquiry_type, message, marketing_consent, submitted_at)
       VALUES (

@@ -251,11 +251,6 @@ async function handleInstructorFeedUrl(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Ensure column exists
-    try {
-      await sql`ALTER TABLE instructors ADD COLUMN IF NOT EXISTS calendar_token TEXT UNIQUE`;
-    } catch (e) { /* column already exists */ }
-
     const [instructor] = await sql`
       SELECT calendar_token FROM instructors WHERE id = ${user.id}
     `;

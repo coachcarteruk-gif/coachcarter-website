@@ -33,26 +33,6 @@ module.exports = async (req, res) => {
 
   const sql = neon(process.env.POSTGRES_URL);
 
-  // Ensure table exists
-  await sql`
-    CREATE TABLE IF NOT EXISTS guarantee_pricing (
-      id            INTEGER PRIMARY KEY DEFAULT 1,
-      base_price    INTEGER NOT NULL DEFAULT 1500,
-      current_price INTEGER NOT NULL DEFAULT 1500,
-      increment     INTEGER NOT NULL DEFAULT 100,
-      cap           INTEGER NOT NULL DEFAULT 3000,
-      purchases     INTEGER NOT NULL DEFAULT 0,
-      updated_at    TIMESTAMPTZ DEFAULT NOW()
-    )
-  `;
-
-  // Seed row if missing
-  await sql`
-    INSERT INTO guarantee_pricing (id, base_price, current_price, increment, cap, purchases)
-    VALUES (1, 1500, 1500, 100, 3000, 0)
-    ON CONFLICT (id) DO NOTHING
-  `;
-
   // ── GET: return current pricing state ─────────────────────────────────────
   if (req.method === 'GET') {
     try {

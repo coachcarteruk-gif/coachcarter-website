@@ -66,18 +66,6 @@ async function handleSessions(req, res) {
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
   const sql = neon(process.env.POSTGRES_URL);
-  await sql`CREATE TABLE IF NOT EXISTS driving_sessions (
-    id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, session_date DATE NOT NULL,
-    duration_minutes INTEGER, session_type TEXT DEFAULT 'instructor', notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW())`;
-  await sql`CREATE TABLE IF NOT EXISTS skill_ratings (
-    id SERIAL PRIMARY KEY, session_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
-    tier INTEGER NOT NULL, skill_key TEXT NOT NULL, rating TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW())`;
-  // Add note column to existing tables that predate this feature
-  await sql`ALTER TABLE skill_ratings ADD COLUMN IF NOT EXISTS note TEXT`;
-  // Add booking link column
-  await sql`ALTER TABLE driving_sessions ADD COLUMN IF NOT EXISTS booking_id INTEGER`;
 
   if (req.method === 'GET') {
     try {
@@ -391,17 +379,6 @@ async function handleQAAsk(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-
-    // Ensure tables exist
-    await sql`CREATE TABLE IF NOT EXISTS qa_questions (
-      id SERIAL PRIMARY KEY, learner_id INTEGER NOT NULL, booking_id INTEGER,
-      session_id INTEGER, title TEXT NOT NULL, body TEXT,
-      status TEXT NOT NULL DEFAULT 'open',
-      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`;
-    await sql`CREATE TABLE IF NOT EXISTS qa_answers (
-      id SERIAL PRIMARY KEY, question_id INTEGER NOT NULL,
-      author_type TEXT NOT NULL, author_id INTEGER NOT NULL,
-      body TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`;
 
     const [question] = await sql`
       INSERT INTO qa_questions (learner_id, booking_id, session_id, title, body)

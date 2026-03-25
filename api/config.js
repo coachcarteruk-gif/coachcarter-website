@@ -13,14 +13,6 @@ module.exports = async (req, res) => {
     try {
       const sql = neon(process.env.POSTGRES_URL);
 
-      await sql`
-        CREATE TABLE IF NOT EXISTS site_config (
-          id INTEGER PRIMARY KEY DEFAULT 1,
-          config JSONB NOT NULL,
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `;
-
       const rows = await sql`SELECT config, updated_at FROM site_config WHERE id = 1`;
 
       if (rows.length > 0) {
@@ -61,14 +53,6 @@ module.exports = async (req, res) => {
       cleanConfig.last_updated = new Date().toISOString();
 
       const sql = neon(process.env.POSTGRES_URL);
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS site_config (
-          id INTEGER PRIMARY KEY DEFAULT 1,
-          config JSONB NOT NULL,
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `;
 
       await sql`
         INSERT INTO site_config (id, config, updated_at)

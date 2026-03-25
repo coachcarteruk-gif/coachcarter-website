@@ -110,19 +110,6 @@ async function handleLogin(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Ensure table exists
-    await sql`
-      CREATE TABLE IF NOT EXISTS admin_users (
-        id            SERIAL PRIMARY KEY,
-        name          TEXT    NOT NULL,
-        email         TEXT    UNIQUE NOT NULL,
-        password_hash TEXT    NOT NULL,
-        role          TEXT    NOT NULL DEFAULT 'admin',
-        active        BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `;
-
     const rows = await sql`
       SELECT * FROM admin_users
       WHERE email = ${email.toLowerCase().trim()} AND active = true
@@ -170,19 +157,6 @@ async function handleCreateAdmin(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-
-    // Ensure table exists
-    await sql`
-      CREATE TABLE IF NOT EXISTS admin_users (
-        id            SERIAL PRIMARY KEY,
-        name          TEXT    NOT NULL,
-        email         TEXT    UNIQUE NOT NULL,
-        password_hash TEXT    NOT NULL,
-        role          TEXT    NOT NULL DEFAULT 'admin',
-        active        BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `;
 
     const existing = await sql`SELECT id FROM admin_users WHERE email = ${email.toLowerCase().trim()}`;
     if (existing.length > 0)
@@ -599,26 +573,20 @@ async function handleLearnerDetail(req, res) {
       ORDER BY lb.scheduled_date DESC, lb.start_time DESC
     `;
 
-    let transactions = [];
-    try {
-      transactions = await sql`
-        SELECT id, type, credits, amount_pence, payment_method, created_at
-        FROM credit_transactions
-        WHERE learner_id = ${learnerId}
-        ORDER BY created_at DESC
-      `;
-    } catch (e) { console.warn('credit_transactions query failed (table may not exist):', e.message); }
+    const transactions = await sql`
+      SELECT id, type, credits, amount_pence, payment_method, created_at
+      FROM credit_transactions
+      WHERE learner_id = ${learnerId}
+      ORDER BY created_at DESC
+    `;
 
-    let progress = [{ total_sessions: 0, total_minutes: 0 }];
-    try {
-      progress = await sql`
-        SELECT
-          COUNT(*)::int AS total_sessions,
-          COALESCE(SUM(duration_minutes), 0)::int AS total_minutes
-        FROM driving_sessions
-        WHERE user_id = ${learnerId}
-      `;
-    } catch (e) { console.warn('driving_sessions query failed (table may not exist):', e.message); }
+    const progress = await sql`
+      SELECT
+        COUNT(*)::int AS total_sessions,
+        COALESCE(SUM(duration_minutes), 0)::int AS total_minutes
+      FROM driving_sessions
+      WHERE user_id = ${learnerId}
+    `;
 
     return res.json({
       bookings,
@@ -666,13 +634,11 @@ async function handleAdjustCredits(req, res) {
       RETURNING credit_balance
     `;
 
-    // Log transaction (non-critical — don't fail if table missing)
-    try {
-      await sql`
-        INSERT INTO credit_transactions (learner_id, type, credits, amount_pence, payment_method)
-        VALUES (${learner_id}, ${amount > 0 ? 'admin_add' : 'admin_remove'}, ${amount}, 0, ${reason || 'Admin adjustment'})
-      `;
-    } catch (e) { console.warn('credit_transactions insert failed:', e.message); }
+    // Log transaction
+    await sql`
+      INSERT INTO credit_transactions (learner_id, type, credits, amount_pence, payment_method)
+      VALUES (${learner_id}, ${amount > 0 ? 'admin_add' : 'admin_remove'}, ${amount}, 0, ${reason || 'Admin adjustment'})
+    `;
 
     return res.json({
       success: true,

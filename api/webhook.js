@@ -633,26 +633,6 @@ function createTransporter() {
 async function incrementGuaranteePrice() {
   const sql = neon(process.env.POSTGRES_URL);
 
-  // Ensure the table exists (idempotent)
-  await sql`
-    CREATE TABLE IF NOT EXISTS guarantee_pricing (
-      id            INTEGER PRIMARY KEY DEFAULT 1,
-      base_price    INTEGER NOT NULL DEFAULT 1500,
-      current_price INTEGER NOT NULL DEFAULT 1500,
-      increment     INTEGER NOT NULL DEFAULT 100,
-      cap           INTEGER NOT NULL DEFAULT 3000,
-      purchases     INTEGER NOT NULL DEFAULT 0,
-      updated_at    TIMESTAMPTZ DEFAULT NOW()
-    )
-  `;
-
-  // Seed if empty
-  await sql`
-    INSERT INTO guarantee_pricing (id, base_price, current_price, increment, cap, purchases)
-    VALUES (1, 1500, 1500, 100, 3000, 0)
-    ON CONFLICT (id) DO NOTHING
-  `;
-
   // Atomic increment
   const [updated] = await sql`
     UPDATE guarantee_pricing
