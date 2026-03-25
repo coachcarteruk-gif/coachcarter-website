@@ -269,29 +269,24 @@ async function handleUpdateProfile(req, res) {
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
   try {
-    const { phone, pickup_address, prefer_contact_before, test_date, test_time } = req.body;
+    const { phone, pickup_address } = req.body;
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Ensure columns exist (idempotent migrations)
-    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS pickup_address TEXT`;
-    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS prefer_contact_before BOOLEAN DEFAULT false`;
-    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS test_date TEXT`;
-    await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS test_time TEXT`;
+    // Ensure pickup_address column exists
+    try { await sql`ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS pickup_address TEXT`; }
+    catch (e) { console.warn('pickup_address migration:', e.message); }
 
     const [updated] = await sql`
       UPDATE learner_users SET
-        phone                 = COALESCE(${phone ?? null}, phone),
-        pickup_address        = COALESCE(${pickup_address ?? null}, pickup_address),
-        prefer_contact_before = COALESCE(${prefer_contact_before ?? null}, prefer_contact_before),
-        test_date             = COALESCE(${test_date ?? null}, test_date),
-        test_time             = COALESCE(${test_time ?? null}, test_time)
+        phone          = COALESCE(${phone ?? null}, phone),
+        pickup_address = COALESCE(${pickup_address ?? null}, pickup_address)
       WHERE id = ${user.id}
-      RETURNING name, email, phone, pickup_address, prefer_contact_before, test_date, test_time
+      RETURNING name, email, phone, pickup_address
     `;
     return res.json({ success: true, profile: updated });
   } catch (err) {
-    console.error('update-profile error:', err);
-    return res.status(500).json({ error: 'Failed to update profile' });
+    console.error('update-profile error:', err.message);
+    return res.status(500).json({ error: 'Failed to update profile', details: err.message });
   }
 }
 
