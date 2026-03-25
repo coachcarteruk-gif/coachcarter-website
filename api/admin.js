@@ -587,20 +587,26 @@ async function handleLearnerDetail(req, res) {
       ORDER BY lb.scheduled_date DESC, lb.start_time DESC
     `;
 
-    const transactions = await sql`
-      SELECT id, type, credits, amount_pence, payment_method, created_at
-      FROM credit_transactions
-      WHERE learner_id = ${learnerId}
-      ORDER BY created_at DESC
-    `;
+    let transactions = [];
+    try {
+      transactions = await sql`
+        SELECT id, type, credits, amount_pence, payment_method, created_at
+        FROM credit_transactions
+        WHERE learner_id = ${learnerId}
+        ORDER BY created_at DESC
+      `;
+    } catch (e) { console.warn('credit_transactions query failed (table may not exist):', e.message); }
 
-    const progress = await sql`
-      SELECT
-        COUNT(*)::int AS total_sessions,
-        COALESCE(SUM(duration_minutes), 0)::int AS total_minutes
-      FROM driving_sessions
-      WHERE user_id = ${learnerId}
-    `;
+    let progress = [{ total_sessions: 0, total_minutes: 0 }];
+    try {
+      progress = await sql`
+        SELECT
+          COUNT(*)::int AS total_sessions,
+          COALESCE(SUM(duration_minutes), 0)::int AS total_minutes
+        FROM driving_sessions
+        WHERE user_id = ${learnerId}
+      `;
+    } catch (e) { console.warn('driving_sessions query failed (table may not exist):', e.message); }
 
     return res.json({
       bookings,
@@ -647,11 +653,13 @@ async function handleAdjustCredits(req, res) {
       RETURNING credit_balance
     `;
 
-    // Log transaction
-    await sql`
-      INSERT INTO credit_transactions (learner_id, type, credits, amount_pence, payment_method)
-      VALUES (${learner_id}, ${amount > 0 ? 'admin_add' : 'admin_remove'}, ${amount}, 0, ${reason || 'Admin adjustment'})
-    `;
+    // Log transaction (non-critical — don't fail if table missing)
+    try {
+      await sql`
+        INSERT INTO credit_transactions (learner_id, type, credits, amount_pence, payment_method)
+        VALUES (${learner_id}, ${amount > 0 ? 'admin_add' : 'admin_remove'}, ${amount}, 0, ${reason || 'Admin adjustment'})
+      `;
+    } catch (e) { console.warn('credit_transactions insert failed:', e.message); }
 
     return res.json({
       success: true,

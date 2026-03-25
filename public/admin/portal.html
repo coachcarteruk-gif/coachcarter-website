@@ -1294,7 +1294,7 @@ async function showLearnerDetail(id) {
     // Stats cards
     html += '<div class="stats-grid" style="margin-bottom: 20px;">';
     html += '<div class="stat-card"><div class="stat-value">' + (tierLabels[learner?.current_tier] || 'N/A') + '</div><div class="stat-label">Current Tier</div></div>';
-    html += '<div class="stat-card" style="cursor:pointer;position:relative;" onclick="openAdjustCredits(\'' + learnerId + '\', ' + (learner?.credit_balance || 0) + ')">' +
+    html += '<div class="stat-card" style="cursor:pointer;position:relative;" onclick="openAdjustCredits(\'' + id + '\', ' + (learner?.credit_balance || 0) + ')">' +
       '<div class="stat-value">' + (learner?.credit_balance || 0) + '</div>' +
       '<div class="stat-label">Credit Balance</div>' +
       '<div style="font-size:0.7rem;color:var(--accent);margin-top:4px;">Click to adjust</div>' +
