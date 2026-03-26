@@ -510,7 +510,7 @@
       <p class="part-desc" id="part-desc"></p>
 
       <div class="part-instruction">
-        Drive for approximately 10 minutes. Your supervising driver should observe and note any faults. When the timer reaches at least 1 minute, the record button will become available.
+        Drive for approximately 10 minutes. Your supervising driver should observe and note any faults. Tap "Pull Over" when you're ready to record faults.
       </div>
 
       <div class="timer-display" id="timer-display">00:00</div>
@@ -740,7 +740,7 @@ function startDriving() {
   var btnPull = document.getElementById('btn-pull-over');
   btnStart.classList.add('hidden');
   btnPull.classList.remove('hidden');
-  btnPull.disabled = true;
+  btnPull.disabled = false;
 
   document.getElementById('timer-label').textContent = 'Driving...';
 
@@ -750,10 +750,6 @@ function startDriving() {
   timerInterval = setInterval(function() {
     timerSeconds++;
     document.getElementById('timer-display').textContent = formatTime(timerSeconds);
-    // Enable pull-over button after 60 seconds
-    if (timerSeconds >= 60) {
-      btnPull.disabled = false;
-    }
   }, 1000);
 }
 
