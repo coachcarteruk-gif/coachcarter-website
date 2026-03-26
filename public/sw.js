@@ -1,7 +1,7 @@
 // ── CoachCarter Service Worker ────────────────────────────────────────────────
 // Strategy: Cache app shell for instant loads, network-first for API/dynamic content
 
-const CACHE_NAME = 'cc-v1';
+const CACHE_NAME = 'cc-v2';
 const SHELL_ASSETS = [
   '/',
   '/learner/',
