@@ -266,13 +266,13 @@
     'body.cc-has-sidebar .mobile-header { display: none !important; }',
 
     /* Sidebar */
-    '.cc-sb { width: 240px; background: #262626; color: #fff; display: flex; flex-direction: column;',
+    '.cc-sb { width: 240px; background: #1a1f2e; color: #fff; display: flex; flex-direction: column;',
     '  position: fixed; top: 0; left: 0; bottom: 0; z-index: 1000; transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); }',
 
     /* Brand */
     '.cc-sb-brand { display: flex; align-items: center; gap: 10px; padding: 20px 20px 16px;',
     '  text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.08); }',
-    '.cc-sb-brand img { height: 32px; }',
+    '.cc-sb-brand img { height: 44px; }',
     '.cc-sb-brand-text { font-family: "Bricolage Grotesque", sans-serif; font-size: 1rem;',
     '  font-weight: 700; color: #fff; }',
     '.cc-sb-brand-text em { font-style: normal; color: #f58321; }',
@@ -283,8 +283,8 @@
     '.cc-sb-link { display: flex; align-items: center; gap: 12px; padding: 10px 20px;',
     '  color: rgba(255,255,255,0.6); text-decoration: none; font-size: 0.88rem; font-weight: 500;',
     '  transition: all 0.15s; border-left: 3px solid transparent; font-family: "Lato", sans-serif; }',
-    '.cc-sb-link:hover { color: #fff; background: #2e2e2e; }',
-    '.cc-sb-link.active { color: #f58321; background: #2e2e2e; border-left-color: #f58321; }',
+    '.cc-sb-link:hover { color: #fff; background: #252b3b; }',
+    '.cc-sb-link.active { color: #f58321; background: #252b3b; border-left-color: #f58321; }',
     '.cc-sb-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }',
     '.cc-sb-icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2;',
     '  stroke-linecap: round; stroke-linejoin: round; }',
@@ -324,10 +324,10 @@
 
     /* Mobile header */
     '.cc-mob-header { display: none; position: fixed; top: 0; left: 0; right: 0;',
-    '  background: #262626; color: #fff; padding: 0 16px; height: 56px;',
+    '  background: #1a1f2e; color: #fff; padding: 0 16px; height: 56px;',
     '  z-index: 998; align-items: center; gap: 12px; }',
     '.cc-mob-brand { display: flex; align-items: center; gap: 8px; text-decoration: none; flex: 1; }',
-    '.cc-mob-brand img { height: 28px; }',
+    '.cc-mob-brand img { height: 36px; }',
     '.cc-mob-brand span { font-family: "Bricolage Grotesque", sans-serif; font-size: 0.95rem;',
     '  font-weight: 700; color: #fff; }',
     '.cc-mob-brand em { font-style: normal; color: #f58321; }',
