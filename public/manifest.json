@@ -2,7 +2,7 @@
   "name": "CoachCarter Driving School",
   "short_name": "CoachCarter",
   "description": "Track your driving progress, take mock tests, and get AI-powered examiner guidance.",
-  "start_url": "/learner/",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#262626",
