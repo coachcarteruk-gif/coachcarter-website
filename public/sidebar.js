@@ -240,6 +240,15 @@
     return html;
   }
 
+  // ── Ensure viewport-fit=cover for iOS safe area ────────────────
+  var vpMeta = document.querySelector('meta[name="viewport"]');
+  if (vpMeta) {
+    var vpContent = vpMeta.getAttribute('content') || '';
+    if (vpContent.indexOf('viewport-fit') === -1) {
+      vpMeta.setAttribute('content', vpContent + ', viewport-fit=cover');
+    }
+  }
+
   // ── Inject CSS ─────────────────────────────────────────────────
   var css = document.createElement('style');
   css.textContent = [
@@ -349,7 +358,7 @@
     '  }',
     '  body.cc-has-sidebar.cc-has-bottom-bar main,',
     '  body.cc-has-sidebar.cc-has-bottom-bar #main {',
-    '    height: calc(100dvh - 56px - 72px);',
+    '    height: calc(100dvh - 56px - 72px - env(safe-area-inset-bottom, 0px));',
     '    overflow-y: auto;',
     '    -webkit-overflow-scrolling: touch;',
     '    margin-top: 0 !important;',
