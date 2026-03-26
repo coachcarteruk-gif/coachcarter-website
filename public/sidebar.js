@@ -70,16 +70,79 @@
     ]
   };
 
-  // ── Bottom tab bar config (mobile only) ───────────────────────
-  var bottomTabs = {
-    learner: [
-      { icon: 'dashboard', label: 'Home', href: '/learner/' },
-      { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
-      { icon: 'creditCard', label: 'Buy', href: '/learner/buy-credits.html' },
-      { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' },
-      { icon: 'user', label: 'Profile', href: '/learner/profile.html' }
-    ]
+  // ── Contextual bottom tab bar (mobile only) ──────────────────
+  // Each section maps page paths to 3 tabs: Dashboard + 2 contextual siblings
+  var bottomSections = {
+    learner: {
+      dashboard: { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
+      sections: [
+        { pages: ['/learner/book', '/learner/buy-credits', '/learner/lessons'],
+          tabs: [
+            { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
+            { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' }
+          ]},
+        { pages: ['/learner/log-session', '/learner/mock-test', '/learner/progress'],
+          tabs: [
+            { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
+            { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' }
+          ]},
+        { pages: ['/learner/videos', '/learner/qa', '/learner/examiner-quiz', '/learner/ask-examiner'],
+          tabs: [
+            { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
+            { icon: 'message', label: 'Q&A', href: '/learner/qa.html' }
+          ]},
+        { pages: ['/learner/profile'],
+          tabs: [
+            { icon: 'user', label: 'Profile', href: '/learner/profile.html' },
+            { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' }
+          ]}
+      ],
+      // Default tabs shown on dashboard and any unmatched pages
+      defaultTabs: [
+        { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
+        { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' }
+      ]
+    },
+    instructor: {
+      dashboard: { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
+      sections: [
+        { pages: ['/instructor/', '/instructor/availability'],
+          tabs: [
+            { icon: 'clock', label: 'Availability', href: '/instructor/availability.html' },
+            { icon: 'list', label: 'Learners', href: '/instructor/learners.html' }
+          ]},
+        { pages: ['/instructor/learners', '/instructor/qa'],
+          tabs: [
+            { icon: 'list', label: 'Learners', href: '/instructor/learners.html' },
+            { icon: 'message', label: 'Q&A', href: '/instructor/qa.html' }
+          ]},
+        { pages: ['/instructor/profile'],
+          tabs: [
+            { icon: 'user', label: 'Profile', href: '/instructor/profile.html' },
+            { icon: 'message', label: 'Q&A', href: '/instructor/qa.html' }
+          ]}
+      ],
+      defaultTabs: [
+        { icon: 'clock', label: 'Availability', href: '/instructor/availability.html' },
+        { icon: 'list', label: 'Learners', href: '/instructor/learners.html' }
+      ]
+    }
   };
+
+  function getBottomTabs() {
+    var config = bottomSections[context];
+    if (!config) return null;
+    // Find which section the current page belongs to
+    for (var i = 0; i < config.sections.length; i++) {
+      var sec = config.sections[i];
+      for (var j = 0; j < sec.pages.length; j++) {
+        if (normPath(path) === normPath(sec.pages[j]) || normPath(path) === sec.pages[j]) {
+          return [config.dashboard].concat(sec.tabs);
+        }
+      }
+    }
+    return [config.dashboard].concat(config.defaultTabs);
+  }
 
   // ── Determine active link ──────────────────────────────────────
   // Normalize path: strip trailing .html for comparison
@@ -154,9 +217,9 @@
       '</button></div>';
   }
 
-  // ── Build bottom tab bar HTML (learner mobile) ──────────────────
+  // ── Build bottom tab bar HTML (mobile) ──────────────────────────
   function buildBottomBarHTML() {
-    var tabs = bottomTabs[context];
+    var tabs = getBottomTabs();
     if (!tabs) return '';
     var html = '<nav class="cc-bottom-bar" aria-label="Quick navigation">';
     for (var i = 0; i < tabs.length; i++) {
