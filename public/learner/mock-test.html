@@ -732,7 +732,27 @@ function showPartScreen() {
   showScreen('screen-part');
 }
 
-function startDriving() {
+async function startDriving() {
+  // Request location permission before starting
+  if (navigator.geolocation) {
+    try {
+      if (navigator.permissions) {
+        var perm = await navigator.permissions.query({ name: 'geolocation' });
+        if (perm.state === 'prompt') {
+          // Trigger the permission dialog by requesting a single position
+          await new Promise(function(resolve) {
+            navigator.geolocation.getCurrentPosition(resolve, resolve, { timeout: 5000 });
+          });
+        }
+      } else {
+        // Fallback: just request a position to trigger the prompt
+        await new Promise(function(resolve) {
+          navigator.geolocation.getCurrentPosition(resolve, resolve, { timeout: 5000 });
+        });
+      }
+    } catch(e) { /* permission denied or unavailable — continue without GPS */ }
+  }
+
   isDriving = true;
   timerSeconds = 0;
 
@@ -1214,8 +1234,8 @@ function showResults() {
     });
   }
 
-  // Show map button if GPS data was recorded
-  if (gpsTrack.length > 0) {
+  // Show map button if GPS data was recorded OR a route was selected
+  if (gpsTrack.length > 0 || selectedRoute) {
     document.getElementById('btn-show-map').classList.remove('hidden');
   }
 
@@ -1268,7 +1288,21 @@ function startGpsTracking() {
         part: currentPart
       });
     },
-    function(err) { console.warn('GPS error:', err.code, err.message); },
+    function(err) {
+      console.warn('GPS error:', err.code, err.message);
+      if (err.code === 1) {
+        // Permission denied — show a subtle note
+        var existing = document.getElementById('gps-denied-note');
+        if (!existing) {
+          var note = document.createElement('div');
+          note.id = 'gps-denied-note';
+          note.style.cssText = 'background:#fff3e0;color:#e65100;padding:8px 12px;border-radius:8px;font-size:0.82rem;margin:8px 0;text-align:center;';
+          note.textContent = 'Location access denied — the fault map will use your selected route instead of GPS tracking.';
+          var timer = document.getElementById('timer-display');
+          if (timer && timer.parentNode) timer.parentNode.insertAdjacentElement('afterend', note);
+        }
+      }
+    },
     { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
   );
 }
