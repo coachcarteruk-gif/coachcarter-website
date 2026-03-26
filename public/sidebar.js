@@ -335,6 +335,20 @@
     '  .cc-sb-close { display: block; }',
     '  .cc-mob-header { display: flex; }',
     '  body.cc-has-sidebar { padding-top: 56px; }',
+    /* Contained app-like layout: main fills viewport, scrolls internally */
+    '  body.cc-has-sidebar.cc-has-bottom-bar {',
+    '    overflow: hidden;',
+    '    height: 100dvh;',
+    '  }',
+    '  body.cc-has-sidebar.cc-has-bottom-bar main,',
+    '  body.cc-has-sidebar.cc-has-bottom-bar #main {',
+    '    height: calc(100dvh - 56px - 72px);',
+    '    overflow-y: auto;',
+    '    -webkit-overflow-scrolling: touch;',
+    '    margin-top: 0 !important;',
+    '    padding-top: 0 !important;',
+    '    box-sizing: border-box;',
+    '  }',
     '}',
 
     /* Reset old nav margins */
@@ -380,7 +394,7 @@
     '    stroke: currentColor; fill: none;',
     '    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;',
     '  }',
-    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-bottom: 72px; }',
+    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-bottom: 0; }',
     '}'
   ].join('\n');
   document.head.appendChild(css);
