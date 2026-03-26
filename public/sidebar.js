@@ -357,15 +357,17 @@
     '  body.cc-has-sidebar:not(.cc-has-bottom-bar) .cc-mob-header { display: flex; padding-top: env(safe-area-inset-top, 0px); height: calc(56px + env(safe-area-inset-top, 0px)); }',
     '  body.cc-has-sidebar:not(.cc-has-bottom-bar) { padding-top: calc(56px + env(safe-area-inset-top, 0px)); }',
     '  body.cc-has-sidebar.cc-has-bottom-bar .cc-mob-header { display: none !important; }',
-    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-top: 0; }',
+    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-top: env(safe-area-inset-top, 0px); }',
     /* Contained app-like layout: main fills viewport, scrolls internally */
     '  body.cc-has-sidebar.cc-has-bottom-bar {',
     '    overflow: hidden;',
     '    height: 100dvh;',
     '  }',
     '  body.cc-has-sidebar.cc-has-bottom-bar main,',
-    '  body.cc-has-sidebar.cc-has-bottom-bar #main {',
-    '    height: calc(100dvh - 72px - env(safe-area-inset-bottom, 0px));',
+    '  body.cc-has-sidebar.cc-has-bottom-bar #main,',
+    '  body.cc-has-sidebar.cc-has-bottom-bar > .page,',
+    '  body.cc-has-sidebar.cc-has-bottom-bar > .chat-container {',
+    '    height: calc(100dvh - 72px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));',
     '    overflow-y: auto;',
     '    -webkit-overflow-scrolling: touch;',
     '    margin-top: 0 !important;',
@@ -376,7 +378,9 @@
 
     /* Reset old nav margins */
     'body.cc-has-sidebar #main,',
-    'body.cc-has-sidebar main { margin-top: 0 !important; padding-top: 0 !important; }',
+    'body.cc-has-sidebar main,',
+    'body.cc-has-sidebar > .page,',
+    'body.cc-has-sidebar > .chat-container { margin-top: 0 !important; padding-top: 0 !important; }',
 
     /* Bottom tab bar (mobile only) */
     '.cc-bottom-bar { display: none; }',
