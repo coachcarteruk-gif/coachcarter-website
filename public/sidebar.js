@@ -45,19 +45,12 @@
     ],
     learner: [
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
-      { icon: 'calendar', label: 'Lessons', children: [
-        { icon: 'calendarPlus', label: 'Book Lessons', href: '/learner/book.html' },
-        { icon: 'creditCard', label: 'Purchase Lessons', href: '/learner/buy-credits.html' },
-        { icon: 'list', label: 'Upcoming Lessons', href: '/learner/lessons.html' }
-      ]},
-      { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
-      { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
-      { icon: 'dashboard', label: 'My Progress', href: '/learner/progress.html' },
-      'divider',
-      { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
-      { icon: 'message', label: 'Q&A', href: '/learner/qa.html' },
-      { icon: 'clipboard', label: 'Examiner Quiz', href: '/learner/examiner-quiz.html' },
-      { icon: 'message', label: 'Ask the Examiner', href: '/learner/ask-examiner.html' },
+      { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
+        activeOn: ['/learner/buy-credits.html', '/learner/lessons.html'] },
+      { icon: 'clipboard', label: 'Practice', href: '/learner/log-session.html',
+        activeOn: ['/learner/mock-test.html', '/learner/progress.html'] },
+      { icon: 'play', label: 'Learn', href: '/learner/videos.html',
+        activeOn: ['/learner/examiner-quiz.html', '/learner/ask-examiner.html'] },
       'divider',
       { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true }
     ],
@@ -158,10 +151,15 @@
   }
   var normCurrent = normPath(path);
 
-  function isActive(href) {
+  function isActive(href, activeOn) {
     var hrefPath = href.split('?')[0];
     if (normCurrent === normPath(hrefPath)) return true;
     if (path === '/' && href === '/') return true;
+    if (activeOn) {
+      for (var k = 0; k < activeOn.length; k++) {
+        if (normCurrent === normPath(activeOn[k])) return true;
+      }
+    }
     return false;
   }
 
@@ -202,7 +200,7 @@
           }
           html += '</div></div>';
         } else {
-          var active = isActive(item.href) ? ' active' : '';
+          var active = isActive(item.href, item.activeOn) ? ' active' : '';
           html += '<a href="' + item.href + '" class="cc-sb-link' + active + '">' +
             '<span class="cc-sb-icon">' + icons[item.icon] + '</span>' +
             '<span>' + item.label + '</span></a>';
