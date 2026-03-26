@@ -296,9 +296,9 @@ document.addEventListener('click', function(e) {
 });
 
 // Auth (optional — page is viewable without login)
-const session = ccAuth.getAuth();
+const session = (typeof ccAuth !== 'undefined' && ccAuth.getAuth) ? ccAuth.getAuth() : (typeof ccAuth !== 'undefined' ? { user: ccAuth.user, token: ccAuth.token } : null);
 if (session?.user?.name) document.getElementById('user-name').textContent = session.user.name;
-function logout() { ccAuth.logout(); }
+function logout() { if (ccAuth.logout) ccAuth.logout(); else { localStorage.removeItem('cc_learner'); window.location.href = '/learner/login.html'; } }
 
 const CF_BASE = 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com';
 let allVideos = [], categories = [], activeCategory = 'all', currentMode = 'grid', playerHls = null;
