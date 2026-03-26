@@ -22,11 +22,12 @@
   var isLoggedIn = !!(session && session.token);
   var pendingCallbacks = [];
 
-  // ── Public API ──────────────────────────────────────────────────
-  window.ccAuth = {
+  // ── Public API (extend existing ccAuth from learner-auth.js) ────
+  var existing = window.ccAuth || {};
+  window.ccAuth = Object.assign({}, existing, {
     isLoggedIn: isLoggedIn,
     token: isLoggedIn ? session.token : null,
-    user: isLoggedIn ? session.user : null,
+    user: isLoggedIn ? (session.user || session) : null,
 
     /** Show sign-in modal if not logged in. Returns true if already authed. */
     requireAuth: function () {
@@ -40,7 +41,7 @@
       if (isLoggedIn) { fn(); return; }
       pendingCallbacks.push(fn);
     }
-  };
+  });
 
   // If already logged in, nothing more to do
   if (isLoggedIn) return;
