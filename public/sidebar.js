@@ -229,6 +229,10 @@
     var tabs = getBottomTabs();
     if (!tabs) return '';
     var html = '<nav class="cc-bottom-bar" aria-label="Quick navigation">';
+    // Menu button as first tab
+    html += '<button class="cc-bottom-tab cc-bottom-menu" id="cc-bottom-menu" aria-label="Open menu">' +
+      '<span class="cc-bottom-icon">' + icons.hamburger + '</span>' +
+      '<span>Menu</span></button>';
     for (var i = 0; i < tabs.length; i++) {
       var tab = tabs[i];
       var active = isActive(tab.href) ? ' active' : '';
@@ -349,8 +353,11 @@
     '  .cc-sb { transform: translateX(-100%); width: 280px; }',
     '  .cc-sb.open { transform: translateX(0); }',
     '  .cc-sb-close { display: block; }',
-    '  .cc-mob-header { display: flex; }',
-    '  body.cc-has-sidebar { padding-top: 56px; }',
+    /* When bottom bar exists, hide the top header entirely */
+    '  body.cc-has-sidebar:not(.cc-has-bottom-bar) .cc-mob-header { display: flex; }',
+    '  body.cc-has-sidebar:not(.cc-has-bottom-bar) { padding-top: 56px; }',
+    '  body.cc-has-sidebar.cc-has-bottom-bar .cc-mob-header { display: none !important; }',
+    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-top: 0; }',
     /* Contained app-like layout: main fills viewport, scrolls internally */
     '  body.cc-has-sidebar.cc-has-bottom-bar {',
     '    overflow: hidden;',
@@ -358,7 +365,7 @@
     '  }',
     '  body.cc-has-sidebar.cc-has-bottom-bar main,',
     '  body.cc-has-sidebar.cc-has-bottom-bar #main {',
-    '    height: calc(100dvh - 56px - 72px - env(safe-area-inset-bottom, 0px));',
+    '    height: calc(100dvh - 72px - env(safe-area-inset-bottom, 0px));',
     '    overflow-y: auto;',
     '    -webkit-overflow-scrolling: touch;',
     '    margin-top: 0 !important;',
@@ -411,6 +418,7 @@
     '    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;',
     '  }',
     '  body.cc-has-sidebar.cc-has-bottom-bar { padding-bottom: 0; }',
+  '  .cc-bottom-menu { background: none; border: none; cursor: pointer; }',
     '}'
   ].join('\n');
   document.head.appendChild(css);
@@ -469,7 +477,9 @@
       document.body.style.overflow = '';
     }
 
-    hamburger.addEventListener('click', openSidebar);
+    if (hamburger) hamburger.addEventListener('click', openSidebar);
+    var bottomMenu = document.getElementById('cc-bottom-menu');
+    if (bottomMenu) bottomMenu.addEventListener('click', openSidebar);
     overlay.addEventListener('click', closeSidebar);
     closeBtn.addEventListener('click', closeSidebar);
     document.addEventListener('keydown', function(e) {
