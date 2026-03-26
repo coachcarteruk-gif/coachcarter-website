@@ -38,15 +38,10 @@
   var navItems = {
     public: [
       { icon: 'home', label: 'Home', href: '/' },
-      { icon: 'tag', label: 'Pricing', href: '/learner-journey.html' },
       { icon: 'play', label: 'Free Videos', href: '/classroom.html' },
       'divider',
       { icon: 'calendar', label: 'Book a Lesson', href: '/learner/login.html?redirect=/learner/book.html' },
-      { icon: 'message', label: 'Lesson Advisor', href: '/learner/advisor.html' },
-      { icon: 'logIn', label: 'Login', href: '/learner/login.html' },
-      'divider',
-      { icon: 'shield', label: 'Privacy Policy', href: '/privacy.html' },
-      { icon: 'fileText', label: 'Terms', href: '/terms.html' }
+      { icon: 'logIn', label: 'Login', href: '/learner/login.html' }
     ],
     learner: [
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
@@ -63,7 +58,6 @@
       { icon: 'message', label: 'Q&A', href: '/learner/qa.html' },
       { icon: 'clipboard', label: 'Examiner Quiz', href: '/learner/examiner-quiz.html' },
       { icon: 'message', label: 'Ask the Examiner', href: '/learner/ask-examiner.html' },
-      { icon: 'tag', label: 'Lesson Advisor', href: '/learner/advisor.html' },
       'divider',
       { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true }
     ],
@@ -73,6 +67,17 @@
       'divider',
       { icon: 'message', label: 'Q&A', href: '/instructor/qa.html' },
       { icon: 'user', label: 'Profile', href: '/instructor/profile.html' }
+    ]
+  };
+
+  // ── Bottom tab bar config (mobile only) ───────────────────────
+  var bottomTabs = {
+    learner: [
+      { icon: 'dashboard', label: 'Home', href: '/learner/' },
+      { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
+      { icon: 'creditCard', label: 'Buy', href: '/learner/buy-credits.html' },
+      { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' },
+      { icon: 'user', label: 'Profile', href: '/learner/profile.html' }
     ]
   };
 
@@ -147,6 +152,22 @@
         '<span class="cc-sb-icon">' + icons.logOut + '</span>' +
         '<span>Sign Out</span>' +
       '</button></div>';
+  }
+
+  // ── Build bottom tab bar HTML (learner mobile) ──────────────────
+  function buildBottomBarHTML() {
+    var tabs = bottomTabs[context];
+    if (!tabs) return '';
+    var html = '<nav class="cc-bottom-bar" aria-label="Quick navigation">';
+    for (var i = 0; i < tabs.length; i++) {
+      var tab = tabs[i];
+      var active = isActive(tab.href) ? ' active' : '';
+      html += '<a href="' + tab.href + '" class="cc-bottom-tab' + active + '">' +
+        '<span class="cc-bottom-icon">' + icons[tab.icon] + '</span>' +
+        '<span>' + tab.label + '</span></a>';
+    }
+    html += '</nav>';
+    return html;
   }
 
   // ── Inject CSS ─────────────────────────────────────────────────
@@ -255,7 +276,49 @@
 
     /* Reset old nav margins */
     'body.cc-has-sidebar #main,',
-    'body.cc-has-sidebar main { margin-top: 0 !important; padding-top: 0 !important; }'
+    'body.cc-has-sidebar main { margin-top: 0 !important; padding-top: 0 !important; }',
+
+    /* Bottom tab bar (mobile only) */
+    '.cc-bottom-bar { display: none; }',
+
+    '@media (max-width: 959px) {',
+    '  .cc-bottom-bar {',
+    '    display: flex;',
+    '    position: fixed;',
+    '    bottom: 0; left: 0; right: 0;',
+    '    z-index: 997;',
+    '    background: #fff;',
+    '    border-top: 1px solid #e0e0e0;',
+    '    padding: 6px 0;',
+    '    padding-bottom: max(6px, env(safe-area-inset-bottom));',
+    '    box-shadow: 0 -2px 12px rgba(0,0,0,0.06);',
+    '  }',
+    '  .cc-bottom-tab {',
+    '    flex: 1;',
+    '    display: flex;',
+    '    flex-direction: column;',
+    '    align-items: center;',
+    '    text-decoration: none;',
+    '    color: #797879;',
+    '    font-size: 0.62rem;',
+    '    font-weight: 600;',
+    '    gap: 2px;',
+    '    padding: 6px 0;',
+    '    min-height: 44px;',
+    '    justify-content: center;',
+    '    transition: color 0.15s;',
+    '    font-family: "Lato", sans-serif;',
+    '  }',
+    '  .cc-bottom-tab:hover { color: #262626; }',
+    '  .cc-bottom-tab.active { color: #f58321; }',
+    '  .cc-bottom-icon { display: flex; align-items: center; justify-content: center; }',
+    '  .cc-bottom-icon svg {',
+    '    width: 20px; height: 20px;',
+    '    stroke: currentColor; fill: none;',
+    '    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;',
+    '  }',
+    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-bottom: 72px; }',
+    '}'
   ].join('\n');
   document.head.appendChild(css);
 
@@ -288,6 +351,13 @@
       '</div>';
 
     document.body.insertAdjacentHTML('afterbegin', sidebarHTML);
+
+    // ── Bottom tab bar (mobile, learner context) ────────────────
+    var bottomBarHTML = buildBottomBarHTML();
+    if (bottomBarHTML) {
+      document.body.insertAdjacentHTML('beforeend', bottomBarHTML);
+      document.body.classList.add('cc-has-bottom-bar');
+    }
 
     // ── Mobile toggle behavior ─────────────────────────────────
     var sidebar = document.getElementById('cc-sb');
