@@ -70,16 +70,86 @@
     ]
   };
 
-  // ── Bottom tab bar config (mobile only) ───────────────────────
-  var bottomTabs = {
-    learner: [
-      { icon: 'dashboard', label: 'Home', href: '/learner/' },
-      { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
-      { icon: 'creditCard', label: 'Buy', href: '/learner/buy-credits.html' },
-      { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' },
-      { icon: 'user', label: 'Profile', href: '/learner/profile.html' }
-    ]
+  // ── Contextual bottom tab bar (mobile only) ──────────────────
+  // Each section defines its own full set of 3 tabs
+  var bottomSections = {
+    learner: {
+      sections: [
+        { pages: ['/learner/book', '/learner/buy-credits', '/learner/lessons'],
+          tabs: [
+            { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
+            { icon: 'creditCard', label: 'Buy', href: '/learner/buy-credits.html' },
+            { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' }
+          ]},
+        { pages: ['/learner/log-session', '/learner/mock-test', '/learner/progress'],
+          tabs: [
+            { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
+            { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
+            { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' }
+          ]},
+        { pages: ['/learner/videos', '/learner/examiner-quiz', '/learner/ask-examiner'],
+          tabs: [
+            { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
+            { icon: 'message', label: 'Examiner AI', href: '/learner/ask-examiner.html' },
+            { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
+          ]},
+        { pages: ['/learner/profile'],
+          tabs: [
+            { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' },
+            { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
+            { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' }
+          ]}
+      ],
+      // Default tabs shown on dashboard and any unmatched pages
+      defaultTabs: [
+        { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
+        { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' },
+        { icon: 'play', label: 'Videos', href: '/learner/videos.html' }
+      ]
+    },
+    instructor: {
+      sections: [
+        { pages: ['/instructor/', '/instructor/availability'],
+          tabs: [
+            { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
+            { icon: 'clock', label: 'Availability', href: '/instructor/availability.html' },
+            { icon: 'list', label: 'Learners', href: '/instructor/learners.html' }
+          ]},
+        { pages: ['/instructor/learners', '/instructor/qa'],
+          tabs: [
+            { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
+            { icon: 'list', label: 'Learners', href: '/instructor/learners.html' },
+            { icon: 'message', label: 'Q&A', href: '/instructor/qa.html' }
+          ]},
+        { pages: ['/instructor/profile'],
+          tabs: [
+            { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
+            { icon: 'user', label: 'Profile', href: '/instructor/profile.html' },
+            { icon: 'message', label: 'Q&A', href: '/instructor/qa.html' }
+          ]}
+      ],
+      defaultTabs: [
+        { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
+        { icon: 'clock', label: 'Availability', href: '/instructor/availability.html' },
+        { icon: 'list', label: 'Learners', href: '/instructor/learners.html' }
+      ]
+    }
   };
+
+  function getBottomTabs() {
+    var config = bottomSections[context];
+    if (!config) return null;
+    // Find which section the current page belongs to
+    for (var i = 0; i < config.sections.length; i++) {
+      var sec = config.sections[i];
+      for (var j = 0; j < sec.pages.length; j++) {
+        if (normPath(path) === normPath(sec.pages[j]) || normPath(path) === sec.pages[j]) {
+          return sec.tabs;
+        }
+      }
+    }
+    return config.defaultTabs;
+  }
 
   // ── Determine active link ──────────────────────────────────────
   // Normalize path: strip trailing .html for comparison
@@ -154,9 +224,9 @@
       '</button></div>';
   }
 
-  // ── Build bottom tab bar HTML (learner mobile) ──────────────────
+  // ── Build bottom tab bar HTML (mobile) ──────────────────────────
   function buildBottomBarHTML() {
-    var tabs = bottomTabs[context];
+    var tabs = getBottomTabs();
     if (!tabs) return '';
     var html = '<nav class="cc-bottom-bar" aria-label="Quick navigation">';
     for (var i = 0; i < tabs.length; i++) {
@@ -168,6 +238,15 @@
     }
     html += '</nav>';
     return html;
+  }
+
+  // ── Ensure viewport-fit=cover for iOS safe area ────────────────
+  var vpMeta = document.querySelector('meta[name="viewport"]');
+  if (vpMeta) {
+    var vpContent = vpMeta.getAttribute('content') || '';
+    if (vpContent.indexOf('viewport-fit') === -1) {
+      vpMeta.setAttribute('content', vpContent + ', viewport-fit=cover');
+    }
   }
 
   // ── Inject CSS ─────────────────────────────────────────────────
@@ -272,6 +351,20 @@
     '  .cc-sb-close { display: block; }',
     '  .cc-mob-header { display: flex; }',
     '  body.cc-has-sidebar { padding-top: 56px; }',
+    /* Contained app-like layout: main fills viewport, scrolls internally */
+    '  body.cc-has-sidebar.cc-has-bottom-bar {',
+    '    overflow: hidden;',
+    '    height: 100dvh;',
+    '  }',
+    '  body.cc-has-sidebar.cc-has-bottom-bar main,',
+    '  body.cc-has-sidebar.cc-has-bottom-bar #main {',
+    '    height: calc(100dvh - 56px - 72px - env(safe-area-inset-bottom, 0px));',
+    '    overflow-y: auto;',
+    '    -webkit-overflow-scrolling: touch;',
+    '    margin-top: 0 !important;',
+    '    padding-top: 0 !important;',
+    '    box-sizing: border-box;',
+    '  }',
     '}',
 
     /* Reset old nav margins */
@@ -317,7 +410,7 @@
     '    stroke: currentColor; fill: none;',
     '    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;',
     '  }',
-    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-bottom: 72px; }',
+    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-bottom: 0; }',
     '}'
   ].join('\n');
   document.head.appendChild(css);
