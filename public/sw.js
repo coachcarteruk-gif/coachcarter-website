@@ -8,6 +8,7 @@ const SHELL_ASSETS = [
   '/sidebar.js',
   '/competency-config.js',
   '/Logo.png',
+  '/logo-dark.png',
   '/icons/icon-192.png',
   '/offline.html'
 ];

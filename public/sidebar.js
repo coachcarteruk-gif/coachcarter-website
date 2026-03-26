@@ -38,10 +38,15 @@
   var navItems = {
     public: [
       { icon: 'home', label: 'Home', href: '/' },
+      { icon: 'tag', label: 'Pricing', href: '/learner-journey.html' },
       { icon: 'play', label: 'Free Videos', href: '/classroom.html' },
       'divider',
       { icon: 'calendar', label: 'Book a Lesson', href: '/learner/login.html?redirect=/learner/book.html' },
-      { icon: 'logIn', label: 'Login', href: '/learner/login.html' }
+      { icon: 'message', label: 'Lesson Advisor', href: '/learner/advisor.html' },
+      { icon: 'logIn', label: 'Login', href: '/learner/login.html' },
+      'divider',
+      { icon: 'shield', label: 'Privacy Policy', href: '/privacy.html' },
+      { icon: 'fileText', label: 'Terms', href: '/terms.html' }
     ],
     learner: [
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
@@ -58,6 +63,7 @@
       { icon: 'message', label: 'Q&A', href: '/learner/qa.html' },
       { icon: 'clipboard', label: 'Examiner Quiz', href: '/learner/examiner-quiz.html' },
       { icon: 'message', label: 'Ask the Examiner', href: '/learner/ask-examiner.html' },
+      { icon: 'tag', label: 'Lesson Advisor', href: '/learner/advisor.html' },
       'divider',
       { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true }
     ],
@@ -69,87 +75,6 @@
       { icon: 'user', label: 'Profile', href: '/instructor/profile.html' }
     ]
   };
-
-  // ── Contextual bottom tab bar (mobile only) ──────────────────
-  // Each section defines its own full set of 3 tabs
-  var bottomSections = {
-    learner: {
-      sections: [
-        { pages: ['/learner/book', '/learner/buy-credits', '/learner/lessons'],
-          tabs: [
-            { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
-            { icon: 'creditCard', label: 'Buy', href: '/learner/buy-credits.html' },
-            { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' }
-          ]},
-        { pages: ['/learner/log-session', '/learner/mock-test', '/learner/progress'],
-          tabs: [
-            { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
-            { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
-            { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' }
-          ]},
-        { pages: ['/learner/videos', '/learner/examiner-quiz', '/learner/ask-examiner'],
-          tabs: [
-            { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
-            { icon: 'message', label: 'Examiner AI', href: '/learner/ask-examiner.html' },
-            { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
-          ]},
-        { pages: ['/learner/profile'],
-          tabs: [
-            { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' },
-            { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
-            { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' }
-          ]}
-      ],
-      // Default tabs shown on dashboard and any unmatched pages
-      defaultTabs: [
-        { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
-        { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' },
-        { icon: 'play', label: 'Videos', href: '/learner/videos.html' }
-      ]
-    },
-    instructor: {
-      sections: [
-        { pages: ['/instructor/', '/instructor/availability'],
-          tabs: [
-            { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
-            { icon: 'clock', label: 'Availability', href: '/instructor/availability.html' },
-            { icon: 'list', label: 'Learners', href: '/instructor/learners.html' }
-          ]},
-        { pages: ['/instructor/learners', '/instructor/qa'],
-          tabs: [
-            { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
-            { icon: 'list', label: 'Learners', href: '/instructor/learners.html' },
-            { icon: 'message', label: 'Q&A', href: '/instructor/qa.html' }
-          ]},
-        { pages: ['/instructor/profile'],
-          tabs: [
-            { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
-            { icon: 'user', label: 'Profile', href: '/instructor/profile.html' },
-            { icon: 'message', label: 'Q&A', href: '/instructor/qa.html' }
-          ]}
-      ],
-      defaultTabs: [
-        { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
-        { icon: 'clock', label: 'Availability', href: '/instructor/availability.html' },
-        { icon: 'list', label: 'Learners', href: '/instructor/learners.html' }
-      ]
-    }
-  };
-
-  function getBottomTabs() {
-    var config = bottomSections[context];
-    if (!config) return null;
-    // Find which section the current page belongs to
-    for (var i = 0; i < config.sections.length; i++) {
-      var sec = config.sections[i];
-      for (var j = 0; j < sec.pages.length; j++) {
-        if (normPath(path) === normPath(sec.pages[j]) || normPath(path) === sec.pages[j]) {
-          return sec.tabs;
-        }
-      }
-    }
-    return config.defaultTabs;
-  }
 
   // ── Determine active link ──────────────────────────────────────
   // Normalize path: strip trailing .html for comparison
@@ -222,35 +147,6 @@
         '<span class="cc-sb-icon">' + icons.logOut + '</span>' +
         '<span>Sign Out</span>' +
       '</button></div>';
-  }
-
-  // ── Build bottom tab bar HTML (mobile) ──────────────────────────
-  function buildBottomBarHTML() {
-    var tabs = getBottomTabs();
-    if (!tabs) return '';
-    var html = '<nav class="cc-bottom-bar" aria-label="Quick navigation">';
-    // Menu button as first tab
-    html += '<button class="cc-bottom-tab cc-bottom-menu" id="cc-bottom-menu" aria-label="Open menu">' +
-      '<span class="cc-bottom-icon">' + icons.hamburger + '</span>' +
-      '<span>Menu</span></button>';
-    for (var i = 0; i < tabs.length; i++) {
-      var tab = tabs[i];
-      var active = isActive(tab.href) ? ' active' : '';
-      html += '<a href="' + tab.href + '" class="cc-bottom-tab' + active + '">' +
-        '<span class="cc-bottom-icon">' + icons[tab.icon] + '</span>' +
-        '<span>' + tab.label + '</span></a>';
-    }
-    html += '</nav>';
-    return html;
-  }
-
-  // ── Ensure viewport-fit=cover for iOS safe area ────────────────
-  var vpMeta = document.querySelector('meta[name="viewport"]');
-  if (vpMeta) {
-    var vpContent = vpMeta.getAttribute('content') || '';
-    if (vpContent.indexOf('viewport-fit') === -1) {
-      vpMeta.setAttribute('content', vpContent + ', viewport-fit=cover');
-    }
   }
 
   // ── Inject CSS ─────────────────────────────────────────────────
@@ -350,82 +246,28 @@
 
     /* Mobile layout */
     '@media (max-width: 959px) {',
-    '  .cc-sb { transform: translateX(-100%); width: 280px; }',
+    '  .cc-sb { transform: translateX(-100%); width: 280px; padding-top: env(safe-area-inset-top, 0px); }',
     '  .cc-sb.open { transform: translateX(0); }',
     '  .cc-sb-close { display: block; }',
-    /* When bottom bar exists, hide the top header entirely */
-    '  body.cc-has-sidebar:not(.cc-has-bottom-bar) .cc-mob-header { display: flex; }',
-    '  body.cc-has-sidebar:not(.cc-has-bottom-bar) { padding-top: 56px; }',
-    '  body.cc-has-sidebar.cc-has-bottom-bar .cc-mob-header { display: none !important; }',
-    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-top: 0; }',
-    /* Contained app-like layout: main fills viewport, scrolls internally */
-    '  body.cc-has-sidebar.cc-has-bottom-bar {',
-    '    overflow: hidden;',
-    '    height: 100dvh;',
-    '  }',
-    '  body.cc-has-sidebar.cc-has-bottom-bar main,',
-    '  body.cc-has-sidebar.cc-has-bottom-bar #main {',
-    '    height: calc(100dvh - 72px - env(safe-area-inset-bottom, 0px));',
-    '    overflow-y: auto;',
-    '    -webkit-overflow-scrolling: touch;',
-    '    margin-top: 0 !important;',
-    '    padding-top: 0 !important;',
-    '    box-sizing: border-box;',
-    '  }',
+    '  .cc-mob-header { display: flex; padding-top: env(safe-area-inset-top, 0px); height: calc(56px + env(safe-area-inset-top, 0px)); }',
+    '  body.cc-has-sidebar { padding-top: calc(56px + env(safe-area-inset-top, 0px)); }',
     '}',
 
     /* Reset old nav margins */
     'body.cc-has-sidebar #main,',
-    'body.cc-has-sidebar main { margin-top: 0 !important; padding-top: 0 !important; }',
-
-    /* Bottom tab bar (mobile only) */
-    '.cc-bottom-bar { display: none; }',
-
-    '@media (max-width: 959px) {',
-    '  .cc-bottom-bar {',
-    '    display: flex;',
-    '    position: fixed;',
-    '    bottom: 0; left: 0; right: 0;',
-    '    z-index: 997;',
-    '    background: #fff;',
-    '    border-top: 1px solid #e0e0e0;',
-    '    padding: 6px 0;',
-    '    padding-bottom: max(6px, env(safe-area-inset-bottom));',
-    '    box-shadow: 0 -2px 12px rgba(0,0,0,0.06);',
-    '  }',
-    '  .cc-bottom-tab {',
-    '    flex: 1;',
-    '    display: flex;',
-    '    flex-direction: column;',
-    '    align-items: center;',
-    '    text-decoration: none;',
-    '    color: #797879;',
-    '    font-size: 0.62rem;',
-    '    font-weight: 600;',
-    '    gap: 2px;',
-    '    padding: 6px 0;',
-    '    min-height: 44px;',
-    '    justify-content: center;',
-    '    transition: color 0.15s;',
-    '    font-family: "Lato", sans-serif;',
-    '  }',
-    '  .cc-bottom-tab:hover { color: #262626; }',
-    '  .cc-bottom-tab.active { color: #f58321; }',
-    '  .cc-bottom-icon { display: flex; align-items: center; justify-content: center; }',
-    '  .cc-bottom-icon svg {',
-    '    width: 20px; height: 20px;',
-    '    stroke: currentColor; fill: none;',
-    '    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;',
-    '  }',
-    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-bottom: 0; }',
-  '  .cc-bottom-menu { background: none; border: none; cursor: pointer; }',
-    '}'
+    'body.cc-has-sidebar main { margin-top: 0 !important; padding-top: 0 !important; }'
   ].join('\n');
   document.head.appendChild(css);
 
   // ── Inject HTML on DOMContentLoaded ────────────────────────────
   function init() {
     document.body.classList.add('cc-has-sidebar');
+
+    // Ensure viewport-fit=cover for safe-area-inset on notched devices
+    var vp = document.querySelector('meta[name="viewport"]');
+    if (vp && vp.content.indexOf('viewport-fit') === -1) {
+      vp.content += ', viewport-fit=cover';
+    }
 
     // Context label
     var contextLabel = { public: '', learner: 'Learner Hub', instructor: 'Instructor' };
@@ -437,7 +279,7 @@
       '<aside class="cc-sb" id="cc-sb" role="navigation" aria-label="Main navigation">' +
         '<button class="cc-sb-close" id="cc-sb-close" aria-label="Close menu">' + icons.close + '</button>' +
         '<a href="' + brandHref + '" class="cc-sb-brand">' +
-          '<img src="/Logo.png" alt="CoachCarter">' +
+          '<img src="/logo-dark.png" alt="CoachCarter">' +
           '<div><div class="cc-sb-brand-text">Coach<em>Carter</em></div>' +
           (contextLabel[context] ? '<div class="cc-sb-brand-sub">' + contextLabel[context] + '</div>' : '') +
           '</div></a>' +
@@ -447,18 +289,11 @@
       '<div class="cc-mob-header" id="cc-mob-header">' +
         '<button class="cc-hamburger" id="cc-hamburger" aria-label="Open menu">' + icons.hamburger + '</button>' +
         '<a href="' + brandHref + '" class="cc-mob-brand">' +
-          '<img src="/Logo.png" alt="CoachCarter">' +
+          '<img src="/logo-dark.png" alt="CoachCarter">' +
           '<span>Coach<em>Carter</em></span></a>' +
       '</div>';
 
     document.body.insertAdjacentHTML('afterbegin', sidebarHTML);
-
-    // ── Bottom tab bar (mobile, learner context) ────────────────
-    var bottomBarHTML = buildBottomBarHTML();
-    if (bottomBarHTML) {
-      document.body.insertAdjacentHTML('beforeend', bottomBarHTML);
-      document.body.classList.add('cc-has-bottom-bar');
-    }
 
     // ── Mobile toggle behavior ─────────────────────────────────
     var sidebar = document.getElementById('cc-sb');
@@ -477,9 +312,7 @@
       document.body.style.overflow = '';
     }
 
-    if (hamburger) hamburger.addEventListener('click', openSidebar);
-    var bottomMenu = document.getElementById('cc-bottom-menu');
-    if (bottomMenu) bottomMenu.addEventListener('click', openSidebar);
+    hamburger.addEventListener('click', openSidebar);
     overlay.addEventListener('click', closeSidebar);
     closeBtn.addEventListener('click', closeSidebar);
     document.addEventListener('keydown', function(e) {
