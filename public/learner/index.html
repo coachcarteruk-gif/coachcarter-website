@@ -27,8 +27,9 @@
     /* MAIN LAYOUT */
     main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; margin-top: 64px; }
 
-    /* WELCOME */
-    .welcome { margin-bottom: 24px; }
+    /* WELCOME + READINESS */
+    .welcome { margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .welcome-text { flex: 1; }
     .welcome h1 {
       font-size: 1.5rem;
       font-weight: 700;
@@ -37,6 +38,19 @@
       letter-spacing: -0.02em;
     }
     .welcome p { font-size: 0.9rem; color: var(--muted); margin-top: 4px; }
+
+    /* Readiness ring */
+    .readiness-ring { position: relative; width: 64px; height: 64px; flex-shrink: 0; cursor: pointer; text-decoration: none; }
+    .readiness-ring svg { width: 64px; height: 64px; transform: rotate(-90deg); }
+    .readiness-ring .ring-bg { fill: none; stroke: var(--border); stroke-width: 5; }
+    .readiness-ring .ring-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1s ease, stroke 0.3s; }
+    .readiness-pct {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-family: var(--font-head); font-weight: 700; font-size: 0.95rem;
+      color: var(--primary); line-height: 1;
+    }
+    .readiness-label { font-size: 0.5rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
 
     /* CREDIT BALANCE CARD */
     .credit-card {
@@ -760,6 +774,7 @@
     .bottom-nav-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   </style>
 <script src="/sidebar.js"></script>
+<script src="/competency-config.js"></script>
 <script src="/shared/learner-auth.js"></script>
 <script src="/auth-gate.js"></script>
 </head>
@@ -792,8 +807,21 @@
 
 <main>
   <div class="welcome">
-    <h1 id="welcome-msg">Loading…</h1>
-    <p id="welcome-sub"></p>
+    <div class="welcome-text">
+      <h1 id="welcome-msg">Loading…</h1>
+      <p id="welcome-sub"></p>
+    </div>
+    <a href="/learner/progress.html" class="readiness-ring" id="readiness-ring" style="display:none" title="View full progress">
+      <svg viewBox="0 0 64 64">
+        <circle class="ring-bg" cx="32" cy="32" r="28"/>
+        <circle class="ring-fill" cx="32" cy="32" r="28" id="ring-fill"
+          stroke-dasharray="175.93" stroke-dashoffset="175.93"/>
+      </svg>
+      <div class="readiness-pct">
+        <span id="readiness-value">0%</span>
+        <span class="readiness-label">Ready</span>
+      </div>
+    </a>
   </div>
 
   <!-- PROFILE COMPLETION -->
@@ -850,47 +878,6 @@
     <a class="btn-log-now" id="unlogged-btn" href="#">Log now</a>
   </div>
 
-  <!-- Q&A QUICK ACCESS -->
-  <div id="qa-card" style="display:none;background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div style="font-family:var(--font-head);font-weight:700;font-size:0.95rem;">Recent Questions</div>
-      <a href="/learner/qa.html" style="font-size:0.8rem;font-weight:600;color:var(--accent);text-decoration:none;">View all →</a>
-    </div>
-    <div id="qa-list-preview"></div>
-    <div style="margin-top:12px;">
-      <a href="/learner/qa.html?ask=1" style="display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border-radius:100px;padding:8px 18px;font-size:0.82rem;font-weight:700;text-decoration:none;transition:all 0.18s;">+ Ask a Question</a>
-    </div>
-  </div>
-
-  <!-- EXAMINER KNOWLEDGE BASE -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
-    <a href="/learner/examiner-quiz.html" style="display:block;background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:18px 16px;text-decoration:none;color:inherit;transition:all 0.18s;border-top:3px solid var(--accent);">
-      <div style="font-size:1.4rem;margin-bottom:8px;">&#9997;</div>
-      <div style="font-family:var(--font-head);font-weight:700;font-size:0.88rem;margin-bottom:6px;color:var(--primary);">Examiner Quiz</div>
-      <div style="font-size:0.78rem;color:var(--muted);line-height:1.4;">Test yourself on 50 real examiner scenarios from the DL25 marking sheet.</div>
-    </a>
-    <a href="/learner/ask-examiner.html" style="display:block;background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:18px 16px;text-decoration:none;color:inherit;transition:all 0.18s;border-top:3px solid #1a9e5c;">
-      <div style="font-size:1.4rem;margin-bottom:8px;">&#128172;</div>
-      <div style="font-family:var(--font-head);font-weight:700;font-size:0.88rem;margin-bottom:6px;color:var(--primary);">Ask the Examiner</div>
-      <div style="font-size:0.78rem;color:var(--muted);line-height:1.4;">AI-powered answers about driving test marking. Ask anything.</div>
-    </a>
-  </div>
-
-  <!-- QUICK ACTIONS -->
-  <div class="quick-actions">
-    <a href="/learner/qa.html?ask=1" class="quick-action-card">
-      <div class="quick-action-icon">💬</div>
-      <div class="quick-action-label">Ask a Question</div>
-    </a>
-    <a href="/learner/log-session.html" class="quick-action-card">
-      <div class="quick-action-icon">📝</div>
-      <div class="quick-action-label">Log a Session</div>
-    </a>
-    <a href="/learner/profile.html" class="quick-action-card" id="qa-profile-link">
-      <div class="quick-action-icon">👤</div>
-      <div class="quick-action-label">My Profile</div>
-    </a>
-  </div>
 
 </main>
 
@@ -952,9 +939,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   AUTH = ccAuth.getAuth();
 
   // Gate action links behind auth
-  document.querySelectorAll('.quick-actions a, .credit-actions a, a[href*="qa.html?ask=1"]').forEach(link => {
+  document.querySelectorAll('.credit-actions a').forEach(link => {
     link.addEventListener('click', function (e) {
-      if (!window.ccAuth || window.ccAuth.isLoggedIn) return; // let it through
+      if (!window.ccAuth || window.ccAuth.isLoggedIn) return;
       e.preventDefault();
       window.ccAuth.requireAuth();
     });
@@ -965,9 +952,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('welcome-sub').textContent = 'Create a free account to track your progress and book lessons.';
     document.getElementById('upcoming-list').innerHTML =
       '<div class="upcoming-empty">Once you create your account, you\'ll see all your upcoming lessons here.</div>';
-    // Hide My Profile quick action
-    var profileLink = document.getElementById('qa-profile-link');
-    if (profileLink) profileLink.style.display = 'none';
     // Replace credit card with a sign-up prompt
     var creditCard = document.querySelector('.credit-card');
     if (creditCard) {
@@ -982,10 +966,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   document.getElementById('header-name').textContent = AUTH.user.name;
-  await Promise.all([loadProgress(), loadCredits(), loadBookings(), loadUnlogged()]);
+  await Promise.all([loadProgress(), loadCredits(), loadBookings(), loadUnlogged(), loadReadiness()]);
   render();
   initCalSyncBanner();
-  loadQAPreview();
   loadProfileCompleteness();
 });
 
@@ -1072,6 +1055,64 @@ async function loadUnlogged() {
   } catch (e) { console.error(e); }
 }
 
+async function loadReadiness() {
+  try {
+    const res = await fetch('/api/learner?action=competency', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
+    if (!res.ok) return;
+    const data = await res.json();
+    const CC = window.CC_COMPETENCY;
+    if (!CC) return;
+
+    // Process lesson ratings
+    const lessonMap = {};
+    (data.lesson_ratings || []).forEach(lr => {
+      const key = CC.mapLegacySkill(lr.skill_key);
+      const rObj = CC.RATINGS.find(r => r.key === lr.rating);
+      if (!rObj) return;
+      if (!lessonMap[key]) lessonMap[key] = [];
+      lessonMap[key].push({ score: rObj.score, date: lr.created_at, rating: lr.rating });
+    });
+    Object.keys(lessonMap).forEach(k => {
+      lessonMap[k].sort((a, b) => new Date(b.date) - new Date(a.date));
+    });
+
+    // Process quiz accuracy
+    const quizMap = {};
+    (data.quiz_accuracy || []).forEach(qa => {
+      quizMap[qa.skill_key] = { attempts: qa.attempts, correct: qa.correct_count };
+    });
+
+    // Calculate overall readiness
+    let sum = 0;
+    CC.SKILLS.forEach(sk => {
+      const lessonRatings = lessonMap[sk.key] || [];
+      const quiz = quizMap[sk.key];
+      const quizResults = [];
+      if (quiz && quiz.attempts > 0) {
+        for (let i = 0; i < quiz.attempts; i++) quizResults.push({ correct: i < quiz.correct });
+      }
+      const lastPractised = lessonRatings.length > 0 ? lessonRatings[0].date : null;
+      sum += CC.readinessScore({ lessonRatings, quizResults, lastPractised });
+    });
+    const pct = Math.round(sum / CC.SKILLS.length);
+
+    // Render ring
+    const ring = document.getElementById('readiness-ring');
+    const fill = document.getElementById('ring-fill');
+    const val = document.getElementById('readiness-value');
+    if (!ring || !fill || !val) return;
+
+    ring.style.display = '';
+    val.textContent = pct + '%';
+    const circumference = 2 * Math.PI * 28; // r=28
+    const offset = circumference * (1 - pct / 100);
+    fill.style.strokeDashoffset = offset;
+
+    // Color: red < 30, orange 30-70, green > 70
+    fill.style.stroke = pct < 30 ? 'var(--red)' : pct < 70 ? 'var(--accent)' : 'var(--green)';
+  } catch (e) { console.error('Readiness load failed:', e); }
+}
+
 function render() {
   if (!PROGRESS) return;
 
@@ -1116,7 +1157,10 @@ function renderUpcoming() {
   const now = Date.now();
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  list.innerHTML = upcoming.map(b => {
+  // Show only the next lesson on dashboard
+  const nextOnly = upcoming.slice(0, 1);
+
+  list.innerHTML = nextOnly.map(b => {
     const date = new Date(b.scheduled_date + 'T00:00:00Z');
     const dayNum = date.getUTCDate();
     const month = MON_ABBR[date.getUTCMonth()];
@@ -1161,6 +1205,13 @@ function renderUpcoming() {
         </div>
       </div>`;
   }).join('');
+
+  // Show "View all" link if more lessons exist
+  if (upcoming.length > 1) {
+    list.innerHTML += `<div style="text-align:center;margin-top:8px;">
+      <a href="/learner/lessons.html" style="font-size:0.82rem;font-weight:600;color:var(--accent);text-decoration:none;">
+        View all ${upcoming.length} lessons →</a></div>`;
+  }
 }
 
 function renderUnlogged() {
@@ -1229,68 +1280,7 @@ function initCalSyncBanner() {
   };
 }
 
-// ── Q&A Preview ──
-async function loadQAPreview() {
-  try {
-    const res = await fetch('/api/learner?action=qa-list&limit=3', {
-      headers: { Authorization: 'Bearer ' + AUTH.token }
-    });
-    const data = await res.json();
-    if (!res.ok) return;
-    const questions = data.questions || [];
-    const card = document.getElementById('qa-card');
-    const list = document.getElementById('qa-list-preview');
-
-    // Always show the card (even if empty, the "Ask a Question" CTA is valuable)
-    card.style.display = '';
-
-    if (questions.length === 0) {
-      list.innerHTML = '<div style="font-size:0.85rem;color:var(--muted);padding:4px 0;">No questions yet. Ask your instructor anything!</div>';
-      return;
-    }
-
-    list.innerHTML = questions.map(q => {
-      const statusColor = q.status === 'open' ? 'var(--accent)' : q.status === 'answered' ? 'var(--green)' : 'var(--muted)';
-      const statusBg = q.status === 'open' ? 'var(--accent-lt)' : q.status === 'answered' ? 'var(--green-lt)' : 'var(--surface)';
-      return `<a href="/learner/qa.html" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);text-decoration:none;color:inherit;">
-        <span style="font-size:0.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escH(q.title)}</span>
-        <span style="font-size:0.68rem;font-weight:700;text-transform:uppercase;padding:2px 8px;border-radius:100px;background:${statusBg};color:${statusColor};white-space:nowrap;">${q.status}</span>
-      </a>`;
-    }).join('');
-  } catch (err) {
-    console.error('qa-preview error:', err);
-  }
-}
-
-function escH(s) {
-  if (!s) return '';
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
 </script>
 
-<nav class="bottom-nav">
-  <a href="/learner/" class="bottom-nav-item active">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
-    <span>Dashboard</span>
-  </a>
-  <a href="/learner/lessons.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
-    <span>Lessons</span>
-  </a>
-  <a href="/learner/videos.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"/></svg></span>
-    <span>Videos</span>
-  </a>
-  <a href="/learner/qa.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-    <span>Q&A</span>
-  </a>
-  <a href="/learner/log-session.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
-    <span>Session Log</span>
-  </a>
-</nav>
 </body>
 </html>
