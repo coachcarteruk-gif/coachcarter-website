@@ -2,6 +2,12 @@
 
 Driving school website for CoachCarter (coachcarter.uk). Vanilla HTML/JS frontend on Vercel with serverless API routes and Neon Postgres.
 
+## IMPORTANT: Before starting ANY work
+
+1. **Always start from latest main**: `git checkout main && git pull origin main`
+2. **Never continue on an old feature branch** from a previous session — create a fresh branch from main
+3. **Never re-add removed features** — if something looks "missing" from navigation or pages, check this file first. It was probably removed intentionally.
+
 ## Project structure
 
 - `public/` — Static HTML pages (learner portal in `public/learner/`, instructor in `public/instructor/`, admin in `public/admin/`)
@@ -34,6 +40,30 @@ Driving school website for CoachCarter (coachcarter.uk). Vanilla HTML/JS fronten
 ## Error alerting
 
 `api/_error-alert.js` sends email on 500 errors. All API files call `reportError()` before `res.status(500)`. Requires `ERROR_ALERT_EMAIL` env var.
+
+## Navigation design (app mode — March 2026)
+
+The site is designed as an app experience. Do NOT re-add any of the removed items.
+
+**Start page (`/`)**: Role selection — "I'm a Learner" or "I'm an Instructor". No other links.
+
+**Mobile layout**: No top header bar. Bottom bar has 4 tabs: Menu (hamburger) + 3 contextual tabs that change by section.
+
+**Bottom tab sections (learner)**:
+- Learn: Videos, Ask the Examiner, Examiner Quiz
+- Practice: Log Session, Mock Test, My Progress
+- Lessons: Book, Buy Credits, Upcoming
+- Profile: Test Readiness, Mock Results, Progress
+
+**Intentionally removed** (do NOT re-add):
+- Pricing page / tab
+- Lesson Advisor
+- Privacy Policy tab (page still exists, just not in nav)
+- Terms tab (page still exists, just not in nav)
+- Q&A (hidden for now)
+- Dashboard as a permanent bottom tab
+
+**Desktop**: Sidebar nav is unchanged.
 
 ## Docs
 

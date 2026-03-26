@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ \"$branch\" != \"main\" ] && [ -n \"$branch\" ]; then echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"SessionStart\\\",\\\"additionalContext\\\":\\\"WARNING: You are on branch '$branch', NOT main. Run 'git checkout main && git pull origin main' before making any changes. Check CLAUDE.md for design decisions before modifying navigation or removing/adding features.\\\"}}\"; else behind=$(git rev-list HEAD..origin/main --count 2>/dev/null); if [ \"$behind\" != \"0\" ] && [ -n \"$behind\" ]; then echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"SessionStart\\\",\\\"additionalContext\\\":\\\"WARNING: Your main branch is $behind commits behind origin/main. Run 'git pull origin main' before making any changes.\\\"}}\"; fi; fi",
+            "timeout": 10,
+            "statusMessage": "Checking branch status..."
+          }
+        ]
+      }
+    ]
+  }
+}
