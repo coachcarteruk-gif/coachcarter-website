@@ -82,6 +82,9 @@ module.exports = async (req, res) => {
   if (action === 'stats')              return handleStats(req, res);
   if (action === 'upload-photo')       return handleUploadPhoto(req, res);
   if (action === 'my-learners')        return handleMyLearners(req, res);
+  if (action === 'update-notes')       return handleUpdateNotes(req, res);
+  if (action === 'learner-notes')      return handleLearnerNotes(req, res);
+  if (action === 'update-learner-notes') return handleUpdateLearnerNotes(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -349,11 +352,13 @@ async function handleScheduleRange(req, res) {
         lb.end_time::text,
         lb.status,
         lb.notes,
+        lb.instructor_notes,
         lu.id    AS learner_id,
         lu.name  AS learner_name,
         lu.email AS learner_email,
         lu.phone AS learner_phone,
-        lu.pickup_address AS learner_pickup_address
+        lu.pickup_address AS learner_pickup_address,
+        COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       WHERE lb.instructor_id = ${instructor.id}
@@ -1080,11 +1085,14 @@ async function handleMyLearners(req, res) {
         COUNT(lb.id) FILTER (WHERE lb.status = 'completed')::int AS completed_lessons,
         COUNT(lb.id) FILTER (WHERE lb.status = 'confirmed' AND lb.scheduled_date >= CURRENT_DATE)::int AS upcoming_lessons,
         MAX(lb.scheduled_date)::text AS last_lesson_date,
-        MIN(lb.scheduled_date)::text AS first_lesson_date
+        MIN(lb.scheduled_date)::text AS first_lesson_date,
+        iln.notes AS instructor_notes,
+        iln.test_date::text AS test_date
       FROM learner_users lu
       JOIN lesson_bookings lb ON lb.learner_id = lu.id
+      LEFT JOIN instructor_learner_notes iln ON iln.learner_id = lu.id AND iln.instructor_id = ${instructor.id}
       WHERE lb.instructor_id = ${instructor.id}
-      GROUP BY lu.id
+      GROUP BY lu.id, iln.notes, iln.test_date
       ORDER BY MAX(lb.scheduled_date) DESC
     `;
 
@@ -1093,5 +1101,97 @@ async function handleMyLearners(req, res) {
     console.error('instructor my-learners error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load learners' });
+  }
+}
+
+// ── POST /api/instructor?action=update-notes ──────────────────────────────────
+// Body: { booking_id, instructor_notes }
+// Updates notes on an already-completed booking.
+async function handleUpdateNotes(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { booking_id, instructor_notes } = req.body;
+  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [booking] = await sql`
+      SELECT id, status FROM lesson_bookings
+      WHERE id = ${booking_id} AND instructor_id = ${instructor.id}
+    `;
+
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== 'completed')
+      return res.status(400).json({ error: 'Can only edit notes on completed lessons' });
+
+    await sql`
+      UPDATE lesson_bookings
+      SET instructor_notes = ${instructor_notes ? instructor_notes.trim() : null}
+      WHERE id = ${booking_id}
+    `;
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('update-notes error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to update notes' });
+  }
+}
+
+// ── GET /api/instructor?action=learner-notes&learner_id=X ─────────────────────
+// Returns instructor's notes + test_date for a specific learner.
+async function handleLearnerNotes(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const learner_id = req.query.learner_id;
+  if (!learner_id) return res.status(400).json({ error: 'learner_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [row] = await sql`
+      SELECT notes, test_date::text
+      FROM instructor_learner_notes
+      WHERE instructor_id = ${instructor.id} AND learner_id = ${learner_id}
+    `;
+    return res.json({ notes: row?.notes || '', test_date: row?.test_date || null });
+  } catch (err) {
+    console.error('learner-notes error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to load notes' });
+  }
+}
+
+// ── POST /api/instructor?action=update-learner-notes ──────────────────────────
+// Body: { learner_id, notes, test_date }
+// Upserts instructor's notes and test_date for a learner.
+async function handleUpdateLearnerNotes(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { learner_id, notes, test_date } = req.body;
+  if (!learner_id) return res.status(400).json({ error: 'learner_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    await sql`
+      INSERT INTO instructor_learner_notes (instructor_id, learner_id, notes, test_date, updated_at)
+      VALUES (${instructor.id}, ${learner_id}, ${notes || null}, ${test_date || null}, NOW())
+      ON CONFLICT (instructor_id, learner_id)
+      DO UPDATE SET notes = ${notes || null}, test_date = ${test_date || null}, updated_at = NOW()
+    `;
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('update-learner-notes error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to save notes' });
   }
 }

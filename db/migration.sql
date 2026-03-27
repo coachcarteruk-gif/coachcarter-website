@@ -346,3 +346,16 @@ CREATE TABLE IF NOT EXISTS availability_submissions (
   status               TEXT DEFAULT 'pending',
   submitted_at         TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- INSTRUCTOR LEARNER NOTES (per instructor-learner pair)
+-- ══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS instructor_learner_notes (
+  id              SERIAL PRIMARY KEY,
+  instructor_id   INTEGER NOT NULL REFERENCES instructors(id),
+  learner_id      INTEGER NOT NULL REFERENCES learner_users(id),
+  notes           TEXT,
+  test_date       DATE,
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(instructor_id, learner_id)
+);

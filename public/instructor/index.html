@@ -502,6 +502,26 @@
     .cancel-reason { width: 100%; min-height: 50px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-body); font-size: 0.85rem; resize: vertical; margin-top: 8px; }
     .btn-cancel-danger { background: var(--red); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-family: var(--font-head); font-weight: 700; font-size: 0.88rem; cursor: pointer; transition: background 0.15s; }
     .btn-cancel-danger:hover { background: #dc2626; }
+
+    /* ── Contact links (phone/WhatsApp) ── */
+    .daily-booking-contact { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 0.78rem; }
+    .daily-booking-contact a { color: var(--accent); text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+    .daily-booking-contact a:hover { text-decoration: underline; }
+
+    /* ── Inline notes editing ── */
+    .inline-notes { width: 100%; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+    .inline-notes-display { font-size: 0.8rem; color: var(--muted); font-style: italic; line-height: 1.4; }
+    .inline-notes-link { font-size: 0.75rem; font-weight: 600; color: var(--accent); cursor: pointer; background: none; border: none; padding: 0; margin-top: 4px; font-family: var(--font-body); }
+    .inline-notes-link:hover { text-decoration: underline; }
+    .inline-notes-edit { margin-top: 6px; }
+    .inline-notes-edit textarea { width: 100%; min-height: 50px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--font-body); font-size: 0.82rem; resize: vertical; color: var(--primary); }
+    .inline-notes-edit textarea:focus { border-color: var(--accent); outline: none; }
+    .inline-notes-actions { display: flex; gap: 6px; margin-top: 6px; }
+    .inline-notes-actions button { padding: 5px 12px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; cursor: pointer; border: none; }
+    .btn-notes-save { background: var(--accent); color: white; }
+    .btn-notes-save:hover { background: var(--accent-dk); }
+    .btn-notes-save:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-notes-cancel { background: var(--bg); color: var(--muted); border: 1px solid var(--border) !important; }
   </style>
 <script src="/sidebar.js"></script>
 <script src="/shared/instructor-auth.js"></script>
@@ -601,6 +621,7 @@
         <button class="cal-nav-btn" onclick="navNext()" title="Next">&#8250;</button>
       </div>
       <button class="btn-today" onclick="goToday()">Today</button>
+      <button class="btn-today" onclick="refreshSchedule()" id="refreshBtn" title="Refresh schedule">↻</button>
     </div>
   </div>
 
@@ -1062,16 +1083,19 @@ function renderDaily() {
     if (hBookings.length > 0) {
       for (const b of hBookings) {
         const isCompleted = b.status === 'completed';
+        const waUrl = whatsappUrl(b.learner_phone);
         html += `
           <div class="daily-booking-card ${isCompleted ? 'completed' : ''}">
             <div class="daily-booking-time">${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)}</div>
             <div>
               <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before their first lesson">📞 Contact first</span>' : ''}</div>
               <div class="daily-booking-email">${esc(b.learner_email)}</div>
+              ${b.learner_phone ? `<div class="daily-booking-contact"><a href="tel:${esc(b.learner_phone)}">📞 ${esc(b.learner_phone)}</a>${waUrl ? `<a href="${waUrl}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}</div>` : ''}
               ${b.learner_pickup_address ? `<div class="daily-booking-email">📍 ${esc(b.learner_pickup_address)}</div>` : ''}
             </div>
             <span class="daily-booking-status status-${b.status}">${b.status === 'completed' ? '✓ Completed' : 'Confirmed'}</span>
             ${!isCompleted ? `<button class="btn-complete-sm" id="complete-${b.id}" onclick="markComplete(${b.id})">Mark complete</button>` : ''}
+            ${isCompleted ? renderInlineNotes(b) : ''}
             ${isCompleted ? renderFeedbackHTML(b) : ''}
           </div>`;
       }
@@ -1234,6 +1258,85 @@ function renderFeedbackHTML(b) {
     </div>
   </div>`;
 }
+
+// ─── WhatsApp URL helper ──────────────────────────────────────────────────────
+function whatsappUrl(phone) {
+  if (!phone) return null;
+  let num = phone.replace(/\s+/g, '');
+  if (num.startsWith('0')) num = '44' + num.slice(1);
+  else if (num.startsWith('+')) num = num.slice(1);
+  return 'https://wa.me/' + num;
+}
+
+// ─── Inline notes on completed lessons ────────────────────────────────────────
+function renderInlineNotes(b) {
+  const hasNotes = b.instructor_notes && b.instructor_notes.trim();
+  return `
+    <div class="inline-notes" id="notes-wrap-${b.id}">
+      ${hasNotes ? `<div class="inline-notes-display">${esc(b.instructor_notes)}</div>` : ''}
+      <button class="inline-notes-link" onclick="showNotesEditor(${b.id})">${hasNotes ? 'Edit notes' : '+ Add notes'}</button>
+      <div class="inline-notes-edit" id="notes-edit-${b.id}" style="display:none">
+        <textarea id="notes-text-${b.id}" placeholder="e.g. Worked on roundabouts, needs more mirror checks…">${esc(b.instructor_notes || '')}</textarea>
+        <div class="inline-notes-actions">
+          <button class="btn-notes-cancel" onclick="hideNotesEditor(${b.id})">Cancel</button>
+          <button class="btn-notes-save" id="notes-save-${b.id}" onclick="saveInlineNotes(${b.id})">Save</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showNotesEditor(bookingId) {
+  document.getElementById('notes-edit-' + bookingId).style.display = '';
+}
+
+function hideNotesEditor(bookingId) {
+  document.getElementById('notes-edit-' + bookingId).style.display = 'none';
+}
+
+async function saveInlineNotes(bookingId) {
+  const textarea = document.getElementById('notes-text-' + bookingId);
+  const btn = document.getElementById('notes-save-' + bookingId);
+  const notes = textarea.value.trim();
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const res = await fetch('/api/instructor?action=update-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ booking_id: bookingId, instructor_notes: notes || null })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // Update cache
+    for (const ds in bookingCache) {
+      const bk = bookingCache[ds].find(b => b.id === bookingId);
+      if (bk) { bk.instructor_notes = notes || null; break; }
+    }
+    showToast('Notes saved', 'success');
+    renderCurrentView();
+  } catch (err) {
+    showToast(err.message || 'Failed to save notes', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+// ─── Refresh schedule ─────────────────────────────────────────────────────────
+async function refreshSchedule(silent) {
+  const btn = document.getElementById('refreshBtn');
+  if (btn && !silent) btn.textContent = '⟳';
+  bookingCache = {};
+  loadedRanges = [];
+  await renderCurrentView();
+  if (btn) btn.textContent = '↻';
+  if (!silent) showToast('Schedule refreshed', 'success');
+}
+
+// Auto-refresh every 60s when page is visible
+setInterval(() => {
+  if (document.visibilityState === 'visible' && token) refreshSchedule(true);
+}, 60000);
 
 function esc(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
