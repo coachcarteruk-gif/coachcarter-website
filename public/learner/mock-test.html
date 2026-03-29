@@ -457,6 +457,8 @@
     .placed-fault-item:last-child { border-bottom: none; }
     .fault-map-label { display: flex; align-items: center; justify-content: center; background: none !important; border: none !important; }
     .map-actions { display: flex; flex-direction: column; gap: 10px; }
+    .post-save-choice { padding: 20px 0; display: flex; flex-direction: column; gap: 12px; }
+    .post-save-choice.hidden { display: none; }
   </style>
 </head>
 <body>
@@ -472,16 +474,12 @@
         Mobile phones must not be used by the driver or supervising driver during this test. Pull over safely at each 10-minute interval to record faults.
       </div>
 
-      <p class="start-desc">This mock test mirrors the real DVSA practical test. You'll drive for approximately 30 minutes in 3 &times; 10-minute parts, stopping briefly between each to record any faults.</p>
+      <p class="start-desc">This mock test mirrors the real DVSA practical test. Drive in 10-minute sections, stopping briefly between each to record any faults. You can end the test at any point or continue for as many sections as you need.</p>
 
       <div class="step-indicator" id="step-indicator">
-        <div class="step-item" data-step="1"><span class="step-num">1</span> Part 1</div>
+        <div class="step-item active"><span class="step-num" id="step-current">1</span> <span id="step-label">Part 1</span></div>
         <span class="step-arrow">&rsaquo;</span>
-        <div class="step-item" data-step="2"><span class="step-num">2</span> Part 2</div>
-        <span class="step-arrow">&rsaquo;</span>
-        <div class="step-item" data-step="3"><span class="step-num">3</span> Part 3</div>
-        <span class="step-arrow">&rsaquo;</span>
-        <div class="step-item" data-step="4"><span class="step-num">&#10003;</span> Results</div>
+        <div class="step-item" data-step="end"><span class="step-num">&#10003;</span> Results</div>
       </div>
 
       <button class="btn-primary" onclick="showRouteSelection()" id="btn-begin">Begin Mock Test</button>
@@ -536,7 +534,13 @@
 
       <div class="fault-total-bar" id="fault-total-bar">
         <div class="fault-total-pills" id="fault-total-pills"></div>
-        <button class="btn-primary" id="btn-save-faults" onclick="saveFaults()">Save &amp; Continue</button>
+        <button class="btn-primary" id="btn-save-faults" onclick="saveFaults()">Save Faults</button>
+      </div>
+
+      <div id="post-save-choice" class="hidden post-save-choice">
+        <p style="text-align: center; font-weight: 600; margin: 0;">Faults saved. What next?</p>
+        <button class="btn-primary" onclick="continueToNextPart()">Continue to Next Section</button>
+        <button class="btn-dark" onclick="endMockTest()">End Mock Test &amp; View Results</button>
       </div>
     </div>
   </section>
@@ -608,8 +612,8 @@ let currentPart = 0; // 0-indexed internally
 let timerInterval = null;
 let timerSeconds = 0;
 let isDriving = false;
-let partTimes = [0, 0, 0]; // elapsed seconds per part
-let partFaults = [{}, {}, {}]; // per-part: { skill_key: { driving, serious, dangerous } }
+let partTimes = [0]; // elapsed seconds per part (grows dynamically)
+let partFaults = [{}]; // per-part: { skill_key: { driving, serious, dangerous } }
 let longPressTimer = null;
 
 // Route selection
@@ -658,14 +662,16 @@ function showScreen(id) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function updateStepIndicator(activeStep, doneTo) {
-  var items = document.querySelectorAll('.step-item');
-  items.forEach(function(item) {
-    var step = parseInt(item.getAttribute('data-step'));
-    item.classList.remove('active', 'done');
-    if (step < doneTo + 1) item.classList.add('done');
-    else if (step === activeStep) item.classList.add('active');
-  });
+function updateStepIndicator(activeStep) {
+  var numEl = document.getElementById('step-current');
+  var labelEl = document.getElementById('step-label');
+  var endItem = document.querySelector('.step-item[data-step="end"]');
+  if (numEl) numEl.textContent = activeStep;
+  if (labelEl) labelEl.textContent = 'Part ' + activeStep;
+  if (endItem) {
+    endItem.classList.remove('active');
+    if (activeStep === 'done') endItem.classList.add('active');
+  }
 }
 
 function apiCall(method, action, body) {
@@ -701,20 +707,20 @@ async function beginMockTest() {
   }
 
   currentPart = 0;
-  partTimes = [0, 0, 0];
-  partFaults = [{}, {}, {}];
+  partTimes = [0];
+  partFaults = [{}];
   showPartScreen();
 }
 
 /* ── Screen 2: Part Start ── */
 function showPartScreen() {
-  var part = MOCK_TEST.parts[currentPart];
+  var partDef = MOCK_TEST.parts[currentPart % MOCK_TEST.parts.length];
 
-  updateStepIndicator(currentPart + 1, currentPart);
+  updateStepIndicator(currentPart + 1);
 
-  document.getElementById('part-label').textContent = 'PART ' + part.number + ' OF 3';
-  document.getElementById('part-title').textContent = part.label;
-  document.getElementById('part-desc').textContent = part.description;
+  document.getElementById('part-label').textContent = 'PART ' + (currentPart + 1);
+  document.getElementById('part-title').textContent = partDef.label;
+  document.getElementById('part-desc').textContent = partDef.description;
   document.getElementById('timer-display').textContent = '00:00';
   document.getElementById('timer-label').textContent = 'Tap "Start Driving" to begin';
 
@@ -783,8 +789,8 @@ function pullOver() {
 
 /* ── Screen 3: Fault Recording ── */
 function showFaultScreen() {
-  var part = MOCK_TEST.parts[currentPart];
-  document.getElementById('fault-title').textContent = 'Record Faults \u2014 Part ' + part.number;
+  var partDef = MOCK_TEST.parts[currentPart % MOCK_TEST.parts.length];
+  document.getElementById('fault-title').textContent = 'Record Faults \u2014 Part ' + (currentPart + 1);
   document.getElementById('fault-time').textContent = formatTime(partTimes[currentPart]) + ' driven';
 
   // Initialize fault data for this part if empty
@@ -1031,7 +1037,6 @@ function updateFaultTotals() {
     }
   });
 
-  var part = MOCK_TEST.parts[currentPart];
   var html = '<span class="ft-pill driving">' + totals.driving + ' driving</span>';
   html += '<span class="ft-pill serious">' + totals.serious + ' serious</span>';
   html += '<span class="ft-pill dangerous">' + totals.dangerous + ' dangerous</span>';
@@ -1082,28 +1087,51 @@ async function saveFaults() {
     });
   }
 
-  if (currentPart < 2) {
-    // Move to next part
-    currentPart++;
-    btn.disabled = false;
-    btn.textContent = 'Save & Continue';
-    showPartScreen();
-  } else {
-    // Complete the test
-    try {
-      await apiCall('POST', 'mock-tests', { mock_test_id: mockTestId, complete: true });
-    } catch (e) {
-      console.warn('Failed to complete mock test:', e);
-    }
-    btn.disabled = false;
-    btn.textContent = 'Save & Continue';
-    showResults();
+  // Show inline choice: continue or end
+  btn.textContent = 'Saved';
+  btn.classList.add('hidden');
+  var choiceDiv = document.getElementById('post-save-choice');
+  choiceDiv.classList.remove('hidden');
+  choiceDiv.scrollIntoView({ behavior: 'smooth' });
+}
+
+function continueToNextPart() {
+  // Hide choice, reset save button
+  document.getElementById('post-save-choice').classList.add('hidden');
+  var btn = document.getElementById('btn-save-faults');
+  btn.classList.remove('hidden');
+  btn.disabled = false;
+  btn.textContent = 'Save Faults';
+
+  // Add new part
+  currentPart++;
+  partFaults.push({});
+  partTimes.push(0);
+  showPartScreen();
+}
+
+async function endMockTest() {
+  // Hide choice
+  document.getElementById('post-save-choice').classList.add('hidden');
+
+  try {
+    await apiCall('POST', 'mock-tests', { mock_test_id: mockTestId, complete: true });
+  } catch (e) {
+    console.warn('Failed to complete mock test:', e);
   }
+
+  // Reset save button for next time
+  var btn = document.getElementById('btn-save-faults');
+  btn.classList.remove('hidden');
+  btn.disabled = false;
+  btn.textContent = 'Save Faults';
+
+  showResults();
 }
 
 /* ── Screen 4: Results ── */
 function showResults() {
-  updateStepIndicator(4, 3);
+  updateStepIndicator('done');
 
   // Aggregate all faults across all parts
   var allFaults = {};
@@ -1111,7 +1139,7 @@ function showResults() {
     allFaults[skill.key] = { driving: 0, serious: 0, dangerous: 0 };
   });
 
-  for (var p = 0; p < 3; p++) {
+  for (var p = 0; p < partFaults.length; p++) {
     Object.keys(partFaults[p]).forEach(function(key) {
       var f = partFaults[p][key];
       allFaults[key].driving += f.driving;
@@ -1205,7 +1233,7 @@ function showResults() {
 
   // Per-part breakdown
   var pbHtml = '';
-  for (var p = 0; p < 3; p++) {
+  for (var p = 0; p < partFaults.length; p++) {
     var pt = { driving: 0, serious: 0, dangerous: 0 };
     Object.keys(partFaults[p]).forEach(function(key) {
       var f = partFaults[p][key];
@@ -1213,7 +1241,7 @@ function showResults() {
       pt.serious += f.serious;
       pt.dangerous += f.dangerous;
     });
-    var partLabel = MOCK_TEST.parts[p].label;
+    var partLabel = MOCK_TEST.parts[p % MOCK_TEST.parts.length].label.replace(/Part \d/, 'Part ' + (p + 1));
     pbHtml += '<div class="part-breakdown-row">';
     pbHtml += '<span class="part-breakdown-label">' + partLabel + '</span>';
     pbHtml += '<span class="part-breakdown-faults">';
@@ -1394,7 +1422,7 @@ function buildFaultPlacementList() {
   SKILLS.forEach(function(skill) {
     allFaults[skill.key] = { driving: 0, serious: 0, dangerous: 0 };
   });
-  for (var p = 0; p < 3; p++) {
+  for (var p = 0; p < partFaults.length; p++) {
     Object.keys(partFaults[p]).forEach(function(key) {
       var f = partFaults[p][key];
       allFaults[key].driving += f.driving;
