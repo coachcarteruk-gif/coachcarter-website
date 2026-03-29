@@ -335,6 +335,12 @@ CREATE TABLE IF NOT EXISTS mock_test_faults (
   dangerous_faults INTEGER DEFAULT 0
 );
 
+-- Ensure sub_key column exists (may be missing on older DBs)
+DO $$ BEGIN
+  ALTER TABLE mock_test_faults ADD COLUMN sub_key TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- AVAILABILITY SUBMISSIONS (public enquiry form)
 -- ══════════════════════════════════════════════════════════════════════════════
