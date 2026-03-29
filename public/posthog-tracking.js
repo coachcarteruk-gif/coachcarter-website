@@ -85,7 +85,33 @@
     setTimeout(checkScroll, 500);
   });
 
-  /* ── 4. Outbound Link Click Tracking ── */
+  /* ── 4. Time on Page Tracking ── */
+  var pageEnteredAt = Date.now();
+  var engaged = true;
+
+  // Track when user leaves/hides the tab
+  document.addEventListener('visibilitychange', function () {
+    engaged = !document.hidden;
+  });
+
+  function sendTimeOnPage() {
+    var totalSeconds = Math.round((Date.now() - pageEnteredAt) / 1000);
+    if (totalSeconds < 2) return; // ignore bounces under 2s
+    ph() && ph().capture('page_time_spent', {
+      seconds: totalSeconds,
+      page_url: window.location.pathname,
+      page_title: document.title
+    });
+  }
+
+  // Fire on page unload (visibilitychange is more reliable than beforeunload)
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') sendTimeOnPage();
+  });
+  // Fallback for older browsers
+  window.addEventListener('beforeunload', sendTimeOnPage);
+
+  /* ── 5. Outbound Link Click Tracking ── */
   document.addEventListener('click', function (e) {
     var link = e.target.closest('a[href]');
     if (!link) return;
