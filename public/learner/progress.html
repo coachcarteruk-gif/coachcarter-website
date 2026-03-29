@@ -340,25 +340,34 @@ function processData() {
     lessonMap[lkeys[li]].sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
   }
 
-  // Build quiz accuracy map
+  // Build quiz accuracy map (with legacy key mapping)
   quizMap = {};
   if (DATA.quiz_accuracy) {
     for (var q = 0; q < DATA.quiz_accuracy.length; q++) {
       var qa = DATA.quiz_accuracy[q];
-      quizMap[qa.skill_key] = { attempts: qa.attempts, correct: qa.correct_count };
+      var qaKey = CC.mapLegacySkill(qa.skill_key);
+      if (!qaKey) continue; // removed skill
+      if (!quizMap[qaKey]) {
+        quizMap[qaKey] = { attempts: 0, correct: 0 };
+      }
+      quizMap[qaKey].attempts += (qa.attempts || 0);
+      quizMap[qaKey].correct += (qa.correct_count || 0);
     }
   }
 
-  // Build mock faults map
+  // Build mock faults map (with legacy key mapping)
   mockFaultMap = {};
   if (DATA.mock_faults) {
     for (var m = 0; m < DATA.mock_faults.length; m++) {
       var mf = DATA.mock_faults[m];
-      mockFaultMap[mf.skill_key] = {
-        driving: mf.total_driving || 0,
-        serious: mf.total_serious || 0,
-        dangerous: mf.total_dangerous || 0
-      };
+      var mfKey = CC.mapLegacySkill(mf.skill_key);
+      if (!mfKey) continue; // removed skill
+      if (!mockFaultMap[mfKey]) {
+        mockFaultMap[mfKey] = { driving: 0, serious: 0, dangerous: 0 };
+      }
+      mockFaultMap[mfKey].driving += (mf.total_driving || 0);
+      mockFaultMap[mfKey].serious += (mf.total_serious || 0);
+      mockFaultMap[mfKey].dangerous += (mf.total_dangerous || 0);
     }
   }
 
@@ -378,9 +387,12 @@ function processData() {
     var lastPractised = null;
     if (lessonRatings.length > 0) lastPractised = lessonRatings[0].date;
 
+    var mockFaults = mockFaultMap[sk.key] ? [mockFaultMap[sk.key]] : [];
+
     skillScores[sk.key] = CC.readinessScore({
       lessonRatings: lessonRatings,
       quizResults: quizResults,
+      mockFaults: mockFaults,
       lastPractised: lastPractised
     });
   }

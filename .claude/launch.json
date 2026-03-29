@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "static-server",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["node_modules/serve/build/main.js", "public", "-l", "tcp://0.0.0.0:${PORT}"],
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "public", "-l", "tcp://0.0.0.0:${PORT}"],
       "port": 3000,
       "autoPort": true
     }

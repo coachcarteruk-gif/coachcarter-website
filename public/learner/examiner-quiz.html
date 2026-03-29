@@ -492,7 +492,7 @@ function showResults() {
         const skillKey = scenario ? CC_COMPETENCY.quizRefToSkill(scenario.dl25_ref) : null;
         return {
           question_id: a.id,
-          skill_key: skillKey || 'awareness_26',
+          skill_key: skillKey || 'positioning',
           correct: a.is_correct,
           learner_answer: a.selected,
           correct_answer: a.correct_answer

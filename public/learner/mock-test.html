@@ -839,7 +839,7 @@ function renderFaultAreas() {
 
       // Parent skill row
       html += '<div class="skill-row' + (hasSubs ? ' has-subs' : '') + '"' + (hasSubs ? ' onclick="toggleSubs(\'' + skill.key + '\')"' : '') + '>';
-      html += '<div class="skill-name">' + skill.label + '<br><span class="skill-dl25">DL25: ' + skill.dl25 + '</span></div>';
+      html += '<div class="skill-name">' + skill.label + '</div>';
       html += '<div class="fault-counters"' + (hasSubs ? ' onclick="event.stopPropagation()"' : '') + '>';
 
       FAULT_TYPES.forEach(function(ft) {
@@ -1133,7 +1133,7 @@ async function endMockTest() {
 function showResults() {
   updateStepIndicator('done');
 
-  // Aggregate all faults across all parts
+  // Aggregate all faults across all parts (including sub-faults)
   var allFaults = {};
   SKILLS.forEach(function(skill) {
     allFaults[skill.key] = { driving: 0, serious: 0, dangerous: 0 };
@@ -1145,6 +1145,14 @@ function showResults() {
       allFaults[key].driving += f.driving;
       allFaults[key].serious += f.serious;
       allFaults[key].dangerous += f.dangerous;
+      if (f.subs) {
+        Object.keys(f.subs).forEach(function(sk) {
+          var sf = f.subs[sk];
+          allFaults[key].driving += sf.driving;
+          allFaults[key].serious += sf.serious;
+          allFaults[key].dangerous += sf.dangerous;
+        });
+      }
     });
   }
 
@@ -1177,7 +1185,7 @@ function showResults() {
   if (seriousSkills.length > 0) {
     var sHtml = '<div class="result-section"><h3>&#128308; Serious &amp; Dangerous Faults</h3><ul>';
     seriousSkills.forEach(function(item) {
-      sHtml += '<li><span>' + item.skill.label + ' <span class="skill-dl25">(DL25: ' + item.skill.dl25 + ')</span></span><span>';
+      sHtml += '<li><span>' + item.skill.label + '</span><span>';
       if (item.serious > 0) sHtml += '<span class="fault-badge serious-badge">' + item.serious + 'S</span> ';
       if (item.dangerous > 0) sHtml += '<span class="fault-badge dangerous-badge">' + item.dangerous + '&#10005;</span>';
       sHtml += '</span></li>';
@@ -1240,8 +1248,16 @@ function showResults() {
       pt.driving += f.driving;
       pt.serious += f.serious;
       pt.dangerous += f.dangerous;
+      if (f.subs) {
+        Object.keys(f.subs).forEach(function(sk) {
+          var sf = f.subs[sk];
+          pt.driving += sf.driving;
+          pt.serious += sf.serious;
+          pt.dangerous += sf.dangerous;
+        });
+      }
     });
-    var partLabel = MOCK_TEST.parts[p % MOCK_TEST.parts.length].label.replace(/Part \d/, 'Part ' + (p + 1));
+    var partLabel = 'Part ' + (p + 1);
     pbHtml += '<div class="part-breakdown-row">';
     pbHtml += '<span class="part-breakdown-label">' + partLabel + '</span>';
     pbHtml += '<span class="part-breakdown-faults">';
@@ -1428,6 +1444,14 @@ function buildFaultPlacementList() {
       allFaults[key].driving += f.driving;
       allFaults[key].serious += f.serious;
       allFaults[key].dangerous += f.dangerous;
+      if (f.subs) {
+        Object.keys(f.subs).forEach(function(sk) {
+          var sf = f.subs[sk];
+          allFaults[key].driving += sf.driving;
+          allFaults[key].serious += sf.serious;
+          allFaults[key].dangerous += sf.dangerous;
+        });
+      }
     });
   }
 

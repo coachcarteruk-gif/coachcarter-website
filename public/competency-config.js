@@ -1,7 +1,8 @@
 /**
  * CoachCarter Competency Framework
  * ─────────────────────────────────
- * Single source of truth for the 28 DL25-aligned driving skills
+ * Single source of truth for the DL25-aligned driving skills.
+ * 10 categories matching the real DVSA DL25 marking sheet,
  * used across Log Session, Examiner Quiz, Mock Test, My Progress,
  * and Ask the Examiner AI.
  *
@@ -11,111 +12,69 @@
 window.CC_COMPETENCY = (function () {
   'use strict';
 
-  // ── 6 Competency Areas ─────────────────────────────────────────
+  // ── 10 DL25 Categories ─────────────────────────────────────────
   var AREAS = [
-    { id: 'vehicle_control',     label: 'Vehicle Control',       icon: '🚗', colour: '#6366f1' },
-    { id: 'awareness_planning',  label: 'Awareness & Planning',  icon: '👁️', colour: '#0ea5e9' },
-    { id: 'road_positioning',    label: 'Road Positioning',      icon: '🛣️', colour: '#8b5cf6' },
-    { id: 'decision_making',     label: 'Decision Making',       icon: '⚡', colour: '#f59e0b' },
-    { id: 'manoeuvres',          label: 'Manoeuvres',            icon: '🅿️', colour: '#10b981' },
-    { id: 'pre_test',            label: 'Pre-Test Checks',       icon: '✅', colour: '#64748b' }
+    { id: 'control',        label: 'Control',                     icon: '🚗', colour: '#6366f1' },
+    { id: 'move_off',       label: 'Move Off',                    icon: '🟢', colour: '#22c55e' },
+    { id: 'mirrors',        label: 'Use of Mirrors',              icon: '👁️', colour: '#0ea5e9' },
+    { id: 'signals',        label: 'Signals',                     icon: '🔶', colour: '#f59e0b' },
+    { id: 'junctions',      label: 'Junctions',                   icon: '🔀', colour: '#ef4444' },
+    { id: 'judgement',      label: 'Judgement',                   icon: '⚡', colour: '#8b5cf6' },
+    { id: 'positioning',    label: 'Positioning',                 icon: '🛣️', colour: '#0d9488' },
+    { id: 'progress',       label: 'Progress',                   icon: '📈', colour: '#f97316' },
+    { id: 'signs_signals',  label: 'Response to Signs / Signals', icon: '🚦', colour: '#e11d48' },
+    { id: 'manoeuvres',     label: 'Manoeuvres',                  icon: '🅿️', colour: '#10b981' }
   ];
 
-  // ── 28 Skills (DL25-aligned) ───────────────────────────────────
+  // ── Skills (DL25-aligned) ──────────────────────────────────────
   //
-  //  key          – unique identifier, stored in DB (skill_ratings.skill_key)
+  //  key          – area-level key, stored in DB (skill_ratings.skill_key for session logs)
   //  label        – plain-English name shown to learner
-  //  dl25         – official DL25 reference code
-  //  dl25Label    – official DL25 category name
-  //  area         – parent competency area id
-  //  description  – one-liner shown in tooltips / AI context
-  //  subs         – (optional) DL25 subcategories for detailed fault recording
+  //  area         – parent category id (same as key for these)
+  //  subs         – DL25 sub-skills for detailed fault recording in mock tests
+  //  description  – one-liner for tooltips / AI context
   //
   var SKILLS = [
-    // ── Pre-Test Checks ──────────────────────────────────────────
-    { key: 'eyesight_1',     label: 'Eyesight Test',      dl25: '1',  dl25Label: 'Eyesight Test',
-      area: 'pre_test',
-      description: 'Reading a number plate at the required distance (20m)' },
-    { key: 'show_tell_7',   label: 'Show Me / Tell Me',   dl25: '7',  dl25Label: 'Show Me / Tell Me',
-      area: 'pre_test',
-      description: 'Vehicle safety questions — identifying and demonstrating safety checks' },
-
-    // ── Vehicle Control ──────────────────────────────────────────
-    { key: 'accelerator_12a', label: 'Accelerator',     dl25: '12a', dl25Label: 'Control — Accelerator',
-      area: 'vehicle_control',
-      description: 'Smooth, progressive use of the accelerator without jerking or fuel waste' },
-    { key: 'clutch_12b',      label: 'Clutch',          dl25: '12b', dl25Label: 'Control — Clutch',
-      area: 'vehicle_control',
-      description: 'Smooth clutch operation, correct bite-point control, no riding the clutch' },
-    { key: 'gears_12c',       label: 'Gears',           dl25: '12c', dl25Label: 'Control — Gears',
-      area: 'vehicle_control',
-      description: 'Appropriate gear selection for road/speed conditions, smooth changes' },
-    { key: 'footbrake_12d',   label: 'Footbrake',       dl25: '12d', dl25Label: 'Control — Footbrake',
-      area: 'vehicle_control',
-      description: 'Progressive braking without harshness, appropriate stopping distances' },
-    { key: 'parking_brake_12e', label: 'Parking Brake', dl25: '12e', dl25Label: 'Control — Parking Brake',
-      area: 'vehicle_control',
-      description: 'Correct use of parking brake — applying when needed, releasing before move-off' },
-    { key: 'steering_12f',    label: 'Steering',         dl25: '12f', dl25Label: 'Control — Steering',
-      area: 'vehicle_control',
-      description: 'Smooth steering inputs, correct hand positioning, no arm-crossing on turns' },
-    { key: 'ancillary_27',    label: 'Ancillary Controls', dl25: '27', dl25Label: 'Ancillary Controls',
-      area: 'vehicle_control',
-      description: 'Correct use of indicators, wipers, lights, demisters, and heated screens' },
-
-    // ── Awareness & Planning ─────────────────────────────────────
-    { key: 'mirrors_14',      label: 'Use of Mirrors',    dl25: '14', dl25Label: 'Use of Mirrors',
-      area: 'awareness_planning',
+    // ── 1. Control ───────────────────────────────────────────────
+    { key: 'control', label: 'Control', area: 'control',
       subs: [
-        { key: 'change_dir',   label: 'Change direction' },
-        { key: 'change_speed', label: 'Change speed' }
+        { key: 'accelerator',   label: 'Accelerator' },
+        { key: 'clutch',        label: 'Clutch' },
+        { key: 'gears',         label: 'Gears' },
+        { key: 'footbrake',     label: 'Footbrake' },
+        { key: 'parking_brake', label: 'Parking brake' },
+        { key: 'steering',      label: 'Steering' }
       ],
-      description: 'Checking mirrors before signalling, changing direction, speed, or lane' },
-    { key: 'signals_15',      label: 'Signals',           dl25: '15', dl25Label: 'Signals',
-      area: 'awareness_planning',
+      description: 'Smooth, accurate use of accelerator, clutch, gears, brakes, and steering' },
+
+    // ── 2. Move Off ──────────────────────────────────────────────
+    { key: 'move_off', label: 'Move Off', area: 'move_off',
+      subs: [
+        { key: 'safety',  label: 'Safety' },
+        { key: 'control', label: 'Control' }
+      ],
+      description: 'Moving off safely — flat, uphill, downhill, and at an angle' },
+
+    // ── 3. Use of Mirrors ────────────────────────────────────────
+    { key: 'mirrors', label: 'Use of Mirrors', area: 'mirrors',
+      subs: [
+        { key: 'signalling',       label: 'Signalling' },
+        { key: 'change_direction', label: 'Change direction' },
+        { key: 'change_speed',     label: 'Change speed' }
+      ],
+      description: 'Checking mirrors before signalling, changing direction, or speed' },
+
+    // ── 4. Signals ───────────────────────────────────────────────
+    { key: 'signals', label: 'Signals', area: 'signals',
       subs: [
         { key: 'necessary', label: 'Necessary' },
-        { key: 'correctly', label: 'Correctly' }
+        { key: 'correctly', label: 'Correctly' },
+        { key: 'timed',     label: 'Timed' }
       ],
       description: 'Timely, correct signals — not too early, late, or misleading' },
-    { key: 'awareness_26',    label: 'Awareness & Planning', dl25: '26', dl25Label: 'Awareness / Planning',
-      area: 'awareness_planning',
-      description: 'Anticipating hazards, planning ahead, defensive driving awareness' },
-    { key: 'signs_signals_17', label: 'Signs & Signals', dl25: '17', dl25Label: 'Response to Signs / Signals',
-      area: 'awareness_planning',
-      subs: [
-        { key: 'traffic_signs',       label: 'Traffic signs' },
-        { key: 'road_markings',       label: 'Road markings' },
-        { key: 'traffic_lights',      label: 'Traffic lights' },
-        { key: 'traffic_controllers', label: 'Traffic controllers' },
-        { key: 'other_road_users',    label: 'Other road users' }
-      ],
-      description: 'Correct response to traffic lights, road signs, markings, and signals' },
-    { key: 'precautions_11',  label: 'Precautions',       dl25: '11', dl25Label: 'Precautions',
-      area: 'awareness_planning',
-      description: 'Checking surroundings before opening doors, moving off, and reversing' },
 
-    // ── Road Positioning ─────────────────────────────────────────
-    { key: 'positioning_23',  label: 'Positioning',       dl25: '23', dl25Label: 'Positioning',
-      area: 'road_positioning',
-      subs: [
-        { key: 'normal_driving',  label: 'Normal driving' },
-        { key: 'lane_discipline', label: 'Lane discipline' }
-      ],
-      description: 'Correct lane positioning for road layout, turns, and traffic conditions' },
-    { key: 'clearance_16',    label: 'Clearance',         dl25: '16', dl25Label: 'Clearance / Obstructions',
-      area: 'road_positioning',
-      description: 'Safe clearance around parked cars, cyclists, pedestrians, and obstructions' },
-    { key: 'following_19',    label: 'Following Distance', dl25: '19', dl25Label: 'Following Distance',
-      area: 'road_positioning',
-      description: 'Maintaining safe stopping distance from the vehicle ahead' },
-    { key: 'normal_stop_25',  label: 'Normal Stop',       dl25: '25', dl25Label: 'Position / Normal Stop',
-      area: 'road_positioning',
-      description: 'Selecting a safe, legal, and convenient place to stop and pulling up accurately' },
-
-    // ── Decision Making ──────────────────────────────────────────
-    { key: 'junctions_21',    label: 'Junctions',         dl25: '21', dl25Label: 'Junctions',
-      area: 'decision_making',
+    // ── 5. Junctions ─────────────────────────────────────────────
+    { key: 'junctions', label: 'Junctions', area: 'junctions',
       subs: [
         { key: 'approach_speed',  label: 'Approach speed' },
         { key: 'observation',     label: 'Observation' },
@@ -124,64 +83,64 @@ window.CC_COMPETENCY = (function () {
         { key: 'cutting_corners', label: 'Cutting corners' }
       ],
       description: 'Correct approach, observation, and timing at junctions and roundabouts' },
-    { key: 'judgement_22',    label: 'Judgement',          dl25: '22', dl25Label: 'Judgement',
-      area: 'decision_making',
+
+    // ── 6. Judgement ─────────────────────────────────────────────
+    { key: 'judgement', label: 'Judgement', area: 'judgement',
       subs: [
         { key: 'overtaking', label: 'Overtaking' },
         { key: 'meeting',    label: 'Meeting' },
         { key: 'crossing',   label: 'Crossing' }
       ],
       description: 'Assessing gaps, speeds, and distances — overtaking, meeting traffic, crossroads' },
-    { key: 'speed_18',        label: 'Use of Speed',       dl25: '18', dl25Label: 'Use of Speed',
-      area: 'decision_making',
-      description: 'Appropriate speed for road type, conditions, hazards, and limits' },
-    { key: 'pedestrians_24',  label: 'Pedestrian Crossings', dl25: '24', dl25Label: 'Pedestrian Crossings',
-      area: 'decision_making',
-      description: 'Safe approach and response at all types of pedestrian crossings' },
-    { key: 'progress_20',     label: 'Progress',           dl25: '20', dl25Label: 'Progress',
-      area: 'decision_making',
+
+    // ── 7. Positioning ───────────────────────────────────────────
+    { key: 'positioning', label: 'Positioning', area: 'positioning',
+      subs: [
+        { key: 'normal_driving',      label: 'Normal driving' },
+        { key: 'lane_discipline',     label: 'Lane discipline' },
+        { key: 'pedestrian_crossings', label: 'Pedestrian crossings' },
+        { key: 'position_normal_stop', label: 'Position / normal stop' },
+        { key: 'awareness_planning',  label: 'Awareness planning' },
+        { key: 'clearance',           label: 'Clearance' },
+        { key: 'following_distance',  label: 'Following distance' },
+        { key: 'use_of_speed',        label: 'Use of speed' }
+      ],
+      description: 'Correct lane positioning, clearance, following distance, and speed for conditions' },
+
+    // ── 8. Progress ──────────────────────────────────────────────
+    { key: 'progress', label: 'Progress', area: 'progress',
       subs: [
         { key: 'appropriate_speed', label: 'Appropriate speed' },
         { key: 'undue_hesitation',  label: 'Undue hesitation' }
       ],
       description: 'Making reasonable progress without unnecessary hesitation or delay' },
 
-    // ── Manoeuvres ───────────────────────────────────────────────
-    { key: 'controlled_stop_2', label: 'Controlled Stop', dl25: '2', dl25Label: 'Controlled Stop',
-      area: 'manoeuvres',
+    // ── 9. Response to Signs / Signals ───────────────────────────
+    { key: 'signs_signals', label: 'Response to Signs / Signals', area: 'signs_signals',
       subs: [
-        { key: 'control', label: 'Control' },
-        { key: 'timed',   label: 'Timed' }
+        { key: 'traffic_signs',       label: 'Traffic signs' },
+        { key: 'road_markings',       label: 'Road markings' },
+        { key: 'traffic_lights',      label: 'Traffic lights' },
+        { key: 'traffic_controllers', label: 'Traffic controllers' },
+        { key: 'other_road_users',    label: 'Other road users' }
       ],
-      description: 'Emergency/controlled stop — firm, prompt, and under full control' },
-    { key: 'reverse_right_4', label: 'Reverse Right',     dl25: '4', dl25Label: 'Reverse Right',
-      area: 'manoeuvres',
-      subs: [
-        { key: 'control',     label: 'Control' },
-        { key: 'observation', label: 'Observation' }
-      ],
-      description: 'Pull up on the right, reverse two car lengths, rejoin traffic safely' },
-    { key: 'reverse_park_5',  label: 'Reverse Park',      dl25: '5', dl25Label: 'Reverse Park',
-      area: 'manoeuvres',
+      description: 'Correct response to traffic lights, road signs, markings, and signals' },
+
+    // ── 10. Manoeuvres ───────────────────────────────────────────
+    { key: 'manoeuvres', label: 'Manoeuvres', area: 'manoeuvres',
       subs: [
         { key: 'control',     label: 'Control' },
         { key: 'observation', label: 'Observation' }
       ],
-      description: 'Reverse parallel park — control, accuracy, observation throughout' },
-    { key: 'forward_park_8',  label: 'Forward Park',      dl25: '8', dl25Label: 'Forward Park / Taxi',
-      area: 'manoeuvres',
-      subs: [
-        { key: 'control',     label: 'Control' },
-        { key: 'observation', label: 'Observation' }
-      ],
-      description: 'Forward bay park — accurate positioning and safe approach' },
-    { key: 'move_off_13',     label: 'Move Off',          dl25: '13', dl25Label: 'Move Off',
-      area: 'manoeuvres',
-      subs: [
-        { key: 'control', label: 'Control' },
-        { key: 'safety',  label: 'Safety' }
-      ],
-      description: 'Moving off safely — flat, uphill, downhill, and at an angle' }
+      description: 'Vehicle control and observation during reverse park, forward park, or pull-up manoeuvres' }
+  ];
+
+  // ── Manoeuvre Types (selectable in mock tests) ─────────────────
+  var MANOEUVRE_TYPES = [
+    { key: 'reverse_right',       label: 'Reverse / Right' },
+    { key: 'reverse_park_road',   label: 'Reverse park (road)' },
+    { key: 'reverse_park_car',    label: 'Reverse park (car park)' },
+    { key: 'forward_park',        label: 'Forward park' }
   ];
 
   // ── Fault Types ────────────────────────────────────────────────
@@ -211,50 +170,75 @@ window.CC_COMPETENCY = (function () {
   };
 
   // ── Legacy Skill Mapping ───────────────────────────────────────
-  // Maps old log-session skill keys to their nearest new equivalents
-  // so existing session history still renders correctly.
+  // Maps ALL old skill keys to new equivalents so existing data renders.
   var LEGACY_MAP = {
-    speed_choice:  'speed_18',
-    lane_choice:   'positioning_23',
-    mirrors:       'mirrors_14',
-    lane_keeping:  'positioning_23',
-    stay_or_go:    'junctions_21',
-    roundabouts:   'junctions_21',
-    manoeuvres:    'move_off_13'
+    // Old v1 keys (pre-DL25)
+    speed_choice:     'positioning',
+    lane_choice:      'positioning',
+    lane_keeping:     'positioning',
+    stay_or_go:       'junctions',
+    roundabouts:      'junctions',
+
+    // Old v2 keys (28-skill structure)
+    accelerator_12a:  'control',
+    clutch_12b:       'control',
+    gears_12c:        'control',
+    footbrake_12d:    'control',
+    parking_brake_12e:'control',
+    steering_12f:     'control',
+    ancillary_27:     'control',
+    move_off_13:      'move_off',
+    mirrors_14:       'mirrors',
+    signals_15:       'signals',
+    junctions_21:     'junctions',
+    judgement_22:     'judgement',
+    positioning_23:   'positioning',
+    clearance_16:     'positioning',
+    following_19:     'positioning',
+    normal_stop_25:   'positioning',
+    speed_18:         'positioning',
+    pedestrians_24:   'positioning',
+    awareness_26:     'positioning',
+    progress_20:      'progress',
+    signs_signals_17: 'signs_signals',
+    reverse_right_4:  'manoeuvres',
+    reverse_park_5:   'manoeuvres',
+    forward_park_8:   'manoeuvres',
+    controlled_stop_2:'manoeuvres',
+    precautions_11:   'positioning',
+
+    // Removed skills → nearest category
+    eyesight_1:       null,
+    show_tell_7:      null
   };
 
   // ── Scenario-to-Skill Mapping ──────────────────────────────────
-  // Maps examiner quiz dl25_ref prefixes to skill keys so quiz
-  // results feed into the competency record.
+  // Maps examiner quiz dl25_ref prefixes to skill keys.
   var QUIZ_DL25_MAP = {
-    '2':   'controlled_stop_2',
-    '4':   'reverse_right_4',
-    '5':   'reverse_park_5',
-    '1':   'eyesight_1',
-    '7':   'show_tell_7',
-    '8':   'forward_park_8',
-    '11':  'precautions_11',
-    '12a': 'accelerator_12a',
-    '12b': 'clutch_12b',
-    '12c': 'gears_12c',
-    '12d': 'footbrake_12d',
-    '12e': 'parking_brake_12e',
-    '12f': 'steering_12f',
-    '13':  'move_off_13',
-    '14':  'mirrors_14',
-    '15':  'signals_15',
-    '16':  'clearance_16',
-    '17':  'signs_signals_17',
-    '18':  'speed_18',
-    '19':  'following_19',
-    '20':  'progress_20',
-    '21':  'junctions_21',
-    '22':  'judgement_22',
-    '23':  'positioning_23',
-    '24':  'pedestrians_24',
-    '25':  'normal_stop_25',
-    '26':  'awareness_26',
-    '27':  'ancillary_27'
+    '12a': 'control',
+    '12b': 'control',
+    '12c': 'control',
+    '12d': 'control',
+    '12e': 'control',
+    '12f': 'control',
+    '13':  'move_off',
+    '14':  'mirrors',
+    '15':  'signals',
+    '16':  'positioning',
+    '17':  'signs_signals',
+    '18':  'positioning',
+    '19':  'positioning',
+    '20':  'progress',
+    '21':  'junctions',
+    '22':  'judgement',
+    '23':  'positioning',
+    '24':  'positioning',
+    '25':  'positioning',
+    '26':  'positioning',
+    '4':   'manoeuvres',
+    '5':   'manoeuvres',
+    '8':   'manoeuvres',
+    '2':   'manoeuvres'
   };
 
   // ── Helper Functions ───────────────────────────────────────────
@@ -267,7 +251,7 @@ window.CC_COMPETENCY = (function () {
     return null;
   }
 
-  /** Get all skills in a competency area */
+  /** Get all skills in a category (usually just 1 since key === area) */
   function getSkillsByArea(areaId) {
     var result = [];
     for (var i = 0; i < SKILLS.length; i++) {
@@ -276,7 +260,7 @@ window.CC_COMPETENCY = (function () {
     return result;
   }
 
-  /** Get the competency area object for a skill key */
+  /** Get the category object for a skill key */
   function getAreaForSkill(skillKey) {
     var skill = getSkill(skillKey);
     if (!skill) return null;
@@ -288,16 +272,14 @@ window.CC_COMPETENCY = (function () {
 
   /** Map a quiz scenario dl25_ref to a skill key */
   function quizRefToSkill(dl25Ref) {
-    // dl25_ref looks like "2 — Controlled Stop" or "12a — Control — Accelerator"
-    // Extract the numeric/alphanumeric prefix before the dash
     var prefix = dl25Ref.split(/\s/)[0].replace(/[^0-9a-z]/gi, '');
-    // Try exact match first, then just the number part
     return QUIZ_DL25_MAP[prefix] || QUIZ_DL25_MAP[prefix.replace(/[a-z]+$/i, '')] || null;
   }
 
   /** Map a legacy skill key to the new key */
   function mapLegacySkill(oldKey) {
-    return LEGACY_MAP[oldKey] || oldKey;
+    if (LEGACY_MAP.hasOwnProperty(oldKey)) return LEGACY_MAP[oldKey];
+    return oldKey;
   }
 
   /** Check if a skill has DL25 subcategories */
@@ -308,7 +290,6 @@ window.CC_COMPETENCY = (function () {
 
   /** Calculate mock test result */
   function mockTestResult(faults) {
-    // faults = { skill_key: { driving: n, serious: n, dangerous: n, subs?: { sub_key: {...} } }, ... }
     var totals = { driving: 0, serious: 0, dangerous: 0 };
     var keys = Object.keys(faults);
     for (var i = 0; i < keys.length; i++) {
@@ -316,7 +297,6 @@ window.CC_COMPETENCY = (function () {
       totals.driving   += (f.driving || 0);
       totals.serious   += (f.serious || 0);
       totals.dangerous += (f.dangerous || 0);
-      // Include subcategory faults
       if (f.subs) {
         var subKeys = Object.keys(f.subs);
         for (var j = 0; j < subKeys.length; j++) {
@@ -336,12 +316,13 @@ window.CC_COMPETENCY = (function () {
   /**
    * Calculate combined readiness score for a skill (0–100)
    *
-   * @param {Object} data - { lessonRatings: [{score, date}], quizResults: [{correct, date}], lastPractised: Date|null }
+   * @param {Object} data - { lessonRatings: [{score, date}], quizResults: [{correct, date}], mockFaults: [{driving, serious, dangerous}], lastPractised: Date|null }
    * @returns {number} 0–100
    */
   function readinessScore(data) {
     var lessonComponent = 0;
     var quizComponent = 0;
+    var mockComponent = 0;
     var recencyBonus = 0;
 
     // Lesson rating: average of last 3, normalised 1-3 → 0-100
@@ -349,8 +330,8 @@ window.CC_COMPETENCY = (function () {
       var recent = data.lessonRatings.slice(0, 3);
       var sum = 0;
       for (var i = 0; i < recent.length; i++) sum += recent[i].score;
-      var avg = sum / recent.length; // 1–3
-      lessonComponent = ((avg - 1) / 2) * 100; // 0–100
+      var avg = sum / recent.length;
+      lessonComponent = ((avg - 1) / 2) * 100;
     }
 
     // Quiz accuracy: % correct
@@ -360,6 +341,14 @@ window.CC_COMPETENCY = (function () {
         if (data.quizResults[j].correct) correct++;
       }
       quizComponent = (correct / data.quizResults.length) * 100;
+    }
+
+    // Mock test fault score: fewer faults = higher score
+    // Based on most recent mock test faults for this skill
+    if (data.mockFaults && data.mockFaults.length > 0) {
+      var latestMock = data.mockFaults[0];
+      var totalFaults = (latestMock.driving || 0) + (latestMock.serious || 0) * 5 + (latestMock.dangerous || 0) * 10;
+      mockComponent = Math.max(0, 100 - totalFaults * 20);
     }
 
     // Recency: full marks if practised in last 7 days, decays over 30 days
@@ -372,14 +361,21 @@ window.CC_COMPETENCY = (function () {
       }
     }
 
-    // Weighted average: 50% lesson, 30% quiz, 20% recency
+    // Weighted average based on available data
     var hasLesson = data.lessonRatings && data.lessonRatings.length > 0;
     var hasQuiz = data.quizResults && data.quizResults.length > 0;
+    var hasMock = data.mockFaults && data.mockFaults.length > 0;
 
-    if (hasLesson && hasQuiz) {
+    if (hasLesson && hasQuiz && hasMock) {
+      return Math.round(lessonComponent * 0.35 + quizComponent * 0.2 + mockComponent * 0.25 + recencyBonus * 0.2);
+    } else if (hasLesson && hasMock) {
+      return Math.round(lessonComponent * 0.4 + mockComponent * 0.35 + recencyBonus * 0.25);
+    } else if (hasLesson && hasQuiz) {
       return Math.round(lessonComponent * 0.5 + quizComponent * 0.3 + recencyBonus * 0.2);
     } else if (hasLesson) {
       return Math.round(lessonComponent * 0.7 + recencyBonus * 0.3);
+    } else if (hasMock) {
+      return Math.round(mockComponent * 0.7 + recencyBonus * 0.3);
     } else if (hasQuiz) {
       return Math.round(quizComponent * 0.7 + recencyBonus * 0.3);
     }
@@ -388,13 +384,14 @@ window.CC_COMPETENCY = (function () {
 
   // ── Public API ─────────────────────────────────────────────────
   return {
-    AREAS:          AREAS,
-    SKILLS:         SKILLS,
-    FAULT_TYPES:    FAULT_TYPES,
-    RATINGS:        RATINGS,
-    MOCK_TEST:      MOCK_TEST,
-    LEGACY_MAP:     LEGACY_MAP,
-    QUIZ_DL25_MAP:  QUIZ_DL25_MAP,
+    AREAS:            AREAS,
+    SKILLS:           SKILLS,
+    FAULT_TYPES:      FAULT_TYPES,
+    RATINGS:          RATINGS,
+    MOCK_TEST:        MOCK_TEST,
+    MANOEUVRE_TYPES:  MANOEUVRE_TYPES,
+    LEGACY_MAP:       LEGACY_MAP,
+    QUIZ_DL25_MAP:    QUIZ_DL25_MAP,
 
     getSkill:        getSkill,
     getSkillsByArea: getSkillsByArea,
