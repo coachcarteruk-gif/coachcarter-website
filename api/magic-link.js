@@ -316,8 +316,8 @@ async function handleVerifyCode(req, res) {
     } else {
       isNewUser = true;
       const newRows = await sql`
-        INSERT INTO learner_users (phone, credit_balance)
-        VALUES (${linkRecord.phone}, ${FREE_TRIAL_CREDITS})
+        INSERT INTO learner_users (phone, email, credit_balance)
+        VALUES (${linkRecord.phone}, ${linkRecord.email || null}, ${FREE_TRIAL_CREDITS})
         RETURNING *`;
       user = newRows[0];
 

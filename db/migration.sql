@@ -27,6 +27,9 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- Ensure email is nullable (phone-based signups have no email)
+ALTER TABLE learner_users ALTER COLUMN email DROP NOT NULL;
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- MAGIC LINK TOKENS
 -- ══════════════════════════════════════════════════════════════════════════════
