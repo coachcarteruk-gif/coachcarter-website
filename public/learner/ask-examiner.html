@@ -208,7 +208,7 @@ function askChip(btn) {
   sendMessage(text);
 
   if (typeof posthog !== 'undefined') {
-    posthog.capture('ask_examiner_chip_clicked', { chip_text: text });
+    posthog.capture('ask_examiner_chip_clicked', { chip_text: text, source: 'starter_chip' });
   }
 }
 
@@ -271,9 +271,12 @@ async function sendMessage(text) {
     conversationHistory.push({ role: 'assistant', content: reply });
 
     if (typeof posthog !== 'undefined') {
-      posthog.capture('ask_examiner_message_sent', {
-        message_length: text.length,
-        conversation_length: conversationHistory.length
+      posthog.capture('ask_examiner_question', {
+        question: text,
+        question_length: text.length,
+        answer_length: reply.length,
+        conversation_turn: Math.ceil(conversationHistory.length / 2),
+        is_first_question: conversationHistory.length === 2
       });
     }
   } catch (err) {
