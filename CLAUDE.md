@@ -85,3 +85,12 @@ This codebase is being prepared for migration to a React Native (Expo) app. See 
 - `MIGRATION-PLAN.md` — React Native app migration plan (keep updated)
 - `DEVELOPMENT-ROADMAP.md` — full feature history and roadmap
 - `PROJECT.md` — complete project reference (APIs, tables, flows)
+- `COMPETITOR-FEATURES-ROADMAP.md` — 17 competitor-inspired features with implementation plans
+
+## After completing any work
+
+When a session completes work that relates to any feature in `COMPETITOR-FEATURES-ROADMAP.md`, update that document:
+1. Mark implemented features with a `[DONE - date]` tag in the Priority Matrix
+2. Add implementation notes (any deviations from the plan, actual effort vs estimated)
+3. Update dependencies if the build order changed
+4. If new competitor insights emerge during work, add them to the relevant feature section
