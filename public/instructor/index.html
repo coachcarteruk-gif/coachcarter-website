@@ -140,6 +140,19 @@
       color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap;
     }
     .btn-today:hover { border-color: var(--accent); color: var(--accent); }
+    .cal-filter-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-lt); }
+    .daily-booking-card.cancelled { opacity: 0.5; border-left: 3px solid var(--red); }
+    .week-event.cancelled { background: var(--red-lt) !important; border-left-color: var(--red) !important; opacity: 0.6; }
+    .month-booking-pill.cancelled { background: var(--red-lt); color: var(--red); opacity: 0.7; }
+
+    @media print {
+      .site-nav, .bottom-nav, .cal-toolbar, .toast, .modal-overlay,
+      .glance-section, .qa-banner, .cal-sync-banner { display: none !important; }
+      .page { max-width: 100%; margin: 0; padding: 10px; box-shadow: none; }
+      .daily-booking-card { break-inside: avoid; border: 1px solid #ccc; }
+      .week-event { border: 1px solid #ccc; }
+      @page { margin: 0.5in; }
+    }
     .btn-add-lesson {
       padding: 6px 14px; border-radius: 8px;
       border: 1.5px solid var(--accent); background: var(--accent);
@@ -193,7 +206,7 @@
       border-radius: var(--radius); overflow: hidden;
     }
     .month-dow-row {
-      display: grid; grid-template-columns: repeat(7, 1fr);
+      display: grid; grid-template-columns: repeat(var(--month-cols, 7), 1fr);
       border-bottom: 1px solid var(--border);
     }
     .month-dow {
@@ -202,7 +215,7 @@
       letter-spacing: 0.04em; text-transform: uppercase;
     }
     .month-days {
-      display: grid; grid-template-columns: repeat(7, 1fr);
+      display: grid; grid-template-columns: repeat(var(--month-cols, 7), 1fr);
     }
     .month-cell {
       min-height: 86px; padding: 6px; border-right: 1px solid var(--border);
@@ -245,7 +258,7 @@
       border-radius: var(--radius); overflow: hidden;
     }
     .week-header {
-      display: grid; grid-template-columns: 52px repeat(7, 1fr);
+      display: grid; grid-template-columns: 52px repeat(var(--week-cols, 7), 1fr);
       border-bottom: 2px solid var(--border);
     }
     .week-header-gutter { border-right: 1px solid var(--border); }
@@ -263,7 +276,7 @@
     .week-hd-num { font-family: var(--font-head); font-size: 1.05rem; font-weight: 800; margin-top: 2px; }
 
     .week-body {
-      display: grid; grid-template-columns: 52px repeat(7, 1fr);
+      display: grid; grid-template-columns: 52px repeat(var(--week-cols, 7), 1fr);
       position: relative; overflow-y: auto; max-height: 560px;
     }
     .week-time-col { border-right: 1px solid var(--border); }
@@ -660,6 +673,9 @@
       <button class="btn-today" onclick="goToday()">Today</button>
       <button class="btn-today" onclick="refreshSchedule()" id="refreshBtn" title="Refresh schedule">↻</button>
       <button class="btn-add-lesson" onclick="openAddLessonModal()">+ Add Lesson</button>
+      <button class="btn-today cal-filter-btn" id="btnHideWeekends" onclick="toggleHideWeekends()" title="Hide Saturday & Sunday">Weekdays</button>
+      <button class="btn-today cal-filter-btn" id="btnShowCancelled" onclick="toggleShowCancelled()" title="Show or hide cancelled lessons">Cancelled</button>
+      <button class="btn-today" onclick="window.print()" title="Print schedule">🖨️</button>
     </div>
   </div>
 
@@ -846,6 +862,8 @@ cursor.setHours(0,0,0,0);
 let bookingCache = {}; // dateStr -> [booking, ...]
 let availCache   = []; // availability windows [{day_of_week, start_time, end_time}]
 let calendarStartHour = 7; // from instructor profile
+let hideWeekends = false;
+let showCancelled = false;
 let loadedRanges = []; // [{from, to}] already fetched
 let selectedBooking = null;
 
@@ -911,6 +929,18 @@ function setView(view) {
   document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
   document.getElementById('btnWeekly').classList.toggle('active',  view === 'weekly');
   document.getElementById('btnDaily').classList.toggle('active',   view === 'daily');
+  renderCurrentView();
+}
+
+function toggleHideWeekends() {
+  hideWeekends = !hideWeekends;
+  document.getElementById('btnHideWeekends').classList.toggle('active', hideWeekends);
+  renderCurrentView();
+}
+
+function toggleShowCancelled() {
+  showCancelled = !showCancelled;
+  document.getElementById('btnShowCancelled').classList.toggle('active', showCancelled);
   renderCurrentView();
 }
 
@@ -1044,17 +1074,21 @@ function renderMonthly() {
   const cells = [];
   for (let i = 0; i < 42; i++) cells.push(addDays(gridStart, i));
 
-  let html = `<div class="month-grid">`;
-  // Day-of-week headers (Mon–Sun)
+  const dowLabels = hideWeekends ? ['Mon','Tue','Wed','Thu','Fri'] : ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const filteredCells = hideWeekends ? cells.filter(d => d.getDay() !== 0 && d.getDay() !== 6) : cells;
+
+  let html = `<div class="month-grid" style="--month-cols:${dowLabels.length}">`;
+  // Day-of-week headers
   html += `<div class="month-dow-row">`;
-  for (const d of ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']) {
+  for (const d of dowLabels) {
     html += `<div class="month-dow">${d}</div>`;
   }
   html += `</div><div class="month-days">`;
 
-  for (const day of cells) {
+  for (const day of filteredCells) {
     const ds        = dateStr(day);
-    const bookings  = bookingCache[ds] || [];
+    const allBookings = bookingCache[ds] || [];
+    const bookings  = allBookings.filter(b => showCancelled || b.status !== 'cancelled');
     const inMonth   = day.getMonth() === cursor.getMonth();
     const isToday   = ds === dateStr(today);
     const hasBook   = bookings.length > 0;
@@ -1072,7 +1106,7 @@ function renderMonthly() {
     // Show up to 2 bookings as pills
     const visible = bookings.slice(0, 2);
     for (const b of visible) {
-      const pillCls = b.status === 'completed' ? 'month-booking-pill completed' : 'month-booking-pill';
+      const pillCls = b.status === 'completed' ? 'month-booking-pill completed' : b.status === 'cancelled' ? 'month-booking-pill cancelled' : 'month-booking-pill';
       html += `<div class="${pillCls}">${b.start_time.slice(0,5)} ${esc(b.learner_name.split(' ')[0])}</div>`;
     }
     if (bookings.length > 2) {
@@ -1089,10 +1123,12 @@ function renderMonthly() {
 function renderWeekly() {
   const today    = new Date(); today.setHours(0,0,0,0);
   const weekStart = getWeekStart(cursor);
-  const days     = Array.from({length:7}, (_,i) => addDays(weekStart, i));
+  const allDays  = Array.from({length:7}, (_,i) => addDays(weekStart, i));
+  const days     = hideWeekends ? allDays.filter(d => d.getDay() !== 0 && d.getDay() !== 6) : allDays;
   const HOURS    = Array.from({length: 21 - calendarStartHour}, (_,i) => i + calendarStartHour);
+  const colCount = days.length;
 
-  let html = `<div class="week-grid">`;
+  let html = `<div class="week-grid" style="--week-cols:${colCount}">`;
 
   // Header
   html += `<div class="week-header"><div class="week-header-gutter"></div>`;
@@ -1118,7 +1154,8 @@ function renderWeekly() {
   // Day columns
   for (const day of days) {
     const ds       = dateStr(day);
-    const bookings = bookingCache[ds] || [];
+    const allBookings = bookingCache[ds] || [];
+    const bookings = allBookings.filter(b => showCancelled || b.status !== 'cancelled');
     const isToday  = ds === dateStr(today);
 
     html += `<div class="week-day-col ${isToday ? 'is-today' : ''}">`;
@@ -1139,7 +1176,7 @@ function renderWeekly() {
       const topPx    = ((sh - calendarStartHour) * 48) + (sm / 60 * 48);
       const heightPx = ((eh - sh) * 48) + ((em - sm) / 60 * 48);
 
-      const evtCls = b.status === 'completed' ? 'week-event completed' : 'week-event';
+      const evtCls = b.status === 'completed' ? 'week-event completed' : b.status === 'cancelled' ? 'week-event cancelled' : 'week-event';
       html += `
         <div class="${evtCls}" style="top:${topPx}px;height:${Math.max(heightPx,22)}px;"
              onclick="openBookingDetail(${b.id})">
@@ -1157,7 +1194,8 @@ function renderWeekly() {
 function renderDaily() {
   const today    = new Date(); today.setHours(0,0,0,0);
   const ds       = dateStr(cursor);
-  const bookings = bookingCache[ds] || [];
+  const allBookings = bookingCache[ds] || [];
+  const bookings = allBookings.filter(b => showCancelled || b.status !== 'cancelled');
   const isToday  = ds === dateStr(today);
 
   // Get availability windows for this day of week
@@ -1219,7 +1257,7 @@ function renderDaily() {
         const isCompleted = b.status === 'completed';
         const waUrl = whatsappUrl(b.learner_phone);
         html += `
-          <div class="daily-booking-card ${isCompleted ? 'completed' : ''}">
+          <div class="daily-booking-card ${isCompleted ? 'completed' : b.status === 'cancelled' ? 'cancelled' : ''}">
             <div class="daily-booking-time">${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)}</div>
             <div>
               <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before their first lesson">📞 Contact first</span>' : ''}</div>
@@ -1228,7 +1266,7 @@ function renderDaily() {
               ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="daily-booking-email">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</div>` : ''}
               ${b.booking_dropoff_address ? `<div class="daily-booking-email">🏁 ${esc(b.booking_dropoff_address)}</div>` : ''}
             </div>
-            <span class="daily-booking-status status-${b.status}">${b.status === 'completed' ? '✓ Completed' : 'Confirmed'}</span>
+            <span class="daily-booking-status status-${b.status}">${b.status === 'completed' ? '✓ Completed' : b.status === 'cancelled' ? '✕ Cancelled' : 'Confirmed'}</span>
             ${!isCompleted ? `<button class="btn-complete-sm" id="complete-${b.id}" onclick="markComplete(${b.id})">Mark complete</button>` : ''}
             ${isCompleted ? renderInlineNotes(b) : ''}
             ${isCompleted ? renderFeedbackHTML(b) : ''}

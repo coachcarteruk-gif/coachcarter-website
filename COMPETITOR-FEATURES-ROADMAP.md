@@ -36,12 +36,12 @@ Every feature in this roadmap follows these constraints:
 | 9 | "Today" quick-jump button | Medium | Trivial | Low | — |
 | 10 | Scheduling lead time [DONE - 2026-03-30] | Medium | Low | Medium | — |
 | 11 | Agenda/list view | Medium | Medium | Medium | — |
-| 12 | Hide weekends toggle | Lower | Trivial | Low | — |
-| 13 | Cancellation visibility toggle | Lower | Trivial | Low | — |
+| 12 | Hide weekends toggle [DONE - 2026-03-30] | Lower | Trivial | Low | — |
+| 13 | Cancellation visibility toggle [DONE - 2026-03-30] | Lower | Trivial | Low | — |
 | 14 | Per-service booking links | Lower | Low | Medium | #3 |
 | 15 | Waiting list | Lower | Medium | Medium | — |
 | 16 | Google Calendar bi-directional sync | Lower | High | Low | — |
-| 17 | Print calendar | Lower | Low | Low | — |
+| 17 | Print calendar [DONE - 2026-03-30] | Lower | Low | Low | — |
 
 ---
 
