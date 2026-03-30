@@ -592,6 +592,10 @@ document.addEventListener('keydown', e => {
 
 **Estimated effort:** 0.5 session (quick UI addition)
 
+**Implementation notes (2026-03-30):**
+- Already implemented prior to this session. `goToday()` function + "Today" button in calendar toolbar.
+- Keyboard shortcut not added (deferred — low value for touch-first app).
+
 ---
 
 ### Feature 10: Scheduling Lead Time
@@ -734,6 +738,14 @@ Toggle in the header:
 
 **Estimated effort:** 0.5 session
 
+**Implementation notes (2026-03-30):**
+- "Weekdays" toggle button in calendar toolbar (styled as `.cal-filter-btn` with `.active` state)
+- Weekly view: filters `days` array to exclude Sat/Sun; uses CSS variable `--week-cols` for dynamic grid columns
+- Monthly view: filters cells and header labels; uses CSS variable `--month-cols`
+- Daily view: unaffected (already shows one day at a time)
+- State stored in `hideWeekends` JS variable (not persisted — resets on page load)
+- Actual effort: combined with Features 13 & 17 in one commit
+
 ---
 
 ### Feature 13: Cancellation Visibility Toggle
@@ -761,6 +773,14 @@ Toggle in the header:
 **Migration-plan alignment:** Purely display logic + one API param.
 
 **Estimated effort:** 0.5 session
+
+**Implementation notes (2026-03-30):**
+- "Cancelled" toggle button in calendar toolbar (hidden by default, click to show cancelled bookings)
+- All three views (daily/weekly/monthly) filter bookings via `showCancelled` variable
+- Cancelled bookings styled with `.cancelled` CSS class: red border-left, reduced opacity
+- Daily view status text now correctly shows "✕ Cancelled" (was previously showing "Confirmed" for cancelled bookings — bug fixed)
+- Backend already returns cancelled bookings in schedule-range; filtering is purely frontend
+- Actual effort: combined with Features 12 & 17 in one commit
 
 ---
 
@@ -982,6 +1002,13 @@ CREATE TABLE IF NOT EXISTS calendar_connections (
 - Could be replaced in the app by a "Share schedule as PDF" feature using `expo-print`
 
 **Estimated effort:** 0.5 session (CSS only)
+
+**Implementation notes (2026-03-30):**
+- 🖨️ print button added to calendar toolbar, calls `window.print()`
+- `@media print` CSS hides nav, bottom-nav, toolbar, toast, modals, stats section, cal-sync banner
+- Page layout removes max-width and shadow for full-width printing
+- Booking cards use `break-inside: avoid` to prevent splitting across pages
+- Actual effort: combined with Features 12 & 13 in one commit
 
 ---
 

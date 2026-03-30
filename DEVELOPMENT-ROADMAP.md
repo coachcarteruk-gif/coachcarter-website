@@ -589,6 +589,10 @@ Unique referral link per learner. Both referrer and new learner receive credit b
 - **Cancellation policy:** 48 hours minimum notice for credit return
 - **Rescheduling:** Learners can reschedule 48hr+ in advance (max 2 per chain), instructors anytime. No credit change.
 - **Booking lead time:** Per-instructor `min_booking_notice_hours` (default 24h) filters slots too close to now
+- **Instructor-initiated booking:** Instructors can book lessons on behalf of learners via "Add Lesson" modal (cash/credit/free payment)
+- **Per-booking addresses:** `pickup_address` and `dropoff_address` on each booking (overrides learner profile default)
+- **Calendar display:** Configurable `calendar_start_hour` (default 7); non-working hours greyed out using availability windows
+- **Calendar toggles:** Hide weekends (weekly/monthly), show/hide cancelled bookings, print schedule
 - **Video hosting:** Cloudflare Stream (HLS adaptive streaming), managed from admin portal
 - **API pattern:** Related endpoints grouped into single files using `?action=` routing
 - **DB migrations:** `db/migration.sql` — single idempotent file, run via `GET /api/migrate?secret=MIGRATION_SECRET`
