@@ -332,7 +332,8 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | `book` | POST | Yes | Book a slot using 1 credit |
 | `checkout-slot` | POST | Yes | Pay-per-slot: reserves slot for 10 min, creates Stripe Checkout (£82.50) |
 | `cancel` | POST | Yes | Cancel a booking (returns credit if 48hr+ policy met) |
-| `my-bookings` | GET | Yes | Learner's upcoming confirmed bookings |
+| `reschedule` | POST | Yes | Move a confirmed booking to a new slot (48hr+ notice, max 2 per chain, no credit change) |
+| `my-bookings` | GET | Yes | Learner's upcoming confirmed bookings (includes reschedule_count) |
 
 ### API — `api/calendar.js`
 
@@ -399,9 +400,11 @@ instructor_id INTEGER
 scheduled_date DATE
 start_time TIME
 end_time TIME
-status TEXT             -- 'confirmed', 'completed', 'cancelled'
+status TEXT             -- 'confirmed', 'completed', 'cancelled', 'rescheduled'
 credit_returned BOOLEAN DEFAULT FALSE
 stripe_session_id TEXT  -- idempotency key for pay-per-slot bookings
+rescheduled_from INTEGER  -- links to the booking this one replaced (NULL for original bookings)
+reschedule_count INTEGER DEFAULT 0  -- how many times this booking chain has been rescheduled (max 2)
 created_at TIMESTAMPTZ
 -- UNIQUE (instructor_id, scheduled_date, start_time) prevents double-booking
 ```
@@ -478,10 +481,12 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 | `set-availability` | POST | JWT | Update weekly availability windows |
 | `profile` | GET | JWT | Profile details |
 | `update-profile` | POST | JWT | Update bio, contact details, and buffer_minutes |
+| `cancel-booking` | POST | JWT | Cancel a confirmed booking (always refunds learner credit) |
+| `reschedule-booking` | POST | JWT | Move a booking to a new slot (no time restriction, no count limit) |
 
 ### Database tables
 
-**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30)
+**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30), min_booking_notice_hours (default 24)
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
 

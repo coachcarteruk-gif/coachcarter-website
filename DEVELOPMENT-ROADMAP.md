@@ -587,6 +587,8 @@ Unique referral link per learner. Both referrer and new learner receive credit b
 - **Buffer time:** Configurable per instructor (default 30 mins), blocks time after each booked slot
 - **Advance booking window:** 90 days
 - **Cancellation policy:** 48 hours minimum notice for credit return
+- **Rescheduling:** Learners can reschedule 48hr+ in advance (max 2 per chain), instructors anytime. No credit change.
+- **Booking lead time:** Per-instructor `min_booking_notice_hours` (default 24h) filters slots too close to now
 - **Video hosting:** Cloudflare Stream (HLS adaptive streaming), managed from admin portal
 - **API pattern:** Related endpoints grouped into single files using `?action=` routing
 - **DB migrations:** `db/migration.sql` — single idempotent file, run via `GET /api/migrate?secret=MIGRATION_SECRET`

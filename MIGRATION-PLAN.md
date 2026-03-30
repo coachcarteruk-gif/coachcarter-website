@@ -35,9 +35,9 @@
 | File | Actions | Key notes |
 |------|---------|-----------|
 | learner.js | 18 | Core learner data — sessions, progress, profile, mock-tests, quiz, competency, onboarding |
-| instructor.js | 24+ | Auth, schedule, availability, blackouts, learner history, notes, stats, photo upload |
+| instructor.js | 26+ | Auth, schedule, availability, blackouts, learner history, notes, stats, photo upload, cancel-booking, reschedule-booking |
 | admin.js | 14+ | Dashboard stats, bookings, instructor CRUD, learner management, credit adjustment |
-| slots.js | 5 | available, book, checkout-slot, cancel, my-bookings |
+| slots.js | 6 | available (with lead-time filter), book, checkout-slot, cancel, reschedule, my-bookings |
 | videos.js | 12 | CRUD, upload-url, categories, bulk operations |
 | credits.js | 2-3 | balance, checkout |
 | calendar.js | 5 | ICS feed download + URLs for learner and instructor |
@@ -77,6 +77,12 @@
 **Community:** qa_questions, qa_answers, enquiries, availability_submissions
 **Config:** site_config, google_reviews, google_reviews_meta
 **Notes:** instructor_learner_notes
+
+**Notable columns added (March 2026):**
+- `lesson_bookings.rescheduled_from` — FK to previous booking in reschedule chain
+- `lesson_bookings.reschedule_count` — tracks reschedules per chain (max 2 for learners)
+- `lesson_bookings.status` now includes `'rescheduled'` value
+- `instructors.min_booking_notice_hours` — minimum hours before a slot can be booked (default 24)
 
 ### Critical Design Decisions Already Made
 
