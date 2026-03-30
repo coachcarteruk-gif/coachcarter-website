@@ -79,6 +79,7 @@ module.exports = async (req, res) => {
   if (action === 'qa-reply')           return handleQAReply(req, res);
   if (action === 'learner-history')    return handleLearnerHistory(req, res);
   if (action === 'cancel-booking')     return handleCancelBooking(req, res);
+  if (action === 'reschedule-booking') return handleRescheduleBooking(req, res);
   if (action === 'stats')              return handleStats(req, res);
   if (action === 'upload-photo')       return handleUploadPhoto(req, res);
   if (action === 'my-learners')        return handleMyLearners(req, res);
@@ -958,6 +959,136 @@ async function handleCancelBooking(req, res) {
     console.error('instructor cancel-booking error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to cancel booking' });
+  }
+}
+
+// ── POST /api/instructor?action=reschedule-booking ─────────────────────────
+// Body: { booking_id, new_date, new_start_time }
+// Instructor-initiated reschedule: no 48hr restriction, no reschedule count limit.
+async function handleRescheduleBooking(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { booking_id, new_date, new_start_time } = req.body;
+  if (!booking_id || !new_date || !new_start_time)
+    return res.status(400).json({ error: 'booking_id, new_date and new_start_time are required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Load booking — must belong to this instructor
+    const [booking] = await sql`
+      SELECT lb.id, lb.status, lb.learner_id, lb.scheduled_date, lb.start_time, lb.end_time,
+             lb.instructor_id, COALESCE(lb.reschedule_count, 0) AS reschedule_count,
+             lu.name AS learner_name, lu.email AS learner_email,
+             i.name AS instructor_name
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN instructors i ON i.id = lb.instructor_id
+      WHERE lb.id = ${booking_id} AND lb.instructor_id = ${instructor.id}
+    `;
+
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== 'confirmed')
+      return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
+
+    // Calculate new end time (fixed 90-minute slots)
+    const startParts = new_start_time.split(':').map(Number);
+    const startMins  = startParts[0] * 60 + startParts[1];
+    const endMins    = startMins + 90;
+    const new_end_time = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+
+    // Check new slot is available
+    const [existingBooking] = await sql`
+      SELECT id FROM lesson_bookings
+      WHERE instructor_id = ${booking.instructor_id}
+        AND scheduled_date = ${new_date}
+        AND start_time = ${new_start_time}::time
+        AND status IN ('confirmed', 'completed')
+    `;
+    if (existingBooking)
+      return res.status(409).json({ error: 'That slot is already booked.' });
+
+    // Mark old booking as rescheduled
+    await sql`
+      UPDATE lesson_bookings
+      SET status = 'rescheduled', cancelled_at = NOW()
+      WHERE id = ${booking_id}
+    `;
+
+    // Create new booking
+    let newBooking;
+    try {
+      const [b] = await sql`
+        INSERT INTO lesson_bookings
+          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+           rescheduled_from, reschedule_count)
+        VALUES
+          (${booking.learner_id}, ${booking.instructor_id}, ${new_date}, ${new_start_time},
+           ${new_end_time}, 'confirmed', ${booking_id}, ${booking.reschedule_count + 1})
+        RETURNING id, scheduled_date, start_time::text, end_time::text, reschedule_count
+      `;
+      newBooking = b;
+    } catch (insertErr) {
+      // Rollback: restore old booking
+      await sql`
+        UPDATE lesson_bookings SET status = 'confirmed', cancelled_at = NULL
+        WHERE id = ${booking_id}
+      `;
+      if (insertErr.message?.includes('uq_booking_slot')) {
+        return res.status(409).json({ error: 'That slot was just taken. Please choose another.' });
+      }
+      throw insertErr;
+    }
+
+    // Email the learner
+    try {
+      const mailer = createTransporter();
+      const oldDate = new Date(booking.scheduled_date + 'T00:00:00Z')
+        .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+      const newDateStr = new Date(new_date + 'T00:00:00Z')
+        .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+      const oldTime = String(booking.start_time).slice(0, 5);
+      const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
+
+      await mailer.sendMail({
+        from: 'CoachCarter <system@coachcarter.uk>',
+        to: booking.learner_email,
+        subject: `Lesson rescheduled to ${newDateStr} at ${new_start_time}`,
+        html: `
+          <h2>Hi ${firstName},</h2>
+          <p>Your instructor ${booking.instructor_name} has rescheduled your lesson:</p>
+          <table>
+            <tr><td><strong>Was:</strong></td><td><s>${oldDate} at ${oldTime}</s></td></tr>
+            <tr><td><strong>Now:</strong></td><td>${newDateStr} at ${new_start_time}</td></tr>
+            <tr><td><strong>Duration:</strong></td><td>1.5 hours</td></tr>
+          </table>
+          <p style="margin:28px 0">
+            <a href="https://coachcarter.uk/learner/book.html"
+               style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                      border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+              View my bookings →
+            </a>
+          </p>
+        `
+      });
+    } catch (emailErr) {
+      console.error('Failed to send reschedule email:', emailErr);
+    }
+
+    return res.json({
+      ok: true,
+      old_booking_id: booking_id,
+      new_booking_id: newBooking.id,
+      new_date,
+      new_start_time,
+      new_end_time
+    });
+  } catch (err) {
+    console.error('instructor reschedule-booking error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to reschedule booking' });
   }
 }
 

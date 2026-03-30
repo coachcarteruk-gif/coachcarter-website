@@ -87,6 +87,7 @@ module.exports = async (req, res) => {
   if (action === 'book')         return handleBook(req, res);
   if (action === 'checkout-slot') return handleCheckoutSlot(req, res);
   if (action === 'cancel')       return handleCancel(req, res);
+  if (action === 'reschedule')   return handleReschedule(req, res);
   if (action === 'my-bookings')  return handleMyBookings(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
@@ -135,7 +136,8 @@ async function handleAvailable(req, res) {
                  ia.end_time::text   AS end_time,
                  i.name AS instructor_name,
                  i.photo_url, i.bio,
-                 COALESCE(i.buffer_minutes, 30) AS buffer_minutes
+                 COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+                 COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours
           FROM instructor_availability ia
           JOIN instructors i ON i.id = ia.instructor_id
           WHERE ia.instructor_id = ${instructor_id}
@@ -149,7 +151,8 @@ async function handleAvailable(req, res) {
                  ia.end_time::text   AS end_time,
                  i.name AS instructor_name,
                  i.photo_url, i.bio,
-                 COALESCE(i.buffer_minutes, 30) AS buffer_minutes
+                 COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+                 COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours
           FROM instructor_availability ia
           JOIN instructors i ON i.id = ia.instructor_id
           WHERE ia.active = true
@@ -250,6 +253,7 @@ async function handleAvailable(req, res) {
           photo_url:      w.photo_url,
           bio:            w.bio,
           buffer_minutes: parseInt(w.buffer_minutes) || 30,
+          min_booking_notice_hours: parseInt(w.min_booking_notice_hours) || 24,
           windows:        []
         };
       }
@@ -293,6 +297,17 @@ async function handleAvailable(req, res) {
             if (isToday && slotStart <= nowMinutes) {
               slotStart += SLOT_MINUTES;
               continue;
+            }
+
+            // Skip slots within the instructor's minimum booking notice period
+            if (instructor.min_booking_notice_hours > 0) {
+              const slotDateTime = new Date(cursor);
+              slotDateTime.setUTCHours(Math.floor(slotStart / 60), slotStart % 60, 0, 0);
+              const hoursUntilSlot = (slotDateTime - now) / 3600000;
+              if (hoursUntilSlot < instructor.min_booking_notice_hours) {
+                slotStart += SLOT_MINUTES;
+                continue;
+              }
             }
 
             // Check if this slot overlaps any booked slot (including buffer after each booking)
@@ -802,6 +817,242 @@ async function handleCancel(req, res) {
   }
 }
 
+// ── POST /api/slots?action=reschedule ────────────────────────────────────────
+// Body: { booking_id, new_date, new_start_time }
+// Atomically moves a confirmed booking to a new time slot (no credit change).
+async function handleReschedule(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { booking_id, new_date, new_start_time } = req.body;
+  if (!booking_id || !new_date || !new_start_time)
+    return res.status(400).json({ error: 'booking_id, new_date and new_start_time are required' });
+
+  // Validate new date format
+  const newBookingDate = parseDate(new_date);
+  if (!newBookingDate)
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+
+  const today    = startOfDay(new Date());
+  const maxAhead = addDays(today, MAX_DAYS_AHEAD);
+  if (newBookingDate < today)
+    return res.status(400).json({ error: 'Cannot reschedule to a date in the past' });
+  if (newBookingDate > maxAhead)
+    return res.status(400).json({ error: `Cannot reschedule more than ${MAX_DAYS_AHEAD} days in advance` });
+
+  // Calculate new end time (fixed 90-minute slots)
+  const newStartMins = timeToMinutes(new_start_time);
+  const newEndMins   = newStartMins + SLOT_MINUTES;
+  const new_end_time = minutesToTime(newEndMins);
+
+  // Reject if new slot has already started
+  if (newBookingDate.getTime() === today.getTime()) {
+    const now = new Date();
+    const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    if (newStartMins <= nowMins)
+      return res.status(400).json({ error: 'This slot has already started.' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Load booking — must belong to this learner
+    const [booking] = await sql`
+      SELECT lb.*, i.name AS instructor_name, i.email AS instructor_email,
+             i.phone AS instructor_phone,
+             lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
+             COALESCE(lb.reschedule_count, 0) AS reschedule_count
+      FROM lesson_bookings lb
+      JOIN instructors i    ON i.id  = lb.instructor_id
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      WHERE lb.id = ${booking_id} AND lb.learner_id = ${user.id}
+    `;
+
+    if (!booking)
+      return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== 'confirmed')
+      return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
+
+    // Check 48-hour reschedule window (same as cancellation policy)
+    const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}:00Z`);
+    const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
+    if (hoursUntil < CANCEL_HOURS_CUTOFF)
+      return res.status(400).json({
+        error: `Cannot reschedule with less than ${CANCEL_HOURS_CUTOFF} hours' notice. You can still cancel, but the lesson will be forfeited.`
+      });
+
+    // Reschedule count cap (max 2)
+    const MAX_RESCHEDULES = 2;
+    if (booking.reschedule_count >= MAX_RESCHEDULES)
+      return res.status(400).json({
+        error: `This lesson has already been rescheduled ${MAX_RESCHEDULES} times. Please cancel and rebook instead.`
+      });
+
+    // Check new slot isn't the same as current
+    const oldDate  = String(booking.scheduled_date).slice(0, 10);
+    const oldStart = String(booking.start_time).slice(0, 5);
+    if (new_date === oldDate && new_start_time === oldStart)
+      return res.status(400).json({ error: 'New time is the same as current booking' });
+
+    // Check new slot is available (not booked or reserved)
+    const [existingBooking] = await sql`
+      SELECT id FROM lesson_bookings
+      WHERE instructor_id = ${booking.instructor_id}
+        AND scheduled_date = ${new_date}
+        AND start_time = ${new_start_time}::time
+        AND status IN ('confirmed', 'completed')
+    `;
+    if (existingBooking)
+      return res.status(409).json({ error: 'That slot is already booked. Please choose another.' });
+
+    const [existingReservation] = await sql`
+      SELECT id FROM slot_reservations
+      WHERE instructor_id = ${booking.instructor_id}
+        AND scheduled_date = ${new_date}
+        AND start_time = ${new_start_time}::time
+        AND expires_at > NOW()
+    `;
+    if (existingReservation)
+      return res.status(409).json({ error: 'Someone is currently booking that slot. Try another or wait a few minutes.' });
+
+    // Atomically: mark old booking as rescheduled, create new one
+    // 1. Mark old booking as rescheduled
+    await sql`
+      UPDATE lesson_bookings
+      SET status = 'rescheduled', cancelled_at = NOW()
+      WHERE id = ${booking_id}
+    `;
+
+    // 2. Create new booking
+    let newBooking;
+    try {
+      const [b] = await sql`
+        INSERT INTO lesson_bookings
+          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+           rescheduled_from, reschedule_count)
+        VALUES
+          (${user.id}, ${booking.instructor_id}, ${new_date}, ${new_start_time}, ${new_end_time},
+           'confirmed', ${booking_id}, ${booking.reschedule_count + 1})
+        RETURNING id, scheduled_date, start_time::text, end_time::text, status,
+                  rescheduled_from, reschedule_count
+      `;
+      newBooking = b;
+    } catch (insertErr) {
+      // Rollback: restore old booking
+      await sql`
+        UPDATE lesson_bookings
+        SET status = 'confirmed', cancelled_at = NULL
+        WHERE id = ${booking_id}
+      `;
+      if (insertErr.message?.includes('uq_booking_slot')) {
+        return res.status(409).json({ error: 'That slot was just booked by someone else. Please choose another.' });
+      }
+      throw insertErr;
+    }
+
+    // Send notifications
+    const oldDateStr = formatDateDisplay(oldDate);
+    const newDateStr = formatDateDisplay(new_date);
+    const oldTime    = oldStart;
+    const newTime    = new_start_time;
+    const mailer     = createTransporter();
+    const isDemoBooking = booking.instructor_email === 'demo@coachcarter.uk';
+
+    // Generate .ics for new booking
+    const icsContent = generateICS({
+      id: newBooking.id,
+      scheduled_date: new_date,
+      start_time: new_start_time,
+      end_time: new_end_time,
+      instructor_name: booking.instructor_name
+    });
+
+    // Email to learner
+    await mailer.sendMail({
+      from:    'CoachCarter <bookings@coachcarter.uk>',
+      to:      booking.learner_email,
+      subject: `Lesson rescheduled — now ${newDateStr} at ${newTime}`,
+      html: `
+        <h1>Lesson rescheduled</h1>
+        <p>Your lesson has been moved:</p>
+        <table>
+          <tr><td><strong>Was:</strong></td><td><s>${oldDateStr} at ${oldTime}</s></td></tr>
+          <tr><td><strong>Now:</strong></td><td>${newDateStr} at ${newTime}</td></tr>
+          <tr><td><strong>Instructor:</strong></td><td>${booking.instructor_name}</td></tr>
+          <tr><td><strong>Duration:</strong></td><td>1.5 hours</td></tr>
+        </table>
+        <p style="margin-top:16px;font-size:0.875rem;color:#797879">
+          You can reschedule ${MAX_RESCHEDULES - newBooking.reschedule_count} more time${MAX_RESCHEDULES - newBooking.reschedule_count !== 1 ? 's' : ''}.
+          Cancel at least 48 hours before and the lesson returns to your balance.
+        </p>
+        <p>
+          <a href="https://coachcarter.uk/learner/"
+             style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">
+            View my bookings →
+          </a>
+        </p>
+      `,
+      attachments: [{
+        filename: `coachcarter-lesson-${new_date}.ics`,
+        content:  icsContent,
+        contentType: 'text/calendar; method=PUBLISH'
+      }]
+    });
+
+    // Email to instructor (skip demo)
+    if (!isDemoBooking) {
+      await mailer.sendMail({
+        from:    'CoachCarter <system@coachcarter.uk>',
+        to:      booking.instructor_email,
+        subject: `Lesson rescheduled — ${booking.learner_name}`,
+        html: `
+          <h2>Lesson rescheduled</h2>
+          <p><strong>${booking.learner_name}</strong> has rescheduled their lesson:</p>
+          <table>
+            <tr><td><strong>Was:</strong></td><td>${oldDateStr} at ${oldTime}</td></tr>
+            <tr><td><strong>Now:</strong></td><td>${newDateStr} at ${newTime}</td></tr>
+          </table>
+          <p style="margin-top:16px">
+            <a href="https://coachcarter.uk/instructor/"
+               style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
+                      border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
+              View my schedule →
+            </a>
+          </p>
+        `
+      });
+    }
+
+    // WhatsApp notifications
+    await sendWhatsApp(booking.learner_phone,
+      `🔄 Lesson rescheduled!\n\n❌ Was: ${oldDateStr} at ${oldTime}\n✅ Now: ${newDateStr} at ${newTime}\n🚗 Instructor: ${booking.instructor_name}\n\nView bookings: https://coachcarter.uk/learner/`
+    );
+    if (!isDemoBooking) {
+      await sendWhatsApp(booking.instructor_phone,
+        `🔄 Lesson rescheduled\n\n👤 ${booking.learner_name}\n❌ Was: ${oldDateStr} at ${oldTime}\n✅ Now: ${newDateStr} at ${newTime}\n\nView schedule: https://coachcarter.uk/instructor/`
+      );
+    }
+
+    return res.json({
+      ok: true,
+      old_booking_id: booking_id,
+      new_booking_id: newBooking.id,
+      new_date,
+      new_start_time,
+      new_end_time,
+      reschedule_count: newBooking.reschedule_count,
+      message: `Lesson rescheduled from ${oldDateStr} at ${oldTime} to ${newDateStr} at ${newTime}.`
+    });
+
+  } catch (err) {
+    console.error('slots reschedule error:', err);
+    reportError('/api/slots', err);
+    return res.status(500).json({ error: 'Reschedule failed', details: err.message });
+  }
+}
+
 // ── GET /api/slots?action=my-bookings ────────────────────────────────────────
 // Returns the authenticated learner's upcoming and recent bookings.
 async function handleMyBookings(req, res) {
@@ -822,6 +1073,8 @@ async function handleMyBookings(req, res) {
         lb.status,
         lb.cancelled_at,
         lb.credit_returned,
+        COALESCE(lb.reschedule_count, 0) AS reschedule_count,
+        lb.rescheduled_from,
         i.id   AS instructor_id,
         i.name AS instructor_name,
         i.photo_url AS instructor_photo

@@ -115,6 +115,24 @@
       cursor: pointer; color: var(--muted); transition: all 0.15s;
     }
     .upcoming-cancel:hover { border-color: var(--red); color: var(--red); background: var(--red-lt); }
+    .upcoming-reschedule {
+      background: none; border: 1px solid var(--border);
+      border-radius: 7px; padding: 5px 12px; font-size: 0.78rem;
+      cursor: pointer; color: var(--accent); transition: all 0.15s;
+    }
+    .upcoming-reschedule:hover { border-color: var(--accent); background: var(--accent-lt); }
+    .reschedule-banner {
+      background: var(--accent-lt); border: 1px solid var(--accent); border-radius: 10px;
+      padding: 12px 20px; margin-bottom: 16px; display: flex; align-items: center;
+      justify-content: space-between; gap: 12px; font-size: 0.85rem;
+    }
+    .reschedule-banner strong { color: var(--accent); }
+    .reschedule-banner button {
+      background: none; border: 1px solid var(--accent); border-radius: 7px;
+      padding: 5px 14px; cursor: pointer; color: var(--accent); font-size: 0.78rem;
+      white-space: nowrap;
+    }
+    .reschedule-banner button:hover { background: white; }
     .upcoming-cal-btn {
       background: none; border: 1px solid var(--border);
       border-radius: 7px; padding: 5px 10px; cursor: pointer;
@@ -575,6 +593,12 @@
     </div>
   </div>
 
+  <!-- Reschedule banner (visible when in reschedule mode) -->
+  <div class="reschedule-banner" id="rescheduleBanner" style="display:none">
+    <span>Rescheduling: <strong id="rescheduleBannerText">—</strong>. Pick a new slot below.</span>
+    <button onclick="cancelRescheduleMode()">Cancel</button>
+  </div>
+
   <!-- Toolbar -->
   <div class="cal-toolbar">
     <div class="cal-title-block">
@@ -699,6 +723,27 @@
   </div>
 </div>
 
+<!-- ── Reschedule confirmation modal ── -->
+<div class="modal-overlay" id="rescheduleModal">
+  <div class="modal">
+    <h2>Reschedule lesson?</h2>
+    <div class="modal-detail">
+      <div class="modal-detail-row"><span>Was</span><span id="rmOldDateTime" style="text-decoration:line-through;color:var(--muted)">—</span></div>
+      <div class="modal-detail-row"><span>Now</span><span id="rmNewDateTime" style="color:var(--accent);font-weight:700">—</span></div>
+      <div class="modal-detail-row"><span>Instructor</span><span id="rmInstructor">—</span></div>
+      <div class="modal-detail-row"><span>Duration</span><span>1.5 hours</span></div>
+    </div>
+    <p class="modal-credit-note">No credit change — your lesson is simply being moved to the new time.</p>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeRescheduleModal()">Cancel</button>
+      <button class="btn-confirm" id="btnConfirmReschedule">
+        <span id="rescheduleBtnLabel">Move lesson</span>
+        <div class="modal-spinner" id="rescheduleSpinner" style="display:none"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <nav class="bottom-nav">
@@ -755,6 +800,7 @@ let slotCache     = {}; // dateStr -> [slot, ...]
 let loadedRanges  = [];
 let pendingSlot   = null;
 let pendingCancel = null;
+let pendingReschedule = null; // { bookingId, date, start, end, instructorName, instructorId }
 let lastBookingId = null;
 let learnerProfile = { phone: '', pickup_address: '' };
 
@@ -805,6 +851,7 @@ function init() {
   // Close modals on overlay click
   document.getElementById('bookModal').addEventListener('click', e => { if (e.target === document.getElementById('bookModal')) closeBookModal(); });
   document.getElementById('cancelModal').addEventListener('click', e => { if (e.target === document.getElementById('cancelModal')) document.getElementById('cancelModal').classList.remove('open'); });
+  document.getElementById('rescheduleModal').addEventListener('click', e => { if (e.target === document.getElementById('rescheduleModal')) closeRescheduleModal(); });
 }
 
 function dismissWelcome() {
@@ -872,6 +919,7 @@ async function loadUpcoming() {
           <div class="upcoming-time">${start} – ${end}</div>
           <div class="upcoming-instructor">${b.instructor_name}</div>
           ${canCancel ? `<button class="upcoming-cal-btn" onclick="downloadCalendar(${b.id})" title="Add to calendar">📅</button>` : ''}
+          ${canCancel && hoursUntil >= 48 && (b.reschedule_count || 0) < 2 ? `<button class="upcoming-reschedule" onclick="startRescheduleMode(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${esc(b.instructor_name)}', ${b.instructor_id})">Reschedule</button>` : ''}
           ${canCancel ? `<button class="upcoming-cancel" onclick="openCancelModal(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${esc(b.instructor_name)}', ${hoursUntil})">Cancel</button>` : '<span style="font-size:0.8rem;color:var(--muted)">Past</span>'}
         </div>`;
     }).join('');
@@ -1200,6 +1248,19 @@ function openBookModal(el) {
     showToast('Please add your phone number and pickup address in your Profile before booking.', 'error');
     return;
   }
+
+  // If in reschedule mode, redirect to reschedule confirmation
+  if (pendingReschedule) {
+    const slotInstructorId = el.dataset.instructorId;
+    openRescheduleConfirm({
+      instructor_id: slotInstructorId,
+      date:          el.dataset.date,
+      start_time:    el.dataset.start,
+      end_time:      el.dataset.end
+    });
+    return;
+  }
+
   pendingSlot = {
     instructor_id:   el.dataset.instructorId,
     date:            el.dataset.date,
@@ -1443,6 +1504,77 @@ async function confirmCancel() {
     showToast(err.message || 'Cancellation failed.', 'error');
     btn.disabled = false;
     document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
+  }
+}
+
+// ─── Reschedule flow ────────────────────────────────────────────────────────
+function startRescheduleMode(bookingId, date, start, end, instructorName, instructorId) {
+  pendingReschedule = { bookingId, date, start, end, instructorName, instructorId };
+  const dateStr = new Date(date + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
+  document.getElementById('rescheduleBannerText').textContent = `${dateStr} at ${start} with ${instructorName}`;
+  document.getElementById('rescheduleBanner').style.display = 'flex';
+  showToast('Select a new time slot below to reschedule your lesson', '');
+}
+window.startRescheduleMode = startRescheduleMode;
+
+function cancelRescheduleMode() {
+  pendingReschedule = null;
+  document.getElementById('rescheduleBanner').style.display = 'none';
+}
+window.cancelRescheduleMode = cancelRescheduleMode;
+
+function openRescheduleConfirm(newSlot) {
+  // Show confirmation modal with old → new times
+  const oldDateStr = new Date(pendingReschedule.date + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
+  const newDateStr = new Date(newSlot.date + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
+
+  document.getElementById('rmOldDateTime').textContent = `${oldDateStr} at ${pendingReschedule.start}`;
+  document.getElementById('rmNewDateTime').textContent = `${newDateStr} at ${newSlot.start_time}`;
+  document.getElementById('rmInstructor').textContent = pendingReschedule.instructorName;
+  document.getElementById('rescheduleBtnLabel').textContent = 'Move lesson';
+  document.getElementById('rescheduleSpinner').style.display = 'none';
+  document.getElementById('btnConfirmReschedule').disabled = false;
+  document.getElementById('btnConfirmReschedule').onclick = () => confirmReschedule(newSlot);
+  document.getElementById('rescheduleModal').classList.add('open');
+}
+
+function closeRescheduleModal() {
+  document.getElementById('rescheduleModal').classList.remove('open');
+}
+window.closeRescheduleModal = closeRescheduleModal;
+
+async function confirmReschedule(newSlot) {
+  const btn = document.getElementById('btnConfirmReschedule');
+  btn.disabled = true;
+  document.getElementById('rescheduleBtnLabel').textContent = 'Moving…';
+  document.getElementById('rescheduleSpinner').style.display = 'block';
+
+  try {
+    const res = await fetch('/api/slots?action=reschedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({
+        booking_id: pendingReschedule.bookingId,
+        new_date: newSlot.date,
+        new_start_time: newSlot.start_time
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    closeRescheduleModal();
+    cancelRescheduleMode();
+    showToast(data.message || 'Lesson rescheduled successfully!', 'success');
+    loadedRanges = []; slotCache = {};
+    await Promise.all([loadUpcoming(), renderCurrentView()]);
+  } catch (err) {
+    showToast(err.message || 'Reschedule failed.', 'error');
+    btn.disabled = false;
+    document.getElementById('rescheduleBtnLabel').textContent = 'Move lesson';
+    document.getElementById('rescheduleSpinner').style.display = 'none';
   }
 }
 

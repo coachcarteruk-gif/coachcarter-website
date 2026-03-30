@@ -368,3 +368,14 @@ CREATE TABLE IF NOT EXISTS instructor_learner_notes (
   updated_at      TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(instructor_id, learner_id)
 );
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- FEATURE 2: RESCHEDULING
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS rescheduled_from INTEGER REFERENCES lesson_bookings(id);
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS reschedule_count INTEGER DEFAULT 0;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- FEATURE 10: SCHEDULING LEAD TIME
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS min_booking_notice_hours INTEGER DEFAULT 24;

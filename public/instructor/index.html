@@ -691,6 +691,28 @@
   </div>
 </div>
 
+<!-- ── Reschedule modal ── -->
+<div class="modal-overlay" id="instrRescheduleModal" onclick="if(event.target===this)closeInstrRescheduleModal()">
+  <div class="modal">
+    <div class="modal-title">Reschedule Lesson</div>
+    <div class="modal-sub" id="instrRescheduleSubtitle">Move this lesson to a new date and time.</div>
+    <div style="margin:16px 0">
+      <div class="booking-detail-row" style="margin-bottom:8px"><span class="booking-detail-label">Learner</span><span class="booking-detail-val" id="instrReschLearner">—</span></div>
+      <div class="booking-detail-row" style="margin-bottom:8px"><span class="booking-detail-label">Current</span><span class="booking-detail-val" id="instrReschCurrent" style="text-decoration:line-through;color:var(--muted)">—</span></div>
+      <div style="margin-top:16px">
+        <div class="notes-label">New date</div>
+        <input type="date" id="instrReschDate" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;margin-bottom:8px">
+        <div class="notes-label">New start time</div>
+        <input type="time" id="instrReschTime" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem" step="1800">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeInstrRescheduleModal()">Cancel</button>
+      <button class="btn-modal-save" id="instrRescheduleBtn" onclick="confirmInstrReschedule()">Move lesson</button>
+    </div>
+  </div>
+</div>
+
 <nav class="bottom-nav">
   <a href="/instructor/" class="bottom-nav-item active">
     <span class="bottom-nav-icon">&#x1F4C5;</span>
@@ -1496,6 +1518,7 @@ function openBookingDetail(bookingId) {
   if (b.status === 'confirmed') {
     actions.innerHTML = `
       <button class="btn-modal-cancel" style="color:var(--red)" onclick="openCancelModal(${b.id})">Cancel lesson</button>
+      <button class="btn-modal-cancel" style="color:var(--accent)" onclick="openRescheduleModal(${b.id}, '${b.scheduled_date}', '${b.start_time.slice(0,5)}', '${b.end_time.slice(0,5)}', '${esc(b.learner_name)}')">Reschedule</button>
       <button class="btn-modal-cancel" onclick="closeBookingModal()">Close</button>
       <button class="btn-modal-save" id="detailCompleteBtn" onclick="markCompleteFromModal(${b.id})">Mark complete</button>`;
   } else {
@@ -1644,6 +1667,72 @@ async function confirmCancel() {
     showToast(err.message || 'Failed to cancel', 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Cancel this lesson';
+  }
+}
+
+// ─── Reschedule Booking ──────────────────────────────────────────────────────
+let rescheduleBookingId = null;
+
+function openRescheduleModal(bookingId, date, start, end, learnerName) {
+  rescheduleBookingId = bookingId;
+  closeBookingModal();
+  const dateDisplay = new Date(date + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', timeZone:'UTC' });
+  document.getElementById('instrReschLearner').textContent = learnerName;
+  document.getElementById('instrReschCurrent').textContent = `${dateDisplay} at ${start}`;
+  // Pre-fill with tomorrow's date
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  document.getElementById('instrReschDate').value = tomorrow.toISOString().slice(0, 10);
+  document.getElementById('instrReschDate').min = new Date().toISOString().slice(0, 10);
+  document.getElementById('instrReschTime').value = start;
+  document.getElementById('instrRescheduleBtn').disabled = false;
+  document.getElementById('instrRescheduleBtn').textContent = 'Move lesson';
+  document.getElementById('instrRescheduleModal').classList.add('open');
+}
+
+function closeInstrRescheduleModal() {
+  document.getElementById('instrRescheduleModal').classList.remove('open');
+  rescheduleBookingId = null;
+}
+
+async function confirmInstrReschedule() {
+  if (!rescheduleBookingId) return;
+  const newDate = document.getElementById('instrReschDate').value;
+  const newTime = document.getElementById('instrReschTime').value;
+  if (!newDate || !newTime) { showToast('Please select a date and time', 'error'); return; }
+
+  const btn = document.getElementById('instrRescheduleBtn');
+  btn.disabled = true; btn.textContent = 'Moving…';
+
+  try {
+    const res = await fetch('/api/instructor?action=reschedule-booking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({
+        booking_id: rescheduleBookingId,
+        new_date: newDate,
+        new_start_time: newTime.slice(0, 5)
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // Update cache — mark old as rescheduled
+    for (const ds in bookingCache) {
+      const bk = bookingCache[ds].find(b => b.id === rescheduleBookingId);
+      if (bk) { bk.status = 'rescheduled'; break; }
+    }
+    // Clear cache for new date so it reloads
+    delete bookingCache[newDate];
+
+    closeInstrRescheduleModal();
+    showToast('Lesson rescheduled — learner notified', 'success');
+    renderCurrentView();
+  } catch (err) {
+    showToast(err.message || 'Failed to reschedule', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Move lesson';
   }
 }
 

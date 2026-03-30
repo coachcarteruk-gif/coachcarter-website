@@ -4,7 +4,7 @@
 >
 > **Competitors analysed:** Total Drive (web.totaldrive.app) — driving school management platform; Setmore (go.setmore.com) — general appointment scheduling with branded booking pages.
 >
-> **Last updated:** 2026-03-29
+> **Last updated:** 2026-03-30
 
 ---
 
@@ -26,7 +26,7 @@ Every feature in this roadmap follows these constraints:
 | # | Feature | Priority | Effort | Impact | Depends On |
 |---|---------|----------|--------|--------|------------|
 | 1 | Lesson reminder notifications | **High** | Medium | Very High | Push infra (Phase 0.5) |
-| 2 | Rescheduling | **High** | Medium | High | — |
+| 2 | Rescheduling [DONE - 2026-03-30] | **High** | Medium | High | — |
 | 3 | Multiple lesson types/durations | **High** | High | Very High | DB schema change |
 | 4 | Colour-coded lesson types | **High** | Low | Medium | #3 |
 | 5 | Instructor-initiated booking | **High** | Medium | High | — |
@@ -34,7 +34,7 @@ Every feature in this roadmap follows these constraints:
 | 7 | Drop-off location | Medium | Low | Medium | — |
 | 8 | Calendar start time & working hours greying | Medium | Low | Medium | — |
 | 9 | "Today" quick-jump button | Medium | Trivial | Low | — |
-| 10 | Scheduling lead time | Medium | Low | Medium | — |
+| 10 | Scheduling lead time [DONE - 2026-03-30] | Medium | Low | Medium | — |
 | 11 | Agenda/list view | Medium | Medium | Medium | — |
 | 12 | Hide weekends toggle | Lower | Trivial | Low | — |
 | 13 | Cancellation visibility toggle | Lower | Trivial | Low | — |
@@ -159,6 +159,15 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS reschedule_count INTEGER DE
 - Reschedule count could be capped (e.g. max 2 reschedules per booking) to prevent abuse
 
 **Estimated effort:** 2 sessions (1 for API, 1 for learner + instructor UI)
+
+**Implementation notes (2026-03-30):**
+- Implemented as planned: `POST /api/slots?action=reschedule` (learner) and `POST /api/instructor?action=reschedule-booking` (instructor)
+- Learner reschedule enforces 48hr cutoff (same as cancellation) and max 2 reschedules per booking chain
+- Instructor reschedule has no time restriction or reschedule count limit
+- Old booking gets `status='rescheduled'`, new booking has `rescheduled_from` pointer and incremented `reschedule_count`
+- Rollback mechanism: if new booking insert fails (unique constraint), old booking is restored to 'confirmed'
+- Notifications: email + WhatsApp (learner side), email only (instructor side, matching existing pattern)
+- Actual effort: 1 session (API + frontend combined)
 
 ---
 
@@ -587,6 +596,13 @@ ALTER TABLE instructors ADD COLUMN IF NOT EXISTS min_booking_notice_hours INTEGE
 - One column addition, one filter line in the availability engine
 
 **Estimated effort:** 0.5 session (tiny change)
+
+**Implementation notes (2026-03-30):**
+- Added `min_booking_notice_hours INTEGER DEFAULT 24` to instructors table
+- Loaded alongside `buffer_minutes` in the availability windows query (COALESCE to 24)
+- Filter added in slot generation loop: calculates hours until each slot and skips if below threshold
+- No instructor settings UI added yet — defaults to 24 hours. Admin or instructor profile page can expose this later.
+- Actual effort: combined with Feature 2 in 1 session
 
 ---
 
