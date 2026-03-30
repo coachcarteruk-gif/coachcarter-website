@@ -35,7 +35,7 @@
 | File | Actions | Key notes |
 |------|---------|-----------|
 | learner.js | 18 | Core learner data — sessions, progress, profile, mock-tests, quiz, competency, onboarding |
-| instructor.js | 26+ | Auth, schedule, availability, blackouts, learner history, notes, stats, photo upload, cancel-booking, reschedule-booking |
+| instructor.js | 27+ | Auth, schedule, availability, blackouts, learner history, notes, stats, photo upload, cancel-booking, reschedule-booking, create-booking |
 | admin.js | 14+ | Dashboard stats, bookings, instructor CRUD, learner management, credit adjustment |
 | slots.js | 6 | available (with lead-time filter), book, checkout-slot, cancel, reschedule, my-bookings |
 | videos.js | 12 | CRUD, upload-url, categories, bulk operations |
@@ -83,6 +83,8 @@
 - `lesson_bookings.reschedule_count` — tracks reschedules per chain (max 2 for learners)
 - `lesson_bookings.status` now includes `'rescheduled'` value
 - `instructors.min_booking_notice_hours` — minimum hours before a slot can be booked (default 24)
+- `lesson_bookings.created_by` — who initiated the booking: 'learner', 'instructor', 'admin'
+- `lesson_bookings.payment_method` — how it was paid: 'credit', 'stripe', 'cash', 'free'
 
 ### Critical Design Decisions Already Made
 

@@ -405,6 +405,8 @@ credit_returned BOOLEAN DEFAULT FALSE
 stripe_session_id TEXT  -- idempotency key for pay-per-slot bookings
 rescheduled_from INTEGER  -- links to the booking this one replaced (NULL for original bookings)
 reschedule_count INTEGER DEFAULT 0  -- how many times this booking chain has been rescheduled (max 2)
+created_by TEXT DEFAULT 'learner'    -- 'learner', 'instructor', 'admin'
+payment_method TEXT DEFAULT 'credit' -- 'credit', 'stripe', 'cash', 'free'
 created_at TIMESTAMPTZ
 -- UNIQUE (instructor_id, scheduled_date, start_time) prevents double-booking
 ```
@@ -483,6 +485,7 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 | `update-profile` | POST | JWT | Update bio, contact details, and buffer_minutes |
 | `cancel-booking` | POST | JWT | Cancel a confirmed booking (always refunds learner credit) |
 | `reschedule-booking` | POST | JWT | Move a booking to a new slot (no time restriction, no count limit) |
+| `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/free payment) |
 
 ### Database tables
 

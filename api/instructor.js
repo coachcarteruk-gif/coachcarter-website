@@ -33,8 +33,25 @@
 
 const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
+const twilio     = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { reportError } = require('./_error-alert');
+
+function sendWhatsApp(to, message) {
+  const sid  = process.env.TWILIO_SID;
+  const auth = process.env.TWILIO_AUTH;
+  const from = process.env.TWILIO_WHATSAPP_FROM;
+  if (!sid || !auth || !from || !to) return Promise.resolve();
+  let phone = to.replace(/\s+/g, '');
+  if (phone.startsWith('0')) phone = '+44' + phone.slice(1);
+  else if (!phone.startsWith('+')) phone = '+' + phone;
+  const client = twilio(sid, auth);
+  return client.messages.create({
+    from: `whatsapp:${from}`,
+    to:   `whatsapp:${phone}`,
+    body: message
+  }).catch(err => { console.warn('WhatsApp failed:', err.message); });
+}
 
 const TOKEN_EXPIRY_MINUTES = 30;
 const JWT_EXPIRY           = '7d';
@@ -80,6 +97,7 @@ module.exports = async (req, res) => {
   if (action === 'learner-history')    return handleLearnerHistory(req, res);
   if (action === 'cancel-booking')     return handleCancelBooking(req, res);
   if (action === 'reschedule-booking') return handleRescheduleBooking(req, res);
+  if (action === 'create-booking')     return handleCreateBooking(req, res);
   if (action === 'stats')              return handleStats(req, res);
   if (action === 'upload-photo')       return handleUploadPhoto(req, res);
   if (action === 'my-learners')        return handleMyLearners(req, res);
@@ -1089,6 +1107,157 @@ async function handleRescheduleBooking(req, res) {
     console.error('instructor reschedule-booking error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to reschedule booking' });
+  }
+}
+
+// ── POST /api/instructor?action=create-booking ────────────────────────────
+// Body: { learner_id, scheduled_date, start_time, payment_method, notes }
+// Instructor creates a booking on behalf of a learner.
+async function handleCreateBooking(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { learner_id, scheduled_date, start_time, payment_method, notes } = req.body;
+  if (!learner_id || !scheduled_date || !start_time)
+    return res.status(400).json({ error: 'learner_id, scheduled_date and start_time are required' });
+
+  // Validate date
+  const bookingDate = new Date(scheduled_date + 'T00:00:00Z');
+  if (isNaN(bookingDate.getTime()))
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  if (bookingDate < today)
+    return res.status(400).json({ error: 'Cannot book a slot in the past' });
+
+  // Calculate end time (fixed 90-minute lessons)
+  const startParts = start_time.split(':').map(Number);
+  const startMins  = startParts[0] * 60 + startParts[1];
+  const endMins    = startMins + 90;
+  const end_time   = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+
+  const payMethod = payment_method || 'cash';
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Verify learner exists
+    const [learner] = await sql`
+      SELECT id, name, email, phone, credit_balance
+      FROM learner_users WHERE id = ${learner_id}
+    `;
+    if (!learner)
+      return res.status(404).json({ error: 'Learner not found' });
+
+    // Get instructor details for notifications
+    const [instrDetails] = await sql`
+      SELECT id, name, email, phone FROM instructors WHERE id = ${instructor.id}
+    `;
+
+    // Handle credit deduction if paying by credit
+    let creditDeducted = false;
+    if (payMethod === 'credit') {
+      if (learner.credit_balance < 1)
+        return res.status(402).json({ error: `${learner.name} has no lessons remaining. Use "Cash" or "Free" instead.` });
+
+      const [deducted] = await sql`
+        UPDATE learner_users
+        SET credit_balance = credit_balance - 1
+        WHERE id = ${learner_id} AND credit_balance >= 1
+        RETURNING credit_balance
+      `;
+      if (!deducted)
+        return res.status(402).json({ error: 'Learner has no lessons remaining.' });
+      creditDeducted = true;
+    }
+
+    // Insert booking
+    let booking;
+    try {
+      const [b] = await sql`
+        INSERT INTO lesson_bookings
+          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+           created_by, payment_method, instructor_notes)
+        VALUES
+          (${learner_id}, ${instructor.id}, ${scheduled_date}, ${start_time}, ${end_time},
+           'confirmed', 'instructor', ${payMethod}, ${notes || null})
+        RETURNING id, scheduled_date, start_time::text, end_time::text, status
+      `;
+      booking = b;
+    } catch (insertErr) {
+      // Rollback credit if deducted
+      if (creditDeducted) {
+        await sql`UPDATE learner_users SET credit_balance = credit_balance + 1 WHERE id = ${learner_id}`;
+      }
+      if (insertErr.message?.includes('uq_booking_slot')) {
+        return res.status(409).json({ error: 'That slot is already booked. Please choose another time.' });
+      }
+      throw insertErr;
+    }
+
+    // Get updated balance
+    const [updated] = await sql`SELECT credit_balance FROM learner_users WHERE id = ${learner_id}`;
+
+    // Send confirmation email to learner
+    const dateObj = new Date(scheduled_date + 'T00:00:00Z');
+    const dateStr = dateObj.toLocaleDateString('en-GB', {
+      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+    });
+    const firstName = (learner.name || '').split(' ')[0] || 'there';
+
+    try {
+      const mailer = createTransporter();
+      await mailer.sendMail({
+        from: 'CoachCarter <bookings@coachcarter.uk>',
+        to: learner.email,
+        subject: `Lesson booked — ${dateStr} at ${start_time}`,
+        html: `
+          <h2>Hi ${firstName},</h2>
+          <p>Your instructor ${instrDetails.name} has booked a lesson for you:</p>
+          <table>
+            <tr><td><strong>Date:</strong></td><td>${dateStr}</td></tr>
+            <tr><td><strong>Time:</strong></td><td>${start_time} – ${end_time}</td></tr>
+            <tr><td><strong>Instructor:</strong></td><td>${instrDetails.name}</td></tr>
+            <tr><td><strong>Duration:</strong></td><td>1.5 hours</td></tr>
+          </table>
+          ${payMethod === 'credit' ? `<p>1 lesson has been deducted from your balance. You have ${updated.credit_balance} lesson${updated.credit_balance !== 1 ? 's' : ''} remaining.</p>` : ''}
+          <p style="margin-top:16px;font-size:0.875rem;color:#797879">
+            Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.
+          </p>
+          <p style="margin:28px 0">
+            <a href="https://coachcarter.uk/learner/book.html"
+               style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                      border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+              View my bookings →
+            </a>
+          </p>
+        `
+      });
+    } catch (emailErr) {
+      console.error('Failed to send booking email:', emailErr);
+    }
+
+    // WhatsApp to learner
+    await sendWhatsApp(learner.phone,
+      `✅ Lesson booked!\n\n📅 ${dateStr}\n⏰ ${start_time} – ${end_time}\n🚗 Instructor: ${instrDetails.name}\n\n${payMethod === 'credit' ? `1 lesson deducted. ${updated.credit_balance} remaining.\n\n` : ''}Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
+    );
+
+    return res.json({
+      ok: true,
+      booking_id: booking.id,
+      learner_name: learner.name,
+      scheduled_date,
+      start_time,
+      end_time,
+      payment_method: payMethod,
+      credit_balance: updated.credit_balance
+    });
+  } catch (err) {
+    console.error('instructor create-booking error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to create booking' });
   }
 }
 

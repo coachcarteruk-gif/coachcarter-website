@@ -379,3 +379,9 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS reschedule_count INTEGER DE
 -- FEATURE 10: SCHEDULING LEAD TIME
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS min_booking_notice_hours INTEGER DEFAULT 24;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- FEATURE 5: INSTRUCTOR-INITIATED BOOKING
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT 'learner';
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'credit';

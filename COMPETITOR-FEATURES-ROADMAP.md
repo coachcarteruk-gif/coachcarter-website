@@ -29,7 +29,7 @@ Every feature in this roadmap follows these constraints:
 | 2 | Rescheduling [DONE - 2026-03-30] | **High** | Medium | High | — |
 | 3 | Multiple lesson types/durations | **High** | High | Very High | DB schema change |
 | 4 | Colour-coded lesson types | **High** | Low | Medium | #3 |
-| 5 | Instructor-initiated booking | **High** | Medium | High | — |
+| 5 | Instructor-initiated booking [DONE - 2026-03-30] | **High** | Medium | High | — |
 | 6 | Recurring/repeat bookings | Medium | High | Medium | #3 |
 | 7 | Drop-off location | Medium | Low | Medium | — |
 | 8 | Calendar start time & working hours greying | Medium | Low | Medium | — |
@@ -346,6 +346,16 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT
 - The `created_by` column lets the app distinguish learner-booked from instructor-booked lessons (useful for analytics)
 
 **Estimated effort:** 2 sessions (1 for API, 1 for instructor UI modal)
+
+**Implementation notes (2026-03-30):**
+- `POST /api/instructor?action=create-booking` with learner_id, date, time, payment_method, notes
+- Payment methods: cash (default), credit (deducts from learner balance), free
+- Added `created_by` and `payment_method` columns to lesson_bookings
+- "Add Lesson" button in calendar toolbar opens modal with searchable learner dropdown
+- Learner search filters client-side from my-learners API (name/email/phone)
+- Email + WhatsApp notification sent to learner on booking
+- Atomic credit deduction with rollback on slot conflict (same pattern as learner booking)
+- Actual effort: 1 session (combined API + frontend)
 
 ---
 

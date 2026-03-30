@@ -140,6 +140,41 @@
       color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap;
     }
     .btn-today:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-add-lesson {
+      padding: 6px 14px; border-radius: 8px;
+      border: 1.5px solid var(--accent); background: var(--accent);
+      font-family: var(--font-body); font-size: 0.82rem; font-weight: 700;
+      color: white; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .btn-add-lesson:hover { background: #e0741e; border-color: #e0741e; }
+    .learner-search-wrap { position: relative; }
+    .learner-search-input {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 0.9rem; font-family: var(--font-body);
+    }
+    .learner-search-input:focus { outline: none; border-color: var(--accent); }
+    .learner-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; max-height: 200px;
+      overflow-y: auto; background: white; border: 1px solid var(--border);
+      border-top: none; border-radius: 0 0 8px 8px; z-index: 10; display: none;
+    }
+    .learner-dropdown.open { display: block; }
+    .learner-option {
+      padding: 10px 12px; cursor: pointer; font-size: 0.85rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .learner-option:last-child { border-bottom: none; }
+    .learner-option:hover { background: var(--accent-lt); }
+    .learner-option .learner-opt-name { font-weight: 600; }
+    .learner-option .learner-opt-detail { color: var(--muted); font-size: 0.78rem; }
+    .payment-radios { display: flex; gap: 12px; margin-top: 4px; }
+    .payment-radios label {
+      display: flex; align-items: center; gap: 5px; cursor: pointer;
+      font-size: 0.85rem; padding: 6px 12px; border: 1px solid var(--border);
+      border-radius: 8px; transition: all 0.15s;
+    }
+    .payment-radios input:checked + span { color: var(--accent); font-weight: 600; }
+    .payment-radios label:has(input:checked) { border-color: var(--accent); background: var(--accent-lt); }
 
     /* ── Loading / Empty ──────────────────────────────────────────────────── */
     .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
@@ -622,6 +657,7 @@
       </div>
       <button class="btn-today" onclick="goToday()">Today</button>
       <button class="btn-today" onclick="refreshSchedule()" id="refreshBtn" title="Refresh schedule">↻</button>
+      <button class="btn-add-lesson" onclick="openAddLessonModal()">+ Add Lesson</button>
     </div>
   </div>
 
@@ -709,6 +745,53 @@
     <div class="modal-actions">
       <button class="btn-modal-cancel" onclick="closeInstrRescheduleModal()">Cancel</button>
       <button class="btn-modal-save" id="instrRescheduleBtn" onclick="confirmInstrReschedule()">Move lesson</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Lesson Modal ── -->
+<div class="modal-overlay" id="addLessonModal" onclick="if(event.target===this)closeAddLessonModal()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">Add Lesson</div>
+    <div class="modal-sub">Book a lesson on behalf of a learner.</div>
+    <div style="margin:16px 0; display:flex; flex-direction:column; gap:12px;">
+      <div>
+        <div class="notes-label">Learner</div>
+        <div class="learner-search-wrap">
+          <input type="text" class="learner-search-input" id="addLessonSearch" placeholder="Search by name, email or phone..." oninput="filterAddLessonLearners()" onfocus="document.getElementById('addLessonDropdown').classList.add('open')" autocomplete="off">
+          <div class="learner-dropdown" id="addLessonDropdown"></div>
+        </div>
+        <div id="addLessonSelected" style="display:none; margin-top:8px; padding:8px 12px; background:var(--accent-lt); border-radius:8px; font-size:0.85rem; display:none;">
+          <span id="addLessonSelectedName" style="font-weight:600"></span>
+          <span id="addLessonSelectedDetail" style="color:var(--muted); margin-left:8px"></span>
+          <button onclick="clearSelectedLearner()" style="float:right; background:none; border:none; cursor:pointer; color:var(--muted); font-size:0.9rem;">✕</button>
+        </div>
+      </div>
+      <div>
+        <div class="notes-label">Date</div>
+        <input type="date" id="addLessonDate" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
+      </div>
+      <div>
+        <div class="notes-label">Start time</div>
+        <input type="time" id="addLessonTime" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;" step="1800">
+      </div>
+      <div>
+        <div class="notes-label">Payment</div>
+        <div class="payment-radios">
+          <label><input type="radio" name="addLessonPay" value="cash" checked><span>Cash</span></label>
+          <label><input type="radio" name="addLessonPay" value="credit"><span>Deduct credit</span></label>
+          <label><input type="radio" name="addLessonPay" value="free"><span>Free</span></label>
+        </div>
+        <div id="addLessonCreditNote" style="display:none; font-size:0.78rem; color:var(--muted); margin-top:4px;"></div>
+      </div>
+      <div>
+        <div class="notes-label">Notes (optional)</div>
+        <textarea class="notes-field" id="addLessonNotes" placeholder="e.g. Phone booking, test prep session…" style="margin-top:0"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeAddLessonModal()">Cancel</button>
+      <button class="btn-modal-save" id="addLessonBtn" onclick="confirmCreateBooking()">Book lesson</button>
     </div>
   </div>
 </div>
@@ -1733,6 +1816,158 @@ async function confirmInstrReschedule() {
     showToast(err.message || 'Failed to reschedule', 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Move lesson';
+  }
+}
+
+// ─── Add Lesson (Instructor-Initiated Booking) ──────────────────────────────
+let addLessonLearners = [];
+let selectedLearnerId = null;
+
+async function openAddLessonModal() {
+  selectedLearnerId = null;
+  document.getElementById('addLessonSearch').value = '';
+  document.getElementById('addLessonSelected').style.display = 'none';
+  document.getElementById('addLessonNotes').value = '';
+  document.getElementById('addLessonCreditNote').style.display = 'none';
+  document.getElementById('addLessonBtn').disabled = false;
+  document.getElementById('addLessonBtn').textContent = 'Book lesson';
+
+  // Default date to current calendar date
+  const d = currentDate || new Date();
+  const dateVal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  document.getElementById('addLessonDate').value = dateVal;
+  document.getElementById('addLessonDate').min = new Date().toISOString().slice(0, 10);
+  document.getElementById('addLessonTime').value = '09:00';
+
+  // Reset payment to cash
+  document.querySelector('input[name="addLessonPay"][value="cash"]').checked = true;
+
+  // Fetch learners
+  try {
+    const res = await fetch('/api/instructor?action=my-learners', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const data = await res.json();
+    addLessonLearners = Array.isArray(data) ? data : (data.learners || []);
+  } catch { addLessonLearners = []; }
+
+  document.getElementById('addLessonModal').classList.add('open');
+  filterAddLessonLearners();
+}
+
+function closeAddLessonModal() {
+  document.getElementById('addLessonModal').classList.remove('open');
+  document.getElementById('addLessonDropdown').classList.remove('open');
+}
+
+function filterAddLessonLearners() {
+  const search = (document.getElementById('addLessonSearch').value || '').toLowerCase();
+  const dropdown = document.getElementById('addLessonDropdown');
+  const filtered = addLessonLearners.filter(l =>
+    (l.name || '').toLowerCase().includes(search) ||
+    (l.email || '').toLowerCase().includes(search) ||
+    (l.phone || '').toLowerCase().includes(search)
+  ).slice(0, 20);
+
+  if (filtered.length === 0) {
+    dropdown.innerHTML = '<div class="learner-option" style="color:var(--muted)">No learners found</div>';
+  } else {
+    dropdown.innerHTML = filtered.map(l => `
+      <div class="learner-option" onclick="selectLearner(${l.id}, '${esc(l.name)}', '${esc(l.phone || l.email)}', ${l.credit_balance || 0})">
+        <div class="learner-opt-name">${esc(l.name)}</div>
+        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? '·' : ''} ${esc(l.email || '')} · ${l.credit_balance || 0} credit${(l.credit_balance || 0) !== 1 ? 's' : ''}</div>
+      </div>
+    `).join('');
+  }
+  dropdown.classList.add('open');
+}
+
+function selectLearner(id, name, detail, credits) {
+  selectedLearnerId = id;
+  document.getElementById('addLessonSearch').value = '';
+  document.getElementById('addLessonDropdown').classList.remove('open');
+  document.getElementById('addLessonSelected').style.display = 'block';
+  document.getElementById('addLessonSelectedName').textContent = name;
+  document.getElementById('addLessonSelectedDetail').textContent = detail;
+
+  // Update credit note
+  updateCreditNote(credits);
+}
+
+function clearSelectedLearner() {
+  selectedLearnerId = null;
+  document.getElementById('addLessonSelected').style.display = 'none';
+  document.getElementById('addLessonCreditNote').style.display = 'none';
+  document.getElementById('addLessonSearch').focus();
+}
+
+function updateCreditNote(credits) {
+  const noteEl = document.getElementById('addLessonCreditNote');
+  const payMethod = document.querySelector('input[name="addLessonPay"]:checked')?.value;
+  if (payMethod === 'credit') {
+    noteEl.style.display = 'block';
+    noteEl.textContent = credits > 0
+      ? `Learner has ${credits} lesson${credits !== 1 ? 's' : ''} remaining. 1 will be deducted.`
+      : 'Learner has no credits! Choose Cash or Free instead.';
+    noteEl.style.color = credits > 0 ? 'var(--muted)' : 'var(--red)';
+  } else {
+    noteEl.style.display = 'none';
+  }
+}
+
+// Update credit note when payment method changes
+document.addEventListener('change', e => {
+  if (e.target.name === 'addLessonPay' && selectedLearnerId) {
+    const learner = addLessonLearners.find(l => l.id === selectedLearnerId);
+    if (learner) updateCreditNote(learner.credit_balance || 0);
+  }
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.learner-search-wrap')) {
+    document.getElementById('addLessonDropdown').classList.remove('open');
+  }
+});
+
+async function confirmCreateBooking() {
+  if (!selectedLearnerId) { showToast('Please select a learner', 'error'); return; }
+
+  const newDate = document.getElementById('addLessonDate').value;
+  const newTime = document.getElementById('addLessonTime').value;
+  if (!newDate || !newTime) { showToast('Please select a date and time', 'error'); return; }
+
+  const payMethod = document.querySelector('input[name="addLessonPay"]:checked')?.value || 'cash';
+  const notes = document.getElementById('addLessonNotes').value.trim();
+
+  const btn = document.getElementById('addLessonBtn');
+  btn.disabled = true; btn.textContent = 'Booking…';
+
+  try {
+    const res = await fetch('/api/instructor?action=create-booking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({
+        learner_id: selectedLearnerId,
+        scheduled_date: newDate,
+        start_time: newTime.slice(0, 5),
+        payment_method: payMethod,
+        notes: notes || null
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // Clear cache for the booked date so it reloads
+    delete bookingCache[newDate];
+
+    closeAddLessonModal();
+    showToast(`Lesson booked for ${data.learner_name || 'learner'} — they've been notified`, 'success');
+    renderCurrentView();
+  } catch (err) {
+    showToast(err.message || 'Failed to create booking', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Book lesson';
   }
 }
 
