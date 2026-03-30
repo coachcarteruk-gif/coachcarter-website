@@ -407,6 +407,8 @@ rescheduled_from INTEGER  -- links to the booking this one replaced (NULL for or
 reschedule_count INTEGER DEFAULT 0  -- how many times this booking chain has been rescheduled (max 2)
 created_by TEXT DEFAULT 'learner'    -- 'learner', 'instructor', 'admin'
 payment_method TEXT DEFAULT 'credit' -- 'credit', 'stripe', 'cash', 'free'
+pickup_address TEXT                  -- per-booking pickup (overrides learner profile)
+dropoff_address TEXT                 -- per-booking dropoff (school, work, test centre)
 created_at TIMESTAMPTZ
 -- UNIQUE (instructor_id, scheduled_date, start_time) prevents double-booking
 ```
@@ -489,7 +491,7 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 
 ### Database tables
 
-**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30), min_booking_notice_hours (default 24)
+**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7)
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
 

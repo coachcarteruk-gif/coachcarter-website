@@ -385,3 +385,14 @@ ALTER TABLE instructors ADD COLUMN IF NOT EXISTS min_booking_notice_hours INTEGE
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT 'learner';
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'credit';
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- FEATURE 7: PER-BOOKING ADDRESSES
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS pickup_address TEXT;
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS dropoff_address TEXT;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- FEATURE 8: CALENDAR START HOUR
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS calendar_start_hour INTEGER DEFAULT 7;

@@ -85,6 +85,9 @@
 - `instructors.min_booking_notice_hours` — minimum hours before a slot can be booked (default 24)
 - `lesson_bookings.created_by` — who initiated the booking: 'learner', 'instructor', 'admin'
 - `lesson_bookings.payment_method` — how it was paid: 'credit', 'stripe', 'cash', 'free'
+- `lesson_bookings.pickup_address` — per-booking pickup (overrides learner profile default)
+- `lesson_bookings.dropoff_address` — per-booking dropoff address
+- `instructors.calendar_start_hour` — calendar display start hour (default 7)
 
 ### Critical Design Decisions Already Made
 

@@ -285,6 +285,8 @@ async function handleSchedule(req, res) {
         lu.phone AS learner_phone,
         COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
         lu.pickup_address AS learner_pickup_address,
+        lb.pickup_address AS booking_pickup_address,
+        lb.dropoff_address AS booking_dropoff_address,
         ds.id AS session_log_id,
         ds.notes AS session_notes,
         lb.instructor_notes
@@ -377,6 +379,8 @@ async function handleScheduleRange(req, res) {
         lu.email AS learner_email,
         lu.phone AS learner_phone,
         lu.pickup_address AS learner_pickup_address,
+        lb.pickup_address AS booking_pickup_address,
+        lb.dropoff_address AS booking_dropoff_address,
         COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
@@ -580,7 +584,8 @@ async function handleProfile(req, res) {
 
     const [profile] = await sql`
       SELECT id, name, email, phone, bio, photo_url, active, created_at,
-             COALESCE(buffer_minutes, 30) AS buffer_minutes
+             COALESCE(buffer_minutes, 30) AS buffer_minutes,
+             COALESCE(calendar_start_hour, 7) AS calendar_start_hour
       FROM instructors WHERE id = ${instructor.id}
     `;
 
@@ -604,7 +609,7 @@ async function handleUpdateProfile(req, res) {
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { name, phone, bio, photo_url, buffer_minutes } = req.body;
+  const { name, phone, bio, photo_url, buffer_minutes, calendar_start_hour } = req.body;
 
   // Validate buffer_minutes if provided
   if (buffer_minutes !== undefined && buffer_minutes !== null) {
@@ -613,21 +618,33 @@ async function handleUpdateProfile(req, res) {
       return res.status(400).json({ error: 'Buffer time must be between 0 and 120 minutes' });
   }
 
+  // Validate calendar_start_hour if provided
+  if (calendar_start_hour !== undefined && calendar_start_hour !== null) {
+    const csh = parseInt(calendar_start_hour);
+    if (isNaN(csh) || csh < 0 || csh > 23)
+      return res.status(400).json({ error: 'Calendar start hour must be between 0 and 23' });
+  }
+
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
     const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null)
       ? parseInt(buffer_minutes) : null;
+    const cshVal = (calendar_start_hour !== undefined && calendar_start_hour !== null)
+      ? parseInt(calendar_start_hour) : null;
 
     const [updated] = await sql`
       UPDATE instructors SET
-        name           = COALESCE(NULLIF(${name      || ''}, ''), name),
-        phone          = COALESCE(${phone     ?? null}, phone),
-        bio            = COALESCE(${bio       ?? null}, bio),
-        photo_url      = COALESCE(${photo_url ?? null}, photo_url),
-        buffer_minutes = COALESCE(${bufVal}, buffer_minutes)
+        name                = COALESCE(NULLIF(${name      || ''}, ''), name),
+        phone               = COALESCE(${phone     ?? null}, phone),
+        bio                 = COALESCE(${bio       ?? null}, bio),
+        photo_url           = COALESCE(${photo_url ?? null}, photo_url),
+        buffer_minutes      = COALESCE(${bufVal}, buffer_minutes),
+        calendar_start_hour = COALESCE(${cshVal}, calendar_start_hour)
       WHERE id = ${instructor.id}
-      RETURNING id, name, email, phone, bio, photo_url, COALESCE(buffer_minutes, 30) AS buffer_minutes
+      RETURNING id, name, email, phone, bio, photo_url,
+                COALESCE(buffer_minutes, 30) AS buffer_minutes,
+                COALESCE(calendar_start_hour, 7) AS calendar_start_hour
     `;
 
     return res.json({ success: true, instructor: updated });
@@ -1111,14 +1128,14 @@ async function handleRescheduleBooking(req, res) {
 }
 
 // ── POST /api/instructor?action=create-booking ────────────────────────────
-// Body: { learner_id, scheduled_date, start_time, payment_method, notes }
+// Body: { learner_id, scheduled_date, start_time, payment_method, notes, pickup_address?, dropoff_address? }
 // Instructor creates a booking on behalf of a learner.
 async function handleCreateBooking(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { learner_id, scheduled_date, start_time, payment_method, notes } = req.body;
+  const { learner_id, scheduled_date, start_time, payment_method, notes, pickup_address, dropoff_address } = req.body;
   if (!learner_id || !scheduled_date || !start_time)
     return res.status(400).json({ error: 'learner_id, scheduled_date and start_time are required' });
 
@@ -1176,13 +1193,16 @@ async function handleCreateBooking(req, res) {
     // Insert booking
     let booking;
     try {
+      const bookingPickup = pickup_address || learner.pickup_address || null;
+      const bookingDropoff = dropoff_address || null;
       const [b] = await sql`
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           created_by, payment_method, instructor_notes)
+           created_by, payment_method, instructor_notes, pickup_address, dropoff_address)
         VALUES
           (${learner_id}, ${instructor.id}, ${scheduled_date}, ${start_time}, ${end_time},
-           'confirmed', 'instructor', ${payMethod}, ${notes || null})
+           'confirmed', 'instructor', ${payMethod}, ${notes || null},
+           ${bookingPickup}, ${bookingDropoff})
         RETURNING id, scheduled_date, start_time::text, end_time::text, status
       `;
       booking = b;

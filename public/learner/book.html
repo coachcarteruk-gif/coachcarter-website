@@ -643,6 +643,10 @@
         <div class="modal-detail-row"><span>Instructor</span><span id="mdInstructor">—</span></div>
         <div class="modal-detail-row"><span>Duration</span><span>1.5 hours</span></div>
       </div>
+      <div style="margin:12px 0">
+        <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off address (optional)</label>
+        <input type="text" id="mdDropoff" placeholder="e.g. School, work, test centre…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+      </div>
       <div id="modalCreditPath" style="display:none">
         <p class="modal-credit-note">
           This will use <strong>1 lesson</strong> from your balance.
@@ -1288,6 +1292,7 @@ function openBookModal(el) {
     document.getElementById('btnPayAndBook').disabled = false;
   }
 
+  document.getElementById('mdDropoff').value = '';
   document.getElementById('bookConfirmStep').style.display = 'block';
   document.getElementById('bookSuccessStep').style.display = 'none';
   document.getElementById('bookModal').classList.add('open');
@@ -1313,7 +1318,7 @@ async function confirmBookWithCredit() {
     const res = await fetch('/api/slots?action=book', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify(pendingSlot)
+      body: JSON.stringify({ ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
@@ -1341,7 +1346,7 @@ async function confirmPayAndBook() {
     const res = await fetch('/api/slots?action=checkout-slot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify(pendingSlot)
+      body: JSON.stringify({ ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);

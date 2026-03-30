@@ -360,7 +360,7 @@ async function handleAvailable(req, res) {
 }
 
 // ── POST /api/slots?action=book ───────────────────────────────────────────────
-// Body: { instructor_id, date, start_time, end_time }
+// Body: { instructor_id, date, start_time, end_time, pickup_address?, dropoff_address? }
 // Deducts 1 credit atomically and creates a confirmed booking.
 async function handleBook(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -368,7 +368,7 @@ async function handleBook(req, res) {
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { instructor_id, date, start_time, end_time } = req.body;
+  const { instructor_id, date, start_time, end_time, pickup_address, dropoff_address } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'instructor_id, date, start_time and end_time are required' });
 
@@ -403,7 +403,7 @@ async function handleBook(req, res) {
 
     // 1. Check learner has enough credits
     const [learner] = await sql`
-      SELECT id, name, email, phone, credit_balance
+      SELECT id, name, email, phone, credit_balance, pickup_address
       FROM learner_users WHERE id = ${user.id}
     `;
     if (!learner)
@@ -441,11 +441,15 @@ async function handleBook(req, res) {
     //    will throw if slot was taken. If so, refund the credit.
     let booking;
     try {
+      const bookingPickup = pickup_address || learner.pickup_address || null;
+      const bookingDropoff = dropoff_address || null;
       const [b] = await sql`
         INSERT INTO lesson_bookings
-          (learner_id, instructor_id, scheduled_date, start_time, end_time, status)
+          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+           pickup_address, dropoff_address)
         VALUES
-          (${user.id}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, 'confirmed')
+          (${user.id}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, 'confirmed',
+           ${bookingPickup}, ${bookingDropoff})
         RETURNING id, learner_id, instructor_id, scheduled_date,
                   start_time::text, end_time::text, status, created_at
       `;
@@ -931,10 +935,11 @@ async function handleReschedule(req, res) {
       const [b] = await sql`
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           rescheduled_from, reschedule_count)
+           rescheduled_from, reschedule_count, pickup_address, dropoff_address)
         VALUES
           (${user.id}, ${booking.instructor_id}, ${new_date}, ${new_start_time}, ${new_end_time},
-           'confirmed', ${booking_id}, ${booking.reschedule_count + 1})
+           'confirmed', ${booking_id}, ${booking.reschedule_count + 1},
+           ${booking.pickup_address || null}, ${booking.dropoff_address || null})
         RETURNING id, scheduled_date, start_time::text, end_time::text, status,
                   rescheduled_from, reschedule_count
       `;
@@ -1075,6 +1080,8 @@ async function handleMyBookings(req, res) {
         lb.credit_returned,
         COALESCE(lb.reschedule_count, 0) AS reschedule_count,
         lb.rescheduled_from,
+        lb.pickup_address,
+        lb.dropoff_address,
         i.id   AS instructor_id,
         i.name AS instructor_name,
         i.photo_url AS instructor_photo

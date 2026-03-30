@@ -31,8 +31,8 @@ Every feature in this roadmap follows these constraints:
 | 4 | Colour-coded lesson types | **High** | Low | Medium | #3 |
 | 5 | Instructor-initiated booking [DONE - 2026-03-30] | **High** | Medium | High | — |
 | 6 | Recurring/repeat bookings | Medium | High | Medium | #3 |
-| 7 | Drop-off location | Medium | Low | Medium | — |
-| 8 | Calendar start time & working hours greying | Medium | Low | Medium | — |
+| 7 | Drop-off location [DONE - 2026-03-30] | Medium | Low | Medium | — |
+| 8 | Calendar start time & working hours greying [DONE - 2026-03-30] | Medium | Low | Medium | — |
 | 9 | "Today" quick-jump button | Medium | Trivial | Low | — |
 | 10 | Scheduling lead time [DONE - 2026-03-30] | Medium | Low | Medium | — |
 | 11 | Agenda/list view | Medium | Medium | Medium | — |
@@ -454,6 +454,15 @@ CREATE TABLE IF NOT EXISTS saved_locations (
 
 **Estimated effort:** 1-2 sessions (straightforward schema + UI additions)
 
+**Implementation notes (2026-03-30):**
+- Added `pickup_address` and `dropoff_address` columns to lesson_bookings (per-booking, not just profile-level)
+- Learner booking modal: optional drop-off field; pickup defaults from profile
+- Instructor create-booking: accepts pickup/dropoff; defaults pickup from learner profile
+- Schedule APIs return both booking-level and profile-level addresses; frontend prefers booking-level
+- Reschedule carries forward addresses from old booking
+- Saved locations table deferred — low complexity gain for now
+- Actual effort: combined with Feature 8 in 1 session
+
 ---
 
 ### Feature 8: Calendar Start Time & Working Hours Greying
@@ -518,6 +527,17 @@ CSS:
 - `calendar_start_hour` is used by the RN `ScrollView` `contentOffset` prop
 
 **Estimated effort:** 1 session (mostly CSS/JS on the existing calendar)
+
+**Implementation notes (2026-03-30):**
+- Added `calendar_start_hour` (default 7) to instructors table
+- Profile API returns and accepts it; validated 0-23
+- Daily view: uses `calendarStartHour` instead of hardcoded 6 for range start
+- Daily view: non-working hours (outside availability windows) get `.non-working` CSS class (greyed out)
+- Weekly view: dynamic hour range from `calendarStartHour` to 21; non-working hour slots greyed per-day
+- Weekly event positioning updated to use `calendarStartHour` offset instead of hardcoded 6
+- Profile loaded on init to get `calendar_start_hour`
+- Lunch break skipped — availability windows already support gaps (9-12 + 13-17)
+- Actual effort: combined with Feature 7 in 1 session
 
 ---
 
