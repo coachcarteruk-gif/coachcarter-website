@@ -66,6 +66,8 @@
     instructor: [
       { icon: 'calendar', label: 'My Calendar', href: '/instructor/' },
       { icon: 'clock', label: 'Availability', href: '/instructor/availability.html' },
+      { icon: 'list', label: 'My Learners', href: '/instructor/learners.html' },
+      { icon: 'tag', label: 'Earnings', href: '/instructor/earnings.html' },
       'divider',
       { icon: 'message', label: 'Q&A', href: '/instructor/qa.html' },
       { icon: 'user', label: 'Profile', href: '/instructor/profile.html' }
@@ -93,6 +95,8 @@
         { icon: 'calendar', label: 'Calendar', href: '/instructor/',
           activeOn: ['/instructor/availability'] },
         { icon: 'list', label: 'Learners', href: '/instructor/learners.html',
+          activeOn: [] },
+        { icon: 'tag', label: 'Earnings', href: '/instructor/earnings.html',
           activeOn: [] },
         { icon: 'message', label: 'Q&A', href: '/instructor/qa.html',
           activeOn: [] },
