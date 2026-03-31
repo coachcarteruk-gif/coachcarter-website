@@ -539,6 +539,52 @@ Three-part cleanup to eliminate technical debt that was slowing down development
 - ✅ Requires `ERROR_ALERT_EMAIL` env var (silently no-ops if not set)
 - ✅ Non-blocking — does not await, does not slow error responses
 
+### 2.36 — Multiple Lesson Types & Hours-Based Balance ✅ Complete (31 March 2026)
+
+Replaced fixed 90-min/1-credit lessons with variable-duration lesson types and an hours-based balance system.
+
+**What was built:**
+- ✅ `lesson_types` table with admin CRUD API (`api/lesson-types.js`)
+- ✅ Seeded: Standard Lesson (90min/£82.50), 2-Hour Lesson (120min/£110)
+- ✅ `balance_minutes` column on learner_users — hours-based balance (stored as minutes internally)
+- ✅ Existing credit balances migrated: `balance_minutes = credit_balance × 90`
+- ✅ `lesson_type_id` + `minutes_deducted` on lesson_bookings for audit trail
+- ✅ Slot generation engine (`api/slots.js`) accepts `lesson_type_id` for variable-duration slots
+- ✅ All booking flows (book, checkout-slot, cancel, reschedule) use minutes-based balance
+- ✅ `api/credits.js` sells hours at £55/hr with discount tiers (6/12/18/24/30 hrs)
+- ✅ Webhook dual-writes `credit_balance` + `balance_minutes` for rollback safety
+- ✅ Admin portal: Lesson Types CRUD management section
+- ✅ Learner booking page: lesson type selector (shown when multiple types exist)
+- ✅ Buy Credits → Buy Hours page with hour-based packages
+- ✅ Dashboard, sidebar, emails, WhatsApp, ICS all show hours instead of credits
+- ✅ Instructor create-booking modal has lesson type dropdown
+- ✅ AI Lesson Advisor prompt updated with hours-based pricing
+
+### 2.37 — Colour-Coded Lesson Types ✅ Complete (31 March 2026)
+
+Lesson type colours visible across the instructor calendar and learner booking page.
+
+**What was built:**
+- ✅ Monthly view: booking pills use lesson type colour as background
+- ✅ Weekly view: Setmore-style tinted background with coloured left border
+- ✅ Daily view: lesson type badge pill next to time, coloured card borders
+- ✅ Booking detail modal: type name badge with duration
+- ✅ Learner upcoming bookings: coloured left border + type name label
+- ✅ Completed bookings: reduced opacity regardless of type colour
+
+### 2.38 — Agenda/List View ✅ Complete (31 March 2026)
+
+Fourth calendar view mode for instructors showing a scrollable list of upcoming lessons.
+
+**What was built:**
+- ✅ "Agenda" button in instructor calendar toolbar alongside Daily/Weekly/Monthly
+- ✅ 14-day rolling window of bookings grouped by date headers
+- ✅ Each card: time, colour-coded lesson type badge, learner name, pickup address, status
+- ✅ Date headers clickable to drill into daily view
+- ✅ Respects showCancelled toggle
+- ✅ Cards open existing booking detail modal
+- ✅ ±14 day navigation, Today button works
+
 ---
 
 ## Phase 3: Next Up (Prioritised)
@@ -549,7 +595,7 @@ PWA push notifications for lesson reminders, quiz nudges, and new message alerts
 
 ### 3.2 — Automated Lesson Reminders
 
-24-hour email/SMS reminder to learner and instructor before each lesson. Needs Vercel cron job.
+24-hour email/WhatsApp reminder to learner and instructor before each lesson. Needs Vercel cron job.
 
 ### 3.3 — Refund Flow
 
@@ -561,7 +607,15 @@ Capture leads when all instructors are fully booked. "No slots available" trigge
 
 ### 3.5 — Referral System
 
-Unique referral link per learner. Both referrer and new learner receive credit bonus on first purchase.
+Unique referral link per learner. Both referrer and new learner receive hours bonus on first purchase.
+
+### 3.6 — Recurring/Repeat Bookings
+
+"Repeat weekly" option when booking — creates multiple bookings in one transaction. Depends on lesson types (Feature 3).
+
+### 3.7 — Per-Service Booking Links
+
+URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareable links for marketing.
 
 ---
 
@@ -583,7 +637,8 @@ Unique referral link per learner. Both referrer and new learner receive credit b
 - **Hosting:** Vercel Pro (upgraded to support >12 serverless functions)
 - **Payments:** Stripe (Klarna enabled via Stripe dashboard — not hardcoded)
 - **Calendar:** Custom-built, no third-party calendar dependency
-- **Slot duration:** 1.5 hours (hardcoded, can be made configurable later)
+- **Lesson types:** Configurable via `lesson_types` table + admin portal. Standard (90min/£82.50), 2-Hour (120min/£110). More types addable via admin.
+- **Balance system:** Hours-based (`balance_minutes` column). Learners buy hours, each lesson type deducts its duration. Legacy `credit_balance` maintained via dual-write.
 - **Buffer time:** Configurable per instructor (default 30 mins), blocks time after each booked slot
 - **Advance booking window:** 90 days
 - **Cancellation policy:** 48 hours minimum notice for credit return
@@ -592,7 +647,7 @@ Unique referral link per learner. Both referrer and new learner receive credit b
 - **Instructor-initiated booking:** Instructors can book lessons on behalf of learners via "Add Lesson" modal (cash/credit/free payment)
 - **Per-booking addresses:** `pickup_address` and `dropoff_address` on each booking (overrides learner profile default)
 - **Calendar display:** Configurable `calendar_start_hour` (default 7); non-working hours greyed out using availability windows
-- **Calendar toggles:** Hide weekends (weekly/monthly), show/hide cancelled bookings, print schedule
+- **Calendar views:** Daily, Weekly, Monthly, Agenda (14-day list). Toggles: hide weekends, show/hide cancelled, print schedule
 - **Video hosting:** Cloudflare Stream (HLS adaptive streaming), managed from admin portal
 - **API pattern:** Related endpoints grouped into single files using `?action=` routing
 - **DB migrations:** `db/migration.sql` — single idempotent file, run via `GET /api/migrate?secret=MIGRATION_SECRET`

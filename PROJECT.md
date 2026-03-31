@@ -257,16 +257,21 @@ Each credit = one 1.5-hour lesson. Credits are stored as a balance on the learne
 | 16 | 24hrs | 20% off |
 | 20 | 30hrs | 25% off |
 
-Base price: **£82.50 per credit** (set in `api/credits.js` as `CREDIT_PRICE_PENCE = 8250`).
+Base rate: **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Learners buy hours, not lesson credits. Balance stored as `balance_minutes` internally.
+
+**Lesson types** (managed via admin portal):
+- Standard Lesson — 90 min / £82.50
+- 2-Hour Lesson — 120 min / £110.00
+- More types can be added via admin portal (`api/lesson-types.js`)
 
 ### How booking works
 
 - Instructors set recurring weekly availability windows (admin or self-service via instructor portal)
-- The slot engine (`api/slots.js`) divides windows into 1.5-hour bookable slots
-- Learners browse the calendar, filter by instructor (optional), and book any available slot
+- The slot engine (`api/slots.js`) generates slots based on the selected lesson type's duration
+- Learners select a lesson type (if multiple exist), browse the calendar, filter by instructor (optional), and book
 - Booking is instant — no instructor approval needed
-- **With credits:** 1 credit deducted on booking; returned automatically on 48+ hour cancellations
-- **Without credits (pay-per-slot):** Slot reserved for 10 minutes during Stripe Checkout; on payment confirmation, 1 credit added + deducted atomically, booking created, .ics calendar attachment sent to both parties
+- **With hours balance:** Duration deducted from `balance_minutes` on booking; returned automatically on 48+ hour cancellations
+- **Without balance (pay-per-slot):** Slot reserved for 10 minutes during Stripe Checkout; on payment, hours added + deducted atomically, booking created, .ics calendar attachment sent to both parties
 - **Demo instructor:** Bookings against the demo instructor (email `demo@coachcarter.uk`) are free — no credit check or deduction. The demo instructor is excluded from real booking flows via email check in `api/instructors.js` and `api/slots.js`. No emails sent to the demo instructor on book/cancel. Cancel returns no credits (since none were taken).
 - Race condition protection via DB unique index on `(instructor_id, scheduled_date, start_time)` + slot reservations table
 
@@ -317,23 +322,33 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | `qa-ask` | POST | Yes | Submit a question |
 | `qa-reply` | POST | Yes | Reply to a question |
 
+### API — `api/lesson-types.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `list` | GET | No | Active lesson types sorted by sort_order (public) |
+| `all` | GET | Admin | All types including inactive |
+| `create` | POST | Admin | Create a new lesson type |
+| `update` | POST | Admin | Update an existing type |
+| `toggle` | POST | Admin | Activate/deactivate a type |
+
 ### API — `api/credits.js`
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `balance` | GET | Yes | Returns current credit balance |
-| `checkout` | POST | Yes | Creates Stripe checkout session with bulk discount logic |
+| `balance` | GET | Yes | Returns `balance_minutes`, `balance_hours`, `credit_balance` + recent transactions |
+| `checkout` | POST | Yes | Creates Stripe checkout for hours purchase. Body: `{ hours }` (or legacy `{ quantity }` for lesson count). Discount tiers: 6h=5%, 12h=10%, 18h=15%, 24h=20%, 30h=25% |
 
 ### API — `api/slots.js`
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `available` | GET | Yes | Available slots in date range, grouped by date (excludes reserved slots) |
-| `book` | POST | Yes | Book a slot using 1 credit |
-| `checkout-slot` | POST | Yes | Pay-per-slot: reserves slot for 10 min, creates Stripe Checkout (£82.50) |
-| `cancel` | POST | Yes | Cancel a booking (returns credit if 48hr+ policy met) |
-| `reschedule` | POST | Yes | Move a confirmed booking to a new slot (48hr+ notice, max 2 per chain, no credit change) |
-| `my-bookings` | GET | Yes | Learner's upcoming confirmed bookings (includes reschedule_count) |
+| `available` | GET | No | Available slots for a lesson type duration. Params: `from`, `to`, `instructor_id?`, `lesson_type_id?` |
+| `book` | POST | Yes | Book a slot — deducts `duration_minutes` from `balance_minutes`. Body includes `lesson_type_id` |
+| `checkout-slot` | POST | Yes | Pay-per-slot: reserves slot, creates Stripe Checkout at lesson type's price |
+| `cancel` | POST | Yes | Cancel a booking (returns `minutes_deducted` to balance if 48hr+ policy met) |
+| `reschedule` | POST | Yes | Move a confirmed booking to a new slot (48hr+ notice, max 2 per chain, no balance change) |
+| `my-bookings` | GET | Yes | Learner's bookings with lesson type info (name, colour, duration) |
 
 ### API — `api/calendar.js`
 
@@ -353,7 +368,7 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 
 | Endpoint | Method | Auth | Description |
 |---|---|---|---|
-| (single endpoint) | POST | Yes | AI lesson advisor chat with Claude tool_use — can recommend packages and create Stripe Checkout sessions within pricing bounds (£82.50 base, up to 25% discount, 1-50 lessons) |
+| (single endpoint) | POST | Yes | AI lesson advisor chat with Claude tool_use — recommends hour packages and creates Stripe Checkout sessions (£55/hr base, up to 25% discount, 1.5–30 hours) |
 
 ### API — `api/reviews.js`
 
@@ -371,10 +386,24 @@ email TEXT UNIQUE
 password_hash TEXT
 phone TEXT
 current_tier INTEGER DEFAULT 1
-credit_balance INTEGER DEFAULT 0   -- DB constraint prevents negative
+credit_balance INTEGER DEFAULT 0   -- legacy, kept via dual-write
+balance_minutes INTEGER DEFAULT 0  -- hours-based balance (stored as minutes)
 calendar_token TEXT UNIQUE         -- for iCal feed polling
 pickup_address TEXT
 prefer_contact_before BOOLEAN DEFAULT FALSE
+created_at TIMESTAMPTZ
+```
+
+**`lesson_types`**
+```sql
+id SERIAL PRIMARY KEY
+name TEXT NOT NULL                  -- 'Standard Lesson', '2-Hour Lesson'
+slug TEXT NOT NULL UNIQUE           -- 'standard', '2hr'
+duration_minutes INTEGER NOT NULL   -- 90, 120
+price_pence INTEGER NOT NULL        -- 8250, 11000
+colour TEXT DEFAULT '#3b82f6'       -- hex for calendar colour-coding
+active BOOLEAN DEFAULT TRUE
+sort_order INTEGER DEFAULT 0
 created_at TIMESTAMPTZ
 ```
 
@@ -383,12 +412,13 @@ created_at TIMESTAMPTZ
 **`credit_transactions`**
 ```sql
 id SERIAL PRIMARY KEY
-user_id INTEGER
-type TEXT               -- 'purchase', 'refund', 'booking', 'cancellation_return'
+learner_id INTEGER
+type TEXT               -- 'purchase', 'slot_purchase', 'refund'
 credits INTEGER
+minutes INTEGER DEFAULT 0  -- hours equivalent (in minutes)
 amount_pence INTEGER
-stripe_payment_id TEXT
-stripe_refund_id TEXT
+payment_method TEXT
+stripe_session_id TEXT
 created_at TIMESTAMPTZ
 ```
 
@@ -407,6 +437,8 @@ rescheduled_from INTEGER  -- links to the booking this one replaced (NULL for or
 reschedule_count INTEGER DEFAULT 0  -- how many times this booking chain has been rescheduled (max 2)
 created_by TEXT DEFAULT 'learner'    -- 'learner', 'instructor', 'admin'
 payment_method TEXT DEFAULT 'credit' -- 'credit', 'stripe', 'cash', 'free'
+lesson_type_id INTEGER              -- FK to lesson_types
+minutes_deducted INTEGER            -- hours deducted (in minutes) for audit trail
 pickup_address TEXT                  -- per-booking pickup (overrides learner profile)
 dropoff_address TEXT                 -- per-booking dropoff (school, work, test centre)
 created_at TIMESTAMPTZ
