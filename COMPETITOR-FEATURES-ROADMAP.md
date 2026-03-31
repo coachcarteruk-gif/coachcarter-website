@@ -28,7 +28,7 @@ Every feature in this roadmap follows these constraints:
 | 1 | Lesson reminder notifications | **High** | Medium | Very High | Push infra (Phase 0.5) |
 | 2 | Rescheduling [DONE - 2026-03-30] | **High** | Medium | High | — |
 | 3 | Multiple lesson types/durations [DONE - 2026-03-31] | **High** | High | Very High | DB schema change |
-| 4 | Colour-coded lesson types | **High** | Low | Medium | #3 |
+| 4 | Colour-coded lesson types [DONE - 2026-03-31] | **High** | Low | Medium | #3 |
 | 5 | Instructor-initiated booking [DONE - 2026-03-30] | **High** | Medium | High | — |
 | 6 | Recurring/repeat bookings | Medium | High | Medium | #3 |
 | 7 | Drop-off location [DONE - 2026-03-30] | Medium | Low | Medium | — |
@@ -320,6 +320,18 @@ ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_duration_check
 - No web-only CSS dependency — the colour hex values work on any platform
 
 **Estimated effort:** 1 session (purely frontend, depends on #3 being done)
+
+**Implementation notes (2026-03-31):**
+- Setmore-style left border approach: `background:${colour}22;border-left:3px solid ${colour}` on weekly events and daily cards
+- Monthly pills: solid background colour from lesson_type_colour
+- Daily cards: lesson type badge pill next to the time (font-size 0.68rem, rounded, colour-tinted background)
+- Weekly events: light tinted background with coloured left border, dark text (more readable than white-on-colour)
+- Booking detail modal: type badge with duration shown
+- Learner upcoming bookings: coloured left border + type name label
+- Completed bookings: reduced opacity (0.6) regardless of type colour
+- Cancelled bookings: standard grey/red styling overrides type colour
+- No legend bar added yet — deferred until more than 2 types exist
+- Actual effort: combined with Feature 3 in 1 session
 
 ---
 

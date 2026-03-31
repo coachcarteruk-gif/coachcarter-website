@@ -1001,9 +1001,11 @@ async function loadUpcoming() {
       const lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
       const hoursUntil = (lessonMs - Date.now()) / 3600000;
       const canCancel = hoursUntil > 0;
+      const ltColour = b.lesson_type_colour || 'var(--accent)';
+      const ltName   = b.lesson_type_name || '';
       return `
-        <div class="upcoming-item">
-          <div class="upcoming-date">${dateStr}</div>
+        <div class="upcoming-item" style="border-left:3px solid ${ltColour}">
+          <div class="upcoming-date">${dateStr}${ltName ? ` <span style="font-size:0.7rem;font-weight:600;color:${ltColour}">${esc(ltName)}</span>` : ''}</div>
           <div class="upcoming-time">${start} – ${end}</div>
           <div class="upcoming-instructor">${b.instructor_name}</div>
           ${canCancel ? `<button class="upcoming-cal-btn" onclick="downloadCalendar(${b.id})" title="Add to calendar">📅</button>` : ''}
