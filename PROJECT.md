@@ -114,7 +114,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   │   ├── dashboard.html          # Admin enquiry dashboard
 │   │   └── editor.html             # Admin content editor
 │   ├── learner/
-│   │   ├── index.html              # Learner hub — dashboard (credits, bookings, progress)
+│   │   ├── index.html              # Learner hub — dashboard (quick-action nav, upcoming lessons, profile)
 │   │   ├── login.html              # Magic-link login (email or SMS)
 │   │   ├── verify.html             # Token verification page (two-step: validate then verify)
 │   │   ├── book.html               # Lesson booking calendar — monthly/weekly/daily views (credit or pay-per-slot)
@@ -316,7 +316,7 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | `quiz-results` | GET/POST | Yes | Persist per-question examiner quiz results |
 | `competency` | GET | Yes | Full competency dashboard data (lesson ratings, quiz accuracy, mock summary, faults) |
 | `onboarding` | GET/POST | Yes | Get/save onboarding profile (prior experience + initial self-assessment) |
-| `profile-completeness` | GET | Yes | Returns 5-step profile completion status for dashboard card |
+| `profile-completeness` | GET | Yes | Returns profile completion steps; dashboard uses prior_experience + initial_assessment (2 steps) |
 | `qa-list` | GET | Yes | List Q&A questions |
 | `qa-detail` | GET | Yes | Get single Q&A thread |
 | `qa-ask` | POST | Yes | Submit a question |

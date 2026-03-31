@@ -167,9 +167,9 @@ Learners can subscribe to a personal iCal feed of their upcoming lessons, so boo
 Surface the new booking system on the existing learner dashboard.
 
 **What was built:**
-- ✅ Credit balance card at the top of the dashboard with "Buy Credits" and "Book a Lesson" CTAs
-- ✅ "Book a Lesson" button automatically dimmed when balance is zero, prompting learner to buy credits
-- ✅ Upcoming lessons section showing next 5 confirmed bookings with date, time, and instructor name
+- ✅ Credit balance card at the top of the dashboard with "Buy Credits" and "Book a Lesson" CTAs (removed in 2.39)
+- ✅ "Book a Lesson" button automatically dimmed when balance is zero, prompting learner to buy credits (removed in 2.39)
+- ✅ Upcoming lessons section showing next confirmed booking with date, time, and instructor name
 - ✅ "Manage" link on each upcoming lesson through to the booking page for cancellations
 
 ### 2.5 — Pay-Per-Slot Booking ✅ Complete
@@ -464,7 +464,7 @@ Comprehensive competency dashboard with data visualisation.
 - ✅ Step 2: Initial self-assessment (5 areas with drill-down to individual skills for weak areas)
 - ✅ Step 3: Summary and save
 - ✅ Initial ratings saved as special 'onboarding' session feeding competency system
-- ✅ Dashboard profile completion card with 5-step checklist and smart CTAs
+- ✅ Dashboard profile completion card with 2-step checklist (prior experience + initial assessment)
 - ✅ `db/migrations/018_learner_onboarding.sql`
 
 ### 2.31 — AI Personalisation ✅ Complete (March 2026)
@@ -584,6 +584,17 @@ Fourth calendar view mode for instructors showing a scrollable list of upcoming 
 - ✅ Respects showCancelled toggle
 - ✅ Cards open existing booking detail modal
 - ✅ ±14 day navigation, Today button works
+
+### 2.39 — Learner Dashboard Navigation Hub ✅ Complete (31 March 2026)
+
+Redesigned learner dashboard as a navigation hub focused on learning, not upselling.
+
+**What was built:**
+- ✅ 5 quick-action buttons: Mock Test, Ask Examiner, Book Lessons, Progress, Quiz
+- ✅ Removed "Hours Remaining" credit balance card (felt like upselling, not learner-focused)
+- ✅ Upcoming lessons section retained
+- ✅ Profile completion card simplified to 2 steps only: Prior Experience + Initial Assessment
+- ✅ Profile card CTA copy adapts: "Add Your Experience" or "Complete Skill Assessment" based on next step
 
 ---
 
