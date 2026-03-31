@@ -67,9 +67,12 @@ async function handleDownload(req, res) {
         lb.start_time::text AS start_time,
         lb.end_time::text AS end_time,
         lb.status,
-        i.name AS instructor_name
+        i.name AS instructor_name,
+        lt.name AS lesson_type_name,
+        COALESCE(lt.duration_minutes, 90) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.id = ${booking_id} AND lb.learner_id = ${user.id}
     `;
 
@@ -117,9 +120,12 @@ async function handleFeed(req, res) {
         lb.start_time::text AS start_time,
         lb.end_time::text AS end_time,
         lb.status,
-        i.name AS instructor_name
+        i.name AS instructor_name,
+        lt.name AS lesson_type_name,
+        COALESCE(lt.duration_minutes, 90) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.learner_id = ${learner.id}
         AND lb.status IN ('confirmed', 'completed')
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '7 days')
@@ -218,9 +224,12 @@ async function handleInstructorFeed(req, res) {
         lb.start_time::text AS start_time,
         lb.end_time::text AS end_time,
         lb.status,
-        lu.name AS learner_name
+        lu.name AS learner_name,
+        lt.name AS lesson_type_name,
+        COALESCE(lt.duration_minutes, 90) AS duration_minutes
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.status IN ('confirmed', 'completed')
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '7 days')
@@ -281,6 +290,12 @@ async function handleInstructorFeedUrl(req, res) {
 // ── ICS generation helpers ────────────────────────────────────────────────────
 
 // Generate a single-event .ics file
+function formatDuration(mins) {
+  if (!mins) return '1.5 hours';
+  const hrs = mins / 60;
+  return hrs % 1 === 0 ? `${hrs} hour${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hours`;
+}
+
 function generateICS(booking) {
   const dtStart = toICSDate(booking.scheduled_date, booking.start_time);
   const dtEnd   = toICSDate(booking.scheduled_date, booking.end_time);
@@ -300,8 +315,8 @@ function generateICS(booking) {
     `DTSTAMP:${now}`,
     `DTSTART:${dtStart}`,
     `DTEND:${dtEnd}`,
-    `SUMMARY:Driving Lesson — ${booking.instructor_name}`,
-    `DESCRIPTION:1.5-hour driving lesson with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.`,
+    `SUMMARY:${booking.lesson_type_name || 'Driving Lesson'} — ${booking.instructor_name}`,
+    `DESCRIPTION:${formatDuration(booking.duration_minutes)} ${booking.lesson_type_name || 'driving lesson'} with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before and the hours return to your balance.`,
     `STATUS:${status}`,
     'BEGIN:VALARM',
     'TRIGGER:-PT2H',
@@ -334,8 +349,8 @@ function generateFeedICS(bookings, learnerName) {
       `DTSTAMP:${now}`,
       `DTSTART:${dtStart}`,
       `DTEND:${dtEnd}`,
-      `SUMMARY:Driving Lesson — ${b.instructor_name}`,
-      `DESCRIPTION:1.5-hour driving lesson with ${b.instructor_name}.\\n\\nManage bookings: https://coachcarter.uk/learner/book.html`,
+      `SUMMARY:${b.lesson_type_name || 'Driving Lesson'} — ${b.instructor_name}`,
+      `DESCRIPTION:${formatDuration(b.duration_minutes)} ${b.lesson_type_name || 'driving lesson'} with ${b.instructor_name}.\\n\\nManage bookings: https://coachcarter.uk/learner/book.html`,
       `STATUS:${status}`,
       'BEGIN:VALARM',
       'TRIGGER:-PT2H',
@@ -382,8 +397,8 @@ function generateInstructorFeedICS(bookings, instructorName) {
       `DTSTAMP:${now}`,
       `DTSTART:${dtStart}`,
       `DTEND:${dtEnd}`,
-      `SUMMARY:Lesson — ${b.learner_name}`,
-      `DESCRIPTION:1.5-hour driving lesson with ${b.learner_name}.\\n\\nManage schedule: https://coachcarter.uk/instructor/`,
+      `SUMMARY:${b.lesson_type_name || 'Lesson'} — ${b.learner_name}`,
+      `DESCRIPTION:${formatDuration(b.duration_minutes)} ${b.lesson_type_name || 'lesson'} with ${b.learner_name}.\\n\\nManage schedule: https://coachcarter.uk/instructor/`,
       `STATUS:${status}`,
       'BEGIN:VALARM',
       'TRIGGER:-PT2H',

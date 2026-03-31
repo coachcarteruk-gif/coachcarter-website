@@ -64,21 +64,22 @@ PERSONALITY AND TONE:
 - You guide with honesty — if someone doesn't need more lessons, say so.
 
 PRICING — COACH CARTER DRIVING LESSONS:
-Each lesson is 1.5 hours. Base price: £82.50 per lesson.
+Learners buy hours. Base rate: £55 per hour (£82.50 for a standard 1.5-hour lesson).
+Multiple lesson types available: Standard (1.5 hrs), 2-Hour, and more.
 
-Discount tiers (buy more, save more):
-| Lessons | Discount | Per Lesson | Total     | You Save  |
-|---------|----------|------------|-----------|-----------|
-| 1–3     | 0%       | £82.50     | varies    | —         |
-| 4       | 5%       | £78.38     | £313.50   | £16.50    |
-| 8       | 10%      | £74.25     | £594.00   | £66.00    |
-| 12      | 15%      | £70.13     | £841.50   | £148.50   |
-| 16      | 20%      | £66.00     | £1,056.00 | £264.00   |
-| 20      | 25%      | £61.88     | £1,237.50 | £412.50   |
+Discount tiers (buy more hours, save more):
+| Hours | Discount | Per Hour | Total     | You Save  |
+|-------|----------|----------|-----------|-----------|
+| 1.5–5 | 0%      | £55.00   | varies    | —         |
+| 6     | 5%      | £52.25   | £313.50   | £16.50    |
+| 12    | 10%     | £49.50   | £594.00   | £66.00    |
+| 18    | 15%     | £46.75   | £841.50   | £148.50   |
+| 24    | 20%     | £44.00   | £1,056.00 | £264.00   |
+| 30    | 25%     | £41.25   | £1,237.50 | £412.50   |
 
-- In-between quantities get proportionally interpolated discounts (e.g. 6 lessons = ~7.5% off, 10 lessons = ~12.5% off).
-- 25% is the absolute maximum discount, even for 50 lessons.
-- Maximum purchase: 50 lessons at a time.
+- In-between quantities get proportionally interpolated discounts.
+- 25% is the absolute maximum discount.
+- Maximum purchase: 30 hours at a time.
 
 ESTIMATING HOURS NEEDED:
 - Complete beginners typically need 40–50 hours of professional tuition (27–33 lessons).
@@ -138,11 +139,11 @@ async function handleCreateCheckout(toolInput, user, origin) {
 
   const hours = qty * 1.5;
   const productName = price.discountPct > 0
-    ? `${qty} Driving Lessons — ${hours} hrs (${price.discountPct}% off)`
-    : `${qty} Driving Lesson${qty > 1 ? 's' : ''} — ${hours} hrs`;
+    ? `${hours} Hours of Driving Lessons (${price.discountPct}% off)`
+    : `${hours} Hour${hours !== 1 ? 's' : ''} of Driving Lessons`;
   const description = price.discountPct > 0
-    ? `${qty} × 1.5-hour lessons at £82.50 each. You save £${price.savingsPounds} with the ${price.discountPct}% package discount.`
-    : `${qty} × 1.5-hour driving lesson${qty > 1 ? 's' : ''} at £82.50 each. Book online at any time.`;
+    ? `${hours} hours at £55/hr. You save £${price.savingsPounds} with the ${price.discountPct}% package discount.`
+    : `${hours} hours of driving lessons at £55/hr. Book online at any time.`;
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',

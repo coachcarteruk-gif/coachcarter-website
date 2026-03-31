@@ -279,6 +279,7 @@ async function handleSchedule(req, res) {
         lb.end_time::text,
         lb.status,
         lb.notes,
+        lb.lesson_type_id,
         lu.id   AS learner_id,
         lu.name AS learner_name,
         lu.email AS learner_email,
@@ -289,10 +290,14 @@ async function handleSchedule(req, res) {
         lb.dropoff_address AS booking_dropoff_address,
         ds.id AS session_log_id,
         ds.notes AS session_notes,
-        lb.instructor_notes
+        lb.instructor_notes,
+        lt.name AS lesson_type_name,
+        lt.colour AS lesson_type_colour,
+        COALESCE(lt.duration_minutes, 90) AS duration_minutes
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.status IN ('confirmed', 'completed')
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '14 days')
