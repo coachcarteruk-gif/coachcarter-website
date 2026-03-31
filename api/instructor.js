@@ -1109,7 +1109,7 @@ async function handleRescheduleBooking(req, res) {
           <table>
             <tr><td><strong>Was:</strong></td><td><s>${oldDate} at ${oldTime}</s></td></tr>
             <tr><td><strong>Now:</strong></td><td>${newDateStr} at ${new_start_time}</td></tr>
-            <tr><td><strong>Duration:</strong></td><td>1.5 hours</td></tr>
+            <tr><td><strong>Duration:</strong></td><td>${bookingDuration >= 60 ? (bookingDuration % 60 === 0 ? (bookingDuration/60) + ' hour' + (bookingDuration/60 !== 1 ? 's' : '') : (bookingDuration/60).toFixed(1) + ' hours') : bookingDuration + ' mins'}</td></tr>
           </table>
           <p style="margin:28px 0">
             <a href="https://coachcarter.uk/learner/book.html"

@@ -676,7 +676,7 @@
   <div class="policy-card">
     <h3>Good to know</h3>
     <ul>
-      <li>Each lesson is 1.5 hours with a qualified CoachCarter instructor</li>
+      <li>Hours work for any lesson type — standard, extended, or refresher</li>
       <li>Lessons never expire — use them whenever you're ready</li>
       <li>Cancel 48+ hours before and the lesson returns to your balance automatically</li>
       <li>Fully refundable — contact us if you need a cash refund</li>
@@ -814,7 +814,8 @@
       showToast(err.message || 'Something went wrong. Please try again.', 'error');
       btn.disabled     = false;
       const { total } = calcTotal(qty);
-      label.textContent = `Buy ${qty} lesson${qty > 1 ? 's' : ''} — ${fmt(total)}`;
+      const hrsLabel = qty === 1 ? '1 hour' : `${qty} hours`;
+      label.textContent = `Buy ${hrsLabel} — ${fmt(total)}`;
       spinner.style.display = 'none';
     }
   });
@@ -865,7 +866,7 @@
   }
 
   initAuth(); // check but don't block
-  selectPkg(8); // Default to most popular
+  selectPkg(12); // Default to most popular (12 hours)
   loadProgrammePrice();
   if (token) loadBalance();
 </script>

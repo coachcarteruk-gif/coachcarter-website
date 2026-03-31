@@ -269,7 +269,8 @@ async function handleSlotBooking(session) {
       scheduled_date: scheduledDate,
       start_time: startTime,
       end_time: endTime,
-      instructor_name: instructorName
+      instructor_name: instructorName,
+      duration_str: durationStr
     });
 
     // Email to learner
@@ -363,7 +364,7 @@ function generateICS(booking) {
     `DTSTART:${dtStart}`,
     `DTEND:${dtEnd}`,
     `SUMMARY:Driving Lesson — ${booking.instructor_name}`,
-    `DESCRIPTION:1.5-hour driving lesson with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html`,
+    `DESCRIPTION:${booking.duration_str || '1.5 hours'} driving lesson with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html`,
     'STATUS:CONFIRMED',
     'BEGIN:VALARM',
     'TRIGGER:-PT2H',
