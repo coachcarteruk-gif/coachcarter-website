@@ -596,6 +596,17 @@ Redesigned learner dashboard as a navigation hub focused on learning, not upsell
 - ✅ Profile completion card simplified to 2 steps only: Prior Experience + Initial Assessment
 - ✅ Profile card CTA copy adapts: "Add Your Experience" or "Complete Skill Assessment" based on next step
 
+### 2.40 — Navigation Alignment: Desktop Groups + Fixed Mobile Tabs ✅ Complete (31 March 2026)
+
+Aligned desktop and mobile navigation so both surfaces share the same mental model of sections and subsections.
+
+**What was built:**
+- ✅ Desktop sidebar: Lessons, Practice, Learn now expand as collapsible groups (accordion — one open at a time) revealing subsection links. Auto-expands to current section on page load.
+- ✅ Mobile bottom bar: replaced contextual tabs that changed per-section with 5 fixed tabs (Home, Lessons, Practice, Learn, Profile) — consistent muscle memory across all pages
+- ✅ Mobile header hamburger restored so users can access the sidebar on mobile (previously hidden when bottom bar was present)
+- ✅ Active tab on mobile highlights based on `activeOn` mapping — e.g. visiting `/learner/mock-test.html` lights up the Practice tab
+- ✅ Single file change: `public/sidebar.js` only
+
 ---
 
 ## Phase 3: Next Up (Prioritised)

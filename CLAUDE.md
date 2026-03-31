@@ -47,13 +47,24 @@ The site is designed as an app experience. Do NOT re-add any of the removed item
 
 **Start page (`/`)**: Role selection — "I'm a Learner" or "I'm an Instructor". No other links.
 
-**Mobile layout**: No top header bar. Bottom bar has 4 tabs: Menu (hamburger) + 3 contextual tabs that change by section.
+**Mobile layout**: Top header bar with hamburger to open sidebar. Fixed bottom bar with 5 tabs that never change.
 
-**Bottom tab sections (learner)**:
-- Learn: Videos, Ask the Examiner, Examiner Quiz
-- Practice: Log Session, Mock Test, My Progress
-- Lessons: Book, Buy Credits, Upcoming
-- Profile: Test Readiness, Mock Results, Progress
+**Fixed bottom tabs (learner)**: Home | Lessons | Practice | Learn | Profile
+- Each tab links to the first page in that group (Home → dashboard, Lessons → book, Practice → log-session, Learn → videos)
+- Active tab highlights orange based on which section the current page belongs to
+- Subsection navigation (e.g. Book vs Buy Credits vs Upcoming) via the sidebar collapsible groups
+
+**Sidebar groups (learner)**:
+- Dashboard (standalone)
+- Lessons → Book, Buy Credits, Upcoming
+- Practice → Log Session, Mock Test, My Progress
+- Learn → Videos, Examiner AI, Quiz
+- My Profile (standalone, auth-gated)
+- Accordion behaviour — one group open at a time; auto-expands to current section on page load
+
+**Fixed bottom tabs (instructor)**: Calendar | Learners | Q&A | Profile
+
+**Desktop**: Fixed 240px sidebar with the same collapsible group structure. No bottom bar.
 
 **Intentionally removed** (do NOT re-add):
 - Pricing page / tab
@@ -62,8 +73,7 @@ The site is designed as an app experience. Do NOT re-add any of the removed item
 - Terms tab (page still exists, just not in nav)
 - Q&A (hidden for now)
 - Dashboard as a permanent bottom tab
-
-**Desktop**: Sidebar nav is unchanged.
+- Menu/hamburger as a bottom tab (sidebar opened via top header hamburger instead)
 
 ## Migration awareness (React Native app planned)
 

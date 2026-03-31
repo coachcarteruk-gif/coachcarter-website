@@ -59,7 +59,7 @@
 
 | File | Size | Purpose |
 |------|------|---------|
-| sidebar.js | 30KB | Context-aware nav — desktop sidebar + mobile bottom bar with 4 tabs per section |
+| sidebar.js | 30KB | Context-aware nav — desktop sidebar with collapsible groups + mobile fixed 5-tab bottom bar (Home/Lessons/Practice/Learn/Profile) |
 | competency-config.js | 19KB | 10 DL25 categories, 39 sub-skills, fault types, ratings, readiness scoring |
 | auth-gate.js | 7KB | Modal login prompt, `window.ccAuth` (token, user, requireAuth) |
 | pwa.js | 5KB | Service worker registration + install banner |
@@ -99,9 +99,8 @@
 
 **Navigation (app-mode design — do NOT deviate):**
 - Start page (`/`): Role selection only — "I'm a Learner" or "I'm an Instructor"
-- Mobile: No top header bar. Bottom bar has 4 tabs: Menu (hamburger) + 3 contextual tabs that change by section
-- Bottom tab sections (learner): Learn, Practice, Lessons, Profile — each with 3 sub-items
-- Desktop: Sidebar nav
+- Mobile: Top header with hamburger. Fixed 5-tab bottom bar: Home | Lessons | Practice | Learn | Profile. Active tab reflects current section. Subsections accessed via sidebar collapsible groups.
+- Desktop: Fixed 240px sidebar with collapsible groups (Lessons → Book/Buy/Upcoming, Practice → Log Session/Mock Test/Progress, Learn → Videos/Examiner AI/Quiz). Accordion — one group open at a time.
 
 **Intentionally removed features (do NOT re-add):**
 - Pricing page/tab
@@ -233,7 +232,7 @@ npx expo install @react-navigation/native @react-navigation/bottom-tabs
     login.tsx               # Magic link (phone + email)
     verify.tsx              # Code verification
   /(learner)
-    _layout.tsx             # Bottom tab navigator (4 tabs matching sidebar.js)
+    _layout.tsx             # Bottom tab navigator (5 fixed tabs matching sidebar.js: Home/Lessons/Practice/Learn/Profile)
     (learn)/                # "Learn" tab group
       videos.tsx
       ask-examiner.tsx
@@ -276,7 +275,7 @@ npx expo install @react-navigation/native @react-navigation/bottom-tabs
   Button.tsx
 ```
 
-**Key architectural decision:** The tab structure must match the existing `sidebar.js` bottom bar sections exactly. The web has 4 tabs (Menu + 3 contextual) that change by section. In RN, use a bottom tab navigator where the "Menu" tab opens a drawer/modal with all sections, and the other 3 tabs are the current section's items.
+**Key architectural decision:** The tab structure must match the existing `sidebar.js` bottom bar sections exactly. The web now has 5 fixed tabs (Home, Lessons, Practice, Learn, Profile) that never change. In RN, use a bottom tab navigator with these same 5 tabs. Subsection navigation (e.g. Book vs Buy Credits vs Upcoming within Lessons) is handled by nested stack navigators within each tab group, mirroring the sidebar collapsible groups on web.
 
 ### 1.3 — Design tokens (match existing CSS variables)
 
