@@ -37,7 +37,7 @@
 | learner.js | 18 | Core learner data — sessions, progress, profile, mock-tests, quiz, competency, onboarding |
 | instructor.js | 27+ | Auth, schedule, availability, blackouts, learner history, notes, stats, photo upload, cancel-booking, reschedule-booking, create-booking |
 | admin.js | 14+ | Dashboard stats, bookings, instructor CRUD, learner management, credit adjustment |
-| slots.js | 6 | available (with lead-time filter), book, checkout-slot, cancel, reschedule, my-bookings |
+| slots.js | 7 | available (with lead-time filter), book (+ repeat_weeks), checkout-slot, cancel (+ cancel_series), reschedule, my-bookings, series-info |
 | videos.js | 12 | CRUD, upload-url, categories, bulk operations |
 | credits.js | 2-3 | balance, checkout |
 | calendar.js | 5 | ICS feed download + URLs for learner and instructor |
@@ -93,6 +93,7 @@
 - `instructors.reminder_hours` — how many hours before lesson to send learner reminders (default 24)
 - `instructors.daily_schedule_email` — whether to send next-day schedule email at 7pm (default true)
 - `sent_reminders` table — tracks sent reminders to prevent duplicates (unique on booking_id + reminder_type)
+- `lesson_bookings.series_id` — UUID grouping recurring weekly bookings (same time slot, N weeks)
 
 ### Critical Design Decisions Already Made
 

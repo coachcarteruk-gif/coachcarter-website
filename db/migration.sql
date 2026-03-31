@@ -457,3 +457,8 @@ CREATE TABLE IF NOT EXISTS sent_reminders (
   channel        TEXT NOT NULL,
   UNIQUE(booking_id, reminder_type)
 );
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- RECURRING/REPEAT BOOKINGS (Feature 6)
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS series_id UUID;
