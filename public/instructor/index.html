@@ -429,6 +429,44 @@
     }
     .daily-empty-hour { font-size: 0.78rem; color: #ccc; padding: 2px 0; }
 
+    /* ── AGENDA VIEW ──────────────────────────────────────────────────────── */
+    .agenda-view { max-width: 720px; }
+    .agenda-date-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px; margin-top: 16px;
+      font-family: var(--font-head); font-weight: 800; font-size: 0.9rem;
+      color: var(--primary); background: var(--bg);
+      border-radius: var(--radius); cursor: pointer;
+      border-left: 3px solid transparent;
+    }
+    .agenda-date-header:first-child { margin-top: 0; }
+    .agenda-date-header:hover { background: var(--accent-lt); }
+    .agenda-date-header.today { border-left-color: var(--accent); background: #fff8f0; }
+    .agenda-date-count { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+    .agenda-card {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 14px; margin: 4px 0;
+      background: var(--white); border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius); cursor: pointer;
+      transition: box-shadow 0.15s, border-color 0.15s;
+    }
+    .agenda-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .agenda-card.completed { opacity: 0.6; }
+    .agenda-card.cancelled { opacity: 0.4; border-left-color: var(--muted); text-decoration: line-through; }
+    .agenda-card-left { min-width: 100px; flex-shrink: 0; }
+    .agenda-time { font-weight: 700; font-size: 0.85rem; color: var(--primary); margin-bottom: 4px; }
+    .agenda-card-mid { flex: 1; min-width: 0; }
+    .agenda-learner { font-weight: 600; font-size: 0.88rem; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .agenda-address { font-size: 0.75rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .agenda-card-right { flex-shrink: 0; }
+    .agenda-status { font-size: 0.85rem; }
+    .agenda-status.status-confirmed { color: var(--accent); }
+    .agenda-status.status-completed { color: var(--green); }
+    .agenda-status.status-cancelled { color: var(--muted); }
+    .agenda-empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+    .agenda-empty .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+
     /* ── Add Availability Modal ───────────────────────────────────────────── */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.45);
@@ -665,6 +703,7 @@
         <button class="view-btn" id="btnMonthly" onclick="setView('monthly')">Monthly</button>
         <button class="view-btn" id="btnWeekly"  onclick="setView('weekly')">Weekly</button>
         <button class="view-btn active" id="btnDaily"   onclick="setView('daily')">Daily</button>
+        <button class="view-btn" id="btnAgenda"  onclick="setView('agenda')">Agenda</button>
       </div>
       <!-- Nav -->
       <div class="cal-nav">
@@ -935,6 +974,7 @@ function setView(view) {
   document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
   document.getElementById('btnWeekly').classList.toggle('active',  view === 'weekly');
   document.getElementById('btnDaily').classList.toggle('active',   view === 'daily');
+  document.getElementById('btnAgenda').classList.toggle('active',  view === 'agenda');
   renderCurrentView();
 }
 
@@ -953,12 +993,14 @@ function toggleShowCancelled() {
 function navPrev() {
   if (currentView === 'monthly') { cursor.setMonth(cursor.getMonth() - 1); }
   else if (currentView === 'weekly') { cursor.setDate(cursor.getDate() - 7); }
+  else if (currentView === 'agenda') { cursor.setDate(cursor.getDate() - 14); }
   else { cursor.setDate(cursor.getDate() - 1); }
   renderCurrentView();
 }
 function navNext() {
   if (currentView === 'monthly') { cursor.setMonth(cursor.getMonth() + 1); }
   else if (currentView === 'weekly') { cursor.setDate(cursor.getDate() + 7); }
+  else if (currentView === 'agenda') { cursor.setDate(cursor.getDate() + 14); }
   else { cursor.setDate(cursor.getDate() + 1); }
   renderCurrentView();
 }
@@ -973,6 +1015,7 @@ async function renderCurrentView() {
   await fetchNeededData();
   if (currentView === 'monthly') renderMonthly();
   else if (currentView === 'weekly') renderWeekly();
+  else if (currentView === 'agenda') renderAgenda();
   else renderDaily();
 }
 
@@ -989,6 +1032,10 @@ function updateToolbarLabel() {
     const sun = addDays(mon, 6);
     label.textContent = `${mon.getDate()} ${MON_SHORT[mon.getMonth()]} – ${sun.getDate()} ${MON_SHORT[sun.getMonth()]} ${sun.getFullYear()}`;
     sub.textContent   = 'Your week at a glance';
+  } else if (currentView === 'agenda') {
+    const endDate = addDays(cursor, 13);
+    label.textContent = `${cursor.getDate()} ${MON_SHORT[cursor.getMonth()]} – ${endDate.getDate()} ${MON_SHORT[endDate.getMonth()]}`;
+    sub.textContent   = 'Upcoming lessons';
   } else {
     const isToday = dateStr(cursor) === dateStr(today);
     label.textContent = `${DAY_SHORT[cursor.getDay()]} ${cursor.getDate()} ${MON_SHORT[cursor.getMonth()]}`;
@@ -1011,6 +1058,9 @@ async function fetchNeededData() {
     const mon = getWeekStart(cursor);
     from = dateStr(mon);
     to   = dateStr(addDays(mon, 6));
+  } else if (currentView === 'agenda') {
+    from = dateStr(cursor);
+    to   = dateStr(addDays(cursor, 13));
   } else {
     from = dateStr(cursor);
     to   = dateStr(cursor);
@@ -1301,6 +1351,86 @@ function renderDaily() {
   }
 
   html += `</div>`;
+  document.getElementById('calContent').innerHTML = html;
+}
+
+// ─── AGENDA RENDER ──────────────────────────────────────────────────────────
+function renderAgenda() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const rangeStart = new Date(cursor);
+  const rangeEnd   = addDays(cursor, 13);
+
+  // Collect all bookings in date range, sorted chronologically
+  const allBookings = [];
+  let d = new Date(rangeStart);
+  while (d <= rangeEnd) {
+    const ds = dateStr(d);
+    const dayBookings = bookingCache[ds] || [];
+    for (const b of dayBookings) {
+      if (!showCancelled && (b.status === 'cancelled' || b.status === 'rescheduled')) continue;
+      allBookings.push(b);
+    }
+    d = addDays(d, 1);
+  }
+
+  allBookings.sort((a, b) =>
+    a.scheduled_date.localeCompare(b.scheduled_date) ||
+    a.start_time.localeCompare(b.start_time)
+  );
+
+  if (allBookings.length === 0) {
+    document.getElementById('calContent').innerHTML = `
+      <div class="agenda-empty">
+        <div class="empty-icon">📋</div>
+        <p>No upcoming lessons in this period.</p>
+        <p style="font-size:0.8rem;color:var(--muted)">Navigate forward or share your booking link to get started.</p>
+      </div>`;
+    return;
+  }
+
+  // Group by date
+  const groups = {};
+  for (const b of allBookings) {
+    if (!groups[b.scheduled_date]) groups[b.scheduled_date] = [];
+    groups[b.scheduled_date].push(b);
+  }
+
+  let html = '<div class="agenda-view">';
+  for (const ds of Object.keys(groups).sort()) {
+    const dayDate = new Date(ds + 'T00:00:00');
+    const isToday = ds === dateStr(today);
+    const dayLabel = `${DAY_FULL[dayDate.getDay()]}, ${dayDate.getDate()} ${MON_FULL[dayDate.getMonth()]}`;
+
+    html += `<div class="agenda-date-header${isToday ? ' today' : ''}" onclick="cursor=new Date('${ds}T00:00:00');setView('daily')">
+      <span>${dayLabel}</span>
+      <span class="agenda-date-count">${groups[ds].length} lesson${groups[ds].length !== 1 ? 's' : ''}</span>
+    </div>`;
+
+    for (const b of groups[ds]) {
+      const ltColour = b.lesson_type_colour || 'var(--accent)';
+      const ltName   = b.lesson_type_name || 'Standard Lesson';
+      const isCancelled = b.status === 'cancelled' || b.status === 'rescheduled';
+      const isCompleted = b.status === 'completed';
+      const cardCls = isCancelled ? 'agenda-card cancelled' : isCompleted ? 'agenda-card completed' : 'agenda-card';
+      const waUrl = whatsappUrl(b.learner_phone);
+
+      html += `
+        <div class="${cardCls}" style="border-left-color:${isCancelled ? 'var(--muted)' : ltColour}" onclick="openBookingDetail(${b.id})">
+          <div class="agenda-card-left">
+            <div class="agenda-time">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
+            <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span>
+          </div>
+          <div class="agenda-card-mid">
+            <div class="agenda-learner">${esc(b.learner_name)}${b.prefer_contact_before ? ' <span class="contact-badge">📞</span>' : ''}</div>
+            ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="agenda-address">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</div>` : ''}
+          </div>
+          <div class="agenda-card-right">
+            <span class="agenda-status status-${b.status}">${isCompleted ? '✓' : isCancelled ? '✕' : '●'}</span>
+          </div>
+        </div>`;
+    }
+  }
+  html += '</div>';
   document.getElementById('calContent').innerHTML = html;
 }
 

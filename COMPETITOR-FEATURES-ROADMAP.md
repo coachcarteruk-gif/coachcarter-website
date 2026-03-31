@@ -35,7 +35,7 @@ Every feature in this roadmap follows these constraints:
 | 8 | Calendar start time & working hours greying [DONE - 2026-03-30] | Medium | Low | Medium | — |
 | 9 | "Today" quick-jump button | Medium | Trivial | Low | — |
 | 10 | Scheduling lead time [DONE - 2026-03-30] | Medium | Low | Medium | — |
-| 11 | Agenda/list view | Medium | Medium | Medium | — |
+| 11 | Agenda/list view [DONE - 2026-03-31] | Medium | Medium | Medium | — |
 | 12 | Hide weekends toggle [DONE - 2026-03-30] | Lower | Trivial | Low | — |
 | 13 | Cancellation visibility toggle [DONE - 2026-03-30] | Lower | Trivial | Low | — |
 | 14 | Per-service booking links | Lower | Low | Medium | #3 |
@@ -722,6 +722,19 @@ GET /api/instructor?action=agenda&from=2026-03-29&days=30&page=1
 - Mobile-first design pattern (list view is actually better on phones than grids)
 
 **Estimated effort:** 1-2 sessions (API tweak + new view rendering)
+
+**Implementation notes (2026-03-31):**
+- 4th view button "Agenda" added to instructor calendar toolbar alongside Daily/Weekly/Monthly
+- Shows a 14-day rolling window of bookings as a scrollable list grouped by date
+- Date headers show day name + lesson count; clickable to drill into daily view
+- Each card shows time, lesson type badge (colour-coded), learner name, pickup address, status indicator
+- Cards clickable to open the existing booking detail modal
+- Respects showCancelled toggle — hides cancelled/rescheduled by default
+- Navigation arrows step ±14 days; Today button works as expected
+- No API changes needed — uses existing schedule-range endpoint with 14-day range
+- Mobile-first layout: single column, works well on small screens
+- Empty state with guidance message when no lessons in period
+- Actual effort: 0.5 session (frontend only, no API changes)
 
 ---
 
