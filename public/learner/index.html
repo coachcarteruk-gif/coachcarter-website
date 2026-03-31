@@ -52,106 +52,6 @@
     }
     .readiness-label { font-size: 0.5rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
 
-    /* CREDIT BALANCE CARD */
-    .credit-card {
-      background: var(--primary);
-      border-radius: 16px;
-      padding: 24px;
-      margin-bottom: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      flex-wrap: wrap;
-      position: relative;
-      overflow: hidden;
-      box-shadow: 0 8px 32px rgba(38,38,38,0.25), 0 0 0 1px rgba(255,255,255,0.04) inset;
-    }
-    .credit-card::before {
-      content: '';
-      position: absolute;
-      top: -40px;
-      right: -40px;
-      width: 180px;
-      height: 180px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(245,131,33,0.25), transparent 70%);
-      pointer-events: none;
-      animation: glow-pulse 4s ease-in-out infinite;
-    }
-    @keyframes glow-pulse {
-      0%, 100% { opacity: 0.7; transform: scale(1); }
-      50% { opacity: 1; transform: scale(1.08); }
-    }
-    .credit-card::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 60%;
-      height: 3px;
-      background: linear-gradient(90deg, var(--accent), transparent);
-    }
-    .credit-card-left { position: relative; z-index: 1; }
-    .credit-label {
-      font-size: 0.72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: rgba(255,255,255,0.5);
-      margin-bottom: 4px;
-    }
-    .credit-value {
-      font-family: var(--font-head);
-      font-size: 2.8rem;
-      font-weight: 700;
-      color: var(--accent);
-      line-height: 1;
-    }
-    .credit-sub {
-      font-size: 0.8rem;
-      color: rgba(255,255,255,0.5);
-      margin-top: 4px;
-    }
-    .credit-actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      position: relative;
-      z-index: 1;
-    }
-    .btn-buy {
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      padding: 12px 20px;
-      font-family: var(--font-head);
-      font-size: 0.85rem;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: none;
-      display: inline-block;
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .btn-buy:hover { transform: translateY(-2px); box-shadow: 0 6px 20px var(--accent-glow); }
-    .btn-book-lesson {
-      background: rgba(255,255,255,0.08);
-      color: #fff;
-      border: 1.5px solid rgba(255,255,255,0.2);
-      border-radius: 10px;
-      padding: 12px 20px;
-      font-family: var(--font-head);
-      font-size: 0.85rem;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: none;
-      display: inline-block;
-      transition: all 0.2s;
-    }
-    .btn-book-lesson:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.4); }
-    .btn-book-lesson.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: auto; }
-
     /* UPCOMING LESSONS */
     .upcoming-card {
       background: var(--white);
@@ -327,9 +227,14 @@
     /* QUICK ACTIONS */
     .quick-actions {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 10px;
       margin-bottom: 24px;
+    }
+    @media (max-width: 520px) {
+      .quick-actions {
+        grid-template-columns: repeat(3, 1fr);
+      }
     }
     .quick-action-card {
       background: var(--white);
@@ -827,7 +732,7 @@
   <!-- PROFILE COMPLETION -->
   <div class="profile-card" id="profile-card">
     <div class="profile-card-header">
-      <div class="profile-card-title">👋 Build Your Driving Profile</div>
+      <div class="profile-card-title">Build Your Driving Profile</div>
       <button class="profile-card-dismiss" onclick="dismissProfile()">Dismiss</button>
     </div>
     <div class="profile-bar-bg"><div class="profile-bar-fill" id="profile-bar-fill" style="width:0%"></div></div>
@@ -836,17 +741,28 @@
     <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete Next Step →</a>
   </div>
 
-  <!-- CREDIT BALANCE -->
-  <div class="credit-card" id="credit-card">
-    <div class="credit-card-left">
-      <div class="credit-label">Hours Remaining</div>
-      <div class="credit-value" id="credit-balance">—</div>
-      <div class="credit-sub" id="credit-sub">hours</div>
-    </div>
-    <div class="credit-actions">
-      <a href="/learner/lessons.html?tab=buy" class="btn-buy">Buy Hours</a>
-      <a href="/learner/lessons.html" class="btn-book-lesson" id="book-btn">Book a Lesson →</a>
-    </div>
+  <!-- QUICK ACTIONS -->
+  <div class="quick-actions">
+    <a href="/learner/mock-test.html" class="quick-action-card">
+      <div class="quick-action-icon">🚗</div>
+      <div class="quick-action-label">Mock Test</div>
+    </a>
+    <a href="/learner/ask-examiner.html" class="quick-action-card">
+      <div class="quick-action-icon">💬</div>
+      <div class="quick-action-label">Ask Examiner</div>
+    </a>
+    <a href="/learner/book.html" class="quick-action-card">
+      <div class="quick-action-icon">📅</div>
+      <div class="quick-action-label">Book Lessons</div>
+    </a>
+    <a href="/learner/progress.html" class="quick-action-card">
+      <div class="quick-action-icon">📊</div>
+      <div class="quick-action-label">Progress</div>
+    </a>
+    <a href="/learner/examiner-quiz.html" class="quick-action-card">
+      <div class="quick-action-icon">🧠</div>
+      <div class="quick-action-label">Quiz</div>
+    </a>
   </div>
 
   <!-- UPCOMING LESSONS -->
@@ -933,40 +849,20 @@ const LEGACY_LABELS = {
   t1_mirrors: 'Mirror checks', t1_mice: 'MICE routine', t1_eval: 'Overall'
 };
 
-let AUTH, PROGRESS, SESSIONS_DATA, CREDITS_DATA, BOOKINGS_DATA, UNLOGGED_DATA;
+let AUTH, PROGRESS, SESSIONS_DATA, BOOKINGS_DATA, UNLOGGED_DATA;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = ccAuth.getAuth();
-
-  // Gate action links behind auth
-  document.querySelectorAll('.credit-actions a').forEach(link => {
-    link.addEventListener('click', function (e) {
-      if (!window.ccAuth || window.ccAuth.isLoggedIn) return;
-      e.preventDefault();
-      window.ccAuth.requireAuth();
-    });
-  });
 
   if (!AUTH?.token) {
     document.getElementById('welcome-msg').textContent = 'Welcome!';
     document.getElementById('welcome-sub').textContent = 'Create a free account to track your progress and book lessons.';
     document.getElementById('upcoming-list').innerHTML =
       '<div class="upcoming-empty">Once you create your account, you\'ll see all your upcoming lessons here.</div>';
-    // Replace credit card with a sign-up prompt
-    var creditCard = document.querySelector('.credit-card');
-    if (creditCard) {
-      creditCard.innerHTML =
-        '<div style="text-align:center;padding:24px 16px;">' +
-          '<div style="font-size:1.1rem;font-weight:700;margin-bottom:8px;">Ready to start learning?</div>' +
-          '<a href="/learner/login.html" style="display:inline-block;background:var(--accent);color:#fff;' +
-            'padding:12px 24px;border-radius:10px;font-weight:700;text-decoration:none;font-family:var(--font-head);' +
-            'transition:background 0.2s;">Create your free account</a>' +
-        '</div>';
-    }
     return;
   }
   document.getElementById('header-name').textContent = AUTH.user.name;
-  await Promise.all([loadProgress(), loadCredits(), loadBookings(), loadUnlogged(), loadReadiness()]);
+  await Promise.all([loadProgress(), loadBookings(), loadUnlogged(), loadReadiness()]);
   render();
   initCalSyncBanner();
   loadProfileCompleteness();
@@ -982,39 +878,35 @@ async function loadProfileCompleteness() {
     });
     if (!res.ok) return;
     const data = await res.json();
-    if (data.percentage >= 100) return; // Fully complete — don't show
-
     const card = document.getElementById('profile-card');
-    card.classList.add('show');
-    document.getElementById('profile-bar-fill').style.width = data.percentage + '%';
-    document.getElementById('profile-pct').textContent = data.percentage + '% complete';
 
     const stepLabels = {
-      account_created: 'Account created',
-      prior_experience: 'Prior experience added',
-      initial_assessment: 'Initial skill assessment',
-      first_session: 'First session logged',
-      first_quiz: 'First examiner quiz taken'
+      prior_experience: 'Prior experience',
+      initial_assessment: 'Initial skill assessment'
     };
+    // Only show the 2 profile-building steps
+    const profileSteps = ['prior_experience', 'initial_assessment'];
     const stepsEl = document.getElementById('profile-steps');
-    stepsEl.innerHTML = Object.entries(data.steps).map(function(entry) {
-      var key = entry[0], done = entry[1];
+    stepsEl.innerHTML = profileSteps.map(function(key) {
+      var done = data.steps[key];
       return '<div class="profile-step ' + (done ? 'done' : '') + '">' +
         '<span class="profile-step-icon">' + (done ? '✅' : '⬜') + '</span>' +
         '<span>' + (stepLabels[key] || key) + '</span></div>';
     }).join('');
 
-    // Point CTA to the most useful next step
-    if (!data.steps.prior_experience || !data.steps.initial_assessment) {
-      document.getElementById('profile-cta').href = '/learner/onboarding.html';
-      document.getElementById('profile-cta').textContent = 'Complete Your Profile →';
-    } else if (!data.steps.first_session) {
-      document.getElementById('profile-cta').href = '/learner/log-session.html';
-      document.getElementById('profile-cta').textContent = 'Log Your First Session →';
-    } else if (!data.steps.first_quiz) {
-      document.getElementById('profile-cta').href = '/learner/examiner-quiz.html';
-      document.getElementById('profile-cta').textContent = 'Take the Examiner Quiz →';
-    }
+    // Recalculate percentage based on just these 2 steps
+    var profileDone = profileSteps.filter(function(k) { return data.steps[k]; }).length;
+    if (profileDone >= 2) return; // Both done — don't show card
+    card.classList.add('show');
+    var profilePct = Math.round((profileDone / 2) * 100);
+    document.getElementById('profile-bar-fill').style.width = profilePct + '%';
+    document.getElementById('profile-pct').textContent = profilePct + '% complete';
+
+    // CTA always points to onboarding
+    document.getElementById('profile-cta').href = '/learner/onboarding.html';
+    document.getElementById('profile-cta').textContent = !data.steps.prior_experience
+      ? 'Add Your Experience →'
+      : 'Complete Skill Assessment →';
   } catch (e) { console.warn('Profile completeness check failed:', e); }
 }
 
@@ -1033,13 +925,6 @@ async function loadProgress() {
   } catch (e) { console.error(e); }
 }
 
-
-async function loadCredits() {
-  try {
-    const res = await fetch('/api/credits?action=balance', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
-    if (res.ok) CREDITS_DATA = await res.json();
-  } catch (e) { console.error(e); }
-}
 
 async function loadBookings() {
   try {
@@ -1115,15 +1000,6 @@ async function loadReadiness() {
 
 function render() {
   if (!PROGRESS) return;
-
-  if (CREDITS_DATA) {
-    const mins = CREDITS_DATA.balance_minutes ?? (CREDITS_DATA.credit_balance ?? 0) * 90;
-    const hrs = (mins / 60);
-    const hrsStr = hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
-    document.getElementById('credit-balance').textContent = hrsStr;
-    document.getElementById('credit-sub').textContent = 'hours';
-    // Book button always active — learners can pay per slot even with 0 balance
-  }
 
   renderUpcoming();
   renderUnlogged();
