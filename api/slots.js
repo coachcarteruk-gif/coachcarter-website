@@ -197,7 +197,7 @@ async function handleAvailable(req, res) {
                  end_time::text       AS end_time
           FROM lesson_bookings
           WHERE scheduled_date BETWEEN ${from} AND ${to}
-            AND status IN ('confirmed', 'completed')
+            AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
             AND instructor_id = ${instructor_id}
         `
       : await sql`
@@ -207,7 +207,7 @@ async function handleAvailable(req, res) {
                  end_time::text       AS end_time
           FROM lesson_bookings
           WHERE scheduled_date BETWEEN ${from} AND ${to}
-            AND status IN ('confirmed', 'completed')
+            AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
         `;
 
     // 2b. Also load active slot reservations (held during Stripe checkout)
@@ -1252,7 +1252,7 @@ async function handleReschedule(req, res) {
       WHERE instructor_id = ${booking.instructor_id}
         AND scheduled_date = ${new_date}
         AND start_time = ${new_start_time}::time
-        AND status IN ('confirmed', 'completed')
+        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
     `;
     if (existingBooking)
       return res.status(409).json({ error: 'That slot is already booked. Please choose another.' });

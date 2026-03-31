@@ -467,3 +467,19 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS series_id UUID;
 -- INSTRUCTOR EARNINGS (Feature – Earnings Dashboard)
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS commission_rate NUMERIC(4,3) DEFAULT 0.850;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- POST-LESSON CONFIRMATION (Feature – Dual Confirmation System)
+-- ══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS lesson_confirmations (
+  id                SERIAL PRIMARY KEY,
+  booking_id        INTEGER NOT NULL REFERENCES lesson_bookings(id) ON DELETE CASCADE,
+  confirmed_by_role TEXT NOT NULL CHECK (confirmed_by_role IN ('instructor', 'learner')),
+  lesson_happened   BOOLEAN NOT NULL,
+  late_party        TEXT CHECK (late_party IS NULL OR late_party IN ('instructor', 'learner')),
+  late_minutes      INTEGER CHECK (late_minutes IS NULL OR late_minutes > 0),
+  notes             TEXT,
+  auto_confirmed    BOOLEAN DEFAULT FALSE,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(booking_id, confirmed_by_role)
+);

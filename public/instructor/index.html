@@ -377,6 +377,9 @@
     }
     .status-confirmed { background: #e0f2fe; color: #0369a1; }
     .status-completed { background: var(--green-lt); color: #166534; }
+    .status-awaiting_confirmation { background: #fef3c7; color: #92400e; }
+    .status-disputed { background: #fee2e2; color: #991b1b; }
+    .status-no_show { background: #f3f4f6; color: #6b7280; }
     .btn-complete-sm {
       background: var(--white); border: 1.5px solid var(--green);
       color: var(--green); padding: 5px 12px; border-radius: 7px;
@@ -385,6 +388,35 @@
     }
     .btn-complete-sm:hover { background: var(--green-lt); }
     .btn-complete-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-confirm-sm {
+      background: var(--white); border: 1.5px solid #f59e0b;
+      color: #92400e; padding: 5px 12px; border-radius: 7px;
+      font-size: 0.78rem; font-weight: 700; cursor: pointer;
+      transition: all 0.15s; white-space: nowrap;
+    }
+    .btn-confirm-sm:hover { background: #fef3c7; }
+    .confirm-form {
+      margin-top: 10px; padding: 12px; background: #fffbeb;
+      border: 1px solid #fde68a; border-radius: 8px; font-size: 0.82rem;
+    }
+    .confirm-form label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--muted); margin: 8px 0 4px; text-transform: uppercase; }
+    .confirm-form select, .confirm-form textarea {
+      width: 100%; padding: 6px 10px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 0.82rem; font-family: var(--font-body);
+    }
+    .confirm-form textarea { min-height: 50px; resize: vertical; }
+    .confirm-form .btn-submit-confirm {
+      background: #f59e0b; color: white; border: none; padding: 8px 16px;
+      border-radius: 7px; font-weight: 700; font-size: 0.82rem; cursor: pointer;
+      margin-top: 8px;
+    }
+    .confirm-form .btn-submit-confirm:hover { background: #d97706; }
+    .confirm-banner {
+      background: #fef3c7; border: 1.5px solid #fde68a; border-radius: 10px;
+      padding: 12px 16px; margin-bottom: 16px; font-size: 0.85rem;
+      color: #92400e; display: none;
+    }
+    .confirm-banner.show { display: block; }
 
     /* Learner self-assessment feedback */
     .learner-feedback {
@@ -1335,8 +1367,9 @@ function renderDaily() {
               ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="daily-booking-email">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</div>` : ''}
               ${b.booking_dropoff_address ? `<div class="daily-booking-email">🏁 ${esc(b.booking_dropoff_address)}</div>` : ''}
             </div>
-            <span class="daily-booking-status status-${b.status}">${b.status === 'completed' ? '✓ Completed' : b.status === 'cancelled' ? '✕ Cancelled' : 'Confirmed'}</span>
-            ${!isCompleted ? `<button class="btn-complete-sm" id="complete-${b.id}" onclick="markComplete(${b.id})">Mark complete</button>` : ''}
+            <span class="daily-booking-status status-${b.status}">${statusLabel(b.status)}</span>
+            ${b.status === 'awaiting_confirmation' ? `<button class="btn-confirm-sm" onclick="toggleConfirmForm(${b.id})">Confirm lesson</button><div id="confirm-form-${b.id}" style="display:none">${renderConfirmForm(b.id)}</div>` : ''}
+            ${b.status === 'confirmed' && !isCompleted ? `<button class="btn-complete-sm" id="complete-${b.id}" onclick="markComplete(${b.id})">Mark complete</button>` : ''}
             ${isCompleted ? renderInlineNotes(b) : ''}
             ${isCompleted ? renderFeedbackHTML(b) : ''}
           </div>`;
@@ -1415,7 +1448,8 @@ function renderAgenda() {
       const ltName   = b.lesson_type_name || 'Standard Lesson';
       const isCancelled = b.status === 'cancelled' || b.status === 'rescheduled';
       const isCompleted = b.status === 'completed';
-      const cardCls = isCancelled ? 'agenda-card cancelled' : isCompleted ? 'agenda-card completed' : 'agenda-card';
+      const isAwaiting = b.status === 'awaiting_confirmation';
+      const cardCls = isCancelled ? 'agenda-card cancelled' : isCompleted ? 'agenda-card completed' : isAwaiting ? 'agenda-card' : 'agenda-card';
       const waUrl = whatsappUrl(b.learner_phone);
 
       html += `
@@ -1442,6 +1476,77 @@ function renderAgenda() {
 function drillToDay(ds) {
   cursor = new Date(ds + 'T00:00:00');
   setView('daily');
+}
+
+// ─── Status helpers ──────────────────────────────────────────────────────────
+function statusLabel(status) {
+  switch (status) {
+    case 'completed': return '✓ Completed';
+    case 'cancelled': return '✕ Cancelled';
+    case 'rescheduled': return '↻ Rescheduled';
+    case 'awaiting_confirmation': return '⏳ Awaiting confirmation';
+    case 'disputed': return '⚠ Disputed';
+    case 'no_show': return '✕ No show';
+    default: return 'Confirmed';
+  }
+}
+
+function renderConfirmForm(bookingId) {
+  return `
+    <div class="confirm-form">
+      <label>Did this lesson take place?</label>
+      <select id="cf-happened-${bookingId}">
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+      <label>Was anyone late?</label>
+      <select id="cf-late-${bookingId}" onchange="document.getElementById('cf-mins-row-${bookingId}').style.display = this.value ? 'block' : 'none'">
+        <option value="">No one was late</option>
+        <option value="instructor">I was late</option>
+        <option value="learner">Learner was late</option>
+      </select>
+      <div id="cf-mins-row-${bookingId}" style="display:none">
+        <label>How many minutes late?</label>
+        <select id="cf-mins-${bookingId}">
+          <option value="5">5 minutes</option>
+          <option value="10">10 minutes</option>
+          <option value="15">15 minutes</option>
+          <option value="20">20 minutes</option>
+          <option value="30">30 minutes</option>
+          <option value="45">45 minutes</option>
+          <option value="60">60 minutes</option>
+        </select>
+      </div>
+      <label>Notes (optional)</label>
+      <textarea id="cf-notes-${bookingId}" placeholder="Any notes about this lesson..."></textarea>
+      <button class="btn-submit-confirm" onclick="submitConfirmation(${bookingId})">Submit confirmation</button>
+    </div>`;
+}
+
+function toggleConfirmForm(bookingId) {
+  const el = document.getElementById('confirm-form-' + bookingId);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function submitConfirmation(bookingId) {
+  const happened = document.getElementById('cf-happened-' + bookingId).value === 'true';
+  const lateParty = document.getElementById('cf-late-' + bookingId).value || null;
+  const lateMinutes = lateParty ? parseInt(document.getElementById('cf-mins-' + bookingId).value) : null;
+  const notes = document.getElementById('cf-notes-' + bookingId).value.trim() || null;
+
+  try {
+    const res = await fetch('/api/instructor?action=confirm-lesson', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ booking_id: bookingId, lesson_happened: happened, late_party: lateParty, late_minutes: lateMinutes, notes })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    // Refresh the calendar view
+    loadView();
+  } catch (err) {
+    alert('Failed to submit confirmation: ' + err.message);
+  }
 }
 
 // ─── Mark complete ───────────────────────────────────────────────────────────
@@ -1797,7 +1902,7 @@ function openBookingDetail(bookingId) {
     ${b.learner_phone ? `<div class="booking-detail-row"><span class="booking-detail-label">Phone</span><span class="booking-detail-val"><a href="tel:${esc(b.learner_phone)}" style="color:var(--accent)">${esc(b.learner_phone)}</a></span></div>` : ''}
     ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="booking-detail-row"><span class="booking-detail-label">Pickup</span><span class="booking-detail-val">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</span></div>` : ''}
     ${b.booking_dropoff_address ? `<div class="booking-detail-row"><span class="booking-detail-label">Drop-off</span><span class="booking-detail-val">🏁 ${esc(b.booking_dropoff_address)}</span></div>` : ''}
-    <div class="booking-detail-row"><span class="booking-detail-label">Status</span><span class="booking-detail-val">${b.status === 'completed' ? '✓ Completed' : b.status === 'cancelled' ? '✕ Cancelled' : 'Confirmed'}</span></div>
+    <div class="booking-detail-row"><span class="booking-detail-label">Status</span><span class="booking-detail-val"><span class="daily-booking-status status-${b.status}">${statusLabel(b.status)}</span></span></div>
     ${b.prefer_contact_before ? `<div class="booking-detail-row"><span class="booking-detail-label">Note</span><span class="booking-detail-val" style="color:var(--accent);">📞 Learner would like a call or message before their first lesson</span></div>` : ''}
     ${b.instructor_notes ? `<div class="booking-detail-row"><span class="booking-detail-label">Your notes</span><span class="booking-detail-val" style="font-style:italic">${esc(b.instructor_notes)}</span></div>` : ''}
     ${b.status !== 'completed' ? `

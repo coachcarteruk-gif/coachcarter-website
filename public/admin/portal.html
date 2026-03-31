@@ -407,6 +407,8 @@ body {
       <div class="stat-card"><div class="stat-value" id="stat-learners">-</div><div class="stat-label">Total Learners</div></div>
       <div class="stat-card"><div class="stat-value" id="stat-instructors">-</div><div class="stat-label">Active Instructors</div></div>
       <div class="stat-card"><div class="stat-value" id="stat-revenue">-</div><div class="stat-label">Total Revenue</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-awaiting" style="color:#92400e">-</div><div class="stat-label">Awaiting Confirm</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-disputed" style="color:#991b1b">-</div><div class="stat-label">Disputed</div></div>
     </div>
 
     <div class="panel-card">
@@ -480,6 +482,9 @@ body {
       <button class="filter-pill active" data-status="" onclick="filterBookings(this, '')">All</button>
       <button class="filter-pill" data-status="confirmed" onclick="filterBookings(this, 'confirmed')">Confirmed</button>
       <button class="filter-pill" data-status="completed" onclick="filterBookings(this, 'completed')">Completed</button>
+      <button class="filter-pill" data-status="awaiting_confirmation" onclick="filterBookings(this, 'awaiting_confirmation')">Awaiting</button>
+      <button class="filter-pill" data-status="disputed" onclick="filterBookings(this, 'disputed')">Disputed</button>
+      <button class="filter-pill" data-status="no_show" onclick="filterBookings(this, 'no_show')">No Show</button>
       <button class="filter-pill" data-status="cancelled" onclick="filterBookings(this, 'cancelled')">Cancelled</button>
     </div>
 
@@ -903,9 +908,12 @@ function formatTime(str) { return str ? str.slice(0, 5) : ''; }
 function statusBadge(status) {
   const map = {
     confirmed: 'badge-green', completed: 'badge-blue',
-    cancelled: 'badge-red', active: 'badge-green', inactive: 'badge-gray'
+    cancelled: 'badge-red', active: 'badge-green', inactive: 'badge-gray',
+    awaiting_confirmation: 'badge-amber', disputed: 'badge-red', no_show: 'badge-gray',
+    rescheduled: 'badge-gray'
   };
-  return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + status + '</span>';
+  const labels = { awaiting_confirmation: 'awaiting', no_show: 'no show' };
+  return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + (labels[status] || status) + '</span>';
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -924,6 +932,8 @@ async function loadDashboard() {
     document.getElementById('stat-instructors').textContent = data.instructors.active_instructors;
     document.getElementById('stat-revenue').textContent =
       '\u00a3' + (data.revenue.total_revenue_pence / 100).toLocaleString('en-GB', { minimumFractionDigits: 2 });
+    document.getElementById('stat-awaiting').textContent = data.bookings.awaiting_confirmation || 0;
+    document.getElementById('stat-disputed').textContent = data.bookings.disputed || 0;
   } catch (err) {
     console.error('Dashboard stats error:', err);
   }

@@ -92,6 +92,8 @@ module.exports = async (req, res) => {
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
   if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
+  if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
+  if (action === 'resolve-dispute')      return handleResolveDispute(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -204,7 +206,10 @@ async function handleDashboardStats(req, res) {
         COUNT(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
         COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
         COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled,
-        COUNT(*) FILTER (WHERE status = 'confirmed' AND scheduled_date >= CURRENT_DATE)::int AS upcoming
+        COUNT(*) FILTER (WHERE status = 'confirmed' AND scheduled_date >= CURRENT_DATE)::int AS upcoming,
+        COUNT(*) FILTER (WHERE status = 'awaiting_confirmation')::int AS awaiting_confirmation,
+        COUNT(*) FILTER (WHERE status = 'disputed')::int AS disputed,
+        COUNT(*) FILTER (WHERE status = 'no_show')::int AS no_show
       FROM lesson_bookings
     `;
 
@@ -236,7 +241,7 @@ async function handleDashboardStats(req, res) {
     const todayBookings = await sql`
       SELECT COUNT(*)::int AS today
       FROM lesson_bookings
-      WHERE scheduled_date = CURRENT_DATE AND status IN ('confirmed', 'completed')
+      WHERE scheduled_date = CURRENT_DATE AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
     `;
 
     // This week's bookings
@@ -244,7 +249,7 @@ async function handleDashboardStats(req, res) {
       SELECT COUNT(*)::int AS this_week
       FROM lesson_bookings
       WHERE scheduled_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')
-        AND status IN ('confirmed', 'completed')
+        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
     `;
 
     return res.json({
@@ -334,7 +339,7 @@ async function handleMarkComplete(req, res) {
       SELECT id, status FROM lesson_bookings WHERE id = ${booking_id}
     `;
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== 'confirmed')
+    if (!['confirmed', 'awaiting_confirmation', 'disputed'].includes(booking.status))
       return res.status(400).json({ error: `Cannot mark a "${booking.status}" booking as complete` });
 
     await sql`
@@ -710,5 +715,86 @@ async function handleDeleteLearner(req, res) {
     console.error('admin delete-learner error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to delete learner', details: err.message });
+  }
+}
+
+// ── GET /api/admin?action=confirmation-details&booking_id=X ──────────────────
+// Returns both confirmation records for a booking (admin can see both sides).
+async function handleConfirmationDetails(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  const booking_id = req.query.booking_id;
+  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [booking] = await sql`
+      SELECT lb.id, lb.status, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
+             lb.instructor_notes,
+             lu.name AS learner_name, lu.email AS learner_email,
+             i.name AS instructor_name, i.email AS instructor_email
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN instructors i ON i.id = lb.instructor_id
+      WHERE lb.id = ${booking_id}
+    `;
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    const confirmations = await sql`
+      SELECT confirmed_by_role, lesson_happened, late_party, late_minutes, notes, auto_confirmed, created_at
+      FROM lesson_confirmations
+      WHERE booking_id = ${booking_id}
+      ORDER BY confirmed_by_role
+    `;
+
+    const instructor = confirmations.find(c => c.confirmed_by_role === 'instructor') || null;
+    const learner    = confirmations.find(c => c.confirmed_by_role === 'learner') || null;
+
+    return res.json({ booking, instructor_confirmation: instructor, learner_confirmation: learner });
+  } catch (err) {
+    console.error('admin confirmation-details error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to load confirmation details' });
+  }
+}
+
+// ── POST /api/admin?action=resolve-dispute ───────────────────────────────────
+// Body: { booking_id, resolution } where resolution is 'completed', 'no_show', or 'cancelled'
+// Admin manually overrides the status of a disputed or awaiting_confirmation booking.
+async function handleResolveDispute(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { booking_id, resolution } = req.body;
+  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
+  if (!['completed', 'no_show', 'cancelled'].includes(resolution))
+    return res.status(400).json({ error: 'resolution must be completed, no_show, or cancelled' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [booking] = await sql`
+      SELECT id, status FROM lesson_bookings WHERE id = ${booking_id}
+    `;
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (!['disputed', 'awaiting_confirmation', 'no_show'].includes(booking.status))
+      return res.status(400).json({ error: `Cannot resolve a booking with status "${booking.status}"` });
+
+    await sql`
+      UPDATE lesson_bookings SET status = ${resolution} WHERE id = ${booking_id}
+    `;
+
+    console.log(`Admin resolved booking #${booking_id}: ${booking.status} → ${resolution}`);
+    return res.json({ success: true, booking_id, previous_status: booking.status, new_status: resolution });
+  } catch (err) {
+    console.error('admin resolve-dispute error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to resolve dispute' });
   }
 }

@@ -36,6 +36,7 @@ const jwt        = require('jsonwebtoken');
 const twilio     = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { reportError } = require('./_error-alert');
+const { resolveConfirmations } = require('./_confirmation-resolver');
 
 function sendWhatsApp(to, message) {
   const sid  = process.env.TWILIO_SID;
@@ -85,6 +86,7 @@ module.exports = async (req, res) => {
   if (action === 'schedule')         return handleSchedule(req, res);
   if (action === 'schedule-range')   return handleScheduleRange(req, res);
   if (action === 'complete')         return handleComplete(req, res);
+  if (action === 'confirm-lesson')   return handleConfirmLesson(req, res);
   if (action === 'availability')     return handleAvailability(req, res);
   if (action === 'set-availability') return handleSetAvailability(req, res);
   if (action === 'profile')          return handleProfile(req, res);
@@ -302,7 +304,7 @@ async function handleSchedule(req, res) {
       LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
-        AND lb.status IN ('confirmed', 'completed')
+        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '14 days')
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
       LIMIT 60
@@ -398,7 +400,7 @@ async function handleScheduleRange(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
-        AND lb.status IN ('confirmed', 'completed')
+        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
         AND lb.scheduled_date >= ${from}::date
         AND lb.scheduled_date <= ${to}::date
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
@@ -429,10 +431,9 @@ async function handleComplete(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Must belong to this instructor and be a past confirmed booking
     const [booking] = await sql`
-      SELECT lb.id, lb.status, lb.scheduled_date, lb.start_time,
-             lu.email AS learner_email, lu.name AS learner_name,
+      SELECT lb.id, lb.status, lb.scheduled_date, lb.start_time, lb.end_time,
+             lu.email AS learner_email, lu.name AS learner_name, lu.phone AS learner_phone,
              i.name AS instructor_name, i.email AS instructor_email
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
@@ -444,21 +445,41 @@ async function handleComplete(req, res) {
       return res.status(404).json({ error: 'Booking not found' });
     if (booking.status === 'completed')
       return res.status(400).json({ error: 'Booking is already marked as completed' });
-    if (booking.status !== 'confirmed')
+    if (!['confirmed', 'awaiting_confirmation'].includes(booking.status))
       return res.status(400).json({ error: `Cannot complete a booking with status "${booking.status}"` });
 
     // Only allow completing bookings that are in the past
-    const lessonTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
-    if (lessonTime > new Date())
+    const lessonEnd = new Date(`${booking.scheduled_date}T${booking.end_time || booking.start_time}Z`);
+    if (lessonEnd > new Date())
       return res.status(400).json({ error: 'Cannot mark a future lesson as complete' });
 
+    // Store instructor notes if provided
+    if (instructor_notes) {
+      await sql`
+        UPDATE lesson_bookings SET instructor_notes = ${instructor_notes.trim()}
+        WHERE id = ${booking_id}
+      `;
+    }
+
+    // Submit instructor confirmation (lesson happened = true, via legacy complete flow)
     await sql`
-      UPDATE lesson_bookings SET status = 'completed',
-        instructor_notes = ${instructor_notes ? instructor_notes.trim() : null}
-      WHERE id = ${booking_id}
+      INSERT INTO lesson_confirmations (booking_id, confirmed_by_role, lesson_happened, notes)
+      VALUES (${booking_id}, 'instructor', true, ${instructor_notes ? instructor_notes.trim() : null})
+      ON CONFLICT (booking_id, confirmed_by_role) DO NOTHING
     `;
 
-    // Send email to learner prompting them to log the session
+    // If booking was still 'confirmed', transition to 'awaiting_confirmation'
+    if (booking.status === 'confirmed') {
+      await sql`
+        UPDATE lesson_bookings SET status = 'awaiting_confirmation'
+        WHERE id = ${booking_id} AND status = 'confirmed'
+      `;
+    }
+
+    // Try to resolve (in case learner already confirmed)
+    const result = await resolveConfirmations(sql, booking_id);
+
+    // Send confirmation prompt email to learner
     const isDemoInstructor = booking.instructor_email === 'demo@coachcarter.uk';
     if (!isDemoInstructor && booking.learner_email) {
       try {
@@ -466,40 +487,142 @@ async function handleComplete(req, res) {
         const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
         const dateStr = new Date(booking.scheduled_date + 'T00:00:00Z')
           .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-        const logUrl = `https://coachcarter.uk/learner/log-session.html?booking_id=${booking_id}`;
+        const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+        const confirmUrl = `${baseUrl}/learner/confirm-lesson.html?booking_id=${booking_id}`;
 
         await mailer.sendMail({
           from: 'CoachCarter <system@coachcarter.uk>',
           to: booking.learner_email,
-          subject: 'Your lesson is complete — log your session!',
+          subject: 'How did your lesson go? Please confirm',
           html: `
-            <h2>Nice one, ${firstName}!</h2>
-            <p>${booking.instructor_name} has marked your lesson on <strong>${dateStr}</strong> as complete.</p>
-            <p>Take a moment to log how it went — it only takes 30 seconds and helps you track your progress.</p>
+            <h2>Hey ${firstName}!</h2>
+            <p>Your lesson on <strong>${dateStr}</strong> with ${booking.instructor_name} has ended.</p>
+            <p>Please take a moment to confirm how it went — it only takes 30 seconds.</p>
             <p style="margin:28px 0">
-              <a href="${logUrl}"
+              <a href="${confirmUrl}"
                  style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
                         border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
-                Log my session →
+                Confirm my lesson →
               </a>
             </p>
             <p style="color:#888;font-size:0.85rem;">
-              You can also log sessions from your dashboard at any time.
+              You can also confirm from your dashboard at any time.
             </p>
           `
         });
       } catch (emailErr) {
-        console.error('Failed to send session-log email:', emailErr);
-        // Don't fail the request if email fails
+        console.error('Failed to send confirmation email:', emailErr);
       }
     }
 
-    return res.json({ success: true });
+    return res.json({ success: true, status: result.resolved ? result.newStatus : 'awaiting_confirmation' });
 
   } catch (err) {
     console.error('instructor complete error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to mark booking as complete' });
+  }
+}
+
+// ── POST /api/instructor?action=confirm-lesson ─────────────────────────────────
+// Body: { booking_id, lesson_happened, late_party, late_minutes, notes }
+// Instructor submits their confirmation of whether the lesson took place.
+async function handleConfirmLesson(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { booking_id, lesson_happened, late_party, late_minutes, notes } = req.body;
+  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
+  if (typeof lesson_happened !== 'boolean') return res.status(400).json({ error: 'lesson_happened must be true or false' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [booking] = await sql`
+      SELECT lb.id, lb.status, lb.scheduled_date, lb.start_time, lb.end_time,
+             lu.email AS learner_email, lu.name AS learner_name, lu.phone AS learner_phone,
+             i.name AS instructor_name, i.email AS instructor_email
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN instructors i ON i.id = lb.instructor_id
+      WHERE lb.id = ${booking_id} AND lb.instructor_id = ${instructor.id}
+    `;
+
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (['completed', 'no_show', 'disputed', 'cancelled'].includes(booking.status))
+      return res.status(400).json({ error: `Booking already resolved with status "${booking.status}"` });
+
+    // Must be in the past
+    const lessonEnd = new Date(`${booking.scheduled_date}T${booking.end_time || booking.start_time}Z`);
+    if (lessonEnd > new Date())
+      return res.status(400).json({ error: 'Cannot confirm a lesson that hasn\'t ended yet' });
+
+    // Validate late_party
+    const validLateParty = late_party && ['instructor', 'learner'].includes(late_party) ? late_party : null;
+    const validLateMinutes = validLateParty && late_minutes > 0 ? parseInt(late_minutes) : null;
+
+    // Insert confirmation
+    await sql`
+      INSERT INTO lesson_confirmations (booking_id, confirmed_by_role, lesson_happened, late_party, late_minutes, notes)
+      VALUES (${booking_id}, 'instructor', ${lesson_happened}, ${validLateParty}, ${validLateMinutes}, ${notes ? notes.trim() : null})
+      ON CONFLICT (booking_id, confirmed_by_role) DO NOTHING
+    `;
+
+    // If booking was still 'confirmed', transition to 'awaiting_confirmation' and prompt learner
+    if (booking.status === 'confirmed') {
+      await sql`
+        UPDATE lesson_bookings SET status = 'awaiting_confirmation'
+        WHERE id = ${booking_id} AND status = 'confirmed'
+      `;
+
+      // Send learner confirmation prompt
+      const isDemoInstructor = booking.instructor_email === 'demo@coachcarter.uk';
+      if (!isDemoInstructor && booking.learner_email) {
+        try {
+          const mailer = createTransporter();
+          const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
+          const dateStr = new Date(booking.scheduled_date + 'T00:00:00Z')
+            .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+          const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+          const confirmUrl = `${baseUrl}/learner/confirm-lesson.html?booking_id=${booking_id}`;
+
+          await mailer.sendMail({
+            from: 'CoachCarter <system@coachcarter.uk>',
+            to: booking.learner_email,
+            subject: 'How did your lesson go? Please confirm',
+            html: `
+              <h2>Hey ${firstName}!</h2>
+              <p>Your lesson on <strong>${dateStr}</strong> with ${booking.instructor_name} has ended.</p>
+              <p>Please take a moment to confirm how it went — it only takes 30 seconds.</p>
+              <p style="margin:28px 0">
+                <a href="${confirmUrl}"
+                   style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                          border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+                  Confirm my lesson →
+                </a>
+              </p>
+            `
+          });
+        } catch (emailErr) {
+          console.error('Failed to send learner confirmation email:', emailErr);
+        }
+      }
+    }
+
+    // Try to resolve
+    const result = await resolveConfirmations(sql, booking_id);
+
+    return res.json({
+      success: true,
+      status: result.resolved ? result.newStatus : 'awaiting_confirmation'
+    });
+
+  } catch (err) {
+    console.error('instructor confirm-lesson error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to confirm lesson' });
   }
 }
 
@@ -1077,7 +1200,7 @@ async function handleRescheduleBooking(req, res) {
       WHERE instructor_id = ${booking.instructor_id}
         AND scheduled_date = ${new_date}
         AND start_time = ${new_start_time}::time
-        AND status IN ('confirmed', 'completed')
+        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
     `;
     if (existingBooking)
       return res.status(409).json({ error: 'That slot is already booked.' });
@@ -1617,7 +1740,7 @@ async function handleEarningsWeek(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
-        AND lb.status IN ('confirmed', 'completed')
+        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
         AND lb.scheduled_date >= ${weekRow.week_start}
         AND lb.scheduled_date <= ${weekRow.week_end}
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC

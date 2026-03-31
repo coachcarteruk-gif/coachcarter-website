@@ -13,6 +13,7 @@ const jwt      = require('jsonwebtoken');
 const twilio   = require('twilio');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
+const { resolveConfirmations } = require('./_confirmation-resolver');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,6 +87,8 @@ module.exports = async (req, res) => {
   if (action === 'daily-schedule')  return handleDailySchedule(req, res);
   if (action === 'settings')        return handleSettings(req, res);
   if (action === 'update-settings') return handleUpdateSettings(req, res);
+  if (action === 'prompt-confirmations') return handlePromptConfirmations(req, res);
+  if (action === 'auto-confirm')         return handleAutoConfirm(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -423,5 +426,190 @@ async function handleUpdateSettings(req, res) {
     console.error('reminders update-settings error:', err);
     reportError('/api/reminders?action=update-settings', err);
     return res.status(500).json({ error: 'Failed to update settings' });
+  }
+}
+
+// ── POST ?action=prompt-confirmations ────────────────────────────────────────
+// Hourly cron. Finds past lessons still 'confirmed', transitions them to
+// 'awaiting_confirmation', and sends confirmation prompt emails to both parties.
+async function handlePromptConfirmations(req, res) {
+  if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+
+    // Find past confirmed bookings not yet prompted
+    const bookings = await sql`
+      SELECT lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
+             lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
+             i.name AS instructor_name, i.email AS instructor_email, i.phone AS instructor_phone
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN instructors i ON i.id = lb.instructor_id
+      LEFT JOIN sent_reminders sr ON sr.booking_id = lb.id AND sr.reminder_type = 'confirmation_prompt'
+      WHERE lb.status = 'confirmed'
+        AND (lb.scheduled_date + lb.end_time) < NOW()
+        AND sr.id IS NULL
+        AND i.email != 'demo@coachcarter.uk'
+      ORDER BY lb.scheduled_date ASC
+      LIMIT 50
+    `;
+
+    let prompted = 0;
+    const mailer = bookings.length > 0 ? createTransporter() : null;
+
+    for (const b of bookings) {
+      try {
+        // Transition status
+        await sql`
+          UPDATE lesson_bookings SET status = 'awaiting_confirmation'
+          WHERE id = ${b.id} AND status = 'confirmed'
+        `;
+
+        const dateStr = formatDateDisplay(b.scheduled_date);
+        const timeStr = formatTime12h(b.start_time);
+
+        // Email learner
+        if (b.learner_email) {
+          const firstName = (b.learner_name || '').split(' ')[0] || 'there';
+          const confirmUrl = `${baseUrl}/learner/confirm-lesson.html?booking_id=${b.id}`;
+          await mailer.sendMail({
+            from: 'CoachCarter <system@coachcarter.uk>',
+            to: b.learner_email,
+            subject: 'How did your lesson go? Please confirm',
+            html: `
+              <h2>Hey ${escHtml(firstName)}!</h2>
+              <p>Your lesson on <strong>${dateStr}</strong> at ${timeStr} with ${escHtml(b.instructor_name)} has ended.</p>
+              <p>Please take a moment to confirm how it went.</p>
+              <p style="margin:28px 0">
+                <a href="${confirmUrl}"
+                   style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                          border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+                  Confirm my lesson →
+                </a>
+              </p>
+            `
+          }).catch(e => console.warn('Learner confirmation email failed:', e.message));
+        }
+
+        // Email instructor
+        if (b.instructor_email) {
+          const instFirstName = (b.instructor_name || '').split(' ')[0] || 'there';
+          await mailer.sendMail({
+            from: 'CoachCarter <system@coachcarter.uk>',
+            to: b.instructor_email,
+            subject: `Please confirm your lesson with ${b.learner_name}`,
+            html: `
+              <h2>Hi ${escHtml(instFirstName)},</h2>
+              <p>Your lesson on <strong>${dateStr}</strong> at ${timeStr} with ${escHtml(b.learner_name)} has ended.</p>
+              <p>Please confirm the lesson from your instructor portal.</p>
+              <p style="margin:28px 0">
+                <a href="${baseUrl}/instructor/"
+                   style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                          border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+                  Open Instructor Portal →
+                </a>
+              </p>
+            `
+          }).catch(e => console.warn('Instructor confirmation email failed:', e.message));
+        }
+
+        // Record in sent_reminders to prevent re-prompting
+        await sql`
+          INSERT INTO sent_reminders (booking_id, reminder_type, channel)
+          VALUES (${b.id}, 'confirmation_prompt', 'email')
+          ON CONFLICT (booking_id, reminder_type) DO NOTHING
+        `;
+
+        prompted++;
+      } catch (bookingErr) {
+        console.error(`Failed to prompt confirmation for booking #${b.id}:`, bookingErr);
+      }
+    }
+
+    return res.json({ ok: true, prompted, total_found: bookings.length });
+  } catch (err) {
+    console.error('prompt-confirmations error:', err);
+    reportError('/api/reminders?action=prompt-confirmations', err);
+    return res.status(500).json({ error: 'Failed to prompt confirmations' });
+  }
+}
+
+// ── POST ?action=auto-confirm ────────────────────────────────────────────────
+// Hourly cron (offset 30min from prompt). Finds 'awaiting_confirmation' bookings
+// older than 48 hours and auto-confirms the missing party.
+async function handleAutoConfirm(req, res) {
+  if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Find bookings awaiting confirmation for over 48 hours
+    const bookings = await sql`
+      SELECT lb.id
+      FROM lesson_bookings lb
+      WHERE lb.status = 'awaiting_confirmation'
+        AND (lb.scheduled_date + lb.end_time) < (NOW() - INTERVAL '48 hours')
+      LIMIT 50
+    `;
+
+    let resolved = 0;
+
+    for (const b of bookings) {
+      try {
+        // Check which confirmations exist
+        const existing = await sql`
+          SELECT confirmed_by_role, lesson_happened
+          FROM lesson_confirmations
+          WHERE booking_id = ${b.id}
+        `;
+
+        const hasInstructor = existing.some(c => c.confirmed_by_role === 'instructor');
+        const hasLearner    = existing.some(c => c.confirmed_by_role === 'learner');
+
+        if (hasInstructor && hasLearner) {
+          // Both exist — just resolve (shouldn't happen, but safety net)
+          await resolveConfirmations(sql, b.id);
+          resolved++;
+          continue;
+        }
+
+        if (!hasInstructor && !hasLearner) {
+          // Neither confirmed — auto-confirm both as happened (benefit of the doubt)
+          await sql`
+            INSERT INTO lesson_confirmations (booking_id, confirmed_by_role, lesson_happened, auto_confirmed)
+            VALUES (${b.id}, 'instructor', true, true)
+            ON CONFLICT (booking_id, confirmed_by_role) DO NOTHING
+          `;
+          await sql`
+            INSERT INTO lesson_confirmations (booking_id, confirmed_by_role, lesson_happened, auto_confirmed)
+            VALUES (${b.id}, 'learner', true, true)
+            ON CONFLICT (booking_id, confirmed_by_role) DO NOTHING
+          `;
+        } else {
+          // One party confirmed — auto-confirm the missing one, copying lesson_happened
+          const existingConf = existing[0];
+          const missingRole = hasInstructor ? 'learner' : 'instructor';
+          await sql`
+            INSERT INTO lesson_confirmations (booking_id, confirmed_by_role, lesson_happened, auto_confirmed)
+            VALUES (${b.id}, ${missingRole}, ${existingConf.lesson_happened}, true)
+            ON CONFLICT (booking_id, confirmed_by_role) DO NOTHING
+          `;
+        }
+
+        // Now resolve
+        await resolveConfirmations(sql, b.id);
+        resolved++;
+      } catch (bookingErr) {
+        console.error(`Failed to auto-confirm booking #${b.id}:`, bookingErr);
+      }
+    }
+
+    return res.json({ ok: true, resolved, total_found: bookings.length });
+  } catch (err) {
+    console.error('auto-confirm error:', err);
+    reportError('/api/reminders?action=auto-confirm', err);
+    return res.status(500).json({ error: 'Failed to auto-confirm' });
   }
 }

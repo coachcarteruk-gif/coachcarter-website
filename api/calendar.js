@@ -127,7 +127,7 @@ async function handleFeed(req, res) {
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.learner_id = ${learner.id}
-        AND lb.status IN ('confirmed', 'completed')
+        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '7 days')
       ORDER BY lb.scheduled_date, lb.start_time
     `;
@@ -231,7 +231,7 @@ async function handleInstructorFeed(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
-        AND lb.status IN ('confirmed', 'completed')
+        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '7 days')
       ORDER BY lb.scheduled_date, lb.start_time
     `;
