@@ -6,12 +6,17 @@
 //
 //   POST /api/slots?action=book          (JWT auth required)
 //     → deduct hours from balance and create a confirmed booking
+//     → optional repeat_weeks (2-8): creates N weekly bookings sharing a series_id
 //
 //   POST /api/slots?action=cancel        (JWT auth required)
 //     → cancel a booking; returns hours if 48+ hours notice
+//     → optional cancel_series: cancels all future bookings in the series
 //
 //   GET  /api/slots?action=my-bookings   (JWT auth required)
 //     → upcoming + recent past bookings for the authenticated learner
+//
+//   GET  /api/slots?action=series-info&booking_id=X (JWT auth required)
+//     → returns all bookings in a series
 //
 // Constraints enforced:
 //   - "from" may not be in the past
@@ -22,6 +27,7 @@
 const { neon }    = require('@neondatabase/serverless');
 const nodemailer  = require('nodemailer');
 const jwt         = require('jsonwebtoken');
+const crypto      = require('crypto');
 const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const twilio      = require('twilio');
 const { reportError } = require('./_error-alert');
@@ -104,6 +110,7 @@ module.exports = async (req, res) => {
   if (action === 'cancel')       return handleCancel(req, res);
   if (action === 'reschedule')   return handleReschedule(req, res);
   if (action === 'my-bookings')  return handleMyBookings(req, res);
+  if (action === 'series-info')  return handleSeriesInfo(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -389,9 +396,15 @@ async function handleBook(req, res) {
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { instructor_id, date, start_time, end_time, lesson_type_id, pickup_address, dropoff_address } = req.body;
+  const { instructor_id, date, start_time, end_time, lesson_type_id, pickup_address, dropoff_address, repeat_weeks } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'instructor_id, date, start_time and end_time are required' });
+
+  // Validate repeat_weeks if provided
+  const weeks = repeat_weeks ? parseInt(repeat_weeks, 10) : 1;
+  if (weeks < 1 || weeks > 8 || isNaN(weeks))
+    return res.status(400).json({ error: 'repeat_weeks must be between 1 and 8' });
+  const isRecurring = weeks > 1;
 
   // Validate date is not in the past and within booking window
   const bookingDate = parseDate(date);
@@ -402,8 +415,18 @@ async function handleBook(req, res) {
   const maxAhead = addDays(today, MAX_DAYS_AHEAD);
   if (bookingDate < today)
     return res.status(400).json({ error: 'Cannot book a slot in the past' });
-  if (bookingDate > maxAhead)
-    return res.status(400).json({ error: `Cannot book more than ${MAX_DAYS_AHEAD} days in advance` });
+
+  // Build list of dates for all weeks
+  const bookingDates = [];
+  for (let w = 0; w < weeks; w++) {
+    const d = addDays(bookingDate, w * 7);
+    bookingDates.push({ date: formatDate(d), dateObj: d });
+  }
+
+  // Validate all dates are within the booking window
+  const lastDate = bookingDates[bookingDates.length - 1];
+  if (lastDate.dateObj > maxAhead)
+    return res.status(400).json({ error: `Cannot book more than ${MAX_DAYS_AHEAD} days in advance. The last date in this series (${lastDate.date}) exceeds the limit.` });
 
   // Reject same-day bookings where the slot has already started
   const startMins = timeToMinutes(start_time);
@@ -446,154 +469,296 @@ async function handleBook(req, res) {
     // Demo instructor bookings are free (no deduction)
     const isDemoInstructor = instructor.email === 'demo@coachcarter.uk';
 
+    const totalMins = durationMins * weeks;
     if (!isDemoInstructor) {
       const balance = learner.balance_minutes || 0;
-      if (balance < durationMins)
-        return res.status(402).json({ error: `Not enough hours. You need ${formatHours(durationMins)} but have ${formatHours(balance)}. Please buy more hours.` });
+      if (balance < totalMins)
+        return res.status(402).json({
+          error: `Not enough hours. You need ${formatHours(totalMins)} for ${weeks} lessons but have ${formatHours(balance)}. Please buy more hours.`
+        });
     }
 
-    // 3. Deduct hours FIRST (skip for demo instructor)
+    // 3. For recurring bookings, check all slots are available before booking any
+    if (isRecurring) {
+      const dateStrings = bookingDates.map(d => d.date);
+      const conflicts = await sql`
+        SELECT scheduled_date::text AS date, start_time::text
+        FROM lesson_bookings
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ANY(${dateStrings})
+          AND start_time = ${start_time}
+          AND status = 'confirmed'
+      `;
+      // Also check slot reservations (Stripe checkout holds)
+      const reservations = await sql`
+        SELECT scheduled_date::text AS date, start_time::text
+        FROM slot_reservations
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ANY(${dateStrings})
+          AND start_time = ${start_time}
+          AND expires_at > NOW()
+      `;
+      const takenDates = new Set([
+        ...conflicts.map(c => c.date),
+        ...reservations.map(r => r.date)
+      ]);
+      if (takenDates.size > 0) {
+        return res.status(409).json({
+          error: true,
+          code: 'SLOTS_UNAVAILABLE',
+          message: `${takenDates.size} of ${weeks} slots are not available`,
+          conflicts: [...takenDates].map(d => ({ date: d, start_time, reason: 'already booked' })),
+          available: dateStrings.filter(d => !takenDates.has(d)).map(d => ({ date: d, start_time }))
+        });
+      }
+    }
+
+    // 4. Deduct hours FIRST (skip for demo instructor)
     if (!isDemoInstructor) {
+      const creditsToDeduct = Math.ceil(totalMins / 60);
       const [deducted] = await sql`
         UPDATE learner_users
-        SET balance_minutes = balance_minutes - ${durationMins},
-            credit_balance = GREATEST(credit_balance - 1, 0)
-        WHERE id = ${user.id} AND balance_minutes >= ${durationMins}
+        SET balance_minutes = balance_minutes - ${totalMins},
+            credit_balance = GREATEST(credit_balance - ${creditsToDeduct}, 0)
+        WHERE id = ${user.id} AND balance_minutes >= ${totalMins}
         RETURNING balance_minutes
       `;
       if (!deducted)
-        return res.status(402).json({ error: `Not enough hours. You need ${formatHours(durationMins)}. Please buy more hours.` });
+        return res.status(402).json({ error: `Not enough hours. You need ${formatHours(totalMins)}. Please buy more hours.` });
     }
 
-    // 4. Create booking — unique index on (instructor_id, scheduled_date, start_time)
-    //    will throw if slot was taken. If so, refund the hours.
-    let booking;
+    // 5. Create booking(s) — unique index on (instructor_id, scheduled_date, start_time)
+    const seriesId = isRecurring ? crypto.randomUUID() : null;
+    const bookingPickup  = pickup_address || learner.pickup_address || null;
+    const bookingDropoff = dropoff_address || null;
+    const minsPerBooking = isDemoInstructor ? 0 : durationMins;
+    const createdBookings = [];
+
     try {
-      const bookingPickup = pickup_address || learner.pickup_address || null;
-      const bookingDropoff = dropoff_address || null;
-      const [b] = await sql`
-        INSERT INTO lesson_bookings
-          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           pickup_address, dropoff_address, lesson_type_id, minutes_deducted)
-        VALUES
-          (${user.id}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, 'confirmed',
-           ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${isDemoInstructor ? 0 : durationMins})
-        RETURNING id, learner_id, instructor_id, scheduled_date,
-                  start_time::text, end_time::text, status, created_at
-      `;
-      booking = b;
+      for (const bd of bookingDates) {
+        const [b] = await sql`
+          INSERT INTO lesson_bookings
+            (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+             pickup_address, dropoff_address, lesson_type_id, minutes_deducted, series_id)
+          VALUES
+            (${user.id}, ${instructor_id}, ${bd.date}, ${start_time}, ${end_time}, 'confirmed',
+             ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${minsPerBooking}, ${seriesId})
+          RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at
+        `;
+        createdBookings.push(b);
+      }
     } catch (insertErr) {
       // Refund the hours since booking failed (not needed for demo)
       if (!isDemoInstructor) {
+        const creditsToRefund = Math.ceil(totalMins / 60);
         await sql`
           UPDATE learner_users
-          SET balance_minutes = balance_minutes + ${durationMins},
-              credit_balance = credit_balance + 1
+          SET balance_minutes = balance_minutes + ${totalMins},
+              credit_balance = credit_balance + ${creditsToRefund}
           WHERE id = ${user.id}
         `;
       }
+      // If some bookings in a series were created before the failure, cancel them
+      if (createdBookings.length > 0) {
+        const createdIds = createdBookings.map(b => b.id);
+        await sql`
+          UPDATE lesson_bookings SET status = 'cancelled', cancelled_at = NOW()
+          WHERE id = ANY(${createdIds})
+        `;
+      }
       if (insertErr.message?.includes('uq_booking_slot') || insertErr.message?.includes('uq_instructor_slot')) {
-        return res.status(409).json({ error: 'Sorry, that slot was just booked by someone else. Please choose another.' });
+        return res.status(409).json({ error: 'Sorry, one of the slots was just booked by someone else. Please try again.' });
       }
       throw insertErr;
     }
 
-    // 5. Get updated balance for response
+    // 6. Get updated balance for response
     const [updated] = await sql`SELECT balance_minutes, credit_balance FROM learner_users WHERE id = ${user.id}`;
     const durationStr = formatHours(durationMins);
     const balanceStr  = formatHours(updated.balance_minutes || 0);
 
-    // 6. Send confirmation emails
-    const lessonDateStr = formatDateDisplay(date);
-    const lessonTime    = `${start_time} – ${end_time}`;
-    const mailer        = createTransporter();
+    // 7. Send notifications
+    const mailer = createTransporter();
 
-    // Generate .ics calendar attachment
-    const icsContent = generateICS({
-      id: booking.id,
-      scheduled_date: date,
-      start_time,
-      end_time,
-      instructor_name: instructor.name,
-      lesson_type_name: lessonType.name,
-      duration_str: durationStr
-    });
+    if (isRecurring) {
+      // Send summary email + ICS for each booking in the series
+      const dateList = bookingDates.map(bd => {
+        const display = formatDateDisplay(bd.date);
+        return `<li>${display} at ${start_time} – ${end_time}</li>`;
+      }).join('');
 
-    // Email to learner (with .ics attachment)
-    await mailer.sendMail({
-      from:    'CoachCarter <bookings@coachcarter.uk>',
-      to:      learner.email,
-      subject: `Lesson confirmed — ${lessonDateStr} at ${start_time}`,
-      html: `
-        <h1>Lesson confirmed.</h1>
-        <table>
-          <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
-          <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
-          <tr><td><strong>Instructor:</strong></td><td>${instructor.name}</td></tr>
-          <tr><td><strong>Type:</strong></td><td>${lessonType.name}</td></tr>
-          <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
-          <tr><td><strong>Hours remaining:</strong></td><td>${balanceStr}</td></tr>
-        </table>
-        <p style="margin-top:16px;font-size:0.875rem;color:#797879">
-          Need to cancel? Do so at least 48 hours before and the hours return to your balance.
-        </p>
-        <p>
-          <a href="https://coachcarter.uk/learner/"
-             style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">
-            View my bookings →
-          </a>
-        </p>
-      `,
-      attachments: [{
-        filename: `coachcarter-lesson-${date}.ics`,
-        content:  icsContent,
-        contentType: 'text/calendar; method=PUBLISH'
-      }]
-    });
-
-    // Email to instructor (skip for demo instructor)
-    if (!isDemoInstructor) {
       await mailer.sendMail({
-        from:    'CoachCarter <system@coachcarter.uk>',
-        to:      instructor.email,
-        subject: `New booking — ${lessonDateStr} at ${start_time}`,
+        from:    'CoachCarter <bookings@coachcarter.uk>',
+        to:      learner.email,
+        subject: `${weeks} weekly lessons confirmed — starting ${formatDateDisplay(date)}`,
         html: `
-          <h2>New lesson booked</h2>
+          <h1>${weeks} weekly lessons confirmed.</h1>
           <table>
-            <tr><td><strong>Learner:</strong></td><td>${learner.name}</td></tr>
-            <tr><td><strong>Email:</strong></td><td>${learner.email}</td></tr>
-            <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
-            <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+            <tr><td><strong>Instructor:</strong></td><td>${instructor.name}</td></tr>
             <tr><td><strong>Type:</strong></td><td>${lessonType.name} (${durationStr})</td></tr>
+            <tr><td><strong>Total hours:</strong></td><td>${formatHours(totalMins)}</td></tr>
+            <tr><td><strong>Hours remaining:</strong></td><td>${balanceStr}</td></tr>
           </table>
-          <p style="margin-top:16px">
-            <a href="https://coachcarter.uk/instructor/"
-               style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
-                      border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
-              View my schedule →
+          <h3>Dates:</h3>
+          <ol>${dateList}</ol>
+          <p style="margin-top:16px;font-size:0.875rem;color:#797879">
+            Need to cancel? You can cancel individual lessons or the whole series.
+            Cancel at least 48 hours before and the hours return to your balance.
+          </p>
+          <p>
+            <a href="https://coachcarter.uk/learner/"
+               style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">
+              View my bookings →
             </a>
           </p>
-        `
+        `,
+        attachments: bookingDates.map((bd, i) => ({
+          filename: `coachcarter-lesson-${bd.date}.ics`,
+          content: generateICS({
+            id: createdBookings[i].id,
+            scheduled_date: bd.date,
+            start_time,
+            end_time,
+            instructor_name: instructor.name,
+            lesson_type_name: lessonType.name,
+            duration_str: durationStr
+          }),
+          contentType: 'text/calendar; method=PUBLISH'
+        }))
       });
-    }
 
-    // WhatsApp notification — must await so Vercel doesn't kill the function
-    await sendWhatsApp(learner.phone,
-      `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n📋 ${lessonType.name} (${durationStr})\n\nNeed to cancel? Do so at least 48 hours before and the hours return to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
-    );
-    if (!isDemoInstructor) {
-      await sendWhatsApp(instructor.phone,
-        `📋 New booking!\n\n👤 ${learner.name}\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n📋 ${lessonType.name} (${durationStr})\n\nView schedule: https://coachcarter.uk/instructor/`
+      if (!isDemoInstructor) {
+        await mailer.sendMail({
+          from:    'CoachCarter <system@coachcarter.uk>',
+          to:      instructor.email,
+          subject: `${weeks} weekly bookings — ${learner.name} starting ${formatDateDisplay(date)}`,
+          html: `
+            <h2>${weeks} weekly lessons booked</h2>
+            <table>
+              <tr><td><strong>Learner:</strong></td><td>${learner.name}</td></tr>
+              <tr><td><strong>Email:</strong></td><td>${learner.email}</td></tr>
+              <tr><td><strong>Type:</strong></td><td>${lessonType.name} (${durationStr})</td></tr>
+            </table>
+            <h3>Dates:</h3>
+            <ol>${dateList}</ol>
+            <p style="margin-top:16px">
+              <a href="https://coachcarter.uk/instructor/"
+                 style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
+                        border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
+                View my schedule →
+              </a>
+            </p>
+          `
+        });
+      }
+
+      // WhatsApp — single summary message
+      const dateListText = bookingDates.map(bd => `  📅 ${formatDateDisplay(bd.date)}`).join('\n');
+      await sendWhatsApp(learner.phone,
+        `✅ ${weeks} weekly lessons confirmed!\n\n🚗 Instructor: ${instructor.name}\n📋 ${lessonType.name} (${durationStr} each)\n⏰ ${start_time} – ${end_time}\n\n${dateListText}\n\nTotal: ${formatHours(totalMins)} | Remaining: ${balanceStr}\n\nView bookings: https://coachcarter.uk/learner/`
       );
+      if (!isDemoInstructor) {
+        await sendWhatsApp(instructor.phone,
+          `📋 ${weeks} weekly bookings!\n\n👤 ${learner.name}\n📋 ${lessonType.name} (${durationStr})\n⏰ ${start_time} – ${end_time}\n\n${dateListText}\n\nView schedule: https://coachcarter.uk/instructor/`
+        );
+      }
+    } else {
+      // Single booking — existing notification flow
+      const lessonDateStr = formatDateDisplay(date);
+      const lessonTime    = `${start_time} – ${end_time}`;
+
+      const icsContent = generateICS({
+        id: createdBookings[0].id,
+        scheduled_date: date,
+        start_time,
+        end_time,
+        instructor_name: instructor.name,
+        lesson_type_name: lessonType.name,
+        duration_str: durationStr
+      });
+
+      await mailer.sendMail({
+        from:    'CoachCarter <bookings@coachcarter.uk>',
+        to:      learner.email,
+        subject: `Lesson confirmed — ${lessonDateStr} at ${start_time}`,
+        html: `
+          <h1>Lesson confirmed.</h1>
+          <table>
+            <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
+            <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+            <tr><td><strong>Instructor:</strong></td><td>${instructor.name}</td></tr>
+            <tr><td><strong>Type:</strong></td><td>${lessonType.name}</td></tr>
+            <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
+            <tr><td><strong>Hours remaining:</strong></td><td>${balanceStr}</td></tr>
+          </table>
+          <p style="margin-top:16px;font-size:0.875rem;color:#797879">
+            Need to cancel? Do so at least 48 hours before and the hours return to your balance.
+          </p>
+          <p>
+            <a href="https://coachcarter.uk/learner/"
+               style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">
+              View my bookings →
+            </a>
+          </p>
+        `,
+        attachments: [{
+          filename: `coachcarter-lesson-${date}.ics`,
+          content:  icsContent,
+          contentType: 'text/calendar; method=PUBLISH'
+        }]
+      });
+
+      if (!isDemoInstructor) {
+        await mailer.sendMail({
+          from:    'CoachCarter <system@coachcarter.uk>',
+          to:      instructor.email,
+          subject: `New booking — ${lessonDateStr} at ${start_time}`,
+          html: `
+            <h2>New lesson booked</h2>
+            <table>
+              <tr><td><strong>Learner:</strong></td><td>${learner.name}</td></tr>
+              <tr><td><strong>Email:</strong></td><td>${learner.email}</td></tr>
+              <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
+              <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+              <tr><td><strong>Type:</strong></td><td>${lessonType.name} (${durationStr})</td></tr>
+            </table>
+            <p style="margin-top:16px">
+              <a href="https://coachcarter.uk/instructor/"
+                 style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
+                        border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
+                View my schedule →
+              </a>
+            </p>
+          `
+        });
+      }
+
+      await sendWhatsApp(learner.phone,
+        `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n📋 ${lessonType.name} (${durationStr})\n\nNeed to cancel? Do so at least 48 hours before and the hours return to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
+      );
+      if (!isDemoInstructor) {
+        await sendWhatsApp(instructor.phone,
+          `📋 New booking!\n\n👤 ${learner.name}\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n📋 ${lessonType.name} (${durationStr})\n\nView schedule: https://coachcarter.uk/instructor/`
+        );
+      }
     }
 
-    return res.status(201).json({
+    // 8. Response
+    const response = {
       success:         true,
-      booking_id:      booking.id,
+      booking_id:      createdBookings[0].id,
       balance_minutes: updated.balance_minutes || 0,
       balance_hours:   ((updated.balance_minutes || 0) / 60).toFixed(1),
       credit_balance:  updated.credit_balance
-    });
+    };
+    if (isRecurring) {
+      response.series_id   = seriesId;
+      response.booking_ids = createdBookings.map(b => b.id);
+      response.dates       = bookingDates.map(bd => bd.date);
+      response.weeks       = weeks;
+    }
+
+    return res.status(201).json(response);
 
   } catch (err) {
     console.error('slots book error:', err);
@@ -747,7 +912,7 @@ async function handleCancel(req, res) {
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { booking_id } = req.body;
+  const { booking_id, cancel_series } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
 
   try {
@@ -768,10 +933,132 @@ async function handleCancel(req, res) {
     if (booking.status !== 'confirmed')
       return res.status(400).json({ error: `Cannot cancel a booking with status "${booking.status}"` });
 
+    const isDemoBooking = booking.instructor_email === 'demo@coachcarter.uk';
+
+    // ── Series cancellation ─────────────────────────────────────────────────
+    if (cancel_series && booking.series_id) {
+      // Find all future confirmed bookings in this series (including the target)
+      const seriesBookings = await sql`
+        SELECT id, scheduled_date::text, start_time::text, minutes_deducted
+        FROM lesson_bookings
+        WHERE series_id = ${booking.series_id}
+          AND learner_id = ${user.id}
+          AND status = 'confirmed'
+          AND scheduled_date >= CURRENT_DATE
+        ORDER BY scheduled_date
+      `;
+
+      if (seriesBookings.length === 0)
+        return res.status(400).json({ error: 'No future bookings in this series to cancel' });
+
+      const cancelled = [];
+      const refunded = [];
+      const noRefund = [];
+      let totalMinsRefunded = 0;
+
+      for (const sb of seriesBookings) {
+        const lessonDT = new Date(`${sb.scheduled_date}T${sb.start_time}:00Z`);
+        const hoursUntil = (lessonDT - Date.now()) / 3600000;
+        const eligible = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF;
+        const mins = sb.minutes_deducted || DEFAULT_SLOT_MINUTES;
+
+        await sql`
+          UPDATE lesson_bookings
+          SET status = 'cancelled', cancelled_at = NOW(), credit_returned = ${eligible}
+          WHERE id = ${sb.id}
+        `;
+
+        cancelled.push(sb.id);
+        if (eligible) {
+          refunded.push(sb.id);
+          totalMinsRefunded += mins;
+        } else {
+          noRefund.push(sb.id);
+        }
+      }
+
+      // Refund total eligible minutes in one update
+      if (totalMinsRefunded > 0) {
+        const creditsBack = Math.ceil(totalMinsRefunded / 60);
+        await sql`
+          UPDATE learner_users
+          SET balance_minutes = balance_minutes + ${totalMinsRefunded},
+              credit_balance = credit_balance + ${creditsBack}
+          WHERE id = ${user.id}
+        `;
+      }
+
+      const [updated] = await sql`SELECT credit_balance, balance_minutes FROM learner_users WHERE id = ${user.id}`;
+      const balanceStr = formatHours(updated.balance_minutes || 0);
+      const refundedStr = formatHours(totalMinsRefunded);
+
+      // Send summary notifications
+      const mailer = createTransporter();
+      const dateList = seriesBookings.map(sb => {
+        const display = formatDateDisplay(sb.scheduled_date);
+        return `<li>${display} at ${String(sb.start_time).slice(0, 5)}</li>`;
+      }).join('');
+
+      await mailer.sendMail({
+        from:    'CoachCarter <bookings@coachcarter.uk>',
+        to:      booking.learner_email,
+        subject: `${cancelled.length} lessons cancelled`,
+        html: `
+          <h1>${cancelled.length} lessons cancelled.</h1>
+          <p>The following lessons with ${booking.instructor_name} have been cancelled:</p>
+          <ol>${dateList}</ol>
+          ${totalMinsRefunded > 0 ? `<p><strong>${refundedStr} returned to your balance.</strong> You now have ${balanceStr} remaining.</p>` : ''}
+          ${noRefund.length > 0 ? `<p>${noRefund.length} lesson(s) were within 48 hours and hours were forfeited.</p>` : ''}
+          <p><a href="https://coachcarter.uk/learner/"
+                style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;
+                       border-radius:8px;display:inline-block;font-weight:bold">
+            Book again →
+          </a></p>
+        `
+      });
+
+      if (!isDemoBooking) {
+        await mailer.sendMail({
+          from:    'CoachCarter <system@coachcarter.uk>',
+          to:      booking.instructor_email,
+          subject: `${cancelled.length} lessons cancelled — ${booking.learner_name}`,
+          html: `
+            <h2>${cancelled.length} lessons cancelled</h2>
+            <p><strong>${booking.learner_name}</strong> has cancelled their weekly series:</p>
+            <ol>${dateList}</ol>
+            <p>These slots are now free.</p>
+          `
+        });
+      }
+
+      const dateListText = seriesBookings.map(sb => `  📅 ${formatDateDisplay(sb.scheduled_date)}`).join('\n');
+      await sendWhatsApp(booking.learner_phone,
+        `❌ ${cancelled.length} lessons cancelled\n\n${dateListText}\n\n${totalMinsRefunded > 0 ? `${refundedStr} returned. Balance: ${balanceStr}` : 'Hours forfeited (less than 48hrs notice).'}\n\nRebook: https://coachcarter.uk/learner/book.html`
+      );
+      if (!isDemoBooking) {
+        await sendWhatsApp(booking.instructor_phone,
+          `❌ ${cancelled.length} lessons cancelled\n\n👤 ${booking.learner_name}\n${dateListText}\n\nThese slots are now free.`
+        );
+      }
+
+      return res.json({
+        success:          true,
+        cancelled,
+        refunded,
+        no_refund:        noRefund,
+        minutes_returned: totalMinsRefunded,
+        credit_balance:   updated.credit_balance,
+        balance_minutes:  updated.balance_minutes || 0,
+        balance_hours:    ((updated.balance_minutes || 0) / 60).toFixed(1),
+        message: `${cancelled.length} lessons cancelled. ${totalMinsRefunded > 0 ? formatHours(totalMinsRefunded) + ' returned.' : ''}`
+      });
+    }
+
+    // ── Single booking cancellation (existing logic) ────────────────────────
+
     // Calculate hours until lesson
     const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}:00Z`);
     const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
-    const isDemoBooking  = booking.instructor_email === 'demo@coachcarter.uk';
     // Demo bookings are free, so no hours to return
     const creditReturned = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF;
     const minsToReturn   = booking.minutes_deducted || DEFAULT_SLOT_MINUTES;
@@ -1145,6 +1432,7 @@ async function handleMyBookings(req, res) {
         lb.dropoff_address,
         lb.lesson_type_id,
         lb.minutes_deducted,
+        lb.series_id,
         i.id   AS instructor_id,
         i.name AS instructor_name,
         i.photo_url AS instructor_photo,
@@ -1185,6 +1473,71 @@ async function handleMyBookings(req, res) {
     console.error('slots my-bookings error:', err);
     reportError('/api/slots', err);
     return res.status(500).json({ error: 'Failed to load bookings', details: err.message });
+  }
+}
+
+// ── GET /api/slots?action=series-info&booking_id=X ──────────────────────────
+// Returns all bookings in a series, given any booking ID from that series.
+async function handleSeriesInfo(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { booking_id } = req.query;
+  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Find the series_id for this booking
+    const [target] = await sql`
+      SELECT series_id FROM lesson_bookings
+      WHERE id = ${booking_id} AND learner_id = ${user.id}
+    `;
+    if (!target)
+      return res.status(404).json({ error: 'Booking not found' });
+    if (!target.series_id)
+      return res.json({ ok: true, series: null, message: 'This booking is not part of a series' });
+
+    // Load all bookings in the series
+    const bookings = await sql`
+      SELECT
+        lb.id,
+        lb.scheduled_date::text,
+        lb.start_time::text,
+        lb.end_time::text,
+        lb.status,
+        lb.cancelled_at,
+        lb.credit_returned,
+        lb.series_id,
+        i.name AS instructor_name,
+        lt.name AS lesson_type_name,
+        lt.colour AS lesson_type_colour,
+        COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
+      FROM lesson_bookings lb
+      JOIN instructors i ON i.id = lb.instructor_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      WHERE lb.series_id = ${target.series_id} AND lb.learner_id = ${user.id}
+      ORDER BY lb.scheduled_date, lb.start_time
+    `;
+
+    const confirmed = bookings.filter(b => b.status === 'confirmed');
+    const future = confirmed.filter(b => new Date(`${b.scheduled_date}T${b.start_time}:00Z`) > new Date());
+
+    return res.json({
+      ok: true,
+      series_id: target.series_id,
+      total: bookings.length,
+      confirmed: confirmed.length,
+      remaining: future.length,
+      bookings
+    });
+
+  } catch (err) {
+    console.error('slots series-info error:', err);
+    reportError('/api/slots', err);
+    return res.status(500).json({ error: 'Failed to load series info', details: err.message });
   }
 }
 

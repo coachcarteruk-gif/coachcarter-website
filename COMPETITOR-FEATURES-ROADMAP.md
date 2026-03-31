@@ -26,7 +26,7 @@
 | 3 | Multiple lesson types/durations | DONE | 2026-03-31 |
 | 4 | Colour-coded lesson types | DONE | 2026-03-31 |
 | 5 | Instructor-initiated booking | DONE | 2026-03-30 |
-| 6 | Recurring/repeat bookings | **TODO** | — |
+| 6 | Recurring/repeat bookings | **IN PROGRESS** (backend done) | 2026-03-31 |
 | 7 | Drop-off location | DONE | 2026-03-30 |
 | 8 | Calendar start time & working hours | DONE | 2026-03-30 |
 | 9 | "Today" quick-jump button | DONE | pre-existing |
@@ -104,7 +104,7 @@ Print button calls `window.print()`. `@media print` CSS hides nav/toolbar/modals
 
 ---
 
-### Feature 6: Recurring/Repeat Bookings
+### Feature 6: Recurring/Repeat Bookings [IN PROGRESS - backend 2026-03-31]
 
 **Priority: Medium | Effort: 2-3 sessions | Depends on: #3 (done)**
 
@@ -127,10 +127,20 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS series_id UUID;
 **API changes (`api/slots.js`):**
 - `book`: New optional `repeat_weeks` param. Checks availability for N weeks, validates balance for N × duration, creates N rows sharing a `series_id`. Returns conflicts if any slot taken.
 - `cancel`: New optional `cancel_series` param. If true, cancels all future bookings in the series.
+- `series-info`: New GET action returns all bookings in a series given any booking_id.
+- `my-bookings`: Now includes `series_id` in response for frontend grouping.
 
-**Frontend:**
+**Frontend (Session 2 — TODO):**
 - Booking modal: "Repeat?" toggle shows date list, conflicts in red, total hours required
 - Lessons page: group recurring bookings visually ("Weekly series — 3 of 4 remaining")
+
+**Session 1 implementation notes (backend - 2026-03-31):**
+- `series_id UUID` column added to `lesson_bookings` via migration
+- `handleBook` extended: `repeat_weeks` (2-8) generates weekly dates, checks all slots available via batch query (bookings + reservations), deducts total balance, creates N bookings with shared `series_id`. On any INSERT failure, refunds all hours and cancels any partially created bookings.
+- `handleCancel` extended: `cancel_series` flag finds all future confirmed bookings in series, cancels each with individual 48hr refund assessment, returns summary.
+- `handleSeriesInfo` added: returns all bookings in a series with status counts.
+- Notifications: recurring bookings get summary emails/WhatsApp (single message with all dates) rather than N individual messages.
+- Credit deduction for recurring: deducts `Math.ceil(totalMins / 60)` credits (approximate, legacy field) alongside exact `balance_minutes`.
 
 ---
 
