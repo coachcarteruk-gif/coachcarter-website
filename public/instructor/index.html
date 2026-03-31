@@ -252,66 +252,78 @@
       padding: 1px 4px;
     }
 
-    /* ── WEEKLY VIEW ──────────────────────────────────────────────────────── */
-    .week-grid {
-      background: var(--white); border: 1px solid var(--border);
-      border-radius: var(--radius); overflow: hidden;
+    /* ── WEEKLY VIEW (Timepage-style agenda) ────────────────────────────── */
+    .tp-week { max-width: 720px; }
+    .tp-day {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border);
+      padding: 16px 0; min-height: 72px;
     }
-    .week-header {
-      display: grid; grid-template-columns: 52px repeat(var(--week-cols, 7), 1fr);
-      border-bottom: 2px solid var(--border);
+    .tp-day:last-child { border-bottom: none; }
+    .tp-day-label {
+      width: 64px; flex-shrink: 0; text-align: center;
+      padding-top: 2px; cursor: pointer;
     }
-    .week-header-gutter { border-right: 1px solid var(--border); }
-    .week-header-day {
-      padding: 10px 8px; text-align: center; border-right: 1px solid var(--border);
-      cursor: default;
+    .tp-day-label:hover { opacity: 0.7; }
+    .tp-day-dow {
+      font-size: 0.68rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.04em;
     }
-    .week-header-day:last-child { border-right: none; }
-    .week-header-day.is-today .week-hd-num {
-      background: var(--accent); color: white; border-radius: 50%;
-      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
-      margin: 0 auto;
+    .tp-day-num {
+      font-family: var(--font-head); font-size: 1.35rem; font-weight: 800;
+      color: var(--primary); margin-top: 2px; line-height: 1;
     }
-    .week-hd-dow { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .week-hd-num { font-family: var(--font-head); font-size: 1.05rem; font-weight: 800; margin-top: 2px; }
-
-    .week-body {
-      display: grid; grid-template-columns: 52px repeat(var(--week-cols, 7), 1fr);
-      position: relative; overflow-y: auto; max-height: 560px;
+    .tp-day.is-today .tp-day-dow { color: var(--accent); }
+    .tp-day.is-today .tp-day-num {
+      color: var(--white); background: var(--accent);
+      width: 34px; height: 34px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 4px auto 0;
     }
-    .week-time-col { border-right: 1px solid var(--border); }
-    .week-time-label {
-      height: 48px; display: flex; align-items: flex-start; justify-content: center;
-      padding-top: 4px; font-size: 0.7rem; color: var(--muted); font-weight: 600;
-      border-bottom: 1px solid var(--border);
+    .tp-day-lessons {
+      flex: 1; display: flex; flex-direction: column; gap: 8px;
+      min-width: 0; padding-right: 4px;
     }
-    .week-day-col {
-      border-right: 1px solid var(--border); position: relative;
-      min-height: 768px; /* 16 hours × 48px */
+    .tp-lesson {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px; background: var(--white);
+      border-radius: 12px; cursor: pointer;
+      border-left: 4px solid var(--accent);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03);
+      transition: box-shadow 0.15s, transform 0.15s;
     }
-    .week-day-col:last-child { border-right: none; }
-    .week-hour-slot {
-      height: 48px; border-bottom: 1px solid var(--border);
+    .tp-lesson:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+      transform: translateY(-1px);
     }
-    .week-hour-slot.half { border-bottom: 1px dashed #f0f0f0; height: 24px; }
-
-    .week-event {
-      position: absolute; left: 2px; right: 2px;
-      background: var(--accent-lt); color: var(--primary);
-      border-radius: 6px; padding: 3px 6px;
-      font-size: 0.72rem; font-weight: 600;
-      overflow: hidden; cursor: pointer;
-      transition: opacity 0.15s; z-index: 2;
-      border-left: 3px solid var(--accent);
+    .tp-lesson.completed { opacity: 0.55; }
+    .tp-lesson.cancelled { opacity: 0.35; border-left-color: var(--muted); }
+    .tp-lesson-bar {
+      width: 4px; flex-shrink: 0; border-radius: 2px;
+      align-self: stretch; min-height: 28px;
     }
-    .week-event:hover { opacity: 0.85; }
-    .week-event.completed { opacity: 0.6; }
-    .week-event.cancelled { opacity: 0.35; border-left-color: var(--red); }
-    .week-event-time { font-size: 0.68rem; opacity: 0.75; }
-    .week-event-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-    /* Today highlight column */
-    .week-day-col.is-today { background: #fffbf5; }
+    .tp-lesson-info { flex: 1; min-width: 0; }
+    .tp-lesson-name {
+      font-weight: 700; font-size: 0.88rem; color: var(--primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tp-lesson-time {
+      font-size: 0.78rem; color: var(--muted); font-weight: 600; margin-top: 2px;
+    }
+    .tp-lesson-address {
+      font-size: 0.72rem; color: var(--muted); margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tp-lesson-type {
+      font-size: 0.65rem; font-weight: 700; padding: 2px 8px;
+      border-radius: 20px; flex-shrink: 0; white-space: nowrap;
+    }
+    .tp-lesson-status {
+      font-size: 0.8rem; flex-shrink: 0; margin-left: auto;
+    }
+    .tp-empty-day {
+      font-size: 0.8rem; color: var(--muted); font-style: italic;
+      padding: 8px 0; opacity: 0.6;
+    }
 
     /* ── DAILY VIEW ───────────────────────────────────────────────────────── */
     .daily-header {
@@ -1215,75 +1227,56 @@ function renderMonthly() {
 
 // ─── WEEKLY RENDER ───────────────────────────────────────────────────────────
 function renderWeekly() {
-  const today    = new Date(); today.setHours(0,0,0,0);
+  const today     = new Date(); today.setHours(0,0,0,0);
   const weekStart = getWeekStart(cursor);
-  const allDays  = Array.from({length:7}, (_,i) => addDays(weekStart, i));
-  const days     = hideWeekends ? allDays.filter(d => d.getDay() !== 0 && d.getDay() !== 6) : allDays;
-  const HOURS    = Array.from({length: 21 - calendarStartHour}, (_,i) => i + calendarStartHour);
-  const colCount = days.length;
+  const allDays   = Array.from({length:7}, (_,i) => addDays(weekStart, i));
+  const days      = hideWeekends ? allDays.filter(d => d.getDay() !== 0 && d.getDay() !== 6) : allDays;
 
-  let html = `<div class="week-grid" style="--week-cols:${colCount}">`;
+  let html = '<div class="tp-week">';
 
-  // Header
-  html += `<div class="week-header"><div class="week-header-gutter"></div>`;
   for (const day of days) {
-    const isToday = dateStr(day) === dateStr(today);
-    html += `<div class="week-header-day ${isToday ? 'is-today' : ''}">
-      <div class="week-hd-dow">${DAY_SHORT[day.getDay()]}</div>
-      <div class="week-hd-num">${day.getDate()}</div>
+    const ds        = dateStr(day);
+    const allBk     = bookingCache[ds] || [];
+    const bookings  = allBk.filter(b => showCancelled || (b.status !== 'cancelled' && b.status !== 'rescheduled'));
+    const isToday   = ds === dateStr(today);
+
+    html += `<div class="tp-day${isToday ? ' is-today' : ''}">`;
+
+    // Day label (left column) — click to go to daily view
+    html += `<div class="tp-day-label" onclick="cursor=new Date('${ds}T00:00:00');setView('daily')">
+      <div class="tp-day-dow">${DAY_SHORT[day.getDay()]}</div>
+      <div class="tp-day-num">${day.getDate()}</div>
     </div>`;
-  }
-  html += `</div>`;
 
-  // Body
-  html += `<div class="week-body">`;
+    // Lessons column (right)
+    html += '<div class="tp-day-lessons">';
+    if (bookings.length === 0) {
+      html += '<div class="tp-empty-day">No lessons</div>';
+    } else {
+      for (const b of bookings) {
+        const ltColour    = b.lesson_type_colour || 'var(--accent)';
+        const ltName      = b.lesson_type_name || 'Standard Lesson';
+        const isCancelled = b.status === 'cancelled' || b.status === 'rescheduled';
+        const isCompleted = b.status === 'completed';
+        const cls         = isCancelled ? 'tp-lesson cancelled' : isCompleted ? 'tp-lesson completed' : 'tp-lesson';
+        const borderCol   = isCancelled ? 'var(--muted)' : ltColour;
+        const address     = b.booking_pickup_address || b.learner_pickup_address || '';
 
-  // Time column
-  html += `<div class="week-time-col">`;
-  for (const h of HOURS) {
-    html += `<div class="week-time-label">${String(h).padStart(2,'0')}:00</div>`;
-  }
-  html += `</div>`;
-
-  // Day columns
-  for (const day of days) {
-    const ds       = dateStr(day);
-    const allBookings = bookingCache[ds] || [];
-    const bookings = allBookings.filter(b => showCancelled || b.status !== 'cancelled');
-    const isToday  = ds === dateStr(today);
-
-    html += `<div class="week-day-col ${isToday ? 'is-today' : ''}">`;
-    // Hour grid lines (grey out non-working hours)
-    const dayAvail = availCache.filter(w => w.day_of_week === day.getDay());
-    for (const h of HOURS) {
-      const inAvail = dayAvail.some(w => {
-        const ws = parseInt(w.start_time);
-        const we = parseInt(w.end_time);
-        return h >= ws && h < we;
-      });
-      html += `<div class="week-hour-slot${!inAvail ? ' non-working' : ''}"></div>`;
+        html += `
+          <div class="${cls}" style="border-left-color:${borderCol}" onclick="openBookingDetail(${b.id})">
+            <div class="tp-lesson-info">
+              <div class="tp-lesson-name">${esc(b.learner_name)}${b.prefer_contact_before ? ' <span class="contact-badge">📞</span>' : ''}</div>
+              <div class="tp-lesson-time">${b.start_time.slice(0,5)} → ${b.end_time.slice(0,5)}</div>
+              ${address ? `<div class="tp-lesson-address">📍 ${esc(address)}</div>` : ''}
+            </div>
+            <span class="tp-lesson-type" style="background:${ltColour}18;color:${ltColour}">${esc(ltName)}</span>
+          </div>`;
+      }
     }
-    // Overlay events
-    for (const b of bookings) {
-      const [sh, sm] = b.start_time.split(':').map(Number);
-      const [eh, em] = b.end_time.split(':').map(Number);
-      const topPx    = ((sh - calendarStartHour) * 48) + (sm / 60 * 48);
-      const heightPx = ((eh - sh) * 48) + ((em - sm) / 60 * 48);
-
-      const evtCls = b.status === 'completed' ? 'week-event completed' : b.status === 'cancelled' ? 'week-event cancelled' : 'week-event';
-      const ltColour = b.lesson_type_colour || 'var(--accent)';
-      const evtStyle = b.status === 'cancelled' ? '' :
-        `background:${ltColour}22;border-left:3px solid ${ltColour};color:var(--primary);`;
-      html += `
-        <div class="${evtCls}" style="top:${topPx}px;height:${Math.max(heightPx,22)}px;${evtStyle}"
-             onclick="openBookingDetail(${b.id})">
-          <div class="week-event-time">${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)}</div>
-          <div class="week-event-name">${esc(b.learner_name)}</div>
-        </div>`;
-    }
-    html += `</div>`;
+    html += '</div></div>';
   }
-  html += `</div></div>`;
+
+  html += '</div>';
   document.getElementById('calContent').innerHTML = html;
 }
 
