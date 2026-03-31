@@ -21,7 +21,7 @@
 
 | # | Feature | Status | Date |
 |---|---------|--------|------|
-| 1 | Lesson reminder notifications | **TODO** | — |
+| 1 | Lesson reminder notifications | DONE | 2026-03-31 |
 | 2 | Rescheduling | DONE | 2026-03-30 |
 | 3 | Multiple lesson types/durations | DONE | 2026-03-31 |
 | 4 | Colour-coded lesson types | DONE | 2026-03-31 |
@@ -34,12 +34,12 @@
 | 11 | Agenda/list view | DONE | 2026-03-31 |
 | 12 | Hide weekends toggle | DONE | 2026-03-30 |
 | 13 | Cancellation visibility toggle | DONE | 2026-03-30 |
-| 14 | Per-service booking links | **TODO** | — |
+| 14 | Per-service booking links | DONE | 2026-03-31 |
 | 15 | Waiting list | **TODO** | — |
 | 16 | Google Calendar bi-directional sync | **TODO** | — |
 | 17 | Print calendar | DONE | 2026-03-30 |
 
-**12 of 17 done. 5 remaining.**
+**14 of 17 done. 3 remaining.**
 
 ---
 
@@ -87,50 +87,20 @@ Print button calls `window.print()`. `@media print` CSS hides nav/toolbar/modals
 
 ---
 
-### Feature 1: Lesson Reminder Notifications
+### Feature 1: Lesson Reminder Notifications [DONE - 2026-03-31]
 
-**Priority: HIGH | Effort: 2 sessions | Impact: Very High**
+**Priority: HIGH | Effort: 1 session | Impact: Very High**
 
 **Inspired by:** Total Drive (SMS reminders), Setmore (email reminders with 1-day-before default)
 
-**Why:** Currently only `.ics` VALARM reminders (2hr + 15min). These only fire if the learner synced the calendar. Server-side reminders are the highest-ROI feature for reducing no-shows.
-
-**What to build:**
-- Email + WhatsApp reminder 24 hours before each lesson
-- Instructor daily schedule email at 7am
-- Configurable reminder timing per instructor (24hr default)
-
-**Database:**
-```sql
-ALTER TABLE instructors ADD COLUMN IF NOT EXISTS reminder_hours INTEGER DEFAULT 24;
-ALTER TABLE instructors ADD COLUMN IF NOT EXISTS daily_schedule_email BOOLEAN DEFAULT true;
-
-CREATE TABLE IF NOT EXISTS sent_reminders (
-  id SERIAL PRIMARY KEY,
-  booking_id INTEGER REFERENCES lesson_bookings(id),
-  reminder_type TEXT NOT NULL,
-  sent_at TIMESTAMPTZ DEFAULT NOW(),
-  channel TEXT NOT NULL,
-  UNIQUE(booking_id, reminder_type)
-);
-```
-
-**API (`api/reminders.js`):**
-
-| Action | Method | Auth | Description |
-|--------|--------|------|-------------|
-| `send-due` | POST | Cron | Hourly. Finds bookings within reminder window, sends email + WhatsApp |
-| `daily-schedule` | POST | Cron | 7am. Sends instructor their day's schedule |
-| `settings` | GET | Instructor | Returns reminder config |
-| `update-settings` | POST | Instructor | Updates reminder_hours, daily_schedule_email |
-
-**Vercel Cron:**
-```json
-{ "path": "/api/reminders?action=send-due&secret=CRON_SECRET", "schedule": "0 * * * *" }
-{ "path": "/api/reminders?action=daily-schedule&secret=CRON_SECRET", "schedule": "0 7 * * *" }
-```
-
-**Frontend:** Instructor settings page gets "Reminder Settings" section. No learner UI needed.
+**Implementation notes:**
+- `api/reminders.js` — 4 actions: `send-due` (hourly cron), `daily-schedule` (7pm cron), `settings`, `update-settings`
+- `sent_reminders` table prevents duplicate learner reminders (UNIQUE on booking_id + reminder_type)
+- Daily schedule sends at **7pm** with **tomorrow's** lessons (not 7am same-day) per user preference
+- No dedup needed for daily schedule — cron fires once, unlikely to double-send
+- Instructor profile page has new "Reminders" card with dropdown (12/24/48hr) and daily schedule toggle
+- `update-profile` action in `instructor.js` also accepts `reminder_hours` and `daily_schedule_email`
+- Cron auth uses same `CRON_SECRET` pattern as `qa-digest.js` (query key or Bearer header)
 
 ---
 
@@ -164,19 +134,18 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS series_id UUID;
 
 ---
 
-### Feature 14: Per-Service Booking Links
+### Feature 14: Per-Service Booking Links [DONE - 2026-03-31]
 
 **Priority: Lower | Effort: 0.5 session | Depends on: #3 (done)**
 
 **Inspired by:** Setmore (Easy Share page with per-service "Copy link" buttons)
 
-**Why:** Send `coachcarter.uk/learner/book?type=2hr` to pre-select a lesson type. Useful for marketing and enquiry responses.
-
-**What to build:**
-- URL param `?type=slug` on booking page auto-selects lesson type and skips type selector
-- Shareable links section for instructor (list of types with "Copy link" buttons)
-
-**No DB or API changes** — booking page reads param client-side, passes `lesson_type_id` to API.
+**Implementation notes:**
+- `book.html` reads `?type=slug` URL param and auto-selects matching lesson type on load
+- Example: `coachcarter.uk/learner/book.html?type=2hr` → pre-selects 2-Hour Lesson
+- Instructor profile page has new "Booking Links" card listing all active lesson types with "Copy link" buttons
+- No DB or API changes needed — uses existing `lesson_types` slug field and `?action=list` endpoint
+- Clipboard API with fallback for older browsers
 
 ---
 

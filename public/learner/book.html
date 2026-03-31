@@ -841,8 +841,9 @@ function init() {
     document.getElementById('welcomeBanner').style.display = 'flex';
   }
 
-  // Handle Stripe return
+  // Handle URL params
   const params = new URLSearchParams(window.location.search);
+  const preselectedTypeSlug = params.get('type'); // ?type=standard or ?type=2hr
   if (params.get('paid') === '1') {
     showToast('Payment successful — your lesson is booked! Check your email for details.', 'success');
     window.history.replaceState({}, '', '/learner/book.html');
@@ -919,9 +920,13 @@ async function loadLessonTypes() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     lessonTypes = data.lesson_types || [];
-    // Default to the first type (Standard Lesson)
+    // Auto-select from ?type=slug URL param, or default to first
     if (lessonTypes.length > 0 && !selectedLessonType) {
-      selectedLessonType = lessonTypes[0];
+      if (preselectedTypeSlug) {
+        selectedLessonType = lessonTypes.find(lt => lt.slug === preselectedTypeSlug) || lessonTypes[0];
+      } else {
+        selectedLessonType = lessonTypes[0];
+      }
     }
     renderLessonTypeSelector();
   } catch (err) {

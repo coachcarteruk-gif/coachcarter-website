@@ -1,7 +1,9 @@
 {
   "version": 2,
   "crons": [
-    { "path": "/api/qa-digest", "schedule": "0 8 * * *" }
+    { "path": "/api/qa-digest", "schedule": "0 8 * * *" },
+    { "path": "/api/reminders?action=send-due", "schedule": "0 * * * *" },
+    { "path": "/api/reminders?action=daily-schedule", "schedule": "0 19 * * *" }
   ],
   "redirects": [
     {

@@ -619,7 +619,7 @@ async function handleUpdateProfile(req, res) {
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { name, phone, bio, photo_url, buffer_minutes, calendar_start_hour } = req.body;
+  const { name, phone, bio, photo_url, buffer_minutes, calendar_start_hour, reminder_hours, daily_schedule_email } = req.body;
 
   // Validate buffer_minutes if provided
   if (buffer_minutes !== undefined && buffer_minutes !== null) {
@@ -635,6 +635,18 @@ async function handleUpdateProfile(req, res) {
       return res.status(400).json({ error: 'Calendar start hour must be between 0 and 23' });
   }
 
+  // Validate reminder_hours if provided
+  if (reminder_hours !== undefined && reminder_hours !== null) {
+    const rh = parseInt(reminder_hours);
+    if (isNaN(rh) || rh < 1 || rh > 72)
+      return res.status(400).json({ error: 'Reminder hours must be between 1 and 72' });
+  }
+
+  // Validate daily_schedule_email if provided
+  if (daily_schedule_email !== undefined && daily_schedule_email !== null && typeof daily_schedule_email !== 'boolean') {
+    return res.status(400).json({ error: 'daily_schedule_email must be true or false' });
+  }
+
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
@@ -642,19 +654,27 @@ async function handleUpdateProfile(req, res) {
       ? parseInt(buffer_minutes) : null;
     const cshVal = (calendar_start_hour !== undefined && calendar_start_hour !== null)
       ? parseInt(calendar_start_hour) : null;
+    const rhVal = (reminder_hours !== undefined && reminder_hours !== null)
+      ? parseInt(reminder_hours) : null;
+    const dseVal = (daily_schedule_email !== undefined && daily_schedule_email !== null)
+      ? daily_schedule_email : null;
 
     const [updated] = await sql`
       UPDATE instructors SET
-        name                = COALESCE(NULLIF(${name      || ''}, ''), name),
-        phone               = COALESCE(${phone     ?? null}, phone),
-        bio                 = COALESCE(${bio       ?? null}, bio),
-        photo_url           = COALESCE(${photo_url ?? null}, photo_url),
-        buffer_minutes      = COALESCE(${bufVal}, buffer_minutes),
-        calendar_start_hour = COALESCE(${cshVal}, calendar_start_hour)
+        name                 = COALESCE(NULLIF(${name      || ''}, ''), name),
+        phone                = COALESCE(${phone     ?? null}, phone),
+        bio                  = COALESCE(${bio       ?? null}, bio),
+        photo_url            = COALESCE(${photo_url ?? null}, photo_url),
+        buffer_minutes       = COALESCE(${bufVal}, buffer_minutes),
+        calendar_start_hour  = COALESCE(${cshVal}, calendar_start_hour),
+        reminder_hours       = COALESCE(${rhVal}, reminder_hours),
+        daily_schedule_email = COALESCE(${dseVal}, daily_schedule_email)
       WHERE id = ${instructor.id}
       RETURNING id, name, email, phone, bio, photo_url,
                 COALESCE(buffer_minutes, 30) AS buffer_minutes,
-                COALESCE(calendar_start_hour, 7) AS calendar_start_hour
+                COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
+                COALESCE(reminder_hours, 24) AS reminder_hours,
+                COALESCE(daily_schedule_email, true) AS daily_schedule_email
     `;
 
     return res.json({ success: true, instructor: updated });

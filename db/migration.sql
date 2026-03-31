@@ -442,3 +442,18 @@ END $$;
 
 -- Track minutes in credit transactions
 ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS minutes INTEGER DEFAULT 0;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- LESSON REMINDERS (Feature 1)
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS reminder_hours INTEGER DEFAULT 24;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS daily_schedule_email BOOLEAN DEFAULT true;
+
+CREATE TABLE IF NOT EXISTS sent_reminders (
+  id             SERIAL PRIMARY KEY,
+  booking_id     INTEGER REFERENCES lesson_bookings(id) ON DELETE CASCADE,
+  reminder_type  TEXT NOT NULL,
+  sent_at        TIMESTAMPTZ DEFAULT NOW(),
+  channel        TEXT NOT NULL,
+  UNIQUE(booking_id, reminder_type)
+);

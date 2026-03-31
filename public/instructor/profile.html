@@ -313,9 +313,85 @@
         </div>
       </div>
 
+      <div class="form-card">
+        <div class="form-card-title">Reminders</div>
+
+        <div class="form-group">
+          <label for="inputReminderHours">Learner reminder timing</label>
+          <select id="inputReminderHours" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--primary);font-family:var(--font-body);font-size:0.9rem;padding:10px 13px;outline:none;">
+            <option value="12" ${p.reminder_hours === 12 ? 'selected' : ''}>12 hours before</option>
+            <option value="24" ${p.reminder_hours === 24 || !p.reminder_hours ? 'selected' : ''}>24 hours before (default)</option>
+            <option value="48" ${p.reminder_hours === 48 ? 'selected' : ''}>48 hours before</option>
+          </select>
+          <p class="field-hint">Learners receive an email and WhatsApp reminder this many hours before their lesson.</p>
+        </div>
+
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" id="inputDailySchedule" ${p.daily_schedule_email !== false ? 'checked' : ''}
+              style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
+            Send me a daily schedule email
+          </label>
+          <p class="field-hint">Receive an email at 7pm each evening with your next day's lessons.</p>
+        </div>
+      </div>
+
       <button class="btn-save" id="saveBtn" onclick="saveProfile()">Save changes</button>
+
+      <div class="form-card" id="bookingLinksCard" style="margin-top:20px">
+        <div class="form-card-title">Booking Links</div>
+        <p class="field-hint" style="margin-bottom:12px">Share these links with learners to let them book a specific lesson type directly.</p>
+        <div id="bookingLinksContainer"><span style="color:var(--muted);font-size:0.85rem">Loading…</span></div>
+      </div>
     `;
+    loadBookingLinks();
   }
+
+  async function loadBookingLinks() {
+    try {
+      const res = await fetch('/api/lesson-types?action=list');
+      const data = await res.json();
+      const types = data.lesson_types || [];
+      const container = document.getElementById('bookingLinksContainer');
+      if (!container) return;
+      if (types.length === 0) {
+        container.innerHTML = '<span style="color:var(--muted);font-size:0.85rem">No lesson types configured.</span>';
+        return;
+      }
+      container.innerHTML = types.map(lt => {
+        const url = 'https://coachcarter.uk/learner/book.html?type=' + encodeURIComponent(lt.slug);
+        return \`
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+            <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:\${lt.colour};flex-shrink:0"></span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:0.9rem">\${lt.name}</div>
+              <div style="font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\${url}</div>
+            </div>
+            <button onclick="copyBookingLink('\${url}', this)" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:8px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font-body)">
+              Copy link
+            </button>
+          </div>\`;
+      }).join('');
+    } catch (err) {
+      console.error('Failed to load booking links:', err);
+    }
+  }
+
+  function copyBookingLink(url, btn) {
+    navigator.clipboard.writeText(url).then(() => {
+      btn.textContent = 'Copied!';
+      btn.style.background = 'var(--green, #22c55e)';
+      setTimeout(() => { btn.textContent = 'Copy link'; btn.style.background = 'var(--accent)'; }, 2000);
+    }).catch(() => {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      btn.textContent = 'Copied!';
+      btn.style.background = 'var(--green, #22c55e)';
+      setTimeout(() => { btn.textContent = 'Copy link'; btn.style.background = 'var(--accent)'; }, 2000);
+    });
+  }
+  window.copyBookingLink = copyBookingLink;
 
   function previewPhoto(url) {
     if (!url) return;
@@ -368,6 +444,8 @@
     const bio            = document.getElementById('inputBio').value.trim();
     const photo_url      = document.getElementById('inputPhoto').value.trim();
     const buffer_minutes = parseInt(document.getElementById('inputBuffer').value);
+    const reminder_hours = parseInt(document.getElementById('inputReminderHours').value);
+    const daily_schedule_email = document.getElementById('inputDailySchedule').checked;
 
     if (!name) {
       alert('Name cannot be empty');
@@ -382,7 +460,7 @@
       const res  = await fetch('/api/instructor?action=update-profile', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body:    JSON.stringify({ name, phone: phone || null, bio: bio || null, photo_url: photo_url || null, buffer_minutes })
+        body:    JSON.stringify({ name, phone: phone || null, bio: bio || null, photo_url: photo_url || null, buffer_minutes, reminder_hours, daily_schedule_email })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);

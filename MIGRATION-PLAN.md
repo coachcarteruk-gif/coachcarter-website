@@ -30,7 +30,7 @@
 **Public pages (12 pages):**
 - index (role selector), coachcarter-landing, classroom, availability, lessons, admin-availability, privacy, terms, success, maintenance, offline, demo/book
 
-### Verified API Surface (28 route files, 100+ actions)
+### Verified API Surface (29 route files, 100+ actions)
 
 | File | Actions | Key notes |
 |------|---------|-----------|
@@ -47,6 +47,7 @@
 | advisor.js | 1 | Anthropic API lesson advisor |
 | create-checkout-session.js | 1 | Stripe session creation |
 | webhook.js | 1 | Stripe webhook handler |
+| reminders.js | 4 | send-due (hourly cron), daily-schedule (7pm cron), settings, update-settings |
 | Others (15) | 1 each | address-lookup, config, status, reviews, qa-digest (cron), migrate, verify-session, etc. |
 
 **Shared server modules (prefixed with `_`):**
@@ -67,11 +68,12 @@
 | shared/learner-auth.js | 1.3KB | Learner auth helpers |
 | shared/instructor-auth.js | 1.2KB | Instructor auth helpers |
 
-### Database (24 tables)
+### Database (25 tables)
 
 **Users:** learner_users, instructors, admin_users
 **Auth:** magic_link_tokens, instructor_login_tokens
 **Scheduling:** instructor_availability, instructor_blackout_dates, lesson_bookings, slot_reservations
+**Notifications:** sent_reminders
 **Payments:** credit_transactions
 **Learning:** driving_sessions, skill_ratings, learner_onboarding, quiz_results, mock_tests, mock_test_faults
 **Community:** qa_questions, qa_answers, enquiries, availability_submissions
@@ -88,6 +90,9 @@
 - `lesson_bookings.pickup_address` — per-booking pickup (overrides learner profile default)
 - `lesson_bookings.dropoff_address` — per-booking dropoff address
 - `instructors.calendar_start_hour` — calendar display start hour (default 7)
+- `instructors.reminder_hours` — how many hours before lesson to send learner reminders (default 24)
+- `instructors.daily_schedule_email` — whether to send next-day schedule email at 7pm (default true)
+- `sent_reminders` table — tracks sent reminders to prevent duplicates (unique on booking_id + reminder_type)
 
 ### Critical Design Decisions Already Made
 
