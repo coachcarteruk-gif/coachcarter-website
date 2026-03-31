@@ -149,24 +149,26 @@ async function handleUpdate(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyAdmin(req))     return res.status(401).json({ error: 'Unauthorised' });
 
-  const { id, name, email, phone, bio, photo_url, active, buffer_minutes } = req.body;
+  const { id, name, email, phone, bio, photo_url, active, buffer_minutes, commission_rate } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required' });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null) ? parseInt(buffer_minutes) : null;
+    const rateVal = (commission_rate !== undefined && commission_rate !== null) ? parseFloat(commission_rate) : null;
 
     const [instructor] = await sql`
       UPDATE instructors SET
-        name           = COALESCE(${name      || null}, name),
-        email          = COALESCE(${email     ? email.toLowerCase().trim() : null}, email),
-        phone          = COALESCE(${phone     || null}, phone),
-        bio            = COALESCE(${bio       || null}, bio),
-        photo_url      = COALESCE(${photo_url || null}, photo_url),
-        active         = COALESCE(${active !== undefined ? active : null}, active),
-        buffer_minutes = COALESCE(${bufVal}, buffer_minutes)
+        name            = COALESCE(${name      || null}, name),
+        email           = COALESCE(${email     ? email.toLowerCase().trim() : null}, email),
+        phone           = COALESCE(${phone     || null}, phone),
+        bio             = COALESCE(${bio       || null}, bio),
+        photo_url       = COALESCE(${photo_url || null}, photo_url),
+        active          = COALESCE(${active !== undefined ? active : null}, active),
+        buffer_minutes  = COALESCE(${bufVal}, buffer_minutes),
+        commission_rate = COALESCE(${rateVal}, commission_rate)
       WHERE id = ${id}
-      RETURNING id, name, email, phone, bio, photo_url, active, COALESCE(buffer_minutes, 30) AS buffer_minutes
+      RETURNING id, name, email, phone, bio, photo_url, active, COALESCE(buffer_minutes, 30) AS buffer_minutes, COALESCE(commission_rate, 0.85) AS commission_rate
     `;
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
     return res.json({ instructor });

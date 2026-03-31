@@ -753,6 +753,12 @@ body {
         <option value="120">120 minutes</option>
       </select>
     </div>
+    <div class="form-group">
+      <label>Commission rate (%)</label>
+      <input type="number" id="inst-commission" min="0" max="100" step="1" value="85"
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
+      <small style="color:var(--muted);font-size:0.78rem;">Percentage of lesson price paid to instructor (default 85%)</small>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-instructor')">Cancel</button>
       <button class="btn btn-primary" onclick="saveInstructor()">Save Instructor</button>
@@ -1015,6 +1021,7 @@ function openAddInstructor() {
   document.getElementById('inst-bio').value = '';
   document.getElementById('inst-photo').value = '';
   document.getElementById('inst-buffer').value = '30';
+  document.getElementById('inst-commission').value = '85';
   openModal('modal-instructor');
 }
 
@@ -1029,6 +1036,7 @@ function openEditInstructor(id) {
   document.getElementById('inst-bio').value = i.bio || '';
   document.getElementById('inst-photo').value = i.photo_url || '';
   document.getElementById('inst-buffer').value = String(i.buffer_minutes ?? 30);
+  document.getElementById('inst-commission').value = String(Math.round((i.commission_rate ?? 0.85) * 100));
   openModal('modal-instructor');
 }
 
@@ -1041,6 +1049,7 @@ async function saveInstructor() {
     bio: document.getElementById('inst-bio').value.trim() || null,
     photo_url: document.getElementById('inst-photo').value.trim() || null,
     buffer_minutes: parseInt(document.getElementById('inst-buffer').value) || 30,
+    commission_rate: (parseFloat(document.getElementById('inst-commission').value) || 85) / 100,
   };
 
   if (!body.name || !body.email) { toast('Name and email are required', 'error'); return; }

@@ -104,6 +104,9 @@ module.exports = async (req, res) => {
   if (action === 'update-notes')       return handleUpdateNotes(req, res);
   if (action === 'learner-notes')      return handleLearnerNotes(req, res);
   if (action === 'update-learner-notes') return handleUpdateLearnerNotes(req, res);
+  if (action === 'earnings-week')        return handleEarningsWeek(req, res);
+  if (action === 'earnings-history')     return handleEarningsHistory(req, res);
+  if (action === 'earnings-summary')     return handleEarningsSummary(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -1571,5 +1574,223 @@ async function handleUpdateLearnerNotes(req, res) {
     console.error('update-learner-notes error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to save notes' });
+  }
+}
+
+// ── GET /api/instructor?action=earnings-week ──────────────────────────────────
+// Returns lessons for a Monday–Sunday pay week with per-lesson pay.
+// Query params: week_start=YYYY-MM-DD (optional, defaults to current week's Monday)
+async function handleEarningsWeek(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Get commission rate
+    const [inst] = await sql`
+      SELECT COALESCE(commission_rate, 0.85) AS commission_rate
+      FROM instructors WHERE id = ${instructor.id}
+    `;
+    const rate = parseFloat(inst.commission_rate);
+
+    // Determine week boundaries (Monday–Sunday)
+    let weekStart = req.query.week_start;
+    // If no week_start provided, use Postgres to get current ISO week Monday
+    const [weekRow] = weekStart
+      ? await sql`SELECT ${weekStart}::date AS week_start, (${weekStart}::date + 6) AS week_end`
+      : await sql`SELECT date_trunc('week', CURRENT_DATE)::date AS week_start, (date_trunc('week', CURRENT_DATE)::date + 6) AS week_end`;
+
+    const lessons = await sql`
+      SELECT
+        lb.id, lb.scheduled_date::text AS date,
+        lb.start_time::text AS start_time,
+        lb.end_time::text AS end_time,
+        lb.status,
+        lb.instructor_notes,
+        lu.name AS learner_name,
+        lt.name AS lesson_type_name,
+        COALESCE(lt.price_pence, 8250) AS price_pence,
+        COALESCE(lt.duration_minutes, 90) AS duration_minutes
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      WHERE lb.instructor_id = ${instructor.id}
+        AND lb.status IN ('confirmed', 'completed')
+        AND lb.scheduled_date >= ${weekRow.week_start}
+        AND lb.scheduled_date <= ${weekRow.week_end}
+      ORDER BY lb.scheduled_date ASC, lb.start_time ASC
+    `;
+
+    let totalPence = 0;
+    let completedCount = 0;
+    let confirmedCount = 0;
+    const mapped = lessons.map(l => {
+      const payPence = Math.round(parseInt(l.price_pence) * rate);
+      totalPence += payPence;
+      if (l.status === 'completed') completedCount++;
+      else confirmedCount++;
+      return {
+        id: l.id,
+        date: l.date,
+        start_time: l.start_time,
+        end_time: l.end_time,
+        status: l.status,
+        learner_name: l.learner_name,
+        lesson_type_name: l.lesson_type_name || 'Standard Lesson',
+        duration_minutes: parseInt(l.duration_minutes),
+        price_pence: parseInt(l.price_pence),
+        instructor_pay_pence: payPence
+      };
+    });
+
+    return res.json({
+      commission_rate: rate,
+      week_start: weekRow.week_start,
+      week_end: weekRow.week_end,
+      lessons: mapped,
+      total_pence: totalPence,
+      completed_count: completedCount,
+      confirmed_count: confirmedCount
+    });
+  } catch (err) {
+    console.error('instructor earnings-week error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to load weekly earnings' });
+  }
+}
+
+// ── GET /api/instructor?action=earnings-history ───────────────────────────────
+// Returns aggregated weekly totals for past weeks.
+// Query params: limit (default 12, max 52), offset (default 0)
+async function handleEarningsHistory(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [inst] = await sql`
+      SELECT COALESCE(commission_rate, 0.85) AS commission_rate
+      FROM instructors WHERE id = ${instructor.id}
+    `;
+    const rate = parseFloat(inst.commission_rate);
+
+    const limit  = Math.min(parseInt(req.query.limit) || 12, 52);
+    const offset = parseInt(req.query.offset) || 0;
+
+    const weeks = await sql`
+      SELECT
+        date_trunc('week', lb.scheduled_date)::date AS week_start,
+        (date_trunc('week', lb.scheduled_date)::date + 6) AS week_end,
+        COUNT(*)::int AS lesson_count,
+        SUM(COALESCE(lt.duration_minutes, 90))::int AS total_minutes,
+        SUM(COALESCE(lt.price_pence, 8250))::int AS gross_pence
+      FROM lesson_bookings lb
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      WHERE lb.instructor_id = ${instructor.id}
+        AND lb.status = 'completed'
+      GROUP BY date_trunc('week', lb.scheduled_date)
+      ORDER BY week_start DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    const mapped = weeks.map(w => ({
+      week_start: w.week_start,
+      week_end: w.week_end,
+      lesson_count: w.lesson_count,
+      total_minutes: w.total_minutes,
+      total_hours: +(w.total_minutes / 60).toFixed(1),
+      gross_pence: w.gross_pence,
+      instructor_pay_pence: Math.round(w.gross_pence * rate)
+    }));
+
+    return res.json({
+      commission_rate: rate,
+      weeks: mapped,
+      limit,
+      offset
+    });
+  } catch (err) {
+    console.error('instructor earnings-history error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to load earnings history' });
+  }
+}
+
+// ── GET /api/instructor?action=earnings-summary ───────────────────────────────
+// Returns summary stats: this month, all-time, average per week.
+async function handleEarningsSummary(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [inst] = await sql`
+      SELECT COALESCE(commission_rate, 0.85) AS commission_rate
+      FROM instructors WHERE id = ${instructor.id}
+    `;
+    const rate = parseFloat(inst.commission_rate);
+
+    // This month
+    const [monthData] = await sql`
+      SELECT
+        COUNT(*)::int AS lesson_count,
+        COALESCE(SUM(COALESCE(lt.price_pence, 8250)), 0)::int AS gross_pence,
+        COALESCE(SUM(COALESCE(lt.duration_minutes, 90)), 0)::int AS total_minutes
+      FROM lesson_bookings lb
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      WHERE lb.instructor_id = ${instructor.id}
+        AND lb.status = 'completed'
+        AND lb.scheduled_date >= date_trunc('month', CURRENT_DATE)
+        AND lb.scheduled_date < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+    `;
+
+    // All-time
+    const [allTime] = await sql`
+      SELECT
+        COUNT(*)::int AS lesson_count,
+        COALESCE(SUM(COALESCE(lt.price_pence, 8250)), 0)::int AS gross_pence,
+        COALESCE(SUM(COALESCE(lt.duration_minutes, 90)), 0)::int AS total_minutes
+      FROM lesson_bookings lb
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      WHERE lb.instructor_id = ${instructor.id}
+        AND lb.status = 'completed'
+    `;
+
+    // Distinct weeks with completed lessons (for average)
+    const [weeksActive] = await sql`
+      SELECT COUNT(DISTINCT date_trunc('week', scheduled_date))::int AS count
+      FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id} AND status = 'completed'
+    `;
+
+    const avgPerWeekPence = weeksActive.count > 0
+      ? Math.round((allTime.gross_pence * rate) / weeksActive.count)
+      : 0;
+
+    return res.json({
+      commission_rate: rate,
+      this_month: {
+        lesson_count: monthData.lesson_count,
+        total_minutes: monthData.total_minutes,
+        earnings_pence: Math.round(monthData.gross_pence * rate)
+      },
+      all_time: {
+        lesson_count: allTime.lesson_count,
+        total_minutes: allTime.total_minutes,
+        earnings_pence: Math.round(allTime.gross_pence * rate)
+      },
+      avg_per_week_pence: avgPerWeekPence,
+      weeks_active: weeksActive.count
+    });
+  } catch (err) {
+    console.error('instructor earnings-summary error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to load earnings summary' });
   }
 }

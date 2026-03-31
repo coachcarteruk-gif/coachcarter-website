@@ -462,3 +462,8 @@ CREATE TABLE IF NOT EXISTS sent_reminders (
 -- RECURRING/REPEAT BOOKINGS (Feature 6)
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS series_id UUID;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- INSTRUCTOR EARNINGS (Feature – Earnings Dashboard)
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS commission_rate NUMERIC(4,3) DEFAULT 0.850;
