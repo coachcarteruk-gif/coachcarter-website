@@ -27,7 +27,7 @@ Every feature in this roadmap follows these constraints:
 |---|---------|----------|--------|--------|------------|
 | 1 | Lesson reminder notifications | **High** | Medium | Very High | Push infra (Phase 0.5) |
 | 2 | Rescheduling [DONE - 2026-03-30] | **High** | Medium | High | — |
-| 3 | Multiple lesson types/durations | **High** | High | Very High | DB schema change |
+| 3 | Multiple lesson types/durations [DONE - 2026-03-31] | **High** | High | Very High | DB schema change |
 | 4 | Colour-coded lesson types | **High** | Low | Medium | #3 |
 | 5 | Instructor-initiated booking [DONE - 2026-03-30] | **High** | Medium | High | — |
 | 6 | Recurring/repeat bookings | Medium | High | Medium | #3 |
@@ -264,6 +264,25 @@ ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_duration_check
 ```
 
 **Estimated effort:** 3-4 sessions (1 for DB + lesson_types API, 1 for slots.js refactor, 1-2 for frontend)
+
+**Implementation notes (2026-03-31):**
+- Credit system converted from integer credits to hours-based balance (stored as `balance_minutes` in DB)
+- Existing learners migrated: `balance_minutes = credit_balance * 90`
+- `lesson_types` table with public list + admin CRUD API (`api/lesson-types.js`)
+- Seeded: Standard Lesson (90min/£82.50) + 2-Hour Lesson (120min/£110)
+- `api/slots.js` refactored: slot generation uses lesson type duration instead of hardcoded 90min
+- All booking flows (book, checkout-slot, cancel, reschedule) updated for minutes-based balance
+- `api/credits.js` converted to sell hours (£55/hr base rate, discount tiers at 6/12/18/24/30 hrs)
+- `api/webhook.js` dual-writes both `credit_balance` and `balance_minutes` during transition
+- Admin portal: Lesson Types CRUD section added
+- Learner booking page: lesson type selector shown when multiple types exist
+- Buy Credits page converted to Buy Hours with hour-based packages
+- Dashboard, sidebar, emails, WhatsApp all show hours instead of credits
+- Instructor create-booking modal has lesson type dropdown
+- Instructor schedule-range API joins lesson_types for type name/colour
+- Dual-write strategy: both `credit_balance` and `balance_minutes` maintained for rollback safety
+- `credits_required` per type deferred — all types just deduct their duration in minutes
+- Actual effort: 1 session (all changes combined)
 
 ---
 

@@ -839,12 +839,12 @@
   <!-- CREDIT BALANCE -->
   <div class="credit-card" id="credit-card">
     <div class="credit-card-left">
-      <div class="credit-label">Lessons Remaining</div>
+      <div class="credit-label">Hours Remaining</div>
       <div class="credit-value" id="credit-balance">—</div>
-      <div class="credit-sub" id="credit-sub">lessons</div>
+      <div class="credit-sub" id="credit-sub">hours</div>
     </div>
     <div class="credit-actions">
-      <a href="/learner/lessons.html?tab=buy" class="btn-buy">Buy Lessons</a>
+      <a href="/learner/lessons.html?tab=buy" class="btn-buy">Buy Hours</a>
       <a href="/learner/lessons.html" class="btn-book-lesson" id="book-btn">Book a Lesson →</a>
     </div>
   </div>
@@ -1117,10 +1117,12 @@ function render() {
   if (!PROGRESS) return;
 
   if (CREDITS_DATA) {
-    const bal = CREDITS_DATA.credit_balance ?? 0;
-    document.getElementById('credit-balance').textContent = bal;
-    document.getElementById('credit-sub').textContent = bal === 1 ? 'lesson' : 'lessons';
-    // Book button always active — learners can pay per slot even with 0 credits
+    const mins = CREDITS_DATA.balance_minutes ?? (CREDITS_DATA.credit_balance ?? 0) * 90;
+    const hrs = (mins / 60);
+    const hrsStr = hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
+    document.getElementById('credit-balance').textContent = hrsStr;
+    document.getElementById('credit-sub').textContent = 'hours';
+    // Book button always active — learners can pay per slot even with 0 balance
   }
 
   renderUpcoming();

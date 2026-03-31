@@ -794,6 +794,10 @@
         <input type="time" id="addLessonTime" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;" step="1800">
       </div>
       <div>
+        <div class="notes-label">Lesson type</div>
+        <select id="addLessonType" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;"></select>
+      </div>
+      <div>
         <div class="notes-label">Payment</div>
         <div class="payment-radios">
           <label><input type="radio" name="addLessonPay" value="cash" checked><span>Cash</span></label>
@@ -1912,13 +1916,22 @@ async function openAddLessonModal() {
   // Reset payment to cash
   document.querySelector('input[name="addLessonPay"][value="cash"]').checked = true;
 
-  // Fetch learners
+  // Fetch learners + lesson types in parallel
   try {
-    const res = await fetch('/api/instructor?action=my-learners', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
-    const data = await res.json();
-    addLessonLearners = Array.isArray(data) ? data : (data.learners || []);
+    const [learnersRes, typesRes] = await Promise.all([
+      fetch('/api/instructor?action=my-learners', { headers: { Authorization: 'Bearer ' + token } }),
+      fetch('/api/lesson-types?action=list')
+    ]);
+    const learnersData = await learnersRes.json();
+    addLessonLearners = Array.isArray(learnersData) ? learnersData : (learnersData.learners || []);
+    const typesData = await typesRes.json();
+    const types = typesData.lesson_types || [];
+    const sel = document.getElementById('addLessonType');
+    sel.innerHTML = types.map(lt => {
+      const hrs = lt.duration_minutes / 60;
+      const hrsStr = hrs % 1 === 0 ? `${hrs}hr` : `${hrs.toFixed(1)}hrs`;
+      return `<option value="${lt.id}">${lt.name} (${hrsStr})</option>`;
+    }).join('');
   } catch { addLessonLearners = []; }
 
   document.getElementById('addLessonModal').classList.add('open');
@@ -2021,6 +2034,7 @@ async function confirmCreateBooking() {
         learner_id: selectedLearnerId,
         scheduled_date: newDate,
         start_time: newTime.slice(0, 5),
+        lesson_type_id: parseInt(document.getElementById('addLessonType').value) || null,
         payment_method: payMethod,
         notes: notes || null,
         dropoff_address: document.getElementById('addLessonDropoff').value.trim() || null

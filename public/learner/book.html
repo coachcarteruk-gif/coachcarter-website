@@ -67,6 +67,25 @@
       height: 2px; background: var(--accent); border-radius: 1px;
     }
 
+    /* ── Lesson Type Selector ─────────────────────────────────────────────── */
+    .lesson-type-selector {
+      display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .lesson-type-btn {
+      flex: 1; min-width: 120px; padding: 10px 14px; border-radius: var(--radius);
+      border: 1.5px solid var(--border); background: var(--white);
+      cursor: pointer; text-align: left; transition: all 0.2s;
+      font-family: var(--font-head);
+    }
+    .lesson-type-btn:hover { border-color: var(--lt-colour, var(--accent)); }
+    .lesson-type-btn.active {
+      border-color: var(--lt-colour, var(--accent));
+      background: color-mix(in srgb, var(--lt-colour, var(--accent)) 8%, white);
+      box-shadow: 0 0 0 1px var(--lt-colour, var(--accent));
+    }
+    .lt-name { display: block; font-weight: 700; font-size: 0.85rem; color: var(--primary); }
+    .lt-detail { display: block; font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
     /* ── Page ──────────────────────────────────────────────────────────────── */
     .page { max-width: 960px; margin: 0 auto; padding: 24px 16px 100px; }
 
@@ -604,7 +623,8 @@
     <div class="cal-title-block">
       <div>
         <div class="cal-title">Book a Lesson</div>
-        <div class="cal-subtitle" id="calSubtitle">Pick any available slot — each lesson is 1.5 hours.</div>
+        <div id="lessonTypeSelector" class="lesson-type-selector" style="display:none"></div>
+        <div class="cal-subtitle" id="calSubtitle">Pick any available slot.</div>
       </div>
     </div>
     <div class="cal-controls">
@@ -641,7 +661,8 @@
         <div class="modal-detail-row"><span>Date</span><span id="mdDate">—</span></div>
         <div class="modal-detail-row"><span>Time</span><span id="mdTime">—</span></div>
         <div class="modal-detail-row"><span>Instructor</span><span id="mdInstructor">—</span></div>
-        <div class="modal-detail-row"><span>Duration</span><span>1.5 hours</span></div>
+        <div class="modal-detail-row"><span>Type</span><span id="mdType">Standard Lesson</span></div>
+        <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">1.5 hours</span></div>
       </div>
       <div style="margin:12px 0">
         <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off address (optional)</label>
@@ -649,7 +670,7 @@
       </div>
       <div id="modalCreditPath" style="display:none">
         <p class="modal-credit-note">
-          This will use <strong>1 lesson</strong> from your balance.
+          This will use <strong id="mdDeductHours">1.5 hours</strong> from your balance.
           Cancel 48+ hours before and it returns automatically.
         </p>
         <div class="modal-actions">
@@ -660,7 +681,7 @@
           </button>
         </div>
         <p style="text-align:center;margin-top:12px;font-size:0.8rem;color:var(--muted)">
-          or <a href="/learner/buy-credits.html" style="color:var(--accent);font-weight:600">buy more lessons</a>
+          or <a href="/learner/buy-credits.html" style="color:var(--accent);font-weight:600">buy more hours</a>
         </p>
       </div>
       <div id="modalPayPath" style="display:none">
@@ -735,9 +756,9 @@
       <div class="modal-detail-row"><span>Was</span><span id="rmOldDateTime" style="text-decoration:line-through;color:var(--muted)">—</span></div>
       <div class="modal-detail-row"><span>Now</span><span id="rmNewDateTime" style="color:var(--accent);font-weight:700">—</span></div>
       <div class="modal-detail-row"><span>Instructor</span><span id="rmInstructor">—</span></div>
-      <div class="modal-detail-row"><span>Duration</span><span>1.5 hours</span></div>
+      <div class="modal-detail-row"><span>Duration</span><span id="rmDuration">1.5 hours</span></div>
     </div>
-    <p class="modal-credit-note">No credit change — your lesson is simply being moved to the new time.</p>
+    <p class="modal-credit-note">No balance change — your lesson is simply being moved to the new time.</p>
     <div class="modal-actions">
       <button class="btn-modal-cancel" onclick="closeRescheduleModal()">Cancel</button>
       <button class="btn-confirm" id="btnConfirmReschedule">
@@ -797,7 +818,10 @@ const MON_FULL  = ['January','February','March','April','May','June','July','Aug
 // ─── State ───────────────────────────────────────────────────────────────────
 let token         = null;
 let creditBalance = 0;
+let balanceMinutes = 0;
 let instructors   = [];
+let lessonTypes   = [];
+let selectedLessonType = null; // current lesson type object
 let currentView   = 'weekly';
 let cursor        = new Date(); cursor.setHours(0,0,0,0);
 let slotCache     = {}; // dateStr -> [slot, ...]
@@ -835,7 +859,7 @@ function init() {
     return;
   }
 
-  Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile()])
+  Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile(), loadLessonTypes()])
     .then(() => {
       cursor = new Date(); cursor.setHours(0,0,0,0);
       setView('weekly');
@@ -871,16 +895,76 @@ async function loadBalance() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     creditBalance = data.credit_balance;
+    balanceMinutes = data.balance_minutes || 0;
     updateCreditBadge();
   } catch {}
 }
 
+function formatBalanceHours(mins) {
+  const hrs = mins / 60;
+  return hrs % 1 === 0 ? `${hrs} hr${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hrs`;
+}
+
 function updateCreditBadge() {
   const badge = document.getElementById('creditBadge');
-  badge.textContent = creditBalance === 1 ? '1 lesson' : `${creditBalance} lessons`;
-  badge.className = 'credit-badge' + (creditBalance === 0 ? ' zero' : '');
-  document.getElementById('noCreditsBanner').style.display = creditBalance === 0 ? 'flex' : 'none';
+  badge.textContent = formatBalanceHours(balanceMinutes);
+  badge.className = 'credit-badge' + (balanceMinutes === 0 ? ' zero' : '');
+  document.getElementById('noCreditsBanner').style.display = balanceMinutes === 0 ? 'flex' : 'none';
 }
+
+// ─── Lesson Types ───────────────────────────────────────────────────────────
+async function loadLessonTypes() {
+  try {
+    const res = await fetch('/api/lesson-types?action=list');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    lessonTypes = data.lesson_types || [];
+    // Default to the first type (Standard Lesson)
+    if (lessonTypes.length > 0 && !selectedLessonType) {
+      selectedLessonType = lessonTypes[0];
+    }
+    renderLessonTypeSelector();
+  } catch (err) {
+    console.error('Failed to load lesson types:', err);
+    // Fallback
+    lessonTypes = [{ id: null, name: 'Standard Lesson', slug: 'standard', duration_minutes: 90, price_pence: 8250, colour: '#3b82f6' }];
+    selectedLessonType = lessonTypes[0];
+  }
+}
+
+function renderLessonTypeSelector() {
+  const container = document.getElementById('lessonTypeSelector');
+  if (!container || lessonTypes.length <= 1) {
+    // Hide selector if only one type
+    if (container) container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'flex';
+  container.innerHTML = lessonTypes.map(lt => {
+    const hrs = lt.duration_minutes / 60;
+    const hrsStr = hrs % 1 === 0 ? `${hrs} hr${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hrs`;
+    const priceStr = '£' + (lt.price_pence / 100).toFixed(2);
+    const isActive = selectedLessonType && selectedLessonType.id === lt.id;
+    return `<button class="lesson-type-btn${isActive ? ' active' : ''}" onclick="selectLessonType(${lt.id})" style="--lt-colour: ${lt.colour}">
+      <span class="lt-name">${lt.name}</span>
+      <span class="lt-detail">${hrsStr} · ${priceStr}</span>
+    </button>`;
+  }).join('');
+}
+
+function selectLessonType(id) {
+  selectedLessonType = lessonTypes.find(lt => lt.id === id) || lessonTypes[0];
+  renderLessonTypeSelector();
+  // Update subtitle
+  const hrs = selectedLessonType.duration_minutes / 60;
+  const hrsStr = hrs % 1 === 0 ? `${hrs} hour${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hours`;
+  document.getElementById('calSubtitle').textContent = `Pick any available slot — ${selectedLessonType.name} (${hrsStr}).`;
+  // Clear cache and reload slots for the new duration
+  slotCache = {};
+  loadedRanges = [];
+  renderCalendar();
+}
+window.selectLessonType = selectLessonType;
 
 // ─── Instructors ─────────────────────────────────────────────────────────────
 async function loadInstructors() {
@@ -1050,6 +1134,7 @@ async function fetchNeededSlots() {
     for (const chunk of chunks) {
       let url = `/api/slots?action=available&from=${chunk.from}&to=${chunk.to}`;
       if (instructorId) url += `&instructor_id=${instructorId}`;
+      if (selectedLessonType && selectedLessonType.id) url += `&lesson_type_id=${selectedLessonType.id}`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -1278,7 +1363,15 @@ function openBookModal(el) {
   document.getElementById('mdTime').textContent = `${pendingSlot.start_time} – ${pendingSlot.end_time}`;
   document.getElementById('mdInstructor').textContent = pendingSlot.instructor_name;
 
-  const hasCreds = creditBalance >= 1;
+  const ltName     = selectedLessonType ? selectedLessonType.name : 'Standard Lesson';
+  const ltDuration = selectedLessonType ? selectedLessonType.duration_minutes : 90;
+  const ltHrs = ltDuration / 60;
+  const ltHrsStr = ltHrs % 1 === 0 ? `${ltHrs} hour${ltHrs !== 1 ? 's' : ''}` : `${ltHrs.toFixed(1)} hours`;
+  document.getElementById('mdType').textContent = ltName;
+  document.getElementById('mdDuration').textContent = ltHrsStr;
+  document.getElementById('mdDeductHours').textContent = ltHrsStr;
+  const ltPrice    = selectedLessonType ? selectedLessonType.price_pence : 8250;
+  const hasCreds   = balanceMinutes >= ltDuration;
   document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
   document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
 
@@ -1287,7 +1380,7 @@ function openBookModal(el) {
     document.getElementById('bookSpinner').style.display = 'none';
     document.getElementById('btnConfirmBook').disabled = false;
   } else {
-    document.getElementById('payBtnLabel').textContent = 'Pay £82.50 & book';
+    document.getElementById('payBtnLabel').textContent = `Pay £${(ltPrice / 100).toFixed(2)} & book`;
     document.getElementById('paySpinner').style.display = 'none';
     document.getElementById('btnPayAndBook').disabled = false;
   }
@@ -1315,15 +1408,18 @@ async function confirmBookWithCredit() {
   btn.disabled = true; label.textContent = 'Booking…'; spinner.style.display = 'block';
 
   try {
+    const bookBody = { ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined };
+    if (selectedLessonType && selectedLessonType.id) bookBody.lesson_type_id = selectedLessonType.id;
     const res = await fetch('/api/slots?action=book', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined })
+      body: JSON.stringify(bookBody)
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
     creditBalance = data.credit_balance;
+    balanceMinutes = data.balance_minutes || 0;
     lastBookingId = data.booking_id;
     updateCreditBadge();
     showBookSuccess();
@@ -1343,17 +1439,20 @@ async function confirmPayAndBook() {
   btn.disabled = true; label.textContent = 'Redirecting to payment…'; spinner.style.display = 'block';
 
   try {
+    const payBody = { ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined };
+    if (selectedLessonType && selectedLessonType.id) payBody.lesson_type_id = selectedLessonType.id;
     const res = await fetch('/api/slots?action=checkout-slot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined })
+      body: JSON.stringify(payBody)
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     window.location.href = data.url;
   } catch (err) {
+    const ltPrice = selectedLessonType ? selectedLessonType.price_pence : 8250;
     showToast(err.message || 'Could not start payment. Please try again.', 'error');
-    btn.disabled = false; label.textContent = 'Pay £82.50 & book'; spinner.style.display = 'none';
+    btn.disabled = false; label.textContent = `Pay £${(ltPrice / 100).toFixed(2)} & book`; spinner.style.display = 'none';
   }
 }
 
@@ -1500,6 +1599,7 @@ async function confirmCancel() {
     if (!res.ok) throw new Error(data.error);
 
     creditBalance = data.credit_balance;
+    balanceMinutes = data.balance_minutes || 0;
     updateCreditBadge();
     document.getElementById('cancelModal').classList.remove('open');
     showToast(data.message, data.credit_returned ? 'success' : '');

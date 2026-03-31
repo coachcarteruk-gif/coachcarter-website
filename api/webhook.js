@@ -97,34 +97,39 @@ async function handleCreditPurchase(session) {
     // Determine payment method (card or klarna)
     const paymentMethod = session.payment_method_types?.[0] || 'card';
 
+    // Calculate minutes: each credit = 90 minutes (standard lesson)
+    // Future: metadata.minutes_purchased overrides this
+    const minutes = parseInt(metadata.minutes_purchased, 10) || (credits * 90);
+    const hoursStr = (minutes / 60) % 1 === 0 ? `${minutes / 60}` : (minutes / 60).toFixed(1);
+
     // 1. Record the transaction
     await sql`
       INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id)
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes)
       VALUES
-        (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${session.id})
+        (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${session.id}, ${minutes})
     `;
 
-    // 2. Increment the learner's credit balance atomically
+    // 2. Increment the learner's balance atomically (both columns for transition)
     await sql`
       UPDATE learner_users
-      SET credit_balance = credit_balance + ${credits}
+      SET credit_balance = credit_balance + ${credits},
+          balance_minutes = balance_minutes + ${minutes}
       WHERE id = ${learnerId}
     `;
 
-    console.log(`✅ Lessons added: ${credits} lessons → learner #${learnerId} (${learnerEmail})`);
+    console.log(`✅ Hours added: ${hoursStr}hrs (${minutes}min) → learner #${learnerId} (${learnerEmail})`);
 
     // 3. Send confirmation email via nodemailer
     const transporter = createTransporter();
-    const plural = credits === 1 ? 'lesson' : 'lessons';
 
     await transporter.sendMail({
       from:    'CoachCarter <bookings@coachcarter.uk>',
       to:      learnerEmail,
-      subject: `${credits} ${plural} added to your account`,
+      subject: `${hoursStr} hours added to your account`,
       html: `
-        <h1>Your lessons are ready to book.</h1>
-        <p>We've added <strong>${credits} ${plural}</strong> to your CoachCarter account.</p>
+        <h1>Your hours are ready to book.</h1>
+        <p>We've added <strong>${hoursStr} hours</strong> to your CoachCarter account.</p>
         <p><strong>Amount paid:</strong> £${(amountPence / 100).toFixed(2)}</p>
         <p>Head to your dashboard to book your next lesson.</p>
         <p><a href="https://coachcarter.uk/learner/"
@@ -133,8 +138,8 @@ async function handleCreditPurchase(session) {
           Book a lesson →
         </a></p>
         <p style="color:#888;font-size:0.85rem;">
-          Lessons are fully refundable. Cancel 48+ hours before and the lesson
-          returns to your balance automatically.
+          Hours are fully refundable. Cancel 48+ hours before and the hours
+          return to your balance automatically.
         </p>
       `
     });
@@ -157,6 +162,8 @@ async function handleSlotBooking(session) {
   const startTime     = metadata.start_time;
   const endTime       = metadata.end_time;
   const amountPence   = parseInt(metadata.amount_pence, 10);
+  const lessonTypeId  = metadata.lesson_type_id ? parseInt(metadata.lesson_type_id, 10) : null;
+  const durationMins  = parseInt(metadata.duration_minutes, 10) || 90;
 
   if (!learnerId || !instructorId || !scheduledDate || !startTime || !endTime) {
     console.error('❌ slot_booking webhook missing required metadata', metadata);
@@ -175,31 +182,33 @@ async function handleSlotBooking(session) {
       return;
     }
 
-    // 1. Record the transaction (1 credit purchased for this single lesson)
+    // 1. Record the transaction
     await sql`
       INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id)
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes)
       VALUES
-        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id})
+        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins})
     `;
 
-    // 2. Add 1 credit to the learner's balance
+    // 2. Add hours to balance (net zero — add then deduct)
     await sql`
       UPDATE learner_users
-      SET credit_balance = credit_balance + 1
+      SET credit_balance = credit_balance + 1,
+          balance_minutes = balance_minutes + ${durationMins}
       WHERE id = ${learnerId}
     `;
 
-    // 3. Immediately deduct 1 credit and create the booking (atomic deduct)
+    // 3. Immediately deduct hours and create the booking
     const [deducted] = await sql`
       UPDATE learner_users
-      SET credit_balance = credit_balance - 1
-      WHERE id = ${learnerId} AND credit_balance >= 1
-      RETURNING credit_balance
+      SET credit_balance = credit_balance - 1,
+          balance_minutes = balance_minutes - ${durationMins}
+      WHERE id = ${learnerId} AND balance_minutes >= ${durationMins}
+      RETURNING credit_balance, balance_minutes
     `;
 
     if (!deducted) {
-      console.error('❌ slot_booking: failed to deduct credit after adding it — race condition?');
+      console.error('❌ slot_booking: failed to deduct hours after adding — race condition?');
       return;
     }
 
@@ -208,19 +217,23 @@ async function handleSlotBooking(session) {
     try {
       const [b] = await sql`
         INSERT INTO lesson_bookings
-          (learner_id, instructor_id, scheduled_date, start_time, end_time, status)
+          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+           lesson_type_id, minutes_deducted)
         VALUES
-          (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, 'confirmed')
+          (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, 'confirmed',
+           ${lessonTypeId}, ${durationMins})
         RETURNING id, scheduled_date, start_time::text, end_time::text
       `;
       booking = b;
     } catch (insertErr) {
-      // Slot was taken — refund the credit
+      // Slot was taken — refund the hours
       await sql`
-        UPDATE learner_users SET credit_balance = credit_balance + 1 WHERE id = ${learnerId}
+        UPDATE learner_users
+        SET credit_balance = credit_balance + 1,
+            balance_minutes = balance_minutes + ${durationMins}
+        WHERE id = ${learnerId}
       `;
-      console.error('❌ slot_booking: slot already taken, credit refunded', insertErr.message);
-      // TODO: could send a "sorry, slot was taken" email here
+      console.error('❌ slot_booking: slot already taken, hours refunded', insertErr.message);
       return;
     }
 
@@ -239,7 +252,10 @@ async function handleSlotBooking(session) {
       SELECT name, email, phone FROM learner_users WHERE id = ${learnerId}
     `;
 
-    const creditBalance = deducted.credit_balance;
+    const balanceHrs = ((deducted.balance_minutes || 0) / 60).toFixed(1);
+    const durationStr = durationMins >= 60
+      ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
+      : `${durationMins} mins`;
 
     // 7. Send confirmation emails
     const transporter = createTransporter();
@@ -268,11 +284,11 @@ async function handleSlotBooking(session) {
           <tr><td><strong>Date:</strong></td><td>${lessonDate}</td></tr>
           <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
           <tr><td><strong>Instructor:</strong></td><td>${instructorName}</td></tr>
-          <tr><td><strong>Duration:</strong></td><td>1.5 hours</td></tr>
-          <tr><td><strong>Lessons remaining:</strong></td><td>${creditBalance}</td></tr>
+          <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
+          <tr><td><strong>Hours remaining:</strong></td><td>${balanceHrs} hrs</td></tr>
         </table>
         <p style="margin-top:16px;font-size:0.875rem;color:#797879">
-          Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.
+          Need to cancel? Do so at least 48 hours before and the hours return to your balance.
         </p>
         <p>
           <a href="https://coachcarter.uk/learner/"

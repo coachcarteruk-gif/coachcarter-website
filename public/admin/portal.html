@@ -373,6 +373,9 @@ body {
     <a href="#" onclick="showSection('videos'); return false;" data-section="videos">
       <span class="nav-icon">&#x1f3ac;</span> Videos
     </a>
+    <a href="#" onclick="showSection('lesson-types'); return false;" data-section="lesson-types">
+      <span class="nav-icon">&#x1f4cb;</span> Lesson Types
+    </a>
     <a href="/" target="_blank" style="opacity: 0.5; font-size: 0.82rem;">
       <span class="nav-icon">&#x1f310;</span> View Site
     </a>
@@ -567,7 +570,70 @@ body {
     </div>
   </div>
 
+  <!-- ═══════════ LESSON TYPES SECTION ═══════════ -->
+  <div class="section" id="section-lesson-types">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Lesson Types</div>
+        <div class="page-subtitle">Manage lesson types, durations, and pricing</div>
+      </div>
+      <button class="btn" onclick="openAddLessonType()">+ Add Type</button>
+    </div>
+    <table class="data-table" id="lesson-types-table">
+      <thead><tr>
+        <th>Colour</th><th>Name</th><th>Slug</th><th>Duration</th><th>Price</th><th>Order</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody id="lesson-types-body"><tr><td colspan="8">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
 </div><!-- /main -->
+
+<!-- ═══════════ ADD/EDIT LESSON TYPE MODAL ═══════════ -->
+<div class="modal-overlay" id="modal-lesson-type">
+  <div class="modal">
+    <div class="modal-title" id="lt-modal-title">Add Lesson Type</div>
+    <input type="hidden" id="lt-edit-id">
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" id="lt-name" placeholder="e.g. Standard Lesson">
+    </div>
+    <div class="form-group">
+      <label>Slug</label>
+      <input type="text" id="lt-slug" placeholder="e.g. standard">
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1">
+        <label>Duration (minutes)</label>
+        <select id="lt-duration">
+          <option value="60">60 min (1 hr)</option>
+          <option value="90" selected>90 min (1.5 hrs)</option>
+          <option value="120">120 min (2 hrs)</option>
+          <option value="150">150 min (2.5 hrs)</option>
+          <option value="180">180 min (3 hrs)</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>Price (pence)</label>
+        <input type="number" id="lt-price" placeholder="8250" min="0">
+      </div>
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1">
+        <label>Colour</label>
+        <input type="color" id="lt-colour" value="#3b82f6" style="width:100%;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>Sort Order</label>
+        <input type="number" id="lt-sort" placeholder="0" min="0">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeLTModal()">Cancel</button>
+      <button class="btn" onclick="saveLessonType()">Save</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════ ADD/EDIT VIDEO MODAL ═══════════ -->
 <div class="modal-overlay" id="modal-video">
@@ -793,8 +859,9 @@ function showSection(name) {
   if (name === 'instructors')  loadInstructors();
   if (name === 'availability') loadInstructorSelect();
   if (name === 'bookings')     loadBookings();
-  if (name === 'videos')       loadVideos();
-  if (name === 'learners')     loadLearners();
+  if (name === 'videos')        loadVideos();
+  if (name === 'learners')      loadLearners();
+  if (name === 'lesson-types')  loadLessonTypes();
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('open');
@@ -1925,6 +1992,122 @@ function esc(str) {
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+// ── Lesson Types ─────────────────────────────────────────────────
+let lessonTypesCache = [];
+
+async function loadLessonTypes() {
+  const body = document.getElementById('lesson-types-body');
+  body.innerHTML = '<tr><td colspan="8">Loading...</td></tr>';
+  try {
+    const res = await fetch('/api/lesson-types?action=all', { headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error);
+    lessonTypesCache = data.lesson_types || [];
+    if (!lessonTypesCache.length) {
+      body.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">No lesson types yet. Click "+ Add Type" to create one.</td></tr>';
+      return;
+    }
+    body.innerHTML = lessonTypesCache.map(lt => {
+      const hrs = lt.duration_minutes / 60;
+      const hrsStr = hrs % 1 === 0 ? `${hrs} hr${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hrs`;
+      return `<tr>
+        <td><span style="display:inline-block;width:20px;height:20px;border-radius:4px;background:${esc(lt.colour)};vertical-align:middle"></span></td>
+        <td><strong>${esc(lt.name)}</strong></td>
+        <td style="color:var(--muted);font-size:0.82rem">${esc(lt.slug)}</td>
+        <td>${hrsStr}</td>
+        <td>&pound;${(lt.price_pence / 100).toFixed(2)}</td>
+        <td>${lt.sort_order}</td>
+        <td>${lt.active ? '<span style="color:var(--green);font-weight:600">Active</span>' : '<span style="color:var(--muted)">Inactive</span>'}</td>
+        <td>
+          <button class="btn btn-sm" onclick="openEditLessonType(${lt.id})">Edit</button>
+          <button class="btn btn-sm ${lt.active ? 'btn-danger' : 'btn-primary'}" onclick="toggleLessonType(${lt.id}, ${!lt.active})">
+            ${lt.active ? 'Deactivate' : 'Activate'}
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="8" style="color:red">${esc(err.message)}</td></tr>`;
+  }
+}
+
+function openAddLessonType() {
+  document.getElementById('lt-modal-title').textContent = 'Add Lesson Type';
+  document.getElementById('lt-edit-id').value = '';
+  document.getElementById('lt-name').value = '';
+  document.getElementById('lt-slug').value = '';
+  document.getElementById('lt-duration').value = '90';
+  document.getElementById('lt-price').value = '';
+  document.getElementById('lt-colour').value = '#3b82f6';
+  document.getElementById('lt-sort').value = '0';
+  document.getElementById('modal-lesson-type').classList.add('open');
+}
+
+function openEditLessonType(id) {
+  const lt = lessonTypesCache.find(t => t.id === id);
+  if (!lt) return;
+  document.getElementById('lt-modal-title').textContent = 'Edit Lesson Type';
+  document.getElementById('lt-edit-id').value = lt.id;
+  document.getElementById('lt-name').value = lt.name;
+  document.getElementById('lt-slug').value = lt.slug;
+  document.getElementById('lt-duration').value = String(lt.duration_minutes);
+  document.getElementById('lt-price').value = lt.price_pence;
+  document.getElementById('lt-colour').value = lt.colour;
+  document.getElementById('lt-sort').value = lt.sort_order || 0;
+  document.getElementById('modal-lesson-type').classList.add('open');
+}
+
+function closeLTModal() {
+  document.getElementById('modal-lesson-type').classList.remove('open');
+}
+
+async function saveLessonType() {
+  const editId = document.getElementById('lt-edit-id').value;
+  const payload = {
+    name: document.getElementById('lt-name').value.trim(),
+    slug: document.getElementById('lt-slug').value.trim(),
+    duration_minutes: parseInt(document.getElementById('lt-duration').value),
+    price_pence: parseInt(document.getElementById('lt-price').value),
+    colour: document.getElementById('lt-colour').value,
+    sort_order: parseInt(document.getElementById('lt-sort').value) || 0
+  };
+  if (!payload.name || !payload.slug || !payload.duration_minutes || !payload.price_pence) {
+    toast('Please fill in all required fields', 'error'); return;
+  }
+  const action = editId ? 'update' : 'create';
+  if (editId) payload.id = parseInt(editId);
+  try {
+    const res = await fetch(`/api/lesson-types?action=${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error);
+    closeLTModal();
+    toast(editId ? 'Lesson type updated' : 'Lesson type created', 'success');
+    loadLessonTypes();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function toggleLessonType(id, active) {
+  try {
+    const res = await fetch('/api/lesson-types?action=toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ id, active })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error);
+    toast(active ? 'Lesson type activated' : 'Lesson type deactivated', 'success');
+    loadLessonTypes();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
 }
 
 // ── Initial load ──────────────────────────────────────────────────

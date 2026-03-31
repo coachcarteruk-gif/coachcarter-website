@@ -1,0 +1,176 @@
+// Lesson Types API
+//
+// Routes:
+//   GET  /api/lesson-types?action=list
+//     → all active lesson types sorted by sort_order (public, no auth)
+//
+//   GET  /api/lesson-types?action=all
+//     → all lesson types including inactive (admin JWT required)
+//
+//   POST /api/lesson-types?action=create
+//     → create a new lesson type (admin JWT required)
+//
+//   POST /api/lesson-types?action=update
+//     → update an existing lesson type (admin JWT required)
+//
+//   POST /api/lesson-types?action=toggle
+//     → activate or deactivate a lesson type (admin JWT required)
+
+const { neon } = require('@neondatabase/serverless');
+const jwt      = require('jsonwebtoken');
+const { reportError } = require('./_error-alert');
+
+function setCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+}
+
+function verifyAdminJWT(req) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) return null;
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return null;
+  try {
+    const payload = jwt.verify(auth.slice(7), secret);
+    if (payload.role === 'admin' || payload.role === 'superadmin') return payload;
+    if (payload.role === 'instructor' && payload.isAdmin === true) return payload;
+    return null;
+  } catch { return null; }
+}
+
+module.exports = async (req, res) => {
+  setCors(res);
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+
+  const action = req.query.action;
+  if (action === 'list')   return handleList(req, res);
+  if (action === 'all')    return handleAll(req, res);
+  if (action === 'create') return handleCreate(req, res);
+  if (action === 'update') return handleUpdate(req, res);
+  if (action === 'toggle') return handleToggle(req, res);
+
+  return res.status(400).json({ error: true, code: 'UNKNOWN_ACTION', message: 'Unknown action' });
+};
+
+// Public — active lesson types
+async function handleList(req, res) {
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      SELECT id, name, slug, duration_minutes, price_pence, colour, sort_order
+      FROM lesson_types
+      WHERE active = true
+      ORDER BY sort_order, id
+    `;
+    return res.json({ ok: true, lesson_types: rows });
+  } catch (err) {
+    reportError('/api/lesson-types?action=list', err);
+    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to load lesson types' });
+  }
+}
+
+// Admin — all types including inactive
+async function handleAll(req, res) {
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: true, code: 'UNAUTHORIZED', message: 'Admin access required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      SELECT id, name, slug, duration_minutes, price_pence, colour, active, sort_order, created_at
+      FROM lesson_types
+      ORDER BY sort_order, id
+    `;
+    return res.json({ ok: true, lesson_types: rows });
+  } catch (err) {
+    reportError('/api/lesson-types?action=all', err);
+    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to load lesson types' });
+  }
+}
+
+// Admin — create
+async function handleCreate(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: true, code: 'METHOD_NOT_ALLOWED', message: 'POST required' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: true, code: 'UNAUTHORIZED', message: 'Admin access required' });
+
+  const { name, slug, duration_minutes, price_pence, colour, sort_order } = req.body || {};
+  if (!name || !slug || !duration_minutes || !price_pence) {
+    return res.status(400).json({ error: true, code: 'MISSING_FIELDS', message: 'name, slug, duration_minutes, price_pence required' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      INSERT INTO lesson_types (name, slug, duration_minutes, price_pence, colour, sort_order)
+      VALUES (${name}, ${slug}, ${duration_minutes}, ${price_pence}, ${colour || '#3b82f6'}, ${sort_order || 0})
+      RETURNING *
+    `;
+    return res.json({ ok: true, lesson_type: rows[0] });
+  } catch (err) {
+    if (err.message?.includes('unique') || err.message?.includes('duplicate')) {
+      return res.status(409).json({ error: true, code: 'DUPLICATE_SLUG', message: 'A lesson type with that slug already exists' });
+    }
+    reportError('/api/lesson-types?action=create', err);
+    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to create lesson type' });
+  }
+}
+
+// Admin — update
+async function handleUpdate(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: true, code: 'METHOD_NOT_ALLOWED', message: 'POST required' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: true, code: 'UNAUTHORIZED', message: 'Admin access required' });
+
+  const { id, name, slug, duration_minutes, price_pence, colour, active, sort_order } = req.body || {};
+  if (!id) return res.status(400).json({ error: true, code: 'MISSING_ID', message: 'id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      UPDATE lesson_types SET
+        name             = COALESCE(${name}, name),
+        slug             = COALESCE(${slug}, slug),
+        duration_minutes = COALESCE(${duration_minutes}, duration_minutes),
+        price_pence      = COALESCE(${price_pence}, price_pence),
+        colour           = COALESCE(${colour}, colour),
+        active           = COALESCE(${active}, active),
+        sort_order       = COALESCE(${sort_order}, sort_order)
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    if (!rows.length) return res.status(404).json({ error: true, code: 'NOT_FOUND', message: 'Lesson type not found' });
+    return res.json({ ok: true, lesson_type: rows[0] });
+  } catch (err) {
+    if (err.message?.includes('unique') || err.message?.includes('duplicate')) {
+      return res.status(409).json({ error: true, code: 'DUPLICATE_SLUG', message: 'A lesson type with that slug already exists' });
+    }
+    reportError('/api/lesson-types?action=update', err);
+    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to update lesson type' });
+  }
+}
+
+// Admin — toggle active/inactive
+async function handleToggle(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: true, code: 'METHOD_NOT_ALLOWED', message: 'POST required' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: true, code: 'UNAUTHORIZED', message: 'Admin access required' });
+
+  const { id, active } = req.body || {};
+  if (!id || typeof active !== 'boolean') {
+    return res.status(400).json({ error: true, code: 'MISSING_FIELDS', message: 'id and active (boolean) required' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      UPDATE lesson_types SET active = ${active} WHERE id = ${id} RETURNING *
+    `;
+    if (!rows.length) return res.status(404).json({ error: true, code: 'NOT_FOUND', message: 'Lesson type not found' });
+    return res.json({ ok: true, lesson_type: rows[0] });
+  } catch (err) {
+    reportError('/api/lesson-types?action=toggle', err);
+    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to toggle lesson type' });
+  }
+}

@@ -512,8 +512,15 @@
         var userEl = document.getElementById('cc-sb-user');
         var creditsEl = document.getElementById('cc-sb-credits');
         if (userEl && learner.name) userEl.textContent = learner.name;
-        if (creditsEl && typeof learner.credits !== 'undefined') {
-          creditsEl.textContent = learner.credits + ' credit' + (learner.credits === 1 ? '' : 's') + ' remaining';
+        if (creditsEl) {
+          if (typeof learner.balance_minutes !== 'undefined') {
+            var hrs = (learner.balance_minutes / 60);
+            var hrsStr = hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
+            creditsEl.textContent = hrsStr + ' hr' + (hrs !== 1 ? 's' : '') + ' remaining';
+          } else if (typeof learner.credits !== 'undefined') {
+            var fallbackHrs = (learner.credits * 1.5);
+            creditsEl.textContent = fallbackHrs + ' hrs remaining';
+          }
         }
       } catch(e) {}
 

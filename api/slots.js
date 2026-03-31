@@ -1,14 +1,14 @@
 // Slot generation engine + booking actions
 //
 // Routes:
-//   GET  /api/slots?action=available&from=YYYY-MM-DD&to=YYYY-MM-DD[&instructor_id=X]
-//     → returns all available 1.5-hour slots in date range, grouped by date
+//   GET  /api/slots?action=available&from=YYYY-MM-DD&to=YYYY-MM-DD[&instructor_id=X][&lesson_type_id=X]
+//     → returns available slots for the given lesson type duration, grouped by date
 //
 //   POST /api/slots?action=book          (JWT auth required)
-//     → deduct 1 credit and create a confirmed booking
+//     → deduct hours from balance and create a confirmed booking
 //
 //   POST /api/slots?action=cancel        (JWT auth required)
-//     → cancel a booking; returns credit if 48+ hours notice
+//     → cancel a booking; returns hours if 48+ hours notice
 //
 //   GET  /api/slots?action=my-bookings   (JWT auth required)
 //     → upcoming + recent past bookings for the authenticated learner
@@ -17,7 +17,7 @@
 //   - "from" may not be in the past
 //   - "to" may not exceed 90 days from today (3-month advance booking window)
 //   - Max 31 days per request (for performance)
-//   - 48-hour cancellation policy for credit return
+//   - 48-hour cancellation policy for hours return
 
 const { neon }    = require('@neondatabase/serverless');
 const nodemailer  = require('nodemailer');
@@ -48,12 +48,27 @@ function sendWhatsApp(to, message) {
   });
 }
 
-const SLOT_MINUTES        = 90;   // 1.5 hours
+const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
 const MAX_DAYS_AHEAD      = 90;   // booking window
 const MAX_RANGE_DAYS      = 31;   // max days per API request
-const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get credit back
-const LESSON_PRICE_PENCE  = 8250; // £82.50 per single lesson
+const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
 const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
+
+// Look up a lesson type by ID (or return the default 'standard' type)
+async function getLessonType(sql, lessonTypeId) {
+  if (lessonTypeId) {
+    const [lt] = await sql`SELECT * FROM lesson_types WHERE id = ${lessonTypeId} AND active = true`;
+    return lt || null;
+  }
+  // Default to standard lesson
+  const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = 'standard' AND active = true`;
+  return lt || { id: null, name: 'Standard Lesson', slug: 'standard', duration_minutes: 90, price_pence: 8250, colour: '#3b82f6' };
+}
+
+function formatHours(minutes) {
+  const hrs = minutes / 60;
+  return hrs % 1 === 0 ? `${hrs} hour${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hours`;
+}
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -97,7 +112,7 @@ module.exports = async (req, res) => {
 async function handleAvailable(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { from, to, instructor_id } = req.query;
+  const { from, to, instructor_id, lesson_type_id } = req.query;
 
   // Validate dates
   if (!from || !to)
@@ -127,6 +142,11 @@ async function handleAvailable(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    // 0. Look up lesson type to get duration
+    const lessonType = await getLessonType(sql, lesson_type_id);
+    if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    const slotMinutes = lessonType.duration_minutes;
 
     // 1. Load availability windows (optionally filtered to one instructor)
     const windows = instructor_id
@@ -290,12 +310,12 @@ async function handleAvailable(req, res) {
         for (const window of matchingWindows) {
           let slotStart = window.start;
 
-          while (slotStart + SLOT_MINUTES <= window.end) {
-            const slotEnd = slotStart + SLOT_MINUTES;
+          while (slotStart + slotMinutes <= window.end) {
+            const slotEnd = slotStart + slotMinutes;
 
             // Skip slots that have already started today
             if (isToday && slotStart <= nowMinutes) {
-              slotStart += SLOT_MINUTES;
+              slotStart += slotMinutes;
               continue;
             }
 
@@ -305,7 +325,7 @@ async function handleAvailable(req, res) {
               slotDateTime.setUTCHours(Math.floor(slotStart / 60), slotStart % 60, 0, 0);
               const hoursUntilSlot = (slotDateTime - now) / 3600000;
               if (hoursUntilSlot < instructor.min_booking_notice_hours) {
-                slotStart += SLOT_MINUTES;
+                slotStart += slotMinutes;
                 continue;
               }
             }
@@ -326,7 +346,7 @@ async function handleAvailable(req, res) {
               });
             }
 
-            slotStart += SLOT_MINUTES;
+            slotStart += slotMinutes;
           }
         }
       }
@@ -348,6 +368,7 @@ async function handleAvailable(req, res) {
       from,
       to,
       instructor_id: instructor_id || null,
+      lesson_type: { id: lessonType.id, name: lessonType.name, duration_minutes: slotMinutes, price_pence: lessonType.price_pence, colour: lessonType.colour },
       days_with_slots: Object.keys(result).length,
       slots: result
     });
@@ -360,15 +381,15 @@ async function handleAvailable(req, res) {
 }
 
 // ── POST /api/slots?action=book ───────────────────────────────────────────────
-// Body: { instructor_id, date, start_time, end_time, pickup_address?, dropoff_address? }
-// Deducts 1 credit atomically and creates a confirmed booking.
+// Body: { instructor_id, date, start_time, end_time, lesson_type_id?, pickup_address?, dropoff_address? }
+// Deducts hours from balance atomically and creates a confirmed booking.
 async function handleBook(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { instructor_id, date, start_time, end_time, pickup_address, dropoff_address } = req.body;
+  const { instructor_id, date, start_time, end_time, lesson_type_id, pickup_address, dropoff_address } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'instructor_id, date, start_time and end_time are required' });
 
@@ -384,13 +405,9 @@ async function handleBook(req, res) {
   if (bookingDate > maxAhead)
     return res.status(400).json({ error: `Cannot book more than ${MAX_DAYS_AHEAD} days in advance` });
 
-  // Validate slot is exactly 90 minutes
+  // Reject same-day bookings where the slot has already started
   const startMins = timeToMinutes(start_time);
   const endMins   = timeToMinutes(end_time);
-  if (endMins - startMins !== SLOT_MINUTES)
-    return res.status(400).json({ error: 'Slot must be exactly 90 minutes' });
-
-  // Reject same-day bookings where the slot has already started
   if (bookingDate.getTime() === today.getTime()) {
     const now = new Date();
     const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
@@ -401,9 +418,18 @@ async function handleBook(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // 1. Check learner has enough credits
+    // 0. Look up lesson type
+    const lessonType = await getLessonType(sql, lesson_type_id);
+    if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    const durationMins = lessonType.duration_minutes;
+
+    // Validate slot duration matches lesson type
+    if (endMins - startMins !== durationMins)
+      return res.status(400).json({ error: `Slot must be exactly ${formatHours(durationMins)} for ${lessonType.name}` });
+
+    // 1. Check learner has enough hours
     const [learner] = await sql`
-      SELECT id, name, email, phone, credit_balance, pickup_address
+      SELECT id, name, email, phone, credit_balance, balance_minutes, pickup_address
       FROM learner_users WHERE id = ${user.id}
     `;
     if (!learner)
@@ -417,28 +443,30 @@ async function handleBook(req, res) {
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found or unavailable' });
 
-    // Demo instructor bookings are free (no credit deduction)
+    // Demo instructor bookings are free (no deduction)
     const isDemoInstructor = instructor.email === 'demo@coachcarter.uk';
 
     if (!isDemoInstructor) {
-      if (learner.credit_balance < 1)
-        return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
+      const balance = learner.balance_minutes || 0;
+      if (balance < durationMins)
+        return res.status(402).json({ error: `Not enough hours. You need ${formatHours(durationMins)} but have ${formatHours(balance)}. Please buy more hours.` });
     }
 
-    // 3. Deduct credit FIRST (skip for demo instructor)
+    // 3. Deduct hours FIRST (skip for demo instructor)
     if (!isDemoInstructor) {
       const [deducted] = await sql`
         UPDATE learner_users
-        SET credit_balance = credit_balance - 1
-        WHERE id = ${user.id} AND credit_balance >= 1
-        RETURNING credit_balance
+        SET balance_minutes = balance_minutes - ${durationMins},
+            credit_balance = GREATEST(credit_balance - 1, 0)
+        WHERE id = ${user.id} AND balance_minutes >= ${durationMins}
+        RETURNING balance_minutes
       `;
       if (!deducted)
-        return res.status(402).json({ error: 'You have no lessons remaining. Please buy lessons to book.' });
+        return res.status(402).json({ error: `Not enough hours. You need ${formatHours(durationMins)}. Please buy more hours.` });
     }
 
     // 4. Create booking — unique index on (instructor_id, scheduled_date, start_time)
-    //    will throw if slot was taken. If so, refund the credit.
+    //    will throw if slot was taken. If so, refund the hours.
     let booking;
     try {
       const bookingPickup = pickup_address || learner.pickup_address || null;
@@ -446,31 +474,34 @@ async function handleBook(req, res) {
       const [b] = await sql`
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           pickup_address, dropoff_address)
+           pickup_address, dropoff_address, lesson_type_id, minutes_deducted)
         VALUES
           (${user.id}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, 'confirmed',
-           ${bookingPickup}, ${bookingDropoff})
+           ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${isDemoInstructor ? 0 : durationMins})
         RETURNING id, learner_id, instructor_id, scheduled_date,
                   start_time::text, end_time::text, status, created_at
       `;
       booking = b;
     } catch (insertErr) {
-      // Refund the credit since booking failed (not needed for demo)
+      // Refund the hours since booking failed (not needed for demo)
       if (!isDemoInstructor) {
         await sql`
           UPDATE learner_users
-          SET credit_balance = credit_balance + 1
+          SET balance_minutes = balance_minutes + ${durationMins},
+              credit_balance = credit_balance + 1
           WHERE id = ${user.id}
         `;
       }
-      if (insertErr.message?.includes('uq_instructor_slot')) {
+      if (insertErr.message?.includes('uq_booking_slot') || insertErr.message?.includes('uq_instructor_slot')) {
         return res.status(409).json({ error: 'Sorry, that slot was just booked by someone else. Please choose another.' });
       }
       throw insertErr;
     }
 
     // 5. Get updated balance for response
-    const [updated] = await sql`SELECT credit_balance FROM learner_users WHERE id = ${user.id}`;
+    const [updated] = await sql`SELECT balance_minutes, credit_balance FROM learner_users WHERE id = ${user.id}`;
+    const durationStr = formatHours(durationMins);
+    const balanceStr  = formatHours(updated.balance_minutes || 0);
 
     // 6. Send confirmation emails
     const lessonDateStr = formatDateDisplay(date);
@@ -483,7 +514,9 @@ async function handleBook(req, res) {
       scheduled_date: date,
       start_time,
       end_time,
-      instructor_name: instructor.name
+      instructor_name: instructor.name,
+      lesson_type_name: lessonType.name,
+      duration_str: durationStr
     });
 
     // Email to learner (with .ics attachment)
@@ -497,11 +530,12 @@ async function handleBook(req, res) {
           <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
           <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
           <tr><td><strong>Instructor:</strong></td><td>${instructor.name}</td></tr>
-          <tr><td><strong>Duration:</strong></td><td>1.5 hours</td></tr>
-          <tr><td><strong>Lessons remaining:</strong></td><td>${updated.credit_balance}</td></tr>
+          <tr><td><strong>Type:</strong></td><td>${lessonType.name}</td></tr>
+          <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
+          <tr><td><strong>Hours remaining:</strong></td><td>${balanceStr}</td></tr>
         </table>
         <p style="margin-top:16px;font-size:0.875rem;color:#797879">
-          Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.
+          Need to cancel? Do so at least 48 hours before and the hours return to your balance.
         </p>
         <p>
           <a href="https://coachcarter.uk/learner/"
@@ -530,6 +564,7 @@ async function handleBook(req, res) {
             <tr><td><strong>Email:</strong></td><td>${learner.email}</td></tr>
             <tr><td><strong>Date:</strong></td><td>${lessonDateStr}</td></tr>
             <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+            <tr><td><strong>Type:</strong></td><td>${lessonType.name} (${durationStr})</td></tr>
           </table>
           <p style="margin-top:16px">
             <a href="https://coachcarter.uk/instructor/"
@@ -544,18 +579,20 @@ async function handleBook(req, res) {
 
     // WhatsApp notification — must await so Vercel doesn't kill the function
     await sendWhatsApp(learner.phone,
-      `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
+      `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n📋 ${lessonType.name} (${durationStr})\n\nNeed to cancel? Do so at least 48 hours before and the hours return to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
     );
     if (!isDemoInstructor) {
       await sendWhatsApp(instructor.phone,
-        `📋 New booking!\n\n👤 ${learner.name}\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`
+        `📋 New booking!\n\n👤 ${learner.name}\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n📋 ${lessonType.name} (${durationStr})\n\nView schedule: https://coachcarter.uk/instructor/`
       );
     }
 
     return res.status(201).json({
-      success:        true,
-      booking_id:     booking.id,
-      credit_balance: updated.credit_balance
+      success:         true,
+      booking_id:      booking.id,
+      balance_minutes: updated.balance_minutes || 0,
+      balance_hours:   ((updated.balance_minutes || 0) / 60).toFixed(1),
+      credit_balance:  updated.credit_balance
     });
 
   } catch (err) {
@@ -566,27 +603,23 @@ async function handleBook(req, res) {
 }
 
 // ── POST /api/slots?action=checkout-slot ──────────────────────────────────────
-// Body: { instructor_id, date, start_time, end_time }
-// Creates a Stripe Checkout session for a single lesson (£82.50).
+// Body: { instructor_id, date, start_time, end_time, lesson_type_id? }
+// Creates a Stripe Checkout session for a single lesson at the lesson type's price.
 // Reserves the slot for 10 minutes while the learner pays.
-// The webhook will book the slot and add+deduct a credit on payment completion.
+// The webhook will book the slot and add+deduct hours on payment completion.
 async function handleCheckoutSlot(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { instructor_id, date, start_time, end_time } = req.body;
+  const { instructor_id, date, start_time, end_time, lesson_type_id } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'instructor_id, date, start_time, end_time required' });
 
-  // Validate slot is 90 minutes
-  const startMins = timeToMinutes(start_time);
-  const endMins   = timeToMinutes(end_time);
-  if (endMins - startMins !== SLOT_MINUTES)
-    return res.status(400).json({ error: 'Slot must be exactly 90 minutes' });
-
   // Reject same-day bookings where the slot has already started
+  const startMins    = timeToMinutes(start_time);
+  const endMins      = timeToMinutes(end_time);
   const checkoutDate = parseDate(date);
   const todayStart   = startOfDay(new Date());
   if (checkoutDate && checkoutDate.getTime() === todayStart.getTime()) {
@@ -598,6 +631,17 @@ async function handleCheckoutSlot(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    // 0. Look up lesson type for pricing
+    const lessonType = await getLessonType(sql, lesson_type_id);
+    if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    const durationMins = lessonType.duration_minutes;
+    const pricePence   = lessonType.price_pence;
+    const durationStr  = formatHours(durationMins);
+
+    // Validate slot duration matches lesson type
+    if (endMins - startMins !== durationMins)
+      return res.status(400).json({ error: `Slot must be exactly ${durationStr} for ${lessonType.name}` });
 
     // Clean up any expired reservations
     await sql`DELETE FROM slot_reservations WHERE expires_at < NOW()`;
@@ -648,10 +692,10 @@ async function handleCheckoutSlot(req, res) {
       line_items: [{
         price_data: {
           currency: 'gbp',
-          unit_amount: LESSON_PRICE_PENCE,
+          unit_amount: pricePence,
           product_data: {
-            name: `Driving Lesson — ${lessonDate} ${start_time}–${end_time}`,
-            description: `1.5-hour lesson with ${instructor.name}. Slot held for ${RESERVATION_MINUTES} minutes.`
+            name: `${lessonType.name} — ${lessonDate} ${start_time}–${end_time}`,
+            description: `${durationStr} lesson with ${instructor.name}. Slot held for ${RESERVATION_MINUTES} minutes.`
           }
         },
         quantity: 1
@@ -665,7 +709,9 @@ async function handleCheckoutSlot(req, res) {
         scheduled_date:  date,
         start_time,
         end_time,
-        amount_pence:    String(LESSON_PRICE_PENCE)
+        lesson_type_id:  String(lessonType.id),
+        duration_minutes: String(durationMins),
+        amount_pence:    String(pricePence)
       },
       customer_email: learner.email,
       billing_address_collection: 'required',
@@ -726,8 +772,9 @@ async function handleCancel(req, res) {
     const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}:00Z`);
     const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
     const isDemoBooking  = booking.instructor_email === 'demo@coachcarter.uk';
-    // Demo bookings are free, so no credit to return
+    // Demo bookings are free, so no hours to return
     const creditReturned = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF;
+    const minsToReturn   = booking.minutes_deducted || DEFAULT_SLOT_MINUTES;
 
     // Cancel the booking
     await sql`
@@ -736,15 +783,19 @@ async function handleCancel(req, res) {
       WHERE id = ${booking_id}
     `;
 
-    // Return credit if eligible (not for demo bookings)
+    // Return hours if eligible (not for demo bookings)
     if (creditReturned) {
       await sql`
-        UPDATE learner_users SET credit_balance = credit_balance + 1
+        UPDATE learner_users
+        SET balance_minutes = balance_minutes + ${minsToReturn},
+            credit_balance = credit_balance + 1
         WHERE id = ${user.id}
       `;
     }
 
-    const [updated] = await sql`SELECT credit_balance FROM learner_users WHERE id = ${user.id}`;
+    const [updated] = await sql`SELECT credit_balance, balance_minutes FROM learner_users WHERE id = ${user.id}`;
+    const balanceStr = formatHours(updated.balance_minutes || 0);
+    const returnedStr = formatHours(minsToReturn);
 
     // Notify learner
     const lessonDateStr = formatDateDisplay(String(booking.scheduled_date).slice(0, 10));
@@ -758,8 +809,8 @@ async function handleCancel(req, res) {
         <h1>Lesson cancelled.</h1>
         <p>Your lesson on <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
            with ${booking.instructor_name} has been cancelled.</p>
-        <p><strong>Your lesson has been returned to your balance.</strong>
-           You now have ${updated.credit_balance} lesson${updated.credit_balance !== 1 ? 's' : ''} remaining.</p>
+        <p><strong>${returnedStr} returned to your balance.</strong>
+           You now have ${balanceStr} remaining.</p>
         <p><a href="https://coachcarter.uk/learner/"
               style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;
                      border-radius:8px;display:inline-block;font-weight:bold">
@@ -769,7 +820,7 @@ async function handleCancel(req, res) {
         <h1>Lesson cancelled.</h1>
         <p>Your lesson on <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
            with ${booking.instructor_name} has been cancelled.</p>
-        <p><strong>As this was cancelled with less than 48 hours' notice, your lesson has been forfeited
+        <p><strong>As this was cancelled with less than 48 hours' notice, your hours have been forfeited
            in line with our cancellation policy.</strong></p>
         <p>If you believe this is an error, please reply to this email.</p>
       `
@@ -794,8 +845,8 @@ async function handleCancel(req, res) {
     const cancelTime = String(booking.start_time).slice(0, 5);
     await sendWhatsApp(booking.learner_phone,
       creditReturned
-        ? `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nYour lesson has been returned to your balance. You now have ${updated.credit_balance} lesson(s) remaining.\n\nRebook: https://coachcarter.uk/learner/book.html`
-        : `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nAs this was less than 48 hours' notice, the lesson has been forfeited.`
+        ? `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\n${returnedStr} returned to your balance. You now have ${balanceStr} remaining.\n\nRebook: https://coachcarter.uk/learner/book.html`
+        : `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nAs this was less than 48 hours' notice, your hours have been forfeited.`
     );
     if (!isDemoBooking) {
       await sendWhatsApp(booking.instructor_phone,
@@ -804,14 +855,17 @@ async function handleCancel(req, res) {
     }
 
     return res.json({
-      success:        true,
-      credit_returned: creditReturned,
-      credit_balance:  updated.credit_balance,
+      success:          true,
+      credit_returned:  creditReturned,
+      credit_balance:   updated.credit_balance,
+      balance_minutes:  updated.balance_minutes || 0,
+      balance_hours:    ((updated.balance_minutes || 0) / 60).toFixed(1),
+      minutes_returned: creditReturned ? minsToReturn : 0,
       message: isDemoBooking
         ? 'Demo booking cancelled.'
         : creditReturned
-          ? 'Booking cancelled and lesson returned to your balance.'
-          : `Booking cancelled. Lesson forfeited (less than ${CANCEL_HOURS_CUTOFF} hours\' notice).`
+          ? `Booking cancelled and ${returnedStr} returned to your balance.`
+          : `Booking cancelled. Hours forfeited (less than ${CANCEL_HOURS_CUTOFF} hours' notice).`
     });
 
   } catch (err) {
@@ -846,10 +900,7 @@ async function handleReschedule(req, res) {
   if (newBookingDate > maxAhead)
     return res.status(400).json({ error: `Cannot reschedule more than ${MAX_DAYS_AHEAD} days in advance` });
 
-  // Calculate new end time (fixed 90-minute slots)
   const newStartMins = timeToMinutes(new_start_time);
-  const newEndMins   = newStartMins + SLOT_MINUTES;
-  const new_end_time = minutesToTime(newEndMins);
 
   // Reject if new slot has already started
   if (newBookingDate.getTime() === today.getTime()) {
@@ -867,15 +918,23 @@ async function handleReschedule(req, res) {
       SELECT lb.*, i.name AS instructor_name, i.email AS instructor_email,
              i.phone AS instructor_phone,
              lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
-             COALESCE(lb.reschedule_count, 0) AS reschedule_count
+             COALESCE(lb.reschedule_count, 0) AS reschedule_count,
+             COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS type_duration_minutes,
+             lt.name AS lesson_type_name
       FROM lesson_bookings lb
       JOIN instructors i    ON i.id  = lb.instructor_id
       JOIN learner_users lu ON lu.id = lb.learner_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.id = ${booking_id} AND lb.learner_id = ${user.id}
     `;
 
     if (!booking)
       return res.status(404).json({ error: 'Booking not found' });
+
+    // Calculate new end time using booking's lesson type duration
+    const bookingDuration = parseInt(booking.type_duration_minutes) || DEFAULT_SLOT_MINUTES;
+    const newEndMins   = newStartMins + bookingDuration;
+    const new_end_time = minutesToTime(newEndMins);
     if (booking.status !== 'confirmed')
       return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
 
@@ -935,11 +994,13 @@ async function handleReschedule(req, res) {
       const [b] = await sql`
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           rescheduled_from, reschedule_count, pickup_address, dropoff_address)
+           rescheduled_from, reschedule_count, pickup_address, dropoff_address,
+           lesson_type_id, minutes_deducted)
         VALUES
           (${user.id}, ${booking.instructor_id}, ${new_date}, ${new_start_time}, ${new_end_time},
            'confirmed', ${booking_id}, ${booking.reschedule_count + 1},
-           ${booking.pickup_address || null}, ${booking.dropoff_address || null})
+           ${booking.pickup_address || null}, ${booking.dropoff_address || null},
+           ${booking.lesson_type_id || null}, ${booking.minutes_deducted || null})
         RETURNING id, scheduled_date, start_time::text, end_time::text, status,
                   rescheduled_from, reschedule_count
       `;
@@ -986,11 +1047,11 @@ async function handleReschedule(req, res) {
           <tr><td><strong>Was:</strong></td><td><s>${oldDateStr} at ${oldTime}</s></td></tr>
           <tr><td><strong>Now:</strong></td><td>${newDateStr} at ${newTime}</td></tr>
           <tr><td><strong>Instructor:</strong></td><td>${booking.instructor_name}</td></tr>
-          <tr><td><strong>Duration:</strong></td><td>1.5 hours</td></tr>
+          <tr><td><strong>Duration:</strong></td><td>${formatHours(bookingDuration)}</td></tr>
         </table>
         <p style="margin-top:16px;font-size:0.875rem;color:#797879">
           You can reschedule ${MAX_RESCHEDULES - newBooking.reschedule_count} more time${MAX_RESCHEDULES - newBooking.reschedule_count !== 1 ? 's' : ''}.
-          Cancel at least 48 hours before and the lesson returns to your balance.
+          Cancel at least 48 hours before and the hours return to your balance.
         </p>
         <p>
           <a href="https://coachcarter.uk/learner/"
@@ -1082,11 +1143,17 @@ async function handleMyBookings(req, res) {
         lb.rescheduled_from,
         lb.pickup_address,
         lb.dropoff_address,
+        lb.lesson_type_id,
+        lb.minutes_deducted,
         i.id   AS instructor_id,
         i.name AS instructor_name,
-        i.photo_url AS instructor_photo
+        i.photo_url AS instructor_photo,
+        lt.name AS lesson_type_name,
+        lt.colour AS lesson_type_colour,
+        COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.learner_id = ${user.id}
       ORDER BY lb.scheduled_date DESC, lb.start_time DESC
       LIMIT 50
@@ -1140,8 +1207,8 @@ function generateICS(booking) {
     `DTSTAMP:${now}`,
     `DTSTART:${dtStart}`,
     `DTEND:${dtEnd}`,
-    `SUMMARY:Driving Lesson — ${booking.instructor_name}`,
-    `DESCRIPTION:1.5-hour driving lesson with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.`,
+    `SUMMARY:${booking.lesson_type_name || 'Driving Lesson'} — ${booking.instructor_name}`,
+    `DESCRIPTION:${booking.duration_str || '1.5 hours'} ${booking.lesson_type_name || 'driving lesson'} with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before and the hours return to your balance.`,
     'STATUS:CONFIRMED',
     'BEGIN:VALARM',
     'TRIGGER:-PT2H',

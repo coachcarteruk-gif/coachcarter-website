@@ -396,3 +396,49 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS dropoff_address TEXT;
 -- FEATURE 8: CALENDAR START HOUR
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS calendar_start_hour INTEGER DEFAULT 7;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- FEATURE 3: MULTIPLE LESSON TYPES & DURATIONS
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- Lesson types lookup table
+CREATE TABLE IF NOT EXISTS lesson_types (
+  id               SERIAL PRIMARY KEY,
+  name             TEXT NOT NULL,
+  slug             TEXT NOT NULL UNIQUE,
+  duration_minutes INTEGER NOT NULL DEFAULT 90,
+  price_pence      INTEGER NOT NULL DEFAULT 8250,
+  colour           TEXT DEFAULT '#3b82f6',
+  active           BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order       INTEGER DEFAULT 0,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed initial types
+INSERT INTO lesson_types (name, slug, duration_minutes, price_pence, colour, sort_order)
+VALUES
+  ('Standard Lesson', 'standard', 90, 8250, '#3b82f6', 1),
+  ('2-Hour Lesson',   '2hr',     120, 11000, '#8b5cf6', 2)
+ON CONFLICT (slug) DO NOTHING;
+
+-- Hours-based balance (stored as minutes internally)
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS balance_minutes INTEGER DEFAULT 0;
+
+-- Migrate existing credit balances: 1 credit = 90 minutes
+DO $$ BEGIN
+  UPDATE learner_users SET balance_minutes = credit_balance * 90
+  WHERE balance_minutes = 0 AND credit_balance > 0;
+END $$;
+
+-- Link bookings to lesson types
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS lesson_type_id INTEGER REFERENCES lesson_types(id);
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS minutes_deducted INTEGER;
+
+-- Backfill existing bookings as standard lesson
+DO $$ BEGIN
+  UPDATE lesson_bookings SET lesson_type_id = (SELECT id FROM lesson_types WHERE slug = 'standard')
+  WHERE lesson_type_id IS NULL;
+END $$;
+
+-- Track minutes in credit transactions
+ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS minutes INTEGER DEFAULT 0;

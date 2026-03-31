@@ -488,15 +488,15 @@
 </div>
 
 <main>
-  <h1>Buy Lessons</h1>
-  <p class="subtitle">Each lesson is 1.5 hours with a qualified instructor. Pick a package and book whenever you're ready.</p>
+  <h1>Buy Hours</h1>
+  <p class="subtitle">Buy hours and book any lesson type. The more you buy, the more you save.</p>
 
   <!-- Current balance -->
   <div class="balance-card">
     <div>
-      <div class="balance-label">Lessons remaining</div>
+      <div class="balance-label">Hours remaining</div>
       <div class="balance-value" id="balanceValue">—</div>
-      <div class="balance-unit" id="balanceUnit">lessons</div>
+      <div class="balance-unit" id="balanceUnit">hours</div>
     </div>
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#f58321" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
@@ -505,10 +505,10 @@
 
   <!-- Package cards -->
   <div class="packages" id="packages">
-    <div class="pkg-card" onclick="selectPkg(4)" data-qty="4">
+    <div class="pkg-card" onclick="selectPkg(6)" data-qty="6">
       <div class="pkg-left">
-        <div class="pkg-title">4 lessons <span class="pkg-save">Save 5%</span></div>
-        <div class="pkg-detail">£78.38 per lesson</div>
+        <div class="pkg-title">6 hours <span class="pkg-save">Save 5%</span></div>
+        <div class="pkg-detail">£52.25/hr</div>
       </div>
       <div class="pkg-right">
         <div class="pkg-price">£313.50</div>
@@ -516,11 +516,11 @@
       </div>
     </div>
 
-    <div class="pkg-card" onclick="selectPkg(8)" data-qty="8">
+    <div class="pkg-card" onclick="selectPkg(12)" data-qty="12">
       <div class="popular-badge">Most popular</div>
       <div class="pkg-left">
-        <div class="pkg-title">8 lessons <span class="pkg-save">Save 10%</span></div>
-        <div class="pkg-detail">£74.25 per lesson</div>
+        <div class="pkg-title">12 hours <span class="pkg-save">Save 10%</span></div>
+        <div class="pkg-detail">£49.50/hr</div>
       </div>
       <div class="pkg-right">
         <div class="pkg-price">£594.00</div>
@@ -528,10 +528,10 @@
       </div>
     </div>
 
-    <div class="pkg-card" onclick="selectPkg(12)" data-qty="12">
+    <div class="pkg-card" onclick="selectPkg(18)" data-qty="18">
       <div class="pkg-left">
-        <div class="pkg-title">12 lessons <span class="pkg-save">Save 15%</span></div>
-        <div class="pkg-detail">£70.13 per lesson</div>
+        <div class="pkg-title">18 hours <span class="pkg-save">Save 15%</span></div>
+        <div class="pkg-detail">£46.75/hr</div>
       </div>
       <div class="pkg-right">
         <div class="pkg-price">£841.50</div>
@@ -539,10 +539,10 @@
       </div>
     </div>
 
-    <div class="pkg-card" onclick="selectPkg(16)" data-qty="16">
+    <div class="pkg-card" onclick="selectPkg(24)" data-qty="24">
       <div class="pkg-left">
-        <div class="pkg-title">16 lessons <span class="pkg-save">Save 20%</span></div>
-        <div class="pkg-detail">£66.00 per lesson</div>
+        <div class="pkg-title">24 hours <span class="pkg-save">Save 20%</span></div>
+        <div class="pkg-detail">£44.00/hr</div>
       </div>
       <div class="pkg-right">
         <div class="pkg-price">£1,056.00</div>
@@ -550,10 +550,10 @@
       </div>
     </div>
 
-    <div class="pkg-card" onclick="selectPkg(20)" data-qty="20">
+    <div class="pkg-card" onclick="selectPkg(30)" data-qty="30">
       <div class="pkg-left">
-        <div class="pkg-title">20 lessons <span class="pkg-save">Save 25%</span></div>
-        <div class="pkg-detail">£61.88 per lesson</div>
+        <div class="pkg-title">30 hours <span class="pkg-save">Save 25%</span></div>
+        <div class="pkg-detail">£41.25/hr</div>
       </div>
       <div class="pkg-right">
         <div class="pkg-price">£1,237.50</div>
@@ -563,18 +563,18 @@
   </div>
 
   <div class="single-lesson">
-    <button class="single-lesson-link" onclick="selectPkg(1)">Just need a single lesson? £82.50</button>
+    <button class="single-lesson-link" onclick="selectPkg(1.5)">Just need 1.5 hours? £82.50</button>
   </div>
 
   <!-- Price summary -->
   <div class="price-summary" id="priceSummary">
     <div class="price-row">
-      <span id="summaryLine">8 lessons × £82.50</span>
+      <span id="summaryLine">12 hours × £55.00/hr</span>
       <span id="summarySubtotal">£660.00</span>
     </div>
-    <div class="price-row discount" id="discountRow" style="display:none">
+    <div class="price-row discount" id="discountRow" style="display:flex">
       <span id="discountLabel">10% package discount</span>
-      <span id="discountValue"></span>
+      <span id="discountValue">-£66.00</span>
     </div>
     <div class="price-row total">
       <span>Total</span>
@@ -583,7 +583,7 @@
   </div>
 
   <button class="btn-checkout" id="btnCheckout">
-    <span id="btnLabel">Buy 8 lessons — £594.00</span>
+    <span id="btnLabel">Buy 12 hours — £594.00</span>
     <div class="spinner" id="btnSpinner"></div>
   </button>
   <p class="klarna-note">
@@ -702,20 +702,20 @@
   });
   function logout() { ccAuth.logout(); }
 
-  const PRICE_PENCE = 8250; // £82.50 per lesson (1.5 hrs)
+  const PRICE_PER_HOUR_PENCE = 5500; // £55.00 per hour
 
   const PACKAGES = [
-    { qty: 1,  pct: 0  },
-    { qty: 4,  pct: 5  },
-    { qty: 8,  pct: 10 },
-    { qty: 12, pct: 15 },
-    { qty: 16, pct: 20 },
-    { qty: 20, pct: 25 },
+    { hrs: 1.5, pct: 0  },
+    { hrs: 6,   pct: 5  },
+    { hrs: 12,  pct: 10 },
+    { hrs: 18,  pct: 15 },
+    { hrs: 24,  pct: 20 },
+    { hrs: 30,  pct: 25 },
   ];
 
-  function calcTotal(q) {
-    const pkg    = PACKAGES.find(p => p.qty === q) || { qty: q, pct: 0 };
-    const full   = PRICE_PENCE * q;
+  function calcTotal(hours) {
+    const pkg    = PACKAGES.find(p => p.hrs === hours) || { hrs: hours, pct: 0 };
+    const full   = Math.round(PRICE_PER_HOUR_PENCE * hours);
     const saving = Math.round(full * pkg.pct / 100);
     return { full, pct: pkg.pct, saving, total: full - saving };
   }
@@ -726,7 +726,7 @@
   }
 
   let token = null;
-  let qty   = 8;
+  let qty   = 12;
 
   // ── Auth check ──────────────────────────────────────────────────────────────
   function initAuth() {
@@ -748,11 +748,12 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load balance');
 
-      const b = data.credit_balance;
-      document.getElementById('balanceValue').textContent = b;
-      document.getElementById('balanceUnit').textContent  = b === 1 ? 'lesson' : 'lessons';
-      document.getElementById('headerBalance').textContent =
-        `${b} lesson${b === 1 ? '' : 's'}`;
+      const mins = data.balance_minutes ?? (data.credit_balance ?? 0) * 90;
+      const hrs = (mins / 60);
+      const hrsStr = hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
+      document.getElementById('balanceValue').textContent = hrsStr;
+      document.getElementById('balanceUnit').textContent = 'hours';
+      document.getElementById('headerBalance').textContent = `${hrsStr} hrs`;
     } catch (err) {
       document.getElementById('balanceValue').textContent = '?';
       document.getElementById('headerBalance').textContent = 'Balance unavailable';
@@ -765,13 +766,14 @@
 
     // Highlight selected card
     document.querySelectorAll('.pkg-card').forEach(card => {
-      card.classList.toggle('active', parseInt(card.dataset.qty) === qty);
+      card.classList.toggle('active', parseFloat(card.dataset.qty) === qty);
     });
 
     const { full, pct, saving, total } = calcTotal(qty);
+    const hrsLabel = qty === 1 ? '1 hour' : `${qty} hours`;
 
     // Update summary
-    document.getElementById('summaryLine').textContent = `${qty} lesson${qty > 1 ? 's' : ''} × £82.50`;
+    document.getElementById('summaryLine').textContent = `${hrsLabel} × £55.00/hr`;
     document.getElementById('summarySubtotal').textContent = fmt(full);
 
     const discountRow = document.getElementById('discountRow');
@@ -784,7 +786,7 @@
     }
 
     document.getElementById('totalValue').textContent = fmt(total);
-    document.getElementById('btnLabel').textContent = `Buy ${qty} lesson${qty > 1 ? 's' : ''} — ${fmt(total)}`;
+    document.getElementById('btnLabel').textContent = `Buy ${hrsLabel} — ${fmt(total)}`;
   }
 
   // ── Checkout ────────────────────────────────────────────────────────────────
@@ -802,7 +804,7 @@
       const res  = await fetch('/api/credits?action=checkout', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body:    JSON.stringify({ quantity: qty })
+        body:    JSON.stringify({ hours: qty })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Checkout failed');
