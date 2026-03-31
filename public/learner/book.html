@@ -160,6 +160,29 @@
     }
     .upcoming-cal-btn:hover { border-color: var(--accent); background: var(--accent-lt); }
 
+    /* ── Repeat/recurring booking ─────────────────────────────────────────── */
+    .repeat-section { margin: 12px 0; padding: 12px; background: var(--page-bg); border-radius: 10px; }
+    .repeat-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+    .repeat-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+    .repeat-options { margin-top: 10px; display: none; }
+    .repeat-options.open { display: block; }
+    .repeat-weeks-select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; }
+    .repeat-dates { margin-top: 10px; }
+    .repeat-date-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.82rem; border-bottom: 1px solid var(--border); }
+    .repeat-date-item:last-child { border-bottom: none; }
+    .repeat-date-item .repeat-num { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: white; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .repeat-date-item.conflict .repeat-num { background: var(--red); }
+    .repeat-date-item.conflict { color: var(--red); }
+    .repeat-total { margin-top: 10px; font-size: 0.82rem; font-weight: 600; color: var(--muted); padding: 8px 10px; background: white; border-radius: 8px; border: 1px solid var(--border); }
+    .repeat-conflict-warning { margin-top: 8px; padding: 8px 10px; background: var(--red-lt); border: 1px solid var(--red); border-radius: 8px; font-size: 0.8rem; color: var(--red); }
+
+    /* ── Series grouping in upcoming ─────────────────────────────────────── */
+    .series-group { border: 1px solid var(--accent); border-radius: 10px; margin: 8px 0; overflow: hidden; }
+    .series-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--accent-lt); font-size: 0.8rem; font-weight: 700; color: var(--accent); }
+    .series-header button { background: none; border: 1px solid var(--accent); border-radius: 7px; padding: 4px 10px; font-size: 0.72rem; cursor: pointer; color: var(--accent); }
+    .series-header button:hover { background: white; }
+    .series-group .upcoming-item:last-child { border-bottom: none; }
+
     /* ── Calendar Toolbar ─────────────────────────────────────────────────── */
     .cal-toolbar {
       display: flex; align-items: center; justify-content: space-between;
@@ -668,6 +691,26 @@
         <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off address (optional)</label>
         <input type="text" id="mdDropoff" placeholder="e.g. School, work, test centre…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
       </div>
+      <!-- Repeat weekly toggle -->
+      <div class="repeat-section" id="repeatSection">
+        <label class="repeat-toggle">
+          <input type="checkbox" id="repeatToggle" onchange="toggleRepeatOptions()">
+          <span>Repeat weekly</span>
+        </label>
+        <div class="repeat-options" id="repeatOptions">
+          <select class="repeat-weeks-select" id="repeatWeeksSelect" onchange="updateRepeatDates()">
+            <option value="2">2 weeks</option>
+            <option value="3">3 weeks</option>
+            <option value="4" selected>4 weeks</option>
+            <option value="6">6 weeks</option>
+            <option value="8">8 weeks</option>
+          </select>
+          <div class="repeat-dates" id="repeatDates"></div>
+          <div class="repeat-total" id="repeatTotal"></div>
+          <div class="repeat-conflict-warning" id="repeatConflictWarning" style="display:none"></div>
+        </div>
+      </div>
+
       <div id="modalCreditPath" style="display:none">
         <p class="modal-credit-note">
           This will use <strong id="mdDeductHours">1.5 hours</strong> from your balance.
@@ -735,6 +778,13 @@
       <div class="modal-detail-row"><span>Instructor</span><span id="cmInstructor">—</span></div>
     </div>
     <div class="cancel-policy" id="cancelPolicyNote"></div>
+    <div id="cancelSeriesOption" style="display:none;margin:10px 0;padding:10px;background:var(--page-bg);border-radius:8px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;font-weight:600;cursor:pointer;">
+        <input type="checkbox" id="cancelSeriesCheck" onchange="toggleCancelSeriesInfo()" style="width:16px;height:16px;accent-color:var(--accent);">
+        <span>Cancel all remaining lessons in this series</span>
+      </label>
+      <p id="cancelSeriesInfo" style="display:none;margin:6px 0 0 26px;font-size:0.78rem;color:var(--muted);"></p>
+    </div>
     <label class="cancel-ack" id="cancelAckLabel" style="display:none">
       <input type="checkbox" id="cancelAckCheck" onchange="toggleCancelBtn()">
       <span>I understand my lesson will be forfeited and not returned</span>
@@ -998,8 +1048,20 @@ async function loadUpcoming() {
     if (upcoming.length === 0) { strip.style.display = 'none'; return; }
 
     strip.style.display = 'block';
-    list.innerHTML = upcoming.map(b => {
-      const dateObj = new Date(b.scheduled_date + 'T00:00:00Z');
+
+    // Group series bookings together
+    const seriesMap = {};
+    const standalone = [];
+    for (const b of upcoming) {
+      if (b.series_id) {
+        if (!seriesMap[b.series_id]) seriesMap[b.series_id] = [];
+        seriesMap[b.series_id].push(b);
+      } else {
+        standalone.push(b);
+      }
+    }
+
+    function renderBookingItem(b) {
       const dateStr = new Date(b.scheduled_date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
       const start = b.start_time.slice(0,5);
       const end = b.end_time.slice(0,5);
@@ -1015,9 +1077,26 @@ async function loadUpcoming() {
           <div class="upcoming-instructor">${b.instructor_name}</div>
           ${canCancel ? `<button class="upcoming-cal-btn" onclick="downloadCalendar(${b.id})" title="Add to calendar">📅</button>` : ''}
           ${canCancel && hoursUntil >= 48 && (b.reschedule_count || 0) < 2 ? `<button class="upcoming-reschedule" onclick="startRescheduleMode(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${esc(b.instructor_name)}', ${b.instructor_id})">Reschedule</button>` : ''}
-          ${canCancel ? `<button class="upcoming-cancel" onclick="openCancelModal(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${esc(b.instructor_name)}', ${hoursUntil})">Cancel</button>` : '<span style="font-size:0.8rem;color:var(--muted)">Past</span>'}
+          ${canCancel ? `<button class="upcoming-cancel" onclick="openCancelModal(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${esc(b.instructor_name)}', ${hoursUntil}, '${b.series_id || ''}')">Cancel</button>` : '<span style="font-size:0.8rem;color:var(--muted)">Past</span>'}
         </div>`;
-    }).join('');
+    }
+
+    let html = '';
+    // Render series groups first
+    for (const [sid, bookings] of Object.entries(seriesMap)) {
+      const remaining = bookings.length;
+      // Get total from series (we only have future confirmed ones, but that's fine for display)
+      html += `<div class="series-group">
+        <div class="series-header">
+          <span>Weekly series — ${remaining} remaining</span>
+          <button onclick="openCancelModal(${bookings[0].id}, '${bookings[0].scheduled_date}', '${bookings[0].start_time.slice(0,5)}', '${bookings[0].end_time.slice(0,5)}', '${esc(bookings[0].instructor_name)}', 999, '${sid}')">Cancel series</button>
+        </div>
+        ${bookings.map(renderBookingItem).join('')}
+      </div>`;
+    }
+    // Then standalone bookings
+    html += standalone.map(renderBookingItem).join('');
+    list.innerHTML = html;
   } catch {}
 }
 
@@ -1400,11 +1479,121 @@ function openBookModal(el) {
 
 function closeBookModal() {
   document.getElementById('bookModal').classList.remove('open');
+  document.getElementById('repeatToggle').checked = false;
+  document.getElementById('repeatOptions').classList.remove('open');
+  repeatConflicts = [];
   setTimeout(() => {
     document.getElementById('bookConfirmStep').style.display = 'block';
     document.getElementById('bookSuccessStep').style.display = 'none';
   }, 300);
 }
+
+// ─── Repeat weekly logic ──────────────────────────────────────────────────
+let repeatConflicts = [];
+
+function toggleRepeatOptions() {
+  const open = document.getElementById('repeatToggle').checked;
+  document.getElementById('repeatOptions').classList.toggle('open', open);
+  if (open) updateRepeatDates();
+  updateDeductDisplay();
+}
+
+function getRepeatWeeks() {
+  if (!document.getElementById('repeatToggle').checked) return 1;
+  return parseInt(document.getElementById('repeatWeeksSelect').value, 10);
+}
+
+async function updateRepeatDates() {
+  if (!pendingSlot) return;
+  const weeks = getRepeatWeeks();
+  const dates = [];
+  const baseDate = new Date(pendingSlot.date + 'T00:00:00Z');
+  for (let w = 0; w < weeks; w++) {
+    const d = new Date(baseDate);
+    d.setUTCDate(d.getUTCDate() + w * 7);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+
+  // Check conflicts
+  repeatConflicts = [];
+  try {
+    const from = dates[0];
+    const to = dates[dates.length - 1];
+    const ltId = selectedLessonType ? selectedLessonType.id : '';
+    const instId = pendingSlot.instructor_id;
+    const res = await fetch(`/api/slots?action=available&from=${from}&to=${to}&instructor_id=${instId}${ltId ? '&lesson_type_id=' + ltId : ''}`);
+    const data = await res.json();
+    // Check which dates have the slot available
+    for (let i = 1; i < dates.length; i++) {
+      const dateSlots = data.slots?.[dates[i]] || [];
+      const hasSlot = dateSlots.some(s => s.start_time === pendingSlot.start_time);
+      if (!hasSlot) repeatConflicts.push(dates[i]);
+    }
+  } catch {}
+
+  // Render date list
+  const container = document.getElementById('repeatDates');
+  container.innerHTML = dates.map((d, i) => {
+    const display = new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    const isConflict = repeatConflicts.includes(d);
+    return `<div class="repeat-date-item${isConflict ? ' conflict' : ''}">
+      <span class="repeat-num">${i + 1}</span>
+      <span>${display} at ${pendingSlot.start_time}</span>
+      ${isConflict ? '<span style="margin-left:auto;font-weight:600">Unavailable</span>' : ''}
+    </div>`;
+  }).join('');
+
+  // Conflict warning
+  const warning = document.getElementById('repeatConflictWarning');
+  if (repeatConflicts.length > 0) {
+    warning.textContent = `${repeatConflicts.length} slot(s) unavailable. All slots must be free to book a series.`;
+    warning.style.display = 'block';
+  } else {
+    warning.style.display = 'none';
+  }
+
+  updateDeductDisplay();
+  updateBookButtonState();
+}
+
+function updateDeductDisplay() {
+  const weeks = getRepeatWeeks();
+  const ltDuration = selectedLessonType ? selectedLessonType.duration_minutes : 90;
+  const totalMins = ltDuration * weeks;
+  const totalHrs = totalMins / 60;
+  const totalStr = totalHrs % 1 === 0 ? `${totalHrs} hours` : `${totalHrs.toFixed(1)} hours`;
+
+  document.getElementById('mdDeductHours').textContent = totalStr;
+
+  if (weeks > 1) {
+    const perLesson = ltDuration / 60;
+    const perStr = perLesson % 1 === 0 ? `${perLesson} hour${perLesson !== 1 ? 's' : ''}` : `${perLesson.toFixed(1)} hours`;
+    document.getElementById('repeatTotal').textContent = `Total: ${totalStr} (${weeks} × ${perStr})`;
+    document.getElementById('repeatTotal').style.display = 'block';
+  } else {
+    document.getElementById('repeatTotal').style.display = 'none';
+  }
+
+  // Update balance check for credit path visibility
+  const hasCreds = balanceMinutes >= totalMins;
+  document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
+  document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
+}
+
+function updateBookButtonState() {
+  const weeks = getRepeatWeeks();
+  const btn = document.getElementById('btnConfirmBook');
+  const label = document.getElementById('bookBtnLabel');
+  if (weeks > 1) {
+    label.textContent = repeatConflicts.length > 0 ? 'Slots unavailable' : `Book ${weeks} lessons`;
+    btn.disabled = repeatConflicts.length > 0;
+  } else {
+    label.textContent = 'Confirm booking';
+    btn.disabled = false;
+  }
+}
+window.toggleRepeatOptions = toggleRepeatOptions;
+window.updateRepeatDates = updateRepeatDates;
 
 // ─── Confirm with credit ─────────────────────────────────────────────────────
 async function confirmBookWithCredit() {
@@ -1412,28 +1601,42 @@ async function confirmBookWithCredit() {
   const btn = document.getElementById('btnConfirmBook');
   const label = document.getElementById('bookBtnLabel');
   const spinner = document.getElementById('bookSpinner');
-  btn.disabled = true; label.textContent = 'Booking…'; spinner.style.display = 'block';
+  const weeks = getRepeatWeeks();
+  btn.disabled = true; label.textContent = weeks > 1 ? `Booking ${weeks} lessons…` : 'Booking…'; spinner.style.display = 'block';
 
   try {
     const bookBody = { ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined };
     if (selectedLessonType && selectedLessonType.id) bookBody.lesson_type_id = selectedLessonType.id;
+    if (weeks > 1) bookBody.repeat_weeks = weeks;
     const res = await fetch('/api/slots?action=book', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify(bookBody)
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    if (!res.ok) {
+      // Handle conflict response for recurring bookings
+      if (data.code === 'SLOTS_UNAVAILABLE' && data.conflicts) {
+        const conflictDates = data.conflicts.map(c => {
+          const d = new Date(c.date + 'T00:00:00Z');
+          return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+        }).join(', ');
+        throw new Error(`Some slots are unavailable: ${conflictDates}`);
+      }
+      throw new Error(data.error);
+    }
 
     creditBalance = data.credit_balance;
     balanceMinutes = data.balance_minutes || 0;
     lastBookingId = data.booking_id;
     updateCreditBadge();
-    showBookSuccess();
+    showBookSuccess(weeks, data.dates);
     refreshAfterBooking();
   } catch (err) {
     showToast(err.message || 'Booking failed. Please try again.', 'error');
-    btn.disabled = false; label.textContent = 'Confirm booking'; spinner.style.display = 'none';
+    btn.disabled = false;
+    label.textContent = weeks > 1 ? `Book ${weeks} lessons` : 'Confirm booking';
+    spinner.style.display = 'none';
   }
 }
 
@@ -1463,20 +1666,32 @@ async function confirmPayAndBook() {
   }
 }
 
-function showBookSuccess() {
-  const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
-    .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', timeZone:'UTC' });
-  document.getElementById('successDate').textContent = dateDisplay;
+function showBookSuccess(weeks, dates) {
+  const successStep = document.getElementById('bookSuccessStep');
+  if (weeks && weeks > 1 && dates) {
+    const dateList = dates.map(d => {
+      const display = new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+      return display;
+    }).join(', ');
+    document.getElementById('successDate').textContent = dateList;
+    successStep.querySelector('h2').textContent = `${weeks} lessons booked!`;
+    successStep.querySelector('p').innerHTML = `Your <strong>${weeks} weekly lessons</strong> at <strong>${pendingSlot.start_time}</strong> with <strong>${pendingSlot.instructor_name}</strong> are confirmed. Check your email for details.`;
+  } else {
+    const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', timeZone:'UTC' });
+    document.getElementById('successDate').textContent = dateDisplay;
+    successStep.querySelector('h2').textContent = 'Lesson booked!';
+    successStep.querySelector('p').innerHTML = `Your lesson on <strong>${dateDisplay}</strong> at <strong>${pendingSlot.start_time}</strong> with <strong>${pendingSlot.instructor_name}</strong> is confirmed. Check your email for details.`;
+  }
   document.getElementById('successTime').textContent = pendingSlot.start_time;
   document.getElementById('successInstructor').textContent = pendingSlot.instructor_name;
 
-  // Show sync prompt or synced message based on whether they've subscribed before
   const showSync = shouldShowCalSync();
   document.getElementById('calSyncPrompt').style.display = showSync ? 'block' : 'none';
   document.getElementById('calSyncedNote').style.display = showSync ? 'none' : 'block';
 
   document.getElementById('bookConfirmStep').style.display = 'none';
-  document.getElementById('bookSuccessStep').style.display = 'block';
+  successStep.style.display = 'block';
 }
 
 function refreshAfterBooking() {
@@ -1556,8 +1771,8 @@ async function downloadCalendar(bookingId) {
 window.downloadCalendar = downloadCalendar;
 
 // ─── Cancel modal ────────────────────────────────────────────────────────────
-function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil) {
-  pendingCancel = { bookingId, date, start, end, instructorName, hoursUntil };
+function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil, seriesId) {
+  pendingCancel = { bookingId, date, start, end, instructorName, hoursUntil, seriesId: seriesId || null };
   const dateDisplay = new Date(date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
   document.getElementById('cmDate').textContent = dateDisplay;
@@ -1577,12 +1792,41 @@ function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil
   ackCheck.checked = false;
   ackLabel.style.display = willGet ? 'none' : 'flex';
 
-  document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
-  // Disable cancel button until checkbox is checked (for sub-48hr only)
-  document.getElementById('btnConfirmCancel').disabled = !willGet;
+  // Series cancel option
+  const seriesOption = document.getElementById('cancelSeriesOption');
+  const seriesCheck = document.getElementById('cancelSeriesCheck');
+  seriesCheck.checked = false;
+  document.getElementById('cancelSeriesInfo').style.display = 'none';
+  if (seriesId) {
+    seriesOption.style.display = 'block';
+    // If opened from the "Cancel series" button, pre-check it
+    if (hoursUntil === 999) {
+      seriesCheck.checked = true;
+      toggleCancelSeriesInfo();
+      // Override policy display for series
+      policyEl.className = 'cancel-policy safe';
+      policyEl.innerHTML = '✓ Each lesson in the series will be assessed individually. Lessons 48+ hours away will be refunded.';
+    }
+  } else {
+    seriesOption.style.display = 'none';
+  }
+
+  document.getElementById('cancelBtnLabel').textContent = seriesCheck.checked ? 'Cancel series' : 'Cancel lesson';
+  document.getElementById('btnConfirmCancel').disabled = !willGet && !seriesCheck.checked;
   document.getElementById('cancelModal').classList.add('open');
 }
 window.openCancelModal = openCancelModal;
+
+function toggleCancelSeriesInfo() {
+  const checked = document.getElementById('cancelSeriesCheck').checked;
+  document.getElementById('cancelSeriesInfo').style.display = checked ? 'block' : 'none';
+  document.getElementById('cancelBtnLabel').textContent = checked ? 'Cancel series' : 'Cancel lesson';
+  if (checked) {
+    document.getElementById('cancelSeriesInfo').textContent = 'All remaining lessons in this weekly series will be cancelled. Refunds apply per the 48-hour policy.';
+    document.getElementById('btnConfirmCancel').disabled = false;
+  }
+}
+window.toggleCancelSeriesInfo = toggleCancelSeriesInfo;
 
 function toggleCancelBtn() {
   const ackCheck = document.getElementById('cancelAckCheck');
@@ -1593,14 +1837,17 @@ window.toggleCancelBtn = toggleCancelBtn;
 async function confirmCancel() {
   if (!pendingCancel) return;
   const btn = document.getElementById('btnConfirmCancel');
+  const cancelSeries = document.getElementById('cancelSeriesCheck').checked && pendingCancel.seriesId;
   btn.disabled = true;
-  document.getElementById('cancelBtnLabel').textContent = 'Cancelling…';
+  document.getElementById('cancelBtnLabel').textContent = cancelSeries ? 'Cancelling series…' : 'Cancelling…';
 
   try {
+    const body = { booking_id: pendingCancel.bookingId };
+    if (cancelSeries) body.cancel_series = true;
     const res = await fetch('/api/slots?action=cancel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ booking_id: pendingCancel.bookingId })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
@@ -1609,13 +1856,13 @@ async function confirmCancel() {
     balanceMinutes = data.balance_minutes || 0;
     updateCreditBadge();
     document.getElementById('cancelModal').classList.remove('open');
-    showToast(data.message, data.credit_returned ? 'success' : '');
+    showToast(data.message, data.credit_returned !== false ? 'success' : '');
     loadedRanges = []; slotCache = {};
     await Promise.all([loadUpcoming(), renderCurrentView()]);
   } catch (err) {
     showToast(err.message || 'Cancellation failed.', 'error');
     btn.disabled = false;
-    document.getElementById('cancelBtnLabel').textContent = 'Cancel lesson';
+    document.getElementById('cancelBtnLabel').textContent = cancelSeries ? 'Cancel series' : 'Cancel lesson';
   }
 }
 
