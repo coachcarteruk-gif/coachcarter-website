@@ -519,7 +519,7 @@ async function handleAllLearners(req, res) {
     const learners = await sql`
       SELECT
         lu.id, lu.name, lu.email, lu.phone,
-        lu.current_tier, lu.credit_balance,
+        lu.current_tier, lu.credit_balance, lu.balance_minutes,
         lu.pickup_address, lu.prefer_contact_before,
         lu.created_at,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
@@ -601,55 +601,62 @@ async function handleLearnerDetail(req, res) {
 }
 
 // ── POST /api/admin?action=adjust-credits ─────────────────────────────────────
+// Body: { learner_id, hours: float (e.g. 1.5), reason }
+// Positive = add, negative = remove. Updates balance_minutes (primary) + credit_balance (legacy).
 async function handleAdjustCredits(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
 
-  const { learner_id, credits, reason } = req.body;
-  if (!learner_id || credits === undefined || credits === 0)
-    return res.status(400).json({ error: 'learner_id and non-zero credits are required' });
+  const { learner_id, hours, reason } = req.body;
+  if (!learner_id || hours === undefined || hours === 0)
+    return res.status(400).json({ error: 'learner_id and non-zero hours are required' });
 
-  const amount = parseInt(credits, 10);
-  if (isNaN(amount) || amount === 0)
-    return res.status(400).json({ error: 'credits must be a non-zero integer' });
+  const hoursFloat = parseFloat(hours);
+  if (isNaN(hoursFloat) || hoursFloat === 0)
+    return res.status(400).json({ error: 'hours must be a non-zero number' });
+
+  const minutesDelta = Math.round(hoursFloat * 60);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
     // Check learner exists
-    const [learner] = await sql`SELECT id, credit_balance FROM learner_users WHERE id = ${learner_id}`;
+    const [learner] = await sql`SELECT id, balance_minutes, credit_balance FROM learner_users WHERE id = ${learner_id}`;
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
     // Prevent negative balance
-    if (amount < 0 && learner.credit_balance + amount < 0)
-      return res.status(400).json({ error: 'Cannot reduce below 0. Current balance: ' + learner.credit_balance });
+    const newMinutes = (learner.balance_minutes || 0) + minutesDelta;
+    if (newMinutes < 0)
+      return res.status(400).json({ error: 'Cannot reduce below 0. Current balance: ' + Math.round((learner.balance_minutes || 0) / 60 * 10) / 10 + ' hours' });
 
-    // Update balance
+    // Update both balance_minutes (primary) and credit_balance (legacy dual-write)
+    const creditsDelta = Math.round(hoursFloat);
     const [updated] = await sql`
       UPDATE learner_users
-      SET credit_balance = credit_balance + ${amount}
+      SET balance_minutes = balance_minutes + ${minutesDelta},
+          credit_balance  = GREATEST(0, credit_balance + ${creditsDelta})
       WHERE id = ${learner_id}
-      RETURNING credit_balance
+      RETURNING balance_minutes, credit_balance
     `;
 
-    // Log transaction
+    // Log transaction (credits field stores whole hours, legacy)
     await sql`
       INSERT INTO credit_transactions (learner_id, type, credits, amount_pence, payment_method)
-      VALUES (${learner_id}, ${amount > 0 ? 'admin_add' : 'admin_remove'}, ${amount}, 0, ${reason || 'Admin adjustment'})
+      VALUES (${learner_id}, ${minutesDelta > 0 ? 'admin_add' : 'admin_remove'}, ${creditsDelta}, 0, ${reason || 'Admin adjustment'})
     `;
 
     return res.json({
-      success: true,
-      previous_balance: learner.credit_balance,
-      new_balance: updated.credit_balance,
-      adjusted_by: amount
+      ok: true,
+      previous_balance_minutes: learner.balance_minutes || 0,
+      new_balance_minutes: updated.balance_minutes,
+      adjusted_hours: hoursFloat
     });
   } catch (err) {
     console.error('admin adjust-credits error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to adjust credits', details: err.message });
+    return res.status(500).json({ error: 'Failed to adjust hours', details: err.message });
   }
 }
 
