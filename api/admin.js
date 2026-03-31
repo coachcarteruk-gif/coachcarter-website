@@ -271,6 +271,12 @@ async function handleAllBookings(req, res) {
 
   const { status, instructor_id, from, to } = req.query;
 
+  // Use NULL-safe params so one query handles all filter combos without nested sql fragments
+  const statusFilter     = status || null;
+  const instructorFilter = instructor_id ? parseInt(instructor_id) : null;
+  const fromFilter       = from || null;
+  const toFilter         = to || null;
+
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
@@ -295,11 +301,10 @@ async function handleAllBookings(req, res) {
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       JOIN instructors i    ON i.id  = lb.instructor_id
-      WHERE 1=1
-        ${status ? sql`AND lb.status = ${status}` : sql``}
-        ${instructor_id ? sql`AND lb.instructor_id = ${parseInt(instructor_id)}` : sql``}
-        ${from ? sql`AND lb.scheduled_date >= ${from}` : sql``}
-        ${to ? sql`AND lb.scheduled_date <= ${to}` : sql``}
+      WHERE (${statusFilter}::text IS NULL OR lb.status = ${statusFilter})
+        AND (${instructorFilter}::integer IS NULL OR lb.instructor_id = ${instructorFilter})
+        AND (${fromFilter}::date IS NULL OR lb.scheduled_date >= ${fromFilter}::date)
+        AND (${toFilter}::date IS NULL OR lb.scheduled_date <= ${toFilter}::date)
       ORDER BY lb.scheduled_date DESC, lb.start_time DESC
       LIMIT 200
     `;
@@ -632,11 +637,12 @@ async function handleAdjustCredits(req, res) {
       return res.status(400).json({ error: 'Cannot reduce below 0. Current balance: ' + Math.round((learner.balance_minutes || 0) / 60 * 10) / 10 + ' hours' });
 
     // Update both balance_minutes (primary) and credit_balance (legacy dual-write)
-    const creditsDelta = Math.round(hoursFloat);
+    const creditsDelta    = Math.round(hoursFloat);
+    const newCreditBal    = Math.max(0, (learner.credit_balance || 0) + creditsDelta);
     const [updated] = await sql`
       UPDATE learner_users
       SET balance_minutes = balance_minutes + ${minutesDelta},
-          credit_balance  = GREATEST(0, credit_balance + ${creditsDelta})
+          credit_balance  = ${newCreditBal}
       WHERE id = ${learner_id}
       RETURNING balance_minutes, credit_balance
     `;
