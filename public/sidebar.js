@@ -45,12 +45,21 @@
     ],
     learner: [
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
-      { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
-        activeOn: ['/learner/buy-credits.html', '/learner/lessons.html'] },
-      { icon: 'clipboard', label: 'Practice', href: '/learner/log-session.html',
-        activeOn: ['/learner/mock-test.html', '/learner/progress.html'] },
-      { icon: 'play', label: 'Learn', href: '/learner/videos.html',
-        activeOn: ['/learner/examiner-quiz.html', '/learner/ask-examiner.html'] },
+      { icon: 'calendar', label: 'Lessons', children: [
+        { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
+        { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html' },
+        { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' }
+      ]},
+      { icon: 'clipboard', label: 'Practice', children: [
+        { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
+        { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
+        { icon: 'dashboard', label: 'My Progress', href: '/learner/progress.html' }
+      ]},
+      { icon: 'play', label: 'Learn', children: [
+        { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
+        { icon: 'message', label: 'Examiner AI', href: '/learner/ask-examiner.html' },
+        { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
+      ]},
       'divider',
       { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true }
     ],
@@ -63,85 +72,39 @@
     ]
   };
 
-  // ── Contextual bottom tab bar (mobile only) ──────────────────
-  // Each section defines its own full set of 3 tabs
+  // ── Fixed bottom tab bar (mobile only) ────────────────────────
   var bottomSections = {
     learner: {
-      sections: [
-        { pages: ['/learner/book', '/learner/buy-credits', '/learner/lessons'],
-          tabs: [
-            { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
-            { icon: 'creditCard', label: 'Buy', href: '/learner/buy-credits.html' },
-            { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' }
-          ]},
-        { pages: ['/learner/log-session', '/learner/mock-test', '/learner/progress'],
-          tabs: [
-            { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
-            { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
-            { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' }
-          ]},
-        { pages: ['/learner/videos', '/learner/examiner-quiz', '/learner/ask-examiner'],
-          tabs: [
-            { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
-            { icon: 'message', label: 'Examiner AI', href: '/learner/ask-examiner.html' },
-            { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
-          ]},
-        { pages: ['/learner/profile'],
-          tabs: [
-            { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' },
-            { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
-            { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' }
-          ]}
-      ],
-      // Default tabs shown on dashboard and any unmatched pages
-      defaultTabs: [
-        { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
-        { icon: 'dashboard', label: 'Progress', href: '/learner/progress.html' },
-        { icon: 'play', label: 'Videos', href: '/learner/videos.html' }
+      tabs: [
+        { icon: 'dashboard', label: 'Home', href: '/learner/',
+          activeOn: [] },
+        { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
+          activeOn: ['/learner/buy-credits', '/learner/lessons'] },
+        { icon: 'clipboard', label: 'Practice', href: '/learner/log-session.html',
+          activeOn: ['/learner/mock-test', '/learner/progress'] },
+        { icon: 'play', label: 'Learn', href: '/learner/videos.html',
+          activeOn: ['/learner/ask-examiner', '/learner/examiner-quiz'] },
+        { icon: 'user', label: 'Profile', href: '/learner/profile.html',
+          activeOn: [] }
       ]
     },
     instructor: {
-      sections: [
-        { pages: ['/instructor/', '/instructor/availability'],
-          tabs: [
-            { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
-            { icon: 'clock', label: 'Availability', href: '/instructor/availability.html' },
-            { icon: 'list', label: 'Learners', href: '/instructor/learners.html' }
-          ]},
-        { pages: ['/instructor/learners', '/instructor/qa'],
-          tabs: [
-            { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
-            { icon: 'list', label: 'Learners', href: '/instructor/learners.html' },
-            { icon: 'message', label: 'Q&A', href: '/instructor/qa.html' }
-          ]},
-        { pages: ['/instructor/profile'],
-          tabs: [
-            { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
-            { icon: 'user', label: 'Profile', href: '/instructor/profile.html' },
-            { icon: 'message', label: 'Q&A', href: '/instructor/qa.html' }
-          ]}
-      ],
-      defaultTabs: [
-        { icon: 'calendar', label: 'Calendar', href: '/instructor/' },
-        { icon: 'clock', label: 'Availability', href: '/instructor/availability.html' },
-        { icon: 'list', label: 'Learners', href: '/instructor/learners.html' }
+      tabs: [
+        { icon: 'calendar', label: 'Calendar', href: '/instructor/',
+          activeOn: ['/instructor/availability'] },
+        { icon: 'list', label: 'Learners', href: '/instructor/learners.html',
+          activeOn: [] },
+        { icon: 'message', label: 'Q&A', href: '/instructor/qa.html',
+          activeOn: [] },
+        { icon: 'user', label: 'Profile', href: '/instructor/profile.html',
+          activeOn: [] }
       ]
     }
   };
 
   function getBottomTabs() {
     var config = bottomSections[context];
-    if (!config) return null;
-    // Find which section the current page belongs to
-    for (var i = 0; i < config.sections.length; i++) {
-      var sec = config.sections[i];
-      for (var j = 0; j < sec.pages.length; j++) {
-        if (normPath(path) === normPath(sec.pages[j]) || normPath(path) === sec.pages[j]) {
-          return sec.tabs;
-        }
-      }
-    }
-    return config.defaultTabs;
+    return config ? config.tabs : null;
   }
 
   // ── Determine active link ──────────────────────────────────────
@@ -227,13 +190,9 @@
     var tabs = getBottomTabs();
     if (!tabs) return '';
     var html = '<nav class="cc-bottom-bar" aria-label="Quick navigation">';
-    // Menu button as first tab
-    html += '<button class="cc-bottom-tab cc-bottom-menu" id="cc-bottom-menu" aria-label="Open menu">' +
-      '<span class="cc-bottom-icon">' + icons.hamburger + '</span>' +
-      '<span>Menu</span></button>';
     for (var i = 0; i < tabs.length; i++) {
       var tab = tabs[i];
-      var active = isActive(tab.href) ? ' active' : '';
+      var active = isActive(tab.href, tab.activeOn) ? ' active' : '';
       html += '<a href="' + tab.href + '" class="cc-bottom-tab' + active + '">' +
         '<span class="cc-bottom-icon">' + icons[tab.icon] + '</span>' +
         '<span>' + tab.label + '</span></a>';
@@ -355,11 +314,10 @@
     '  .cc-sb { transform: translateX(-100%); width: 280px; padding-top: env(safe-area-inset-top, 0px); }',
     '  .cc-sb.open { transform: translateX(0); }',
     '  .cc-sb-close { display: block; }',
-    /* When bottom bar exists, hide the top header entirely */
-    '  body.cc-has-sidebar:not(.cc-has-bottom-bar) .cc-mob-header { display: flex; padding-top: env(safe-area-inset-top, 0px); height: calc(56px + env(safe-area-inset-top, 0px)); }',
+    /* Mobile header — always show on mobile */
+    '  body.cc-has-sidebar .cc-mob-header { display: flex; padding-top: env(safe-area-inset-top, 0px); height: calc(56px + env(safe-area-inset-top, 0px)); }',
     '  body.cc-has-sidebar:not(.cc-has-bottom-bar) { padding-top: calc(56px + env(safe-area-inset-top, 0px)); }',
-    '  body.cc-has-sidebar.cc-has-bottom-bar .cc-mob-header { display: none !important; }',
-    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-top: env(safe-area-inset-top, 0px); }',
+    '  body.cc-has-sidebar.cc-has-bottom-bar { padding-top: calc(56px + env(safe-area-inset-top, 0px)); }',
     /* Contained app-like layout: main fills viewport, scrolls internally */
     '  body.cc-has-sidebar.cc-has-bottom-bar {',
     '    overflow: hidden;',
@@ -369,7 +327,7 @@
     '  body.cc-has-sidebar.cc-has-bottom-bar #main,',
     '  body.cc-has-sidebar.cc-has-bottom-bar > .page,',
     '  body.cc-has-sidebar.cc-has-bottom-bar > .chat-container {',
-    '    height: calc(100dvh - 72px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));',
+    '    height: calc(100dvh - 56px - 72px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));',
     '    overflow-y: auto;',
     '    -webkit-overflow-scrolling: touch;',
     '    margin-top: 0 !important;',
@@ -484,8 +442,6 @@
     }
 
     if (hamburger) hamburger.addEventListener('click', openSidebar);
-    var bottomMenu = document.getElementById('cc-bottom-menu');
-    if (bottomMenu) bottomMenu.addEventListener('click', openSidebar);
     overlay.addEventListener('click', closeSidebar);
     closeBtn.addEventListener('click', closeSidebar);
     document.addEventListener('keydown', function(e) {
@@ -497,11 +453,17 @@
       if (window.innerWidth >= 960) closeSidebar();
     });
 
-    // ── Collapsible group toggles ────────────────────────────────
+    // ── Collapsible group toggles (accordion: one open at a time) ─
     var toggles = document.querySelectorAll('.cc-sb-group-toggle');
     for (var t = 0; t < toggles.length; t++) {
       toggles[t].addEventListener('click', function() {
-        this.parentElement.classList.toggle('open');
+        var parent = this.parentElement;
+        var wasOpen = parent.classList.contains('open');
+        var allGroups = document.querySelectorAll('.cc-sb-group');
+        for (var g = 0; g < allGroups.length; g++) {
+          allGroups[g].classList.remove('open');
+        }
+        if (!wasOpen) parent.classList.add('open');
       });
     }
 
