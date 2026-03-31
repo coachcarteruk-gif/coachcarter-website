@@ -607,6 +607,48 @@ Aligned desktop and mobile navigation so both surfaces share the same mental mod
 - ✅ Active tab on mobile highlights based on `activeOn` mapping — e.g. visiting `/learner/mock-test.html` lights up the Practice tab
 - ✅ Single file change: `public/sidebar.js` only
 
+### 2.41 — UI/Design Refresh: Borderless Cards + App-Style Polish ✅ Complete (31 March 2026)
+
+Mobbin-inspired visual refresh across the learner and instructor portals, bringing the aesthetic closer to top iOS apps (Revolut, Calm, Freenow, komoot).
+
+**What was built:**
+- ✅ Cards site-wide: removed all `border: 1px solid` from `.card`, `.choice-card`, `.quick-action-card`, `.stat-pill`, `.progress-card`, `.upcoming-card`, `.profile-card`, `.cal-sync-banner` — replaced with neutral ambient shadows
+- ✅ Upcoming lesson cards retain the orange left-border accent, all others are fully borderless
+- ✅ `.choice-card` hover: removed border-colour change, now uses shadow depth only
+- ✅ Bottom tab active state: warm pill highlight (`#fff4ec` background) instead of orange text alone
+- ✅ Changes via CSS injection in `sidebar.js` — no edits to individual page files
+- ✅ `public/shared-auth.css` updated for login/choice card styles
+
+### 2.42 — Instructor Calendar: Timepage-Style Weekly View ✅ Complete (31 March 2026)
+
+Replaced the time-grid weekly view (which crushed columns on mobile) with an agenda-style layout inspired by Timepage.
+
+**What was built:**
+- ✅ Each day is a horizontal row: compact day label (DOW + date number) on the left, lesson cards on the right
+- ✅ Lesson cards have a coloured left-bar matching the lesson type colour
+- ✅ Today's day label is highlighted in orange
+- ✅ Empty days show "No lessons" placeholder
+- ✅ Tap day label → drills into daily view; tap lesson card → opens booking detail modal
+- ✅ Preserves: cancelled/completed styling, `hideWeekends` filter, `showCancelled` toggle, lesson type colours
+- ✅ Scales naturally to any screen width — no more crushed columns on mobile
+- ✅ Changes in `public/instructor/index.html` only (CSS + `renderWeekly()` function)
+
+### 2.43 — Floating Pill Bottom Nav Bar ✅ Complete (31 March 2026)
+
+Replaced the edge-to-edge fixed bottom bar with a floating pill — matching the premium app style of Revolut, Linear, and top iOS apps.
+
+**What was built:**
+- ✅ Bar floats 12px above the bottom edge with 10px side margins (not full-width)
+- ✅ `border-radius: 26px` — fully rounded pill shape
+- ✅ `backdrop-filter: blur(20px)` frosted glass effect on the bar background
+- ✅ Layered shadow (`0 8px 32px` + `0 2px 8px`) for depth
+- ✅ Subtle `1px border` at `rgba(0,0,0,0.06)` for edge definition
+- ✅ Inactive tabs: lighter grey `#a0a0a0`; active: orange icon + warm `#fff3e8` pill
+- ✅ Active icon scales 1.1× with bolder stroke (2.5)
+- ✅ Home tab: switched from dashboard/grid icon to house icon
+- ✅ Safe area inset handled via `max(12px, env(safe-area-inset-bottom))`
+- ✅ Content height updated from 72px to 80px to account for floating offset
+
 ---
 
 ## Phase 3: Next Up (Prioritised)

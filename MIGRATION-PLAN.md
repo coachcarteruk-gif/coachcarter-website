@@ -59,7 +59,7 @@
 
 | File | Size | Purpose |
 |------|------|---------|
-| sidebar.js | 30KB | Context-aware nav — desktop sidebar with collapsible groups + mobile fixed 5-tab bottom bar (Home/Lessons/Practice/Learn/Profile) |
+| sidebar.js | 30KB | Context-aware nav — desktop sidebar with collapsible groups + mobile floating pill bottom bar (Home/Lessons/Practice/Learn/Profile). Also injects card styling overrides (borderless shadows) site-wide. |
 | competency-config.js | 19KB | 10 DL25 categories, 39 sub-skills, fault types, ratings, readiness scoring |
 | auth-gate.js | 7KB | Modal login prompt, `window.ccAuth` (token, user, requireAuth) |
 | pwa.js | 5KB | Service worker registration + install banner |
@@ -99,7 +99,7 @@
 
 **Navigation (app-mode design — do NOT deviate):**
 - Start page (`/`): Role selection only — "I'm a Learner" or "I'm an Instructor"
-- Mobile: Top header with hamburger. Fixed 5-tab bottom bar: Home | Lessons | Practice | Learn | Profile. Active tab reflects current section. Subsections accessed via sidebar collapsible groups.
+- Mobile: Top header with hamburger. **Floating pill bottom bar** (border-radius 26px, frosted glass, layered shadow, 10px side margins): Home | Lessons | Practice | Learn | Profile. Active tab reflects current section via `activeOn` mapping. Subsections accessed via sidebar collapsible groups.
 - Desktop: Fixed 240px sidebar with collapsible groups (Lessons → Book/Buy/Upcoming, Practice → Log Session/Mock Test/Progress, Learn → Videos/Examiner AI/Quiz). Accordion — one group open at a time.
 
 **Intentionally removed features (do NOT re-add):**

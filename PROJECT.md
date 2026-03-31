@@ -104,7 +104,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── manifest.json               # PWA manifest
 │   ├── pwa.js                      # PWA install prompt + service worker registration
 │   ├── sw.js                       # Service worker (cache shell + network-first strategy)
-│   ├── sidebar.js                  # Context-aware sidebar navigation (public/learner/instructor)
+│   ├── sidebar.js                  # Context-aware sidebar navigation (public/learner/instructor) + floating pill bottom bar + card styling overrides
 │   ├── posthog-tracking.js         # PostHog analytics
 │   ├── offline.html                # Branded offline fallback page
 │   ├── icons/                      # PWA icons (multiple sizes + maskable variants)
@@ -204,6 +204,9 @@ The site uses a **sidebar navigation** system (`public/sidebar.js`) that replace
 - Auth-aware (hides profile link when logged out, shows admin link for admin instructors)
 - Mobile responsive with hamburger toggle at 960px breakpoint
 - Shows user name, credit balance, and logout in footer
+- **Mobile bottom bar:** floating pill style (border-radius 26px, 10px side margins, frosted glass blur, layered shadow) — 5 fixed tabs for learner (Home/Lessons/Practice/Learn/Profile), 5 for instructor (Calendar/Learners/Earnings/Q&A/Profile)
+- **Card styling:** injects CSS overrides removing borders from cards site-wide, replacing with ambient shadows. Orange left-border retained on upcoming lesson cards only.
+- **Instructor weekly view:** Timepage-style agenda layout (day label left, lesson cards with coloured left-bar right)
 
 ---
 
