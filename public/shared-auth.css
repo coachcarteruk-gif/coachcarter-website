@@ -120,12 +120,12 @@ body {
 /* ── Card ────────────────────────────────────────────────────────────────── */
 .card {
   background: var(--white);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 16px;
   width: 100%;
   max-width: 420px;
   overflow: hidden;
-  box-shadow: 0 4px 24px rgba(245,131,33,0.06), 0 1px 3px rgba(0,0,0,0.04);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.06);
   padding: 32px;
 }
 .card-title {
@@ -425,19 +425,19 @@ textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
   align-items: center;
   gap: 16px;
   padding: 18px 20px;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
   text-decoration: none;
   color: inherit;
   background: var(--white);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
 }
 .choice-card:hover {
-  border-color: var(--accent);
   background: var(--accent-lt);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(245,131,33,0.1);
+  box-shadow: 0 4px 12px rgba(245,131,33,0.12), 0 2px 4px rgba(0,0,0,0.06);
 }
 .choice-icon {
   width: 48px; height: 48px;
