@@ -147,7 +147,8 @@
 
     @media print {
       .site-nav, .bottom-nav, .cal-toolbar, .toast, .modal-overlay,
-      .glance-section, .qa-banner, .cal-sync-banner { display: none !important; }
+      .glance-section, .qa-banner, .cal-sync-banner, .greeting, .next-lesson,
+      .next-lesson-empty, .pill-row, .action-cards, .new-bookings-banner { display: none !important; }
       .page { max-width: 100%; margin: 0; padding: 10px; box-shadow: none; }
       .daily-booking-card { break-inside: avoid; border: 1px solid #ccc; }
       .week-event { border: 1px solid #ccc; }
@@ -604,12 +605,76 @@
     .glance-num.accent { color: var(--accent); }
     .glance-label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
 
-    /* ── Next Lesson Card ── */
-    .next-lesson { background: linear-gradient(135deg, var(--accent-lt), #fff); border: 1.5px solid var(--accent); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 20px; display: none; }
-    .next-lesson-label { font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
-    .next-lesson-time { font-family: var(--font-head); font-size: 1.15rem; font-weight: 700; color: var(--primary); }
-    .next-lesson-details { font-size: 0.85rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
-    .next-lesson-details strong { color: var(--primary); }
+    /* ── Greeting ── */
+    .greeting { font-size: 1.3rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); letter-spacing: -0.02em; margin-bottom: 16px; }
+
+    /* ── Next Lesson Hero Card ── */
+    .next-lesson {
+      background: linear-gradient(135deg, #f58321, #ff9a3c);
+      border: none; border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
+      display: none; align-items: center; justify-content: space-between; gap: 16px; color: #fff;
+    }
+    .next-lesson.show { display: flex; }
+    .nl-info { flex: 1; min-width: 0; }
+    .next-lesson-label { font-size: 0.72rem; font-weight: 700; color: rgba(255,255,255,0.85); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .next-lesson-time { font-family: var(--font-head); font-size: 1.25rem; font-weight: 700; color: #fff; line-height: 1.2; }
+    .next-lesson-details { font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-top: 3px; line-height: 1.5; }
+    .next-lesson-details strong { color: #fff; }
+    .nl-actions { margin-top: 10px; display: flex; gap: 8px; }
+    .nl-btn { display: inline-block; background: rgba(255,255,255,0.22); color: #fff; border-radius: 100px; padding: 6px 16px; font-size: 0.78rem; font-weight: 700; text-decoration: none; transition: background 0.15s; backdrop-filter: blur(4px); border: none; cursor: pointer; }
+    .nl-btn:hover { background: rgba(255,255,255,0.35); }
+    .nl-stat { text-align: center; flex-shrink: 0; }
+    .nl-stat-num { font-family: var(--font-head); font-size: 1.8rem; font-weight: 800; line-height: 1; }
+    .nl-stat-label { font-size: 0.42rem; font-weight: 600; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+    /* Next lesson empty state */
+    .next-lesson-empty {
+      border: 2px dashed var(--border); border-radius: var(--radius);
+      padding: 24px; text-align: center; margin-bottom: 20px; display: none;
+    }
+    .next-lesson-empty.show { display: block; }
+    .next-lesson-empty p { font-size: 0.9rem; color: var(--muted); margin-bottom: 12px; }
+    .nle-btn { display: inline-block; background: var(--accent); color: #fff; border-radius: 100px; padding: 10px 24px; font-size: 0.85rem; font-weight: 700; text-decoration: none; font-family: var(--font-head); transition: all 0.18s; }
+    .nle-btn:hover { background: var(--accent-dk); transform: translateY(-1px); }
+
+    /* ── Quick Access Pills ── */
+    .pill-row {
+      display: flex; gap: 18px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 18px;
+      -ms-overflow-style: none; scrollbar-width: none;
+    }
+    .pill-row::-webkit-scrollbar { display: none; }
+    .pill-item { display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; flex-shrink: 0; min-width: 56px; }
+    .pill-icon {
+      width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      transition: transform 0.18s, box-shadow 0.18s;
+    }
+    .pill-item:hover .pill-icon { transform: scale(1.08); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+    .pill-icon svg { width: 22px; height: 22px; }
+    .pill-icon-learners { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .pill-icon-earnings { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .pill-icon-availability { background: rgba(168,85,247,0.12); color: #a855f7; }
+    .pill-icon-qa { background: rgba(245,131,33,0.12); color: #f58321; }
+    .pill-icon-profile { background: rgba(107,114,128,0.12); color: #6b7280; }
+    .pill-label { font-size: 0.68rem; font-weight: 600; color: var(--primary); white-space: nowrap; }
+
+    /* ── Action Cards ── */
+    .action-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 24px; }
+    .action-card {
+      border-radius: 14px; padding: 18px 14px; display: flex; flex-direction: column; justify-content: space-between;
+      color: #fff; text-decoration: none; min-height: 100px;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+    }
+    .action-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+    .action-card svg { width: 28px; height: 28px; margin-bottom: 10px; opacity: 0.9; }
+    .action-card-label { font-family: var(--font-head); font-size: 0.85rem; font-weight: 700; line-height: 1.2; }
+    .action-card-add { background: linear-gradient(135deg, #f58321, #ff9a3c); }
+    .action-card-avail { background: linear-gradient(135deg, #a855f7, #c084fc); }
+    .action-card-earnings { background: linear-gradient(135deg, #22c55e, #4ade80); }
+    @media (max-width: 340px) {
+      .action-cards { display: flex; overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
+      .action-cards::-webkit-scrollbar { display: none; }
+      .action-card { min-width: 130px; flex-shrink: 0; }
+    }
 
     /* ── New Bookings Banner ── */
     .new-bookings-banner { display: none; background: var(--green-lt); border: 1.5px solid var(--green); border-radius: var(--radius); padding: 14px 20px; margin-bottom: 18px; align-items: center; justify-content: space-between; gap: 12px; }
@@ -691,6 +756,81 @@
 </header>
 
 <div class="page">
+  <!-- GREETING -->
+  <h1 class="greeting" id="greeting">Loading…</h1>
+
+  <!-- NEXT LESSON HERO CARD -->
+  <div class="next-lesson" id="nextLessonCard">
+    <div class="nl-info">
+      <div class="next-lesson-label" id="nextLessonWhen">Next lesson</div>
+      <div class="next-lesson-time" id="nextLessonTime"></div>
+      <div class="next-lesson-details" id="nextLessonDetails"></div>
+      <div class="nl-actions">
+        <button class="nl-btn" onclick="goToday()">View Schedule</button>
+      </div>
+    </div>
+    <div class="nl-stat" id="nlStat" style="display:none">
+      <div class="nl-stat-num" id="nlStatNum">0</div>
+      <div class="nl-stat-label">Today</div>
+    </div>
+  </div>
+
+  <!-- NEXT LESSON EMPTY STATE -->
+  <div class="next-lesson-empty" id="nextLessonEmpty">
+    <p>No upcoming lessons today</p>
+    <button class="nle-btn" onclick="openAddLessonModal()">Add a Lesson</button>
+  </div>
+
+  <!-- QUICK ACCESS PILLS -->
+  <div class="pill-row">
+    <a href="/instructor/learners.html" class="pill-item">
+      <div class="pill-icon pill-icon-learners">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <span class="pill-label">Learners</span>
+    </a>
+    <a href="/instructor/earnings.html" class="pill-item">
+      <div class="pill-icon pill-icon-earnings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+      </div>
+      <span class="pill-label">Earnings</span>
+    </a>
+    <a href="/instructor/availability.html" class="pill-item">
+      <div class="pill-icon pill-icon-availability">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <span class="pill-label">Availability</span>
+    </a>
+    <a href="/instructor/qa.html" class="pill-item">
+      <div class="pill-icon pill-icon-qa">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </div>
+      <span class="pill-label">Q&A</span>
+    </a>
+    <a href="/instructor/profile.html" class="pill-item">
+      <div class="pill-icon pill-icon-profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <span class="pill-label">Profile</span>
+    </a>
+  </div>
+
+  <!-- ACTION CARDS -->
+  <div class="action-cards">
+    <a href="#" onclick="openAddLessonModal();return false" class="action-card action-card-add">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+      <span class="action-card-label">Add Lesson</span>
+    </a>
+    <a href="/instructor/availability.html" class="action-card action-card-avail">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span class="action-card-label">Set Availability</span>
+    </a>
+    <a href="/instructor/earnings.html" class="action-card action-card-earnings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      <span class="action-card-label">View Earnings</span>
+    </a>
+  </div>
+
   <!-- Calendar sync banner -->
   <div class="cal-sync-banner" id="calSyncBanner" style="display:none">
     <div class="cal-sync-banner-text">
@@ -701,21 +841,6 @@
       <a class="cal-sync-btn" id="calSyncBtn" href="#">Sync to calendar</a>
       <button class="cal-sync-dismiss" id="calSyncDismiss" title="Dismiss">✕</button>
     </div>
-  </div>
-
-  <!-- Today at a Glance -->
-  <div class="glance-row" id="glanceRow" style="display:none">
-    <div class="glance-card"><div class="glance-num accent" id="glToday">—</div><div class="glance-label">Today</div></div>
-    <div class="glance-card"><div class="glance-num" id="glWeek">—</div><div class="glance-label">This week</div></div>
-    <div class="glance-card"><div class="glance-num" id="glMonth">—</div><div class="glance-label">This month</div></div>
-    <div class="glance-card"><div class="glance-num" id="glAllTime">—</div><div class="glance-label">All time</div></div>
-  </div>
-
-  <!-- Next Lesson Card -->
-  <div class="next-lesson" id="nextLessonCard">
-    <div class="next-lesson-label">Next lesson</div>
-    <div class="next-lesson-time" id="nextLessonTime"></div>
-    <div class="next-lesson-details" id="nextLessonDetails"></div>
   </div>
 
   <!-- New Bookings Banner -->
@@ -731,6 +856,14 @@
       <span style="color:var(--muted);font-size:0.82rem;margin-left:6px;">from learners</span>
     </div>
     <a href="/instructor/qa.html" style="background:var(--accent);color:white;border:none;padding:8px 18px;border-radius:8px;font-family:var(--font-head);font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;text-decoration:none;">Answer now</a>
+  </div>
+
+  <!-- Today at a Glance -->
+  <div class="glance-row" id="glanceRow" style="display:none">
+    <div class="glance-card"><div class="glance-num accent" id="glToday">—</div><div class="glance-label">Today</div></div>
+    <div class="glance-card"><div class="glance-num" id="glWeek">—</div><div class="glance-label">This week</div></div>
+    <div class="glance-card"><div class="glance-num" id="glMonth">—</div><div class="glance-label">This month</div></div>
+    <div class="glance-card"><div class="glance-num" id="glAllTime">—</div><div class="glance-label">All time</div></div>
   </div>
 
   <!-- Toolbar -->
@@ -967,6 +1100,7 @@ function init() {
   instructor = session?.instructor || null;
   if (!token) { window.location.href = '/instructor/login.html'; return; }
   document.getElementById('headerName').textContent = instructor?.name || '—';
+  document.getElementById('greeting').textContent = 'Hi, ' + (instructor?.name?.split(' ')[0] || 'there');
 
   // Show admin tab if instructor has admin access
   if (instructor?.is_admin) {
@@ -1848,29 +1982,58 @@ async function loadStats() {
 function showNextLesson() {
   const now = new Date();
   const todayDS = dateStr(now);
-  const todayBookings = bookingCache[todayDS] || [];
+  const todayBookings = (bookingCache[todayDS] || []).filter(b => b.status === 'confirmed');
+  const card = document.getElementById('nextLessonCard');
+  const empty = document.getElementById('nextLessonEmpty');
 
   // Find next confirmed lesson today
   let next = null;
   for (const b of todayBookings) {
-    if (b.status !== 'confirmed') continue;
     const [h, m] = b.start_time.split(':').map(Number);
     const lessonTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
     if (lessonTime > now) { next = b; break; }
   }
 
-  if (!next) return;
+  if (!next) {
+    card.classList.remove('show');
+    empty.classList.add('show');
+    return;
+  }
 
-  const card = document.getElementById('nextLessonCard');
-  card.style.display = '';
+  empty.classList.remove('show');
+  card.classList.add('show');
+
+  // Countdown
+  const [h, m] = next.start_time.split(':').map(Number);
+  const lessonTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
+  const diffMs = lessonTime - now;
+  const diffMins = Math.floor(diffMs / 60000);
+  let countdown = 'Next lesson';
+  if (diffMins <= 0) {
+    countdown = 'Starting now';
+  } else if (diffMins < 60) {
+    countdown = 'In ' + diffMins + ' min';
+  } else {
+    countdown = 'In ' + Math.floor(diffMins / 60) + 'h ' + (diffMins % 60) + 'm';
+  }
+
+  document.getElementById('nextLessonWhen').textContent = countdown;
   document.getElementById('nextLessonTime').textContent =
     next.start_time.slice(0,5) + ' – ' + next.end_time.slice(0,5);
 
   let details = '<strong>' + esc(next.learner_name) + '</strong>';
   if (next.learner_pickup_address) details += ' · 📍 ' + esc(next.learner_pickup_address);
   if (next.learner_phone) details += ' · 📞 ' + esc(next.learner_phone);
-  if (next.prefer_contact_before) details += '<br><span style="color:var(--accent)">📞 Wants a call/message before first lesson</span>';
+  if (next.prefer_contact_before) details += '<br><span style="color:rgba(255,255,255,0.85)">📞 Wants a call before first lesson</span>';
   document.getElementById('nextLessonDetails').innerHTML = details;
+
+  // Show today's lesson count in the stat bubble
+  const stat = document.getElementById('nlStat');
+  const statNum = document.getElementById('nlStatNum');
+  if (todayBookings.length > 0) {
+    stat.style.display = '';
+    statNum.textContent = todayBookings.length;
+  }
 }
 
 // ─── Instructor Notes in Complete Flow ───────────────────────────────────────
