@@ -476,6 +476,10 @@
   // ── Connect & Payout renders ──────────────────────────────────────────────────
 
   function renderConnectBanner(status) {
+    // Dismissed: no account + payouts paused = platform owner, hide banner entirely
+    if (!status.has_account && status.payouts_paused) {
+      return '';
+    }
     if (!status.has_account) {
       return `
         <div class="connect-banner not-started">
@@ -483,7 +487,10 @@
             <div class="connect-banner-title">Set Up Direct Payouts</div>
             <div class="connect-banner-desc">Get paid automatically every Friday. Connect your bank account to start receiving payouts.</div>
           </div>
-          <button class="connect-btn" onclick="startConnectOnboarding()">Set Up Payouts</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="connect-btn" onclick="startConnectOnboarding()">Set Up Payouts</button>
+            <button class="connect-btn secondary" onclick="dismissConnect()" style="font-size:0.78rem;">Not needed</button>
+          </div>
         </div>
       `;
     }
@@ -494,7 +501,10 @@
             <div class="connect-banner-title">Finish Setting Up Payouts</div>
             <div class="connect-banner-desc">You've started the process — just a few more steps to connect your bank account.</div>
           </div>
-          <button class="connect-btn" onclick="continueConnectOnboarding()">Continue Setup</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="connect-btn" onclick="continueConnectOnboarding()">Continue Setup</button>
+            <button class="connect-btn secondary" onclick="dismissConnect()" style="font-size:0.78rem;">Not needed</button>
+          </div>
         </div>
       `;
     }
@@ -583,6 +593,25 @@
         window.location.href = data.onboarding_url;
       } else {
         alert(data.message || 'Failed to get onboarding link. Please try again.');
+      }
+    } catch (err) {
+      alert('Something went wrong. Please try again.');
+    }
+  }
+
+  async function dismissConnect() {
+    if (!confirm('This will hide the payout setup banner. You can re-enable it from the admin portal later.')) return;
+    try {
+      const res = await fetch('/api/connect?action=dismiss-connect', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (data.ok) {
+        // Remove the banner from the page
+        document.querySelector('.connect-banner')?.remove();
+      } else {
+        alert(data.message || 'Failed to dismiss.');
       }
     } catch (err) {
       alert('Something went wrong. Please try again.');

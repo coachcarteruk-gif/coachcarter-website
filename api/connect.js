@@ -69,6 +69,7 @@ module.exports = async (req, res) => {
   if (action === 'dashboard-link')      return handleDashboardLink(req, res);
   if (action === 'admin-create-account') return handleAdminCreateAccount(req, res);
   if (action === 'admin-send-invite')    return handleAdminSendInvite(req, res);
+  if (action === 'dismiss-connect')      return handleDismissConnect(req, res);
 
   return res.status(400).json({ error: true, code: 'UNKNOWN_ACTION', message: 'Unknown action' });
 };
@@ -301,5 +302,29 @@ async function handleAdminSendInvite(req, res) {
   } catch (err) {
     reportError('/api/connect?action=admin-send-invite', err);
     return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to send Connect invite' });
+  }
+}
+
+// ── Instructor: Dismiss Connect banner (platform owner doesn't need payouts) ──
+async function handleDismissConnect(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: true, message: 'POST required' });
+  const user = verifyInstructorAuth(req);
+  if (!user) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Not authenticated' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    // Clear any half-created Connect account and mark as "dismissed" by setting payouts_paused
+    // with a NULL stripe_account_id — the banner checks both fields
+    await sql`
+      UPDATE instructors
+         SET stripe_account_id = NULL,
+             stripe_onboarding_complete = FALSE,
+             payouts_paused = TRUE
+       WHERE id = ${user.id}
+    `;
+    return res.json({ ok: true });
+  } catch (err) {
+    reportError('/api/connect?action=dismiss-connect', err);
+    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to dismiss' });
   }
 }
