@@ -481,6 +481,9 @@ function renderDetail(data, notesData) {
   html += '<div class="detail-header">';
   html += '<div class="detail-name">' + esc(l.name || 'Unnamed') + ' <span class="tier-badge tier-' + tier + '">' + (tierLabels[tier] || 'Tier ' + tier) + '</span></div>';
   if (info.length) html += '<div class="detail-info">' + info.join(' &middot; ') + '</div>';
+  if (l.email) {
+    html += '<div style="margin-top:10px"><button onclick="offerLessonToLearner(\'' + esc(l.email) + '\')" style="padding:8px 16px;border:1.5px solid var(--accent);background:var(--accent-lt);color:var(--accent);border-radius:8px;font-weight:700;font-size:0.82rem;cursor:pointer;transition:all 0.15s">📧 Offer a lesson</button></div>';
+  }
   html += '</div>';
 
   // Stats cards
@@ -598,6 +601,12 @@ function showToast(msg, type = '') {
   void t.offsetWidth;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── Offer Lesson (redirect to schedule page with offer modal open) ──
+function offerLessonToLearner(email) {
+  // Navigate to the schedule page with a query param to open the offer modal
+  window.location.href = '/instructor/?offer=' + encodeURIComponent(email);
 }
 
 window.addEventListener('DOMContentLoaded', init);

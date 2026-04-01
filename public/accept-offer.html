@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Accept Lesson Offer — CoachCarter</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #262626; --accent: #f58321; --accent-dk: #e07518;
+      --accent-lt: #fff4ec; --muted: #797879; --border: #e0e0e0;
+      --bg: #ffffff; --surface: #f9f9f9; --white: #ffffff;
+      --green: #22c55e; --green-lt: #f0fdf4; --red: #ef4444; --red-lt: #fef2f2;
+      --font-head: 'Bricolage Grotesque', sans-serif;
+      --font-body: 'Lato', sans-serif;
+      --radius: 14px;
+    }
+    body {
+      font-family: var(--font-body); background: var(--bg);
+      color: var(--primary); min-height: 100vh;
+    }
+    .hidden { display: none !important; }
+
+    /* Header */
+    .header {
+      background: rgba(38,38,38,0.95); backdrop-filter: blur(20px);
+      padding: 0 24px; height: 64px; display: flex; align-items: center;
+    }
+    .header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .header-logo img { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,0.08); padding: 4px; }
+    .header-logo span { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+    .header-logo span em { font-style: normal; color: var(--accent); }
+
+    /* Page */
+    .page { max-width: 520px; margin: 0 auto; padding: 32px 16px 80px; }
+    .page-title {
+      font-family: var(--font-head); font-size: 1.5rem; font-weight: 800;
+      margin-bottom: 8px; letter-spacing: -0.02em;
+    }
+    .page-sub { color: var(--muted); margin-bottom: 24px; font-size: 0.95rem; }
+
+    /* Card */
+    .offer-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px; margin-bottom: 24px;
+    }
+    .offer-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .offer-row:last-child { border-bottom: none; }
+    .offer-label { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+    .offer-value { font-weight: 700; font-size: 0.95rem; text-align: right; }
+
+    /* Expiry */
+    .expiry-bar {
+      background: var(--accent-lt); border: 1px solid #fcd4b0;
+      border-radius: 10px; padding: 12px 16px; margin-bottom: 24px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.88rem; font-weight: 600;
+    }
+    .expiry-bar.expired { background: var(--red-lt); border-color: #fca5a5; color: var(--red); }
+
+    /* Form */
+    .form-section { margin-bottom: 24px; }
+    .form-section h3 {
+      font-family: var(--font-head); font-size: 1.05rem; font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block; font-size: 0.82rem; font-weight: 600; color: var(--muted);
+      margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .field input {
+      width: 100%; padding: 12px 14px; border: 1px solid var(--border);
+      border-radius: 10px; font-size: 0.95rem; font-family: var(--font-body);
+      transition: border-color 0.15s;
+    }
+    .field input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(245,131,33,0.15); }
+
+    /* Button */
+    .btn-primary {
+      display: block; width: 100%; padding: 16px; background: var(--accent);
+      color: white; border: none; border-radius: 12px; font-size: 1.05rem;
+      font-weight: 800; font-family: var(--font-head); cursor: pointer;
+      transition: background 0.15s; letter-spacing: -0.01em;
+    }
+    .btn-primary:hover { background: var(--accent-dk); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* States */
+    .state-msg {
+      text-align: center; padding: 60px 24px;
+    }
+    .state-msg .icon { font-size: 3rem; margin-bottom: 16px; }
+    .state-msg h2 { font-family: var(--font-head); margin-bottom: 8px; }
+    .state-msg p { color: var(--muted); }
+
+    .error-msg {
+      background: var(--red-lt); color: var(--red); border-radius: 10px;
+      padding: 12px 16px; font-size: 0.9rem; margin-bottom: 16px;
+      font-weight: 600; display: none;
+    }
+
+    /* Loading */
+    .loading { text-align: center; padding: 80px 24px; color: var(--muted); }
+    .spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.6s linear infinite; margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <a href="/" class="header-logo">
+      <img src="/icons/apple-touch-icon.png" alt="">
+      <span>Coach<em>Carter</em></span>
+    </a>
+  </div>
+
+  <!-- Loading state -->
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Loading offer...</p>
+  </div>
+
+  <!-- Error state -->
+  <div id="error-state" class="page hidden">
+    <div class="state-msg">
+      <div class="icon">😔</div>
+      <h2 id="error-title">Offer unavailable</h2>
+      <p id="error-text">This offer may have expired or already been accepted.</p>
+    </div>
+  </div>
+
+  <!-- Cancelled state (returned from Stripe) -->
+  <div id="cancelled-state" class="page hidden">
+    <div class="state-msg">
+      <div class="icon">↩️</div>
+      <h2>Payment cancelled</h2>
+      <p>No worries — you can still accept the offer below.</p>
+    </div>
+  </div>
+
+  <!-- Main offer content -->
+  <div id="offer-content" class="page hidden">
+    <h1 class="page-title">Driving lesson offer</h1>
+    <p class="page-sub"><span id="instructor-name"></span> has offered you a lesson</p>
+
+    <div class="expiry-bar" id="expiry-bar">
+      <span>⏰</span>
+      <span id="expiry-text">Expires in ...</span>
+    </div>
+
+    <div class="offer-card">
+      <div class="offer-row">
+        <span class="offer-label">Date</span>
+        <span class="offer-value" id="offer-date"></span>
+      </div>
+      <div class="offer-row">
+        <span class="offer-label">Time</span>
+        <span class="offer-value" id="offer-time"></span>
+      </div>
+      <div class="offer-row">
+        <span class="offer-label">Duration</span>
+        <span class="offer-value" id="offer-duration"></span>
+      </div>
+      <div class="offer-row">
+        <span class="offer-label">Instructor</span>
+        <span class="offer-value" id="offer-instructor"></span>
+      </div>
+      <div class="offer-row">
+        <span class="offer-label">Price</span>
+        <span class="offer-value" id="offer-price"></span>
+      </div>
+    </div>
+
+    <div class="form-section" id="details-section">
+      <h3>Your details</h3>
+      <div class="field">
+        <label for="name">Full name *</label>
+        <input type="text" id="name" placeholder="e.g. John Smith" required>
+      </div>
+      <div class="field">
+        <label for="phone">Phone number</label>
+        <input type="tel" id="phone" placeholder="e.g. 07700 900000">
+      </div>
+      <div class="field">
+        <label for="pickup">Pickup address</label>
+        <input type="text" id="pickup" placeholder="e.g. 42 High Street, London">
+      </div>
+    </div>
+
+    <div id="form-error" class="error-msg"></div>
+
+    <button class="btn-primary" id="accept-btn" onclick="handleAccept()">
+      Accept &amp; pay →
+    </button>
+  </div>
+
+<script>
+const API = '/api/offers';
+let offerData = null;
+let expiryInterval = null;
+
+// Get token from URL
+const params = new URLSearchParams(location.search);
+const token = params.get('token');
+const wasCancelled = params.get('cancelled') === '1';
+
+async function loadOffer() {
+  if (!token) {
+    showError('No offer token', 'Please use the link from your email to access this page.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API}?action=get-offer&token=${encodeURIComponent(token)}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      const titles = {
+        EXPIRED: 'Offer expired',
+        ALREADY_ACCEPTED: 'Already accepted',
+        CANCELLED: 'Offer cancelled',
+        NOT_FOUND: 'Offer not found'
+      };
+      const messages = {
+        EXPIRED: 'This lesson offer has expired. Please ask your instructor to send a new one.',
+        ALREADY_ACCEPTED: 'This lesson offer has already been accepted and paid for.',
+        CANCELLED: 'This lesson offer was cancelled by the instructor.',
+        NOT_FOUND: 'This offer link is invalid. Please check the link from your email.'
+      };
+      showError(titles[data.code] || 'Unavailable', messages[data.code] || data.message || 'Something went wrong.');
+      return;
+    }
+
+    offerData = data.offer;
+    renderOffer();
+  } catch (err) {
+    console.error('Failed to load offer:', err);
+    showError('Connection error', 'Failed to load the offer. Please try again.');
+  }
+}
+
+function renderOffer() {
+  const o = offerData;
+
+  // Format date
+  const dateObj = new Date(o.scheduled_date + 'T00:00:00Z');
+  const dateStr = dateObj.toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+  });
+
+  // Format duration
+  const mins = o.duration_minutes;
+  const durStr = mins >= 60
+    ? (mins % 60 === 0 ? `${mins / 60} hour${mins / 60 !== 1 ? 's' : ''}` : `${(mins / 60).toFixed(1)} hours`)
+    : `${mins} mins`;
+
+  // Fill card
+  document.getElementById('instructor-name').textContent = o.instructor_name;
+  document.getElementById('offer-date').textContent = dateStr;
+  document.getElementById('offer-time').textContent = `${o.start_time.slice(0,5)} – ${o.end_time.slice(0,5)}`;
+  document.getElementById('offer-duration').textContent = durStr;
+  document.getElementById('offer-instructor').textContent = o.instructor_name;
+  // Price display
+  if (o.discount_pct === 100) {
+    document.getElementById('offer-price').innerHTML = '<span style="color:#22c55e;font-weight:800">FREE</span>';
+  } else if (o.discount_pct > 0) {
+    document.getElementById('offer-price').innerHTML = `<span style="text-decoration:line-through;color:#999;font-weight:400">£${(o.original_price_pence / 100).toFixed(2)}</span> £${(o.price_pence / 100).toFixed(2)} <span style="color:#22c55e;font-size:0.8rem">(${o.discount_pct}% off)</span>`;
+  } else {
+    document.getElementById('offer-price').textContent = `£${(o.price_pence / 100).toFixed(2)}`;
+  }
+
+  // Pre-fill form
+  if (o.learner_name) document.getElementById('name').value = o.learner_name;
+  if (o.learner_phone) document.getElementById('phone').value = o.learner_phone;
+  if (o.learner_pickup_address) document.getElementById('pickup').value = o.learner_pickup_address;
+
+  // Update button text for free lessons
+  if (o.discount_pct === 100) {
+    document.getElementById('accept-btn').textContent = 'Accept free lesson →';
+  }
+
+  // Start expiry countdown
+  updateExpiry();
+  expiryInterval = setInterval(updateExpiry, 1000);
+
+  // Show content
+  document.getElementById('loading').classList.add('hidden');
+  if (wasCancelled) {
+    document.getElementById('cancelled-state').classList.remove('hidden');
+  }
+  document.getElementById('offer-content').classList.remove('hidden');
+}
+
+function updateExpiry() {
+  if (!offerData) return;
+  const now = Date.now();
+  const exp = new Date(offerData.expires_at).getTime();
+  const diff = exp - now;
+
+  if (diff <= 0) {
+    document.getElementById('expiry-text').textContent = 'This offer has expired';
+    document.getElementById('expiry-bar').classList.add('expired');
+    document.getElementById('accept-btn').disabled = true;
+    clearInterval(expiryInterval);
+    return;
+  }
+
+  const hours = Math.floor(diff / 3600000);
+  const minutes = Math.floor((diff % 3600000) / 60000);
+  const seconds = Math.floor((diff % 60000) / 1000);
+
+  let text = 'Expires in ';
+  if (hours > 0) text += `${hours}h ${minutes}m`;
+  else if (minutes > 0) text += `${minutes}m ${seconds}s`;
+  else text += `${seconds}s`;
+
+  document.getElementById('expiry-text').textContent = text;
+}
+
+async function handleAccept() {
+  const name = document.getElementById('name').value.trim();
+  const phone = document.getElementById('phone').value.trim();
+  const pickup = document.getElementById('pickup').value.trim();
+  const errorEl = document.getElementById('form-error');
+
+  if (!name) {
+    errorEl.textContent = 'Please enter your full name.';
+    errorEl.style.display = 'block';
+    document.getElementById('name').focus();
+    return;
+  }
+
+  errorEl.style.display = 'none';
+  const btn = document.getElementById('accept-btn');
+  btn.disabled = true;
+  btn.textContent = 'Processing...';
+
+  try {
+    const res = await fetch(`${API}?action=accept-offer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, name, phone, pickup_address: pickup })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errorEl.textContent = data.message || data.error || 'Something went wrong. Please try again.';
+      errorEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Accept & pay →';
+      return;
+    }
+
+    // Redirect to Stripe checkout
+    window.location.href = data.url;
+  } catch (err) {
+    console.error('Accept error:', err);
+    errorEl.textContent = 'Connection failed. Please try again.';
+    errorEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Accept & pay →';
+  }
+}
+
+function showError(title, message) {
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('error-title').textContent = title;
+  document.getElementById('error-text').textContent = message;
+  document.getElementById('error-state').classList.remove('hidden');
+}
+
+// Init
+loadOffer();
+</script>
+</body>
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Lesson Confirmed — CoachCarter</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #262626; --accent: #f58321; --accent-dk: #e07518;
+      --accent-lt: #fff4ec; --muted: #797879; --border: #e0e0e0;
+      --bg: #ffffff; --surface: #f9f9f9; --white: #ffffff;
+      --green: #22c55e; --green-lt: #f0fdf4;
+      --font-head: 'Bricolage Grotesque', sans-serif;
+      --font-body: 'Lato', sans-serif;
+      --radius: 14px;
+    }
+    body {
+      font-family: var(--font-body); background: var(--bg);
+      color: var(--primary); min-height: 100vh;
+    }
+    .hidden { display: none !important; }
+
+    .header {
+      background: rgba(38,38,38,0.95); backdrop-filter: blur(20px);
+      padding: 0 24px; height: 64px; display: flex; align-items: center;
+    }
+    .header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .header-logo img { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,0.08); padding: 4px; }
+    .header-logo span { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+    .header-logo span em { font-style: normal; color: var(--accent); }
+
+    .page { max-width: 520px; margin: 0 auto; padding: 48px 16px 80px; text-align: center; }
+
+    .success-icon {
+      width: 80px; height: 80px; border-radius: 50%; background: var(--green-lt);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 24px; font-size: 2.5rem;
+      animation: popIn 0.4s ease-out;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.5); opacity: 0; }
+      70% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .page h1 {
+      font-family: var(--font-head); font-size: 1.6rem; font-weight: 800;
+      margin-bottom: 8px; letter-spacing: -0.02em;
+    }
+    .page .subtitle { color: var(--muted); margin-bottom: 28px; font-size: 0.95rem; }
+
+    .details-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px; margin-bottom: 28px;
+      text-align: left;
+    }
+    .details-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .details-row:last-child { border-bottom: none; }
+    .details-label { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+    .details-value { font-weight: 700; font-size: 0.95rem; }
+
+    .info-box {
+      background: var(--accent-lt); border-radius: 12px; padding: 16px 20px;
+      margin-bottom: 24px; font-size: 0.9rem; text-align: left;
+    }
+    .info-box strong { display: block; margin-bottom: 4px; }
+
+    .btn-primary {
+      display: inline-block; padding: 14px 32px; background: var(--accent);
+      color: white; border: none; border-radius: 12px; font-size: 1rem;
+      font-weight: 800; font-family: var(--font-head); cursor: pointer;
+      text-decoration: none; transition: background 0.15s;
+    }
+    .btn-primary:hover { background: var(--accent-dk); }
+
+    .loading { text-align: center; padding: 80px 24px; color: var(--muted); }
+    .spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.6s linear infinite; margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <a href="/" class="header-logo">
+      <img src="/icons/apple-touch-icon.png" alt="">
+      <span>Coach<em>Carter</em></span>
+    </a>
+  </div>
+
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Confirming your booking...</p>
+  </div>
+
+  <div id="success-content" class="page hidden">
+    <div class="success-icon">✅</div>
+    <h1>Lesson confirmed!</h1>
+    <p class="subtitle">Your payment was successful and your lesson is booked.</p>
+
+    <div class="details-card">
+      <div class="details-row">
+        <span class="details-label">Date</span>
+        <span class="details-value" id="s-date"></span>
+      </div>
+      <div class="details-row">
+        <span class="details-label">Time</span>
+        <span class="details-value" id="s-time"></span>
+      </div>
+      <div class="details-row">
+        <span class="details-label">Instructor</span>
+        <span class="details-value" id="s-instructor"></span>
+      </div>
+      <div class="details-row">
+        <span class="details-label">Duration</span>
+        <span class="details-value" id="s-duration"></span>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <strong>What's next?</strong>
+      Log in to your CoachCarter account to manage your bookings, view upcoming lessons, and track your progress.
+    </div>
+
+    <a href="/learner/" class="btn-primary">Log in to my account →</a>
+  </div>
+
+  <div id="error-content" class="page hidden">
+    <div class="success-icon" style="background: var(--accent-lt);">📋</div>
+    <h1>Booking in progress</h1>
+    <p class="subtitle">Your payment is being processed. You'll receive a confirmation email shortly.</p>
+    <a href="/learner/" class="btn-primary" style="margin-top: 16px;">Go to my account →</a>
+  </div>
+
+<script>
+async function loadConfirmation() {
+  const params = new URLSearchParams(location.search);
+  const token = params.get('token');
+
+  if (!token) {
+    showSuccess();
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/offers?action=get-offer&token=${encodeURIComponent(token)}`);
+    const data = await res.json();
+
+    if (data.code === 'ALREADY_ACCEPTED' || (data.ok && data.offer)) {
+      // Offer was accepted — show the details we have
+      if (data.ok && data.offer) {
+        renderDetails(data.offer);
+      } else {
+        showSuccess();
+      }
+    } else {
+      // The offer is accepted (webhook processed) — show generic success
+      showSuccess();
+    }
+  } catch (err) {
+    // Show generic success — the webhook may still be processing
+    showSuccess();
+  }
+}
+
+function renderDetails(offer) {
+  const dateObj = new Date(offer.scheduled_date + 'T00:00:00Z');
+  const dateStr = dateObj.toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+  });
+  const mins = offer.duration_minutes;
+  const durStr = mins >= 60
+    ? (mins % 60 === 0 ? `${mins / 60} hour${mins / 60 !== 1 ? 's' : ''}` : `${(mins / 60).toFixed(1)} hours`)
+    : `${mins} mins`;
+
+  document.getElementById('s-date').textContent = dateStr;
+  document.getElementById('s-time').textContent = `${offer.start_time.slice(0,5)} – ${offer.end_time.slice(0,5)}`;
+  document.getElementById('s-instructor').textContent = offer.instructor_name;
+  document.getElementById('s-duration').textContent = durStr;
+
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('success-content').classList.remove('hidden');
+}
+
+function showSuccess() {
+  document.getElementById('loading').classList.add('hidden');
+  // Can't get details — show a generic message
+  document.getElementById('error-content').classList.remove('hidden');
+}
+
+loadConfirmation();
+</script>
+</body>
+</html>

@@ -653,3 +653,29 @@ CREATE INDEX IF NOT EXISTS idx_ext_events_instructor_date
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ext_events_dedup
   ON instructor_external_events(instructor_id, uid_hash);
+
+-- ── Lesson offers (instructor-initiated, pending learner acceptance + payment) ──
+CREATE TABLE IF NOT EXISTS lesson_offers (
+  id              SERIAL PRIMARY KEY,
+  token           TEXT UNIQUE NOT NULL,
+  instructor_id   INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
+  learner_email   TEXT NOT NULL,
+  learner_id      INTEGER REFERENCES learner_users(id),
+  scheduled_date  DATE NOT NULL,
+  start_time      TIME NOT NULL,
+  end_time        TIME NOT NULL,
+  lesson_type_id  INTEGER REFERENCES lesson_types(id),
+  discount_pct    INTEGER NOT NULL DEFAULT 0 CHECK (discount_pct IN (0, 25, 50, 75, 100)),
+  status          TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending','accepted','expired','cancelled')),
+  booking_id      INTEGER REFERENCES lesson_bookings(id),
+  stripe_session_id TEXT,
+  expires_at      TIMESTAMPTZ NOT NULL,
+  accepted_at     TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_offers_token ON lesson_offers(token);
+CREATE INDEX IF NOT EXISTS idx_offers_expiry ON lesson_offers(expires_at) WHERE status = 'pending';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_offer_slot
+  ON lesson_offers(instructor_id, scheduled_date, start_time) WHERE status = 'pending';

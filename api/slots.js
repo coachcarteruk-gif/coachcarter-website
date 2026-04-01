@@ -238,6 +238,38 @@ async function handleAvailable(req, res) {
       // Table may not exist yet — that's fine, no reservations
     }
 
+    // 2b-ii. Also load pending lesson offers (instructor-initiated, awaiting acceptance)
+    let pendingOffers = [];
+    try {
+      pendingOffers = instructor_id
+        ? await sql`
+            SELECT instructor_id,
+                   scheduled_date::text AS scheduled_date,
+                   start_time::text     AS start_time,
+                   end_time::text       AS end_time
+            FROM lesson_offers
+            WHERE scheduled_date BETWEEN ${from} AND ${to}
+              AND status = 'pending'
+              AND expires_at > NOW()
+              AND instructor_id = ${instructor_id}
+          `
+        : await sql`
+            SELECT instructor_id,
+                   scheduled_date::text AS scheduled_date,
+                   start_time::text     AS start_time,
+                   end_time::text       AS end_time
+            FROM lesson_offers
+            WHERE scheduled_date BETWEEN ${from} AND ${to}
+              AND status = 'pending'
+              AND expires_at > NOW()
+          `;
+    } catch (e) {
+      // Table may not exist yet
+    }
+
+    // Merge pending offers into reservations so they block slots
+    reservations = reservations.concat(pendingOffers);
+
     // 2c. Load blackout dates in the date range
     let blackouts = [];
     try {
@@ -531,9 +563,23 @@ async function handleBook(req, res) {
           AND start_time = ${start_time}
           AND expires_at > NOW()
       `;
+      // Also check pending lesson offers
+      let offerConflicts = [];
+      try {
+        offerConflicts = await sql`
+          SELECT scheduled_date::text AS date, start_time::text
+          FROM lesson_offers
+          WHERE instructor_id = ${instructor_id}
+            AND scheduled_date = ANY(${dateStrings})
+            AND start_time = ${start_time}
+            AND status = 'pending'
+            AND expires_at > NOW()
+        `;
+      } catch (e) { /* table may not exist yet */ }
       const takenDates = new Set([
         ...conflicts.map(c => c.date),
-        ...reservations.map(r => r.date)
+        ...reservations.map(r => r.date),
+        ...offerConflicts.map(o => o.date)
       ]);
       if (takenDates.size > 0) {
         return res.status(409).json({
@@ -866,6 +912,20 @@ async function handleCheckoutSlot(req, res) {
     `;
     if (existingReservation)
       return res.status(409).json({ error: 'Someone else is currently booking this slot. Try another or wait a few minutes.' });
+
+    // Check slot isn't held by a pending lesson offer
+    try {
+      const [existingOffer] = await sql`
+        SELECT id FROM lesson_offers
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ${date}
+          AND start_time = ${start_time}::time
+          AND status = 'pending'
+          AND expires_at > NOW()
+      `;
+      if (existingOffer)
+        return res.status(409).json({ error: 'This slot is currently held for a pending lesson offer.' });
+    } catch (e) { /* table may not exist yet */ }
 
     // Check instructor is valid
     const [instructor] = await sql`

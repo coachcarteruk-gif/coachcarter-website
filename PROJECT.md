@@ -380,6 +380,22 @@ Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancell
 |---|---|---|---|
 | `/api/ical-sync` | GET | CRON_SECRET | Cron job (every 15 min). Syncs one instructor's external iCal feed per invocation. Parses events, expands RRULE, upserts into `instructor_external_events`. |
 
+### API — `api/offers.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `get-offer` | GET | None (token) | Returns offer details for public accept page |
+| `accept-offer` | POST | None (token) | Collects learner details, creates Stripe checkout |
+| `expire-offers` | POST | CRON_SECRET | Bulk-expires stale pending offers (hourly cron) |
+
+### API — `api/instructor.js` (offer actions)
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `create-offer` | POST | Instructor JWT | Creates lesson offer, sends email to learner |
+| `list-offers` | GET | Instructor JWT | Lists instructor's offers with status filter |
+| `cancel-offer` | POST | Instructor JWT | Cancels a pending offer |
+
 ### API — `api/ask-examiner.js`
 
 | Endpoint | Method | Auth | Description |
@@ -556,6 +572,8 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
 
 **`instructor_external_events`** — synced events from instructor's personal iCal feed (event_date, start_time, end_time, is_all_day, uid_hash for dedup). Indexed on (instructor_id, event_date). Used by slot generation to block slots that conflict with personal events.
+
+**`lesson_offers`** — instructor-initiated lesson offers pending learner acceptance + payment. Fields: token (unique, 64-char hex), instructor_id, learner_email, learner_id (nullable — set when learner exists or after payment creates account), scheduled_date, start_time, end_time, lesson_type_id, status ('pending'/'accepted'/'expired'/'cancelled'), booking_id (set by webhook after payment), stripe_session_id, expires_at (24h from creation), accepted_at. Partial unique index on (instructor_id, scheduled_date, start_time) WHERE status='pending' prevents duplicate pending offers for the same slot. Pending offers block slot availability.
 
 **`instructor_login_tokens`** — magic-link tokens with expiry and used flag
 

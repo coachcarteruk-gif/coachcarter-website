@@ -117,6 +117,9 @@ module.exports = async (req, res) => {
   if (action === 'earnings-summary')     return handleEarningsSummary(req, res);
   if (action === 'ical-test')            return handleIcalTest(req, res);
   if (action === 'ical-status')          return handleIcalStatus(req, res);
+  if (action === 'create-offer')         return handleCreateOffer(req, res);
+  if (action === 'list-offers')          return handleListOffers(req, res);
+  if (action === 'cancel-offer')         return handleCancelOffer(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -2110,5 +2113,273 @@ async function handleIcalStatus(req, res) {
     console.error('ical-status error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load iCal status' });
+  }
+}
+
+// ── POST /api/instructor?action=create-offer ──────────────────────────────────
+// Body: { learner_email, scheduled_date, start_time, lesson_type_id? }
+// Creates a lesson offer and emails the learner an accept link.
+async function handleCreateOffer(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { learner_email, scheduled_date, start_time, lesson_type_id, discount_pct } = req.body;
+  if (!learner_email || !scheduled_date || !start_time)
+    return res.status(400).json({ error: 'learner_email, scheduled_date and start_time are required' });
+
+  // Validate discount
+  const discount = parseInt(discount_pct) || 0;
+  if (![0, 25, 50, 75, 100].includes(discount))
+    return res.status(400).json({ error: 'discount_pct must be 0, 25, 50, 75 or 100' });
+
+  // Validate email format
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(learner_email))
+    return res.status(400).json({ error: 'Invalid email address' });
+
+  // Validate date
+  const bookingDate = new Date(scheduled_date + 'T00:00:00Z');
+  if (isNaN(bookingDate.getTime()))
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  if (bookingDate < today)
+    return res.status(400).json({ error: 'Cannot offer a lesson in the past' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Look up lesson type (default to standard)
+    let lessonType;
+    if (lesson_type_id) {
+      const [lt] = await sql`SELECT * FROM lesson_types WHERE id = ${lesson_type_id} AND active = true`;
+      lessonType = lt;
+    }
+    if (!lessonType) {
+      const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = 'standard' AND active = true`;
+      lessonType = lt || { id: null, duration_minutes: 90, name: 'Standard Lesson', price_pence: 8250 };
+    }
+    const durationMins = lessonType.duration_minutes;
+
+    // Calculate end time
+    const startParts = start_time.split(':').map(Number);
+    const startMins  = startParts[0] * 60 + startParts[1];
+    const endMins    = startMins + durationMins;
+    const end_time   = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+
+    // Get instructor details
+    const [instrDetails] = await sql`
+      SELECT id, name, email, phone FROM instructors WHERE id = ${instructor.id}
+    `;
+    if (!instrDetails) return res.status(404).json({ error: 'Instructor not found' });
+
+    // Check for conflicts — bookings
+    const [existingBooking] = await sql`
+      SELECT id FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id}
+        AND scheduled_date = ${scheduled_date}
+        AND start_time = ${start_time}::time
+        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+    `;
+    if (existingBooking)
+      return res.status(409).json({ error: 'That slot is already booked.' });
+
+    // Check for conflicts — pending offers
+    const [existingOffer] = await sql`
+      SELECT id FROM lesson_offers
+      WHERE instructor_id = ${instructor.id}
+        AND scheduled_date = ${scheduled_date}
+        AND start_time = ${start_time}::time
+        AND status = 'pending'
+        AND expires_at > NOW()
+    `;
+    if (existingOffer)
+      return res.status(409).json({ error: 'There is already a pending offer for that slot.' });
+
+    // Check for conflicts — active reservations
+    let hasReservation = false;
+    try {
+      const [existingRes] = await sql`
+        SELECT id FROM slot_reservations
+        WHERE instructor_id = ${instructor.id}
+          AND scheduled_date = ${scheduled_date}
+          AND start_time = ${start_time}::time
+          AND expires_at > NOW()
+      `;
+      hasReservation = !!existingRes;
+    } catch (e) { /* table may not exist */ }
+    if (hasReservation)
+      return res.status(409).json({ error: 'Someone is currently booking that slot. Try again shortly.' });
+
+    // Check if learner already exists
+    const [existingLearner] = await sql`
+      SELECT id, name, email FROM learner_users WHERE LOWER(email) = LOWER(${learner_email})
+    `;
+
+    // Generate offer token
+    const token = generateToken();
+
+    // Insert offer
+    const [offer] = await sql`
+      INSERT INTO lesson_offers
+        (token, instructor_id, learner_email, learner_id, scheduled_date, start_time, end_time,
+         lesson_type_id, discount_pct, status, expires_at)
+      VALUES
+        (${token}, ${instructor.id}, ${learner_email.toLowerCase()}, ${existingLearner?.id || null},
+         ${scheduled_date}, ${start_time}, ${end_time},
+         ${lessonType.id}, ${discount}, 'pending', NOW() + INTERVAL '24 hours')
+      RETURNING id, expires_at
+    `;
+
+    // Format for email
+    const dateObj = new Date(scheduled_date + 'T00:00:00Z');
+    const dateStr = dateObj.toLocaleDateString('en-GB', {
+      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+    });
+    const durationStr = durationMins >= 60
+      ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
+      : `${durationMins} mins`;
+    const discountedPence = Math.round(lessonType.price_pence * (100 - discount) / 100);
+    const priceStr = discount > 0
+      ? (discount === 100 ? 'FREE' : `<s>£${(lessonType.price_pence / 100).toFixed(2)}</s> £${(discountedPence / 100).toFixed(2)} (${discount}% off)`)
+      : `£${(lessonType.price_pence / 100).toFixed(2)}`;
+    const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+    const acceptUrl = `${baseUrl}/accept-offer.html?token=${token}`;
+    const firstName = existingLearner ? (existingLearner.name || '').split(' ')[0] || 'there' : 'there';
+
+    // Send offer email
+    try {
+      const mailer = createTransporter();
+      await mailer.sendMail({
+        from: 'CoachCarter <bookings@coachcarter.uk>',
+        to: learner_email,
+        subject: `Driving lesson offer from ${instrDetails.name} — ${dateStr}`,
+        html: `
+          <div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto">
+            <h2 style="color:#262626">Hi ${firstName},</h2>
+            <p>${instrDetails.name} has offered you a driving lesson:</p>
+            <table style="border-collapse:collapse;margin:16px 0">
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Date</td><td style="padding:6px 0">${dateStr}</td></tr>
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Time</td><td style="padding:6px 0">${start_time} – ${end_time}</td></tr>
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Duration</td><td style="padding:6px 0">${durationStr}</td></tr>
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceStr}</td></tr>
+            </table>
+            <p style="margin:24px 0">
+              <a href="${acceptUrl}"
+                 style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                        border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem">
+                Accept &amp; pay →
+              </a>
+            </p>
+            <p style="font-size:0.85rem;color:#797879">
+              This offer expires in 24 hours. If you don't accept by then, the slot will become available again.
+            </p>
+          </div>
+        `
+      });
+    } catch (emailErr) {
+      console.error('Failed to send offer email:', emailErr);
+      // Still return success — offer was created, email just failed
+    }
+
+    return res.json({
+      ok: true,
+      offer_id: offer.id,
+      expires_at: offer.expires_at,
+      learner_exists: !!existingLearner,
+      accept_url: acceptUrl
+    });
+  } catch (err) {
+    console.error('create-offer error:', err);
+    if (err.message?.includes('uq_offer_slot')) {
+      return res.status(409).json({ error: 'There is already a pending offer for that slot.' });
+    }
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to create offer' });
+  }
+}
+
+// ── GET /api/instructor?action=list-offers ────────────────────────────────────
+// Query: ?status=pending|accepted|expired|cancelled (optional)
+// Returns the instructor's lesson offers.
+async function handleListOffers(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const statusFilter = req.query.status;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Lazy-expire any stale pending offers
+    await sql`
+      UPDATE lesson_offers SET status = 'expired'
+      WHERE status = 'pending' AND expires_at <= NOW()
+    `;
+
+    const offers = statusFilter
+      ? await sql`
+          SELECT o.id, o.token, o.learner_email, o.learner_id, o.scheduled_date::text,
+                 o.start_time::text, o.end_time::text, o.status, o.expires_at, o.accepted_at,
+                 o.created_at, o.booking_id,
+                 lt.name AS lesson_type_name, lt.duration_minutes, lt.price_pence,
+                 lu.name AS learner_name
+          FROM lesson_offers o
+          LEFT JOIN lesson_types lt ON lt.id = o.lesson_type_id
+          LEFT JOIN learner_users lu ON lu.id = o.learner_id
+          WHERE o.instructor_id = ${instructor.id} AND o.status = ${statusFilter}
+          ORDER BY o.created_at DESC
+          LIMIT 50
+        `
+      : await sql`
+          SELECT o.id, o.token, o.learner_email, o.learner_id, o.scheduled_date::text,
+                 o.start_time::text, o.end_time::text, o.status, o.expires_at, o.accepted_at,
+                 o.created_at, o.booking_id,
+                 lt.name AS lesson_type_name, lt.duration_minutes, lt.price_pence,
+                 lu.name AS learner_name
+          FROM lesson_offers o
+          LEFT JOIN lesson_types lt ON lt.id = o.lesson_type_id
+          LEFT JOIN learner_users lu ON lu.id = o.learner_id
+          WHERE o.instructor_id = ${instructor.id}
+          ORDER BY o.created_at DESC
+          LIMIT 50
+        `;
+
+    return res.json({ ok: true, offers });
+  } catch (err) {
+    console.error('list-offers error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to list offers' });
+  }
+}
+
+// ── POST /api/instructor?action=cancel-offer ──────────────────────────────────
+// Body: { offer_id }
+// Cancels a pending lesson offer.
+async function handleCancelOffer(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { offer_id } = req.body;
+  if (!offer_id) return res.status(400).json({ error: 'offer_id is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [updated] = await sql`
+      UPDATE lesson_offers SET status = 'cancelled'
+      WHERE id = ${offer_id} AND instructor_id = ${instructor.id} AND status = 'pending'
+      RETURNING id, learner_email
+    `;
+    if (!updated)
+      return res.status(404).json({ error: 'Offer not found or already processed' });
+
+    return res.json({ ok: true, cancelled_id: updated.id });
+  } catch (err) {
+    console.error('cancel-offer error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to cancel offer' });
   }
 }

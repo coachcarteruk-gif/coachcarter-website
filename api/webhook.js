@@ -60,6 +60,9 @@ module.exports = async (req, res) => {
     } else if (paymentType === 'slot_booking') {
       // ── Pay-per-slot: single lesson purchase + instant booking ──────────
       await handleSlotBooking(session);
+    } else if (paymentType === 'lesson_offer') {
+      // ── Instructor-initiated offer: learner accepted + paid ─────────────
+      await handleOfferBooking(session);
     } else {
       // ── Legacy pass guarantee / package flow ──────────────────────────────
       await handleCheckoutComplete(session);
@@ -632,6 +635,248 @@ async function sendAvailabilityFormLink(booking) {
       <p>Reference: ${booking.booking_reference}</p>
     `
   });
+}
+
+// ── Lesson offer handler ─────────────────────────────────────────────────────
+// Instructor created an offer, learner accepted and paid via Stripe.
+async function handleOfferBooking(session) {
+  const metadata       = session.metadata || {};
+  const offerToken     = metadata.offer_token;
+  const offerId        = parseInt(metadata.offer_id, 10);
+  const instructorId   = parseInt(metadata.instructor_id, 10);
+  const instructorName = metadata.instructor_name;
+  const learnerEmail   = metadata.learner_email || session.customer_email;
+  const learnerName    = metadata.learner_name || session.customer_details?.name || '';
+  const learnerPhone   = metadata.learner_phone || '';
+  const pickupAddress  = metadata.pickup_address || '';
+  const scheduledDate  = metadata.scheduled_date;
+  const startTime      = metadata.start_time;
+  const endTime        = metadata.end_time;
+  const amountPence    = parseInt(metadata.amount_pence, 10);
+  const lessonTypeId   = metadata.lesson_type_id ? parseInt(metadata.lesson_type_id, 10) : null;
+  const durationMins   = parseInt(metadata.duration_minutes, 10) || 90;
+
+  if (!offerToken || !instructorId || !scheduledDate || !startTime || !endTime) {
+    console.error('❌ lesson_offer webhook missing required metadata', metadata);
+    return;
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Idempotency — check offer hasn't already been processed
+    const [offer] = await sql`
+      SELECT id, status FROM lesson_offers WHERE token = ${offerToken}
+    `;
+    if (!offer) {
+      console.error('❌ lesson_offer webhook: offer not found for token', offerToken);
+      return;
+    }
+    if (offer.status === 'accepted') {
+      console.log(`⏭️ Duplicate lesson_offer webhook for offer #${offer.id} — skipping`);
+      return;
+    }
+
+    // 1. Find or create learner
+    let learnerId;
+    const [existingLearner] = await sql`
+      SELECT id, name, phone, pickup_address FROM learner_users WHERE LOWER(email) = LOWER(${learnerEmail})
+    `;
+
+    if (existingLearner) {
+      learnerId = existingLearner.id;
+      // Update only NULL/empty fields — never overwrite existing data
+      const updates = {};
+      if (!existingLearner.name && learnerName) updates.name = learnerName;
+      if (!existingLearner.phone && learnerPhone) updates.phone = learnerPhone;
+      if (!existingLearner.pickup_address && pickupAddress) updates.pickup_address = pickupAddress;
+
+      if (Object.keys(updates).length > 0) {
+        await sql`
+          UPDATE learner_users SET
+            name = COALESCE(NULLIF(name, ''), ${updates.name || null}),
+            phone = COALESCE(phone, ${updates.phone || null}),
+            pickup_address = COALESCE(NULLIF(pickup_address, ''), ${updates.pickup_address || null})
+          WHERE id = ${learnerId}
+        `;
+      }
+    } else {
+      // Create new learner from offer details + Stripe customer_details
+      try {
+        const [newLearner] = await sql`
+          INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance)
+          VALUES (${learnerName}, ${learnerEmail.toLowerCase()}, ${learnerPhone || null},
+                  ${pickupAddress || null}, 0, 0)
+          RETURNING id
+        `;
+        learnerId = newLearner.id;
+      } catch (insertErr) {
+        if (insertErr.message?.includes('learner_users_phone_key') || insertErr.message?.includes('unique')) {
+          // Phone already in use — retry without phone
+          console.warn('⚠️ Phone conflict creating learner, retrying without phone');
+          const [newLearner] = await sql`
+            INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance)
+            VALUES (${learnerName}, ${learnerEmail.toLowerCase()}, ${pickupAddress || null}, 0, 0)
+            RETURNING id
+          `;
+          learnerId = newLearner.id;
+        } else {
+          throw insertErr;
+        }
+      }
+    }
+
+    // 2. Record the transaction (add-then-deduct pattern for consistency)
+    await sql`
+      INSERT INTO credit_transactions
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes)
+      VALUES
+        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins})
+    `;
+
+    await sql`
+      UPDATE learner_users
+      SET credit_balance = credit_balance + 1,
+          balance_minutes = balance_minutes + ${durationMins}
+      WHERE id = ${learnerId}
+    `;
+
+    const [deducted] = await sql`
+      UPDATE learner_users
+      SET credit_balance = credit_balance - 1,
+          balance_minutes = balance_minutes - ${durationMins}
+      WHERE id = ${learnerId} AND balance_minutes >= ${durationMins}
+      RETURNING credit_balance, balance_minutes
+    `;
+
+    if (!deducted) {
+      console.error('❌ lesson_offer: failed to deduct hours after adding — race condition?');
+      return;
+    }
+
+    // 3. Create the booking
+    let booking;
+    try {
+      const [b] = await sql`
+        INSERT INTO lesson_bookings
+          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+           created_by, payment_method, lesson_type_id, minutes_deducted,
+           pickup_address)
+        VALUES
+          (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, 'confirmed',
+           'instructor_offer', 'card', ${lessonTypeId}, ${durationMins},
+           ${pickupAddress || null})
+        RETURNING id, scheduled_date, start_time::text, end_time::text
+      `;
+      booking = b;
+    } catch (insertErr) {
+      // Slot was taken — refund hours
+      await sql`
+        UPDATE learner_users
+        SET credit_balance = credit_balance + 1,
+            balance_minutes = balance_minutes + ${durationMins}
+        WHERE id = ${learnerId}
+      `;
+      console.error('❌ lesson_offer: slot already taken, hours refunded', insertErr.message);
+      // Mark offer as cancelled since the slot is gone
+      await sql`UPDATE lesson_offers SET status = 'cancelled' WHERE id = ${offerId}`;
+      return;
+    }
+
+    // 4. Update the offer
+    await sql`
+      UPDATE lesson_offers
+      SET status = 'accepted', booking_id = ${booking.id}, learner_id = ${learnerId},
+          accepted_at = NOW()
+      WHERE id = ${offerId}
+    `;
+
+    // 5. Send confirmation emails
+    const [instructor] = await sql`SELECT name, email, phone FROM instructors WHERE id = ${instructorId}`;
+    const [learner] = await sql`SELECT name, email, phone FROM learner_users WHERE id = ${learnerId}`;
+
+    const durationStr = durationMins >= 60
+      ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
+      : `${durationMins} mins`;
+    const lessonDate = new Date(scheduledDate + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const lessonTime = `${startTime} – ${endTime}`;
+
+    // Generate .ics calendar attachment
+    const icsContent = generateICS({
+      id: booking.id,
+      scheduled_date: scheduledDate,
+      start_time: startTime,
+      end_time: endTime,
+      instructor_name: instructorName,
+      duration_str: durationStr
+    });
+
+    const transporter = createTransporter();
+    const firstName = (learner?.name || '').split(' ')[0] || 'there';
+
+    // Email to learner
+    await transporter.sendMail({
+      from:    'CoachCarter <bookings@coachcarter.uk>',
+      to:      learnerEmail,
+      subject: `Lesson confirmed — ${lessonDate} at ${startTime}`,
+      html: `
+        <h1>Lesson confirmed!</h1>
+        <p>Hi ${firstName}, your payment of <strong>£${(amountPence / 100).toFixed(2)}</strong> was successful and your lesson is booked.</p>
+        <table>
+          <tr><td><strong>Date:</strong></td><td>${lessonDate}</td></tr>
+          <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+          <tr><td><strong>Instructor:</strong></td><td>${instructorName}</td></tr>
+          <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
+        </table>
+        <p style="margin-top:16px;font-size:0.875rem;color:#797879">
+          Need to cancel? Do so at least 48 hours before and the hours return to your balance.
+        </p>
+        <p>
+          <a href="https://coachcarter.uk/learner/"
+             style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">
+            View my bookings →
+          </a>
+        </p>
+      `,
+      attachments: [{
+        filename: `coachcarter-lesson-${scheduledDate}.ics`,
+        content:  icsContent,
+        contentType: 'text/calendar; method=PUBLISH'
+      }]
+    });
+
+    // Email to instructor
+    if (instructor?.email) {
+      await transporter.sendMail({
+        from:    'CoachCarter <system@coachcarter.uk>',
+        to:      instructor.email,
+        subject: `Offer accepted — ${learner?.name || learnerEmail} on ${lessonDate}`,
+        html: `
+          <h2>Lesson offer accepted!</h2>
+          <p>${learner?.name || learnerEmail} has accepted your lesson offer and paid.</p>
+          <table>
+            <tr><td><strong>Learner:</strong></td><td>${learner?.name || 'New learner'}</td></tr>
+            <tr><td><strong>Email:</strong></td><td>${learnerEmail}</td></tr>
+            <tr><td><strong>Date:</strong></td><td>${lessonDate}</td></tr>
+            <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+          </table>
+          <p style="margin-top:16px">
+            <a href="https://coachcarter.uk/instructor/"
+               style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
+                      border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
+              View my schedule →
+            </a>
+          </p>
+        `
+      });
+    }
+
+    console.log(`✅ Offer booking complete: lesson #${booking.id} for learner #${learnerId} (offer #${offerId})`);
+
+  } catch (err) {
+    console.error('❌ handleOfferBooking error:', err);
+  }
 }
 
 function createTransporter() {
