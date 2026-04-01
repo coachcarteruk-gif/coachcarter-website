@@ -470,19 +470,18 @@
         container.innerHTML = '<span style="color:var(--muted);font-size:0.85rem">No lesson types configured.</span>';
         return;
       }
-      container.innerHTML = types.map(lt => {
-        const url = 'https://coachcarter.uk/learner/book.html?type=' + encodeURIComponent(lt.slug);
-        return \`
-          <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-            <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:\${lt.colour};flex-shrink:0"></span>
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:0.9rem">\${lt.name}</div>
-              <div style="font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\${url}</div>
-            </div>
-            <button onclick="copyBookingLink('\${url}', this)" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:8px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font-body)">
-              Copy link
-            </button>
-          </div>\`;
+      container.innerHTML = types.map(function(lt) {
+        var url = 'https://coachcarter.uk/learner/book.html?type=' + encodeURIComponent(lt.slug);
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'
+          + '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + lt.colour + ';flex-shrink:0"></span>'
+          + '<div style="flex:1;min-width:0">'
+          + '<div style="font-weight:600;font-size:0.9rem">' + lt.name + '</div>'
+          + '<div style="font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + url + '</div>'
+          + '</div>'
+          + '<button onclick="copyBookingLink(\'' + url + '\', this)" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:8px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font-body)">'
+          + 'Copy link'
+          + '</button>'
+          + '</div>';
       }).join('');
     } catch (err) {
       console.error('Failed to load booking links:', err);
