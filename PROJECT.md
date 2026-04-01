@@ -114,7 +114,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   │   ├── dashboard.html          # Admin enquiry dashboard
 │   │   └── editor.html             # Admin content editor
 │   ├── learner/
-│   │   ├── index.html              # Learner hub — dashboard (quick-action nav, upcoming lessons, profile)
+│   │   ├── index.html              # Learner hub — dashboard (hero card, pill shortcuts, action cards, upcoming lessons, profile)
 │   │   ├── login.html              # Magic-link login (email or SMS)
 │   │   ├── verify.html             # Token verification page (two-step: validate then verify)
 │   │   ├── book.html               # Lesson booking calendar — monthly/weekly/daily views (credit or pay-per-slot)
@@ -207,6 +207,7 @@ The site uses a **sidebar navigation** system (`public/sidebar.js`) that replace
 - **Mobile bottom bar:** floating pill style (border-radius 26px, 10px side margins, frosted glass blur, layered shadow) — 5 fixed tabs for learner (Home/Lessons/Practice/Learn/Profile), 5 for instructor (Calendar/Learners/Earnings/Q&A/Profile)
 - **Card styling:** injects CSS overrides removing borders from cards site-wide, replacing with ambient shadows. Orange left-border retained on upcoming lesson cards only.
 - **Instructor weekly view:** Timepage-style agenda layout (day label left, lesson cards with coloured left-bar right)
+- **Dashboard top section (learner + instructor):** hero card (orange gradient) showing next lesson with countdown + readiness ring/today count, horizontal pill shortcuts (5 circular icons), 3 colourful action cards (gradient backgrounds). Replaces old emoji quick-action grid (learner) and plain next-lesson card (instructor).
 
 ---
 
@@ -660,8 +661,9 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 
 ---
 
-## Recent changes (March 2026)
+## Recent changes (March–April 2026)
 
+- **Dashboard redesign** (2.44) — replaced top section of both learner and instructor dashboards with app-style layout: orange gradient hero card (next lesson with countdown), horizontal pill shortcuts (5 icons), colourful action cards (3 gradient cards). Inspired by Klarna/Zing/Monday.com. No new API endpoints.
 - **Foundation cleanup** (#75–78) — centralised DB migration (`db/migration.sql` + `/api/migrate`), extracted shared CSS/JS into `public/shared/` (removed ~984 lines of duplicated CSS), wired up shared auth JS (`ccAuth.getAuth()`, `ccAuth.logout()`), added email error alerts on all 500 errors (`api/_error-alert.js`)
 - **PWA support** (#62) — manifest, service worker, install prompt, offline page, generated icons
 - **Codebase cleanup** (#61) — fixed migration numbering, extracted shared auth/mail helpers, removed dead files

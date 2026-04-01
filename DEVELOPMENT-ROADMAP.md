@@ -649,6 +649,35 @@ Replaced the edge-to-edge fixed bottom bar with a floating pill — matching the
 - ✅ Safe area inset handled via `max(12px, env(safe-area-inset-bottom))`
 - ✅ Content height updated from 72px to 80px to account for floating offset
 
+### 2.44 — Dashboard Redesign: Hero Cards, Pills & Action Cards ✅ Complete (1 April 2026)
+
+Replaced the top section of both learner and instructor dashboards with an app-style layout inspired by Klarna, Zing, and Monday.com. Prioritises answering "when's my next lesson?" and reducing clutter.
+
+**What was built (Learner — `public/learner/index.html`):**
+- ✅ Compact greeting (`Hi, {name}`) replacing the old welcome banner + subtitle
+- ✅ **Next Lesson hero card** — orange gradient card showing next upcoming lesson: date, time, instructor, countdown ("In 3 hours", "Tomorrow"), plus 52px readiness ring (white-on-orange)
+- ✅ Dashed empty state with "Book a Lesson" CTA when no lessons exist
+- ✅ **Quick Access Pills** — horizontal scrollable row of 5 circular icon shortcuts (Progress, Videos, Quiz, Examiner AI, Log Session) with coloured backgrounds
+- ✅ **Colour Action Cards** — 3-column grid: Book Lesson (orange gradient), Buy Credits (green gradient), Mock Test (blue gradient)
+- ✅ Upcoming section now shows 2nd+ lessons (1st is in hero card); hidden when 0–1 lessons
+- ✅ Calendar sync banner moved outside upcoming section so it always shows
+- ✅ Inline SVG icons throughout (no emojis)
+
+**What was built (Instructor — `public/instructor/index.html`):**
+- ✅ Compact greeting (`Hi, {first name}`)
+- ✅ **Next Lesson hero card** — same orange gradient style, shows countdown ("In 45m"), learner name, pickup address, phone. Right side shows today's lesson count stat bubble
+- ✅ Empty state with "Add a Lesson" CTA
+- ✅ **Quick Access Pills** — Learners (blue), Earnings (green), Availability (purple), Q&A (orange), Profile (grey)
+- ✅ **Colour Action Cards** — Add Lesson (orange), Set Availability (purple), View Earnings (green)
+- ✅ Glance stats row moved below new section
+- ✅ Print CSS updated to exclude new elements
+
+**Key decisions:**
+- Reused existing API data (`BOOKINGS_DATA.upcoming[0]` for learner, `bookingCache` for instructor) — no new endpoints
+- Pills are "browse" shortcuts; action cards are primary CTAs — separates discovery from doing
+- Hidden scrollbar on pill row for clean mobile swipe
+- Action cards collapse to horizontal scroll only below 340px (not 380px, so standard iPhone widths get the grid)
+
 ---
 
 ## Phase 3: Next Up (Prioritised)
