@@ -260,6 +260,15 @@
     }
   }
 
+  const SPECIALISMS = ['Nervous drivers','Motorway lessons','Intensive courses','Automatic only','Manual only','Refresher courses','Pass Plus','Advanced driving'];
+
+  function buildSpecialismChips(selected) {
+    return SPECIALISMS.map(function(s) {
+      var cls = 'chip' + (selected.includes(s) ? ' active' : '');
+      return '<span class="' + cls + '" onclick="toggleChip(this)">' + s + '</span>';
+    }).join('');
+  }
+
   function renderProfile(p) {
     const initials = p.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
     const avatarHtml = p.photo_url
@@ -341,10 +350,7 @@
         <div class="form-group">
           <label>Specialisms</label>
           <div class="chip-group" id="specialismsChips">
-            ${['Nervous drivers','Motorway lessons','Intensive courses','Automatic only','Manual only','Refresher courses','Pass Plus','Advanced driving'].map(s => {
-              const active = (p.specialisms || []).includes(s) ? ' active' : '';
-              return \`<span class="chip\${active}" onclick="toggleChip(this)">\${s}</span>\`;
-            }).join('')}
+            ${buildSpecialismChips(p.specialisms || [])}
           </div>
           <p class="field-hint">Select all that apply — shown to learners on your profile.</p>
         </div>
