@@ -41,6 +41,18 @@ Driving school website for CoachCarter (coachcarter.uk). Vanilla HTML/JS fronten
 
 `api/_error-alert.js` sends email on 500 errors. All API files call `reportError()` before `res.status(500)`. Requires `ERROR_ALERT_EMAIL` env var.
 
+## Stripe Connect & Instructor Payouts
+
+Instructors are paid via Stripe Connect Express accounts. Money flows: learner pays → platform Stripe account → weekly Friday transfer to instructor's connected account.
+
+- `api/connect.js` — onboarding, status, dashboard link, admin invite, dismiss
+- `api/cron-payouts.js` — Vercel cron every Friday 9am UTC
+- `api/_payout-helpers.js` — shared payout calculation logic
+- Eligible bookings: status='completed' OR (status='confirmed' AND 3+ days old)
+- `instructor_payouts` + `payout_line_items` tables (UNIQUE on booking_id prevents double-payment)
+- Platform owner (Fraser) has payouts dismissed — revenue stays in platform account
+- Admin can pause/resume individual instructor payouts from admin portal
+
 ## Navigation design (app mode — March 2026)
 
 The site is designed as an app experience. Do NOT re-add any of the removed items.

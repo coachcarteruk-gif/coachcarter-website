@@ -47,7 +47,9 @@
 | ask-examiner.js | 1 | Anthropic API streaming chat |
 | advisor.js | 1 | Anthropic API lesson advisor |
 | create-checkout-session.js | 1 | Stripe session creation |
-| webhook.js | 1 | Stripe webhook handler |
+| webhook.js | 1 | Stripe webhook handler (checkout.session.completed, account.updated) |
+| connect.js | 7 | Stripe Connect onboarding, status, dashboard, admin invite, dismiss |
+| cron-payouts.js | 1 | Weekly Friday payout processing (Vercel cron) |
 | reminders.js | 4 | send-due (hourly cron), daily-schedule (7pm cron), settings, update-settings |
 | Others (15) | 1 each | address-lookup, config, status, reviews, qa-digest (cron), migrate, verify-session, etc. |
 
@@ -55,6 +57,7 @@
 - `_auth-helpers.js` — SMTP transporter, token generation
 - `_shared.js` — JWT verification (`verifyAuth`), AI context builder (`buildLearnerContext`), skill labels
 - `_error-alert.js` — Email alerts on 500 errors
+- `_payout-helpers.js` — Payout calculation and Stripe transfer logic (shared by cron + admin manual trigger)
 
 ### Shared Client Modules
 

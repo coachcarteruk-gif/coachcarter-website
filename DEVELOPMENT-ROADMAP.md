@@ -739,6 +739,23 @@ Bug fixes and UI cleanup across the instructor portal.
 
 ---
 
+### 2.48 — Stripe Connect & Weekly Instructor Payouts ✅ Complete (1 April 2026)
+
+Automated instructor payouts via Stripe Connect Express accounts. Learner payments land in the platform account as before, then instructor earnings are transferred every Friday via a Vercel cron job.
+
+- **Stripe Connect Express** — instructors onboard via Stripe's hosted flow (self-service from earnings page or admin-triggered invite email)
+- **Weekly cron job** (`api/cron-payouts.js`) — runs every Friday 9am UTC. Finds eligible bookings (completed OR confirmed 3+ days old), calculates instructor share (price × commission_rate), creates Stripe transfers, sends email notifications
+- **Safety**: `UNIQUE(booking_id)` constraint on `payout_line_items` prevents double-payment even if cron and manual trigger fire simultaneously
+- **Admin controls**: Payouts section in admin portal with connect status table, upcoming estimates, pause/resume toggle per instructor, manual "Process Payouts Now" trigger
+- **Platform owner handling**: "Not needed" dismiss button for instructors who own the platform and don't need payouts (clears half-created accounts, hides banner permanently)
+- **Webhook**: `account.updated` event auto-marks `stripe_onboarding_complete = TRUE` when instructor finishes Stripe onboarding
+- **New files**: `api/connect.js` (6 actions), `api/cron-payouts.js`, `api/_payout-helpers.js`
+- **New tables**: `instructor_payouts`, `payout_line_items`
+- **New columns**: `instructors.stripe_account_id`, `instructors.stripe_onboarding_complete`, `instructors.payouts_paused`
+- **Modified**: `api/instructor.js` (+2 actions), `api/admin.js` (+4 actions), `api/webhook.js`, `vercel.json`, `public/instructor/earnings.html`, `public/admin/portal.html`
+
+---
+
 ### 3.1 — Push Notifications
 
 PWA push notifications for lesson reminders, quiz nudges, and new message alerts.
@@ -768,7 +785,7 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
 - **Capacitor native wrapper** — wrap PWA for App Store / Play Store submission
-- **Instructor dashboard** — earnings tracking, lesson stats, learner progress overview
+- ~~**Instructor dashboard** — earnings tracking, lesson stats, learner progress overview~~ ✅ Done (2.48)
 - **Theory test prep** — built-in revision tools integrated with competency system
 - **Multi-instructor scaling** — instructor-specific pricing, rating system (specialisations done in 2.46)
 - **Automated progress reports** — weekly email digest with competency changes and recommendations
@@ -781,7 +798,7 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
 - **Hosting:** Vercel Pro (upgraded to support >12 serverless functions)
-- **Payments:** Stripe (Klarna enabled via Stripe dashboard — not hardcoded)
+- **Payments:** Stripe (Klarna enabled via Stripe dashboard — not hardcoded). Stripe Connect Express for instructor payouts (weekly Friday cron)
 - **Calendar:** Custom-built, no third-party calendar dependency
 - **Lesson types:** Configurable via `lesson_types` table + admin portal. Standard (90min/£82.50), 2-Hour (120min/£110). More types addable via admin.
 - **Balance system:** Hours-based (`balance_minutes` column). Learners buy hours, each lesson type deducts its duration. Legacy `credit_balance` maintained via dual-write.
@@ -803,6 +820,6 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 - **Navigation:** Context-aware sidebar (`sidebar.js`) replaces all previous nav patterns
 - **PWA:** Installable with service worker caching, offline support, custom install prompt
 - **Analytics:** PostHog for event tracking and session recording
-- **Shared code:** Auth helpers in `api/_auth-helpers.js`, mail utilities in `api/_shared.js`, error alerts in `api/_error-alert.js`
+- **Shared code:** Auth helpers in `api/_auth-helpers.js`, mail utilities in `api/_shared.js`, error alerts in `api/_error-alert.js`, payout logic in `api/_payout-helpers.js`
 - **Shared frontend:** CSS in `public/shared/learner.css` + `instructor.css`, auth JS in `public/shared/learner-auth.js` + `instructor-auth.js`
 - **Error alerting:** Email alerts on 500 errors via `api/_error-alert.js` (requires `ERROR_ALERT_EMAIL` env var)
