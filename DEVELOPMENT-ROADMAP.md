@@ -716,6 +716,18 @@ Extended the instructor profile with qualifications, vehicle, service area, and 
 
 ---
 
+### 2.47 — Instructor Portal Cleanup ✅ Complete (1 April 2026)
+
+Bug fixes and UI cleanup across the instructor portal.
+
+- **Fix**: Profile page JS parse error — backslash-backtick (`\``) in `loadBookingLinks` was a literal backslash+backtick, not a valid template literal. Replaced with string concatenation. Also extracted specialisms chip builder from nested template literal.
+- **Fix**: Earnings page 500 error — `earnings-week` query referenced `instructor_notes` column that was missing from production DB (table created before column was added to schema; `CREATE TABLE IF NOT EXISTS` skipped it). Removed unused column from query and added idempotent `ALTER TABLE`.
+- **Fix**: Earnings page "Invalid Date" — Neon returns Postgres date columns as objects, not ISO strings. Added `toDateStr()` normalizer.
+- **UI**: Removed redundant fixed header bar (CoachCarter branding + Sign out) from all 6 instructor pages. The sidebar already provides both. This was overlapping page content and blocking summary cards on earnings. Reduced page `margin-top` from 124px to 64px.
+- **Files**: All 6 `public/instructor/*.html`, `api/instructor.js`, `db/migration.sql`
+
+---
+
 ### 3.1 — Push Notifications
 
 PWA push notifications for lesson reminders, quiz nudges, and new message alerts.

@@ -536,7 +536,7 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 | `availability` | GET | JWT | Current weekly availability windows |
 | `set-availability` | POST | JWT | Update weekly availability windows |
 | `profile` | GET | JWT | Profile details |
-| `update-profile` | POST | JWT | Update bio, contact details, and buffer_minutes |
+| `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages |
 | `cancel-booking` | POST | JWT | Cancel a confirmed booking (always refunds learner credit) |
 | `reschedule-booking` | POST | JWT | Move a booking to a new slot (no time restriction, no count limit) |
 | `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/free payment) |
