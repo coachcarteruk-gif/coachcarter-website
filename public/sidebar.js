@@ -180,13 +180,30 @@
   // ── Build footer HTML (portal pages only) ──────────────────────
   function buildFooterHTML() {
     if (context === 'public') return '';
-    return '<div class="cc-sb-footer" id="cc-sb-footer">' +
-      '<div class="cc-sb-user" id="cc-sb-user"></div>' +
-      '<div class="cc-sb-credits" id="cc-sb-credits"></div>' +
-      '<button class="cc-sb-logout" id="cc-sb-logout">' +
-        '<span class="cc-sb-icon">' + icons.logOut + '</span>' +
-        '<span>Sign Out</span>' +
-      '</button></div>';
+
+    // Check if user is logged in
+    var storageKey = context === 'learner' ? 'cc_learner' : 'cc_instructor';
+    var isLoggedIn = false;
+    try {
+      var session = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      isLoggedIn = !!(session && session.token);
+    } catch(e) {}
+
+    if (isLoggedIn) {
+      return '<div class="cc-sb-footer" id="cc-sb-footer">' +
+        '<div class="cc-sb-user" id="cc-sb-user"></div>' +
+        '<div class="cc-sb-credits" id="cc-sb-credits"></div>' +
+        '<button class="cc-sb-logout" id="cc-sb-logout">' +
+          '<span class="cc-sb-icon">' + icons.logOut + '</span>' +
+          '<span>Sign Out</span>' +
+        '</button></div>';
+    } else {
+      return '<div class="cc-sb-footer" id="cc-sb-footer">' +
+        '<a href="/" class="cc-sb-login">' +
+          '<span class="cc-sb-icon">' + icons.logIn + '</span>' +
+          '<span>Login</span>' +
+        '</a></div>';
+    }
   }
 
   // ── Build bottom tab bar HTML (mobile) ──────────────────────────
@@ -279,6 +296,15 @@
     '.cc-sb-logout:hover { background: rgba(239,68,68,0.08); color: #ef4444; border-color: rgba(239,68,68,0.3); }',
     '.cc-sb-logout .cc-sb-icon { width: 16px; height: 16px; }',
     '.cc-sb-logout .cc-sb-icon svg { width: 14px; height: 14px; }',
+
+    /* Login button (shown when signed out) */
+    '.cc-sb-login { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 10px;',
+    '  background: #f58321; border: none; border-radius: 8px; color: #fff; font-size: 0.9rem;',
+    '  font-weight: 700; font-family: "Bricolage Grotesque", "Lato", sans-serif; cursor: pointer;',
+    '  text-decoration: none; transition: background 0.15s; letter-spacing: -0.01em; }',
+    '.cc-sb-login:hover { background: #e07518; }',
+    '.cc-sb-login .cc-sb-icon { width: 18px; height: 18px; }',
+    '.cc-sb-login .cc-sb-icon svg { width: 18px; height: 18px; stroke: #fff; }',
 
     /* Overlay */
     '.cc-sb-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; }',
@@ -544,7 +570,7 @@
       var logoutBtn = document.getElementById('cc-sb-logout');
       if (logoutBtn) logoutBtn.addEventListener('click', function() {
         localStorage.removeItem('cc_learner');
-        window.location.href = '/learner/login.html';
+        window.location.href = '/';
       });
     }
 
@@ -570,7 +596,7 @@
       var logoutBtn2 = document.getElementById('cc-sb-logout');
       if (logoutBtn2) logoutBtn2.addEventListener('click', function() {
         localStorage.removeItem('cc_instructor');
-        window.location.href = '/instructor/login.html';
+        window.location.href = '/';
       });
     }
   }
