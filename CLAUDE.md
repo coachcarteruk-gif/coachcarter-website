@@ -12,7 +12,7 @@ Driving school website for CoachCarter (coachcarter.uk). Vanilla HTML/JS fronten
 
 - `public/` — Static HTML pages (learner portal in `public/learner/`, instructor in `public/instructor/`, admin in `public/admin/`)
 - `api/` — Vercel serverless functions. Files prefixed with `_` are shared utilities (not endpoints)
-- `db/migration.sql` — Single idempotent migration file defining all 24 tables
+- `db/migration.sql` — Single idempotent migration file defining all 26 tables
 - `public/shared/` — Shared CSS (learner.css, instructor.css) and auth JS (learner-auth.js, instructor-auth.js)
 - `public/sidebar.js` — Context-aware sidebar nav used on all pages
 - `public/competency-config.js` — 10-category DL25 framework (39 sub-skills) shared across 6 features
@@ -95,4 +95,4 @@ This codebase is being prepared for migration to a React Native (Expo) app. See 
 - `MIGRATION-PLAN.md` — React Native app migration plan (keep updated)
 - `DEVELOPMENT-ROADMAP.md` — full feature history and roadmap
 - `PROJECT.md` — complete project reference (APIs, tables, flows)
-- `COMPETITOR-FEATURES-ROADMAP.md` — competitor-inspired features (15 of 17 done; #15 Waiting List remaining, #16 Google Calendar deferred post-app-launch)
+- `COMPETITOR-FEATURES-ROADMAP.md` — competitor-inspired features (16 of 17 done; #16 Google Calendar deferred post-app-launch)

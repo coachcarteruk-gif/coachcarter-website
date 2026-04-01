@@ -40,6 +40,8 @@ module.exports = async (req, res) => {
   if (action === 'profile-completeness') return handleProfileCompleteness(req, res);
   if (action === 'confirm-lesson')        return handleConfirmLesson(req, res);
   if (action === 'pending-confirmations') return handlePendingConfirmations(req, res);
+  if (action === 'my-availability')       return handleMyAvailability(req, res);
+  if (action === 'set-availability')      return handleSetAvailability(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -919,5 +921,67 @@ async function handlePendingConfirmations(req, res) {
     console.error('pending-confirmations error:', err);
     reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to load pending confirmations' });
+  }
+}
+
+// ── Learner Availability — GET ─────────────────────────────────────────────
+async function handleMyAvailability(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      SELECT id, day_of_week, start_time::text, end_time::text
+      FROM learner_availability
+      WHERE learner_id = ${user.id} AND active = true
+      ORDER BY day_of_week, start_time`;
+    return res.json({ availability: rows });
+  } catch (err) {
+    console.error('my-availability error:', err);
+    reportError('/api/learner', err);
+    return res.status(500).json({ error: 'Failed to load availability' });
+  }
+}
+
+// ── Learner Availability — SET (delete + insert) ───────────────────────────
+async function handleSetAvailability(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const { windows } = req.body;
+    if (!Array.isArray(windows)) return res.status(400).json({ error: 'windows array required' });
+    if (windows.length > 14) return res.status(400).json({ error: 'Maximum 14 availability windows' });
+
+    // Validate each window
+    const timeRe = /^([01]\d|2[0-3]):(00|30)$/;
+    for (const w of windows) {
+      if (typeof w.day_of_week !== 'number' || w.day_of_week < 0 || w.day_of_week > 6)
+        return res.status(400).json({ error: 'day_of_week must be 0-6' });
+      if (!timeRe.test(w.start_time) || !timeRe.test(w.end_time))
+        return res.status(400).json({ error: 'Times must be HH:00 or HH:30 format' });
+      if (w.start_time >= w.end_time)
+        return res.status(400).json({ error: 'end_time must be after start_time' });
+    }
+
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Delete all existing and re-insert
+    await sql`DELETE FROM learner_availability WHERE learner_id = ${user.id}`;
+
+    for (const w of windows) {
+      await sql`
+        INSERT INTO learner_availability (learner_id, day_of_week, start_time, end_time)
+        VALUES (${user.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time})`;
+    }
+
+    return res.json({ success: true, count: windows.length });
+  } catch (err) {
+    console.error('set-availability error:', err);
+    reportError('/api/learner', err);
+    return res.status(500).json({ error: 'Failed to save availability' });
   }
 }

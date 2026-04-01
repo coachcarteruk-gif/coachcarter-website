@@ -246,6 +246,52 @@
     .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); font-size: 0.875rem; }
     .empty-icon  { font-size: 2.5rem; margin-bottom: 12px; }
     .empty-state h3 { font-family: var(--font-head); font-size: 1.1rem; margin-bottom: 6px; color: var(--primary); }
+    .btn-waitlist {
+      background: var(--accent-lt); color: var(--accent); border: 1.5px solid var(--accent);
+      border-radius: 8px; padding: 10px 20px; font-family: var(--font-head);
+      font-size: 0.85rem; font-weight: 700; cursor: pointer; margin-top: 14px;
+      transition: all 0.15s;
+    }
+    .btn-waitlist:hover { background: var(--accent); color: white; }
+    .waitlist-form {
+      text-align: left; max-width: 340px; margin: 18px auto 0;
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px;
+    }
+    .waitlist-form label {
+      display: block; font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted); margin-bottom: 4px; margin-top: 10px;
+    }
+    .waitlist-form label:first-child { margin-top: 0; }
+    .waitlist-form select {
+      width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 8px 10px; font-size: 0.85rem; font-family: var(--font-body);
+      background: var(--white); color: var(--primary);
+    }
+    .waitlist-form select:focus { border-color: var(--accent); outline: none; }
+    .waitlist-check-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 12px; font-size: 0.82rem; color: var(--primary);
+    }
+    .waitlist-check-row input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+    .waitlist-form-actions { margin-top: 14px; display: flex; gap: 8px; }
+    .btn-waitlist-submit {
+      flex: 1; background: var(--accent); color: white; border: none;
+      border-radius: 8px; padding: 10px; font-family: var(--font-head);
+      font-size: 0.85rem; font-weight: 700; cursor: pointer;
+    }
+    .btn-waitlist-submit:hover { background: var(--accent-dk); }
+    .btn-waitlist-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-waitlist-cancel {
+      background: none; border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 10px 16px; font-size: 0.85rem; color: var(--muted); cursor: pointer;
+    }
+    .waitlist-success {
+      background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2);
+      border-radius: 10px; padding: 16px; margin-top: 14px;
+      font-size: 0.88rem; color: #15803d; text-align: center;
+    }
 
     /* ── MONTHLY VIEW ─────────────────────────────────────────────────────── */
     .month-grid {
@@ -1358,7 +1404,15 @@ function renderDaily() {
   }
 
   if (slots.length === 0) {
-    html += '<div class="empty-state"><div class="empty-icon">📅</div><h3>No slots available</h3><p>Try a different day or instructor.</p></div>';
+    const dayOfWeek = cursor.getDay();
+    const dateStr = fmtDate(cursor);
+    html += `<div class="empty-state">
+      <div class="empty-icon">📅</div>
+      <h3>No slots available</h3>
+      <p>Try a different day or instructor.</p>
+      ${token ? `<button class="btn-waitlist" onclick="showWaitlistJoin(${dayOfWeek},'${dateStr}')">Notify me when a slot opens</button>` : ''}
+      <div id="waitlistFormArea"></div>
+    </div>`;
     document.getElementById('calContent').innerHTML = html;
     return;
   }
@@ -1965,6 +2019,116 @@ function showToast(msg, type = '') {
   void t.offsetWidth;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+// ─── Waitlist ────────────────────────────────────────────────────────────────
+
+function showWaitlistJoin(dayOfWeek, dateStr) {
+  const area = document.getElementById('waitlistFormArea');
+  if (!area) return;
+
+  // Build time options (07:00 - 21:00 in 30-min steps)
+  let timeOpts = '<option value="">Any time</option>';
+  for (let h = 7; h <= 21; h++) {
+    for (const m of ['00', '30']) {
+      if (h === 21 && m === '30') continue;
+      const val = String(h).padStart(2, '0') + ':' + m;
+      const ampm = h >= 12 ? 'pm' : 'am';
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      const label = m === '00' ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
+      timeOpts += `<option value="${val}">${label}</option>`;
+    }
+  }
+
+  // Get current instructor filter
+  const instrSel = document.getElementById('instructorFilter');
+  const instrId = instrSel ? instrSel.value : '';
+  const instrName = instrSel && instrSel.value ? instrSel.options[instrSel.selectedIndex].text : 'Any instructor';
+
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  area.innerHTML = `
+    <div class="waitlist-form">
+      <label>Day</label>
+      <select id="wlDay">
+        <option value="${dayOfWeek}">${dayNames[dayOfWeek]}</option>
+        <option value="">Any day (match my availability)</option>
+      </select>
+      <label>From</label>
+      <select id="wlStart">${timeOpts}</select>
+      <label>To</label>
+      <select id="wlEnd">${timeOpts}</select>
+      <div class="waitlist-check-row">
+        <input type="checkbox" id="wlUseAvail" onchange="toggleWaitlistAvail()">
+        <span>Match my weekly availability instead</span>
+      </div>
+      <input type="hidden" id="wlInstructor" value="${instrId}">
+      <div class="waitlist-form-actions">
+        <button class="btn-waitlist-submit" id="btnWlJoin" onclick="submitWaitlistJoin()">Join Waitlist</button>
+        <button class="btn-waitlist-cancel" onclick="document.getElementById('waitlistFormArea').innerHTML=''">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function toggleWaitlistAvail() {
+  const useAvail = document.getElementById('wlUseAvail').checked;
+  const dayEl = document.getElementById('wlDay');
+  const startEl = document.getElementById('wlStart');
+  const endEl = document.getElementById('wlEnd');
+  dayEl.disabled = useAvail;
+  startEl.disabled = useAvail;
+  endEl.disabled = useAvail;
+  if (useAvail) {
+    dayEl.value = '';
+    startEl.value = '';
+    endEl.value = '';
+  }
+}
+
+async function submitWaitlistJoin() {
+  const btn = document.getElementById('btnWlJoin');
+  btn.disabled = true; btn.textContent = 'Joining…';
+
+  const useAvail = document.getElementById('wlUseAvail').checked;
+  const body = { use_my_availability: useAvail };
+
+  if (!useAvail) {
+    const day = document.getElementById('wlDay').value;
+    const start = document.getElementById('wlStart').value;
+    const end = document.getElementById('wlEnd').value;
+    if (day !== '') body.preferred_day = parseInt(day);
+    if (start && end) {
+      if (start >= end) {
+        alert('End time must be after start time');
+        btn.disabled = false; btn.textContent = 'Join Waitlist';
+        return;
+      }
+      body.preferred_start_time = start;
+      body.preferred_end_time = end;
+    }
+  }
+
+  const instrId = document.getElementById('wlInstructor').value;
+  if (instrId) body.instructor_id = parseInt(instrId);
+  if (selectedLessonType) body.lesson_type_id = selectedLessonType.id;
+
+  try {
+    const res = await fetch('/api/waitlist?action=join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    document.getElementById('waitlistFormArea').innerHTML = `
+      <div class="waitlist-success">
+        You're on the waitlist! We'll WhatsApp and email you when a matching slot opens.
+      </div>`;
+  } catch (err) {
+    alert(err.message || 'Failed to join waitlist');
+    btn.disabled = false; btn.textContent = 'Join Waitlist';
+  }
 }
 
 // ─── Boot ────────────────────────────────────────────────────────────────────

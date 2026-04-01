@@ -678,6 +678,26 @@ Replaced the top section of both learner and instructor dashboards with an app-s
 - Hidden scrollbar on pill row for clean mobile swipe
 - Action cards collapse to horizontal scroll only below 340px (not 380px, so standard iPhone widths get the grid)
 
+### 2.45 — Learner Weekly Availability + Waiting List ✅ Complete (1 April 2026)
+
+Two companion features: learners declare their typical free times, and a waitlist notifies them when matching slots open via cancellation.
+
+**What was built:**
+- ✅ `learner_availability` table — mirrors `instructor_availability` (day_of_week + time range), max 14 windows per learner
+- ✅ `waitlist` table — optional day/time prefs, instructor, lesson type; status lifecycle (active → notified → booked/expired), 14-day auto-expiry
+- ✅ `api/learner.js` — `my-availability` + `set-availability` actions (delete-and-insert, 30-min boundaries)
+- ✅ `api/waitlist.js` — `join`, `my-waitlist`, `leave` actions + `checkWaitlistOnCancel()` internal function
+- ✅ `api/slots.js` — cancellation hook: both single and series cancellations trigger waitlist matching (fire-and-forget)
+- ✅ Profile page: "My Availability" card (day rows with time chips, add/remove, overlap detection) + "My Waitlist" card (entries with status badges, leave button)
+- ✅ Booking page: "Notify me when a slot opens" button on empty state, inline form with day/time/instructor prefs or "match my availability" checkbox
+- ✅ Notifications: WhatsApp + email to all matching learners when a slot frees up
+
+**Key decisions:**
+- Notify-all approach (not sequential) — existing `uq_instructor_slot` unique index + 10-min Stripe reservation prevents double-booking
+- Waitlist matching uses two branches: explicit entry prefs OR learner_availability fallback (via EXISTS subquery)
+- Auto-expiry on read (no cron) — stale entries expired in `checkWaitlistOnCancel` and `my-waitlist`
+- Max 10 active waitlist entries per learner
+
 ---
 
 ## Phase 3: Next Up (Prioritised)
@@ -694,19 +714,15 @@ PWA push notifications for lesson reminders, quiz nudges, and new message alerts
 
 Learner requests cash refund from dashboard, admin approves in portal, Stripe processes reversal.
 
-### 3.4 — Waiting List
-
-Capture leads when all instructors are fully booked. "No slots available" triggers sign-up form. Admin notified and can manually offer slots.
-
-### 3.5 — Referral System
+### 3.4 — Referral System
 
 Unique referral link per learner. Both referrer and new learner receive hours bonus on first purchase.
 
-### 3.6 — Recurring/Repeat Bookings
+### 3.5 — Recurring/Repeat Bookings
 
 "Repeat weekly" option when booking — creates multiple bookings in one transaction. Depends on lesson types (Feature 3).
 
-### 3.7 — Per-Service Booking Links
+### 3.6 — Per-Service Booking Links
 
 URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareable links for marketing.
 

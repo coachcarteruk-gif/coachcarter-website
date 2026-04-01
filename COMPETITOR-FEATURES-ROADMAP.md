@@ -1,8 +1,8 @@
 # CoachCarter: Competitor Features Roadmap
 
-> Inspired by Total Drive and Setmore. **15 of 17 done.**
+> Inspired by Total Drive and Setmore. **16 of 17 done.**
 >
-> **Last updated:** 2026-03-31
+> **Last updated:** 2026-04-01
 
 ---
 
@@ -24,7 +24,7 @@
 | 12 | Hide weekends toggle | DONE |
 | 13 | Cancellation visibility toggle | DONE |
 | 14 | Per-service booking links | DONE |
-| 15 | Waiting list | TODO |
+| 15 | Waiting list | DONE |
 | 16 | Google Calendar bi-directional sync | Deferred (post-app-launch) |
 | 17 | Print calendar | DONE |
 
@@ -32,32 +32,13 @@
 
 ## Remaining
 
-### Feature 15: Waiting List
+### Feature 15: Waiting List — DONE
 
-**Effort: 2-3 sessions**
+Implemented with a companion "Learner Weekly Availability" feature. Learners set their typical free times on their profile page. When no slots are available, learners can join the waitlist from the booking page. On cancellation, all matching waitlist learners are notified simultaneously via WhatsApp + email. First to book wins (existing slot reservation system handles races). Entries auto-expire after 14 days.
 
-When no slots are available, learners can join a waitlist. On cancellation, matching learners are notified. First-come-first-served with a 2-hour booking window before the next person is notified. Entries auto-expire after 2 weeks.
-
-**Database:**
-```sql
-CREATE TABLE IF NOT EXISTS waitlist (
-  id SERIAL PRIMARY KEY,
-  learner_id INTEGER REFERENCES learner_users(id) NOT NULL,
-  instructor_id INTEGER REFERENCES instructors(id),
-  preferred_day INTEGER,
-  preferred_start_time TIME,
-  preferred_end_time TIME,
-  lesson_type_id INTEGER REFERENCES lesson_types(id),
-  status TEXT DEFAULT 'active',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  expires_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '14 days',
-  notified_at TIMESTAMPTZ
-);
-```
-
-**API (`api/waitlist.js`):** `join`, `my-waitlist`, `leave`, `check` (called on cancellation)
-
-**`api/slots.js`:** Cancel action triggers waitlist check.
+**Tables:** `learner_availability` (mirrors instructor_availability), `waitlist`
+**API:** `api/waitlist.js` (join, my-waitlist, leave) + `checkWaitlistOnCancel()` hooked into `api/slots.js`
+**UI:** Profile page (availability card + waitlist card), booking page (waitlist join on empty state)
 
 ---
 

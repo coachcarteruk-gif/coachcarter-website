@@ -31,6 +31,7 @@ const crypto      = require('crypto');
 const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const twilio      = require('twilio');
 const { reportError } = require('./_error-alert');
+const { checkWaitlistOnCancel } = require('./waitlist');
 
 // ── WhatsApp helper ──────────────────────────────────────────────────────────
 function sendWhatsApp(to, message) {
@@ -939,7 +940,7 @@ async function handleCancel(req, res) {
     if (cancel_series && booking.series_id) {
       // Find all future confirmed bookings in this series (including the target)
       const seriesBookings = await sql`
-        SELECT id, scheduled_date::text, start_time::text, minutes_deducted
+        SELECT id, scheduled_date::text, start_time::text, end_time::text, minutes_deducted
         FROM lesson_bookings
         WHERE series_id = ${booking.series_id}
           AND learner_id = ${user.id}
@@ -1041,6 +1042,21 @@ async function handleCancel(req, res) {
         );
       }
 
+      // Waitlist: notify matching learners for each freed slot (fire-and-forget)
+      for (const sb of seriesBookings) {
+        checkWaitlistOnCancel({
+          instructor_id:   booking.instructor_id,
+          instructor_name: booking.instructor_name,
+          scheduled_date:  sb.scheduled_date,
+          start_time:      sb.start_time,
+          end_time:        sb.end_time,
+          lesson_type_id:  booking.lesson_type_id
+        }).catch(err => {
+          console.warn('waitlist series check failed:', err.message);
+          reportError('/api/slots:waitlist-series', err);
+        });
+      }
+
       return res.json({
         success:          true,
         cancelled,
@@ -1140,6 +1156,19 @@ async function handleCancel(req, res) {
         `❌ Lesson cancelled\n\n👤 ${booking.learner_name}\n📅 ${lessonDateStr} at ${cancelTime}\n\nThis slot is now free.`
       );
     }
+
+    // Waitlist: notify matching learners for this freed slot (fire-and-forget)
+    checkWaitlistOnCancel({
+      instructor_id:   booking.instructor_id,
+      instructor_name: booking.instructor_name,
+      scheduled_date:  String(booking.scheduled_date).slice(0, 10),
+      start_time:      booking.start_time,
+      end_time:        booking.end_time,
+      lesson_type_id:  booking.lesson_type_id
+    }).catch(err => {
+      console.warn('waitlist check failed:', err.message);
+      reportError('/api/slots:waitlist', err);
+    });
 
     return res.json({
       success:          true,

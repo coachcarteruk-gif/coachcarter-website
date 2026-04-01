@@ -325,6 +325,18 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | `qa-detail` | GET | Yes | Get single Q&A thread |
 | `qa-ask` | POST | Yes | Submit a question |
 | `qa-reply` | POST | Yes | Reply to a question |
+| `my-availability` | GET | Yes | Returns learner's active weekly availability windows |
+| `set-availability` | POST | Yes | Replace all availability windows. Body: `{ windows: [{ day_of_week, start_time, end_time }] }` |
+
+### API — `api/waitlist.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `join` | POST | Yes | Join waitlist with optional day/time/instructor prefs or `use_my_availability` flag |
+| `my-waitlist` | GET | Yes | List active/notified entries (expires stale on read) |
+| `leave` | POST | Yes | Remove a waitlist entry. Body: `{ waitlist_id }` |
+
+Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancellation. Matches entries by explicit prefs or `learner_availability` fallback. Sends WhatsApp + email to all matches.
 
 ### API — `api/lesson-types.js`
 
@@ -410,6 +422,10 @@ active BOOLEAN DEFAULT TRUE
 sort_order INTEGER DEFAULT 0
 created_at TIMESTAMPTZ
 ```
+
+**`learner_availability`** — recurring weekly free-time windows per learner (mirrors `instructor_availability`). Columns: `learner_id`, `day_of_week` (0-6), `start_time`, `end_time`, `active`. Used for waitlist matching.
+
+**`waitlist`** — learners waiting for specific slot types. Columns: `learner_id`, `instructor_id` (nullable = any), `preferred_day` (nullable), `preferred_start_time`/`preferred_end_time` (nullable = use learner_availability), `lesson_type_id`, `status` (active/notified/booked/expired), `expires_at` (14 days), `notified_at`. Auto-expired on read.
 
 **`driving_sessions`** / **`skill_ratings`** — session logging tables. `driving_sessions` has optional `booking_id` (FK to `lesson_bookings`) to link sessions to completed bookings. Unique constraint ensures one log per booking. Skill ratings use Traffic Light system: `struggled` (red), `ok` (amber), `nailed` (green). `skill_ratings` also has `driving_faults`, `serious_faults`, and `dangerous_faults` columns for DL25 fault tracking.
 

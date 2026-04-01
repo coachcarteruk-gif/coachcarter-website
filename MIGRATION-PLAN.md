@@ -7,8 +7,8 @@
 ## Current Architecture (Verified March 2026)
 
 **Frontend:** 43 HTML pages (vanilla HTML/CSS/JS), no framework, no bundler, no build step
-**Backend:** 28 Vercel serverless API route files, 100+ actions via `?action=X` routing
-**Database:** Neon PostgreSQL, 24 tables, single idempotent migration file
+**Backend:** 29 Vercel serverless API route files, 100+ actions via `?action=X` routing
+**Database:** Neon PostgreSQL, 26 tables, single idempotent migration file
 **Auth:** JWT in localStorage, magic link login via SMS (Twilio) and email (SMTP/nodemailer)
 **Payments:** Stripe Checkout sessions + webhook handler
 **AI:** Direct Anthropic API calls (ask-examiner + advisor endpoints)
@@ -30,11 +30,12 @@
 **Public pages (12 pages):**
 - index (role selector), coachcarter-landing, classroom, availability, lessons, admin-availability, privacy, terms, success, maintenance, offline, demo/book
 
-### Verified API Surface (29 route files, 100+ actions)
+### Verified API Surface (30 route files, 100+ actions)
 
 | File | Actions | Key notes |
 |------|---------|-----------|
-| learner.js | 18 | Core learner data — sessions, progress, profile, mock-tests, quiz, competency, onboarding |
+| learner.js | 20 | Core learner data — sessions, progress, profile, mock-tests, quiz, competency, onboarding, weekly availability |
+| waitlist.js | 3 | Waiting list — join, my-waitlist, leave + internal checkWaitlistOnCancel (called from slots.js) |
 | instructor.js | 27+ | Auth, schedule, availability, blackouts, learner history, notes, stats, photo upload, cancel-booking, reschedule-booking, create-booking |
 | admin.js | 14+ | Dashboard stats, bookings, instructor CRUD, learner management, credit adjustment |
 | slots.js | 7 | available (with lead-time filter), book (+ repeat_weeks), checkout-slot, cancel (+ cancel_series), reschedule, my-bookings, series-info |
@@ -68,11 +69,11 @@
 | shared/learner-auth.js | 1.3KB | Learner auth helpers |
 | shared/instructor-auth.js | 1.2KB | Instructor auth helpers |
 
-### Database (25 tables)
+### Database (27 tables)
 
 **Users:** learner_users, instructors, admin_users
 **Auth:** magic_link_tokens, instructor_login_tokens
-**Scheduling:** instructor_availability, instructor_blackout_dates, lesson_bookings, slot_reservations
+**Scheduling:** instructor_availability, instructor_blackout_dates, lesson_bookings, slot_reservations, learner_availability, waitlist
 **Notifications:** sent_reminders
 **Payments:** credit_transactions
 **Learning:** driving_sessions, skill_ratings, learner_onboarding, quiz_results, mock_tests, mock_test_faults
@@ -92,6 +93,10 @@
 - `instructors.calendar_start_hour` — calendar display start hour (default 7)
 - `instructors.reminder_hours` — how many hours before lesson to send learner reminders (default 24)
 - `instructors.daily_schedule_email` — whether to send next-day schedule email at 7pm (default true)
+
+**Notable tables added (April 2026):**
+- `learner_availability` — recurring weekly free-time windows (mirrors instructor_availability). Used for waitlist matching.
+- `waitlist` — learners waiting for specific slot types. Supports explicit day/time prefs or fallback to learner_availability. 14-day auto-expiry, notify-all on cancellation.
 - `sent_reminders` table — tracks sent reminders to prevent duplicates (unique on booking_id + reminder_type)
 - `lesson_bookings.series_id` — UUID grouping recurring weekly bookings (same time slot, N weeks)
 
