@@ -27,30 +27,86 @@
     /* MAIN LAYOUT */
     main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; margin-top: 64px; }
 
-    /* WELCOME + READINESS */
-    .welcome { margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .welcome-text { flex: 1; }
-    .welcome h1 {
-      font-size: 1.5rem;
-      font-weight: 700;
-      font-family: var(--font-head);
-      color: var(--primary);
-      letter-spacing: -0.02em;
-    }
-    .welcome p { font-size: 0.9rem; color: var(--muted); margin-top: 4px; }
+    /* GREETING */
+    .greeting { font-size: 1.3rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); letter-spacing: -0.02em; margin-bottom: 16px; }
 
-    /* Readiness ring */
-    .readiness-ring { position: relative; width: 64px; height: 64px; flex-shrink: 0; cursor: pointer; text-decoration: none; }
-    .readiness-ring svg { width: 64px; height: 64px; transform: rotate(-90deg); }
-    .readiness-ring .ring-bg { fill: none; stroke: var(--border); stroke-width: 5; }
-    .readiness-ring .ring-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1s ease, stroke 0.3s; }
+    /* NEXT LESSON HERO CARD */
+    .next-lesson-card {
+      background: linear-gradient(135deg, #f58321, #ff9a3c);
+      border-radius: var(--radius); padding: 20px;
+      display: none; align-items: center; justify-content: space-between; gap: 16px;
+      margin-bottom: 20px; color: #fff;
+    }
+    .next-lesson-card.show { display: flex; }
+    .nl-info { flex: 1; min-width: 0; }
+    .nl-when { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; margin-bottom: 4px; }
+    .nl-time { font-family: var(--font-head); font-size: 1.25rem; font-weight: 700; line-height: 1.2; }
+    .nl-instructor { font-size: 0.85rem; opacity: 0.9; margin-top: 3px; }
+    .nl-actions { margin-top: 10px; display: flex; gap: 8px; }
+    .nl-btn { display: inline-block; background: rgba(255,255,255,0.22); color: #fff; border-radius: 100px; padding: 6px 16px; font-size: 0.78rem; font-weight: 700; text-decoration: none; transition: background 0.15s; backdrop-filter: blur(4px); }
+    .nl-btn:hover { background: rgba(255,255,255,0.35); }
+
+    /* Readiness ring (small, for hero card) */
+    .readiness-ring { position: relative; width: 52px; height: 52px; flex-shrink: 0; cursor: pointer; text-decoration: none; }
+    .readiness-ring svg { width: 52px; height: 52px; transform: rotate(-90deg); }
+    .readiness-ring .ring-bg { fill: none; stroke: rgba(255,255,255,0.25); stroke-width: 4.5; }
+    .readiness-ring .ring-fill { fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; transition: stroke-dashoffset 1s ease, stroke 0.3s; }
     .readiness-pct {
       position: absolute; inset: 0; display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      font-family: var(--font-head); font-weight: 700; font-size: 0.95rem;
-      color: var(--primary); line-height: 1;
+      font-family: var(--font-head); font-weight: 700; font-size: 0.82rem;
+      color: #fff; line-height: 1;
     }
-    .readiness-label { font-size: 0.5rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+    .readiness-label { font-size: 0.42rem; font-weight: 600; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+    /* Next lesson empty state */
+    .next-lesson-empty {
+      border: 2px dashed var(--border); border-radius: var(--radius);
+      padding: 24px; text-align: center; margin-bottom: 20px; display: none;
+    }
+    .next-lesson-empty.show { display: block; }
+    .next-lesson-empty p { font-size: 0.9rem; color: var(--muted); margin-bottom: 12px; }
+    .nle-btn { display: inline-block; background: var(--accent); color: #fff; border-radius: 100px; padding: 10px 24px; font-size: 0.85rem; font-weight: 700; text-decoration: none; font-family: var(--font-head); transition: all 0.18s; }
+    .nle-btn:hover { background: var(--accent-dk); transform: translateY(-1px); }
+
+    /* PILL ROW (Klarna-style shortcuts) */
+    .pill-row {
+      display: flex; gap: 18px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 18px;
+      -ms-overflow-style: none; scrollbar-width: none;
+    }
+    .pill-row::-webkit-scrollbar { display: none; }
+    .pill-item { display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; flex-shrink: 0; min-width: 56px; }
+    .pill-icon {
+      width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      transition: transform 0.18s, box-shadow 0.18s;
+    }
+    .pill-item:hover .pill-icon { transform: scale(1.08); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+    .pill-icon svg { width: 22px; height: 22px; }
+    .pill-icon-progress { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .pill-icon-videos { background: rgba(168,85,247,0.12); color: #a855f7; }
+    .pill-icon-quiz { background: rgba(245,131,33,0.12); color: #f58321; }
+    .pill-icon-examiner { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .pill-icon-mock { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .pill-label { font-size: 0.68rem; font-weight: 600; color: var(--primary); white-space: nowrap; }
+
+    /* ACTION CARDS (Zing-style) */
+    .action-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 24px; }
+    .action-card {
+      border-radius: 14px; padding: 18px 14px; display: flex; flex-direction: column; justify-content: space-between;
+      color: #fff; text-decoration: none; min-height: 100px;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+    }
+    .action-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+    .action-card svg { width: 28px; height: 28px; margin-bottom: 10px; opacity: 0.9; }
+    .action-card-label { font-family: var(--font-head); font-size: 0.85rem; font-weight: 700; line-height: 1.2; }
+    .action-card-book { background: linear-gradient(135deg, #f58321, #ff9a3c); }
+    .action-card-credits { background: linear-gradient(135deg, #22c55e, #4ade80); }
+    .action-card-mock { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
+    @media (max-width: 340px) {
+      .action-cards { display: flex; overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
+      .action-cards::-webkit-scrollbar { display: none; }
+      .action-card { min-width: 130px; flex-shrink: 0; }
+    }
 
     /* UPCOMING LESSONS */
     .upcoming-card {
@@ -711,22 +767,36 @@
 </div>
 
 <main>
-  <div class="welcome">
-    <div class="welcome-text">
-      <h1 id="welcome-msg">Loading…</h1>
-      <p id="welcome-sub"></p>
+  <!-- GREETING -->
+  <h1 class="greeting" id="welcome-msg">Loading…</h1>
+
+  <!-- NEXT LESSON HERO CARD -->
+  <div class="next-lesson-card" id="next-lesson-card">
+    <div class="nl-info">
+      <div class="nl-when" id="nl-when"></div>
+      <div class="nl-time" id="nl-time"></div>
+      <div class="nl-instructor" id="nl-instructor"></div>
+      <div class="nl-actions">
+        <a href="/learner/book.html" class="nl-btn">View Lessons</a>
+      </div>
     </div>
     <a href="/learner/progress.html" class="readiness-ring" id="readiness-ring" style="display:none" title="View full progress">
-      <svg viewBox="0 0 64 64">
-        <circle class="ring-bg" cx="32" cy="32" r="28"/>
-        <circle class="ring-fill" cx="32" cy="32" r="28" id="ring-fill"
-          stroke-dasharray="175.93" stroke-dashoffset="175.93"/>
+      <svg viewBox="0 0 52 52">
+        <circle class="ring-bg" cx="26" cy="26" r="21"/>
+        <circle class="ring-fill" cx="26" cy="26" r="21" id="ring-fill"
+          stroke-dasharray="131.95" stroke-dashoffset="131.95"/>
       </svg>
       <div class="readiness-pct">
         <span id="readiness-value">0%</span>
         <span class="readiness-label">Ready</span>
       </div>
     </a>
+  </div>
+
+  <!-- NEXT LESSON EMPTY STATE -->
+  <div class="next-lesson-empty" id="next-lesson-empty">
+    <p>No upcoming lessons</p>
+    <a href="/learner/book.html" class="nle-btn">Book a Lesson</a>
   </div>
 
   <!-- PROFILE COMPLETION -->
@@ -741,47 +811,72 @@
     <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete Next Step →</a>
   </div>
 
-  <!-- QUICK ACTIONS -->
-  <div class="quick-actions">
-    <a href="/learner/mock-test.html" class="quick-action-card">
-      <div class="quick-action-icon">🚗</div>
-      <div class="quick-action-label">Mock Test</div>
+  <!-- QUICK ACCESS PILLS -->
+  <div class="pill-row">
+    <a href="/learner/progress.html" class="pill-item">
+      <div class="pill-icon pill-icon-progress">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="14" width="4" height="6" rx="1"/><rect x="10" y="9" width="4" height="11" rx="1"/><rect x="16" y="4" width="4" height="16" rx="1"/></svg>
+      </div>
+      <span class="pill-label">Progress</span>
     </a>
-    <a href="/learner/ask-examiner.html" class="quick-action-card">
-      <div class="quick-action-icon">💬</div>
-      <div class="quick-action-label">Ask Examiner</div>
+    <a href="/classroom.html" class="pill-item">
+      <div class="pill-icon pill-icon-videos">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7-11-7z"/></svg>
+      </div>
+      <span class="pill-label">Videos</span>
     </a>
-    <a href="/learner/book.html" class="quick-action-card">
-      <div class="quick-action-icon">📅</div>
-      <div class="quick-action-label">Book Lessons</div>
+    <a href="/learner/examiner-quiz.html" class="pill-item">
+      <div class="pill-icon pill-icon-quiz">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <span class="pill-label">Quiz</span>
     </a>
-    <a href="/learner/progress.html" class="quick-action-card">
-      <div class="quick-action-icon">📊</div>
-      <div class="quick-action-label">Progress</div>
+    <a href="/learner/ask-examiner.html" class="pill-item">
+      <div class="pill-icon pill-icon-examiner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </div>
+      <span class="pill-label">Examiner AI</span>
     </a>
-    <a href="/learner/examiner-quiz.html" class="quick-action-card">
-      <div class="quick-action-icon">🧠</div>
-      <div class="quick-action-label">Quiz</div>
+    <a href="/learner/log-session.html" class="pill-item">
+      <div class="pill-icon pill-icon-mock">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      </div>
+      <span class="pill-label">Log Session</span>
     </a>
   </div>
 
-  <!-- UPCOMING LESSONS -->
-  <div id="upcoming-section" style="margin-bottom: 24px;">
-    <div class="section-title">Upcoming Lessons</div>
-    <!-- Calendar sync banner -->
-    <div class="cal-sync-banner" id="calSyncBanner" style="display:none">
-      <div class="cal-sync-banner-text">
-        <strong>Sync lessons to your phone calendar</strong>
-        <span>All bookings and cancellations will appear automatically — with reminders.</span>
-      </div>
-      <div class="cal-sync-banner-actions">
-        <a class="cal-sync-btn" id="calSyncBtn" href="#">Sync Calendar</a>
-        <button class="cal-sync-dismiss" id="calSyncDismiss" title="Dismiss">&times;</button>
-      </div>
+  <!-- ACTION CARDS -->
+  <div class="action-cards">
+    <a href="/learner/book.html" class="action-card action-card-book">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+      <span class="action-card-label">Book Lesson</span>
+    </a>
+    <a href="/learner/buy-credits.html" class="action-card action-card-credits">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+      <span class="action-card-label">Buy Credits</span>
+    </a>
+    <a href="/learner/mock-test.html" class="action-card action-card-mock">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>
+      <span class="action-card-label">Mock Test</span>
+    </a>
+  </div>
+
+  <!-- Calendar sync banner (outside upcoming section so it always shows) -->
+  <div class="cal-sync-banner" id="calSyncBanner" style="display:none">
+    <div class="cal-sync-banner-text">
+      <strong>Sync lessons to your phone calendar</strong>
+      <span>All bookings and cancellations will appear automatically — with reminders.</span>
     </div>
-    <div id="upcoming-list">
-      <div class="upcoming-empty">Loading...</div>
+    <div class="cal-sync-banner-actions">
+      <a class="cal-sync-btn" id="calSyncBtn" href="#">Sync Calendar</a>
+      <button class="cal-sync-dismiss" id="calSyncDismiss" title="Dismiss">&times;</button>
     </div>
+  </div>
+
+  <!-- UPCOMING LESSONS (shows 2nd+ lessons) -->
+  <div id="upcoming-section" style="margin-bottom: 24px; display: none;">
+    <div class="section-title">More Upcoming</div>
+    <div id="upcoming-list"></div>
   </div>
 
   <!-- UNLOGGED BOOKING BANNER -->
@@ -856,9 +951,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   if (!AUTH?.token) {
     document.getElementById('welcome-msg').textContent = 'Welcome!';
-    document.getElementById('welcome-sub').textContent = 'Create a free account to track your progress and book lessons.';
-    document.getElementById('upcoming-list').innerHTML =
-      '<div class="upcoming-empty">Once you create your account, you\'ll see all your upcoming lessons here.</div>';
+    document.getElementById('next-lesson-empty').classList.add('show');
     return;
   }
   document.getElementById('header-name').textContent = AUTH.user.name;
@@ -989,33 +1082,67 @@ async function loadReadiness() {
 
     ring.style.display = '';
     val.textContent = pct + '%';
-    const circumference = 2 * Math.PI * 28; // r=28
+    const circumference = 2 * Math.PI * 21; // r=21 (52px ring)
     const offset = circumference * (1 - pct / 100);
     fill.style.strokeDashoffset = offset;
 
-    // Color: red < 30, orange 30-70, green > 70
-    fill.style.stroke = pct < 30 ? 'var(--red)' : pct < 70 ? 'var(--accent)' : 'var(--green)';
+    // On the orange hero card, ring is always white — colour handled by CSS
+    fill.style.stroke = '#fff';
   } catch (e) { console.error('Readiness load failed:', e); }
 }
 
 function render() {
   if (!PROGRESS) return;
 
+  document.getElementById('welcome-msg').textContent = `Hi, ${PROGRESS.name}`;
+
+  renderNextLesson();
   renderUpcoming();
   renderUnlogged();
+}
 
-  document.getElementById('welcome-msg').textContent = `Hi, ${PROGRESS.name} 👋`;
+function renderNextLesson() {
+  const upcoming = (BOOKINGS_DATA && BOOKINGS_DATA.upcoming) ? BOOKINGS_DATA.upcoming : [];
+  const card = document.getElementById('next-lesson-card');
+  const empty = document.getElementById('next-lesson-empty');
 
-  // Count "nailed" or legacy "always" across latest ratings
-  const ratingsMap = {};
-  (PROGRESS.latest_ratings || []).forEach(r => { ratingsMap[r.skill_key] = r.rating; });
+  if (upcoming.length === 0) {
+    card.classList.remove('show');
+    empty.classList.add('show');
+    return;
+  }
 
-  const nailedit = SKILLS.filter(s => ratingsMap[s.key] === 'nailed').length;
-  const rated = SKILLS.filter(s => ratingsMap[s.key]).length;
-  document.getElementById('welcome-sub').textContent = rated === 0
-    ? 'Log your first session to start tracking progress.'
-    : `${nailedit} of ${SKILLS.length} skills at green — keep going!`;
+  empty.classList.remove('show');
+  card.classList.add('show');
 
+  const b = upcoming[0];
+  const date = new Date(b.scheduled_date + 'T00:00:00Z');
+  const dayNum = date.getUTCDate();
+  const month = MON_ABBR[date.getUTCMonth()];
+  const dow = DOW_ABBR[date.getUTCDay()];
+  const start = b.start_time ? b.start_time.slice(0, 5) : '';
+  const end = b.end_time ? b.end_time.slice(0, 5) : '';
+
+  // Countdown
+  const now = Date.now();
+  const lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
+  const diffMs = lessonMs - now;
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffHours / 24);
+  let countdown = '';
+  if (diffMs < 0) {
+    countdown = 'In progress';
+  } else if (diffDays === 0 && diffHours < 24) {
+    countdown = diffHours <= 1 ? 'Starting very soon' : 'In ' + diffHours + ' hours';
+  } else if (diffDays === 1) {
+    countdown = 'Tomorrow';
+  } else {
+    countdown = 'In ' + diffDays + ' days';
+  }
+
+  document.getElementById('nl-when').textContent = countdown;
+  document.getElementById('nl-time').textContent = `${dow} ${dayNum} ${month} · ${start} – ${end}`;
+  document.getElementById('nl-instructor').textContent = `with ${b.instructor_name}`;
 }
 
 
@@ -1024,21 +1151,22 @@ const MON_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','N
 const DOW_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 function renderUpcoming() {
+  const section = document.getElementById('upcoming-section');
   const list = document.getElementById('upcoming-list');
   const upcoming = (BOOKINGS_DATA && BOOKINGS_DATA.upcoming) ? BOOKINGS_DATA.upcoming : [];
 
-  if (upcoming.length === 0) {
-    list.innerHTML = '<div class="upcoming-empty">No upcoming lessons. <a href="/learner/book.html">Book one now →</a></div>';
+  // First lesson is in the hero card — show remaining here
+  const rest = upcoming.slice(1);
+  if (rest.length === 0) {
+    section.style.display = 'none';
     return;
   }
 
+  section.style.display = '';
   const now = Date.now();
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // Show only the next lesson on dashboard
-  const nextOnly = upcoming.slice(0, 1);
-
-  list.innerHTML = nextOnly.map(b => {
+  list.innerHTML = rest.map(b => {
     const date = new Date(b.scheduled_date + 'T00:00:00Z');
     const dayNum = date.getUTCDate();
     const month = MON_ABBR[date.getUTCMonth()];
@@ -1047,7 +1175,6 @@ function renderUpcoming() {
     const end = b.end_time ? b.end_time.slice(0, 5) : '';
     const isToday = b.scheduled_date === todayStr;
 
-    // Countdown
     const lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
     const diffMs = lessonMs - now;
     const diffHours = Math.floor(diffMs / 3600000);
@@ -1084,8 +1211,7 @@ function renderUpcoming() {
       </div>`;
   }).join('');
 
-  // Show "View all" link if more lessons exist
-  if (upcoming.length > 1) {
+  if (upcoming.length > 3) {
     list.innerHTML += `<div style="text-align:center;margin-top:8px;">
       <a href="/learner/lessons.html" style="font-size:0.82rem;font-weight:600;color:var(--accent);text-decoration:none;">
         View all ${upcoming.length} lessons →</a></div>`;
