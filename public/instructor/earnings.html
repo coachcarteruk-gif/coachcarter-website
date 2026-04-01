@@ -277,7 +277,9 @@
   }
 
   function formatDateShort(dateStr) {
-    const d = new Date(dateStr + 'T00:00:00');
+    // Handle both ISO strings "2026-04-01" and full date strings from API
+    var s = typeof dateStr === 'string' ? dateStr.slice(0, 10) : new Date(dateStr).toISOString().slice(0, 10);
+    const d = new Date(s + 'T00:00:00');
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   }
 
@@ -336,10 +338,15 @@
     `;
   }
 
+  function toDateStr(v) {
+    return typeof v === 'string' ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10);
+  }
+
   function renderWeek(data) {
-    const weekLabel = formatDateShort(data.week_start) + ' \u2013 ' + formatDateShort(data.week_end);
-    const isCurrentWeek = data.week_start === getMondayISO(0);
-    const isFuture = new Date(data.week_end + 'T23:59:59') > new Date();
+    var ws = toDateStr(data.week_start), we = toDateStr(data.week_end);
+    const weekLabel = formatDateShort(ws) + ' \u2013 ' + formatDateShort(we);
+    const isCurrentWeek = ws === getMondayISO(0);
+    const isFuture = new Date(we + 'T23:59:59') > new Date();
 
     let lessonsHTML = '';
     if (data.lessons.length === 0) {
