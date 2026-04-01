@@ -414,6 +414,43 @@
         </div>
       </div>
 
+      <div class="form-card">
+        <div class="form-card-title">Calendar Sync</div>
+        <p class="field-hint" style="margin-bottom:14px">
+          Paste your personal calendar's iCal feed URL below. Your personal events will automatically block booking slots so learners can't book over your commitments.
+        </p>
+
+        <div class="form-group">
+          <label for="inputIcalUrl">iCal feed URL</label>
+          <div style="display:flex;gap:8px">
+            <input type="url" id="inputIcalUrl" value="${p.ical_feed_url || ''}" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" style="flex:1">
+            <button type="button" onclick="testIcalFeed()" id="icalTestBtn"
+              style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-size:0.82rem;font-weight:600;cursor:pointer;color:var(--primary);white-space:nowrap">
+              Test feed
+            </button>
+          </div>
+          <div id="icalTestResult" style="margin-top:8px;font-size:0.82rem;display:none"></div>
+        </div>
+
+        <div id="icalSyncStatus" style="font-size:0.82rem;border-radius:8px;padding:10px 14px;display:${p.ical_feed_url ? 'block' : 'none'}">
+          ${p.ical_sync_error
+            ? '<span style="color:#c0392b">\u274c Sync error: ' + (p.ical_sync_error || '') + '</span>'
+            : p.ical_last_synced_at
+              ? '<span style="color:#27ae60">\u2705 Last synced: ' + new Date(p.ical_last_synced_at).toLocaleString('en-GB') + '</span>'
+              : '<span style="color:#f39c12">\u23f3 Sync pending — will run within 15 minutes</span>'
+          }
+        </div>
+
+        <details style="margin-top:14px">
+          <summary style="font-size:0.82rem;color:var(--accent);cursor:pointer;font-weight:600">How do I find my iCal URL?</summary>
+          <div style="font-size:0.8rem;color:var(--muted);margin-top:10px;line-height:1.6">
+            <p><strong>Google Calendar:</strong> Settings &rarr; click your calendar &rarr; "Secret address in iCal format" &rarr; copy the URL.</p>
+            <p><strong>Outlook:</strong> Settings &rarr; Calendar &rarr; Shared calendars &rarr; Publish a calendar &rarr; copy the ICS link.</p>
+            <p><strong>Apple iCloud:</strong> Calendar app &rarr; right-click your calendar &rarr; Share Calendar &rarr; tick "Public Calendar" &rarr; copy the URL.</p>
+          </div>
+        </details>
+      </div>
+
       <button class="btn-save" id="saveBtn" onclick="saveProfile()">Save changes</button>
 
       <div class="form-card" id="bookingLinksCard" style="margin-top:20px">
@@ -542,6 +579,7 @@
     const dual_controls  = document.getElementById('inputDualControls').checked;
     const service_areas  = document.getElementById('inputServiceAreas').value.split(',').map(s => s.trim()).filter(Boolean);
     const languages      = document.getElementById('inputLanguages').value.split(',').map(s => s.trim()).filter(Boolean);
+    const ical_feed_url  = document.getElementById('inputIcalUrl').value.trim() || null;
 
     if (!name) {
       alert('Name cannot be empty');
@@ -561,7 +599,7 @@
           buffer_minutes, reminder_hours, daily_schedule_email,
           adi_grade, pass_rate, years_experience, specialisms,
           vehicle_make, vehicle_model, transmission_type, dual_controls,
-          service_areas, languages
+          service_areas, languages, ical_feed_url
         })
       });
       const data = await res.json();
@@ -595,6 +633,40 @@
 
   function signOut() {
     ccAuth.logout();
+  }
+
+  async function testIcalFeed() {
+    const url = document.getElementById('inputIcalUrl').value.trim();
+    const resultEl = document.getElementById('icalTestResult');
+    if (!url) {
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = '<span style="color:#c0392b">Please enter a URL first</span>';
+      return;
+    }
+    const btn = document.getElementById('icalTestBtn');
+    btn.disabled = true;
+    btn.textContent = 'Testing…';
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = '<span style="color:var(--muted)">Fetching feed…</span>';
+
+    try {
+      const res = await fetch('/api/instructor?action=ical-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ url })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        resultEl.innerHTML = `<span style="color:#27ae60">\u2705 Feed is valid — ${data.event_count} event${data.event_count !== 1 ? 's' : ''} found</span>`;
+      } else {
+        resultEl.innerHTML = `<span style="color:#c0392b">\u274c ${data.error || 'Feed test failed'}</span>`;
+      }
+    } catch (err) {
+      resultEl.innerHTML = '<span style="color:#c0392b">\u274c Could not test feed</span>';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Test feed';
+    }
   }
 
   function esc(str) {

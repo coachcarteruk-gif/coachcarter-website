@@ -374,6 +374,12 @@ Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancell
 | `feed` | GET | Token | iCal feed for Apple/Google Calendar subscription (no JWT — uses per-learner token) |
 | `feed-url` | GET | JWT | Returns the learner's personalised iCal feed URL |
 
+### API — `api/ical-sync.js`
+
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/ical-sync` | GET | CRON_SECRET | Cron job (every 15 min). Syncs one instructor's external iCal feed per invocation. Parses events, expands RRULE, upserts into `instructor_external_events`. |
+
 ### API — `api/ask-examiner.js`
 
 | Endpoint | Method | Auth | Description |
@@ -536,16 +542,20 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 | `availability` | GET | JWT | Current weekly availability windows |
 | `set-availability` | POST | JWT | Update weekly availability windows |
 | `profile` | GET | JWT | Profile details |
-| `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages |
+| `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages, ical_feed_url |
+| `ical-test` | POST | JWT | Test-fetch an iCal feed URL, returns event count |
+| `ical-status` | GET | JWT | Returns iCal sync status (url, last_synced, error, event_count) |
 | `cancel-booking` | POST | JWT | Cancel a confirmed booking (always refunds learner credit) |
 | `reschedule-booking` | POST | JWT | Move a booking to a new slot (no time restriction, no count limit) |
 | `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/free payment) |
 
 ### Database tables
 
-**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"])
+**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
+
+**`instructor_external_events`** — synced events from instructor's personal iCal feed (event_date, start_time, end_time, is_all_day, uid_hash for dedup). Indexed on (instructor_id, event_date). Used by slot generation to block slots that conflict with personal events.
 
 **`instructor_login_tokens`** — magic-link tokens with expiry and used flag
 

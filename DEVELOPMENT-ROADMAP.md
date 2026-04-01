@@ -162,6 +162,17 @@ Learners can subscribe to a personal iCal feed of their upcoming lessons, so boo
 - ✅ `db/migrations/003_calendar_token.sql` — `calendar_token` column on `learner_users`, indexed for fast polling
 - ✅ Feed URL exposed to learners via `GET /api/calendar?action=feed-url`
 
+### 2.3b — Inbound iCal Feed Sync ✅ Complete
+
+Instructors can paste their personal calendar's iCal feed URL (Google, Outlook, Apple) into their profile page. A cron job polls feeds every 15 minutes and stores busy-time blocks. Slot generation checks these events alongside bookings and blackout dates — overlapping slots are automatically blocked for learners. No OAuth; works with any calendar provider.
+
+**What was built:**
+- ✅ `db/migrations/022_ical_sync.sql` — `instructor_external_events` table + `ical_feed_url`, `ical_last_synced_at`, `ical_sync_error` columns on `instructors`
+- ✅ `api/ical-sync.js` — Vercel cron job (every 15 min), processes 1 instructor per invocation, expands RRULE recurring events, upserts via uid_hash dedup
+- ✅ `api/instructor.js` — `ical-test` (validate feed URL), `ical-status` (sync status), `ical_feed_url` in update-profile
+- ✅ `api/slots.js` — loads external events into existing bookedIndex/blackoutIndex (~15 lines added)
+- ✅ `public/instructor/profile.html` — Calendar Sync card with URL input, test button, sync status indicator, help text for Google/Outlook/Apple
+
 ### 2.4 — Learner Dashboard Enhancements ✅ Complete
 
 Surface the new booking system on the existing learner dashboard.

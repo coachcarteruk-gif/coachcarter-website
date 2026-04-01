@@ -30,6 +30,12 @@
 //
 //   GET  /api/instructor?action=my-learners     (JWT auth required)
 //     → returns learners who have booked with this instructor, with aggregated stats
+//
+//   POST /api/instructor?action=ical-test       (JWT auth required)
+//     → test-fetches an iCal feed URL, returns event count
+//
+//   GET  /api/instructor?action=ical-status     (JWT auth required)
+//     → returns iCal sync status (url, last_synced, error, event_count)
 
 const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
@@ -109,6 +115,8 @@ module.exports = async (req, res) => {
   if (action === 'earnings-week')        return handleEarningsWeek(req, res);
   if (action === 'earnings-history')     return handleEarningsHistory(req, res);
   if (action === 'earnings-summary')     return handleEarningsSummary(req, res);
+  if (action === 'ical-test')            return handleIcalTest(req, res);
+  if (action === 'ical-status')          return handleIcalStatus(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -728,7 +736,8 @@ async function handleProfile(req, res) {
              COALESCE(transmission_type, 'manual') AS transmission_type,
              COALESCE(dual_controls, true) AS dual_controls,
              COALESCE(service_areas, '[]'::jsonb) AS service_areas,
-             COALESCE(languages, '["English"]'::jsonb) AS languages
+             COALESCE(languages, '["English"]'::jsonb) AS languages,
+             ical_feed_url, ical_last_synced_at, ical_sync_error
       FROM instructors WHERE id = ${instructor.id}
     `;
 
@@ -756,7 +765,7 @@ async function handleUpdateProfile(req, res) {
     name, phone, bio, photo_url, buffer_minutes, calendar_start_hour, reminder_hours, daily_schedule_email,
     adi_grade, pass_rate, years_experience, specialisms,
     vehicle_make, vehicle_model, transmission_type, dual_controls,
-    service_areas, languages
+    service_areas, languages, ical_feed_url
   } = req.body;
 
   // Validate buffer_minutes if provided
@@ -817,6 +826,27 @@ async function handleUpdateProfile(req, res) {
     }
   }
 
+  // Validate iCal feed URL if provided
+  let icalUrlClean = undefined; // undefined = don't touch column
+  if (ical_feed_url !== undefined) {
+    if (ical_feed_url === null || ical_feed_url === '') {
+      icalUrlClean = ''; // signals "clear it"
+    } else {
+      let url = String(ical_feed_url).trim();
+      if (url.startsWith('webcal://')) url = 'https://' + url.slice(9);
+      try { new URL(url); } catch {
+        return res.status(400).json({ error: 'Invalid iCal feed URL' });
+      }
+      if (!url.startsWith('https://'))
+        return res.status(400).json({ error: 'iCal feed URL must use https://' });
+      if (url.length > 2048)
+        return res.status(400).json({ error: 'iCal feed URL is too long' });
+      if (/coachcarter\.(uk|co\.uk)/i.test(url))
+        return res.status(400).json({ error: 'Cannot use a CoachCarter URL as the feed source' });
+      icalUrlClean = url;
+    }
+  }
+
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
@@ -841,6 +871,10 @@ async function handleUpdateProfile(req, res) {
     const langsVal = (languages !== undefined && languages !== null)
       ? JSON.stringify(languages) : null;
 
+    // If iCal URL is being changed (set or cleared), reset sync state
+    const icalChanged = icalUrlClean !== undefined;
+    const icalVal = icalUrlClean === '' ? null : (icalUrlClean || null);
+
     const [updated] = await sql`
       UPDATE instructors SET
         name                 = COALESCE(NULLIF(${name      || ''}, ''), name),
@@ -860,7 +894,10 @@ async function handleUpdateProfile(req, res) {
         transmission_type    = COALESCE(${transmission_type ?? null}, transmission_type),
         dual_controls        = COALESCE(${dcVal}, dual_controls),
         service_areas        = COALESCE(${areasVal}::jsonb, service_areas),
-        languages            = COALESCE(${langsVal}::jsonb, languages)
+        languages            = COALESCE(${langsVal}::jsonb, languages),
+        ical_feed_url        = CASE WHEN ${icalChanged} THEN ${icalVal} ELSE ical_feed_url END,
+        ical_last_synced_at  = CASE WHEN ${icalChanged} THEN NULL ELSE ical_last_synced_at END,
+        ical_sync_error      = CASE WHEN ${icalChanged} THEN NULL ELSE ical_sync_error END
       WHERE id = ${instructor.id}
       RETURNING id, name, email, phone, bio, photo_url,
                 COALESCE(buffer_minutes, 30) AS buffer_minutes,
@@ -873,7 +910,8 @@ async function handleUpdateProfile(req, res) {
                 COALESCE(transmission_type, 'manual') AS transmission_type,
                 COALESCE(dual_controls, true) AS dual_controls,
                 COALESCE(service_areas, '[]'::jsonb) AS service_areas,
-                COALESCE(languages, '["English"]'::jsonb) AS languages
+                COALESCE(languages, '["English"]'::jsonb) AS languages,
+                ical_feed_url, ical_last_synced_at, ical_sync_error
     `;
 
     return res.json({ success: true, instructor: updated });
@@ -1987,5 +2025,90 @@ async function handleEarningsSummary(req, res) {
     console.error('instructor earnings-summary error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load earnings summary' });
+  }
+}
+
+// ── POST /api/instructor?action=ical-test ────────────────────────────────────
+// Body: { url }  — test-fetch an iCal feed URL, returns event count
+async function handleIcalTest(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  let url = String(req.body.url || '').trim();
+  if (!url) return res.status(400).json({ error: 'URL is required' });
+  if (url.startsWith('webcal://')) url = 'https://' + url.slice(9);
+
+  try { new URL(url); } catch {
+    return res.status(400).json({ error: 'Invalid URL format' });
+  }
+  if (!url.startsWith('https://'))
+    return res.status(400).json({ error: 'URL must use https://' });
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'CoachCarter-CalSync/1.0' }
+    });
+    clearTimeout(timeout);
+
+    if (!resp.ok)
+      return res.json({ ok: false, error: `Feed returned HTTP ${resp.status}` });
+
+    const text = await resp.text();
+    if (!text.includes('BEGIN:VCALENDAR'))
+      return res.json({ ok: false, error: 'Response is not a valid iCal feed' });
+
+    const ical = require('node-ical');
+    const parsed = ical.sync.parseICS(text);
+    const events = Object.values(parsed).filter(e => e.type === 'VEVENT');
+
+    return res.json({ ok: true, event_count: events.length });
+  } catch (err) {
+    if (err.name === 'AbortError')
+      return res.json({ ok: false, error: 'Feed took too long to respond' });
+    console.error('ical-test error:', err);
+    return res.json({ ok: false, error: 'Could not fetch or parse the feed' });
+  }
+}
+
+// ── GET /api/instructor?action=ical-status ───────────────────────────────────
+// Returns the instructor's iCal sync status
+async function handleIcalStatus(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [row] = await sql`
+      SELECT ical_feed_url, ical_last_synced_at, ical_sync_error
+      FROM instructors WHERE id = ${instructor.id}
+    `;
+
+    let event_count = 0;
+    if (row.ical_feed_url) {
+      try {
+        const [cnt] = await sql`
+          SELECT COUNT(*)::int AS count FROM instructor_external_events
+          WHERE instructor_id = ${instructor.id} AND event_date >= CURRENT_DATE
+        `;
+        event_count = cnt.count;
+      } catch { /* table may not exist yet */ }
+    }
+
+    return res.json({
+      ical_feed_url: row.ical_feed_url,
+      ical_last_synced_at: row.ical_last_synced_at,
+      ical_sync_error: row.ical_sync_error,
+      event_count
+    });
+  } catch (err) {
+    console.error('ical-status error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to load iCal status' });
   }
 }

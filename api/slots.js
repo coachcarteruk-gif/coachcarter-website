@@ -257,6 +257,27 @@ async function handleAvailable(req, res) {
       // Table may not exist yet — that's fine, no blackout dates
     }
 
+    // 2d. Load external calendar events (iCal sync) in the date range
+    let externalEvents = [];
+    try {
+      externalEvents = instructor_id
+        ? await sql`
+            SELECT instructor_id, event_date::text AS event_date,
+                   start_time::text AS start_time, end_time::text AS end_time, is_all_day
+            FROM instructor_external_events
+            WHERE event_date BETWEEN ${from} AND ${to}
+              AND instructor_id = ${instructor_id}
+          `
+        : await sql`
+            SELECT instructor_id, event_date::text AS event_date,
+                   start_time::text AS start_time, end_time::text AS end_time, is_all_day
+            FROM instructor_external_events
+            WHERE event_date BETWEEN ${from} AND ${to}
+          `;
+    } catch (e) {
+      // Table may not exist yet
+    }
+
     // Index blackout dates as "instructorId|date" for fast lookup
     const blackoutIndex = new Set();
     for (const b of blackouts) {
@@ -269,6 +290,17 @@ async function handleAvailable(req, res) {
       const key = `${b.instructor_id}|${b.scheduled_date}`;
       if (!bookedIndex[key]) bookedIndex[key] = [];
       bookedIndex[key].push({ start: timeToMinutes(b.start_time), end: timeToMinutes(b.end_time) });
+    }
+
+    // Index external calendar events — all-day as blackouts, timed as booked slots
+    for (const e of externalEvents) {
+      if (e.is_all_day) {
+        blackoutIndex.add(`${e.instructor_id}|${e.event_date}`);
+      } else {
+        const key = `${e.instructor_id}|${e.event_date}`;
+        if (!bookedIndex[key]) bookedIndex[key] = [];
+        bookedIndex[key].push({ start: timeToMinutes(e.start_time), end: timeToMinutes(e.end_time) });
+      }
     }
 
     // 3. Group windows by instructor

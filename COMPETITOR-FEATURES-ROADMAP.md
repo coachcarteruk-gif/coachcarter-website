@@ -25,12 +25,12 @@
 | 13 | Cancellation visibility toggle | DONE |
 | 14 | Per-service booking links | DONE |
 | 15 | Waiting list | DONE |
-| 16 | Google Calendar bi-directional sync | Deferred (post-app-launch) |
+| 16 | Inbound iCal calendar sync | DONE |
 | 17 | Print calendar | DONE |
 
 ---
 
-## Remaining
+## Feature Details
 
 ### Feature 15: Waiting List — DONE
 
@@ -42,11 +42,13 @@ Implemented with a companion "Learner Weekly Availability" feature. Learners set
 
 ---
 
-### Feature 16: Google Calendar Bi-directional Sync
+### Feature 16: Inbound iCal Calendar Sync — DONE
 
-**Deferred to post-app-launch. Effort: 4-5 sessions.**
+Instructors paste their personal calendar's iCal feed URL (Google/Outlook/Apple) into their profile. A cron job polls feeds every 15 minutes and stores busy-time blocks. Slot generation checks these alongside existing bookings and blackout dates — overlapping slots are automatically blocked for learners. No OAuth required; works with any calendar provider.
 
-Webcal feeds already handle CoachCarter→Google. This would add Google→CoachCarter (read personal events as blocked time). Requires Google OAuth2 for instructors.
+**Table:** `instructor_external_events` (event_date, start_time, end_time, is_all_day, uid_hash for dedup)
+**API:** `api/ical-sync.js` (cron job), `api/instructor.js` (ical-test, ical-status actions, ical_feed_url in update-profile)
+**UI:** Instructor profile page — Calendar Sync card with URL input, test button, sync status, help text
 
 ---
 

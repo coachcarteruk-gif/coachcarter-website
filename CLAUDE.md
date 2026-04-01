@@ -95,4 +95,4 @@ This codebase is being prepared for migration to a React Native (Expo) app. See 
 - `MIGRATION-PLAN.md` — React Native app migration plan (keep updated)
 - `DEVELOPMENT-ROADMAP.md` — full feature history and roadmap
 - `PROJECT.md` — complete project reference (APIs, tables, flows)
-- `COMPETITOR-FEATURES-ROADMAP.md` — competitor-inspired features (16 of 17 done; #16 Google Calendar deferred post-app-launch)
+- `COMPETITOR-FEATURES-ROADMAP.md` — competitor-inspired features (all 17 done)
