@@ -24,25 +24,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/shared/instructor.css">
   <style>
-    header {
-      background: var(--white); border-bottom: 1px solid var(--border);
-      padding: 0 20px; display: flex; align-items: center;
-      justify-content: space-between; height: 60px;
-      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
-      margin-top: 64px;
-    }
-    .header-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-    .header-brand img { height: 36px; }
-    .header-brand-text { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
-    .header-brand-sub  { font-size: 0.7rem; color: var(--muted); }
-    .header-right { display: flex; align-items: center; gap: 12px; }
-    .header-name { font-size: 0.85rem; font-weight: 700; }
-    .btn-signout {
-      font-size: 0.8rem; color: var(--muted); background: none; border: none;
-      cursor: pointer; padding: 6px 10px; border-radius: 6px; transition: background 0.15s;
-    }
-    .btn-signout:hover { background: var(--bg); color: var(--primary); }
-
     .bottom-nav {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: var(--white); border-top: 1px solid var(--border);
@@ -59,7 +40,7 @@
     .bottom-nav-item.active { color: var(--accent); }
     .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
 
-    .page { max-width: 600px; margin: 0 auto; padding: 28px 16px 100px; margin-top: 124px; }
+    .page { max-width: 600px; margin: 0 auto; padding: 28px 16px 100px; margin-top: 64px; }
     h1 { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; }
     .subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 4px; margin-bottom: 28px; }
 
@@ -206,20 +187,6 @@
     <a class="site-nav-link primary" href="/learner/login.html?redirect=/learner/book.html">Book Free Trial</a>
   </div>
 </nav>
-
-<header>
-  <a class="header-brand" href="/instructor/">
-    <img src="/Logo.png" alt="CoachCarter">
-    <div>
-      <div class="header-brand-text">CoachCarter</div>
-      <div class="header-brand-sub">Instructor Portal</div>
-    </div>
-  </a>
-  <div class="header-right">
-    <span class="header-name" id="headerName"></span>
-    <button class="btn-signout" onclick="signOut()">Sign out</button>
-  </div>
-</header>
 
 <div class="page">
   <h1>Earnings</h1>
@@ -476,9 +443,6 @@
     const auth = ccAuth.requireAuth();
     if (!auth) return;
     token = auth.token;
-
-    // Set header name
-    document.getElementById('headerName').textContent = auth.payload?.name || '';
 
     // Show admin tab if instructor is admin
     if (auth.payload?.is_admin) {
