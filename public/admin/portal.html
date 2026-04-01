@@ -376,6 +376,9 @@ body {
     <a href="#" onclick="showSection('lesson-types'); return false;" data-section="lesson-types">
       <span class="nav-icon">&#x1f4cb;</span> Lesson Types
     </a>
+    <a href="#" onclick="showSection('payouts'); return false;" data-section="payouts">
+      <span class="nav-icon">&#x1f4b8;</span> Payouts
+    </a>
     <a href="/" target="_blank" style="opacity: 0.5; font-size: 0.82rem;">
       <span class="nav-icon">&#x1f310;</span> View Site
     </a>
@@ -590,6 +593,54 @@ body {
       </tr></thead>
       <tbody id="lesson-types-body"><tr><td colspan="8">Loading...</td></tr></tbody>
     </table>
+  </div>
+
+  <!-- ═══════════ PAYOUTS SECTION ═══════════ -->
+  <div class="section" id="section-payouts">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Payouts</div>
+        <div class="page-subtitle">Manage instructor Stripe Connect payouts</div>
+      </div>
+      <button class="btn" id="btn-process-payouts" onclick="processPayoutsNow()">Process Payouts Now</button>
+    </div>
+
+    <!-- Stats row -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;" id="payout-stats">
+    </div>
+
+    <!-- Instructor Connect Status -->
+    <div class="card" style="margin-bottom:24px;">
+      <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:16px;">Instructor Status</h3>
+      <table class="data-table">
+        <thead><tr>
+          <th>Instructor</th><th>Connect</th><th>Commission</th><th>Payouts</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="payout-instructors-body"><tr><td colspan="5">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- Upcoming Payout Estimates -->
+    <div class="card" style="margin-bottom:24px;">
+      <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:16px;">Upcoming Payout Estimates</h3>
+      <table class="data-table">
+        <thead><tr>
+          <th>Instructor</th><th>Lessons</th><th>Estimated</th><th>Status</th>
+        </tr></thead>
+        <tbody id="payout-estimates-body"><tr><td colspan="4">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- Recent Payouts -->
+    <div class="card">
+      <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:16px;">Recent Payouts</h3>
+      <table class="data-table">
+        <thead><tr>
+          <th>Date</th><th>Instructor</th><th>Lessons</th><th>Amount</th><th>Status</th>
+        </tr></thead>
+        <tbody id="payout-recent-body"><tr><td colspan="5">Loading...</td></tr></tbody>
+      </table>
+    </div>
   </div>
 
 </div><!-- /main -->
@@ -873,6 +924,7 @@ function showSection(name) {
   if (name === 'videos')        loadVideos();
   if (name === 'learners')      loadLearners();
   if (name === 'lesson-types')  loadLessonTypes();
+  if (name === 'payouts')       loadPayouts();
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('open');
@@ -2131,6 +2183,140 @@ async function toggleLessonType(id, active) {
     loadLessonTypes();
   } catch (err) {
     toast(err.message, 'error');
+  }
+}
+
+// ── Payouts ──────────────────────────────────────────────────────
+function fmtPence(p) { return '\u00A3' + (p / 100).toFixed(2); }
+function fmtDateShort(d) {
+  if (!d) return '';
+  const dt = new Date(typeof d === 'string' ? d.slice(0, 10) + 'T00:00:00' : d);
+  return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+async function loadPayouts() {
+  try {
+    const res = await fetch('/api/admin?action=payout-overview', {
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    // Stats
+    document.getElementById('payout-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-value">${fmtPence(data.stats.this_month_pence)}</div><div class="stat-label">Paid This Month</div></div>
+      <div class="stat-card"><div class="stat-value">${fmtPence(data.stats.all_time_pence)}</div><div class="stat-label">All Time</div></div>
+      <div class="stat-card"><div class="stat-value">${data.stats.total_payouts}</div><div class="stat-label">Total Payouts</div></div>
+      <div class="stat-card"><div class="stat-value">${data.instructors.filter(i => i.connect_status === 'active').length}</div><div class="stat-label">Connected</div></div>
+    `;
+
+    // Instructor status table
+    document.getElementById('payout-instructors-body').innerHTML = data.instructors
+      .filter(i => i.active)
+      .map(i => {
+        const statusBadge = i.connect_status === 'active'
+          ? '<span style="color:#166534;font-weight:600;">&#x2705; Active</span>'
+          : i.connect_status === 'pending'
+          ? '<span style="color:#b45309;font-weight:600;">&#x23f3; Pending</span>'
+          : '<span style="color:#6b7280;">Not started</span>';
+        const pauseBtn = i.connect_status === 'active'
+          ? `<button class="btn btn-sm" onclick="togglePayoutPause(${i.id}, ${!i.payouts_paused})">${i.payouts_paused ? 'Resume' : 'Pause'}</button>`
+          : '';
+        const inviteBtn = i.connect_status === 'not_started'
+          ? `<button class="btn btn-sm" onclick="sendConnectInvite(${i.id})">Send Invite</button>`
+          : '';
+        return `<tr>
+          <td>${i.name}</td>
+          <td>${statusBadge}</td>
+          <td>${Math.round((i.commission_rate || 0.85) * 100)}%</td>
+          <td>${i.payouts_paused ? '<span style="color:#b45309;font-weight:600;">Paused</span>' : (i.connect_status === 'active' ? 'Active' : '\u2014')}</td>
+          <td>${inviteBtn}${pauseBtn}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5">No active instructors</td></tr>';
+
+    // Upcoming estimates
+    document.getElementById('payout-estimates-body').innerHTML = data.estimates.length > 0
+      ? data.estimates.map(e => `<tr>
+          <td>${e.name}</td>
+          <td>${e.eligible_lessons}</td>
+          <td style="font-weight:700;">${fmtPence(e.estimated_pence)}</td>
+          <td>${e.paused ? '<span style="color:#b45309;">Paused</span>' : 'Ready'}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" style="color:var(--muted);">No pending payouts</td></tr>';
+
+    // Recent payouts
+    document.getElementById('payout-recent-body').innerHTML = data.recent_payouts.length > 0
+      ? data.recent_payouts.map(p => {
+          const statusClass = p.status === 'completed' ? 'color:#166534' : p.status === 'failed' ? 'color:#991b1b' : 'color:#1e40af';
+          return `<tr>
+            <td>${fmtDateShort(p.created_at)}</td>
+            <td>${p.instructor_name}</td>
+            <td>${p.lesson_count}</td>
+            <td style="font-weight:700;">${fmtPence(p.amount_pence)}</td>
+            <td><span style="${statusClass};font-weight:600;text-transform:uppercase;font-size:0.75rem;">${p.status}</span></td>
+          </tr>`;
+        }).join('')
+      : '<tr><td colspan="5" style="color:var(--muted);">No payouts yet</td></tr>';
+
+  } catch (err) {
+    console.error('Failed to load payouts:', err);
+    toast('Failed to load payouts', 'error');
+  }
+}
+
+async function togglePayoutPause(instructorId, paused) {
+  try {
+    const res = await fetch('/api/admin?action=toggle-payout-pause', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instructor_id: instructorId, paused })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    toast(paused ? 'Payouts paused' : 'Payouts resumed', 'success');
+    loadPayouts();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function sendConnectInvite(instructorId) {
+  if (!confirm('Send a Stripe Connect onboarding email to this instructor?')) return;
+  try {
+    const res = await fetch('/api/connect?action=admin-send-invite', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instructor_id: instructorId })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message || data.error);
+    toast('Onboarding invite sent!', 'success');
+    loadPayouts();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function processPayoutsNow() {
+  if (!confirm('Process payouts for all eligible instructors now? This will create Stripe transfers immediately.')) return;
+  const btn = document.getElementById('btn-process-payouts');
+  btn.textContent = 'Processing...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/admin?action=process-payouts', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const msg = `Processed: ${data.processed}, Skipped: ${data.skipped}, Failed: ${data.failed}. Total: ${fmtPence(data.total_transferred_pence)}`;
+    toast(msg, data.failed > 0 ? 'error' : 'success');
+    loadPayouts();
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    btn.textContent = 'Process Payouts Now';
+    btn.disabled = false;
   }
 }
 

@@ -44,6 +44,8 @@ const { neon }   = require('@neondatabase/serverless');
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
+const { processAllPayouts, getEligibleBookings } = require('./_payout-helpers');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -94,6 +96,10 @@ module.exports = async (req, res) => {
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
   if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
   if (action === 'resolve-dispute')      return handleResolveDispute(req, res);
+  if (action === 'toggle-payout-pause')  return handleTogglePayoutPause(req, res);
+  if (action === 'payout-overview')      return handlePayoutOverview(req, res);
+  if (action === 'process-payouts')      return handleProcessPayouts(req, res);
+  if (action === 'instructor-payout-history') return handleInstructorPayoutHistory(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -796,5 +802,178 @@ async function handleResolveDispute(req, res) {
     console.error('admin resolve-dispute error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to resolve dispute' });
+  }
+}
+
+// ── POST /api/admin?action=toggle-payout-pause ──
+async function handleTogglePayoutPause(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+
+  try {
+    const { instructor_id, paused } = req.body || {};
+    if (!instructor_id || typeof paused !== 'boolean')
+      return res.status(400).json({ error: 'instructor_id and paused (boolean) required' });
+
+    const sql = neon(process.env.POSTGRES_URL);
+    const [updated] = await sql`
+      UPDATE instructors SET payouts_paused = ${paused} WHERE id = ${instructor_id} RETURNING id, name
+    `;
+    if (!updated) return res.status(404).json({ error: 'Instructor not found' });
+
+    return res.json({ ok: true, instructor_id: updated.id, name: updated.name, payouts_paused: paused });
+  } catch (err) {
+    console.error('toggle-payout-pause error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to toggle payout pause' });
+  }
+}
+
+// ── GET /api/admin?action=payout-overview ──
+// Returns all instructors' connect status, upcoming payout estimates, and recent payouts.
+async function handlePayoutOverview(req, res) {
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Instructor connect statuses
+    const instructors = await sql`
+      SELECT id, name, email, active, commission_rate,
+             stripe_account_id, stripe_onboarding_complete, payouts_paused
+        FROM instructors ORDER BY name ASC
+    `;
+
+    // Upcoming payout estimates per instructor
+    const estimates = [];
+    for (const inst of instructors) {
+      if (!inst.active || !inst.stripe_onboarding_complete) continue;
+      const bookings = await getEligibleBookings(sql, inst.id);
+      const rate = parseFloat(inst.commission_rate) || 0.85;
+      let estimatedPence = 0;
+      for (const b of bookings) {
+        estimatedPence += Math.round(parseInt(b.price_pence) * rate);
+      }
+      if (bookings.length > 0) {
+        estimates.push({
+          instructor_id: inst.id,
+          name: inst.name,
+          eligible_lessons: bookings.length,
+          estimated_pence: estimatedPence,
+          paused: inst.payouts_paused
+        });
+      }
+    }
+
+    // Recent payouts
+    const recentPayouts = await sql`
+      SELECT ip.id, ip.instructor_id, i.name AS instructor_name,
+             ip.amount_pence, ip.status, ip.period_start, ip.period_end,
+             ip.created_at, ip.completed_at,
+             (SELECT COUNT(*) FROM payout_line_items WHERE payout_id = ip.id) AS lesson_count
+        FROM instructor_payouts ip
+        JOIN instructors i ON i.id = ip.instructor_id
+       ORDER BY ip.created_at DESC
+       LIMIT 20
+    `;
+
+    // Summary stats
+    const [stats] = await sql`
+      SELECT
+        COALESCE(SUM(amount_pence) FILTER (WHERE status = 'completed'
+          AND completed_at >= date_trunc('month', CURRENT_DATE)), 0)::int AS this_month_pence,
+        COALESCE(SUM(amount_pence) FILTER (WHERE status = 'completed'), 0)::int AS all_time_pence,
+        COUNT(*) FILTER (WHERE status = 'completed')::int AS total_payouts
+      FROM instructor_payouts
+    `;
+
+    return res.json({
+      ok: true,
+      instructors: instructors.map(i => ({
+        id: i.id, name: i.name, email: i.email, active: i.active,
+        commission_rate: i.commission_rate,
+        connect_status: !i.stripe_account_id ? 'not_started'
+          : i.stripe_onboarding_complete ? 'active' : 'pending',
+        payouts_paused: i.payouts_paused
+      })),
+      estimates,
+      recent_payouts: recentPayouts,
+      stats
+    });
+  } catch (err) {
+    console.error('payout-overview error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to load payout overview' });
+  }
+}
+
+// ── POST /api/admin?action=process-payouts ──
+// Manual trigger for payout processing (same logic as cron).
+async function handleProcessPayouts(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const results = await processAllPayouts(sql, stripe);
+
+    return res.json({
+      ok: true,
+      processed: results.processed,
+      skipped: results.skipped,
+      failed: results.failed,
+      total_transferred_pence: results.total_pence,
+      details: results.details
+    });
+  } catch (err) {
+    console.error('process-payouts error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to process payouts' });
+  }
+}
+
+// ── GET /api/admin?action=instructor-payout-history&instructor_id=X ──
+async function handleInstructorPayoutHistory(req, res) {
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+
+  try {
+    const instructorId = parseInt(req.query.instructor_id);
+    if (!instructorId) return res.status(400).json({ error: 'instructor_id required' });
+
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const payouts = await sql`
+      SELECT ip.id, ip.amount_pence, ip.platform_fee_pence, ip.stripe_transfer_id,
+             ip.period_start, ip.period_end, ip.status, ip.failure_reason,
+             ip.created_at, ip.completed_at
+        FROM instructor_payouts ip
+       WHERE ip.instructor_id = ${instructorId}
+       ORDER BY ip.created_at DESC
+       LIMIT 52
+    `;
+
+    // For each payout, get line items
+    for (const p of payouts) {
+      p.line_items = await sql`
+        SELECT pli.booking_id, pli.price_pence, pli.instructor_amount_pence, pli.commission_rate,
+               lb.scheduled_date, lb.start_time, lb.end_time, lb.status AS booking_status,
+               COALESCE(lt.name, 'Standard Lesson') AS lesson_type
+          FROM payout_line_items pli
+          JOIN lesson_bookings lb ON lb.id = pli.booking_id
+          LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+         WHERE pli.payout_id = ${p.id}
+         ORDER BY lb.scheduled_date ASC
+      `;
+    }
+
+    return res.json({ ok: true, payouts });
+  } catch (err) {
+    console.error('instructor-payout-history error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to load payout history' });
   }
 }

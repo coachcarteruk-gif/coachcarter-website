@@ -43,6 +43,7 @@ const twilio     = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { reportError } = require('./_error-alert');
 const { resolveConfirmations } = require('./_confirmation-resolver');
+const { getEligibleBookings }  = require('./_payout-helpers');
 
 function sendWhatsApp(to, message) {
   const sid  = process.env.TWILIO_SID;
@@ -120,6 +121,8 @@ module.exports = async (req, res) => {
   if (action === 'create-offer')         return handleCreateOffer(req, res);
   if (action === 'list-offers')          return handleListOffers(req, res);
   if (action === 'cancel-offer')         return handleCancelOffer(req, res);
+  if (action === 'payout-history')       return handlePayoutHistory(req, res);
+  if (action === 'next-payout-preview')  return handleNextPayoutPreview(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -2381,5 +2384,83 @@ async function handleCancelOffer(req, res) {
     console.error('cancel-offer error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to cancel offer' });
+  }
+}
+
+// ── GET /api/instructor?action=payout-history ──
+// Returns paginated payout records for the instructor.
+async function handlePayoutHistory(req, res) {
+  const user = verifyInstructorAuth(req);
+  if (!user) return res.status(401).json({ error: 'Not authenticated' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const limit = Math.min(parseInt(req.query.limit) || 20, 52);
+    const offset = parseInt(req.query.offset) || 0;
+
+    const payouts = await sql`
+      SELECT id, amount_pence, platform_fee_pence, stripe_transfer_id,
+             period_start, period_end, status, failure_reason,
+             created_at, completed_at,
+             (SELECT COUNT(*) FROM payout_line_items WHERE payout_id = ip.id) AS lesson_count
+        FROM instructor_payouts ip
+       WHERE instructor_id = ${user.id}
+       ORDER BY created_at DESC
+       LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    const [{ total }] = await sql`
+      SELECT COUNT(*)::int AS total FROM instructor_payouts WHERE instructor_id = ${user.id}
+    `;
+
+    return res.json({ ok: true, payouts, total, limit, offset });
+  } catch (err) {
+    console.error('payout-history error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to load payout history' });
+  }
+}
+
+// ── GET /api/instructor?action=next-payout-preview ──
+// Returns estimated next payout amount based on unpaid eligible bookings.
+async function handleNextPayoutPreview(req, res) {
+  const user = verifyInstructorAuth(req);
+  if (!user) return res.status(401).json({ error: 'Not authenticated' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [instructor] = await sql`
+      SELECT commission_rate, stripe_onboarding_complete, payouts_paused
+        FROM instructors WHERE id = ${user.id}
+    `;
+    if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
+
+    const bookings = await getEligibleBookings(sql, user.id);
+    const rate = parseFloat(instructor.commission_rate) || 0.85;
+    let estimatedPence = 0;
+    for (const b of bookings) {
+      estimatedPence += Math.round(parseInt(b.price_pence) * rate);
+    }
+
+    // Calculate next Friday
+    const now = new Date();
+    const dayOfWeek = now.getUTCDay(); // 0=Sun, 5=Fri
+    const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7;
+    const nextFriday = new Date(now);
+    nextFriday.setUTCDate(now.getUTCDate() + daysUntilFriday);
+    const nextPayoutDate = nextFriday.toISOString().split('T')[0];
+
+    return res.json({
+      ok: true,
+      estimated_pence: estimatedPence,
+      eligible_lessons: bookings.length,
+      next_payout_date: nextPayoutDate,
+      onboarding_complete: !!instructor.stripe_onboarding_complete,
+      payouts_paused: !!instructor.payouts_paused
+    });
+  } catch (err) {
+    console.error('next-payout-preview error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to preview next payout' });
   }
 }

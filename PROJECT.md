@@ -564,10 +564,30 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 | `cancel-booking` | POST | JWT | Cancel a confirmed booking (always refunds learner credit) |
 | `reschedule-booking` | POST | JWT | Move a booking to a new slot (no time restriction, no count limit) |
 | `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/free payment) |
+| `payout-history` | GET | JWT | Paginated payout records for the instructor |
+| `next-payout-preview` | GET | JWT | Estimated next Friday payout amount + eligible lesson count |
+
+### API — `api/connect.js` (Stripe Connect)
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `create-account` | POST | Instructor JWT | Create Express account + return onboarding URL |
+| `onboarding-link` | GET | Instructor JWT | Fresh onboarding link for incomplete setup |
+| `connect-status` | GET | Instructor JWT | Check account status, auto-update DB if complete |
+| `dashboard-link` | GET | Instructor JWT | Stripe Express dashboard login link |
+| `admin-create-account` | POST | Admin JWT | Create Express account for a specific instructor |
+| `admin-send-invite` | POST | Admin JWT | Create account + email onboarding link to instructor |
+
+### API — `api/cron-payouts.js` (Vercel Cron — Fridays 09:00 UTC)
+
+Processes weekly payouts for all onboarded instructors. Auth: CRON_SECRET or Admin JWT.
+Eligible bookings: status='completed' OR (status='confirmed' AND scheduled_date <= NOW() - 3 days).
+Creates Stripe transfers to instructor Express accounts. Sends email notifications.
+Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment.
 
 ### Database tables
 
-**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error
+**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error, stripe_account_id, stripe_onboarding_complete, payouts_paused
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
 
@@ -576,6 +596,10 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 **`lesson_offers`** — instructor-initiated lesson offers pending learner acceptance + payment. Fields: token (unique, 64-char hex), instructor_id, learner_email, learner_id (nullable — set when learner exists or after payment creates account), scheduled_date, start_time, end_time, lesson_type_id, status ('pending'/'accepted'/'expired'/'cancelled'), booking_id (set by webhook after payment), stripe_session_id, expires_at (24h from creation), accepted_at. Partial unique index on (instructor_id, scheduled_date, start_time) WHERE status='pending' prevents duplicate pending offers for the same slot. Pending offers block slot availability.
 
 **`instructor_login_tokens`** — magic-link tokens with expiry and used flag
+
+**`instructor_payouts`** — id, instructor_id, amount_pence, platform_fee_pence, stripe_transfer_id, period_start, period_end, status ('pending'/'processing'/'completed'/'failed'/'skipped'), failure_reason, created_at, completed_at
+
+**`payout_line_items`** — id, payout_id, booking_id (UNIQUE — prevents double-payment), price_pence, instructor_amount_pence, commission_rate
 
 ---
 
@@ -594,6 +618,10 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 | `add-instructor` | POST | JWT | Add a new instructor |
 | `update-instructor` | POST | JWT | Edit instructor details |
 | `toggle-instructor` | POST | JWT | Activate / deactivate instructor |
+| `toggle-payout-pause` | POST | JWT | Pause or resume an instructor's payouts |
+| `payout-overview` | GET | JWT | All instructors' connect status, upcoming estimates, recent payouts |
+| `process-payouts` | POST | JWT | Manual trigger for payout processing (same logic as cron) |
+| `instructor-payout-history` | GET | JWT | Payout history with line items for a specific instructor |
 
 **`admin_users`** table: email, bcrypt password_hash, role (`admin` / `superadmin`).
 
@@ -734,5 +762,5 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Referral system** — unique links, credit bonuses for both parties
 - **Push notifications** — lesson reminders, quiz nudges, new message alerts (PWA)
 - **Capacitor native wrapper** — App Store / Play Store submission
-- **Instructor dashboard** — earnings tracking, lesson stats, learner progress overview
+- ~~**Instructor dashboard** — earnings tracking, lesson stats, learner progress overview~~ ✅ Done (earnings page + Stripe Connect payouts)
 - **Theory test prep** — built-in revision tools

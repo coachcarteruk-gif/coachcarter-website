@@ -7,7 +7,8 @@
     { "path": "/api/reminders?action=prompt-confirmations", "schedule": "15 * * * *" },
     { "path": "/api/reminders?action=auto-confirm", "schedule": "45 * * * *" },
     { "path": "/api/ical-sync", "schedule": "*/15 * * * *" },
-    { "path": "/api/offers?action=expire-offers", "schedule": "30 * * * *" }
+    { "path": "/api/offers?action=expire-offers", "schedule": "30 * * * *" },
+    { "path": "/api/cron-payouts", "schedule": "0 9 * * 5" }
   ],
   "redirects": [
     {
