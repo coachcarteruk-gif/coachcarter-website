@@ -2334,7 +2334,7 @@ async function openAddLessonModal() {
   document.getElementById('addLessonBtn').textContent = 'Book lesson';
 
   // Default date to current calendar date
-  const d = currentDate || new Date();
+  const d = cursor || new Date();
   const dateVal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   document.getElementById('addLessonDate').value = dateVal;
   document.getElementById('addLessonDate').min = new Date().toISOString().slice(0, 10);
@@ -2492,7 +2492,7 @@ async function openOfferModal(prefillEmail) {
   document.getElementById('offerSendBtn').textContent = 'Send offer';
 
   // Default date to current calendar date
-  const d = currentDate || new Date();
+  const d = cursor || new Date();
   const dateVal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   document.getElementById('offerDate').value = dateVal;
   document.getElementById('offerDate').min = new Date().toISOString().slice(0, 10);
