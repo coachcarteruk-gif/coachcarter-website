@@ -110,8 +110,9 @@ async function handleCreateAccount(req, res) {
 
     return res.json({ ok: true, onboarding_url: link.url });
   } catch (err) {
+    console.error('create-account error:', err);
     reportError('/api/connect?action=create-account', err);
-    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to create Connect account' });
+    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: err.message || 'Failed to create Connect account' });
   }
 }
 
