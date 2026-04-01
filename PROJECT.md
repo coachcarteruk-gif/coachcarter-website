@@ -543,7 +543,7 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 
 ### Database tables
 
-**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7)
+**`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"])
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
 

@@ -135,6 +135,26 @@
       animation: spin 0.7s linear infinite; margin: 0 auto 12px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      display: inline-flex; align-items: center; padding: 7px 14px;
+      border-radius: 20px; font-size: 0.82rem; font-weight: 600;
+      font-family: var(--font-body); cursor: pointer; user-select: none;
+      border: 1.5px solid var(--border); background: var(--bg); color: var(--primary);
+      transition: all 0.15s;
+    }
+    .chip.active {
+      background: var(--accent-lt); border-color: var(--accent); color: var(--accent);
+    }
+    .chip:hover { border-color: var(--accent); }
+
+    input[type="number"] {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--primary); font-family: var(--font-body);
+      font-size: 0.9rem; padding: 10px 13px; outline: none; transition: border-color 0.2s;
+    }
+    input[type="number"]:focus { border-color: var(--accent); background: var(--white); }
   </style>
 <script src="/sidebar.js"></script>
 <script src="/shared/instructor-auth.js"></script>
@@ -300,6 +320,88 @@
       </div>
 
       <div class="form-card">
+        <div class="form-card-title">Qualifications &amp; Experience</div>
+
+        <div class="form-group">
+          <label for="inputAdiGrade">ADI grade</label>
+          <input type="text" id="inputAdiGrade" value="${esc(p.adi_grade || '')}" placeholder="e.g. A, B, or 6">
+          <p class="field-hint">Your DVSA approved driving instructor grade.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="inputPassRate">Pass rate (%)</label>
+          <input type="number" id="inputPassRate" min="0" max="100" step="0.1" value="${p.pass_rate != null ? p.pass_rate : ''}" placeholder="e.g. 72.5">
+        </div>
+
+        <div class="form-group">
+          <label for="inputYearsExp">Years of experience</label>
+          <input type="number" id="inputYearsExp" min="0" max="60" step="1" value="${p.years_experience != null ? p.years_experience : ''}" placeholder="e.g. 8">
+        </div>
+
+        <div class="form-group">
+          <label>Specialisms</label>
+          <div class="chip-group" id="specialismsChips">
+            ${['Nervous drivers','Motorway lessons','Intensive courses','Automatic only','Manual only','Refresher courses','Pass Plus','Advanced driving'].map(s => {
+              const active = (p.specialisms || []).includes(s) ? ' active' : '';
+              return \`<span class="chip\${active}" onclick="toggleChip(this)">\${s}</span>\`;
+            }).join('')}
+          </div>
+          <p class="field-hint">Select all that apply — shown to learners on your profile.</p>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">Vehicle</div>
+
+        <div class="form-group">
+          <label for="inputVehicleMake">Make</label>
+          <input type="text" id="inputVehicleMake" value="${esc(p.vehicle_make || '')}" placeholder="e.g. Vauxhall">
+        </div>
+
+        <div class="form-group">
+          <label for="inputVehicleModel">Model</label>
+          <input type="text" id="inputVehicleModel" value="${esc(p.vehicle_model || '')}" placeholder="e.g. Corsa">
+        </div>
+
+        <div class="form-group">
+          <label for="inputTransmission">Transmission</label>
+          <select id="inputTransmission" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--primary);font-family:var(--font-body);font-size:0.9rem;padding:10px 13px;outline:none;">
+            <option value="manual" ${(p.transmission_type || 'manual') === 'manual' ? 'selected' : ''}>Manual</option>
+            <option value="automatic" ${p.transmission_type === 'automatic' ? 'selected' : ''}>Automatic</option>
+            <option value="both" ${p.transmission_type === 'both' ? 'selected' : ''}>Both</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" id="inputDualControls" ${p.dual_controls !== false ? 'checked' : ''}
+              style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
+            Dual controls fitted
+          </label>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">Service Area</div>
+
+        <div class="form-group">
+          <label for="inputServiceAreas">Coverage areas</label>
+          <textarea id="inputServiceAreas" placeholder="e.g. SW1, SE1, Croydon, Bromley" style="min-height:60px">${esc((p.service_areas || []).join(', '))}</textarea>
+          <p class="field-hint">Comma-separated postcodes or area names. Helps learners find instructors near them.</p>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">Languages</div>
+
+        <div class="form-group">
+          <label for="inputLanguages">Languages spoken</label>
+          <input type="text" id="inputLanguages" value="${esc((p.languages || ['English']).join(', '))}" placeholder="e.g. English, Urdu, Polish">
+          <p class="field-hint">Comma-separated. Helps match learners with instructors who speak their language.</p>
+        </div>
+      </div>
+
+      <div class="form-card">
         <div class="form-card-title">Scheduling</div>
 
         <div class="form-group">
@@ -397,6 +499,11 @@
   }
   window.copyBookingLink = copyBookingLink;
 
+  function toggleChip(el) {
+    el.classList.toggle('active');
+  }
+  window.toggleChip = toggleChip;
+
   function previewPhoto(url) {
     if (!url) return;
     const avatarEl = document.getElementById('avatarEl');
@@ -451,6 +558,20 @@
     const reminder_hours = parseInt(document.getElementById('inputReminderHours').value);
     const daily_schedule_email = document.getElementById('inputDailySchedule').checked;
 
+    // New profile fields
+    const adi_grade      = document.getElementById('inputAdiGrade').value.trim() || null;
+    const passRateRaw    = document.getElementById('inputPassRate').value;
+    const pass_rate      = passRateRaw !== '' ? parseFloat(passRateRaw) : null;
+    const yearsRaw       = document.getElementById('inputYearsExp').value;
+    const years_experience = yearsRaw !== '' ? parseInt(yearsRaw) : null;
+    const specialisms    = [...document.querySelectorAll('#specialismsChips .chip.active')].map(c => c.textContent);
+    const vehicle_make   = document.getElementById('inputVehicleMake').value.trim() || null;
+    const vehicle_model  = document.getElementById('inputVehicleModel').value.trim() || null;
+    const transmission_type = document.getElementById('inputTransmission').value;
+    const dual_controls  = document.getElementById('inputDualControls').checked;
+    const service_areas  = document.getElementById('inputServiceAreas').value.split(',').map(s => s.trim()).filter(Boolean);
+    const languages      = document.getElementById('inputLanguages').value.split(',').map(s => s.trim()).filter(Boolean);
+
     if (!name) {
       alert('Name cannot be empty');
       return;
@@ -464,7 +585,13 @@
       const res  = await fetch('/api/instructor?action=update-profile', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body:    JSON.stringify({ name, phone: phone || null, bio: bio || null, photo_url: photo_url || null, buffer_minutes, reminder_hours, daily_schedule_email })
+        body:    JSON.stringify({
+          name, phone: phone || null, bio: bio || null, photo_url: photo_url || null,
+          buffer_minutes, reminder_hours, daily_schedule_email,
+          adi_grade, pass_rate, years_experience, specialisms,
+          vehicle_make, vehicle_model, transmission_type, dual_controls,
+          service_areas, languages
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);

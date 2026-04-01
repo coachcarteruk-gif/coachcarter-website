@@ -702,6 +702,20 @@ Two companion features: learners declare their typical free times, and a waitlis
 
 ## Phase 3: Next Up (Prioritised)
 
+### 2.46 — Instructor Profile Enhancement ✅ Complete (1 April 2026)
+
+Extended the instructor profile with qualifications, vehicle, service area, and languages — preparing for multi-school/multi-instructor support.
+
+- **Qualifications & Experience** — ADI grade, pass rate %, years of experience, specialisms chip selector (8 options)
+- **Vehicle** — make, model, transmission type (manual/automatic/both), dual controls toggle
+- **Service Area** — comma-separated postcodes/areas, stored as JSONB for future geo-search
+- **Languages** — comma-separated, JSONB array, defaults to English
+- **DB**: 10 new columns on `instructors` table (JSONB arrays for specialisms, service_areas, languages)
+- **API**: Extended `profile` GET and `update-profile` POST with validation
+- **Files**: `db/migration.sql`, `api/instructor.js`, `public/instructor/profile.html`
+
+---
+
 ### 3.1 — Push Notifications
 
 PWA push notifications for lesson reminders, quiz nudges, and new message alerts.
@@ -733,7 +747,7 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 - **Capacitor native wrapper** — wrap PWA for App Store / Play Store submission
 - **Instructor dashboard** — earnings tracking, lesson stats, learner progress overview
 - **Theory test prep** — built-in revision tools integrated with competency system
-- **Multi-instructor scaling** — instructor-specific pricing, specialisations, rating system
+- **Multi-instructor scaling** — instructor-specific pricing, rating system (specialisations done in 2.46)
 - **Automated progress reports** — weekly email digest with competency changes and recommendations
 - **Parent/guardian view** — read-only progress access for parents of younger learners
 - **Intensive course packages** — multi-day bundled bookings with special pricing

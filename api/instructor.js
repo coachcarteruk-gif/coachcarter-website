@@ -721,7 +721,14 @@ async function handleProfile(req, res) {
     const [profile] = await sql`
       SELECT id, name, email, phone, bio, photo_url, active, created_at,
              COALESCE(buffer_minutes, 30) AS buffer_minutes,
-             COALESCE(calendar_start_hour, 7) AS calendar_start_hour
+             COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
+             adi_grade, pass_rate, years_experience,
+             COALESCE(specialisms, '[]'::jsonb) AS specialisms,
+             vehicle_make, vehicle_model,
+             COALESCE(transmission_type, 'manual') AS transmission_type,
+             COALESCE(dual_controls, true) AS dual_controls,
+             COALESCE(service_areas, '[]'::jsonb) AS service_areas,
+             COALESCE(languages, '["English"]'::jsonb) AS languages
       FROM instructors WHERE id = ${instructor.id}
     `;
 
@@ -745,7 +752,12 @@ async function handleUpdateProfile(req, res) {
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { name, phone, bio, photo_url, buffer_minutes, calendar_start_hour, reminder_hours, daily_schedule_email } = req.body;
+  const {
+    name, phone, bio, photo_url, buffer_minutes, calendar_start_hour, reminder_hours, daily_schedule_email,
+    adi_grade, pass_rate, years_experience, specialisms,
+    vehicle_make, vehicle_model, transmission_type, dual_controls,
+    service_areas, languages
+  } = req.body;
 
   // Validate buffer_minutes if provided
   if (buffer_minutes !== undefined && buffer_minutes !== null) {
@@ -773,6 +785,38 @@ async function handleUpdateProfile(req, res) {
     return res.status(400).json({ error: 'daily_schedule_email must be true or false' });
   }
 
+  // Validate pass_rate if provided
+  if (pass_rate !== undefined && pass_rate !== null) {
+    const pr = parseFloat(pass_rate);
+    if (isNaN(pr) || pr < 0 || pr > 100)
+      return res.status(400).json({ error: 'Pass rate must be between 0 and 100' });
+  }
+
+  // Validate years_experience if provided
+  if (years_experience !== undefined && years_experience !== null) {
+    const ye = parseInt(years_experience);
+    if (isNaN(ye) || ye < 0 || ye > 60)
+      return res.status(400).json({ error: 'Years experience must be between 0 and 60' });
+  }
+
+  // Validate transmission_type if provided
+  const allowedTransmissions = ['manual', 'automatic', 'both'];
+  if (transmission_type !== undefined && transmission_type !== null && !allowedTransmissions.includes(transmission_type)) {
+    return res.status(400).json({ error: 'Transmission type must be manual, automatic, or both' });
+  }
+
+  // Validate dual_controls if provided
+  if (dual_controls !== undefined && dual_controls !== null && typeof dual_controls !== 'boolean') {
+    return res.status(400).json({ error: 'dual_controls must be true or false' });
+  }
+
+  // Validate JSONB array fields
+  for (const [field, val] of [['specialisms', specialisms], ['service_areas', service_areas], ['languages', languages]]) {
+    if (val !== undefined && val !== null && !Array.isArray(val)) {
+      return res.status(400).json({ error: `${field} must be an array` });
+    }
+  }
+
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
@@ -784,6 +828,18 @@ async function handleUpdateProfile(req, res) {
       ? parseInt(reminder_hours) : null;
     const dseVal = (daily_schedule_email !== undefined && daily_schedule_email !== null)
       ? daily_schedule_email : null;
+    const prVal = (pass_rate !== undefined && pass_rate !== null)
+      ? parseFloat(pass_rate) : null;
+    const yeVal = (years_experience !== undefined && years_experience !== null)
+      ? parseInt(years_experience) : null;
+    const dcVal = (dual_controls !== undefined && dual_controls !== null)
+      ? dual_controls : null;
+    const specVal = (specialisms !== undefined && specialisms !== null)
+      ? JSON.stringify(specialisms) : null;
+    const areasVal = (service_areas !== undefined && service_areas !== null)
+      ? JSON.stringify(service_areas) : null;
+    const langsVal = (languages !== undefined && languages !== null)
+      ? JSON.stringify(languages) : null;
 
     const [updated] = await sql`
       UPDATE instructors SET
@@ -794,13 +850,30 @@ async function handleUpdateProfile(req, res) {
         buffer_minutes       = COALESCE(${bufVal}, buffer_minutes),
         calendar_start_hour  = COALESCE(${cshVal}, calendar_start_hour),
         reminder_hours       = COALESCE(${rhVal}, reminder_hours),
-        daily_schedule_email = COALESCE(${dseVal}, daily_schedule_email)
+        daily_schedule_email = COALESCE(${dseVal}, daily_schedule_email),
+        adi_grade            = COALESCE(${adi_grade ?? null}, adi_grade),
+        pass_rate            = COALESCE(${prVal}, pass_rate),
+        years_experience     = COALESCE(${yeVal}, years_experience),
+        specialisms          = COALESCE(${specVal}::jsonb, specialisms),
+        vehicle_make         = COALESCE(${vehicle_make ?? null}, vehicle_make),
+        vehicle_model        = COALESCE(${vehicle_model ?? null}, vehicle_model),
+        transmission_type    = COALESCE(${transmission_type ?? null}, transmission_type),
+        dual_controls        = COALESCE(${dcVal}, dual_controls),
+        service_areas        = COALESCE(${areasVal}::jsonb, service_areas),
+        languages            = COALESCE(${langsVal}::jsonb, languages)
       WHERE id = ${instructor.id}
       RETURNING id, name, email, phone, bio, photo_url,
                 COALESCE(buffer_minutes, 30) AS buffer_minutes,
                 COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
                 COALESCE(reminder_hours, 24) AS reminder_hours,
-                COALESCE(daily_schedule_email, true) AS daily_schedule_email
+                COALESCE(daily_schedule_email, true) AS daily_schedule_email,
+                adi_grade, pass_rate, years_experience,
+                COALESCE(specialisms, '[]'::jsonb) AS specialisms,
+                vehicle_make, vehicle_model,
+                COALESCE(transmission_type, 'manual') AS transmission_type,
+                COALESCE(dual_controls, true) AS dual_controls,
+                COALESCE(service_areas, '[]'::jsonb) AS service_areas,
+                COALESCE(languages, '["English"]'::jsonb) AS languages
     `;
 
     return res.json({ success: true, instructor: updated });

@@ -94,6 +94,18 @@
 - `instructors.reminder_hours` — how many hours before lesson to send learner reminders (default 24)
 - `instructors.daily_schedule_email` — whether to send next-day schedule email at 7pm (default true)
 
+**Notable columns added (April 2026) — Instructor profile enhancement:**
+- `instructors.adi_grade` — DVSA ADI grade (text, e.g. "A", "B", "6")
+- `instructors.pass_rate` — learner pass rate percentage (numeric 0-100)
+- `instructors.years_experience` — years as a driving instructor (integer)
+- `instructors.specialisms` — JSONB array of specialisms (e.g. ["Nervous drivers", "Motorway lessons"])
+- `instructors.vehicle_make` — teaching vehicle make (text)
+- `instructors.vehicle_model` — teaching vehicle model (text)
+- `instructors.transmission_type` — manual/automatic/both (text, default 'manual')
+- `instructors.dual_controls` — whether vehicle has dual controls (boolean, default true)
+- `instructors.service_areas` — JSONB array of postcodes/area names covered
+- `instructors.languages` — JSONB array of languages spoken (default ["English"])
+
 **Notable tables added (April 2026):**
 - `learner_availability` — recurring weekly free-time windows (mirrors instructor_availability). Used for waitlist matching.
 - `waitlist` — learners waiting for specific slot types. Supports explicit day/time prefs or fallback to learner_availability. 14-day auto-expiry, notify-all on cancellation.

@@ -468,6 +468,18 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS series_id UUID;
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS commission_rate NUMERIC(4,3) DEFAULT 0.850;
 
+-- Instructor profile enhancement — qualifications, vehicle, service area, languages
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS adi_grade TEXT;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS pass_rate NUMERIC(4,1);
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS years_experience INTEGER;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS specialisms JSONB DEFAULT '[]';
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS vehicle_make TEXT;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS vehicle_model TEXT;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS transmission_type TEXT DEFAULT 'manual';
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS dual_controls BOOLEAN DEFAULT true;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS service_areas JSONB DEFAULT '[]';
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS languages JSONB DEFAULT '["English"]';
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- POST-LESSON CONFIRMATION (Feature – Dual Confirmation System)
 -- ══════════════════════════════════════════════════════════════════════════════
