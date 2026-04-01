@@ -161,6 +161,71 @@
       text-align: center; font-size: 0.78rem; color: var(--muted); margin-top: 20px;
     }
 
+    /* Connect onboarding banner */
+    .connect-banner {
+      border-radius: var(--radius); padding: 18px 20px; margin-bottom: 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap;
+    }
+    .connect-banner.not-started {
+      background: #fff7ed; border: 1px solid #fed7aa;
+    }
+    .connect-banner.pending {
+      background: #fffbeb; border: 1px solid #fde68a;
+    }
+    .connect-banner.active {
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+    }
+    .connect-banner-text { flex: 1; min-width: 200px; }
+    .connect-banner-title {
+      font-family: var(--font-head); font-weight: 700; font-size: 0.95rem;
+    }
+    .connect-banner-desc {
+      font-size: 0.8rem; color: var(--muted); margin-top: 4px;
+    }
+    .connect-btn {
+      background: var(--accent); color: #fff; border: none; border-radius: 8px;
+      padding: 10px 20px; font-family: var(--font-head); font-weight: 700;
+      font-size: 0.85rem; cursor: pointer; white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .connect-btn:hover { opacity: 0.9; }
+    .connect-btn.secondary {
+      background: var(--bg); color: var(--primary); border: 1px solid var(--border);
+    }
+
+    /* Next payout card */
+    .next-payout-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 20px; margin-bottom: 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+    }
+    .next-payout-label {
+      font-size: 0.82rem; color: var(--muted); font-weight: 600;
+    }
+    .next-payout-amount {
+      font-family: var(--font-head); font-size: 1.3rem; font-weight: 800;
+      color: var(--accent);
+    }
+    .next-payout-detail {
+      font-size: 0.78rem; color: var(--muted);
+    }
+
+    /* Payout history */
+    .payout-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid var(--border); gap: 10px;
+    }
+    .payout-row:last-child { border-bottom: none; }
+    .payout-status {
+      display: inline-block; font-size: 0.68rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; text-transform: uppercase;
+    }
+    .payout-status.completed { background: #dcfce7; color: #166534; }
+    .payout-status.failed { background: #fee2e2; color: #991b1b; }
+    .payout-status.processing { background: #dbeafe; color: #1e40af; }
+
     .loading { text-align: center; padding: 48px; color: var(--muted); }
     .spinner {
       width: 32px; height: 32px; border: 3px solid var(--border);
@@ -408,6 +473,138 @@
     `).join('');
   }
 
+  // ── Connect & Payout renders ──────────────────────────────────────────────────
+
+  function renderConnectBanner(status) {
+    if (!status.has_account) {
+      return `
+        <div class="connect-banner not-started">
+          <div class="connect-banner-text">
+            <div class="connect-banner-title">Set Up Direct Payouts</div>
+            <div class="connect-banner-desc">Get paid automatically every Friday. Connect your bank account to start receiving payouts.</div>
+          </div>
+          <button class="connect-btn" onclick="startConnectOnboarding()">Set Up Payouts</button>
+        </div>
+      `;
+    }
+    if (!status.onboarding_complete) {
+      return `
+        <div class="connect-banner pending">
+          <div class="connect-banner-text">
+            <div class="connect-banner-title">Finish Setting Up Payouts</div>
+            <div class="connect-banner-desc">You've started the process — just a few more steps to connect your bank account.</div>
+          </div>
+          <button class="connect-btn" onclick="continueConnectOnboarding()">Continue Setup</button>
+        </div>
+      `;
+    }
+    if (status.payouts_paused) {
+      return `
+        <div class="connect-banner pending">
+          <div class="connect-banner-text">
+            <div class="connect-banner-title">Payouts Paused</div>
+            <div class="connect-banner-desc">Your payouts are currently paused by admin. Contact your manager for details.</div>
+          </div>
+          <button class="connect-btn secondary" onclick="openStripeDashboard()">View Stripe Dashboard</button>
+        </div>
+      `;
+    }
+    return `
+      <div class="connect-banner active">
+        <div class="connect-banner-text">
+          <div class="connect-banner-title" style="color:#166534;">&#x2705; Payouts Active</div>
+          <div class="connect-banner-desc">You're set up to receive automatic payouts every Friday.</div>
+        </div>
+        <button class="connect-btn secondary" onclick="openStripeDashboard()">Stripe Dashboard</button>
+      </div>
+    `;
+  }
+
+  function renderNextPayout(preview) {
+    if (!preview.onboarding_complete || preview.eligible_lessons === 0) return '';
+    return `
+      <div class="next-payout-card">
+        <div>
+          <div class="next-payout-label">Next Payout &middot; Friday ${formatDateShort(preview.next_payout_date)}</div>
+          <div class="next-payout-detail">${preview.eligible_lessons} lesson${preview.eligible_lessons === 1 ? '' : 's'} ready${preview.payouts_paused ? ' (paused)' : ''}</div>
+        </div>
+        <div class="next-payout-amount">${formatPence(preview.estimated_pence)}</div>
+      </div>
+    `;
+  }
+
+  function renderPayoutHistory(data) {
+    if (!data.payouts || data.payouts.length === 0) return '';
+    const rows = data.payouts.map(p => `
+      <div class="payout-row">
+        <div>
+          <div style="font-size:0.82rem;font-weight:600;">${formatDateShort(p.period_start)} &ndash; ${formatDateShort(p.period_end)}</div>
+          <div style="font-size:0.75rem;color:var(--muted);">${p.lesson_count} lesson${p.lesson_count == 1 ? '' : 's'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="payout-status ${p.status}">${p.status}</span>
+          <span style="font-family:var(--font-head);font-weight:700;">${formatPence(p.amount_pence)}</span>
+        </div>
+      </div>
+    `).join('');
+
+    return `
+      <div class="section-card">
+        <div class="section-title" style="margin-bottom:16px;">Payout History</div>
+        ${rows}
+      </div>
+    `;
+  }
+
+  async function startConnectOnboarding() {
+    try {
+      const res = await fetch('/api/connect?action=create-account', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (data.ok && data.onboarding_url) {
+        window.location.href = data.onboarding_url;
+      } else {
+        alert(data.message || 'Failed to start setup. Please try again.');
+      }
+    } catch (err) {
+      alert('Something went wrong. Please try again.');
+    }
+  }
+
+  async function continueConnectOnboarding() {
+    try {
+      const res = await fetch('/api/connect?action=onboarding-link', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (data.ok && data.onboarding_url) {
+        window.location.href = data.onboarding_url;
+      } else {
+        alert(data.message || 'Failed to get onboarding link. Please try again.');
+      }
+    } catch (err) {
+      alert('Something went wrong. Please try again.');
+    }
+  }
+
+  async function openStripeDashboard() {
+    try {
+      const res = await fetch('/api/connect?action=dashboard-link', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (data.ok && data.dashboard_url) {
+        window.open(data.dashboard_url, '_blank');
+      } else {
+        alert(data.message || 'Failed to open dashboard.');
+      }
+    } catch (err) {
+      alert('Something went wrong. Please try again.');
+    }
+  }
+
   // ── Data loading ──────────────────────────────────────────────────────────────
 
   async function loadWeek() {
@@ -452,19 +649,32 @@
 
     currentWeekStart = getMondayISO(0);
 
+    // Handle return from Stripe Connect onboarding
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('connect') === 'return') {
+      // Clean URL
+      window.history.replaceState({}, '', '/instructor/earnings.html');
+    }
+
     try {
       // Fetch all data in parallel
-      const [summary, week, history] = await Promise.all([
+      const [summary, week, history, connectStatus, payoutPreview, payoutHistory] = await Promise.all([
         apiFetch('earnings-summary'),
         apiFetch('earnings-week', `&week_start=${currentWeekStart}`),
-        apiFetch('earnings-history', `&limit=${HISTORY_LIMIT}&offset=0`)
+        apiFetch('earnings-history', `&limit=${HISTORY_LIMIT}&offset=0`),
+        fetch('/api/connect?action=connect-status', { headers: { 'Authorization': 'Bearer ' + token } }).then(r => r.json()).catch(() => ({ has_account: false, onboarding_complete: false })),
+        apiFetch('next-payout-preview').catch(() => null),
+        apiFetch('payout-history', '&limit=10').catch(() => ({ payouts: [] }))
       ]);
 
       const container = document.getElementById('earningsContent');
       container.innerHTML =
+        renderConnectBanner(connectStatus) +
         renderSummary(summary) +
+        (payoutPreview ? renderNextPayout(payoutPreview) : '') +
         renderWeek(week) +
         renderHistory(history.weeks, false) +
+        renderPayoutHistory(payoutHistory) +
         `<p class="commission-note">Your commission rate: ${Math.round(summary.commission_rate * 100)}%. Contact admin for queries.</p>`;
 
       // Hide load more if less than a full page

@@ -69,6 +69,25 @@ module.exports = async (req, res) => {
     }
   }
 
+  // ── Stripe Connect: instructor onboarding complete ──
+  if (event.type === 'account.updated') {
+    try {
+      const account = event.data.object;
+      if (account.charges_enabled && account.payouts_enabled) {
+        const sql = neon(process.env.POSTGRES_URL);
+        await sql`
+          UPDATE instructors
+             SET stripe_onboarding_complete = TRUE
+           WHERE stripe_account_id = ${account.id}
+             AND stripe_onboarding_complete = FALSE
+        `;
+      }
+    } catch (err) {
+      console.error('account.updated handler error:', err);
+      reportError('/api/webhook (account.updated)', err);
+    }
+  }
+
   res.json({ received: true });
 };
 

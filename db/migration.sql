@@ -679,3 +679,41 @@ CREATE INDEX IF NOT EXISTS idx_offers_token ON lesson_offers(token);
 CREATE INDEX IF NOT EXISTS idx_offers_expiry ON lesson_offers(expires_at) WHERE status = 'pending';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_offer_slot
   ON lesson_offers(instructor_id, scheduled_date, start_time) WHERE status = 'pending';
+
+-- ── Stripe Connect & Instructor Payouts ──
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS stripe_account_id TEXT;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS stripe_onboarding_complete BOOLEAN DEFAULT FALSE;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS payouts_paused BOOLEAN DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS instructor_payouts (
+  id                  SERIAL PRIMARY KEY,
+  instructor_id       INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
+  amount_pence        INTEGER NOT NULL,
+  platform_fee_pence  INTEGER NOT NULL DEFAULT 0,
+  stripe_transfer_id  TEXT,
+  period_start        DATE NOT NULL,
+  period_end          DATE NOT NULL,
+  status              TEXT NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending','processing','completed','failed','skipped')),
+  failure_reason      TEXT,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  completed_at        TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_payouts_instructor_period
+  ON instructor_payouts(instructor_id, period_start);
+
+CREATE TABLE IF NOT EXISTS payout_line_items (
+  id                      SERIAL PRIMARY KEY,
+  payout_id               INTEGER NOT NULL REFERENCES instructor_payouts(id) ON DELETE CASCADE,
+  booking_id              INTEGER NOT NULL REFERENCES lesson_bookings(id),
+  price_pence             INTEGER NOT NULL,
+  instructor_amount_pence INTEGER NOT NULL,
+  commission_rate         NUMERIC(4,3) NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payout_booking
+  ON payout_line_items(booking_id);
+
+CREATE INDEX IF NOT EXISTS idx_payout_lines_payout
+  ON payout_line_items(payout_id);
