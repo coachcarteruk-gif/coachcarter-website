@@ -1972,7 +1972,7 @@ async function handleEarningsSummary(req, res) {
     `;
     const rate = parseFloat(inst.commission_rate);
 
-    // This month
+    // This month (include confirmed + completed to match weekly view)
     const [monthData] = await sql`
       SELECT
         COUNT(*)::int AS lesson_count,
@@ -1981,7 +1981,7 @@ async function handleEarningsSummary(req, res) {
       FROM lesson_bookings lb
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
-        AND lb.status = 'completed'
+        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
         AND lb.scheduled_date >= date_trunc('month', CURRENT_DATE)
         AND lb.scheduled_date < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
     `;
