@@ -115,6 +115,9 @@ CREATE TABLE IF NOT EXISTS lesson_bookings (
   CONSTRAINT uq_booking_slot UNIQUE (instructor_id, scheduled_date, start_time)
 );
 
+-- Ensure instructor_notes column exists (may be missing if table was created before it was added)
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS instructor_notes TEXT;
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- SLOT RESERVATIONS (temporary holds during Stripe checkout)
 -- ══════════════════════════════════════════════════════════════════════════════

@@ -1804,7 +1804,6 @@ async function handleEarningsWeek(req, res) {
         lb.start_time::text AS start_time,
         lb.end_time::text AS end_time,
         lb.status,
-        lb.instructor_notes,
         lu.name AS learner_name,
         lt.name AS lesson_type_name,
         COALESCE(lt.price_pence, 8250) AS price_pence,
