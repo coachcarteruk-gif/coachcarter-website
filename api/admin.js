@@ -668,11 +668,15 @@ async function handleAdjustCredits(req, res) {
       RETURNING balance_minutes, credit_balance
     `;
 
-    // Log transaction (credits field stores whole hours, legacy)
-    await sql`
-      INSERT INTO credit_transactions (learner_id, type, credits, amount_pence, payment_method)
-      VALUES (${learner_id}, ${minutesDelta > 0 ? 'admin_add' : 'admin_remove'}, ${creditsDelta}, 0, ${reason || 'Admin adjustment'})
-    `;
+    // Log transaction (best-effort — don't fail the request if this errors)
+    try {
+      await sql`
+        INSERT INTO credit_transactions (learner_id, type, credits, minutes, amount_pence, payment_method)
+        VALUES (${learner_id}, ${minutesDelta > 0 ? 'admin_add' : 'admin_remove'}, ${creditsDelta}, ${minutesDelta}, 0, ${reason || 'Admin adjustment'})
+      `;
+    } catch (txErr) {
+      console.error('admin adjust-credits transaction log failed:', txErr.message);
+    }
 
     return res.json({
       ok: true,
