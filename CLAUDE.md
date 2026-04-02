@@ -69,8 +69,14 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 - Imported bookings have `created_by = 'setmore_sync'` and `minutes_deducted = 0` (no balance deduction)
 - Service durations subtract Setmore's built-in 30-min buffer (e.g. 120min Setmore = 90min real lesson)
 
+**Instructor DB emails differ from Setmore emails:**
+- Fraser: DB has `fraser@coachcarter.uk` (Setmore has `coachcarteruk@gmail.com`)
+- Simon: DB has `simon.edw@outlook.com` (Setmore has `simon@coachcarter.uk`)
+- Always use instructor `id` (Fraser=4, Simon=6) when updating, not email
+
 **Key rules:**
 - Do NOT delete or modify the `setmore_key` column or `idx_bookings_setmore_key` index
+- Do NOT add CHECK constraints on lesson_bookings duration — multiple lesson types exist (60, 90, 120, 165 min). A `chk_booking_90_min` constraint was removed in April 2026 because it blocked non-standard durations.
 - Do NOT send notifications for imported bookings (the sync deliberately skips this)
 - Imported bookings block slots automatically — no changes needed in `slots.js`
 - The service mapping in `setmore-sync.js` is hardcoded to Fraser's Setmore account — update if services change

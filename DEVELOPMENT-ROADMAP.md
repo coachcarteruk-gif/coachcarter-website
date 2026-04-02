@@ -828,7 +828,7 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 - **Hosting:** Vercel Pro (upgraded to support >12 serverless functions)
 - **Payments:** Stripe (Klarna enabled via Stripe dashboard — not hardcoded). Stripe Connect Express for instructor payouts (weekly Friday cron)
 - **Calendar:** Custom-built, no third-party calendar dependency
-- **Lesson types:** Configurable via `lesson_types` table + admin portal. Standard (90min/£82.50), 2-Hour (120min/£110). More types addable via admin.
+- **Lesson types:** Configurable via `lesson_types` table + admin portal. Standard (90min/£82.50), 2-Hour (120min/£110), 3-Hour (165min/£165, active), 1-Hour (60min, inactive), Free Trial (60min, inactive). Do NOT add CHECK constraints on booking duration — multiple durations must coexist.
 - **Balance system:** Hours-based (`balance_minutes` column). Learners buy hours, each lesson type deducts its duration. Legacy `credit_balance` maintained via dual-write.
 - **Buffer time:** Configurable per instructor (default 30 mins), blocks time after each booked slot
 - **Advance booking window:** 90 days
