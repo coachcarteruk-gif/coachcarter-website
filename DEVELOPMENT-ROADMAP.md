@@ -754,6 +754,17 @@ Automated instructor payouts via Stripe Connect Express accounts. Learner paymen
 - **New columns**: `instructors.stripe_account_id`, `instructors.stripe_onboarding_complete`, `instructors.payouts_paused`
 - **Modified**: `api/instructor.js` (+2 actions), `api/admin.js` (+4 actions), `api/webhook.js`, `vercel.json`, `public/instructor/earnings.html`, `public/admin/portal.html`
 
+### 2.49 — Fixed Weekly Franchise Fee Model ✅ Complete (2 April 2026)
+
+Alternative billing model: instead of taking a percentage commission per lesson, the platform takes a fixed weekly franchise fee (e.g. £50/week or £200/week). The instructor keeps all lesson revenue minus the fee.
+
+- **Two fee models** per instructor, configurable via admin portal dropdown: "Commission (%)" or "Franchise Fee (fixed weekly)"
+- **New columns**: `instructors.weekly_franchise_fee_pence` (NULL = commission model), `instructor_payouts.franchise_fee_pence` (audit trail)
+- **Payout logic**: franchise fee capped at weekly gross — instructor never goes negative
+- **Earnings display**: franchise model shows gross/fee/net breakdown on weekly view; bottom note shows "Franchise fee: £X/week" instead of commission rate
+- **Backward compatible**: NULL franchise fee = legacy commission_rate model (no existing behaviour changed)
+- **Modified**: `api/_payout-helpers.js`, `api/instructor.js` (4 earnings endpoints), `api/admin.js`, `api/instructors.js`, `public/admin/portal.html`, `public/instructor/earnings.html`, `db/migration.sql`
+
 ---
 
 ### 3.1 — Push Notifications

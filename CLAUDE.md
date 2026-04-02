@@ -52,6 +52,9 @@ Instructors are paid via Stripe Connect Express accounts. Money flows: learner p
 - `instructor_payouts` + `payout_line_items` tables (UNIQUE on booking_id prevents double-payment)
 - Platform owner (Fraser) has payouts dismissed — revenue stays in platform account
 - Admin can pause/resume individual instructor payouts from admin portal
+- **Two fee models** per instructor (set via admin portal):
+  - **Commission** (default): instructor gets `commission_rate` (e.g. 85%) of each lesson price
+  - **Franchise fee**: platform takes a fixed `weekly_franchise_fee_pence` per week, instructor keeps the rest. Capped at gross (never goes negative). Set `weekly_franchise_fee_pence = NULL` to revert to commission.
 
 ## Navigation design (app mode — March 2026)
 
