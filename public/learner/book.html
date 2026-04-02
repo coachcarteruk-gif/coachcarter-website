@@ -718,6 +718,22 @@
     </div>
   </div>
 
+  <!-- Pickup postcode prompt (shown when learner has no address) -->
+  <div id="postcodePrompt" style="display:none;background:var(--accent-lt);border:1px solid var(--accent);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:0.82rem;color:var(--primary);">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <span style="font-size:1.1rem;">📍</span>
+      <strong>Add your pickup postcode</strong>
+    </div>
+    <p style="margin:0 0 8px;color:var(--muted);font-size:0.78rem;">We'll hide slots your instructor can't reach in time — saving you scrolling.</p>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input type="text" id="postcodeInput" placeholder="e.g. SW1A 1AA" maxlength="10"
+        style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;text-transform:uppercase;">
+      <button id="btnSavePostcode" onclick="savePickupPostcode()" class="btn-primary"
+        style="padding:8px 16px;font-size:0.82rem;white-space:nowrap;">Save</button>
+    </div>
+    <p id="postcodeError" style="display:none;color:#e74c3c;font-size:0.75rem;margin:6px 0 0;"></p>
+  </div>
+
   <!-- Travel-filtered slots notice -->
   <div id="travelHiddenBanner" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.82rem;color:var(--muted);align-items:center;gap:8px;">
     <span style="font-size:1.1rem;">📍</span>
@@ -971,6 +987,7 @@ function init() {
       cursor = new Date(); cursor.setHours(0,0,0,0);
       setView('weekly');
       initCalSyncPageBanner();
+      showPostcodePromptIfNeeded();
     });
 
   // Wire up modal buttons
@@ -1165,6 +1182,62 @@ async function loadLearnerProfile() {
     learnerProfile = data.profile || {};
   } catch {}
 }
+
+function showPostcodePromptIfNeeded() {
+  const prompt = document.getElementById('postcodePrompt');
+  if (!prompt) return;
+  // Show only if logged in and no pickup address
+  if (token && !learnerProfile.pickup_address?.trim()) {
+    prompt.style.display = 'block';
+  } else {
+    prompt.style.display = 'none';
+  }
+}
+
+async function savePickupPostcode() {
+  const input = document.getElementById('postcodeInput');
+  const errEl = document.getElementById('postcodeError');
+  const postcode = input.value.trim().toUpperCase();
+  errEl.style.display = 'none';
+
+  // Basic UK postcode validation
+  if (!/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(postcode)) {
+    errEl.textContent = 'Please enter a valid UK postcode';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('btnSavePostcode');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const res = await fetch('/api/learner?action=update_profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ pickup_address: postcode })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Save failed');
+
+    // Update local profile and hide prompt
+    learnerProfile.pickup_address = postcode;
+    document.getElementById('postcodePrompt').style.display = 'none';
+    showToast('Pickup postcode saved — filtering slots by travel time', 'success');
+
+    // Re-fetch slots with travel filter now active
+    loadedRanges = [];
+    slotCache = {};
+    renderCurrentView();
+  } catch (err) {
+    errEl.textContent = err.message || 'Failed to save';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
+}
+window.savePickupPostcode = savePickupPostcode;
 
 function isProfileComplete() {
   return !!(learnerProfile.phone && learnerProfile.phone.trim() && learnerProfile.pickup_address && learnerProfile.pickup_address.trim());

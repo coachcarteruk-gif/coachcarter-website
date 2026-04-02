@@ -303,6 +303,22 @@ module.exports = async (req, res) => {
       }
     }
 
+    // 5d. Backfill learner_users.pickup_address from their most recent booking
+    // Only updates learners whose profile address is currently empty
+    await sql`
+      UPDATE learner_users lu
+      SET pickup_address = sub.pickup_address
+      FROM (
+        SELECT DISTINCT ON (learner_id) learner_id, pickup_address
+        FROM lesson_bookings
+        WHERE pickup_address IS NOT NULL AND pickup_address != ''
+          AND instructor_id = ${instructor.id}
+        ORDER BY learner_id, scheduled_date DESC
+      ) sub
+      WHERE lu.id = sub.learner_id
+        AND (lu.pickup_address IS NULL OR lu.pickup_address = '')
+    `;
+
     // 6. Mark sync success
     await sql`
       UPDATE instructors
