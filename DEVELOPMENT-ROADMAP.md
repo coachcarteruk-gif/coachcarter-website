@@ -826,6 +826,18 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 
 **Transition plan:** New bookings through CoachCarter, existing Setmore clients migrate gradually, then remove sync.
 
+## 2.51 — Pickup Address & Buy Lesson Types (2 April 2026)
+
+**What:** Improve the travel-time slot filtering UX and give learners a choice of lesson types when purchasing.
+
+**Built:**
+- ✅ Pickup postcode prompt on `book.html` — inline input above calendar for learners without a `pickup_address`, saves to profile via existing `update_profile` API, then re-fetches slots with travel filter active. Non-blocking.
+- ✅ Learner address backfill in `setmore-sync.js` — step 5d copies the most recent booking's `pickup_address` to `learner_users.pickup_address` when the learner's profile field is empty. Scoped per-instructor, idempotent.
+- ✅ Single lesson type cards on `buy-credits.html` — dynamically fetched from `/api/lesson-types`, each card shows name, duration, price, and colour-coded Buy button. "Or save with hour packages" divider separates from bulk discounts.
+- ✅ Test Ready Guarantee section temporarily hidden (`display:none`) pending review.
+
+**Files changed:** `public/learner/book.html`, `public/learner/buy-credits.html`, `api/setmore-sync.js`
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

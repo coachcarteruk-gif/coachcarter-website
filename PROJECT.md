@@ -759,6 +759,7 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 
 ## Recent changes (March–April 2026)
 
+- **Pickup address & lesson types** (2.51) — pickup postcode prompt on book.html encourages learners to add their address for travel filtering; setmore-sync backfills `learner_users.pickup_address` from booking data; buy-credits.html now shows dynamic single-lesson type cards alongside bulk hour packages; Test Ready Guarantee section temporarily hidden
 - **Dashboard redesign** (2.44) — replaced top section of both learner and instructor dashboards with app-style layout: orange gradient hero card (next lesson with countdown), horizontal pill shortcuts (5 icons), colourful action cards (3 gradient cards). Inspired by Klarna/Zing/Monday.com. No new API endpoints.
 - **Foundation cleanup** (#75–78) — centralised DB migration (`db/migration.sql` + `/api/migrate`), extracted shared CSS/JS into `public/shared/` (removed ~984 lines of duplicated CSS), wired up shared auth JS (`ccAuth.getAuth()`, `ccAuth.logout()`), added email error alerts on all 500 errors (`api/_error-alert.js`)
 - **PWA support** (#62) — manifest, service worker, install prompt, offline page, generated icons

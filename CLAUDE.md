@@ -104,6 +104,8 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 - Skip booking warning with `?skip_travel_check=true` query param
 - API returns `travel_hidden` count when slots are removed by the filter
 - `book.html` shows a banner: "X slots hidden due to travel distance from your pickup address"
+- `book.html` shows an inline postcode prompt above the calendar for learners without a pickup_address; saves to profile and re-fetches with travel filter
+- `setmore-sync.js` step 5d backfills `learner_users.pickup_address` from the learner's most recent booking if their profile field is empty
 
 ## Navigation design (app mode — March 2026)
 
