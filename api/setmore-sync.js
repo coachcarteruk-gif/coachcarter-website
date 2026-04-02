@@ -186,11 +186,17 @@ module.exports = async (req, res) => {
     // Build a set of active Setmore appointment keys for cancellation detection
     const activeSetmoreKeys = new Set();
 
-    // DEBUG: log first appointment's fields to identify address field name
+    // DEBUG: log first appointment + its customer to identify address field
     if (appointments.length > 0) {
       const sample = appointments[0];
       console.log('[setmore-sync] Sample appointment keys:', Object.keys(sample));
       console.log('[setmore-sync] Sample appointment data:', JSON.stringify(sample, null, 2));
+      // Fetch the customer directly to see all fields
+      try {
+        const custData = await setmoreGet(token, `/customer/${sample.customer_key}`);
+        console.log('[setmore-sync] Customer keys:', Object.keys(custData.customer));
+        console.log('[setmore-sync] Customer data:', JSON.stringify(custData.customer, null, 2));
+      } catch (e) { console.log('[setmore-sync] Customer fetch failed:', e.message); }
     }
 
     for (const appt of appointments) {
