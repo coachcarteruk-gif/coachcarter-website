@@ -186,18 +186,8 @@ module.exports = async (req, res) => {
     // Build a set of active Setmore appointment keys for cancellation detection
     const activeSetmoreKeys = new Set();
 
-    // DEBUG: log first appointment + its customer to identify address field
-    if (appointments.length > 0) {
-      const sample = appointments[0];
-      console.log('[setmore-sync] Sample appointment keys:', Object.keys(sample));
-      console.log('[setmore-sync] Sample appointment data:', JSON.stringify(sample, null, 2));
-      // Fetch the customer directly to see all fields
-      try {
-        const custData = await setmoreGet(token, `/customer/${sample.customer_key}`);
-        console.log('[setmore-sync] Customer keys:', Object.keys(custData.customer));
-        console.log('[setmore-sync] Customer data:', JSON.stringify(custData.customer, null, 2));
-      } catch (e) { console.log('[setmore-sync] Customer fetch failed:', e.message); }
-    }
+    // Cache customer addresses to avoid duplicate API calls per customer_key
+    const customerAddressCache = {};
 
     for (const appt of appointments) {
       // Track which keys are still active in Setmore (non-cancelled)
@@ -228,9 +218,18 @@ module.exports = async (req, res) => {
       `;
       if (existing) {
         // Backfill pickup_address for previously imported bookings that lack one
-        const addr = (appt.comment || '').trim() || null;
-        if (addr && !existing.pickup_address) {
-          await sql`UPDATE lesson_bookings SET pickup_address = ${addr} WHERE id = ${existing.id}`;
+        if (!existing.pickup_address && appt.customer_key) {
+          let addr = customerAddressCache[appt.customer_key];
+          if (addr === undefined) {
+            try {
+              const data = await setmoreGet(token, `/customer/${appt.customer_key}`);
+              addr = buildCustomerAddress(data.customer);
+              customerAddressCache[appt.customer_key] = addr;
+            } catch { addr = null; customerAddressCache[appt.customer_key] = null; }
+          }
+          if (addr) {
+            await sql`UPDATE lesson_bookings SET pickup_address = ${addr} WHERE id = ${existing.id}`;
+          }
         }
         skipped++;
         continue;
@@ -253,19 +252,17 @@ module.exports = async (req, res) => {
       const apptDate = new Date(start.date + 'T' + start.time);
       if (apptDate < now) { skipped++; continue; }
 
-      // 5a. Find or create learner
-      let learnerId;
+      // 5a. Find or create learner (also returns customer address from Setmore profile)
+      let learnerId, pickupAddress;
       try {
-        learnerId = await findOrCreateLearner(sql, token, appt.customer_key);
+        const learnerResult = await findOrCreateLearner(sql, token, appt.customer_key, customerAddressCache);
+        learnerId = learnerResult.id;
+        pickupAddress = learnerResult.address;
       } catch (err) {
         // Skip this appointment if learner resolution fails
         skipped++;
         continue;
       }
-
-      // 5b. Insert booking — assign to correct instructor based on appointment staff_key
-      // Setmore stores the pickup address in the comment field
-      const pickupAddress = (appt.comment || '').trim() || null;
 
       try {
         await sql`
@@ -330,17 +327,38 @@ module.exports = async (req, res) => {
 
 // ── Learner resolution ───────────────────────────────────────────────────────
 
-/** Find an existing learner or create one from Setmore customer data */
-async function findOrCreateLearner(sql, setmoreToken, customerKey) {
+/** Build a pickup address string from Setmore customer fields */
+function buildCustomerAddress(customer) {
+  const parts = [customer.address, customer.city, customer.postal_code].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : null;
+}
+
+/** Find an existing learner or create one from Setmore customer data.
+ *  Returns { id, address } where address is built from customer profile fields. */
+async function findOrCreateLearner(sql, setmoreToken, customerKey, addressCache) {
   if (!customerKey) throw new Error('No customer key');
 
   // 1. Check by setmore_customer_key
   const [byKey] = await sql`
     SELECT id FROM learner_users WHERE setmore_customer_key = ${customerKey}
   `;
-  if (byKey) return byKey.id;
 
-  // 2. Fetch customer details from Setmore
+  // 2. Fetch customer from Setmore (or cache) to get address
+  let address = addressCache[customerKey];
+  if (address === undefined) {
+    try {
+      const data = await setmoreGet(setmoreToken, `/customer/${customerKey}`);
+      address = buildCustomerAddress(data.customer);
+      addressCache[customerKey] = address;
+    } catch {
+      address = null;
+      addressCache[customerKey] = null;
+    }
+  }
+
+  if (byKey) return { id: byKey.id, address };
+
+  // 3. Fetch customer details for learner creation (reuse cached fetch if available)
   let customer;
   try {
     const data = await setmoreGet(setmoreToken, `/customer/${customerKey}`);
@@ -350,42 +368,37 @@ async function findOrCreateLearner(sql, setmoreToken, customerKey) {
   }
   if (!customer) throw new Error(`Customer ${customerKey} not found`);
 
-  // DEBUG: log customer fields to find address
-  console.log('[setmore-sync] Customer keys:', Object.keys(customer));
-  console.log('[setmore-sync] Customer data:', JSON.stringify(customer, null, 2));
-
   const phone = normalizePhone(customer.cell_phone, customer.country_code);
   const email = customer.email_id || null;
   const name = [customer.first_name, customer.last_name].filter(Boolean).join(' ').trim() || 'Setmore Customer';
 
-  // 3. Check by phone match
+  // 4. Check by phone match
   if (phone) {
     const [byPhone] = await sql`
       SELECT id FROM learner_users WHERE phone = ${phone}
     `;
     if (byPhone) {
-      // Link the setmore key for future lookups
       await sql`UPDATE learner_users SET setmore_customer_key = ${customerKey} WHERE id = ${byPhone.id}`;
-      return byPhone.id;
+      return { id: byPhone.id, address };
     }
   }
 
-  // 4. Check by email match
+  // 5. Check by email match
   if (email) {
     const [byEmail] = await sql`
       SELECT id FROM learner_users WHERE email = ${email}
     `;
     if (byEmail) {
       await sql`UPDATE learner_users SET setmore_customer_key = ${customerKey} WHERE id = ${byEmail.id}`;
-      return byEmail.id;
+      return { id: byEmail.id, address };
     }
   }
 
-  // 5. Auto-create new learner
+  // 6. Auto-create new learner
   const [newLearner] = await sql`
     INSERT INTO learner_users (name, email, phone, setmore_customer_key, balance_minutes)
     VALUES (${name}, ${email}, ${phone}, ${customerKey}, 0)
     RETURNING id
   `;
-  return newLearner.id;
+  return { id: newLearner.id, address };
 }
