@@ -67,24 +67,80 @@
       height: 2px; background: var(--accent); border-radius: 1px;
     }
 
-    /* ── Lesson Type Selector ─────────────────────────────────────────────── */
-    .lesson-type-selector {
-      display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+    /* ── Lesson Type Pill Bar (sticky) ───────────────────────────────────── */
+    .lesson-type-bar {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(255,255,255,0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      margin: 0 -16px; padding: 10px 16px;
+      width: calc(100% + 32px);
     }
-    .lesson-type-btn {
-      flex: 1; min-width: 120px; padding: 10px 14px; border-radius: var(--radius);
+    .lesson-type-pills {
+      display: flex; gap: 8px; overflow-x: auto;
+      scrollbar-width: none; -ms-overflow-style: none;
+    }
+    .lesson-type-pills::-webkit-scrollbar { display: none; }
+    .lt-pill {
+      flex-shrink: 0; padding: 8px 16px; border-radius: 100px;
       border: 1.5px solid var(--border); background: var(--white);
-      cursor: pointer; text-align: left; transition: all 0.2s;
-      font-family: var(--font-head);
+      cursor: pointer; transition: all 0.15s;
+      font-family: var(--font-head); font-size: 0.8rem; font-weight: 600;
+      color: var(--muted); white-space: nowrap;
     }
-    .lesson-type-btn:hover { border-color: var(--lt-colour, var(--accent)); }
-    .lesson-type-btn.active {
+    .lt-pill:hover { border-color: var(--lt-colour, var(--accent)); color: var(--primary); }
+    .lt-pill.active {
       border-color: var(--lt-colour, var(--accent));
-      background: color-mix(in srgb, var(--lt-colour, var(--accent)) 8%, white);
+      background: color-mix(in srgb, var(--lt-colour, var(--accent)) 10%, white);
+      color: var(--primary); font-weight: 700;
       box-shadow: 0 0 0 1px var(--lt-colour, var(--accent));
     }
-    .lt-name { display: block; font-weight: 700; font-size: 0.85rem; color: var(--primary); }
-    .lt-detail { display: block; font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Slot Feed ────────────────────────────────────────────────────────── */
+    .slot-feed { display: flex; flex-direction: column; gap: 10px; }
+    .feed-card {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--white); border: 1.5px solid var(--border);
+      border-radius: var(--radius); padding: 14px 16px;
+      cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .feed-card:hover { border-color: var(--accent); background: var(--accent-lt); transform: translateY(-1px); }
+    .feed-card:active { transform: scale(0.99); }
+    .feed-card-accent {
+      width: 4px; align-self: stretch; border-radius: 2px; flex-shrink: 0;
+      background: var(--lt-colour, var(--accent));
+    }
+    .feed-card-body { flex: 1; min-width: 0; }
+    .feed-card-date {
+      font-size: 0.72rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px;
+    }
+    .feed-card-time {
+      font-family: var(--font-head); font-size: 1.05rem; font-weight: 800;
+      color: var(--primary); margin-bottom: 3px;
+    }
+    .feed-card-instructor {
+      font-size: 0.8rem; color: var(--muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .feed-card-chevron {
+      flex-shrink: 0; width: 20px; height: 20px; color: var(--border);
+      transition: color 0.15s;
+    }
+    .feed-card:hover .feed-card-chevron { color: var(--accent); }
+
+    /* Feed footer */
+    .feed-footer { text-align: center; padding: 20px 0 8px; }
+    .feed-status { font-size: 0.82rem; color: var(--muted); margin-bottom: 12px; }
+    .btn-load-more {
+      display: inline-block; padding: 12px 32px; border-radius: 10px;
+      border: 1.5px solid var(--accent); background: transparent;
+      color: var(--accent); font-family: var(--font-head);
+      font-size: 0.88rem; font-weight: 700; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-load-more:hover { background: var(--accent-lt); }
+    .btn-load-more:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* ── Page ──────────────────────────────────────────────────────────────── */
     .page { max-width: 960px; margin: 0 auto; padding: 24px 16px 100px; }
@@ -194,41 +250,6 @@
 
     .cal-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-    .view-toggle {
-      display: flex; background: var(--bg); border: 1px solid var(--border);
-      border-radius: 10px; padding: 3px; gap: 2px;
-    }
-    .view-btn {
-      padding: 6px 14px; border-radius: 7px; border: none;
-      background: transparent; font-family: var(--font-body);
-      font-size: 0.82rem; font-weight: 600; color: var(--muted);
-      cursor: pointer; transition: all 0.15s; white-space: nowrap;
-    }
-    .view-btn.active {
-      background: var(--white); color: var(--primary);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-    }
-
-    .cal-nav { display: flex; align-items: center; gap: 6px; }
-    .cal-nav-btn {
-      width: 34px; height: 34px; border-radius: 8px;
-      border: 1px solid var(--border); background: var(--white);
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; font-size: 1rem; transition: all 0.15s; color: var(--primary);
-    }
-    .cal-nav-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-lt); }
-    .cal-nav-label {
-      font-family: var(--font-head); font-size: 1rem; font-weight: 700;
-      min-width: 160px; text-align: center;
-    }
-    .btn-today {
-      padding: 6px 14px; border-radius: 8px;
-      border: 1.5px solid var(--border); background: var(--white);
-      font-family: var(--font-body); font-size: 0.82rem; font-weight: 600;
-      color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap;
-    }
-    .btn-today:hover { border-color: var(--accent); color: var(--accent); }
-
     .filter-select {
       border: 1px solid var(--border); border-radius: 8px;
       padding: 7px 12px; font-size: 0.82rem; background: var(--white);
@@ -293,163 +314,13 @@
       font-size: 0.88rem; color: #15803d; text-align: center;
     }
 
-    /* ── MONTHLY VIEW ─────────────────────────────────────────────────────── */
-    .month-grid {
-      background: var(--white); border: 1px solid var(--border);
-      border-radius: var(--radius); overflow: hidden;
-    }
-    .month-dow-row {
-      display: grid; grid-template-columns: repeat(7, 1fr);
-      border-bottom: 1px solid var(--border);
-    }
-    .month-dow {
-      padding: 10px 4px; text-align: center;
-      font-size: 0.75rem; font-weight: 700; color: var(--muted);
-      letter-spacing: 0.04em; text-transform: uppercase;
-    }
-    .month-days { display: grid; grid-template-columns: repeat(7, 1fr); }
-    .month-cell {
-      min-height: 82px; padding: 6px; border-right: 1px solid var(--border);
-      border-bottom: 1px solid var(--border); cursor: pointer;
-      transition: background 0.13s; position: relative;
-    }
-    .month-cell:nth-child(7n) { border-right: none; }
-    .month-cell:hover { background: var(--accent-lt); }
-    .month-cell.other-month .month-day-num { color: #ccc; }
-    .month-cell.other-month { background: #fafafa; }
-    .month-cell.is-today { background: #fffbf5; }
-    .month-cell.is-today .month-day-num {
-      background: var(--accent); color: white;
-      border-radius: 50%; width: 24px; height: 24px;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .month-day-num {
-      font-size: 0.82rem; font-weight: 700; margin-bottom: 4px;
-      width: 24px; height: 24px;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .month-slot-badge {
-      font-size: 0.68rem; font-weight: 700;
-      color: var(--accent); background: var(--accent-lt);
-      border-radius: 4px; padding: 2px 6px;
-      white-space: nowrap; display: inline-block;
-    }
-
-    /* ── WEEKLY VIEW ──────────────────────────────────────────────────────── */
-    .week-grid {
-      background: var(--white); border: 1px solid var(--border);
-      border-radius: var(--radius); overflow: hidden;
-    }
-    .week-header {
-      display: grid; grid-template-columns: 52px repeat(7, 1fr);
-      border-bottom: 2px solid var(--border);
-    }
-    .week-header-gutter { border-right: 1px solid var(--border); }
-    .week-header-day {
-      padding: 10px 8px; text-align: center; border-right: 1px solid var(--border);
-      cursor: default;
-    }
-    .week-header-day:last-child { border-right: none; }
-    .week-header-day.is-today .week-hd-num {
-      background: var(--accent); color: white; border-radius: 50%;
-      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
-      margin: 0 auto;
-    }
-    .week-hd-dow { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .week-hd-num { font-family: var(--font-head); font-size: 1.05rem; font-weight: 800; margin-top: 2px; }
-
-    .week-body {
-      display: grid; grid-template-columns: 52px repeat(7, 1fr);
-      position: relative; overflow-y: auto; max-height: 560px;
-    }
-    .week-time-col { border-right: 1px solid var(--border); }
-    .week-time-label {
-      height: 48px; display: flex; align-items: center; justify-content: center;
-      font-size: 0.7rem; color: var(--muted); font-weight: 600;
-      position: relative; top: 24px;
-    }
-    .week-day-col {
-      border-right: 1px solid var(--border); position: relative;
-      min-height: 768px;
-    }
-    .week-day-col:last-child { border-right: none; }
-    .week-hour-slot { height: 48px; border-bottom: 1px solid var(--border); }
-
-    .week-slot {
-      position: absolute; left: 2px; right: 2px;
-      background: var(--accent-lt); border: 1.5px solid var(--accent);
-      border-left: 3px solid var(--accent);
-      border-radius: 6px; padding: 3px 6px;
-      font-size: 0.7rem; font-weight: 600; color: var(--accent-dk);
-      overflow: hidden; cursor: pointer;
-      transition: all 0.15s; z-index: 2;
-    }
-    .week-slot:hover { background: var(--accent); color: white; border-color: var(--accent-dk); }
-    .week-slot-time { font-size: 0.68rem; }
-    .week-slot-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.65rem; }
-
-    .week-day-col.is-today { background: #fffbf5; }
-
-    /* ── DAILY VIEW ───────────────────────────────────────────────────────── */
-    .daily-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 16px; gap: 12px; flex-wrap: wrap;
-    }
-    .daily-date-label { font-family: var(--font-head); font-size: 1.25rem; font-weight: 800; }
-    .daily-date-sub { font-size: 0.85rem; color: var(--muted); margin-top: 1px; }
-
-    .daily-slots-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 12px; margin-bottom: 16px;
-    }
-    .slot-card {
-      background: var(--white);
-      border: 1.5px solid var(--border);
-      border-radius: 10px; padding: 14px 16px;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s, transform 0.1s;
-    }
-    .slot-card:hover {
-      border-color: var(--accent); background: var(--accent-lt);
-      transform: translateY(-1px);
-    }
-    .slot-time { font-family: var(--font-head); font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
-    .slot-instructor { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    /* ── Slot avatar (reused in feed cards) ──────────────────────────────── */
     .slot-avatar {
       width: 22px; height: 22px; border-radius: 50%;
       background: var(--accent-mid); display: flex; align-items: center; justify-content: center;
       font-size: 0.7rem; font-weight: 700; color: var(--accent); flex-shrink: 0; overflow: hidden;
     }
     .slot-avatar img { width: 100%; height: 100%; object-fit: cover; }
-
-    /* Daily hour timeline */
-    .daily-timeline {
-      background: var(--white); border: 1px solid var(--border);
-      border-radius: var(--radius); overflow: hidden;
-    }
-    .daily-hour-row {
-      display: flex; align-items: stretch; border-bottom: 1px solid var(--border);
-      min-height: 56px;
-    }
-    .daily-hour-row:last-child { border-bottom: none; }
-    .daily-time-label {
-      width: 60px; min-width: 60px; padding: 8px 10px 0;
-      font-size: 0.72rem; font-weight: 600; color: var(--muted);
-      border-right: 1px solid var(--border); flex-shrink: 0;
-    }
-    .daily-slot-area { flex: 1; padding: 4px 8px; display: flex; flex-direction: column; gap: 4px; }
-    .daily-slot-card {
-      background: var(--accent-lt); border: 1.5px solid var(--accent);
-      border-left: 4px solid var(--accent);
-      border-radius: 8px; padding: 8px 12px;
-      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-      cursor: pointer; transition: background 0.15s;
-    }
-    .daily-slot-card:hover { background: #ffe8d3; }
-    .daily-slot-time { font-weight: 700; font-size: 0.82rem; color: var(--accent); white-space: nowrap; }
-    .daily-slot-name { font-weight: 600; font-size: 0.85rem; }
-    .daily-empty-hour { font-size: 0.78rem; color: #ccc; padding: 2px 0; }
 
     /* ── Modals (shared) ──────────────────────────────────────────────────── */
     .modal-overlay {
@@ -597,23 +468,8 @@
       .cal-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
       .cal-title-block { width: 100%; }
       .cal-title-block > div { width: 100%; }
-      .lesson-type-selector { width: 100%; }
-      .lesson-type-btn { min-width: 0; }
       .cal-controls { width: 100%; justify-content: space-between; }
-      .month-cell { min-height: 56px; }
-      .month-slot-badge { display: none; }
-      .month-cell.has-slots::after {
-        content: '●'; font-size: 0.55rem; color: var(--accent);
-        position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
-      }
-      .week-grid { overflow-x: auto; }
-      .week-header, .week-body { min-width: 520px; }
       .upcoming-time, .upcoming-instructor { display: none; }
-      .daily-slots-grid { grid-template-columns: 1fr 1fr; }
-    }
-    @media (max-width: 480px) {
-      .month-dow { font-size: 0.65rem; padding: 6px 2px; }
-      .daily-slots-grid { grid-template-columns: 1fr; }
     }
   </style>
 <script src="/sidebar.js"></script>
@@ -696,26 +552,19 @@
     <div class="cal-title-block">
       <div>
         <div class="cal-title">Book a Lesson</div>
-        <div id="lessonTypeSelector" class="lesson-type-selector" style="display:none"></div>
         <div class="cal-subtitle" id="calSubtitle">Pick any available slot.</div>
       </div>
     </div>
     <div class="cal-controls">
-      <div class="view-toggle">
-        <button class="view-btn" id="btnDaily" onclick="setView('daily')">Daily</button>
-        <button class="view-btn active" id="btnWeekly"  onclick="setView('weekly')">Weekly</button>
-        <button class="view-btn" id="btnMonthly" onclick="setView('monthly')">Monthly</button>
-      </div>
-      <div class="cal-nav">
-        <button class="cal-nav-btn" onclick="navPrev()" title="Previous">&#8249;</button>
-        <span class="cal-nav-label" id="calNavLabel">—</span>
-        <button class="cal-nav-btn" onclick="navNext()" title="Next">&#8250;</button>
-      </div>
-      <button class="btn-today" onclick="goToday()">Today</button>
       <select class="filter-select" id="instructorFilter" onchange="onFilterChange()">
         <option value="">All instructors</option>
       </select>
     </div>
+  </div>
+
+  <!-- Sticky lesson type pill bar -->
+  <div class="lesson-type-bar" id="lessonTypeBar" style="display:none">
+    <div class="lesson-type-pills" id="lessonTypePills"></div>
   </div>
 
   <!-- Pickup postcode prompt (shown when learner has no address) -->
@@ -740,9 +589,15 @@
     <span id="travelHiddenText"></span>
   </div>
 
-  <!-- Calendar content -->
+  <!-- Slot feed content -->
   <div id="calContent">
     <div class="loading"><div class="spinner"></div><p>Loading available slots…</p></div>
+  </div>
+
+  <!-- Feed footer -->
+  <div class="feed-footer" id="feedFooter" style="display:none">
+    <div class="feed-status" id="feedStatus"></div>
+    <button class="btn-load-more" id="btnLoadMore" onclick="loadMoreSlots()">Show more slots</button>
   </div>
 
 </div>
@@ -944,10 +799,12 @@ let balanceMinutes = 0;
 let instructors   = [];
 let lessonTypes   = [];
 let selectedLessonType = null; // current lesson type object
-let currentView   = 'weekly';
-let cursor        = new Date(); cursor.setHours(0,0,0,0);
 let slotCache     = {}; // dateStr -> [slot, ...]
 let loadedRanges  = [];
+let feedFrom      = null; // Date: start of loaded window (always today)
+let feedTo        = null; // Date: end of currently loaded window
+const FEED_CHUNK_DAYS = 14;
+const FEED_MAX_DAYS   = 90;
 let pendingSlot   = null;
 let pendingCancel = null;
 let pendingReschedule = null; // { bookingId, date, start, end, instructorName, instructorId }
@@ -976,16 +833,13 @@ function init() {
   }
 
   if (!token) {
-    // Still render the calendar UI, but skip data loading
-    cursor = new Date(); cursor.setHours(0,0,0,0);
-    setView('weekly');
+    initFeed();
     return;
   }
 
   Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile(), loadLessonTypes()])
     .then(() => {
-      cursor = new Date(); cursor.setHours(0,0,0,0);
-      setView('weekly');
+      initFeed();
       initCalSyncPageBanner();
       showPostcodePromptIfNeeded();
     });
@@ -1051,46 +905,42 @@ async function loadLessonTypes() {
         selectedLessonType = lessonTypes[0];
       }
     }
-    renderLessonTypeSelector();
+    renderLessonTypePills();
   } catch (err) {
     console.error('Failed to load lesson types:', err);
-    // Fallback
     lessonTypes = [{ id: null, name: 'Standard Lesson', slug: 'standard', duration_minutes: 90, price_pence: 8250, colour: '#3b82f6' }];
     selectedLessonType = lessonTypes[0];
   }
 }
 
-function renderLessonTypeSelector() {
-  const container = document.getElementById('lessonTypeSelector');
-  if (!container || lessonTypes.length <= 1) {
-    // Hide selector if only one type
-    if (container) container.style.display = 'none';
+function renderLessonTypePills() {
+  const bar = document.getElementById('lessonTypeBar');
+  const container = document.getElementById('lessonTypePills');
+  if (!bar || !container || lessonTypes.length <= 1) {
+    if (bar) bar.style.display = 'none';
     return;
   }
-  container.style.display = 'flex';
+  bar.style.display = 'block';
   container.innerHTML = lessonTypes.map(lt => {
     const hrs = lt.duration_minutes / 60;
-    const hrsStr = hrs % 1 === 0 ? `${hrs} hr${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hrs`;
-    const priceStr = '£' + (lt.price_pence / 100).toFixed(2);
+    const hrsStr = hrs % 1 === 0 ? `${hrs}hr` : `${hrs.toFixed(1)}hr`;
+    const priceStr = '£' + (lt.price_pence / 100).toFixed(0);
     const isActive = selectedLessonType && selectedLessonType.id === lt.id;
-    return `<button class="lesson-type-btn${isActive ? ' active' : ''}" onclick="selectLessonType(${lt.id})" style="--lt-colour: ${lt.colour}">
-      <span class="lt-name">${lt.name}</span>
-      <span class="lt-detail">${hrsStr} · ${priceStr}</span>
+    return `<button class="lt-pill${isActive ? ' active' : ''}" onclick="selectLessonType(${lt.id})" style="--lt-colour: ${lt.colour}">
+      ${esc(lt.name)} · ${hrsStr} · ${priceStr}
     </button>`;
   }).join('');
 }
 
 function selectLessonType(id) {
   selectedLessonType = lessonTypes.find(lt => lt.id === id) || lessonTypes[0];
-  renderLessonTypeSelector();
-  // Update subtitle
+  renderLessonTypePills();
   const hrs = selectedLessonType.duration_minutes / 60;
   const hrsStr = hrs % 1 === 0 ? `${hrs} hour${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hours`;
-  document.getElementById('calSubtitle').textContent = `Pick any available slot — ${selectedLessonType.name} (${hrsStr}).`;
-  // Clear cache and reload slots for the new duration
+  document.getElementById('calSubtitle').textContent = `${selectedLessonType.name} (${hrsStr}) — pick any slot below.`;
   slotCache = {};
   loadedRanges = [];
-  renderCalendar();
+  initFeed();
 }
 window.selectLessonType = selectLessonType;
 
@@ -1228,7 +1078,7 @@ async function savePickupPostcode() {
     // Re-fetch slots with travel filter now active
     loadedRanges = [];
     slotCache = {};
-    renderCurrentView();
+    initFeed();
   } catch (err) {
     errEl.textContent = err.message || 'Failed to save';
     errEl.style.display = 'block';
@@ -1249,99 +1099,37 @@ function getLearnerPostcode() {
   return match ? match[1].toUpperCase().replace(/\s+/g, '+') : null;
 }
 
-// ─── View switching ──────────────────────────────────────────────────────────
-function setView(view) {
-  currentView = view;
-  document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
-  document.getElementById('btnWeekly').classList.toggle('active',  view === 'weekly');
-  document.getElementById('btnDaily').classList.toggle('active',   view === 'daily');
-  renderCurrentView();
-}
-function navPrev() {
-  if (currentView === 'monthly') cursor.setMonth(cursor.getMonth() - 1);
-  else if (currentView === 'weekly') cursor.setDate(cursor.getDate() - 7);
-  else cursor.setDate(cursor.getDate() - 1);
-  renderCurrentView();
-}
-function navNext() {
-  if (currentView === 'monthly') cursor.setMonth(cursor.getMonth() + 1);
-  else if (currentView === 'weekly') cursor.setDate(cursor.getDate() + 7);
-  else cursor.setDate(cursor.getDate() + 1);
-  renderCurrentView();
-}
-function goToday() { cursor = new Date(); cursor.setHours(0,0,0,0); renderCurrentView(); }
-function onFilterChange() { loadedRanges = []; slotCache = {}; renderCurrentView(); }
+// ─── Feed controls ──────────────────────────────────────────────────────────
+function onFilterChange() { loadedRanges = []; slotCache = {}; initFeed(); }
 
-async function renderCurrentView() {
-  updateToolbarLabel();
-  const ok = await fetchNeededSlots();
-  if (ok === false) return; // fetch showed an error
-  if (currentView === 'monthly') renderMonthly();
-  else if (currentView === 'weekly') renderWeekly();
-  else renderDaily();
+async function initFeed() {
+  feedFrom = new Date(); feedFrom.setHours(0,0,0,0);
+  feedTo = addDaysLocal(feedFrom, FEED_CHUNK_DAYS - 1);
+  const maxDate = addDaysLocal(feedFrom, FEED_MAX_DAYS);
+  if (feedTo > maxDate) feedTo = maxDate;
+  slotCache = {};
+  loadedRanges = [];
+  showLoading();
+  const ok = await fetchFeedSlots(feedFrom, feedTo);
+  if (ok === false) return;
+  renderFeed();
 }
 
-function updateToolbarLabel() {
-  const label = document.getElementById('calNavLabel');
-  const sub   = document.getElementById('calSubtitle');
+async function fetchFeedSlots(fromDate, toDate) {
   const today = new Date(); today.setHours(0,0,0,0);
-
-  if (currentView === 'monthly') {
-    label.textContent = `${MON_FULL[cursor.getMonth()]} ${cursor.getFullYear()}`;
-    sub.textContent = 'Click a day to view and book available slots';
-  } else if (currentView === 'weekly') {
-    const mon = getWeekStart(cursor);
-    const sun = addDaysLocal(mon, 6);
-    label.textContent = `${mon.getDate()} ${MON_SHORT[mon.getMonth()]} – ${sun.getDate()} ${MON_SHORT[sun.getMonth()]} ${sun.getFullYear()}`;
-    sub.textContent = 'Click a slot to book';
-  } else {
-    const isToday = fmtDate(cursor) === fmtDate(today);
-    label.textContent = `${DAY_SHORT[cursor.getDay()]} ${cursor.getDate()} ${MON_SHORT[cursor.getMonth()]}`;
-    sub.textContent = isToday ? 'Today — pick any slot to book' : `${DAY_FULL[cursor.getDay()]} — pick any slot to book`;
-  }
-}
-
-// ─── Slot fetching ───────────────────────────────────────────────────────────
-async function fetchNeededSlots() {
-  let from, to;
-  const today = new Date(); today.setHours(0,0,0,0);
-
-  if (currentView === 'monthly') {
-    const firstOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-    const lastOfMonth  = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-    const gridStart = getWeekStart(firstOfMonth);
-    const gridEnd   = addDaysLocal(getWeekStart(lastOfMonth), 6);
-    // Clamp to today at earliest (API rejects past dates)
-    from = fmtDate(gridStart < today ? today : gridStart);
-    to   = fmtDate(gridEnd);
-  } else if (currentView === 'weekly') {
-    const mon = getWeekStart(cursor);
-    from = fmtDate(mon < today ? today : mon);
-    to   = fmtDate(addDaysLocal(mon, 6));
-  } else {
-    if (cursor < today) { from = fmtDate(cursor); to = from; }
-    else { from = fmtDate(cursor); to = from; }
-  }
-
-  // Don't fetch if entirely in the past
-  if (to < fmtDate(today)) return true;
-  if (from < fmtDate(today)) from = fmtDate(today);
-
-  // Check max 90 days ahead
-  const maxDate = fmtDate(addDaysLocal(today, 90));
+  let from = fmtDate(fromDate < today ? today : fromDate);
+  let to = fmtDate(toDate);
+  const maxDate = fmtDate(addDaysLocal(today, FEED_MAX_DAYS));
   if (from > maxDate) return true;
   if (to > maxDate) to = maxDate;
 
-  // Range already loaded?
   const instructorId = document.getElementById('instructorFilter').value;
-  const cacheKey = `${from}|${to}|${instructorId}`;
+  const ltId = selectedLessonType && selectedLessonType.id ? selectedLessonType.id : '';
+  const cacheKey = `${from}|${to}|${instructorId}|${ltId}`;
   if (loadedRanges.includes(cacheKey)) return true;
 
-  showLoading();
-
-  // API allows max 31 days per request — split if needed
   const fromD = new Date(from + 'T00:00:00');
-  const toD   = new Date(to + 'T00:00:00');
+  const toD = new Date(to + 'T00:00:00');
   const chunks = [];
   let chunkStart = new Date(fromD);
   while (chunkStart <= toD) {
@@ -1356,7 +1144,7 @@ async function fetchNeededSlots() {
     for (const chunk of chunks) {
       let url = `/api/slots?action=available&from=${chunk.from}&to=${chunk.to}`;
       if (instructorId) url += `&instructor_id=${instructorId}`;
-      if (selectedLessonType && selectedLessonType.id) url += `&lesson_type_id=${selectedLessonType.id}`;
+      if (ltId) url += `&lesson_type_id=${ltId}`;
       const pc = getLearnerPostcode();
       if (pc) url += `&pickup_postcode=${pc}`;
       const res = await fetch(url);
@@ -1373,7 +1161,6 @@ async function fetchNeededSlots() {
         }
       }
     }
-    // Show/hide travel-filtered slots banner
     const banner = document.getElementById('travelHiddenBanner');
     if (travelHidden > 0) {
       document.getElementById('travelHiddenText').textContent =
@@ -1385,192 +1172,111 @@ async function fetchNeededSlots() {
     loadedRanges.push(cacheKey);
     return true;
   } catch (err) {
-    console.error('fetchNeededSlots error:', err);
+    console.error('fetchFeedSlots error:', err);
     showError(err.message || 'Failed to load available slots');
     return false;
   }
 }
 
-function showLoading() { document.getElementById('calContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading available slots…</p></div>'; }
-function showError(msg) { document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`; }
-
-// ─── MONTHLY RENDER ──────────────────────────────────────────────────────────
-function renderMonthly() {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const firstOfMon = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const gridStart  = getWeekStart(firstOfMon);
-
-  const cells = [];
-  for (let i = 0; i < 42; i++) cells.push(addDaysLocal(gridStart, i));
-
-  let html = '<div class="month-grid"><div class="month-dow-row">';
-  for (const d of ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']) {
-    html += `<div class="month-dow">${d}</div>`;
+function renderFeed() {
+  const allSlots = [];
+  const fromStr = fmtDate(feedFrom);
+  const toStr = fmtDate(feedTo);
+  for (const ds in slotCache) {
+    if (ds < fromStr || ds > toStr) continue;
+    for (const s of slotCache[ds]) allSlots.push(s);
   }
-  html += '</div><div class="month-days">';
+  allSlots.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return a.start_time < b.start_time ? -1 : 1;
+  });
 
-  for (const day of cells) {
-    const ds = fmtDate(day);
-    const slots = slotCache[ds] || [];
-    const inMonth = day.getMonth() === cursor.getMonth();
-    const isToday = ds === fmtDate(today);
-    const hasSlots = slots.length > 0;
-
-    let cls = 'month-cell';
-    if (!inMonth) cls += ' other-month';
-    if (isToday) cls += ' is-today';
-    if (hasSlots) cls += ' has-slots';
-
-    html += `<div class="${cls}" onclick="drillToDay('${ds}')">`;
-    html += `<div class="month-day-num">${day.getDate()}</div>`;
-    if (hasSlots) {
-      html += `<div class="month-slot-badge">${slots.length} slot${slots.length !== 1 ? 's' : ''}</div>`;
-    }
-    html += '</div>';
-  }
-
-  html += '</div></div>';
-  document.getElementById('calContent').innerHTML = html;
-}
-
-// ─── WEEKLY RENDER ───────────────────────────────────────────────────────────
-function renderWeekly() {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const weekStart = getWeekStart(cursor);
-  const days = Array.from({length:7}, (_,i) => addDaysLocal(weekStart, i));
-  const HOURS = Array.from({length:16}, (_,i) => i + 6);
-
-  let html = '<div class="week-grid"><div class="week-header"><div class="week-header-gutter"></div>';
-  for (const day of days) {
-    const isToday = fmtDate(day) === fmtDate(today);
-    html += `<div class="week-header-day ${isToday ? 'is-today' : ''}">
-      <div class="week-hd-dow">${DAY_SHORT[day.getDay()]}</div>
-      <div class="week-hd-num">${day.getDate()}</div>
-    </div>`;
-  }
-  html += '</div><div class="week-body"><div class="week-time-col">';
-  for (const h of HOURS) html += `<div class="week-time-label">${String(h).padStart(2,'0')}:00</div>`;
-  html += '</div>';
-
-  for (const day of days) {
-    const ds = fmtDate(day);
-    const slots = slotCache[ds] || [];
-    const isToday = ds === fmtDate(today);
-
-    html += `<div class="week-day-col ${isToday ? 'is-today' : ''}">`;
-    for (const h of HOURS) html += '<div class="week-hour-slot"></div>';
-
-    for (const s of slots) {
-      const [sh, sm] = s.start_time.split(':').map(Number);
-      const [eh, em] = s.end_time.split(':').map(Number);
-      const topPx = ((sh - 6) * 48) + (sm / 60 * 48);
-      const heightPx = ((eh - sh) * 48) + ((em - sm) / 60 * 48);
-      const dataAttrs = `data-instructor-id="${s.instructor_id}" data-date="${s.date}" data-start="${s.start_time}" data-end="${s.end_time}" data-instructor-name="${esc(s.instructor_name)}"`;
-      html += `<div class="week-slot" style="top:${topPx}px;height:${Math.max(heightPx,22)}px;" onclick="openBookModal(this)" ${dataAttrs}>
-        <div class="week-slot-time">${s.start_time}–${s.end_time}</div>
-        <div class="week-slot-name">${esc(s.instructor_name)}</div>
+  if (allSlots.length === 0) {
+    document.getElementById('calContent').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📅</div>
+        <h3>No slots available</h3>
+        <p>No slots found in the next ${FEED_CHUNK_DAYS} days. Try a different lesson type or check back later.</p>
       </div>`;
-    }
-    html += '</div>';
+    updateFeedFooter(0);
+    return;
   }
-  html += '</div></div>';
-  document.getElementById('calContent').innerHTML = html;
-}
 
-// ─── DAILY RENDER ────────────────────────────────────────────────────────────
-function renderDaily() {
   const today = new Date(); today.setHours(0,0,0,0);
-  const ds = fmtDate(cursor);
-  const slots = slotCache[ds] || [];
-  const isToday = ds === fmtDate(today);
-  const isPast = cursor < today;
+  let html = '<div class="slot-feed">';
+  for (const s of allSlots) {
+    const d = new Date(s.date + 'T00:00:00');
+    const isToday = fmtDate(d) === fmtDate(today);
+    const isTomorrow = fmtDate(d) === fmtDate(addDaysLocal(today, 1));
+    let dateLabel;
+    if (isToday) dateLabel = 'Today';
+    else if (isTomorrow) dateLabel = 'Tomorrow';
+    else dateLabel = `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
 
-  const todayBadge = isToday ? '<span style="background:var(--accent);color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px;">Today</span>' : '';
+    const timeStr = `${s.start_time.slice(0,5)} – ${s.end_time.slice(0,5)}`;
+    const colour = s.colour || (selectedLessonType ? selectedLessonType.colour : 'var(--accent)');
+    const avatar = s.instructor_avatar
+      ? `<span class="slot-avatar"><img src="${esc(s.instructor_avatar)}" alt=""></span>`
+      : `<span class="slot-avatar">${esc((s.instructor_name || '?')[0])}</span>`;
 
-  let html = `
-    <div class="daily-header">
-      <div>
-        <div class="daily-date-label">${cursor.getDate()} ${MON_FULL[cursor.getMonth()]} ${cursor.getFullYear()}${todayBadge}</div>
-        <div class="daily-date-sub">${DAY_FULL[cursor.getDay()]} · ${slots.length} slot${slots.length !== 1 ? 's' : ''} available</div>
+    html += `<div class="feed-card" onclick="openBookModal(this)"
+      data-instructor-id="${s.instructor_id}"
+      data-date="${s.date}"
+      data-start="${s.start_time}"
+      data-end="${s.end_time}"
+      data-instructor-name="${esc(s.instructor_name || '')}">
+      <div class="feed-card-accent" style="background:${colour}"></div>
+      <div class="feed-card-body">
+        <div class="feed-card-date">${dateLabel}</div>
+        <div class="feed-card-time">${timeStr}</div>
+        <div class="feed-card-instructor">${avatar} ${esc(s.instructor_name || 'Instructor')}</div>
       </div>
+      <svg class="feed-card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
     </div>`;
-
-  if (isPast) {
-    html += '<div class="empty-state"><div class="empty-icon">📅</div><h3>This date is in the past</h3><p>Navigate forward to find available slots.</p></div>';
-    document.getElementById('calContent').innerHTML = html;
-    return;
-  }
-
-  if (slots.length === 0) {
-    const dayOfWeek = cursor.getDay();
-    const dateStr = fmtDate(cursor);
-    html += `<div class="empty-state">
-      <div class="empty-icon">📅</div>
-      <h3>No slots available</h3>
-      <p>Try a different day or instructor.</p>
-      ${token ? `<button class="btn-waitlist" onclick="showWaitlistJoin(${dayOfWeek},'${dateStr}')">Notify me when a slot opens</button>` : ''}
-      <div id="waitlistFormArea"></div>
-    </div>`;
-    document.getElementById('calContent').innerHTML = html;
-    return;
-  }
-
-  // Group by hour for timeline view
-  const byHour = {};
-  for (const s of slots) {
-    const h = parseInt(s.start_time.split(':')[0]);
-    if (!byHour[h]) byHour[h] = [];
-    byHour[h].push(s);
-  }
-
-  let minH = 24, maxH = 0;
-  for (const s of slots) {
-    minH = Math.min(minH, parseInt(s.start_time));
-    maxH = Math.max(maxH, parseInt(s.end_time) + 1);
-  }
-  minH = Math.max(0, minH - 1);
-  maxH = Math.min(24, maxH);
-
-  html += '<div class="daily-timeline">';
-  for (let h = minH; h < maxH; h++) {
-    const hLabel = String(h).padStart(2,'0') + ':00';
-    const hSlots = byHour[h] || [];
-
-    html += `<div class="daily-hour-row">
-      <div class="daily-time-label">${hLabel}</div>
-      <div class="daily-slot-area">`;
-
-    if (hSlots.length > 0) {
-      for (const s of hSlots) {
-        const initials = s.instructor_name.split(' ').map(n => n[0]).join('').slice(0,2);
-        const avatar = s.instructor_photo
-          ? `<img src="${s.instructor_photo}" alt="${esc(s.instructor_name)}">`
-          : initials;
-        const dataAttrs = `data-instructor-id="${s.instructor_id}" data-date="${s.date}" data-start="${s.start_time}" data-end="${s.end_time}" data-instructor-name="${esc(s.instructor_name)}"`;
-        html += `
-          <div class="daily-slot-card" onclick="openBookModal(this)" ${dataAttrs}>
-            <div class="daily-slot-time">${s.start_time} – ${s.end_time}</div>
-            <div class="daily-slot-name">
-              <span class="slot-avatar" style="display:inline-flex;width:20px;height:20px;font-size:0.65rem;vertical-align:middle;margin-right:4px">${avatar}</span>
-              ${esc(s.instructor_name)}
-            </div>
-          </div>`;
-      }
-    } else {
-      html += '<div class="daily-empty-hour"></div>';
-    }
-
-    html += '</div></div>';
   }
   html += '</div>';
   document.getElementById('calContent').innerHTML = html;
+  updateFeedFooter(allSlots.length);
 }
 
-// ─── Drill-down ──────────────────────────────────────────────────────────────
-function drillToDay(ds) {
-  cursor = new Date(ds + 'T00:00:00');
-  setView('daily');
+function updateFeedFooter(slotCount) {
+  const footer = document.getElementById('feedFooter');
+  const status = document.getElementById('feedStatus');
+  const btn = document.getElementById('btnLoadMore');
+  footer.style.display = 'block';
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const maxDate = addDaysLocal(today, FEED_MAX_DAYS);
+  const atMax = feedTo >= maxDate;
+
+  status.textContent = slotCount > 0
+    ? `Showing ${slotCount} available slot${slotCount !== 1 ? 's' : ''}`
+    : 'No slots found in this period';
+  btn.style.display = atMax ? 'none' : 'inline-block';
+  btn.disabled = false;
+  btn.textContent = 'Show more slots';
 }
+
+async function loadMoreSlots() {
+  const btn = document.getElementById('btnLoadMore');
+  btn.disabled = true;
+  btn.textContent = 'Loading…';
+
+  const newFrom = addDaysLocal(feedTo, 1);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const maxDate = addDaysLocal(today, FEED_MAX_DAYS);
+  let newTo = addDaysLocal(newFrom, FEED_CHUNK_DAYS - 1);
+  if (newTo > maxDate) newTo = maxDate;
+
+  feedTo = newTo;
+  const ok = await fetchFeedSlots(newFrom, newTo);
+  if (ok !== false) renderFeed();
+  else { btn.disabled = false; btn.textContent = 'Show more slots'; }
+}
+window.loadMoreSlots = loadMoreSlots;
+
+function showLoading() { document.getElementById('calContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading available slots…</p></div>'; document.getElementById('feedFooter').style.display = 'none'; }
+function showError(msg) { document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`; document.getElementById('feedFooter').style.display = 'none'; }
 
 // ─── Book modal ──────────────────────────────────────────────────────────────
 function openBookModal(el) {
@@ -1854,7 +1560,7 @@ function showBookSuccess(weeks, dates) {
 function refreshAfterBooking() {
   // Clear cache and reload
   loadedRanges = []; slotCache = {};
-  Promise.all([loadUpcoming(), renderCurrentView()]);
+  Promise.all([loadUpcoming(), initFeed()]);
 }
 
 // ─── Calendar download & subscribe ───────────────────────────────────────────
@@ -2015,7 +1721,7 @@ async function confirmCancel() {
     document.getElementById('cancelModal').classList.remove('open');
     showToast(data.message, data.credit_returned !== false ? 'success' : '');
     loadedRanges = []; slotCache = {};
-    await Promise.all([loadUpcoming(), renderCurrentView()]);
+    await Promise.all([loadUpcoming(), initFeed()]);
   } catch (err) {
     showToast(err.message || 'Cancellation failed.', 'error');
     btn.disabled = false;
@@ -2085,7 +1791,7 @@ async function confirmReschedule(newSlot) {
     cancelRescheduleMode();
     showToast(data.message || 'Lesson rescheduled successfully!', 'success');
     loadedRanges = []; slotCache = {};
-    await Promise.all([loadUpcoming(), renderCurrentView()]);
+    await Promise.all([loadUpcoming(), initFeed()]);
   } catch (err) {
     showToast(err.message || 'Reschedule failed.', 'error');
     btn.disabled = false;
