@@ -38,30 +38,62 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
   const bookings = await getEligibleBookings(sql, instructor.id);
   if (!bookings.length) return null;
 
+  const franchiseFee = instructor.weekly_franchise_fee_pence != null
+    ? parseInt(instructor.weekly_franchise_fee_pence) : null;
   const commissionRate = parseFloat(instructor.commission_rate) || 0.85;
-  let totalInstructorPence = 0;
-  let totalGrossPence = 0;
 
+  let totalGrossPence = 0;
+  for (const b of bookings) totalGrossPence += parseInt(b.price_pence);
+
+  let totalInstructorPence;
+  let actualFranchiseFee = null;
+
+  if (franchiseFee != null) {
+    // Franchise model: fixed weekly fee, instructor keeps the rest
+    actualFranchiseFee = Math.min(franchiseFee, totalGrossPence);
+    totalInstructorPence = totalGrossPence - actualFranchiseFee;
+  } else {
+    // Commission model: instructor gets commission_rate of each lesson
+    totalInstructorPence = 0;
+  }
+
+  // Build line items
+  const effectiveRate = franchiseFee != null
+    ? (totalGrossPence > 0 ? totalInstructorPence / totalGrossPence : 1)
+    : commissionRate;
+
+  let lineItemSum = 0;
   const lineItems = bookings.map(b => {
     const pricePence = parseInt(b.price_pence);
-    const instructorPence = Math.round(pricePence * commissionRate);
-    totalInstructorPence += instructorPence;
-    totalGrossPence += pricePence;
+    const instructorPence = Math.round(pricePence * effectiveRate);
+    lineItemSum += instructorPence;
     return {
       booking_id: b.booking_id,
       price_pence: pricePence,
       instructor_amount_pence: instructorPence,
-      commission_rate: commissionRate
+      commission_rate: Math.round(effectiveRate * 1000) / 1000
     };
   });
+
+  // For commission model, totalInstructorPence is the sum of per-lesson amounts
+  if (franchiseFee == null) {
+    totalInstructorPence = lineItemSum;
+  } else if (lineItems.length > 0 && lineItemSum !== totalInstructorPence) {
+    // Fix rounding: adjust largest line item so sum matches exactly
+    let maxIdx = 0;
+    for (let i = 1; i < lineItems.length; i++) {
+      if (lineItems[i].price_pence > lineItems[maxIdx].price_pence) maxIdx = i;
+    }
+    lineItems[maxIdx].instructor_amount_pence += (totalInstructorPence - lineItemSum);
+  }
 
   const periodStart = bookings[0].scheduled_date;
   const periodEnd = bookings[bookings.length - 1].scheduled_date;
 
   // Create payout record
   const [payout] = await sql`
-    INSERT INTO instructor_payouts (instructor_id, amount_pence, platform_fee_pence, period_start, period_end, status)
-    VALUES (${instructor.id}, ${totalInstructorPence}, ${totalGrossPence - totalInstructorPence}, ${periodStart}, ${periodEnd}, 'processing')
+    INSERT INTO instructor_payouts (instructor_id, amount_pence, platform_fee_pence, franchise_fee_pence, period_start, period_end, status)
+    VALUES (${instructor.id}, ${totalInstructorPence}, ${totalGrossPence - totalInstructorPence}, ${actualFranchiseFee}, ${periodStart}, ${periodEnd}, 'processing')
     RETURNING id
   `;
 
@@ -129,7 +161,7 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
  */
 async function processAllPayouts(sql, stripe) {
   const instructors = await sql`
-    SELECT id, name, email, commission_rate, stripe_account_id
+    SELECT id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id
       FROM instructors
      WHERE active = TRUE
        AND stripe_onboarding_complete = TRUE

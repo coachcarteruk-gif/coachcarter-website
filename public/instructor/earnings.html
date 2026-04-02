@@ -417,6 +417,22 @@
               </div>`
             : ''}
           ${lessonsHTML}
+          ${data.fee_model === 'franchise' && data.gross_pence > 0 ? `
+            <div style="border-top:2px solid var(--border);margin-top:12px;padding-top:12px;font-size:0.85rem;">
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="color:var(--muted);">Gross earnings</span>
+                <span>${formatPence(data.gross_pence)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="color:var(--muted);">Franchise fee</span>
+                <span style="color:#991b1b;">&minus;${formatPence(data.franchise_fee_applied_pence)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-weight:700;">
+                <span>Your pay</span>
+                <span style="color:var(--accent);">${formatPence(data.total_pence)}</span>
+              </div>
+            </div>
+          ` : ''}
         </div>
       </div>
     `;
@@ -704,7 +720,9 @@
         renderWeek(week) +
         renderHistory(history.weeks, false) +
         renderPayoutHistory(payoutHistory) +
-        `<p class="commission-note">Your commission rate: ${Math.round(summary.commission_rate * 100)}%. Contact admin for queries.</p>`;
+        (summary.fee_model === 'franchise'
+          ? `<p class="commission-note">Franchise fee: ${formatPence(summary.weekly_franchise_fee_pence)}/week. You keep all lesson revenue minus this fee.</p>`
+          : `<p class="commission-note">Your commission rate: ${Math.round(summary.commission_rate * 100)}%. Contact admin for queries.</p>`);
 
       // Hide load more if less than a full page
       if (history.weeks.length < HISTORY_LIMIT) {

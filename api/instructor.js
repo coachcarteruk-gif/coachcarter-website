@@ -1828,16 +1828,17 @@ async function handleEarningsWeek(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Get commission rate
+    // Get commission rate and franchise fee
     const [inst] = await sql`
-      SELECT COALESCE(commission_rate, 0.85) AS commission_rate
+      SELECT COALESCE(commission_rate, 0.85) AS commission_rate, weekly_franchise_fee_pence
       FROM instructors WHERE id = ${instructor.id}
     `;
     const rate = parseFloat(inst.commission_rate);
+    const franchiseFee = inst.weekly_franchise_fee_pence != null ? parseInt(inst.weekly_franchise_fee_pence) : null;
+    const feeModel = franchiseFee != null ? 'franchise' : 'commission';
 
     // Determine week boundaries (Monday–Sunday)
     let weekStart = req.query.week_start;
-    // If no week_start provided, use Postgres to get current ISO week Monday
     const [weekRow] = weekStart
       ? await sql`SELECT ${weekStart}::date AS week_start, (${weekStart}::date + 6) AS week_end`
       : await sql`SELECT date_trunc('week', CURRENT_DATE)::date AS week_start, (date_trunc('week', CURRENT_DATE)::date + 6) AS week_end`;
@@ -1862,12 +1863,12 @@ async function handleEarningsWeek(req, res) {
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
     `;
 
-    let totalPence = 0;
+    let grossPence = 0;
     let completedCount = 0;
     let confirmedCount = 0;
     const mapped = lessons.map(l => {
-      const payPence = Math.round(parseInt(l.price_pence) * rate);
-      totalPence += payPence;
+      const pricePence = parseInt(l.price_pence);
+      grossPence += pricePence;
       if (l.status === 'completed') completedCount++;
       else confirmedCount++;
       return {
@@ -1879,13 +1880,27 @@ async function handleEarningsWeek(req, res) {
         learner_name: l.learner_name,
         lesson_type_name: l.lesson_type_name || 'Standard Lesson',
         duration_minutes: parseInt(l.duration_minutes),
-        price_pence: parseInt(l.price_pence),
-        instructor_pay_pence: payPence
+        price_pence: pricePence,
+        instructor_pay_pence: Math.round(pricePence * rate) // per-lesson (for display)
       };
     });
 
+    // Calculate total based on fee model
+    let totalPence;
+    let franchiseFeeApplied = null;
+    if (feeModel === 'franchise') {
+      franchiseFeeApplied = Math.min(franchiseFee, grossPence);
+      totalPence = grossPence - franchiseFeeApplied;
+    } else {
+      totalPence = mapped.reduce((sum, l) => sum + l.instructor_pay_pence, 0);
+    }
+
     return res.json({
       commission_rate: rate,
+      fee_model: feeModel,
+      weekly_franchise_fee_pence: franchiseFee,
+      franchise_fee_applied_pence: franchiseFeeApplied,
+      gross_pence: grossPence,
       week_start: weekRow.week_start,
       week_end: weekRow.week_end,
       lessons: mapped,
@@ -1912,10 +1927,12 @@ async function handleEarningsHistory(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [inst] = await sql`
-      SELECT COALESCE(commission_rate, 0.85) AS commission_rate
+      SELECT COALESCE(commission_rate, 0.85) AS commission_rate, weekly_franchise_fee_pence
       FROM instructors WHERE id = ${instructor.id}
     `;
     const rate = parseFloat(inst.commission_rate);
+    const franchiseFee = inst.weekly_franchise_fee_pence != null ? parseInt(inst.weekly_franchise_fee_pence) : null;
+    const feeModel = franchiseFee != null ? 'franchise' : 'commission';
 
     const limit  = Math.min(parseInt(req.query.limit) || 12, 52);
     const offset = parseInt(req.query.offset) || 0;
@@ -1936,18 +1953,25 @@ async function handleEarningsHistory(req, res) {
       LIMIT ${limit} OFFSET ${offset}
     `;
 
-    const mapped = weeks.map(w => ({
-      week_start: w.week_start,
-      week_end: w.week_end,
-      lesson_count: w.lesson_count,
-      total_minutes: w.total_minutes,
-      total_hours: +(w.total_minutes / 60).toFixed(1),
-      gross_pence: w.gross_pence,
-      instructor_pay_pence: Math.round(w.gross_pence * rate)
-    }));
+    const mapped = weeks.map(w => {
+      const instructorPay = feeModel === 'franchise'
+        ? w.gross_pence - Math.min(franchiseFee, w.gross_pence)
+        : Math.round(w.gross_pence * rate);
+      return {
+        week_start: w.week_start,
+        week_end: w.week_end,
+        lesson_count: w.lesson_count,
+        total_minutes: w.total_minutes,
+        total_hours: +(w.total_minutes / 60).toFixed(1),
+        gross_pence: w.gross_pence,
+        instructor_pay_pence: instructorPay
+      };
+    });
 
     return res.json({
       commission_rate: rate,
+      fee_model: feeModel,
+      weekly_franchise_fee_pence: franchiseFee,
       weeks: mapped,
       limit,
       offset
@@ -1970,10 +1994,12 @@ async function handleEarningsSummary(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [inst] = await sql`
-      SELECT COALESCE(commission_rate, 0.85) AS commission_rate
+      SELECT COALESCE(commission_rate, 0.85) AS commission_rate, weekly_franchise_fee_pence
       FROM instructors WHERE id = ${instructor.id}
     `;
     const rate = parseFloat(inst.commission_rate);
+    const franchiseFee = inst.weekly_franchise_fee_pence != null ? parseInt(inst.weekly_franchise_fee_pence) : null;
+    const feeModel = franchiseFee != null ? 'franchise' : 'commission';
 
     // This month (include confirmed + completed to match weekly view)
     const [monthData] = await sql`
@@ -2008,21 +2034,50 @@ async function handleEarningsSummary(req, res) {
       WHERE instructor_id = ${instructor.id} AND status = 'completed'
     `;
 
-    const avgPerWeekPence = weeksActive.count > 0
-      ? Math.round((allTime.gross_pence * rate) / weeksActive.count)
-      : 0;
+    // Calculate earnings based on fee model
+    let monthEarnings, allTimeEarnings, avgPerWeekPence;
+    if (feeModel === 'franchise') {
+      // For franchise: need per-week gross to cap fee per week
+      // Month: approximate by counting distinct weeks in the month's data
+      const monthWeeks = await sql`
+        SELECT COUNT(DISTINCT date_trunc('week', lb.scheduled_date))::int AS count
+        FROM lesson_bookings lb
+        WHERE lb.instructor_id = ${instructor.id}
+          AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+          AND lb.scheduled_date >= date_trunc('month', CURRENT_DATE)
+          AND lb.scheduled_date < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+      `;
+      // For month: gross minus (fee × weeks in month), but each week capped at that week's gross
+      // Simplified: use aggregate approach (close enough for summary display)
+      const mWeeks = monthWeeks[0].count || 0;
+      const mTotalFee = Math.min(franchiseFee * mWeeks, monthData.gross_pence);
+      monthEarnings = monthData.gross_pence - mTotalFee;
+
+      const aTotalFee = Math.min(franchiseFee * weeksActive.count, allTime.gross_pence);
+      allTimeEarnings = allTime.gross_pence - aTotalFee;
+
+      avgPerWeekPence = weeksActive.count > 0
+        ? Math.round(allTimeEarnings / weeksActive.count) : 0;
+    } else {
+      monthEarnings = Math.round(monthData.gross_pence * rate);
+      allTimeEarnings = Math.round(allTime.gross_pence * rate);
+      avgPerWeekPence = weeksActive.count > 0
+        ? Math.round(allTimeEarnings / weeksActive.count) : 0;
+    }
 
     return res.json({
       commission_rate: rate,
+      fee_model: feeModel,
+      weekly_franchise_fee_pence: franchiseFee,
       this_month: {
         lesson_count: monthData.lesson_count,
         total_minutes: monthData.total_minutes,
-        earnings_pence: Math.round(monthData.gross_pence * rate)
+        earnings_pence: monthEarnings
       },
       all_time: {
         lesson_count: allTime.lesson_count,
         total_minutes: allTime.total_minutes,
-        earnings_pence: Math.round(allTime.gross_pence * rate)
+        earnings_pence: allTimeEarnings
       },
       avg_per_week_pence: avgPerWeekPence,
       weeks_active: weeksActive.count
@@ -2430,16 +2485,27 @@ async function handleNextPayoutPreview(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const [instructor] = await sql`
-      SELECT commission_rate, stripe_onboarding_complete, payouts_paused
+      SELECT commission_rate, weekly_franchise_fee_pence, stripe_onboarding_complete, payouts_paused
         FROM instructors WHERE id = ${user.id}
     `;
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
 
     const bookings = await getEligibleBookings(sql, user.id);
     const rate = parseFloat(instructor.commission_rate) || 0.85;
-    let estimatedPence = 0;
-    for (const b of bookings) {
-      estimatedPence += Math.round(parseInt(b.price_pence) * rate);
+    const franchiseFee = instructor.weekly_franchise_fee_pence != null ? parseInt(instructor.weekly_franchise_fee_pence) : null;
+    const feeModel = franchiseFee != null ? 'franchise' : 'commission';
+
+    let grossPence = 0;
+    for (const b of bookings) grossPence += parseInt(b.price_pence);
+
+    let estimatedPence;
+    let franchiseFeeApplied = null;
+    if (feeModel === 'franchise') {
+      franchiseFeeApplied = Math.min(franchiseFee, grossPence);
+      estimatedPence = grossPence - franchiseFeeApplied;
+    } else {
+      estimatedPence = 0;
+      for (const b of bookings) estimatedPence += Math.round(parseInt(b.price_pence) * rate);
     }
 
     // Calculate next Friday
@@ -2452,6 +2518,10 @@ async function handleNextPayoutPreview(req, res) {
 
     return res.json({
       ok: true,
+      fee_model: feeModel,
+      weekly_franchise_fee_pence: franchiseFee,
+      franchise_fee_applied_pence: franchiseFeeApplied,
+      gross_pence: grossPence,
       estimated_pence: estimatedPence,
       eligible_lessons: bookings.length,
       next_payout_date: nextPayoutDate,

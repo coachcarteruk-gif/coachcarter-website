@@ -376,6 +376,7 @@ async function handleAllInstructors(req, res) {
         i.id, i.name, i.email, i.phone, i.bio, i.photo_url, i.active, i.created_at,
         COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
         COALESCE(i.commission_rate, 0.85) AS commission_rate,
+        i.weekly_franchise_fee_pence,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.instructor_id = i.id AND lb.status = 'confirmed'
            AND lb.scheduled_date >= CURRENT_DATE) AS upcoming_bookings,
@@ -466,6 +467,11 @@ async function handleUpdateInstructor(req, res) {
 
   const normalised = email.trim().toLowerCase();
 
+  // Handle fee model fields
+  const body = req.body || {};
+  const hasCommission = 'commission_rate' in body;
+  const hasFranchiseFee = 'weekly_franchise_fee_pence' in body;
+
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
@@ -481,9 +487,11 @@ async function handleUpdateInstructor(req, res) {
           email     = ${normalised},
           phone     = ${phone?.trim() || null},
           bio       = ${bio?.trim() || null},
-          photo_url = ${photo_url?.trim() || null}
+          photo_url = ${photo_url?.trim() || null},
+          commission_rate = CASE WHEN ${hasCommission} THEN ${hasCommission ? (parseFloat(body.commission_rate) || 0.85) : 0.85} ELSE commission_rate END,
+          weekly_franchise_fee_pence = CASE WHEN ${hasFranchiseFee} THEN ${hasFranchiseFee ? body.weekly_franchise_fee_pence : null}::integer ELSE weekly_franchise_fee_pence END
       WHERE id = ${id}
-      RETURNING id, name, email, phone, bio, photo_url, active
+      RETURNING id, name, email, phone, bio, photo_url, active, commission_rate, weekly_franchise_fee_pence
     `;
 
     if (rows.length === 0) return res.status(404).json({ error: 'Instructor not found' });
@@ -841,7 +849,7 @@ async function handlePayoutOverview(req, res) {
 
     // Instructor connect statuses
     const instructors = await sql`
-      SELECT id, name, email, active, commission_rate,
+      SELECT id, name, email, active, commission_rate, weekly_franchise_fee_pence,
              stripe_account_id, stripe_onboarding_complete, payouts_paused
         FROM instructors ORDER BY name ASC
     `;
@@ -851,20 +859,29 @@ async function handlePayoutOverview(req, res) {
     for (const inst of instructors) {
       if (!inst.active || !inst.stripe_onboarding_complete) continue;
       const bookings = await getEligibleBookings(sql, inst.id);
-      const rate = parseFloat(inst.commission_rate) || 0.85;
-      let estimatedPence = 0;
-      for (const b of bookings) {
-        estimatedPence += Math.round(parseInt(b.price_pence) * rate);
+      if (!bookings.length) continue;
+
+      const franchiseFee = inst.weekly_franchise_fee_pence != null ? parseInt(inst.weekly_franchise_fee_pence) : null;
+      let grossPence = 0;
+      for (const b of bookings) grossPence += parseInt(b.price_pence);
+
+      let estimatedPence;
+      if (franchiseFee != null) {
+        estimatedPence = grossPence - Math.min(franchiseFee, grossPence);
+      } else {
+        const rate = parseFloat(inst.commission_rate) || 0.85;
+        estimatedPence = 0;
+        for (const b of bookings) estimatedPence += Math.round(parseInt(b.price_pence) * rate);
       }
-      if (bookings.length > 0) {
-        estimates.push({
-          instructor_id: inst.id,
-          name: inst.name,
-          eligible_lessons: bookings.length,
-          estimated_pence: estimatedPence,
-          paused: inst.payouts_paused
-        });
-      }
+
+      estimates.push({
+        instructor_id: inst.id,
+        name: inst.name,
+        eligible_lessons: bookings.length,
+        estimated_pence: estimatedPence,
+        paused: inst.payouts_paused,
+        fee_model: franchiseFee != null ? 'franchise' : 'commission'
+      });
     }
 
     // Recent payouts
@@ -894,6 +911,8 @@ async function handlePayoutOverview(req, res) {
       instructors: instructors.map(i => ({
         id: i.id, name: i.name, email: i.email, active: i.active,
         commission_rate: i.commission_rate,
+        weekly_franchise_fee_pence: i.weekly_franchise_fee_pence,
+        fee_model: i.weekly_franchise_fee_pence != null ? 'franchise' : 'commission',
         connect_status: !i.stripe_account_id ? 'not_started'
           : i.stripe_onboarding_complete ? 'active' : 'pending',
         payouts_paused: i.payouts_paused

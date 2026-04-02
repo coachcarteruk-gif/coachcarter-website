@@ -717,3 +717,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_payout_booking
 
 CREATE INDEX IF NOT EXISTS idx_payout_lines_payout
   ON payout_line_items(payout_id);
+
+-- ── Weekly franchise fee model (alternative to commission_rate) ──
+-- When non-NULL, platform takes this fixed amount per week instead of per-lesson commission.
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS weekly_franchise_fee_pence INTEGER DEFAULT NULL;
+-- Audit trail: actual franchise fee deducted for each payout (may be less than configured if gross was lower)
+ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS franchise_fee_pence INTEGER DEFAULT NULL;

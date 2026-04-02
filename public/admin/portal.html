@@ -810,10 +810,24 @@ body {
       </select>
     </div>
     <div class="form-group">
+      <label>Fee Model</label>
+      <select id="inst-fee-model" onchange="toggleFeeModelFields()"
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
+        <option value="commission">Commission (% of each lesson)</option>
+        <option value="franchise">Franchise Fee (fixed weekly)</option>
+      </select>
+    </div>
+    <div class="form-group" id="commission-field">
       <label>Commission rate (%)</label>
       <input type="number" id="inst-commission" min="0" max="100" step="1" value="85"
         style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
       <small style="color:var(--muted);font-size:0.78rem;">Percentage of lesson price paid to instructor (default 85%)</small>
+    </div>
+    <div class="form-group" id="franchise-field" style="display:none;">
+      <label>Weekly franchise fee (£)</label>
+      <input type="number" id="inst-franchise-fee" min="0" step="1" value=""
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
+      <small style="color:var(--muted);font-size:0.78rem;">Fixed weekly amount deducted from instructor. They keep all revenue minus this fee.</small>
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-instructor')">Cancel</button>
@@ -1084,6 +1098,9 @@ function openAddInstructor() {
   document.getElementById('inst-photo').value = '';
   document.getElementById('inst-buffer').value = '30';
   document.getElementById('inst-commission').value = '85';
+  document.getElementById('inst-fee-model').value = 'commission';
+  document.getElementById('inst-franchise-fee').value = '';
+  toggleFeeModelFields();
   openModal('modal-instructor');
 }
 
@@ -1099,11 +1116,23 @@ function openEditInstructor(id) {
   document.getElementById('inst-photo').value = i.photo_url || '';
   document.getElementById('inst-buffer').value = String(i.buffer_minutes ?? 30);
   document.getElementById('inst-commission').value = String(Math.round((i.commission_rate ?? 0.85) * 100));
+  // Fee model
+  const hasFranchise = i.weekly_franchise_fee_pence != null;
+  document.getElementById('inst-fee-model').value = hasFranchise ? 'franchise' : 'commission';
+  document.getElementById('inst-franchise-fee').value = hasFranchise ? (i.weekly_franchise_fee_pence / 100).toFixed(0) : '';
+  toggleFeeModelFields();
   openModal('modal-instructor');
+}
+
+function toggleFeeModelFields() {
+  const model = document.getElementById('inst-fee-model').value;
+  document.getElementById('commission-field').style.display = model === 'commission' ? '' : 'none';
+  document.getElementById('franchise-field').style.display = model === 'franchise' ? '' : 'none';
 }
 
 async function saveInstructor() {
   const editId = document.getElementById('instructor-edit-id').value;
+  const feeModel = document.getElementById('inst-fee-model').value;
   const body = {
     name: document.getElementById('inst-name').value.trim(),
     email: document.getElementById('inst-email').value.trim(),
@@ -1111,8 +1140,16 @@ async function saveInstructor() {
     bio: document.getElementById('inst-bio').value.trim() || null,
     photo_url: document.getElementById('inst-photo').value.trim() || null,
     buffer_minutes: parseInt(document.getElementById('inst-buffer').value) || 30,
-    commission_rate: (parseFloat(document.getElementById('inst-commission').value) || 85) / 100,
   };
+  if (feeModel === 'franchise') {
+    const feeGbp = parseFloat(document.getElementById('inst-franchise-fee').value);
+    if (isNaN(feeGbp) || feeGbp < 0) { toast('Enter a valid franchise fee', 'error'); return; }
+    body.weekly_franchise_fee_pence = Math.round(feeGbp * 100);
+    body.commission_rate = 0.85; // keep default, not used in franchise model
+  } else {
+    body.commission_rate = (parseFloat(document.getElementById('inst-commission').value) || 85) / 100;
+    body.weekly_franchise_fee_pence = null; // clear franchise fee
+  }
 
   if (!body.name || !body.email) { toast('Name and email are required', 'error'); return; }
 
@@ -2225,10 +2262,13 @@ async function loadPayouts() {
         const inviteBtn = i.connect_status === 'not_started'
           ? `<button class="btn btn-sm" onclick="sendConnectInvite(${i.id})">Send Invite</button>`
           : '';
+        const feeLabel = i.fee_model === 'franchise'
+          ? `\u00A3${(i.weekly_franchise_fee_pence / 100).toFixed(0)}/wk`
+          : `${Math.round((i.commission_rate || 0.85) * 100)}%`;
         return `<tr>
           <td>${i.name}</td>
           <td>${statusBadge}</td>
-          <td>${Math.round((i.commission_rate || 0.85) * 100)}%</td>
+          <td>${feeLabel}</td>
           <td>${i.payouts_paused ? '<span style="color:#b45309;font-weight:600;">Paused</span>' : (i.connect_status === 'active' ? 'Active' : '\u2014')}</td>
           <td>${inviteBtn}${pauseBtn}</td>
         </tr>`;
