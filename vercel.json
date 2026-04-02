@@ -8,7 +8,8 @@
     { "path": "/api/reminders?action=auto-confirm", "schedule": "45 * * * *" },
     { "path": "/api/ical-sync", "schedule": "*/15 * * * *" },
     { "path": "/api/offers?action=expire-offers", "schedule": "30 * * * *" },
-    { "path": "/api/cron-payouts", "schedule": "0 9 * * 5" }
+    { "path": "/api/cron-payouts", "schedule": "0 9 * * 5" },
+    { "path": "/api/setmore-sync", "schedule": "*/15 * * * *" }
   ],
   "redirects": [
     {

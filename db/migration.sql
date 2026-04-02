@@ -728,3 +728,26 @@ ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_status_check
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS weekly_franchise_fee_pence INTEGER DEFAULT NULL;
 -- Audit trail: actual franchise fee deducted for each payout (may be less than configured if gross was lower)
 ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS franchise_fee_pence INTEGER DEFAULT NULL;
+
+-- ── Setmore sync ──────────────────────────────────────────────────────────────
+
+-- Additional lesson types from Setmore (3hr active, others inactive)
+INSERT INTO lesson_types (name, slug, duration_minutes, price_pence, colour, active, sort_order)
+VALUES
+  ('3-Hour Lesson', '3hr', 165, 16500, '#ef4444', true, 3),
+  ('1-Hour Lesson', '1hr', 60, 5500, '#f59e0b', false, 4),
+  ('Free Trial',    'trial', 60, 0, '#10b981', false, 5)
+ON CONFLICT (slug) DO NOTHING;
+
+-- Track which Setmore appointment each booking came from (idempotent sync)
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS setmore_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_setmore_key
+  ON lesson_bookings(setmore_key) WHERE setmore_key IS NOT NULL;
+
+-- Link learners to their Setmore customer record
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS setmore_customer_key TEXT;
+
+-- Link instructors to their Setmore staff record + sync status
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_staff_key TEXT;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_last_synced_at TIMESTAMPTZ;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_sync_error TEXT;
