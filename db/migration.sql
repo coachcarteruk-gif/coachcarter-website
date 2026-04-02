@@ -118,6 +118,9 @@ CREATE TABLE IF NOT EXISTS lesson_bookings (
 -- Ensure instructor_notes column exists (may be missing if table was created before it was added)
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS instructor_notes TEXT;
 
+-- Track reason for cancellation (e.g. 'Cancelled in Setmore', 'learner_request')
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- SLOT RESERVATIONS (temporary holds during Stripe checkout)
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -747,7 +750,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_setmore_key
 -- Link learners to their Setmore customer record
 ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS setmore_customer_key TEXT;
 
+-- Track when a welcome email was sent to Setmore-migrated learners
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS welcome_email_sent_at TIMESTAMPTZ;
+
 -- Link instructors to their Setmore staff record + sync status
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_staff_key TEXT;
+
+-- Max travel time (minutes) between back-to-back pickups before warning (default 30)
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS max_travel_minutes INTEGER;
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_last_synced_at TIMESTAMPTZ;
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_sync_error TEXT;

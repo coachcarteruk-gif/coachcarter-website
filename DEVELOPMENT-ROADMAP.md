@@ -817,10 +817,11 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 - Service mapping strips Setmore's built-in 30-min buffer from lesson durations
 - Resolves correct instructor from each appointment's `staff_key`
 - 3 new lesson types: 3-Hour Lesson (active), 1-Hour Lesson (inactive), Free Trial (inactive)
+- ✅ Cancellation detection — marks bookings as cancelled when Setmore appointments are cancelled or removed
+- ✅ `api/setmore-welcome.js` — daily cron sends one-time welcome email with 7-day magic link to Setmore-created learners
+- ✅ `api/_travel-time.js` — travel time check between pickup postcodes using OpenRouteService, integrated into booking flow as a warning
 
 **Transition plan:** New bookings through CoachCarter, existing Setmore clients migrate gradually, then remove sync.
-
-**Planned:** Travel time check between pickup postcodes to prevent impossible back-to-back bookings.
 
 ## Technical Notes
 

@@ -35,7 +35,7 @@ Driving school website for CoachCarter (coachcarter.uk). Vanilla HTML/JS fronten
 
 ## Important env vars
 
-`POSTGRES_URL`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ANTHROPIC_API_KEY`, `MIGRATION_SECRET`, `ERROR_ALERT_EMAIL`, `STAFF_EMAIL`, `ADMIN_SECRET`, `BASE_URL`, `SETMORE_REFRESH_TOKEN`
+`POSTGRES_URL`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ANTHROPIC_API_KEY`, `MIGRATION_SECRET`, `ERROR_ALERT_EMAIL`, `STAFF_EMAIL`, `ADMIN_SECRET`, `BASE_URL`, `SETMORE_REFRESH_TOKEN`, `OPENROUTESERVICE_API_KEY`
 
 ## Error alerting
 
@@ -81,9 +81,21 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 - Imported bookings block slots automatically — no changes needed in `slots.js`
 - The service mapping in `setmore-sync.js` is hardcoded to Fraser's Setmore account — update if services change
 
+**Cancellation sync:** The sync also detects cancelled/removed Setmore appointments and marks the corresponding `lesson_bookings` entry as cancelled. Checks both the appointment `status` field and missing appointments (removed from Setmore entirely).
+
+**Welcome emails:** `api/setmore-welcome.js` runs daily at 10am, sending a one-time welcome email with a 7-day magic link to Setmore-created learners who haven't logged in. Tracked via `learner_users.welcome_email_sent_at`.
+
 **Transition plan:** New bookings go through CoachCarter. Existing Setmore clients migrate as lessons complete. Once all clients are on CoachCarter, remove the sync cron and `SETMORE_REFRESH_TOKEN` env var.
 
-**Future feature (not yet built):** Travel time check between pickup postcodes — block back-to-back bookings if travel time exceeds a configurable threshold.
+## Travel time check
+
+`api/_travel-time.js` checks driving time between pickup postcodes using OpenRouteService (free tier). Integrated into `slots.js` `handleBook()` — returns `travel_warnings` in the booking response if travel time between adjacent bookings exceeds the threshold. Warning only, does not block bookings.
+
+- Requires `OPENROUTESERVICE_API_KEY` env var (free from openrouteservice.org)
+- Threshold configurable per instructor via `instructors.max_travel_minutes` (default 30)
+- Extracts UK postcodes from free-text addresses using regex
+- Gracefully returns null if postcodes can't be extracted or API is unavailable
+- Skip with `?skip_travel_check=true` query param
 
 ## Navigation design (app mode — March 2026)
 

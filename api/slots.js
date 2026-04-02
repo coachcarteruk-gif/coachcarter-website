@@ -32,6 +32,7 @@ const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const twilio      = require('twilio');
 const { reportError } = require('./_error-alert');
 const { checkWaitlistOnCancel } = require('./waitlist');
+const { checkAdjacentTravelTime } = require('./_travel-time');
 
 // ── WhatsApp helper ──────────────────────────────────────────────────────────
 function sendWhatsApp(to, message) {
@@ -525,7 +526,7 @@ async function handleBook(req, res) {
 
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
-      SELECT id, name, email, phone FROM instructors
+      SELECT id, name, email, phone, max_travel_minutes FROM instructors
       WHERE id = ${instructor_id} AND active = true
     `;
     if (!instructor)
@@ -533,6 +534,20 @@ async function handleBook(req, res) {
 
     // Demo instructor bookings are free (no deduction)
     const isDemoInstructor = instructor.email === 'demo@coachcarter.uk';
+
+    // 2b. Travel time check between pickup postcodes (warning only, not blocking)
+    let travelWarnings = null;
+    const bookingPickupAddr = pickup_address || learner.pickup_address || null;
+    const skipTravel = req.query.skip_travel_check === 'true';
+    if (bookingPickupAddr && !skipTravel && !isDemoInstructor) {
+      try {
+        const result = await checkAdjacentTravelTime(
+          sql, instructor_id, date, start_time, end_time,
+          bookingPickupAddr, instructor.max_travel_minutes || undefined
+        );
+        if (result) travelWarnings = result.warnings;
+      } catch { /* never block bookings due to travel check errors */ }
+    }
 
     const totalMins = durationMins * weeks;
     if (!isDemoInstructor) {
@@ -835,6 +850,9 @@ async function handleBook(req, res) {
       response.booking_ids = createdBookings.map(b => b.id);
       response.dates       = bookingDates.map(bd => bd.date);
       response.weeks       = weeks;
+    }
+    if (travelWarnings && travelWarnings.length > 0) {
+      response.travel_warnings = travelWarnings;
     }
 
     return res.status(201).json(response);

@@ -384,11 +384,25 @@ Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancell
 
 | Route | Method | Auth | Description |
 |---|---|---|---|
-| `/api/setmore-sync` | GET | CRON_SECRET | Cron job (every 15 min). Imports Setmore appointments as `lesson_bookings`. Auto-creates/matches learners by phone/email. Idempotent via `setmore_key` unique index. Round-robin per instructor. |
+| `/api/setmore-sync` | GET | CRON_SECRET | Cron job (every 15 min). Imports Setmore appointments as `lesson_bookings`. Detects cancelled/removed appointments and marks bookings as cancelled. Auto-creates/matches learners by phone/email. Idempotent via `setmore_key` unique index. Round-robin per instructor. |
 
 **Env:** `SETMORE_REFRESH_TOKEN` — Setmore OAuth2 refresh token, swapped for access token on each run.
 
-**DB columns:** `lesson_bookings.setmore_key`, `learner_users.setmore_customer_key`, `instructors.setmore_staff_key`, `instructors.setmore_last_synced_at`, `instructors.setmore_sync_error`
+**DB columns:** `lesson_bookings.setmore_key`, `lesson_bookings.cancel_reason`, `learner_users.setmore_customer_key`, `learner_users.welcome_email_sent_at`, `instructors.setmore_staff_key`, `instructors.setmore_last_synced_at`, `instructors.setmore_sync_error`
+
+### API — `api/setmore-welcome.js`
+
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/setmore-welcome` | GET | CRON_SECRET | Cron job (daily 10am). Sends one-time welcome email with 7-day magic link to Setmore-created learners who haven't logged in. Processes up to 10 per run. Tracked via `welcome_email_sent_at`. |
+
+### API — `api/_travel-time.js` (shared helper)
+
+Checks driving time between UK pickup postcodes using OpenRouteService (free tier). Extracts postcodes from free-text addresses via regex, geocodes them, and returns driving minutes. Used by `slots.js` `handleBook()` to warn when travel time between adjacent bookings exceeds threshold.
+
+**Env:** `OPENROUTESERVICE_API_KEY` — free API key from openrouteservice.org
+
+**DB columns:** `instructors.max_travel_minutes` — per-instructor threshold (default 30 mins)
 
 ### API — `api/offers.js`
 

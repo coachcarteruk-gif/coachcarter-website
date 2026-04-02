@@ -181,8 +181,34 @@ module.exports = async (req, res) => {
     // 5. Process each appointment
     let imported = 0;
     let skipped = 0;
+    let cancelled = 0;
+
+    // Build a set of active Setmore appointment keys for cancellation detection
+    const activeSetmoreKeys = new Set();
 
     for (const appt of appointments) {
+      // Track which keys are still active in Setmore (non-cancelled)
+      if (appt.status !== 'Cancelled' && appt.status !== 'canceled') {
+        activeSetmoreKeys.add(appt.key);
+      }
+
+      // Handle cancelled appointments — mark existing bookings as cancelled
+      if (appt.status === 'Cancelled' || appt.status === 'canceled') {
+        const [existing] = await sql`
+          SELECT id, status FROM lesson_bookings
+          WHERE setmore_key = ${appt.key} AND status = 'confirmed'
+        `;
+        if (existing) {
+          await sql`
+            UPDATE lesson_bookings
+            SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Cancelled in Setmore'
+            WHERE id = ${existing.id}
+          `;
+          cancelled++;
+        }
+        continue;
+      }
+
       // Skip if already imported
       const [existing] = await sql`
         SELECT id FROM lesson_bookings WHERE setmore_key = ${appt.key}
@@ -233,6 +259,27 @@ module.exports = async (req, res) => {
       }
     }
 
+    // 5c. Detect bookings removed from Setmore (no longer in API response)
+    // Only check future bookings for the instructor we just synced
+    const confirmedSetmoreBookings = await sql`
+      SELECT id, setmore_key FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id}
+        AND setmore_key IS NOT NULL
+        AND status = 'confirmed'
+        AND scheduled_date >= CURRENT_DATE
+    `;
+
+    for (const booking of confirmedSetmoreBookings) {
+      if (!activeSetmoreKeys.has(booking.setmore_key)) {
+        await sql`
+          UPDATE lesson_bookings
+          SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Removed from Setmore'
+          WHERE id = ${booking.id}
+        `;
+        cancelled++;
+      }
+    }
+
     // 6. Mark sync success
     await sql`
       UPDATE instructors
@@ -245,7 +292,8 @@ module.exports = async (req, res) => {
       instructor_id: instructor.id,
       appointments_found: appointments.length,
       imported,
-      skipped
+      skipped,
+      cancelled
     });
 
   } catch (err) {
