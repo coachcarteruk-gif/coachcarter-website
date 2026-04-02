@@ -1,6 +1,7 @@
 const { neon } = require('@neondatabase/serverless');
 const fs = require('fs');
 const path = require('path');
+const { reportError } = require('./_error-alert');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -46,7 +47,7 @@ module.exports = async function handler(req, res) {
       results
     });
   } catch (err) {
-    console.error('Migration error:', err);
+    reportError('/api/migrate', err);
     return res.status(500).json({ error: 'Migration failed', details: err.message });
   }
 };

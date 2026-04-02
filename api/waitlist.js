@@ -334,7 +334,6 @@ async function checkWaitlistOnCancel({ instructor_id, instructor_name, scheduled
     }).catch(err => console.warn('waitlist email failed:', err.message));
   }
 
-  console.log(`Waitlist: notified ${matches.length} learner(s) for ${scheduled_date} ${slotStart}`);
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────

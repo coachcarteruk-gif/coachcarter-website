@@ -344,8 +344,6 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res) 
     console.error('Free offer email failed:', emailErr);
   }
 
-  console.log(`✅ Free offer booking complete: lesson #${booking.id} for learner #${learnerId} (offer #${offer.id})`);
-
   // Redirect to success page
   return res.json({ ok: true, url: `${baseUrl}/offer-success.html?token=${token}` });
 }
@@ -371,7 +369,6 @@ async function handleExpireOffers(req, res) {
       RETURNING id, learner_email, scheduled_date::text
     `;
 
-    console.log(`⏰ Expired ${expired.length} lesson offer(s)`);
     return res.json({ ok: true, expired_count: expired.length });
   } catch (err) {
     console.error('expire-offers error:', err);

@@ -46,7 +46,6 @@ module.exports = async (req, res) => {
     const rawBody = await getRawBody(req);
     event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
   } catch (err) {
-    console.log(`Webhook signature verification failed:`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -112,7 +111,6 @@ async function handleCreditPurchase(session) {
       SELECT id FROM credit_transactions WHERE stripe_session_id = ${session.id}
     `;
     if (existing) {
-      console.log(`⏭️ Duplicate webhook for session ${session.id} — skipping`);
       return;
     }
 
@@ -139,8 +137,6 @@ async function handleCreditPurchase(session) {
           balance_minutes = balance_minutes + ${minutes}
       WHERE id = ${learnerId}
     `;
-
-    console.log(`✅ Hours added: ${hoursStr}hrs (${minutes}min) → learner #${learnerId} (${learnerEmail})`);
 
     // 3. Send confirmation email via nodemailer
     const transporter = createTransporter();
@@ -200,7 +196,6 @@ async function handleSlotBooking(session) {
       SELECT id FROM credit_transactions WHERE stripe_session_id = ${session.id}
     `;
     if (existing) {
-      console.log(`⏭️ Duplicate slot_booking webhook for ${session.id} — skipping`);
       return;
     }
 
@@ -360,8 +355,6 @@ async function handleSlotBooking(session) {
       `📋 New booking!\n\n👤 ${learner?.name || 'Unknown'}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`
     );
 
-    console.log(`✅ Slot booking complete: lesson #${booking.id} for learner #${learnerId}`);
-
   } catch (err) {
     console.error('❌ handleSlotBooking error:', err);
   }
@@ -446,8 +439,6 @@ async function handleCheckoutComplete(session) {
   };
 
   bookings.set(bookingRef, booking);
-  console.log('✅ Booking created:', bookingRef, 'for', customerEmail, '- Type:', packageType);
-
   // If this is a Test Ready Guarantee purchase, increment the dynamic price
   if (isPassGuarantee) {
     try {
@@ -692,7 +683,6 @@ async function handleOfferBooking(session) {
       return;
     }
     if (offer.status === 'accepted') {
-      console.log(`⏭️ Duplicate lesson_offer webhook for offer #${offer.id} — skipping`);
       return;
     }
 
@@ -891,8 +881,6 @@ async function handleOfferBooking(session) {
       });
     }
 
-    console.log(`✅ Offer booking complete: lesson #${booking.id} for learner #${learnerId} (offer #${offerId})`);
-
   } catch (err) {
     console.error('❌ handleOfferBooking error:', err);
   }
@@ -925,7 +913,6 @@ async function incrementGuaranteePrice() {
     RETURNING current_price, purchases
   `;
 
-  console.log(`✅ Guarantee price incremented → £${updated.current_price} (purchase #${updated.purchases})`);
 }
 
 // Helper to get raw body for Stripe

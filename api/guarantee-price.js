@@ -76,7 +76,6 @@ module.exports = async (req, res) => {
           WHERE id = 1
           RETURNING *
         `;
-        console.log(`✅ Guarantee price manually set → £${updated.current_price}`);
       } else {
         // Atomic increment: current_price = MIN(current_price + increment, cap)
         [updated] = await sql`
@@ -88,7 +87,6 @@ module.exports = async (req, res) => {
           WHERE id = 1
           RETURNING *
         `;
-        console.log(`✅ Guarantee price incremented → £${updated.current_price} (purchase #${updated.purchases})`);
       }
 
       return res.json({

@@ -723,7 +723,6 @@ async function handleDeleteLearner(req, res) {
     // Delete the learner
     await sql`DELETE FROM learner_users WHERE id = ${learner_id}`;
 
-    console.log(`Admin deleted learner: ${learner.name} (${learner.email}) id=${learner_id}`);
     return res.json({ success: true, deleted: { id: learner.id, name: learner.name, email: learner.email } });
   } catch (err) {
     console.error('admin delete-learner error:', err);
@@ -804,7 +803,6 @@ async function handleResolveDispute(req, res) {
       UPDATE lesson_bookings SET status = ${resolution} WHERE id = ${booking_id}
     `;
 
-    console.log(`Admin resolved booking #${booking_id}: ${booking.status} → ${resolution}`);
     return res.json({ success: true, booking_id, previous_status: booking.status, new_status: resolution });
   } catch (err) {
     console.error('admin resolve-dispute error:', err);
