@@ -1150,7 +1150,7 @@ async function handleLearnerHistory(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [learner] = await sql`
-      SELECT id, name, email, phone, tier, created_at,
+      SELECT id, name, email, phone, current_tier, created_at,
              pickup_address, prefer_contact_before
       FROM learner_users WHERE id = ${learnerId}
     `;
