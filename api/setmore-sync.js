@@ -344,6 +344,10 @@ async function findOrCreateLearner(sql, setmoreToken, customerKey) {
   }
   if (!customer) throw new Error(`Customer ${customerKey} not found`);
 
+  // DEBUG: log customer fields to find address
+  console.log('[setmore-sync] Customer keys:', Object.keys(customer));
+  console.log('[setmore-sync] Customer data:', JSON.stringify(customer, null, 2));
+
   const phone = normalizePhone(customer.cell_phone, customer.country_code);
   const email = customer.email_id || null;
   const name = [customer.first_name, customer.last_name].filter(Boolean).join(' ').trim() || 'Setmore Customer';
