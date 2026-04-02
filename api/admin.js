@@ -681,7 +681,7 @@ async function handleAdjustCredits(req, res) {
       adjusted_hours: hoursFloat
     });
   } catch (err) {
-    console.error('admin adjust-credits error:', err);
+    console.error('admin adjust-credits error:', err.message, err.stack);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to adjust hours', details: err.message });
   }
