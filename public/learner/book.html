@@ -1212,7 +1212,7 @@ async function savePickupPostcode() {
   btn.textContent = 'Saving…';
 
   try {
-    const res = await fetch('/api/learner?action=update_profile', {
+    const res = await fetch('/api/learner?action=update-profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({ pickup_address: postcode })
