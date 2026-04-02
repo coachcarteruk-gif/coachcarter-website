@@ -186,6 +186,13 @@ module.exports = async (req, res) => {
     // Build a set of active Setmore appointment keys for cancellation detection
     const activeSetmoreKeys = new Set();
 
+    // DEBUG: log first appointment's fields to identify address field name
+    if (appointments.length > 0) {
+      const sample = appointments[0];
+      console.log('[setmore-sync] Sample appointment keys:', Object.keys(sample));
+      console.log('[setmore-sync] Sample appointment data:', JSON.stringify(sample, null, 2));
+    }
+
     for (const appt of appointments) {
       // Track which keys are still active in Setmore (non-cancelled)
       if (appt.status !== 'Cancelled' && appt.status !== 'canceled') {
