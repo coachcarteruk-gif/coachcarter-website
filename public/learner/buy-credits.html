@@ -202,12 +202,44 @@
       letter-spacing: 0.05em;
     }
 
-    /* Single lesson option */
-    .single-lesson {
-      text-align: center;
-      padding: 12px 0 4px;
-      margin-bottom: 24px;
+    /* Single lesson cards */
+    .single-lessons-section { margin-bottom: 28px; }
+    .single-lessons-title {
+      font-family: var(--font-head); font-size: 1rem; font-weight: 700;
+      color: var(--primary); margin-bottom: 12px;
     }
+    .single-lessons-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .single-lesson-card {
+      background: var(--white); border: 2px solid var(--border); border-radius: var(--radius);
+      padding: 16px; text-align: center; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.2s, transform 0.15s;
+    }
+    .single-lesson-card:hover {
+      border-color: var(--lt-colour, var(--accent)); background: color-mix(in srgb, var(--lt-colour, var(--accent)) 6%, white);
+    }
+    .sl-name { font-family: var(--font-head); font-size: 0.9rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+    .sl-duration { font-size: 0.78rem; color: var(--muted); margin-bottom: 8px; }
+    .sl-price { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: var(--primary); margin-bottom: 10px; }
+    .sl-buy-btn {
+      display: inline-block; padding: 8px 20px; border-radius: 20px;
+      background: var(--lt-colour, var(--accent)); color: white;
+      font-size: 0.78rem; font-weight: 700; border: none; cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .sl-buy-btn:hover { opacity: 0.85; }
+    .sl-buy-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .section-divider {
+      display: flex; align-items: center; gap: 14px;
+      margin: 4px 0 20px; color: var(--muted); font-size: 0.82rem;
+    }
+    .section-divider-line { flex: 1; height: 1px; background: var(--border); }
+
+    /* Legacy single-lesson link (hidden, replaced by cards) */
+    .single-lesson { display: none; }
     .single-lesson-link {
       font-size: 0.88rem;
       color: var(--muted);
@@ -503,6 +535,18 @@
     </svg>
   </div>
 
+  <!-- Single lesson cards (dynamically rendered) -->
+  <div class="single-lessons-section" id="singleLessonsSection" style="display:none">
+    <div class="single-lessons-title">Buy a single lesson</div>
+    <div class="single-lessons-grid" id="singleLessonsGrid"></div>
+  </div>
+
+  <div class="section-divider" id="packagesDivider" style="display:none">
+    <span class="section-divider-line"></span>
+    <span>Or save with hour packages</span>
+    <span class="section-divider-line"></span>
+  </div>
+
   <!-- Package cards -->
   <div class="packages" id="packages">
     <div class="pkg-card" onclick="selectPkg(6)" data-qty="6">
@@ -590,14 +634,14 @@
     <strong>Pay in 3 with Klarna</strong> available at checkout — split the cost interest-free.
   </p>
 
-  <!-- Test Ready Guarantee section -->
-  <div class="programme-divider">
+  <!-- Test Ready Guarantee section (temporarily hidden) -->
+  <div class="programme-divider" style="display:none">
     <span class="programme-divider-line"></span>
     <span class="programme-divider-text">Or stop paying by the hour</span>
     <span class="programme-divider-line"></span>
   </div>
 
-  <div class="programme-card">
+  <div class="programme-card" style="display:none">
     <div class="programme-badge">Test Ready Guarantee</div>
     <h2 class="programme-title">Pass your test — guaranteed</h2>
     <p class="programme-sub">You pay once. We teach you until you're ready, book your test, and if you need a retake — that's on us too.</p>
@@ -760,6 +804,72 @@
     }
   }
 
+  // ── Load lesson types & render single-lesson cards ─────────────────────────
+  let lessonTypes = [];
+
+  async function loadLessonTypes() {
+    try {
+      const res = await fetch('/api/lesson-types?action=list');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      lessonTypes = (data.lesson_types || []).filter(lt => lt.active !== false);
+      renderSingleLessonCards();
+    } catch (err) {
+      console.error('Failed to load lesson types:', err);
+    }
+  }
+
+  function renderSingleLessonCards() {
+    const section = document.getElementById('singleLessonsSection');
+    const grid = document.getElementById('singleLessonsGrid');
+    const divider = document.getElementById('packagesDivider');
+    if (!grid || lessonTypes.length === 0) return;
+
+    grid.innerHTML = lessonTypes.map(lt => {
+      const hrs = lt.duration_minutes / 60;
+      const hrsStr = hrs % 1 === 0 ? `${hrs} hr${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hrs`;
+      const price = fmt(lt.price_pence);
+      return `<div class="single-lesson-card" style="--lt-colour: ${lt.colour || '#f58321'}">
+        <div class="sl-name">${lt.name}</div>
+        <div class="sl-duration">${hrsStr}</div>
+        <div class="sl-price">${price}</div>
+        <button class="sl-buy-btn" style="background: ${lt.colour || 'var(--accent)'}" onclick="buySingleLesson(${lt.id})">Buy</button>
+      </div>`;
+    }).join('');
+
+    section.style.display = 'block';
+    divider.style.display = 'flex';
+  }
+
+  async function buySingleLesson(lessonTypeId) {
+    if (window.ccAuth && !window.ccAuth.requireAuth()) return;
+
+    const lt = lessonTypes.find(t => t.id === lessonTypeId);
+    if (!lt) return;
+
+    // Disable button while processing
+    const btn = event.target;
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+
+    try {
+      const hours = lt.duration_minutes / 60;
+      const res = await fetch('/api/credits?action=checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ hours })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Checkout failed');
+      window.location.href = data.url;
+    } catch (err) {
+      showToast(err.message || 'Something went wrong. Please try again.', 'error');
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
+  }
+
   // ── Select package ──────────────────────────────────────────────────────────
   function selectPkg(newQty) {
     qty = newQty;
@@ -868,6 +978,7 @@
   initAuth(); // check but don't block
   selectPkg(12); // Default to most popular (12 hours)
   loadProgrammePrice();
+  loadLessonTypes(); // Fetch lesson types for single-lesson cards
   if (token) loadBalance();
 </script>
 
