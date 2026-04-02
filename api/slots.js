@@ -32,7 +32,7 @@ const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const twilio      = require('twilio');
 const { reportError } = require('./_error-alert');
 const { checkWaitlistOnCancel } = require('./waitlist');
-const { checkAdjacentTravelTime } = require('./_travel-time');
+const { checkAdjacentTravelTime, extractPostcode, bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES } = require('./_travel-time');
 
 // ── WhatsApp helper ──────────────────────────────────────────────────────────
 function sendWhatsApp(to, message) {
@@ -121,7 +121,7 @@ module.exports = async (req, res) => {
 async function handleAvailable(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { from, to, instructor_id, lesson_type_id } = req.query;
+  const { from, to, instructor_id, lesson_type_id, pickup_postcode } = req.query;
 
   // Validate dates
   if (!from || !to)
@@ -166,7 +166,8 @@ async function handleAvailable(req, res) {
                  i.name AS instructor_name,
                  i.photo_url, i.bio,
                  COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
-                 COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours
+                 COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                 i.max_travel_minutes
           FROM instructor_availability ia
           JOIN instructors i ON i.id = ia.instructor_id
           WHERE ia.instructor_id = ${instructor_id}
@@ -181,7 +182,8 @@ async function handleAvailable(req, res) {
                  i.name AS instructor_name,
                  i.photo_url, i.bio,
                  COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
-                 COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours
+                 COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                 i.max_travel_minutes
           FROM instructor_availability ia
           JOIN instructors i ON i.id = ia.instructor_id
           WHERE ia.active = true
@@ -196,7 +198,8 @@ async function handleAvailable(req, res) {
           SELECT instructor_id,
                  scheduled_date::text AS scheduled_date,
                  start_time::text     AS start_time,
-                 end_time::text       AS end_time
+                 end_time::text       AS end_time,
+                 pickup_address
           FROM lesson_bookings
           WHERE scheduled_date BETWEEN ${from} AND ${to}
             AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
@@ -206,7 +209,8 @@ async function handleAvailable(req, res) {
           SELECT instructor_id,
                  scheduled_date::text AS scheduled_date,
                  start_time::text     AS start_time,
-                 end_time::text       AS end_time
+                 end_time::text       AS end_time,
+                 pickup_address
           FROM lesson_bookings
           WHERE scheduled_date BETWEEN ${from} AND ${to}
             AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
@@ -322,7 +326,11 @@ async function handleAvailable(req, res) {
     for (const b of [...bookings, ...reservations]) {
       const key = `${b.instructor_id}|${b.scheduled_date}`;
       if (!bookedIndex[key]) bookedIndex[key] = [];
-      bookedIndex[key].push({ start: timeToMinutes(b.start_time), end: timeToMinutes(b.end_time) });
+      bookedIndex[key].push({
+        start: timeToMinutes(b.start_time),
+        end: timeToMinutes(b.end_time),
+        postcode: b.pickup_address ? extractPostcode(b.pickup_address) : null
+      });
     }
 
     // Index external calendar events — all-day as blackouts, timed as booked slots
@@ -347,6 +355,7 @@ async function handleAvailable(req, res) {
           bio:            w.bio,
           buffer_minutes: parseInt(w.buffer_minutes) || 30,
           min_booking_notice_hours: parseInt(w.min_booking_notice_hours) || 24,
+          max_travel_minutes: w.max_travel_minutes != null ? parseInt(w.max_travel_minutes) : DEFAULT_MAX_TRAVEL_MINUTES,
           windows:        []
         };
       }
@@ -355,6 +364,22 @@ async function handleAvailable(req, res) {
         start: timeToMinutes(w.start_time),
         end:   timeToMinutes(w.end_time)
       });
+    }
+
+    // 3b. Travel time filtering — geocode all postcodes if learner provided theirs
+    const learnerPostcode = pickup_postcode ? pickup_postcode.toUpperCase().replace(/\s+/g, ' ') : null;
+    let coordMap = {}; // postcode → { lat, lon }
+    if (learnerPostcode) {
+      try {
+        // Collect all unique postcodes from bookings + learner's postcode
+        const allPostcodes = new Set([learnerPostcode]);
+        for (const slots of Object.values(bookedIndex)) {
+          for (const s of slots) {
+            if (s.postcode) allPostcodes.add(s.postcode);
+          }
+        }
+        coordMap = await bulkGeocodeUK([...allPostcodes]);
+      } catch { /* graceful — skip travel filtering if geocoding fails */ }
     }
 
     // 4. Walk every date in range and generate slots
@@ -408,16 +433,58 @@ async function handleAvailable(req, res) {
               b => slotStart < (b.end + buffer) && slotEnd > b.start
             );
 
-            if (!isBooked) {
-              daySlots.push({
-                instructor_id:   instructor.id,
-                instructor_name: instructor.name,
-                instructor_photo: instructor.photo_url,
-                date:            dateStr,
-                start_time:      minutesToTime(slotStart),
-                end_time:        minutesToTime(slotEnd)
-              });
+            if (isBooked) {
+              slotStart += slotMinutes;
+              continue;
             }
+
+            // Travel time filter — hide slots where instructor can't travel in time
+            if (learnerPostcode && coordMap[learnerPostcode]) {
+              const learnerCoord = coordMap[learnerPostcode];
+              let travelBlocked = false;
+
+              // Find closest booking BEFORE this slot (with a pickup postcode)
+              let closestBefore = null;
+              let closestAfter = null;
+              for (const b of bookedSlots) {
+                if (b.end <= slotStart && b.postcode && coordMap[b.postcode]) {
+                  if (!closestBefore || b.end > closestBefore.end) closestBefore = b;
+                }
+                if (b.start >= slotEnd && b.postcode && coordMap[b.postcode]) {
+                  if (!closestAfter || b.start < closestAfter.start) closestAfter = b;
+                }
+              }
+
+              // Check gap before: can instructor get from previous booking's pickup to learner's pickup?
+              if (closestBefore) {
+                const prevCoord = coordMap[closestBefore.postcode];
+                const driveMinutes = estimateDriveMinutes(prevCoord.lat, prevCoord.lon, learnerCoord.lat, learnerCoord.lon);
+                const gapMinutes = slotStart - closestBefore.end;
+                if (gapMinutes < driveMinutes + TRAVEL_BUFFER_MINUTES) travelBlocked = true;
+              }
+
+              // Check gap after: can instructor get from learner's pickup to next booking's pickup?
+              if (!travelBlocked && closestAfter) {
+                const nextCoord = coordMap[closestAfter.postcode];
+                const driveMinutes = estimateDriveMinutes(learnerCoord.lat, learnerCoord.lon, nextCoord.lat, nextCoord.lon);
+                const gapMinutes = closestAfter.start - slotEnd;
+                if (gapMinutes < driveMinutes + TRAVEL_BUFFER_MINUTES) travelBlocked = true;
+              }
+
+              if (travelBlocked) {
+                slotStart += slotMinutes;
+                continue;
+              }
+            }
+
+            daySlots.push({
+              instructor_id:   instructor.id,
+              instructor_name: instructor.name,
+              instructor_photo: instructor.photo_url,
+              date:            dateStr,
+              start_time:      minutesToTime(slotStart),
+              end_time:        minutesToTime(slotEnd)
+            });
 
             slotStart += slotMinutes;
           }

@@ -89,13 +89,18 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 
 ## Travel time check
 
-`api/_travel-time.js` checks driving time between pickup postcodes using OpenRouteService (free tier). Integrated into `slots.js` `handleBook()` — returns `travel_warnings` in the booking response if travel time between adjacent bookings exceeds the threshold. Warning only, does not block bookings.
+`api/_travel-time.js` provides two modes of travel time checking between pickup postcodes:
 
-- Requires `OPENROUTESERVICE_API_KEY` env var (free from openrouteservice.org)
+**Slot filtering (pre-booking):** `handleAvailable()` in `slots.js` hides slots where the instructor can't travel between adjacent bookings in time. Uses postcodes.io (free, no key) for geocoding + haversine distance estimation. The learner's postcode is passed via `&pickup_postcode=` query param from `book.html`. Formula: gap between slots must be >= estimated drive time + 10 min buffer.
+
+**Booking warning (post-booking):** `handleBook()` in `slots.js` returns `travel_warnings` in the response using OpenRouteService for precise routing. Warning only, does not block.
+
+- Slot filtering requires no API key (uses postcodes.io + distance estimation)
+- Booking warnings require `OPENROUTESERVICE_API_KEY` env var (free from openrouteservice.org)
 - Threshold configurable per instructor via `instructors.max_travel_minutes` (default 30)
 - Extracts UK postcodes from free-text addresses using regex
-- Gracefully returns null if postcodes can't be extracted or API is unavailable
-- Skip with `?skip_travel_check=true` query param
+- Gracefully degrades — if no postcode provided or API unavailable, all slots show
+- Skip booking warning with `?skip_travel_check=true` query param
 
 ## Navigation design (app mode — March 2026)
 

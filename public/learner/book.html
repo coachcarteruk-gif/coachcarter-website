@@ -1164,6 +1164,12 @@ function isProfileComplete() {
   return !!(learnerProfile.phone && learnerProfile.phone.trim() && learnerProfile.pickup_address && learnerProfile.pickup_address.trim());
 }
 
+function getLearnerPostcode() {
+  if (!learnerProfile.pickup_address) return null;
+  const match = learnerProfile.pickup_address.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i);
+  return match ? match[1].toUpperCase().replace(/\s+/g, '+') : null;
+}
+
 // ─── View switching ──────────────────────────────────────────────────────────
 function setView(view) {
   currentView = view;
@@ -1271,6 +1277,8 @@ async function fetchNeededSlots() {
       let url = `/api/slots?action=available&from=${chunk.from}&to=${chunk.to}`;
       if (instructorId) url += `&instructor_id=${instructorId}`;
       if (selectedLessonType && selectedLessonType.id) url += `&lesson_type_id=${selectedLessonType.id}`;
+      const pc = getLearnerPostcode();
+      if (pc) url += `&pickup_postcode=${pc}`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -1579,7 +1587,8 @@ async function updateRepeatDates() {
     const to = dates[dates.length - 1];
     const ltId = selectedLessonType ? selectedLessonType.id : '';
     const instId = pendingSlot.instructor_id;
-    const res = await fetch(`/api/slots?action=available&from=${from}&to=${to}&instructor_id=${instId}${ltId ? '&lesson_type_id=' + ltId : ''}`);
+    const pc = getLearnerPostcode();
+    const res = await fetch(`/api/slots?action=available&from=${from}&to=${to}&instructor_id=${instId}${ltId ? '&lesson_type_id=' + ltId : ''}${pc ? '&pickup_postcode=' + pc : ''}`);
     const data = await res.json();
     // Check which dates have the slot available
     for (let i = 1; i < dates.length; i++) {

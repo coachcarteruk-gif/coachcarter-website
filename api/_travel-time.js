@@ -1,10 +1,13 @@
 // Travel time check between pickup postcodes
 //
-// Uses OpenRouteService (free tier, 40 req/min) to estimate driving time
-// between two UK postcodes. Returns null gracefully if postcodes can't be
-// extracted or the API is unavailable.
+// Two modes:
+// 1. FAST (slot filtering): postcodes.io + haversine distance estimation
+//    Used by handleAvailable() to hide infeasible slots. No API key needed.
+// 2. PRECISE (booking warning): OpenRouteService driving directions
+//    Used by handleBook() for post-booking warnings. Needs ORS API key.
 
 const DEFAULT_MAX_TRAVEL_MINUTES = 30;
+const TRAVEL_BUFFER_MINUTES = 10; // extra buffer on top of estimated drive time
 
 // UK postcode regex — matches full postcodes like "SW1A 1AA" or "B1 1BB"
 const UK_POSTCODE_RE = /\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
@@ -15,6 +18,63 @@ function extractPostcode(address) {
   const match = address.match(UK_POSTCODE_RE);
   return match ? match[1].toUpperCase().replace(/\s+/g, ' ') : null;
 }
+
+// ── Fast estimation (postcodes.io + haversine) ─────────────────────────────
+// Used for slot filtering — no API key needed, no rate limits
+
+/** Bulk geocode UK postcodes via postcodes.io (free, up to 100 per call) */
+async function bulkGeocodeUK(postcodes) {
+  if (!postcodes || postcodes.length === 0) return {};
+  const unique = [...new Set(postcodes.map(p => p.replace(/\s+/g, ' ').toUpperCase()))];
+  const map = {};
+  try {
+    // postcodes.io accepts up to 100 postcodes per bulk request
+    for (let i = 0; i < unique.length; i += 100) {
+      const batch = unique.slice(i, i + 100);
+      const resp = await fetch('https://api.postcodes.io/postcodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postcodes: batch })
+      });
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      for (const item of (data.result || [])) {
+        if (item.result) {
+          map[item.query.toUpperCase().replace(/\s+/g, ' ')] = {
+            lat: item.result.latitude,
+            lon: item.result.longitude
+          };
+        }
+      }
+    }
+  } catch { /* graceful — return whatever we got */ }
+  return map;
+}
+
+/** Haversine distance in km between two lat/lon points */
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Estimate driving time in minutes from straight-line distance.
+ * Uses road winding factor (1.3) and average UK urban speed (30 mph / 48 km/h).
+ */
+function estimateDriveMinutes(lat1, lon1, lat2, lon2) {
+  const straightKm = haversineKm(lat1, lon1, lat2, lon2);
+  const roadKm = straightKm * 1.3;
+  const avgSpeedKmH = 48;
+  return Math.round((roadKm / avgSpeedKmH) * 60);
+}
+
+// ── Precise routing (OpenRouteService) ──────────────────────────────────────
+// Used for post-booking warnings — needs OPENROUTESERVICE_API_KEY
 
 /** Geocode a UK postcode to [lon, lat] using OpenRouteService */
 async function geocodePostcode(apiKey, postcode) {
@@ -148,4 +208,7 @@ async function checkAdjacentTravelTime(sql, instructorId, date, startTime, endTi
   return warnings.length > 0 ? { warnings } : null;
 }
 
-module.exports = { checkTravelTime, checkAdjacentTravelTime, extractPostcode };
+module.exports = {
+  checkTravelTime, checkAdjacentTravelTime, extractPostcode,
+  bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES
+};
