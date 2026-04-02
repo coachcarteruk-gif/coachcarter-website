@@ -384,11 +384,11 @@ Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancell
 
 | Route | Method | Auth | Description |
 |---|---|---|---|
-| `/api/setmore-sync` | GET | CRON_SECRET | Cron job (every 15 min). Imports Setmore appointments as `lesson_bookings`. Detects cancelled/removed appointments and marks bookings as cancelled. Auto-creates/matches learners by phone/email. Idempotent via `setmore_key` unique index. Round-robin per instructor. |
+| `/api/setmore-sync` | GET | CRON_SECRET | Cron job (every 15 min). Imports Setmore appointments as `lesson_bookings`. Detects cancelled/removed appointments and marks bookings as cancelled. Auto-creates/matches learners by phone/email. Pulls pickup address from Setmore customer profile (address + city + postal_code). Backfills addresses on existing bookings. Idempotent via `setmore_key` unique index. Round-robin per instructor. |
 
 **Env:** `SETMORE_REFRESH_TOKEN` — Setmore OAuth2 refresh token, swapped for access token on each run.
 
-**DB columns:** `lesson_bookings.setmore_key`, `lesson_bookings.cancel_reason`, `learner_users.setmore_customer_key`, `learner_users.welcome_email_sent_at`, `instructors.setmore_staff_key`, `instructors.setmore_last_synced_at`, `instructors.setmore_sync_error`
+**DB columns:** `lesson_bookings.setmore_key`, `lesson_bookings.pickup_address`, `lesson_bookings.cancel_reason`, `learner_users.setmore_customer_key`, `learner_users.welcome_email_sent_at`, `instructors.setmore_staff_key`, `instructors.setmore_last_synced_at`, `instructors.setmore_sync_error`
 
 ### API — `api/setmore-welcome.js`
 
@@ -398,11 +398,11 @@ Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancell
 
 ### API — `api/_travel-time.js` (shared helper)
 
-Checks driving time between UK pickup postcodes using OpenRouteService (free tier). Extracts postcodes from free-text addresses via regex, geocodes them, and returns driving minutes. Used by `slots.js` `handleBook()` to warn when travel time between adjacent bookings exceeds threshold.
+Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-booking) uses postcodes.io + haversine estimation to hide unreachable slots — returns `travel_hidden` count in API response, shown as a banner on `book.html`. **Booking warning** (post-booking) uses OpenRouteService for precise routing — warning only, does not block.
 
-**Env:** `OPENROUTESERVICE_API_KEY` — free API key from openrouteservice.org
+**Env:** `OPENROUTESERVICE_API_KEY` — free API key from openrouteservice.org (only needed for post-booking warnings; slot filtering uses free postcodes.io)
 
-**DB columns:** `instructors.max_travel_minutes` — per-instructor threshold (default 30 mins)
+**DB columns:** `instructors.max_travel_minutes` — per-instructor threshold (default 30 mins), editable from admin portal
 
 ### API — `api/offers.js`
 

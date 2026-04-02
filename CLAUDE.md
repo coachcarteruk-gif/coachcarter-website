@@ -68,6 +68,7 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 - Idempotent — `lesson_bookings.setmore_key` unique index prevents duplicates
 - Imported bookings have `created_by = 'setmore_sync'` and `minutes_deducted = 0` (no balance deduction)
 - Service durations subtract Setmore's built-in 30-min buffer (e.g. 120min Setmore = 90min real lesson)
+- **Pickup addresses** pulled from Setmore customer profile (`address`, `city`, `postal_code` fields) and stored in `lesson_bookings.pickup_address`. Backfills existing bookings that previously had no address. Customer data cached per `customer_key` to avoid duplicate API calls.
 
 **Instructor DB emails differ from Setmore emails:**
 - Fraser: DB has `fraser@coachcarter.uk` (Setmore has `coachcarteruk@gmail.com`)
@@ -97,10 +98,12 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 
 - Slot filtering requires no API key (uses postcodes.io + distance estimation)
 - Booking warnings require `OPENROUTESERVICE_API_KEY` env var (free from openrouteservice.org)
-- Threshold configurable per instructor via `instructors.max_travel_minutes` (default 30)
+- Threshold configurable per instructor via `instructors.max_travel_minutes` (default 30), editable from admin portal
 - Extracts UK postcodes from free-text addresses using regex
 - Gracefully degrades — if no postcode provided or API unavailable, all slots show
 - Skip booking warning with `?skip_travel_check=true` query param
+- API returns `travel_hidden` count when slots are removed by the filter
+- `book.html` shows a banner: "X slots hidden due to travel distance from your pickup address"
 
 ## Navigation design (app mode — March 2026)
 

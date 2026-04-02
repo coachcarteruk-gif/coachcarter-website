@@ -820,6 +820,9 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 - ✅ Cancellation detection — marks bookings as cancelled when Setmore appointments are cancelled or removed
 - ✅ `api/setmore-welcome.js` — daily cron sends one-time welcome email with 7-day magic link to Setmore-created learners
 - ✅ `api/_travel-time.js` — travel time check between pickup postcodes using OpenRouteService, integrated into booking flow as a warning
+- ✅ Pickup address import — pulls address from Setmore customer profile (`address`, `city`, `postal_code`) into `lesson_bookings.pickup_address`, with backfill for existing bookings
+- ✅ "Slots hidden" banner on `book.html` — shows learners how many slots were filtered by travel distance
+- ✅ Admin `max_travel_minutes` setting — per-instructor travel threshold editable from admin portal instructor form
 
 **Transition plan:** New bookings through CoachCarter, existing Setmore clients migrate gradually, then remove sync.
 
@@ -852,4 +855,4 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 - **Shared code:** Auth helpers in `api/_auth-helpers.js`, mail utilities in `api/_shared.js`, error alerts in `api/_error-alert.js`, payout logic in `api/_payout-helpers.js`
 - **Shared frontend:** CSS in `public/shared/learner.css` + `instructor.css`, auth JS in `public/shared/learner-auth.js` + `instructor-auth.js`
 - **Error alerting:** Email alerts on 500 errors via `api/_error-alert.js` (requires `ERROR_ALERT_EMAIL` env var)
-- **Setmore sync:** Ongoing import from Setmore booking system via REST API. Cron every 15 min (`api/setmore-sync.js`). Imports as real `lesson_bookings` with `created_by='setmore_sync'`. Idempotent via `setmore_key`. Both systems run in parallel during transition.
+- **Setmore sync:** Ongoing import from Setmore booking system via REST API. Cron every 15 min (`api/setmore-sync.js`). Imports as real `lesson_bookings` with `created_by='setmore_sync'`. Pulls pickup addresses from customer profiles. Idempotent via `setmore_key`. Both systems run in parallel during transition.
