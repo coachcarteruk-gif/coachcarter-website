@@ -171,6 +171,13 @@ module.exports = async (req, res) => {
     const typeBySlug = {};
     for (const lt of lessonTypes) typeBySlug[lt.slug] = lt.id;
 
+    // 4b. Load all instructor setmore_staff_key → id mapping
+    const allInstructors = await sql`
+      SELECT id, setmore_staff_key FROM instructors WHERE setmore_staff_key IS NOT NULL
+    `;
+    const instructorByStaffKey = {};
+    for (const inst of allInstructors) instructorByStaffKey[inst.setmore_staff_key] = inst.id;
+
     // 5. Process each appointment
     let imported = 0;
     let skipped = 0;
@@ -181,6 +188,9 @@ module.exports = async (req, res) => {
         SELECT id FROM lesson_bookings WHERE setmore_key = ${appt.key}
       `;
       if (existing) { skipped++; continue; }
+
+      // Resolve the correct instructor from the appointment's staff_key
+      const resolvedInstructorId = instructorByStaffKey[appt.staff_key] || instructor.id;
 
       // Map service to real duration
       const serviceInfo = SERVICE_MAP[appt.service_key];
@@ -206,14 +216,14 @@ module.exports = async (req, res) => {
         continue;
       }
 
-      // 5b. Insert booking
+      // 5b. Insert booking — assign to correct instructor based on appointment staff_key
       try {
         await sql`
           INSERT INTO lesson_bookings
             (learner_id, instructor_id, scheduled_date, start_time, end_time,
              status, lesson_type_id, minutes_deducted, setmore_key, created_by)
           VALUES
-            (${learnerId}, ${instructor.id}, ${start.date}, ${start.time}, ${realEndTime},
+            (${learnerId}, ${resolvedInstructorId}, ${start.date}, ${start.time}, ${realEndTime},
              'confirmed', ${lessonTypeId}, 0, ${appt.key}, 'setmore_sync')
         `;
         imported++;
