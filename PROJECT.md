@@ -380,6 +380,16 @@ Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancell
 |---|---|---|---|
 | `/api/ical-sync` | GET | CRON_SECRET | Cron job (every 15 min). Syncs one instructor's external iCal feed per invocation. Parses events, expands RRULE, upserts into `instructor_external_events`. |
 
+### API — `api/setmore-sync.js`
+
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/setmore-sync` | GET | CRON_SECRET | Cron job (every 15 min). Imports Setmore appointments as `lesson_bookings`. Auto-creates/matches learners by phone/email. Idempotent via `setmore_key` unique index. Round-robin per instructor. |
+
+**Env:** `SETMORE_REFRESH_TOKEN` — Setmore OAuth2 refresh token, swapped for access token on each run.
+
+**DB columns:** `lesson_bookings.setmore_key`, `learner_users.setmore_customer_key`, `instructors.setmore_staff_key`, `instructors.setmore_last_synced_at`, `instructors.setmore_sync_error`
+
 ### API — `api/offers.js`
 
 | Action | Method | Auth | Description |

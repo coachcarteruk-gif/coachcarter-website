@@ -35,7 +35,7 @@ Driving school website for CoachCarter (coachcarter.uk). Vanilla HTML/JS fronten
 
 ## Important env vars
 
-`POSTGRES_URL`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ANTHROPIC_API_KEY`, `MIGRATION_SECRET`, `ERROR_ALERT_EMAIL`, `STAFF_EMAIL`, `ADMIN_SECRET`, `BASE_URL`
+`POSTGRES_URL`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ANTHROPIC_API_KEY`, `MIGRATION_SECRET`, `ERROR_ALERT_EMAIL`, `STAFF_EMAIL`, `ADMIN_SECRET`, `BASE_URL`, `SETMORE_REFRESH_TOKEN`
 
 ## Error alerting
 
@@ -55,6 +55,29 @@ Instructors are paid via Stripe Connect Express accounts. Money flows: learner p
 - **Two fee models** per instructor (set via admin portal):
   - **Commission** (default): instructor gets `commission_rate` (e.g. 85%) of each lesson price
   - **Franchise fee**: platform takes a fixed `weekly_franchise_fee_pence` per week, instructor keeps the rest. Capped at gross (never goes negative). Set `weekly_franchise_fee_pence = NULL` to revert to commission.
+
+## Setmore → CoachCarter booking transition (live since April 2026)
+
+Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in booking system. **Both systems run in parallel** during the transition.
+
+**How it works:**
+- `api/setmore-sync.js` — cron every 15 min, imports Setmore appointments as real `lesson_bookings`
+- Syncs via Setmore REST API (OAuth2, refresh token in `SETMORE_REFRESH_TOKEN` env var)
+- Each appointment's `staff_key` maps to the correct CoachCarter instructor via `instructors.setmore_staff_key`
+- Learners auto-created or matched by phone/email, linked via `learner_users.setmore_customer_key`
+- Idempotent — `lesson_bookings.setmore_key` unique index prevents duplicates
+- Imported bookings have `created_by = 'setmore_sync'` and `minutes_deducted = 0` (no balance deduction)
+- Service durations subtract Setmore's built-in 30-min buffer (e.g. 120min Setmore = 90min real lesson)
+
+**Key rules:**
+- Do NOT delete or modify the `setmore_key` column or `idx_bookings_setmore_key` index
+- Do NOT send notifications for imported bookings (the sync deliberately skips this)
+- Imported bookings block slots automatically — no changes needed in `slots.js`
+- The service mapping in `setmore-sync.js` is hardcoded to Fraser's Setmore account — update if services change
+
+**Transition plan:** New bookings go through CoachCarter. Existing Setmore clients migrate as lessons complete. Once all clients are on CoachCarter, remove the sync cron and `SETMORE_REFRESH_TOKEN` env var.
+
+**Future feature (not yet built):** Travel time check between pickup postcodes — block back-to-back bookings if travel time exceeds a configurable threshold.
 
 ## Navigation design (app mode — March 2026)
 

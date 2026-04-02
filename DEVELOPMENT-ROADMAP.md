@@ -805,6 +805,23 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 
 ---
 
+## 2.50 — Setmore Booking Sync (April 2026)
+
+**What:** Ongoing sync from Setmore (third-party booking system) into CoachCarter's built-in booking system. Both systems run in parallel during the transition.
+
+**Built:**
+- `api/setmore-sync.js` — cron every 15 min, imports Setmore appointments as real `lesson_bookings`
+- OAuth2 auth via `SETMORE_REFRESH_TOKEN` env var
+- Auto-creates/matches learner accounts by phone number or email
+- Idempotent via `setmore_key` unique index on `lesson_bookings`
+- Service mapping strips Setmore's built-in 30-min buffer from lesson durations
+- Resolves correct instructor from each appointment's `staff_key`
+- 3 new lesson types: 3-Hour Lesson (active), 1-Hour Lesson (inactive), Free Trial (inactive)
+
+**Transition plan:** New bookings through CoachCarter, existing Setmore clients migrate gradually, then remove sync.
+
+**Planned:** Travel time check between pickup postcodes to prevent impossible back-to-back bookings.
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
@@ -834,3 +851,4 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 - **Shared code:** Auth helpers in `api/_auth-helpers.js`, mail utilities in `api/_shared.js`, error alerts in `api/_error-alert.js`, payout logic in `api/_payout-helpers.js`
 - **Shared frontend:** CSS in `public/shared/learner.css` + `instructor.css`, auth JS in `public/shared/learner-auth.js` + `instructor-auth.js`
 - **Error alerting:** Email alerts on 500 errors via `api/_error-alert.js` (requires `ERROR_ALERT_EMAIL` env var)
+- **Setmore sync:** Ongoing import from Setmore booking system via REST API. Cron every 15 min (`api/setmore-sync.js`). Imports as real `lesson_bookings` with `created_by='setmore_sync'`. Idempotent via `setmore_key`. Both systems run in parallel during transition.
