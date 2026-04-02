@@ -463,7 +463,11 @@ async function handleComplete(req, res) {
       return res.status(400).json({ error: `Cannot complete a booking with status "${booking.status}"` });
 
     // Only allow completing bookings that are in the past
-    const lessonEnd = new Date(`${booking.scheduled_date}T${booking.end_time || booking.start_time}Z`);
+    const dateStr = typeof booking.scheduled_date === 'string'
+      ? booking.scheduled_date.slice(0, 10)
+      : new Date(booking.scheduled_date).toISOString().slice(0, 10);
+    const timeStr = booking.end_time || booking.start_time || '23:59:59';
+    const lessonEnd = new Date(`${dateStr}T${timeStr}Z`);
     if (lessonEnd > new Date())
       return res.status(400).json({ error: 'Cannot mark a future lesson as complete' });
 
@@ -534,7 +538,7 @@ async function handleComplete(req, res) {
   } catch (err) {
     console.error('instructor complete error:', err);
     reportError('/api/instructor', err);
-    return res.status(500).json({ error: 'Failed to mark booking as complete' });
+    return res.status(500).json({ error: 'Failed to mark booking as complete', message: err.message });
   }
 }
 
