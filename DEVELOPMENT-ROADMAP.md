@@ -838,6 +838,20 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 
 **Files changed:** `public/learner/book.html`, `public/learner/buy-credits.html`, `api/setmore-sync.js`
 
+## 2.52 — "Next Available" Slot Feed (3 April 2026)
+
+**What:** Replace the weekly/monthly/daily time-grid calendar on the booking page with a clean "next available" feed. Learners see only available slots, sorted by date+time — no empty hours or empty days.
+
+**Built:**
+- ✅ Slot feed — flat scrollable list of slot cards showing date, time, instructor, lesson type colour. No grid, no timeline.
+- ✅ Sticky lesson type pill bar — compact pills below the header (`position: sticky`), always visible while scrolling. Shows type name, duration, price.
+- ✅ Progressive loading — 14 days at a time with "Show more slots" button (up to 90 days).
+- ✅ Removed ~500 lines of old calendar CSS/JS: 3 renderers (monthly/weekly/daily), view toggle, date navigation arrows, cursor state, drillToDay.
+- ✅ Admin adjust-credits fix — transaction log INSERT made best-effort so balance updates succeed even if the log fails.
+- ✅ Postcode save fix — corrected action name (`update_profile` → `update-profile`).
+
+**Files changed:** `public/learner/book.html`, `api/admin.js`
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

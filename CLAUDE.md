@@ -104,8 +104,18 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 - Skip booking warning with `?skip_travel_check=true` query param
 - API returns `travel_hidden` count when slots are removed by the filter
 - `book.html` shows a banner: "X slots hidden due to travel distance from your pickup address"
-- `book.html` shows an inline postcode prompt above the calendar for learners without a pickup_address; saves to profile and re-fetches with travel filter
+- `book.html` shows an inline postcode prompt above the slot feed for learners without a pickup_address; saves to profile and re-fetches with travel filter
 - `setmore-sync.js` step 5d backfills `learner_users.pickup_address` from the learner's most recent booking if their profile field is empty
+
+## Booking page (slot feed — April 2026)
+
+`book.html` uses a "next available" slot feed instead of a calendar. Do NOT re-add calendar views (weekly/monthly/daily were intentionally removed).
+
+- **Slot feed:** Flat scrollable list of available slots sorted by date+time. No empty hours, no grid. Each card shows date, time, instructor, lesson type colour.
+- **Lesson type pill bar:** Sticky bar below header. Compact pills with type name, duration, price. Selecting a type re-fetches slots.
+- **Progressive loading:** 14 days at a time. "Show more slots" button loads the next 14 days (max 90).
+- **Instructor filter:** Dropdown in toolbar filters slots by instructor.
+- No view toggles, no date navigation arrows, no cursor state.
 
 ## Navigation design (app mode — March 2026)
 
