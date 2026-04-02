@@ -149,7 +149,7 @@ async function handleUpdate(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyAdmin(req))     return res.status(401).json({ error: 'Unauthorised' });
 
-  const { id, name, email, phone, bio, photo_url, active, buffer_minutes, commission_rate } = req.body;
+  const { id, name, email, phone, bio, photo_url, active, buffer_minutes, commission_rate, max_travel_minutes } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required' });
 
   const hasFranchiseFee = 'weekly_franchise_fee_pence' in (req.body || {});
@@ -159,6 +159,7 @@ async function handleUpdate(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
     const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null) ? parseInt(buffer_minutes) : null;
     const rateVal = (commission_rate !== undefined && commission_rate !== null) ? parseFloat(commission_rate) : null;
+    const travelVal = (max_travel_minutes !== undefined && max_travel_minutes !== null) ? parseInt(max_travel_minutes) : null;
 
     const [instructor] = await sql`
       UPDATE instructors SET
@@ -169,10 +170,11 @@ async function handleUpdate(req, res) {
         photo_url       = COALESCE(${photo_url || null}, photo_url),
         active          = COALESCE(${active !== undefined ? active : null}, active),
         buffer_minutes  = COALESCE(${bufVal}, buffer_minutes),
+        max_travel_minutes = COALESCE(${travelVal}, max_travel_minutes),
         commission_rate = COALESCE(${rateVal}, commission_rate),
         weekly_franchise_fee_pence = CASE WHEN ${hasFranchiseFee} THEN ${franchiseFeeVal != null ? parseInt(franchiseFeeVal) : null}::integer ELSE weekly_franchise_fee_pence END
       WHERE id = ${id}
-      RETURNING id, name, email, phone, bio, photo_url, active, COALESCE(buffer_minutes, 30) AS buffer_minutes, COALESCE(commission_rate, 0.85) AS commission_rate, weekly_franchise_fee_pence
+      RETURNING id, name, email, phone, bio, photo_url, active, COALESCE(buffer_minutes, 30) AS buffer_minutes, max_travel_minutes, COALESCE(commission_rate, 0.85) AS commission_rate, weekly_franchise_fee_pence
     `;
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
     return res.json({ instructor });

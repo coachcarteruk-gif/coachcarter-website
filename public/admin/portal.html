@@ -810,6 +810,19 @@ body {
       </select>
     </div>
     <div class="form-group">
+      <label>Max travel time between pickups</label>
+      <select id="inst-max-travel" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
+        <option value="15">15 minutes</option>
+        <option value="20">20 minutes</option>
+        <option value="25">25 minutes</option>
+        <option value="30" selected>30 minutes (default)</option>
+        <option value="40">40 minutes</option>
+        <option value="45">45 minutes</option>
+        <option value="60">60 minutes</option>
+      </select>
+      <small style="color:var(--muted);font-size:0.78rem;">Slots are hidden from learners if the instructor can't travel between pickups within this time</small>
+    </div>
+    <div class="form-group">
       <label>Fee Model</label>
       <select id="inst-fee-model" onchange="toggleFeeModelFields()"
         style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
@@ -1097,6 +1110,7 @@ function openAddInstructor() {
   document.getElementById('inst-bio').value = '';
   document.getElementById('inst-photo').value = '';
   document.getElementById('inst-buffer').value = '30';
+  document.getElementById('inst-max-travel').value = '30';
   document.getElementById('inst-commission').value = '85';
   document.getElementById('inst-fee-model').value = 'commission';
   document.getElementById('inst-franchise-fee').value = '';
@@ -1115,6 +1129,7 @@ function openEditInstructor(id) {
   document.getElementById('inst-bio').value = i.bio || '';
   document.getElementById('inst-photo').value = i.photo_url || '';
   document.getElementById('inst-buffer').value = String(i.buffer_minutes ?? 30);
+  document.getElementById('inst-max-travel').value = String(i.max_travel_minutes ?? 30);
   document.getElementById('inst-commission').value = String(Math.round((i.commission_rate ?? 0.85) * 100));
   // Fee model
   const hasFranchise = i.weekly_franchise_fee_pence != null;
@@ -1140,6 +1155,7 @@ async function saveInstructor() {
     bio: document.getElementById('inst-bio').value.trim() || null,
     photo_url: document.getElementById('inst-photo').value.trim() || null,
     buffer_minutes: parseInt(document.getElementById('inst-buffer').value) || 30,
+    max_travel_minutes: parseInt(document.getElementById('inst-max-travel').value) || 30,
   };
   if (feeModel === 'franchise') {
     const feeGbp = parseFloat(document.getElementById('inst-franchise-fee').value);

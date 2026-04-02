@@ -375,6 +375,7 @@ async function handleAllInstructors(req, res) {
       SELECT
         i.id, i.name, i.email, i.phone, i.bio, i.photo_url, i.active, i.created_at,
         COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+        i.max_travel_minutes,
         COALESCE(i.commission_rate, 0.85) AS commission_rate,
         i.weekly_franchise_fee_pence,
         (SELECT COUNT(*)::int FROM lesson_bookings lb

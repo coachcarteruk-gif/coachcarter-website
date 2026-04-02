@@ -718,6 +718,12 @@
     </div>
   </div>
 
+  <!-- Travel-filtered slots notice -->
+  <div id="travelHiddenBanner" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.82rem;color:var(--muted);align-items:center;gap:8px;">
+    <span style="font-size:1.1rem;">📍</span>
+    <span id="travelHiddenText"></span>
+  </div>
+
   <!-- Calendar content -->
   <div id="calContent">
     <div class="loading"><div class="spinner"></div><p>Loading available slots…</p></div>
@@ -1273,6 +1279,7 @@ async function fetchNeededSlots() {
   }
 
   try {
+    let travelHidden = 0;
     for (const chunk of chunks) {
       let url = `/api/slots?action=available&from=${chunk.from}&to=${chunk.to}`;
       if (instructorId) url += `&instructor_id=${instructorId}`;
@@ -1282,6 +1289,7 @@ async function fetchNeededSlots() {
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      if (data.travel_hidden) travelHidden += data.travel_hidden;
       const slots = data.slots || {};
       for (const ds in slots) {
         if (!slotCache[ds]) slotCache[ds] = [];
@@ -1291,6 +1299,15 @@ async function fetchNeededSlots() {
           }
         }
       }
+    }
+    // Show/hide travel-filtered slots banner
+    const banner = document.getElementById('travelHiddenBanner');
+    if (travelHidden > 0) {
+      document.getElementById('travelHiddenText').textContent =
+        `${travelHidden} slot${travelHidden === 1 ? '' : 's'} hidden due to travel distance from your pickup address`;
+      banner.style.display = 'flex';
+    } else {
+      banner.style.display = 'none';
     }
     loadedRanges.push(cacheKey);
     return true;

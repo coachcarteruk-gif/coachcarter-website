@@ -209,11 +209,19 @@ module.exports = async (req, res) => {
         continue;
       }
 
-      // Skip if already imported
+      // Skip if already imported (but backfill pickup_address if missing)
       const [existing] = await sql`
-        SELECT id FROM lesson_bookings WHERE setmore_key = ${appt.key}
+        SELECT id, pickup_address FROM lesson_bookings WHERE setmore_key = ${appt.key}
       `;
-      if (existing) { skipped++; continue; }
+      if (existing) {
+        // Backfill pickup_address for previously imported bookings that lack one
+        const addr = (appt.comment || '').trim() || null;
+        if (addr && !existing.pickup_address) {
+          await sql`UPDATE lesson_bookings SET pickup_address = ${addr} WHERE id = ${existing.id}`;
+        }
+        skipped++;
+        continue;
+      }
 
       // Resolve the correct instructor from the appointment's staff_key
       const resolvedInstructorId = instructorByStaffKey[appt.staff_key] || instructor.id;
@@ -243,14 +251,19 @@ module.exports = async (req, res) => {
       }
 
       // 5b. Insert booking — assign to correct instructor based on appointment staff_key
+      // Setmore stores the pickup address in the comment field
+      const pickupAddress = (appt.comment || '').trim() || null;
+
       try {
         await sql`
           INSERT INTO lesson_bookings
             (learner_id, instructor_id, scheduled_date, start_time, end_time,
-             status, lesson_type_id, minutes_deducted, setmore_key, created_by)
+             status, lesson_type_id, minutes_deducted, setmore_key, created_by,
+             pickup_address)
           VALUES
             (${learnerId}, ${resolvedInstructorId}, ${start.date}, ${start.time}, ${realEndTime},
-             'confirmed', ${lessonTypeId}, 0, ${appt.key}, 'setmore_sync')
+             'confirmed', ${lessonTypeId}, 0, ${appt.key}, 'setmore_sync',
+             ${pickupAddress})
         `;
         imported++;
       } catch (err) {

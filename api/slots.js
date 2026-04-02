@@ -384,6 +384,7 @@ async function handleAvailable(req, res) {
 
     // 4. Walk every date in range and generate slots
     const result = {}; // { "YYYY-MM-DD": [ slot, ... ] }
+    let travelHiddenCount = 0; // slots removed by travel time filter
 
     // For same-day booking: calculate current time in minutes to filter past slots
     const now          = new Date();
@@ -472,6 +473,7 @@ async function handleAvailable(req, res) {
               }
 
               if (travelBlocked) {
+                travelHiddenCount++;
                 slotStart += slotMinutes;
                 continue;
               }
@@ -504,14 +506,16 @@ async function handleAvailable(req, res) {
       cursor = addDays(cursor, 1);
     }
 
-    return res.json({
+    const response = {
       from,
       to,
       instructor_id: instructor_id || null,
       lesson_type: { id: lessonType.id, name: lessonType.name, duration_minutes: slotMinutes, price_pence: lessonType.price_pence, colour: lessonType.colour },
       days_with_slots: Object.keys(result).length,
       slots: result
-    });
+    };
+    if (travelHiddenCount > 0) response.travel_hidden = travelHiddenCount;
+    return res.json(response);
 
   } catch (err) {
     console.error('slots available error:', err);
