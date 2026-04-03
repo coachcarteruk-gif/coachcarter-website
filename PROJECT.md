@@ -857,6 +857,35 @@ When a learner is deleted, data is handled as follows:
 
 ---
 
+## Security & Performance (April 2026)
+
+### Security
+
+- **Security headers** on all responses via `middleware.js`: HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
+- **Centralised CORS** in `middleware.js` — only allows `coachcarter.uk`, `coachcarter.co.uk`, Vercel previews, localhost
+- **Parameterized SQL only** — no dynamic table/column name interpolation anywhere in the codebase
+- **Rate limiting** on magic link sends — max 5 per email/phone per hour (`rate_limits` table)
+- **Neon connection** — SSL (`sslmode=require` + `channel_binding=require`), connection pooling (`-pooler` hostname)
+
+### Performance — Database Indexes
+
+28 indexes added to FK columns and common query patterns:
+
+| Index | Purpose |
+|---|---|
+| `lesson_bookings(school_id, status, scheduled_date)` | Admin dashboard, booking lists |
+| `lesson_bookings(instructor_id, scheduled_date, start_time)` | Slot availability checks |
+| `lesson_bookings(learner_id, status)` | Learner booking history |
+| `lesson_bookings(learner_id)`, `(instructor_id)`, `(lesson_type_id)` | FK joins |
+| `credit_transactions(learner_id)` | Balance/transaction lookups |
+| `driving_sessions(user_id)`, `skill_ratings(user_id)` | Progress tracking |
+| `quiz_results(learner_id)`, `mock_tests(learner_id)` | Learner progress |
+| `qa_questions(user_id)`, `qa_answers(question_id)` | Q&A lookups |
+| `magic_link_tokens(email)`, `(phone)` | Partial indexes for login |
+| + 15 more FK indexes | See `db/migration.sql` |
+
+---
+
 ## What's still to build
 
 - **Refund flow** — learner requests cash refund, admin approves, Stripe reverses

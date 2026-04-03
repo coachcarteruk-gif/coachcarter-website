@@ -129,6 +129,12 @@ The platform is GDPR-compliant. All future changes MUST follow these rules.
 - **SSL/TLS** — Neon serverless library connects over HTTPS by default. No raw TCP.
 - **No credential exposure** — `POSTGRES_URL` never logged or sent to clients.
 
+### Database performance
+- 28 indexes on FK columns and common query patterns (added April 2026)
+- Key composite indexes: `lesson_bookings(school_id, status, scheduled_date)`, `lesson_bookings(instructor_id, scheduled_date, start_time)`, `lesson_bookings(learner_id, status)`
+- Partial indexes on `magic_link_tokens(email)` and `magic_link_tokens(phone)` WHERE NOT NULL
+- All new FK columns MUST have an index — check `db/migration.sql` for the pattern
+
 ### Rules for ALL future changes
 
 1. **Never use dynamic SQL identifiers**: No `sql(\`DELETE FROM ${tableName}\`)`. Always write explicit queries with tagged template literals.
@@ -136,6 +142,7 @@ The platform is GDPR-compliant. All future changes MUST follow these rules.
 3. **Rate-limit sensitive public endpoints**: Any new unauthenticated endpoint that sends emails, SMS, or costs money must be rate-limited.
 4. **Don't expose error internals**: Never send `err.stack` or raw SQL errors to clients. Use `{ error: 'Human message', details: err.message }` at most.
 5. **Keep security headers in middleware.js**: Don't set or override security headers in individual API files.
+6. **Index all new FK columns**: Every new foreign key column must have a corresponding `CREATE INDEX IF NOT EXISTS` in `db/migration.sql`.
 
 ## Working practices
 

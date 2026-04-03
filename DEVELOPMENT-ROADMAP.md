@@ -811,6 +811,26 @@ Full GDPR compliance pass across the entire platform. Addresses cookie consent, 
 **Files modified:** 35 HTML files, `api/learner.js`, `api/admin.js`, `api/config.js`, `api/magic-link.js`, `api/slots.js`, `db/migration.sql`, `public/sidebar.js`, `public/learner/profile.html`, `vercel.json`
 **DB:** 3 new tables (`cookie_consents`, `audit_log`, `deletion_requests`), 5 new columns, FK change on `credit_transactions`
 
+### 3.8 — Database Security & Performance Hardening (3 April 2026)
+
+Security hardening and query performance optimization across the entire platform.
+
+**Security fixes:**
+- Fixed SQL injection pattern — replaced dynamic table/column name interpolation with explicit parameterized queries in 3 files
+- Added security headers to all responses via middleware.js (HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
+- Centralised CORS in middleware.js — restricted from `*` to coachcarter.uk/co.uk domains only, removed per-file CORS from 31 API files
+- Rate limiting on magic link sends (5 per email/phone per hour) via `rate_limits` DB table
+- Verified Neon SSL (`sslmode=require` + `channel_binding=require`) and connection pooling
+
+**Performance — 28 new indexes:**
+- FK indexes on lesson_bookings (learner_id, instructor_id, lesson_type_id), credit_transactions, driving_sessions, skill_ratings, quiz_results, mock_tests, qa_questions/answers, slot_reservations, instructor_learner_notes
+- Composite indexes: (school_id, status, scheduled_date), (instructor_id, scheduled_date, start_time), (learner_id, status)
+- Partial indexes on magic_link_tokens (email/phone WHERE NOT NULL)
+- Medium priority: lesson_confirmations, sent_reminders, lesson_offers, instructor_availability, admin_users
+
+**Files modified:** `middleware.js`, `api/admin.js`, `api/learner.js`, `api/cron-retention.js`, `api/magic-link.js`, `db/migration.sql`, 31 API files (CORS removal), `CLAUDE.md`
+**DB:** 1 new table (`rate_limits`), 28 new indexes, `last_activity_at` DEFAULT NOW()
+
 ---
 
 ## Phase 4: Future Considerations (Not Yet Scoped)
