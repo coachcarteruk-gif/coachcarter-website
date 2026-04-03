@@ -1113,3 +1113,84 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   window_start  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_rate_limits_key ON rate_limits(key);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- PERFORMANCE: FOREIGN KEY INDEXES (HIGH PRIORITY)
+-- Missing indexes on frequently queried FK columns. Every JOIN and DELETE
+-- CASCADE benefits from these.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- lesson_bookings — most queried table, was missing all FK indexes
+CREATE INDEX IF NOT EXISTS idx_lesson_bookings_learner_id ON lesson_bookings(learner_id);
+CREATE INDEX IF NOT EXISTS idx_lesson_bookings_instructor_id ON lesson_bookings(instructor_id);
+CREATE INDEX IF NOT EXISTS idx_lesson_bookings_lesson_type_id ON lesson_bookings(lesson_type_id);
+
+-- Composite: the most common admin/dashboard query pattern
+CREATE INDEX IF NOT EXISTS idx_lesson_bookings_school_status_date
+  ON lesson_bookings(school_id, status, scheduled_date);
+
+-- Composite: instructor slot availability checks
+CREATE INDEX IF NOT EXISTS idx_lesson_bookings_instructor_date
+  ON lesson_bookings(instructor_id, scheduled_date, start_time);
+
+-- Composite: learner booking history
+CREATE INDEX IF NOT EXISTS idx_lesson_bookings_learner_status
+  ON lesson_bookings(learner_id, status);
+
+-- credit_transactions — queried on every profile/dashboard load
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_learner_id ON credit_transactions(learner_id);
+
+-- driving_sessions — progress tracking queries
+CREATE INDEX IF NOT EXISTS idx_driving_sessions_user_id ON driving_sessions(user_id);
+
+-- skill_ratings — progress tracking queries
+CREATE INDEX IF NOT EXISTS idx_skill_ratings_user_id ON skill_ratings(user_id);
+
+-- quiz_results / mock_tests — learner progress
+CREATE INDEX IF NOT EXISTS idx_quiz_results_learner_id ON quiz_results(learner_id);
+CREATE INDEX IF NOT EXISTS idx_mock_tests_learner_id ON mock_tests(learner_id);
+
+-- qa_questions — Q&A lookups by learner
+CREATE INDEX IF NOT EXISTS idx_qa_questions_user_id ON qa_questions(user_id);
+CREATE INDEX IF NOT EXISTS idx_qa_answers_question_id ON qa_answers(question_id);
+
+-- slot_reservations — booking flow
+CREATE INDEX IF NOT EXISTS idx_slot_reservations_learner_id ON slot_reservations(learner_id);
+CREATE INDEX IF NOT EXISTS idx_slot_reservations_instructor_id ON slot_reservations(instructor_id);
+
+-- instructor notes — learner detail page
+CREATE INDEX IF NOT EXISTS idx_instructor_learner_notes_learner_id ON instructor_learner_notes(learner_id);
+CREATE INDEX IF NOT EXISTS idx_instructor_learner_notes_instructor_id ON instructor_learner_notes(instructor_id);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- PERFORMANCE: MEDIUM PRIORITY FK INDEXES
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- lesson_confirmations — joined on booking lookups
+CREATE INDEX IF NOT EXISTS idx_lesson_confirmations_booking_id ON lesson_confirmations(booking_id);
+
+-- sent_reminders — reminder dedup checks
+CREATE INDEX IF NOT EXISTS idx_sent_reminders_booking_id ON sent_reminders(booking_id);
+
+-- lesson_offers — offer lookups by learner
+CREATE INDEX IF NOT EXISTS idx_lesson_offers_learner_id ON lesson_offers(learner_id);
+
+-- instructor_availability — filtered by instructor
+CREATE INDEX IF NOT EXISTS idx_instructor_availability_instructor_id ON instructor_availability(instructor_id);
+
+-- instructor_login_tokens — token lookup by instructor
+CREATE INDEX IF NOT EXISTS idx_instructor_login_tokens_instructor_id ON instructor_login_tokens(instructor_id);
+
+-- magic_link_tokens — login lookups by email/phone
+CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_email ON magic_link_tokens(email) WHERE email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_phone ON magic_link_tokens(phone) WHERE phone IS NOT NULL;
+
+-- admin_users — school scoping
+CREATE INDEX IF NOT EXISTS idx_admin_users_school_id ON admin_users(school_id) WHERE school_id IS NOT NULL;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- PERFORMANCE: DEFAULTS & CONSTRAINTS
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- Ensure new learners get last_activity_at set automatically
+ALTER TABLE learner_users ALTER COLUMN last_activity_at SET DEFAULT NOW();
