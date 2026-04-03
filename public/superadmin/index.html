@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Platform Overview — CoachCarter</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --sidebar-bg: #262626;
+  --sidebar-hover: #2e2e2e;
+  --sidebar-active: #383838;
+  --accent: #f97316;
+  --accent-dk: #ea580c;
+  --accent-lt: #fff4ec;
+  --accent-mid: rgba(249,115,22,0.12);
+  --primary: #262626;
+  --muted: #797879;
+  --border: #e0e0e0;
+  --bg: #ffffff;
+  --white: #ffffff;
+  --green: #22c55e;
+  --green-bg: #dcfce7;
+  --amber: #f59e0b;
+  --amber-bg: #fef3c7;
+  --red: #ef4444;
+  --red-bg: #fee2e2;
+  --blue: #3b82f6;
+  --blue-bg: #dbeafe;
+  --font-head: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Lato', sans-serif;
+  --radius: 14px;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--primary);
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 240px;
+  background: var(--sidebar-bg);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transition: transform 0.3s;
+}
+.sidebar-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 24px 20px 20px;
+  text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.sidebar-brand-text { font-family: var(--font-head); font-size: 1rem; font-weight: 700; color: #fff; }
+.sidebar-brand-sub { font-size: 0.7rem; color: var(--accent); font-weight: 600; }
+.sidebar-nav { flex: 1; padding: 16px 0; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  color: rgba(255,255,255,0.6);
+  text-decoration: none;
+  font-size: 0.9rem; font-weight: 500;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+.sidebar-nav a:hover { color: #fff; background: var(--sidebar-hover); }
+.sidebar-nav a.active {
+  color: var(--accent); background: var(--sidebar-hover);
+  border-left-color: var(--accent);
+}
+.sidebar-nav a .nav-icon { font-size: 1.1rem; width: 24px; text-align: center; }
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.sidebar-footer .admin-name { font-size: 0.85rem; color: rgba(255,255,255,0.8); font-weight: 600; }
+.sidebar-footer .admin-email { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+.logout-btn {
+  display: block; width: 100%;
+  margin-top: 12px; padding: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px; color: rgba(255,255,255,0.6);
+  font-size: 0.8rem; cursor: pointer;
+  transition: all 0.15s;
+}
+.logout-btn:hover { background: rgba(239,68,68,0.15); color: var(--red); border-color: rgba(239,68,68,0.3); }
+
+/* Mobile */
+.mobile-header {
+  display: none; position: fixed; top: 0; left: 0; right: 0;
+  background: var(--sidebar-bg); color: #fff; padding: 12px 16px;
+  z-index: 99; align-items: center; gap: 12px;
+}
+.hamburger { background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 99; }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .mobile-header { display: flex; }
+  .main { margin-left: 0 !important; padding-top: 64px !important; }
+}
+
+/* Main */
+.main {
+  flex: 1;
+  margin-left: 240px;
+  padding: 32px;
+  min-height: 100vh;
+}
+.page-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 28px;
+}
+.page-title { font-family: var(--font-head); font-size: 1.5rem; font-weight: 700; }
+.page-subtitle { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+
+/* Stats */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px; margin-bottom: 32px;
+}
+.stat-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+}
+.stat-value {
+  font-family: var(--font-head); font-size: 2rem;
+  font-weight: 800; color: var(--accent); line-height: 1;
+}
+.stat-label {
+  font-size: 0.8rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.04em; margin-top: 6px;
+}
+
+/* Link card */
+.link-card {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 14px 24px; border-radius: var(--radius);
+  background: var(--accent); color: #fff;
+  text-decoration: none; font-weight: 600; font-size: 0.95rem;
+  transition: background 0.15s;
+}
+.link-card:hover { background: var(--accent-dk); }
+
+/* Loading */
+.loading { text-align: center; padding: 48px; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<!-- Mobile header -->
+<div class="mobile-header">
+  <button class="hamburger" onclick="document.querySelector('.sidebar').classList.toggle('open'); document.querySelector('.sidebar-overlay').classList.toggle('open');">&#9776;</button>
+  <span style="font-family: var(--font-head); font-weight: 700;">Super Admin</span>
+</div>
+<div class="sidebar-overlay" onclick="document.querySelector('.sidebar').classList.remove('open'); this.classList.remove('open');"></div>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <a class="sidebar-brand" href="/superadmin/">
+    <div>
+      <div class="sidebar-brand-text">CoachCarter</div>
+      <div class="sidebar-brand-sub">SUPER ADMIN</div>
+    </div>
+  </a>
+  <div class="sidebar-nav">
+    <a href="/superadmin/" class="active"><span class="nav-icon">&#128200;</span> Platform Overview</a>
+    <a href="/superadmin/schools.html"><span class="nav-icon">&#127979;</span> Schools</a>
+  </div>
+  <div class="sidebar-footer">
+    <div class="admin-name" id="adminName">Super Admin</div>
+    <div class="admin-email" id="adminEmail"></div>
+    <button class="logout-btn" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+
+<!-- Main content -->
+<div class="main">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Platform Overview</h1>
+      <p class="page-subtitle">Cross-school metrics at a glance</p>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">Loading platform stats...</div>
+
+  <div id="content" style="display:none;">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="statSchools">--</div>
+        <div class="stat-label">Active Schools</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statLearners">--</div>
+        <div class="stat-label">Total Learners</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statInstructors">--</div>
+        <div class="stat-label">Total Instructors</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statBookings">--</div>
+        <div class="stat-label">Total Bookings</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statRevenue">--</div>
+        <div class="stat-label">Revenue (30d)</div>
+      </div>
+    </div>
+
+    <a class="link-card" href="/superadmin/schools.html">
+      &#127979; Manage Schools
+    </a>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Auth check
+  const stored = localStorage.getItem('cc_admin');
+  if (!stored) { window.location.href = '/admin/login.html'; return; }
+  const { token } = JSON.parse(stored);
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.role !== 'superadmin') {
+      alert('Access denied. Superadmin role required.');
+      window.location.href = '/admin/portal.html';
+      return;
+    }
+    document.getElementById('adminName').textContent = payload.name || 'Super Admin';
+    document.getElementById('adminEmail').textContent = payload.email || '';
+  } catch(e) {
+    window.location.href = '/admin/login.html';
+    return;
+  }
+
+  // API helpers
+  async function apiFetch(url) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    return res.json();
+  }
+
+  // Load stats
+  async function loadStats() {
+    try {
+      const data = await apiFetch('/api/schools?action=platform-stats');
+      if (data.error) throw new Error(data.message || 'Failed to load stats');
+
+      document.getElementById('statSchools').textContent = data.active_schools ?? 0;
+      document.getElementById('statLearners').textContent = (data.total_learners ?? 0).toLocaleString();
+      document.getElementById('statInstructors').textContent = data.total_instructors ?? 0;
+      document.getElementById('statBookings').textContent = (data.total_bookings ?? 0).toLocaleString();
+
+      const revenue = data.revenue_30d ?? 0;
+      document.getElementById('statRevenue').textContent = '\u00A3' + (revenue / 100).toLocaleString('en-GB', { minimumFractionDigits: 2 });
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+    } catch(err) {
+      document.getElementById('loading').textContent = 'Error loading stats: ' + err.message;
+    }
+  }
+
+  loadStats();
+
+  // Logout
+  window.logout = function() {
+    localStorage.removeItem('cc_admin');
+    window.location.href = '/admin/login.html';
+  };
+})();
+</script>
+</body>
+</html>

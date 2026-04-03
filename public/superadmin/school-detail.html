@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>School Detail — CoachCarter</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --sidebar-bg: #262626;
+  --sidebar-hover: #2e2e2e;
+  --sidebar-active: #383838;
+  --accent: #f97316;
+  --accent-dk: #ea580c;
+  --accent-lt: #fff4ec;
+  --accent-mid: rgba(249,115,22,0.12);
+  --primary: #262626;
+  --muted: #797879;
+  --border: #e0e0e0;
+  --bg: #ffffff;
+  --white: #ffffff;
+  --green: #22c55e;
+  --green-bg: #dcfce7;
+  --amber: #f59e0b;
+  --amber-bg: #fef3c7;
+  --red: #ef4444;
+  --red-bg: #fee2e2;
+  --blue: #3b82f6;
+  --blue-bg: #dbeafe;
+  --font-head: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Lato', sans-serif;
+  --radius: 14px;
+}
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--primary);
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 240px;
+  background: var(--sidebar-bg);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transition: transform 0.3s;
+}
+.sidebar-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 24px 20px 20px;
+  text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.sidebar-brand-text { font-family: var(--font-head); font-size: 1rem; font-weight: 700; color: #fff; }
+.sidebar-brand-sub { font-size: 0.7rem; color: var(--accent); font-weight: 600; }
+.sidebar-nav { flex: 1; padding: 16px 0; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  color: rgba(255,255,255,0.6);
+  text-decoration: none;
+  font-size: 0.9rem; font-weight: 500;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+.sidebar-nav a:hover { color: #fff; background: var(--sidebar-hover); }
+.sidebar-nav a.active {
+  color: var(--accent); background: var(--sidebar-hover);
+  border-left-color: var(--accent);
+}
+.sidebar-nav a .nav-icon { font-size: 1.1rem; width: 24px; text-align: center; }
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.sidebar-footer .admin-name { font-size: 0.85rem; color: rgba(255,255,255,0.8); font-weight: 600; }
+.sidebar-footer .admin-email { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+.logout-btn {
+  display: block; width: 100%;
+  margin-top: 12px; padding: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px; color: rgba(255,255,255,0.6);
+  font-size: 0.8rem; cursor: pointer;
+  transition: all 0.15s;
+}
+.logout-btn:hover { background: rgba(239,68,68,0.15); color: var(--red); border-color: rgba(239,68,68,0.3); }
+
+/* Mobile */
+.mobile-header {
+  display: none; position: fixed; top: 0; left: 0; right: 0;
+  background: var(--sidebar-bg); color: #fff; padding: 12px 16px;
+  z-index: 99; align-items: center; gap: 12px;
+}
+.hamburger { background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 99; }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .mobile-header { display: flex; }
+  .main { margin-left: 0 !important; padding-top: 64px !important; }
+}
+
+/* Main */
+.main {
+  flex: 1;
+  margin-left: 240px;
+  padding: 32px;
+  min-height: 100vh;
+}
+.page-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 28px; flex-wrap: wrap; gap: 12px;
+}
+.page-title { font-family: var(--font-head); font-size: 1.5rem; font-weight: 700; }
+.page-subtitle { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.85rem; color: var(--muted); text-decoration: none;
+  margin-bottom: 12px; transition: color 0.15s;
+}
+.back-link:hover { color: var(--accent); }
+
+/* Stats */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px; margin-bottom: 32px;
+}
+.stat-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+}
+.stat-value {
+  font-family: var(--font-head); font-size: 2rem;
+  font-weight: 800; color: var(--accent); line-height: 1;
+}
+.stat-label {
+  font-size: 0.8rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.04em; margin-top: 6px;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 8px;
+  font-family: var(--font-body); font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: var(--white);
+  color: var(--primary); transition: all 0.15s;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-dk); border-color: var(--accent-dk); color: #fff; }
+
+/* Panel */
+.panel-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; margin-bottom: 24px;
+}
+.panel-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.panel-card-title { font-family: var(--font-head); font-weight: 700; font-size: 1rem; }
+.panel-card-body { padding: 20px; }
+
+/* Form */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 600px) {
+  .form-grid { grid-template-columns: 1fr; }
+}
+.form-group { margin-bottom: 0; }
+.form-group.full-width { grid-column: 1 / -1; }
+.form-group label {
+  display: block; font-size: 0.78rem; font-weight: 600;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+  margin-bottom: 5px;
+}
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="tel"],
+.form-group input[type="url"],
+.form-group input[type="password"],
+.form-group input[type="color"] {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 8px; font-family: var(--font-body); font-size: 0.9rem;
+  outline: none; transition: border-color 0.2s; background: #fafafa;
+}
+.form-group input:focus { border-color: var(--accent); background: #fff; }
+.form-group input[type="color"] {
+  height: 42px; padding: 4px; cursor: pointer;
+}
+.form-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+  margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);
+}
+
+/* Colour preview */
+.colour-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.colour-row input[type="color"] {
+  width: 48px; flex-shrink: 0;
+}
+.colour-row input[type="text"] {
+  flex: 1;
+}
+
+/* Success / error messages */
+.msg {
+  padding: 10px 14px; border-radius: 8px;
+  font-size: 0.85rem; font-weight: 600; margin-top: 12px;
+}
+.msg-success { background: var(--green-bg); color: #166534; }
+.msg-error { background: var(--red-bg); color: #991b1b; }
+
+/* Loading */
+.loading { text-align: center; padding: 48px; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<!-- Mobile header -->
+<div class="mobile-header">
+  <button class="hamburger" onclick="document.querySelector('.sidebar').classList.toggle('open'); document.querySelector('.sidebar-overlay').classList.toggle('open');">&#9776;</button>
+  <span style="font-family: var(--font-head); font-weight: 700;">Super Admin</span>
+</div>
+<div class="sidebar-overlay" onclick="document.querySelector('.sidebar').classList.remove('open'); this.classList.remove('open');"></div>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <a class="sidebar-brand" href="/superadmin/">
+    <div>
+      <div class="sidebar-brand-text">CoachCarter</div>
+      <div class="sidebar-brand-sub">SUPER ADMIN</div>
+    </div>
+  </a>
+  <div class="sidebar-nav">
+    <a href="/superadmin/"><span class="nav-icon">&#128200;</span> Platform Overview</a>
+    <a href="/superadmin/schools.html" class="active"><span class="nav-icon">&#127979;</span> Schools</a>
+  </div>
+  <div class="sidebar-footer">
+    <div class="admin-name" id="adminName">Super Admin</div>
+    <div class="admin-email" id="adminEmail"></div>
+    <button class="logout-btn" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+
+<!-- Main content -->
+<div class="main">
+  <a class="back-link" href="/superadmin/schools.html">&larr; Back to Schools</a>
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title" id="pageTitle">School Detail</h1>
+      <p class="page-subtitle" id="pageSubtitle"></p>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">Loading school details...</div>
+
+  <div id="content" style="display:none;">
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="statLearners">--</div>
+        <div class="stat-label">Learners</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statInstructors">--</div>
+        <div class="stat-label">Instructors</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statBookings">--</div>
+        <div class="stat-label">Bookings</div>
+      </div>
+    </div>
+
+    <!-- School Info -->
+    <div class="panel-card">
+      <div class="panel-card-header">
+        <span class="panel-card-title">School Information</span>
+      </div>
+      <div class="panel-card-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>School Name</label>
+            <input type="text" id="fName">
+          </div>
+          <div class="form-group">
+            <label>Slug</label>
+            <input type="text" id="fSlug">
+          </div>
+          <div class="form-group">
+            <label>Contact Email</label>
+            <input type="email" id="fEmail">
+          </div>
+          <div class="form-group">
+            <label>Contact Phone</label>
+            <input type="tel" id="fPhone">
+          </div>
+          <div class="form-group full-width">
+            <label>Logo URL</label>
+            <input type="url" id="fLogo" placeholder="https://example.com/logo.png">
+          </div>
+          <div class="form-group full-width">
+            <label>Website URL</label>
+            <input type="url" id="fWebsite" placeholder="https://example.com">
+          </div>
+          <div class="form-group">
+            <label>Primary Colour</label>
+            <div class="colour-row">
+              <input type="color" id="fPrimaryColour" value="#262626" oninput="document.getElementById('fPrimaryColourText').value=this.value">
+              <input type="text" id="fPrimaryColourText" value="#262626" maxlength="7" oninput="document.getElementById('fPrimaryColour').value=this.value">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Secondary Colour</label>
+            <div class="colour-row">
+              <input type="color" id="fSecondaryColour" value="#ffffff" oninput="document.getElementById('fSecondaryColourText').value=this.value">
+              <input type="text" id="fSecondaryColourText" value="#ffffff" maxlength="7" oninput="document.getElementById('fSecondaryColour').value=this.value">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Accent Colour</label>
+            <div class="colour-row">
+              <input type="color" id="fAccentColour" value="#f97316" oninput="document.getElementById('fAccentColourText').value=this.value">
+              <input type="text" id="fAccentColourText" value="#f97316" maxlength="7" oninput="document.getElementById('fAccentColour').value=this.value">
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="saveSchool()">Save Changes</button>
+        </div>
+        <div id="saveMsg"></div>
+      </div>
+    </div>
+
+    <!-- Create School Admin -->
+    <div class="panel-card">
+      <div class="panel-card-header">
+        <span class="panel-card-title">Create School Admin</span>
+      </div>
+      <div class="panel-card-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Admin Name</label>
+            <input type="text" id="aName" placeholder="John Smith">
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="aEmail" placeholder="admin@school.com">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="aPassword" placeholder="Minimum 8 characters">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="createAdmin()">Create Admin</button>
+        </div>
+        <div id="adminMsg"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function() {
+  // Auth check
+  const stored = localStorage.getItem('cc_admin');
+  if (!stored) { window.location.href = '/admin/login.html'; return; }
+  const { token } = JSON.parse(stored);
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.role !== 'superadmin') {
+      alert('Access denied. Superadmin role required.');
+      window.location.href = '/admin/portal.html';
+      return;
+    }
+    document.getElementById('adminName').textContent = payload.name || 'Super Admin';
+    document.getElementById('adminEmail').textContent = payload.email || '';
+  } catch(e) {
+    window.location.href = '/admin/login.html';
+    return;
+  }
+
+  // Get school ID from URL
+  const params = new URLSearchParams(window.location.search);
+  const schoolId = params.get('id');
+  if (!schoolId) {
+    window.location.href = '/superadmin/schools.html';
+    return;
+  }
+
+  // API helpers
+  async function apiFetch(url) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    return res.json();
+  }
+  async function apiPost(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body)
+    });
+    return res.json();
+  }
+
+  function showMsg(elId, text, type) {
+    const el = document.getElementById(elId);
+    el.className = 'msg ' + (type === 'success' ? 'msg-success' : 'msg-error');
+    el.textContent = text;
+    setTimeout(() => { el.textContent = ''; el.className = ''; }, 4000);
+  }
+
+  // Load school
+  async function loadSchool() {
+    try {
+      const data = await apiFetch('/api/schools?action=get&school_id=' + schoolId);
+      if (data.error) throw new Error(data.message || 'School not found');
+
+      const s = data.school || data;
+
+      document.getElementById('pageTitle').textContent = s.name || 'School Detail';
+      document.getElementById('pageSubtitle').textContent = s.slug || '';
+
+      // Stats
+      document.getElementById('statLearners').textContent = s.learner_count ?? 0;
+      document.getElementById('statInstructors').textContent = s.instructor_count ?? 0;
+      document.getElementById('statBookings').textContent = s.booking_count ?? 0;
+
+      // Form fields
+      document.getElementById('fName').value = s.name || '';
+      document.getElementById('fSlug').value = s.slug || '';
+      document.getElementById('fEmail').value = s.contact_email || '';
+      document.getElementById('fPhone').value = s.contact_phone || '';
+      document.getElementById('fLogo').value = s.logo_url || '';
+      document.getElementById('fWebsite').value = s.website_url || '';
+
+      const pc = s.primary_colour || '#262626';
+      const sc = s.secondary_colour || '#ffffff';
+      const ac = s.accent_colour || '#f97316';
+      document.getElementById('fPrimaryColour').value = pc;
+      document.getElementById('fPrimaryColourText').value = pc;
+      document.getElementById('fSecondaryColour').value = sc;
+      document.getElementById('fSecondaryColourText').value = sc;
+      document.getElementById('fAccentColour').value = ac;
+      document.getElementById('fAccentColourText').value = ac;
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+    } catch(err) {
+      document.getElementById('loading').textContent = 'Error: ' + err.message;
+    }
+  }
+
+  // Save school
+  window.saveSchool = async function() {
+    try {
+      const body = {
+        school_id: parseInt(schoolId),
+        name: document.getElementById('fName').value.trim(),
+        slug: document.getElementById('fSlug').value.trim(),
+        contact_email: document.getElementById('fEmail').value.trim(),
+        contact_phone: document.getElementById('fPhone').value.trim(),
+        logo_url: document.getElementById('fLogo').value.trim(),
+        website_url: document.getElementById('fWebsite').value.trim(),
+        primary_colour: document.getElementById('fPrimaryColourText').value.trim(),
+        secondary_colour: document.getElementById('fSecondaryColourText').value.trim(),
+        accent_colour: document.getElementById('fAccentColourText').value.trim()
+      };
+      const data = await apiPost('/api/schools?action=update', body);
+      if (data.error) throw new Error(data.message);
+      showMsg('saveMsg', 'School updated successfully.', 'success');
+      // Update page title
+      document.getElementById('pageTitle').textContent = body.name || 'School Detail';
+      document.getElementById('pageSubtitle').textContent = body.slug || '';
+    } catch(err) {
+      showMsg('saveMsg', 'Error: ' + err.message, 'error');
+    }
+  };
+
+  // Create admin
+  window.createAdmin = async function() {
+    const name = document.getElementById('aName').value.trim();
+    const email = document.getElementById('aEmail').value.trim();
+    const password = document.getElementById('aPassword').value;
+
+    if (!name || !email || !password) {
+      showMsg('adminMsg', 'All fields are required.', 'error');
+      return;
+    }
+    if (password.length < 8) {
+      showMsg('adminMsg', 'Password must be at least 8 characters.', 'error');
+      return;
+    }
+
+    try {
+      const data = await apiPost('/api/schools?action=create-admin', {
+        school_id: parseInt(schoolId), name, email, password
+      });
+      if (data.error) throw new Error(data.message);
+      showMsg('adminMsg', 'Admin account created successfully.', 'success');
+      document.getElementById('aName').value = '';
+      document.getElementById('aEmail').value = '';
+      document.getElementById('aPassword').value = '';
+    } catch(err) {
+      showMsg('adminMsg', 'Error: ' + err.message, 'error');
+    }
+  };
+
+  // Logout
+  window.logout = function() {
+    localStorage.removeItem('cc_admin');
+    window.location.href = '/admin/login.html';
+  };
+
+  loadSchool();
+})();
+</script>
+</body>
+</html>

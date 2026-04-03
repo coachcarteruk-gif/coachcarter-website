@@ -246,7 +246,7 @@ async function handleVerify(req, res) {
     }
 
     // Issue JWT
-    const jwtPayload = { id: user.id, email: user.email || null };
+    const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
     const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '30d' });
 
     // Send welcome email to new users
@@ -329,7 +329,7 @@ async function handleVerifyCode(req, res) {
     }
 
     // Issue JWT
-    const jwtPayload = { id: user.id, email: user.email || null };
+    const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
     const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '30d' });
 
     return res.json({

@@ -254,8 +254,8 @@
     '.cc-sb-brand img { height: 44px; }',
     '.cc-sb-brand-text { font-family: "Bricolage Grotesque", sans-serif; font-size: 1rem;',
     '  font-weight: 700; color: #1a1a1a; }',
-    '.cc-sb-brand-text em { font-style: normal; color: #f58321; }',
-    '.cc-sb-brand-sub { font-size: 0.7rem; color: #f58321; font-weight: 600; letter-spacing: 0.02em; }',
+    '.cc-sb-brand-text em { font-style: normal; color: var(--brand-primary, #f58321); }',
+    '.cc-sb-brand-sub { font-size: 0.7rem; color: var(--brand-primary, #f58321); font-weight: 600; letter-spacing: 0.02em; }',
 
     /* Nav links */
     '.cc-sb-nav { flex: 1; padding: 12px 0; overflow-y: auto; }',
@@ -263,7 +263,7 @@
     '  color: #6b7280; text-decoration: none; font-size: 0.88rem; font-weight: 500;',
     '  transition: all 0.15s; border-left: 3px solid transparent; font-family: "Lato", sans-serif; }',
     '.cc-sb-link:hover { color: #1a1a1a; background: #f5f5f5; }',
-    '.cc-sb-link.active { color: #f58321; background: rgba(245,131,33,0.06); border-left-color: #f58321; }',
+    '.cc-sb-link.active { color: var(--brand-primary, #f58321); background: rgba(245,131,33,0.06); border-left-color: var(--brand-primary, #f58321); }',
     '.cc-sb-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }',
     '.cc-sb-icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2;',
     '  stroke-linecap: round; stroke-linejoin: round; }',
@@ -318,7 +318,7 @@
     '.cc-mob-brand img { height: 36px; }',
     '.cc-mob-brand span { font-family: "Bricolage Grotesque", sans-serif; font-size: 0.95rem;',
     '  font-weight: 700; color: #1a1a1a; }',
-    '.cc-mob-brand em { font-style: normal; color: #f58321; }',
+    '.cc-mob-brand em { font-style: normal; color: var(--brand-primary, #f58321); }',
     '.cc-hamburger { background: none; border: none; color: #1a1a1a; padding: 8px; cursor: pointer;',
     '  display: flex; align-items: center; justify-content: center; }',
     '.cc-hamburger svg { width: 22px; height: 22px; stroke: currentColor; fill: none;',
@@ -408,7 +408,7 @@
     '    border-radius: 20px;',
     '  }',
     '  .cc-bottom-tab:hover { color: #333; }',
-    '  .cc-bottom-tab.active { color: #f58321; background: #fff3e8; }',
+    '  .cc-bottom-tab.active { color: var(--brand-primary, #f58321); background: #fff3e8; }',
     '  .cc-bottom-icon { display: flex; align-items: center; justify-content: center; }',
     '  .cc-bottom-icon svg {',
     '    width: 22px; height: 22px;',
@@ -482,8 +482,8 @@
       '<aside class="cc-sb" id="cc-sb" role="navigation" aria-label="Main navigation">' +
         '<button class="cc-sb-close" id="cc-sb-close" aria-label="Close menu">' + icons.close + '</button>' +
         '<a href="' + brandHref + '" class="cc-sb-brand">' +
-          '<img src="/Logo.png" alt="CoachCarter">' +
-          '<div><div class="cc-sb-brand-text">Coach<em>Carter</em></div>' +
+          '<img src="/Logo.png" alt="CoachCarter" data-brand-logo>' +
+          '<div><div class="cc-sb-brand-text" data-brand-name>Coach<em>Carter</em></div>' +
           (contextLabel[context] ? '<div class="cc-sb-brand-sub">' + contextLabel[context] + '</div>' : '') +
           '</div></a>' +
         '<nav class="cc-sb-nav">' + buildNavHTML() + '</nav>' +
@@ -492,11 +492,26 @@
       '<div class="cc-mob-header" id="cc-mob-header">' +
         '<button class="cc-hamburger" id="cc-hamburger" aria-label="Open menu">' + icons.hamburger + '</button>' +
         '<a href="' + brandHref + '" class="cc-mob-brand">' +
-          '<img src="/Logo.png" alt="CoachCarter">' +
-          '<span>Coach<em>Carter</em></span></a>' +
+          '<img src="/Logo.png" alt="CoachCarter" data-brand-logo>' +
+          '<span data-brand-name>Coach<em>Carter</em></span></a>' +
       '</div>';
 
     document.body.insertAdjacentHTML('afterbegin', sidebarHTML);
+
+    // ── Apply cached school branding to sidebar elements ──────────
+    if (window.ccBranding) {
+      var cached = window.ccBranding.loadCachedBranding();
+      if (cached && cached.name) {
+        document.querySelectorAll('[data-brand-name]').forEach(function(el) {
+          el.textContent = cached.name;
+        });
+      }
+      if (cached && cached.logo_url) {
+        document.querySelectorAll('[data-brand-logo]').forEach(function(el) {
+          el.src = cached.logo_url;
+        });
+      }
+    }
 
     // ── Bottom tab bar (mobile, learner/instructor context) ────────
     var bottomBarHTML = buildBottomBarHTML();

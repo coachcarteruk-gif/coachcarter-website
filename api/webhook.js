@@ -74,8 +74,16 @@ module.exports = async (req, res) => {
       const account = event.data.object;
       if (account.charges_enabled && account.payouts_enabled) {
         const sql = neon(process.env.POSTGRES_URL);
+        // Update instructors table
         await sql`
           UPDATE instructors
+             SET stripe_onboarding_complete = TRUE
+           WHERE stripe_account_id = ${account.id}
+             AND stripe_onboarding_complete = FALSE
+        `;
+        // Also update schools table if the account belongs to a school
+        await sql`
+          UPDATE schools
              SET stripe_onboarding_complete = TRUE
            WHERE stripe_account_id = ${account.id}
              AND stripe_onboarding_complete = FALSE
@@ -97,6 +105,7 @@ async function handleCreditPurchase(session) {
   const credits       = parseInt(metadata.credits_purchased, 10);
   const amountPence   = parseInt(metadata.amount_pence, 10);
   const learnerEmail  = metadata.learner_email || session.customer_email;
+  const schoolId      = parseInt(metadata.school_id, 10) || 1;
 
   if (!learnerId || !credits) {
     console.error('❌ credit_purchase webhook missing learner_id or credits_purchased', metadata);
@@ -125,9 +134,9 @@ async function handleCreditPurchase(session) {
     // 1. Record the transaction
     await sql`
       INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes)
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id)
       VALUES
-        (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${session.id}, ${minutes})
+        (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${session.id}, ${minutes}, ${schoolId})
     `;
 
     // 2. Increment the learner's balance atomically (both columns for transition)
@@ -182,6 +191,7 @@ async function handleSlotBooking(session) {
   const amountPence   = parseInt(metadata.amount_pence, 10);
   const lessonTypeId  = metadata.lesson_type_id ? parseInt(metadata.lesson_type_id, 10) : null;
   const durationMins  = parseInt(metadata.duration_minutes, 10) || 90;
+  const schoolId      = parseInt(metadata.school_id, 10) || 1;
 
   if (!learnerId || !instructorId || !scheduledDate || !startTime || !endTime) {
     console.error('❌ slot_booking webhook missing required metadata', metadata);
@@ -202,9 +212,9 @@ async function handleSlotBooking(session) {
     // 1. Record the transaction
     await sql`
       INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes)
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id)
       VALUES
-        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins})
+        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId})
     `;
 
     // 2. Add hours to balance (net zero — add then deduct)
@@ -235,10 +245,10 @@ async function handleSlotBooking(session) {
       const [b] = await sql`
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           lesson_type_id, minutes_deducted)
+           lesson_type_id, minutes_deducted, school_id)
         VALUES
           (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, 'confirmed',
-           ${lessonTypeId}, ${durationMins})
+           ${lessonTypeId}, ${durationMins}, ${schoolId})
         RETURNING id, scheduled_date, start_time::text, end_time::text
       `;
       booking = b;
@@ -665,6 +675,7 @@ async function handleOfferBooking(session) {
   const amountPence    = parseInt(metadata.amount_pence, 10);
   const lessonTypeId   = metadata.lesson_type_id ? parseInt(metadata.lesson_type_id, 10) : null;
   const durationMins   = parseInt(metadata.duration_minutes, 10) || 90;
+  const schoolId       = parseInt(metadata.school_id, 10) || 1;
 
   if (!offerToken || !instructorId || !scheduledDate || !startTime || !endTime) {
     console.error('❌ lesson_offer webhook missing required metadata', metadata);
@@ -713,9 +724,9 @@ async function handleOfferBooking(session) {
       // Create new learner from offer details + Stripe customer_details
       try {
         const [newLearner] = await sql`
-          INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance)
+          INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance, school_id)
           VALUES (${learnerName}, ${learnerEmail.toLowerCase()}, ${learnerPhone || null},
-                  ${pickupAddress || null}, 0, 0)
+                  ${pickupAddress || null}, 0, 0, ${schoolId})
           RETURNING id
         `;
         learnerId = newLearner.id;
@@ -724,8 +735,8 @@ async function handleOfferBooking(session) {
           // Phone already in use — retry without phone
           console.warn('⚠️ Phone conflict creating learner, retrying without phone');
           const [newLearner] = await sql`
-            INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance)
-            VALUES (${learnerName}, ${learnerEmail.toLowerCase()}, ${pickupAddress || null}, 0, 0)
+            INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
+            VALUES (${learnerName}, ${learnerEmail.toLowerCase()}, ${pickupAddress || null}, 0, 0, ${schoolId})
             RETURNING id
           `;
           learnerId = newLearner.id;
@@ -738,9 +749,9 @@ async function handleOfferBooking(session) {
     // 2. Record the transaction (add-then-deduct pattern for consistency)
     await sql`
       INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes)
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id)
       VALUES
-        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins})
+        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId})
     `;
 
     await sql`
@@ -770,11 +781,11 @@ async function handleOfferBooking(session) {
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            created_by, payment_method, lesson_type_id, minutes_deducted,
-           pickup_address)
+           pickup_address, school_id)
         VALUES
           (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, 'confirmed',
            'instructor_offer', 'card', ${lessonTypeId}, ${durationMins},
-           ${pickupAddress || null})
+           ${pickupAddress || null}, ${schoolId})
         RETURNING id, scheduled_date, start_time::text, end_time::text
       `;
       booking = b;

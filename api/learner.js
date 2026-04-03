@@ -69,6 +69,7 @@ async function handleUpdateName(req, res) {
 async function handleSessions(req, res) {
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   const sql = neon(process.env.POSTGRES_URL);
 
@@ -82,7 +83,7 @@ async function handleSessions(req, res) {
           ) FILTER (WHERE r.id IS NOT NULL), '[]') as ratings
         FROM driving_sessions s
         LEFT JOIN skill_ratings r ON r.session_id = s.id
-        WHERE s.user_id = ${user.id}
+        WHERE s.user_id = ${user.id} AND s.school_id = ${schoolId}
         GROUP BY s.id ORDER BY s.session_date DESC, s.created_at DESC LIMIT 20`;
       return res.json({ sessions });
     } catch (err) {
@@ -100,7 +101,7 @@ async function handleSessions(req, res) {
       if (booking_id) {
         const [booking] = await sql`
           SELECT id FROM lesson_bookings
-          WHERE id = ${booking_id} AND learner_id = ${user.id} AND status = 'completed'`;
+          WHERE id = ${booking_id} AND learner_id = ${user.id} AND school_id = ${schoolId} AND status = 'completed'`;
         if (!booking) return res.status(400).json({ error: 'Invalid or incomplete booking' });
 
         const [existing] = await sql`
@@ -109,8 +110,8 @@ async function handleSessions(req, res) {
       }
 
       const sessionRows = await sql`
-        INSERT INTO driving_sessions (user_id, session_date, duration_minutes, session_type, notes, booking_id)
-        VALUES (${user.id}, ${session_date}, ${duration_minutes || null}, ${session_type || 'instructor'}, ${notes || null}, ${booking_id || null})
+        INSERT INTO driving_sessions (user_id, session_date, duration_minutes, session_type, notes, booking_id, school_id)
+        VALUES (${user.id}, ${session_date}, ${duration_minutes || null}, ${session_type || 'instructor'}, ${notes || null}, ${booking_id || null}, ${schoolId})
         RETURNING id`;
       const sessionId = sessionRows[0].id;
 
@@ -135,6 +136,7 @@ async function handleProgress(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   const sql = neon(process.env.POSTGRES_URL);
   try {
@@ -148,7 +150,7 @@ async function handleProgress(req, res) {
         COALESCE(SUM(duration_minutes), 0)::int as total_minutes,
         COUNT(*) FILTER (WHERE session_type = 'instructor')::int as instructor_sessions,
         COUNT(*) FILTER (WHERE session_type = 'private')::int as private_sessions
-      FROM driving_sessions WHERE user_id = ${user.id}`;
+      FROM driving_sessions WHERE user_id = ${user.id} AND school_id = ${schoolId}`;
 
     const userRow = await sql`SELECT current_tier, name, phone, pickup_address, prefer_contact_before FROM learner_users WHERE id = ${user.id}`;
     return res.json({
@@ -212,6 +214,7 @@ async function handleSetContactPref(req, res) {
 async function handleProfile(req, res) {
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -219,7 +222,7 @@ async function handleProfile(req, res) {
     // Columns already exist in learner_users — no migrations needed
     const [row] = await sql`
       SELECT name, email, phone, pickup_address, prefer_contact_before, test_date, test_time
-      FROM learner_users WHERE id = ${user.id}
+      FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}
     `;
     if (!row) return res.status(404).json({ error: 'User not found' });
     return res.json({ profile: row });
@@ -294,6 +297,7 @@ async function handleQAList(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -310,7 +314,7 @@ async function handleQAList(req, res) {
         FROM qa_questions q
         JOIN learner_users lu ON lu.id = q.learner_id
         LEFT JOIN qa_answers a ON a.question_id = q.id
-        WHERE q.status = ${status}
+        WHERE q.status = ${status} AND q.school_id = ${schoolId}
         GROUP BY q.id, lu.name
         ORDER BY q.created_at DESC
         LIMIT ${limit}`;
@@ -323,6 +327,7 @@ async function handleQAList(req, res) {
         FROM qa_questions q
         JOIN learner_users lu ON lu.id = q.learner_id
         LEFT JOIN qa_answers a ON a.question_id = q.id
+        WHERE q.school_id = ${schoolId}
         GROUP BY q.id, lu.name
         ORDER BY q.created_at DESC
         LIMIT ${limit}`;
@@ -340,6 +345,7 @@ async function handleQADetail(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   const questionId = req.query.question_id;
   if (!questionId) return res.status(400).json({ error: 'question_id required' });
@@ -351,7 +357,7 @@ async function handleQADetail(req, res) {
       SELECT q.*, lu.name AS learner_name
       FROM qa_questions q
       JOIN learner_users lu ON lu.id = q.learner_id
-      WHERE q.id = ${questionId}`;
+      WHERE q.id = ${questionId} AND q.school_id = ${schoolId}`;
     if (!question) return res.status(404).json({ error: 'Question not found' });
 
     const answers = await sql`
@@ -720,6 +726,7 @@ async function handleCompetency(req, res) {
 async function handleOnboarding(req, res) {
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
   const sql = neon(process.env.POSTGRES_URL);
 
   if (req.method === 'GET') {
@@ -834,6 +841,7 @@ async function handleConfirmLesson(req, res) {
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   const { booking_id, lesson_happened, late_party, late_minutes, notes } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
@@ -845,7 +853,7 @@ async function handleConfirmLesson(req, res) {
     const [booking] = await sql`
       SELECT lb.id, lb.status, lb.scheduled_date, lb.start_time, lb.end_time
       FROM lesson_bookings lb
-      WHERE lb.id = ${booking_id} AND lb.learner_id = ${user.id}
+      WHERE lb.id = ${booking_id} AND lb.learner_id = ${user.id} AND lb.school_id = ${schoolId}
     `;
 
     if (!booking) return res.status(404).json({ error: 'Booking not found' });

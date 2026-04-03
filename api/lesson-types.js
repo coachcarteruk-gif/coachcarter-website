@@ -57,10 +57,11 @@ module.exports = async (req, res) => {
 async function handleList(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = parseInt(req.query.school_id) || 1;
     const rows = await sql`
       SELECT id, name, slug, duration_minutes, price_pence, colour, sort_order
       FROM lesson_types
-      WHERE active = true
+      WHERE active = true AND school_id = ${schoolId}
       ORDER BY sort_order, id
     `;
     return res.json({ ok: true, lesson_types: rows });
@@ -74,12 +75,14 @@ async function handleList(req, res) {
 async function handleAll(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: true, code: 'UNAUTHORIZED', message: 'Admin access required' });
+  const schoolId = admin.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const rows = await sql`
       SELECT id, name, slug, duration_minutes, price_pence, colour, active, sort_order, created_at
       FROM lesson_types
+      WHERE school_id = ${schoolId}
       ORDER BY sort_order, id
     `;
     return res.json({ ok: true, lesson_types: rows });
@@ -95,6 +98,7 @@ async function handleCreate(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: true, code: 'UNAUTHORIZED', message: 'Admin access required' });
 
+  const schoolId = admin.school_id || 1;
   const { name, slug, duration_minutes, price_pence, colour, sort_order } = req.body || {};
   if (!name || !slug || !duration_minutes || !price_pence) {
     return res.status(400).json({ error: true, code: 'MISSING_FIELDS', message: 'name, slug, duration_minutes, price_pence required' });
@@ -103,8 +107,8 @@ async function handleCreate(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const rows = await sql`
-      INSERT INTO lesson_types (name, slug, duration_minutes, price_pence, colour, sort_order)
-      VALUES (${name}, ${slug}, ${duration_minutes}, ${price_pence}, ${colour || '#3b82f6'}, ${sort_order || 0})
+      INSERT INTO lesson_types (name, slug, duration_minutes, price_pence, colour, sort_order, school_id)
+      VALUES (${name}, ${slug}, ${duration_minutes}, ${price_pence}, ${colour || '#3b82f6'}, ${sort_order || 0}, ${schoolId})
       RETURNING *
     `;
     return res.json({ ok: true, lesson_type: rows[0] });
@@ -123,6 +127,7 @@ async function handleUpdate(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: true, code: 'UNAUTHORIZED', message: 'Admin access required' });
 
+  const schoolId = admin.school_id || 1;
   const { id, name, slug, duration_minutes, price_pence, colour, active, sort_order } = req.body || {};
   if (!id) return res.status(400).json({ error: true, code: 'MISSING_ID', message: 'id required' });
 
@@ -137,7 +142,7 @@ async function handleUpdate(req, res) {
         colour           = COALESCE(${colour}, colour),
         active           = COALESCE(${active}, active),
         sort_order       = COALESCE(${sort_order}, sort_order)
-      WHERE id = ${id}
+      WHERE id = ${id} AND school_id = ${schoolId}
       RETURNING *
     `;
     if (!rows.length) return res.status(404).json({ error: true, code: 'NOT_FOUND', message: 'Lesson type not found' });
@@ -157,6 +162,7 @@ async function handleToggle(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: true, code: 'UNAUTHORIZED', message: 'Admin access required' });
 
+  const schoolId = admin.school_id || 1;
   const { id, active } = req.body || {};
   if (!id || typeof active !== 'boolean') {
     return res.status(400).json({ error: true, code: 'MISSING_FIELDS', message: 'id and active (boolean) required' });
@@ -165,7 +171,7 @@ async function handleToggle(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const rows = await sql`
-      UPDATE lesson_types SET active = ${active} WHERE id = ${id} RETURNING *
+      UPDATE lesson_types SET active = ${active} WHERE id = ${id} AND school_id = ${schoolId} RETURNING *
     `;
     if (!rows.length) return res.status(404).json({ error: true, code: 'NOT_FOUND', message: 'Lesson type not found' });
     return res.json({ ok: true, lesson_type: rows[0] });

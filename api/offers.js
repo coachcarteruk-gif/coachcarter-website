@@ -54,7 +54,7 @@ async function handleGetOffer(req, res) {
              o.start_time::text, o.end_time::text, o.status, o.expires_at,
              o.discount_pct,
              lt.name AS lesson_type_name, lt.duration_minutes, lt.price_pence,
-             i.name AS instructor_name,
+             i.name AS instructor_name, i.school_id AS instructor_school_id,
              lu.name AS learner_name, lu.phone AS learner_phone,
              lu.pickup_address AS learner_pickup_address
       FROM lesson_offers o
@@ -145,6 +145,10 @@ async function handleAcceptOffer(req, res) {
     if (!name || !name.trim())
       return res.status(400).json({ error: 'Name is required' });
 
+    // Derive school_id from instructor
+    const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
+    const schoolId = instrRow?.school_id || 1;
+
     const originalPricePence = offer.price_pence || 8250;
     const discountPct = offer.discount_pct || 0;
     const pricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
@@ -197,7 +201,8 @@ async function handleAcceptOffer(req, res) {
         end_time:          offer.end_time,
         lesson_type_id:    String(offer.lesson_type_id || ''),
         duration_minutes:  String(durationMins),
-        amount_pence:      String(pricePence)
+        amount_pence:      String(pricePence),
+        school_id:         String(schoolId)
       },
       customer_email: offer.learner_email,
       billing_address_collection: 'required',
@@ -226,6 +231,10 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res) 
   const { createTransporter } = require('./_auth-helpers');
   const durationMins = offer.duration_minutes || 90;
 
+  // Derive school_id from instructor
+  const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
+  const schoolId = instrRow?.school_id || 1;
+
   // 1. Find or create learner
   let learnerId;
   const [existingLearner] = await sql`
@@ -244,17 +253,17 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res) 
   } else {
     try {
       const [newLearner] = await sql`
-        INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance)
+        INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance, school_id)
         VALUES (${learnerDetails.name}, ${offer.learner_email.toLowerCase()}, ${learnerDetails.phone || null},
-                ${learnerDetails.pickup_address || null}, 0, 0)
+                ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
         RETURNING id
       `;
       learnerId = newLearner.id;
     } catch (insertErr) {
       if (insertErr.message?.includes('learner_users_phone_key') || insertErr.message?.includes('unique')) {
         const [newLearner] = await sql`
-          INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance)
-          VALUES (${learnerDetails.name}, ${offer.learner_email.toLowerCase()}, ${learnerDetails.pickup_address || null}, 0, 0)
+          INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
+          VALUES (${learnerDetails.name}, ${offer.learner_email.toLowerCase()}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
           RETURNING id
         `;
         learnerId = newLearner.id;
@@ -271,11 +280,11 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res) 
       INSERT INTO lesson_bookings
         (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
          created_by, payment_method, lesson_type_id, minutes_deducted,
-         pickup_address)
+         pickup_address, school_id)
       VALUES
         (${learnerId}, ${offer.instructor_id}, ${offer.scheduled_date}, ${offer.start_time}, ${offer.end_time}, 'confirmed',
          'instructor_offer', 'free', ${offer.lesson_type_id}, 0,
-         ${learnerDetails.pickup_address || null})
+         ${learnerDetails.pickup_address || null}, ${schoolId})
       RETURNING id, scheduled_date, start_time::text, end_time::text
     `;
     booking = b;

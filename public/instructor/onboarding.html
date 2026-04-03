@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Complete Your Profile — CoachCarter Instructor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/instructor.css">
+  <style>
+    .page { max-width: 600px; margin: 0 auto; padding: 28px 16px 80px; margin-top: 64px; }
+    h1 { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; }
+    .subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 4px; margin-bottom: 28px; line-height: 1.5; }
+
+    .welcome-banner {
+      background: var(--accent-lt); border: 1.5px solid var(--accent);
+      border-radius: 10px; padding: 16px 20px; font-size: 0.875rem;
+      color: var(--primary); margin-bottom: 24px; line-height: 1.5;
+    }
+    .welcome-banner strong { color: var(--accent); }
+
+    .form-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px 20px; margin-bottom: 16px;
+    }
+    .form-card-title {
+      font-family: var(--font-head); font-size: 0.95rem; font-weight: 700;
+      margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+    }
+    .form-group { margin-bottom: 16px; }
+    label {
+      display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+    }
+    input[type="text"],
+    input[type="number"],
+    textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--primary); font-family: var(--font-body);
+      font-size: 0.9rem; padding: 10px 13px; outline: none; transition: border-color 0.2s;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); background: var(--white); }
+    textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+    select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--primary); font-family: var(--font-body);
+      font-size: 0.9rem; padding: 10px 13px; outline: none; transition: border-color 0.2s;
+    }
+    .field-hint { font-size: 0.78rem; color: var(--muted); margin-top: 5px; }
+
+    .btn-save {
+      width: 100%; background: var(--accent); color: white; border: none;
+      border-radius: 8px; font-family: var(--font-head); font-size: 1rem;
+      font-weight: 700; padding: 13px; cursor: pointer; margin-top: 4px;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    .btn-save:hover    { background: var(--accent-dk); }
+    .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .error-banner {
+      background: #fef2f2; border: 1.5px solid #ef4444;
+      border-radius: 10px; padding: 12px 16px; font-size: 0.875rem;
+      color: #991b1b; margin-bottom: 16px; display: none;
+    }
+    .error-banner.show { display: block; }
+  </style>
+  <script src="/shared/instructor-auth.js"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="site-nav-logo" href="/">
+    <img src="/Logo.png" alt="CoachCarter">
+    <span>Coach<em>Carter</em></span>
+  </a>
+</nav>
+
+<div class="page">
+  <h1>Complete Your Profile</h1>
+  <p class="subtitle">Welcome to CoachCarter! Fill in the details below so learners can find and book with you.</p>
+
+  <div class="welcome-banner">
+    <strong>Almost there!</strong> Please complete your profile to get started.
+    Once submitted, you'll have full access to the instructor portal where you can manage your schedule, availability, and learners.
+  </div>
+
+  <div class="error-banner" id="errorBanner"></div>
+
+  <form id="onboardingForm" onsubmit="submitOnboarding(event)">
+    <div class="form-card">
+      <div class="form-card-title">Personal details</div>
+
+      <div class="form-group">
+        <label for="inputName">Full name</label>
+        <input type="text" id="inputName" placeholder="Your full name" required>
+      </div>
+
+      <div class="form-group">
+        <label for="inputPhone">Phone number</label>
+        <input type="text" id="inputPhone" placeholder="e.g. 07700 900000">
+        <p class="field-hint">Shared with learners for lesson day contact.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="inputBio">Bio</label>
+        <textarea id="inputBio" placeholder="Tell learners a bit about yourself — your experience, teaching style, areas covered..."></textarea>
+        <p class="field-hint">Shown to learners when choosing an instructor.</p>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-card-title">Vehicle</div>
+
+      <div class="form-group">
+        <label for="inputVehicleMake">Make</label>
+        <input type="text" id="inputVehicleMake" placeholder="e.g. Vauxhall">
+      </div>
+
+      <div class="form-group">
+        <label for="inputVehicleModel">Model</label>
+        <input type="text" id="inputVehicleModel" placeholder="e.g. Corsa">
+      </div>
+
+      <div class="form-group">
+        <label for="inputTransmission">Transmission</label>
+        <select id="inputTransmission">
+          <option value="manual" selected>Manual</option>
+          <option value="automatic">Automatic</option>
+          <option value="both">Both</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-card-title">Qualifications &amp; Experience</div>
+
+      <div class="form-group">
+        <label for="inputAdiGrade">ADI grade</label>
+        <input type="text" id="inputAdiGrade" placeholder="e.g. A, B, or 6">
+        <p class="field-hint">Your DVSA approved driving instructor grade.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="inputYearsExp">Years of experience</label>
+        <input type="number" id="inputYearsExp" min="0" max="60" step="1" placeholder="e.g. 8">
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-card-title">Service Area</div>
+
+      <div class="form-group">
+        <label for="inputServiceAreas">Coverage areas</label>
+        <textarea id="inputServiceAreas" placeholder="e.g. SW1, SE1, Croydon, Bromley" style="min-height:60px"></textarea>
+        <p class="field-hint">Comma-separated postcodes or area names. Helps learners find instructors near them.</p>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-card-title">Languages</div>
+
+      <div class="form-group">
+        <label for="inputLanguages">Languages spoken</label>
+        <input type="text" id="inputLanguages" value="English" placeholder="e.g. English, Urdu, Polish">
+        <p class="field-hint">Comma-separated. Helps match learners with instructors who speak their language.</p>
+      </div>
+    </div>
+
+    <button type="submit" class="btn-save" id="saveBtn">Complete setup</button>
+  </form>
+</div>
+
+<script>
+  let token = null;
+
+  function init() {
+    const session = ccAuth.getAuth();
+    token = session?.token || null;
+    if (!token) {
+      window.location.href = '/instructor/login.html';
+      return;
+    }
+    // Pre-fill name if available from session
+    if (session?.instructor?.name) {
+      document.getElementById('inputName').value = session.instructor.name;
+    }
+  }
+
+  async function submitOnboarding(e) {
+    e.preventDefault();
+
+    const name = document.getElementById('inputName').value.trim();
+    if (!name) {
+      showError('Please enter your name.');
+      return;
+    }
+
+    const phone = document.getElementById('inputPhone').value.trim() || null;
+    const bio = document.getElementById('inputBio').value.trim() || null;
+    const vehicle_make = document.getElementById('inputVehicleMake').value.trim() || null;
+    const vehicle_model = document.getElementById('inputVehicleModel').value.trim() || null;
+    const transmission_type = document.getElementById('inputTransmission').value;
+    const adi_grade = document.getElementById('inputAdiGrade').value.trim() || null;
+    const yearsRaw = document.getElementById('inputYearsExp').value;
+    const years_experience = yearsRaw !== '' ? parseInt(yearsRaw) : null;
+    const service_areas = document.getElementById('inputServiceAreas').value
+      .split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    const languages = document.getElementById('inputLanguages').value
+      .split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    hideError();
+
+    try {
+      const res = await fetch('/api/instructor?action=complete-onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({
+          name, phone, bio, vehicle_make, vehicle_model, transmission_type,
+          adi_grade, years_experience,
+          service_areas: service_areas.length ? service_areas : null,
+          languages: languages.length ? languages : ['English']
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save');
+
+      // Update session with onboarding status
+      const session = JSON.parse(localStorage.getItem('cc_instructor') || '{}');
+      if (session.instructor) {
+        session.instructor.onboarding_complete = true;
+        session.instructor.name = data.instructor.name;
+        localStorage.setItem('cc_instructor', JSON.stringify(session));
+      }
+
+      window.location.href = '/instructor/';
+    } catch (err) {
+      showError(err.message || 'Something went wrong. Please try again.');
+      btn.disabled = false;
+      btn.textContent = 'Complete setup';
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('errorBanner');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+
+  function hideError() {
+    document.getElementById('errorBanner').classList.remove('show');
+  }
+
+  init();
+</script>
+</body>
+</html>

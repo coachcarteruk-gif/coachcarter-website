@@ -45,7 +45,14 @@ const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
 const { processAllPayouts, getEligibleBookings } = require('./_payout-helpers');
+const { requireAuth, getSchoolId, verifyAdminSecret: verifyAdminSecretNew, isSuperAdmin } = require('./_auth');
+const { createTransporter, generateToken } = require('./_auth-helpers');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+// Helper: derive schoolId from admin JWT (superadmins can pass ?school_id= to target a specific school)
+function getAdminSchoolId(admin, req) {
+  return (admin.school_id != null) ? admin.school_id : (parseInt(req.query?.school_id) || 1);
+}
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -100,6 +107,7 @@ module.exports = async (req, res) => {
   if (action === 'payout-overview')      return handlePayoutOverview(req, res);
   if (action === 'process-payouts')      return handleProcessPayouts(req, res);
   if (action === 'instructor-payout-history') return handleInstructorPayoutHistory(req, res);
+  if (action === 'invite-learner')           return handleInviteLearner(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -131,14 +139,14 @@ async function handleLogin(req, res) {
       return res.status(401).json({ error: 'Invalid email or password' });
 
     const token = jwt.sign(
-      { id: admin.id, email: admin.email, role: admin.role, isAdmin: true },
+      { id: admin.id, email: admin.email, role: admin.role, isAdmin: true, school_id: admin.school_id || null },
       secret,
       { expiresIn: '7d' }
     );
 
     return res.json({
       token,
-      admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role }
+      admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role, school_id: admin.school_id || null }
     });
   } catch (err) {
     console.error('admin login error:', err);
@@ -157,6 +165,11 @@ async function handleCreateAdmin(req, res) {
   if (!adminJWT && !hasSecret)
     return res.status(401).json({ error: 'Unauthorised' });
 
+  // Derive school_id: from JWT if available, otherwise from body or default to 1
+  const schoolId = adminJWT
+    ? getAdminSchoolId(adminJWT, req)
+    : (parseInt(req.body?.school_id) || 1);
+
   const { name, email, password } = req.body;
   if (!name || !email || !password)
     return res.status(400).json({ error: 'name, email and password are required' });
@@ -172,9 +185,9 @@ async function handleCreateAdmin(req, res) {
 
     const hash = await bcrypt.hash(password, 10);
     const [admin] = await sql`
-      INSERT INTO admin_users (name, email, password_hash)
-      VALUES (${name.trim()}, ${email.toLowerCase().trim()}, ${hash})
-      RETURNING id, name, email, role, active, created_at
+      INSERT INTO admin_users (name, email, password_hash, school_id)
+      VALUES (${name.trim()}, ${email.toLowerCase().trim()}, ${hash}, ${schoolId})
+      RETURNING id, name, email, role, active, created_at, school_id
     `;
 
     return res.status(201).json({ admin });
@@ -201,6 +214,7 @@ async function handleDashboardStats(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -217,6 +231,7 @@ async function handleDashboardStats(req, res) {
         COUNT(*) FILTER (WHERE status = 'disputed')::int AS disputed,
         COUNT(*) FILTER (WHERE status = 'no_show')::int AS no_show
       FROM lesson_bookings
+      WHERE school_id = ${schoolId}
     `;
 
     // Learner stats
@@ -225,6 +240,7 @@ async function handleDashboardStats(req, res) {
         COUNT(*)::int AS total_learners,
         COALESCE(SUM(credit_balance), 0)::int AS total_credits_held
       FROM learner_users
+      WHERE school_id = ${schoolId}
     `;
 
     // Instructor stats
@@ -233,6 +249,7 @@ async function handleDashboardStats(req, res) {
         COUNT(*)::int AS total_instructors,
         COUNT(*) FILTER (WHERE active = true)::int AS active_instructors
       FROM instructors
+      WHERE school_id = ${schoolId}
     `;
 
     // Revenue (from credit transactions)
@@ -241,20 +258,23 @@ async function handleDashboardStats(req, res) {
         COALESCE(SUM(amount_pence) FILTER (WHERE type = 'purchase'), 0)::int AS total_revenue_pence,
         COUNT(*) FILTER (WHERE type = 'purchase')::int AS total_purchases
       FROM credit_transactions
+      WHERE school_id = ${schoolId}
     `;
 
     // Today's bookings
     const todayBookings = await sql`
       SELECT COUNT(*)::int AS today
       FROM lesson_bookings
-      WHERE scheduled_date = CURRENT_DATE AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+      WHERE school_id = ${schoolId}
+        AND scheduled_date = CURRENT_DATE AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
     `;
 
     // This week's bookings
     const weekBookings = await sql`
       SELECT COUNT(*)::int AS this_week
       FROM lesson_bookings
-      WHERE scheduled_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')
+      WHERE school_id = ${schoolId}
+        AND scheduled_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')
         AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
     `;
 
@@ -279,6 +299,7 @@ async function handleAllBookings(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   const { status, instructor_id, from, to } = req.query;
 
@@ -312,7 +333,8 @@ async function handleAllBookings(req, res) {
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       JOIN instructors i    ON i.id  = lb.instructor_id
-      WHERE (${statusFilter}::text IS NULL OR lb.status = ${statusFilter})
+      WHERE lb.school_id = ${schoolId}
+        AND (${statusFilter}::text IS NULL OR lb.status = ${statusFilter})
         AND (${instructorFilter}::integer IS NULL OR lb.instructor_id = ${instructorFilter})
         AND (${fromFilter}::date IS NULL OR lb.scheduled_date >= ${fromFilter}::date)
         AND (${toFilter}::date IS NULL OR lb.scheduled_date <= ${toFilter}::date)
@@ -334,6 +356,7 @@ async function handleMarkComplete(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   const { booking_id } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
@@ -342,7 +365,7 @@ async function handleMarkComplete(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [booking] = await sql`
-      SELECT id, status FROM lesson_bookings WHERE id = ${booking_id}
+      SELECT id, status FROM lesson_bookings WHERE id = ${booking_id} AND school_id = ${schoolId}
     `;
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
     if (!['confirmed', 'awaiting_confirmation', 'disputed'].includes(booking.status))
@@ -367,6 +390,7 @@ async function handleAllInstructors(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -384,15 +408,17 @@ async function handleAllInstructors(req, res) {
         (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.instructor_id = i.id AND lb.status = 'completed') AS completed_lessons
       FROM instructors i
+      WHERE i.school_id = ${schoolId}
       ORDER BY i.active DESC, i.name ASC
     `;
 
-    // Get availability windows for each instructor
+    // Get availability windows for each instructor (scoped via instructor join)
     const availability = await sql`
-      SELECT instructor_id, id, day_of_week, start_time::text, end_time::text, active
-      FROM instructor_availability
-      WHERE active = true
-      ORDER BY instructor_id, day_of_week, start_time
+      SELECT ia.instructor_id, ia.id, ia.day_of_week, ia.start_time::text, ia.end_time::text, ia.active
+      FROM instructor_availability ia
+      JOIN instructors i ON i.id = ia.instructor_id
+      WHERE ia.active = true AND i.school_id = ${schoolId}
+      ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
     `;
 
     // Group availability by instructor
@@ -421,6 +447,7 @@ async function handleCreateInstructor(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   const { name, email, phone, bio, photo_url } = req.body || {};
   if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
@@ -430,24 +457,69 @@ async function handleCreateInstructor(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Check for duplicate email
-    const existing = await sql`SELECT id FROM instructors WHERE email = ${normalised}`;
+    // Check for duplicate email within same school
+    const existing = await sql`SELECT id FROM instructors WHERE email = ${normalised} AND school_id = ${schoolId}`;
     if (existing.length > 0) return res.status(409).json({ error: 'An instructor with that email already exists' });
 
     const rows = await sql`
-      INSERT INTO instructors (name, email, phone, bio, photo_url, active)
+      INSERT INTO instructors (name, email, phone, bio, photo_url, active, school_id)
       VALUES (
         ${name.trim()},
         ${normalised},
         ${phone?.trim() || null},
         ${bio?.trim() || null},
         ${photo_url?.trim() || null},
-        true
+        true,
+        ${schoolId}
       )
       RETURNING id, name, email, phone, bio, photo_url, active, created_at
     `;
 
-    return res.status(201).json({ success: true, instructor: rows[0] });
+    const instructor = rows[0];
+
+    // Send invite email with magic link
+    try {
+      const token = generateToken();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      await sql`
+        INSERT INTO instructor_login_tokens (instructor_id, token, expires_at, school_id)
+        VALUES (${instructor.id}, ${token}, ${expiresAt.toISOString()}, ${schoolId})
+      `;
+
+      // Get school name
+      const [school] = await sql`SELECT name FROM schools WHERE id = ${schoolId}`;
+      const schoolName = school?.name || 'your driving school';
+
+      const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+      const inviteLink = `${baseUrl}/instructor/login.html?token=${token}`;
+      const firstName = name.trim().split(' ')[0] || 'there';
+      const mailer = createTransporter();
+
+      await mailer.sendMail({
+        from:    `${schoolName} <system@coachcarter.uk>`,
+        to:      normalised,
+        subject: `You've been added as an instructor at ${schoolName}`,
+        html: `
+          <h2>Hi ${firstName},</h2>
+          <p>You've been added as an instructor at <strong>${schoolName}</strong> on CoachCarter.</p>
+          <p>Click the button below to sign in and set up your profile.</p>
+          <p style="margin:28px 0">
+            <a href="${inviteLink}"
+               style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                      border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+              Set up my profile &rarr;
+            </a>
+          </p>
+          <p style="color:#888;font-size:0.85em">This link expires in 7 days. If you didn't expect this email, you can safely ignore it.</p>
+        `
+      });
+    } catch (emailErr) {
+      // Don't fail the whole request if email fails — instructor was still created
+      console.error('Failed to send instructor invite email:', emailErr.message);
+    }
+
+    return res.status(201).json({ success: true, instructor, invite_sent: true });
   } catch (err) {
     console.error('admin create-instructor error:', err);
     reportError('/api/admin', err);
@@ -461,6 +533,7 @@ async function handleUpdateInstructor(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   const { id, name, email, phone, bio, photo_url } = req.body || {};
   if (!id) return res.status(400).json({ error: 'Instructor ID is required' });
@@ -476,9 +549,9 @@ async function handleUpdateInstructor(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Check email not taken by another instructor
+    // Check email not taken by another instructor in same school
     const conflict = await sql`
-      SELECT id FROM instructors WHERE email = ${normalised} AND id != ${id}
+      SELECT id FROM instructors WHERE email = ${normalised} AND id != ${id} AND school_id = ${schoolId}
     `;
     if (conflict.length > 0) return res.status(409).json({ error: 'That email is already used by another instructor' });
 
@@ -491,7 +564,7 @@ async function handleUpdateInstructor(req, res) {
           photo_url = ${photo_url?.trim() || null},
           commission_rate = CASE WHEN ${hasCommission} THEN ${hasCommission ? (parseFloat(body.commission_rate) || 0.85) : 0.85} ELSE commission_rate END,
           weekly_franchise_fee_pence = CASE WHEN ${hasFranchiseFee} THEN ${hasFranchiseFee ? body.weekly_franchise_fee_pence : null}::integer ELSE weekly_franchise_fee_pence END
-      WHERE id = ${id}
+      WHERE id = ${id} AND school_id = ${schoolId}
       RETURNING id, name, email, phone, bio, photo_url, active, commission_rate, weekly_franchise_fee_pence
     `;
 
@@ -510,6 +583,7 @@ async function handleToggleInstructor(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   const { id, active } = req.body || {};
   if (id === undefined || active === undefined) return res.status(400).json({ error: 'id and active are required' });
@@ -518,7 +592,7 @@ async function handleToggleInstructor(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const rows = await sql`
-      UPDATE instructors SET active = ${!!active} WHERE id = ${id}
+      UPDATE instructors SET active = ${!!active} WHERE id = ${id} AND school_id = ${schoolId}
       RETURNING id, name, active
     `;
 
@@ -538,6 +612,7 @@ async function handleAllLearners(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -558,6 +633,7 @@ async function handleAllLearners(req, res) {
         (SELECT COUNT(*)::int FROM driving_sessions ds
          WHERE ds.user_id = lu.id) AS total_sessions
       FROM learner_users lu
+      WHERE lu.school_id = ${schoolId}
       ORDER BY lu.created_at DESC
     `;
 
@@ -576,12 +652,17 @@ async function handleLearnerDetail(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   const learnerId = parseInt(req.query.learner_id);
   if (!learnerId) return res.status(400).json({ error: 'learner_id is required' });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    // Verify learner belongs to this school
+    const [learnerCheck] = await sql`SELECT id FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}`;
+    if (!learnerCheck) return res.status(404).json({ error: 'Learner not found' });
 
     const bookings = await sql`
       SELECT
@@ -634,6 +715,7 @@ async function handleAdjustCredits(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   const { learner_id, hours, reason } = req.body;
   if (!learner_id || hours === undefined || hours === 0)
@@ -648,8 +730,8 @@ async function handleAdjustCredits(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Check learner exists
-    const [learner] = await sql`SELECT id, balance_minutes, credit_balance FROM learner_users WHERE id = ${learner_id}`;
+    // Check learner exists and belongs to this school
+    const [learner] = await sql`SELECT id, balance_minutes, credit_balance FROM learner_users WHERE id = ${learner_id} AND school_id = ${schoolId}`;
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
     // Prevent negative balance
@@ -699,6 +781,7 @@ async function handleDeleteLearner(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   const { learner_id } = req.body;
   if (!learner_id) return res.status(400).json({ error: 'learner_id is required' });
@@ -706,8 +789,8 @@ async function handleDeleteLearner(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Verify learner exists
-    const [learner] = await sql`SELECT id, name, email FROM learner_users WHERE id = ${learner_id}`;
+    // Verify learner exists and belongs to this school
+    const [learner] = await sql`SELECT id, name, email FROM learner_users WHERE id = ${learner_id} AND school_id = ${schoolId}`;
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
     // Delete associated data (order matters for foreign keys)
@@ -743,6 +826,7 @@ async function handleConfirmationDetails(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   const booking_id = req.query.booking_id;
   if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
@@ -758,7 +842,7 @@ async function handleConfirmationDetails(req, res) {
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       JOIN instructors i ON i.id = lb.instructor_id
-      WHERE lb.id = ${booking_id}
+      WHERE lb.id = ${booking_id} AND lb.school_id = ${schoolId}
     `;
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
@@ -788,6 +872,7 @@ async function handleResolveDispute(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   const { booking_id, resolution } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
@@ -798,7 +883,7 @@ async function handleResolveDispute(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [booking] = await sql`
-      SELECT id, status FROM lesson_bookings WHERE id = ${booking_id}
+      SELECT id, status FROM lesson_bookings WHERE id = ${booking_id} AND school_id = ${schoolId}
     `;
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
     if (!['disputed', 'awaiting_confirmation', 'no_show'].includes(booking.status))
@@ -821,6 +906,7 @@ async function handleTogglePayoutPause(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   try {
     const { instructor_id, paused } = req.body || {};
@@ -829,7 +915,7 @@ async function handleTogglePayoutPause(req, res) {
 
     const sql = neon(process.env.POSTGRES_URL);
     const [updated] = await sql`
-      UPDATE instructors SET payouts_paused = ${paused} WHERE id = ${instructor_id} RETURNING id, name
+      UPDATE instructors SET payouts_paused = ${paused} WHERE id = ${instructor_id} AND school_id = ${schoolId} RETURNING id, name
     `;
     if (!updated) return res.status(404).json({ error: 'Instructor not found' });
 
@@ -846,6 +932,7 @@ async function handleTogglePayoutPause(req, res) {
 async function handlePayoutOverview(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -854,7 +941,7 @@ async function handlePayoutOverview(req, res) {
     const instructors = await sql`
       SELECT id, name, email, active, commission_rate, weekly_franchise_fee_pence,
              stripe_account_id, stripe_onboarding_complete, payouts_paused
-        FROM instructors ORDER BY name ASC
+        FROM instructors WHERE school_id = ${schoolId} ORDER BY name ASC
     `;
 
     // Upcoming payout estimates per instructor
@@ -887,7 +974,7 @@ async function handlePayoutOverview(req, res) {
       });
     }
 
-    // Recent payouts
+    // Recent payouts (scoped via instructor school_id)
     const recentPayouts = await sql`
       SELECT ip.id, ip.instructor_id, i.name AS instructor_name,
              ip.amount_pence, ip.status, ip.period_start, ip.period_end,
@@ -895,18 +982,21 @@ async function handlePayoutOverview(req, res) {
              (SELECT COUNT(*) FROM payout_line_items WHERE payout_id = ip.id) AS lesson_count
         FROM instructor_payouts ip
         JOIN instructors i ON i.id = ip.instructor_id
+       WHERE i.school_id = ${schoolId}
        ORDER BY ip.created_at DESC
        LIMIT 20
     `;
 
-    // Summary stats
+    // Summary stats (scoped via instructor school_id)
     const [stats] = await sql`
       SELECT
-        COALESCE(SUM(amount_pence) FILTER (WHERE status = 'completed'
-          AND completed_at >= date_trunc('month', CURRENT_DATE)), 0)::int AS this_month_pence,
-        COALESCE(SUM(amount_pence) FILTER (WHERE status = 'completed'), 0)::int AS all_time_pence,
-        COUNT(*) FILTER (WHERE status = 'completed')::int AS total_payouts
-      FROM instructor_payouts
+        COALESCE(SUM(ip.amount_pence) FILTER (WHERE ip.status = 'completed'
+          AND ip.completed_at >= date_trunc('month', CURRENT_DATE)), 0)::int AS this_month_pence,
+        COALESCE(SUM(ip.amount_pence) FILTER (WHERE ip.status = 'completed'), 0)::int AS all_time_pence,
+        COUNT(*) FILTER (WHERE ip.status = 'completed')::int AS total_payouts
+      FROM instructor_payouts ip
+      JOIN instructors i ON i.id = ip.instructor_id
+      WHERE i.school_id = ${schoolId}
     `;
 
     return res.json({
@@ -937,10 +1027,11 @@ async function handleProcessPayouts(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const results = await processAllPayouts(sql, stripe);
+    const results = await processAllPayouts(sql, stripe, { schoolId });
 
     return res.json({
       ok: true,
@@ -961,12 +1052,17 @@ async function handleProcessPayouts(req, res) {
 async function handleInstructorPayoutHistory(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   try {
     const instructorId = parseInt(req.query.instructor_id);
     if (!instructorId) return res.status(400).json({ error: 'instructor_id required' });
 
     const sql = neon(process.env.POSTGRES_URL);
+
+    // Verify instructor belongs to this school
+    const [instCheck] = await sql`SELECT id FROM instructors WHERE id = ${instructorId} AND school_id = ${schoolId}`;
+    if (!instCheck) return res.status(404).json({ error: 'Instructor not found' });
 
     const payouts = await sql`
       SELECT ip.id, ip.amount_pence, ip.platform_fee_pence, ip.stripe_transfer_id,
@@ -997,5 +1093,83 @@ async function handleInstructorPayoutHistory(req, res) {
     console.error('instructor-payout-history error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load payout history' });
+  }
+}
+
+// ── POST /api/admin?action=invite-learner ─────────────────────────────────────
+async function handleInviteLearner(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const { email, phone, name } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  const normalised = email.trim().toLowerCase();
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Check if learner already exists in this school
+    const existing = await sql`
+      SELECT id FROM learner_users
+      WHERE LOWER(email) = ${normalised} AND school_id = ${schoolId}
+    `;
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'A learner with that email already exists in this school' });
+    }
+
+    // Create learner row
+    const [learner] = await sql`
+      INSERT INTO learner_users (email, name, phone, credit_balance, balance_minutes, school_id)
+      VALUES (${normalised}, ${name?.trim() || null}, ${phone?.trim() || null}, 0, 0, ${schoolId})
+      RETURNING id
+    `;
+
+    // Generate magic link token with 7-day expiry
+    const token = generateToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await sql`
+      INSERT INTO magic_link_tokens (token, email, method, expires_at)
+      VALUES (${token}, ${normalised}, 'email', ${expiresAt.toISOString()})
+    `;
+
+    // Get school name for email
+    const [school] = await sql`SELECT name FROM schools WHERE id = ${schoolId}`;
+    const schoolName = school?.name || 'your driving school';
+
+    // Send invite email
+    const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+    const inviteLink = `${baseUrl}/learner/login.html?token=${token}`;
+    const firstName = (name || '').split(' ')[0] || 'there';
+    const mailer = createTransporter();
+
+    await mailer.sendMail({
+      from:    `${schoolName} <system@coachcarter.uk>`,
+      to:      normalised,
+      subject: `You've been invited to ${schoolName}`,
+      html: `
+        <h2>Hi ${firstName},</h2>
+        <p>You've been invited to join <strong>${schoolName}</strong> on CoachCarter.</p>
+        <p>Click the button below to set up your account and start booking lessons.</p>
+        <p style="margin:28px 0">
+          <a href="${inviteLink}"
+             style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                    border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+            Set up my account &rarr;
+          </a>
+        </p>
+        <p style="color:#888;font-size:0.85em">This link expires in 7 days. If you didn't expect this email, you can safely ignore it.</p>
+      `
+    });
+
+    return res.status(201).json({ ok: true, learner_id: learner.id, invite_sent: true });
+  } catch (err) {
+    console.error('invite-learner error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to invite learner', details: err.message });
   }
 }

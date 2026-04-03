@@ -12,7 +12,15 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {
     try {
       const sql = neon(process.env.POSTGRES_URL);
+      const schoolId = parseInt(req.query.school_id) || 1;
 
+      // Try school-specific config from the schools table first
+      const schoolRows = await sql`SELECT config, updated_at FROM schools WHERE id = ${schoolId}`;
+      if (schoolRows.length > 0 && schoolRows[0].config) {
+        return res.json({ ...schoolRows[0].config, _source: 'school', _school_id: schoolId, _updated: schoolRows[0].updated_at });
+      }
+
+      // Fall back to legacy site_config table
       const rows = await sql`SELECT config, updated_at FROM site_config WHERE id = 1`;
 
       if (rows.length > 0) {
@@ -49,18 +57,27 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'Invalid config payload' });
       }
 
-      const { _source, _updated, ...cleanConfig } = config;
+      const { _source, _updated, _school_id, ...cleanConfig } = config;
       cleanConfig.last_updated = new Date().toISOString();
+      const schoolId = parseInt(req.body.school_id) || 1;
 
       const sql = neon(process.env.POSTGRES_URL);
 
-      await sql`
-        INSERT INTO site_config (id, config, updated_at)
-        VALUES (1, ${JSON.stringify(cleanConfig)}, NOW())
-        ON CONFLICT (id) DO UPDATE
-          SET config = EXCLUDED.config,
-              updated_at = NOW()
-      `;
+      // Save to school-specific config if school_id provided
+      if (schoolId > 1 || _source === 'school') {
+        await sql`
+          UPDATE schools SET config = ${JSON.stringify(cleanConfig)}, updated_at = NOW()
+          WHERE id = ${schoolId}
+        `;
+      } else {
+        await sql`
+          INSERT INTO site_config (id, config, updated_at)
+          VALUES (1, ${JSON.stringify(cleanConfig)}, NOW())
+          ON CONFLICT (id) DO UPDATE
+            SET config = EXCLUDED.config,
+                updated_at = NOW()
+        `;
+      }
 
       return res.json({ success: true, updated_at: new Date().toISOString() });
 

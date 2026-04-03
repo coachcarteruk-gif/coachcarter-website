@@ -199,4 +199,140 @@ async function processAllPayouts(sql, stripe) {
   return results;
 }
 
-module.exports = { getEligibleBookings, processPayoutForInstructor, processAllPayouts };
+/**
+ * Get unpaid eligible bookings for a school (all instructors in that school).
+ * Excludes bookings already covered by a school_payouts record.
+ */
+async function getEligibleSchoolBookings(sql, schoolId) {
+  return sql`
+    SELECT lb.id AS booking_id,
+           lb.scheduled_date,
+           lb.instructor_id,
+           COALESCE(lt.price_pence, 8250) AS price_pence,
+           COALESCE(lt.name, 'Standard Lesson') AS lesson_type_name
+      FROM lesson_bookings lb
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+     WHERE lb.school_id = ${schoolId}
+       AND (
+         lb.status = 'completed'
+         OR (lb.status = 'confirmed' AND lb.scheduled_date <= CURRENT_DATE - INTERVAL '3 days')
+       )
+       AND lb.id NOT IN (
+         SELECT unnest(booking_ids) FROM school_payouts WHERE school_id = ${schoolId} AND status = 'completed'
+       )
+     ORDER BY lb.scheduled_date ASC
+  `;
+}
+
+/**
+ * Process payouts for all schools with active Stripe Connect.
+ * Each school receives (total lesson revenue - platform fee) transferred to their Connect account.
+ */
+async function processSchoolPayouts(sql, stripe) {
+  const schools = await sql`
+    SELECT id, name, stripe_account_id, platform_fee_pct
+      FROM schools
+     WHERE active = TRUE
+       AND stripe_onboarding_complete = TRUE
+       AND stripe_account_id IS NOT NULL
+  `;
+
+  const results = { processed: 0, skipped: 0, failed: 0, total_pence: 0, details: [] };
+
+  for (const school of schools) {
+    try {
+      const bookings = await getEligibleSchoolBookings(sql, school.id);
+      if (!bookings.length) {
+        results.skipped++;
+        continue;
+      }
+
+      let totalGrossPence = 0;
+      const bookingIds = [];
+      for (const b of bookings) {
+        totalGrossPence += parseInt(b.price_pence);
+        bookingIds.push(b.booking_id);
+      }
+
+      const feeRate = parseFloat(school.platform_fee_pct) || 0;
+      const platformFeePence = Math.round(totalGrossPence * feeRate / 100);
+      const schoolPayoutPence = totalGrossPence - platformFeePence;
+
+      if (schoolPayoutPence <= 0) {
+        results.skipped++;
+        continue;
+      }
+
+      const periodStart = bookings[0].scheduled_date;
+      const periodEnd = bookings[bookings.length - 1].scheduled_date;
+
+      // Create school payout record
+      const [payout] = await sql`
+        INSERT INTO school_payouts (school_id, amount_pence, platform_fee_pence, period_start, period_end, booking_ids, status)
+        VALUES (${school.id}, ${schoolPayoutPence}, ${platformFeePence}, ${periodStart}, ${periodEnd}, ${bookingIds}, 'processing')
+        RETURNING id
+      `;
+
+      // Create Stripe transfer
+      try {
+        const transfer = await stripe.transfers.create({
+          amount: schoolPayoutPence,
+          currency: 'gbp',
+          destination: school.stripe_account_id,
+          description: `CoachCarter school payout ${periodStart} to ${periodEnd}`,
+          metadata: {
+            school_payout_id: String(payout.id),
+            school_id: String(school.id),
+            lesson_count: String(bookings.length)
+          }
+        });
+
+        await sql`
+          UPDATE school_payouts
+             SET status = 'completed', stripe_transfer_id = ${transfer.id}, completed_at = NOW()
+           WHERE id = ${payout.id}
+        `;
+
+        results.processed++;
+        results.total_pence += schoolPayoutPence;
+        results.details.push({
+          payout_id: payout.id,
+          school_id: school.id,
+          school_name: school.name,
+          amount_pence: schoolPayoutPence,
+          platform_fee_pence: platformFeePence,
+          lesson_count: bookings.length,
+          transfer_id: transfer.id,
+          status: 'completed'
+        });
+      } catch (err) {
+        // Transfer failed — mark payout as failed and clear booking_ids so they retry next run
+        await sql`
+          UPDATE school_payouts SET status = 'failed', failure_reason = ${err.message}, booking_ids = '{}' WHERE id = ${payout.id}
+        `;
+        results.failed++;
+        results.details.push({
+          payout_id: payout.id,
+          school_id: school.id,
+          school_name: school.name,
+          amount_pence: schoolPayoutPence,
+          lesson_count: bookings.length,
+          status: 'failed',
+          error: err.message
+        });
+      }
+    } catch (err) {
+      results.failed++;
+      results.details.push({
+        school_id: school.id,
+        school_name: school.name,
+        status: 'error',
+        error: err.message
+      });
+    }
+  }
+
+  return results;
+}
+
+module.exports = { getEligibleBookings, processPayoutForInstructor, processAllPayouts, processSchoolPayouts };

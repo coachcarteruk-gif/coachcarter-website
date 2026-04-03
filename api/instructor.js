@@ -123,6 +123,7 @@ module.exports = async (req, res) => {
   if (action === 'cancel-offer')         return handleCancelOffer(req, res);
   if (action === 'payout-history')       return handlePayoutHistory(req, res);
   if (action === 'next-payout-preview')  return handleNextPayoutPreview(req, res);
+  if (action === 'complete-onboarding')  return handleCompleteOnboarding(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -246,6 +247,7 @@ async function handleVerifyToken(req, res) {
     const [row] = await sql`
       SELECT t.id AS token_id, t.expires_at, t.used,
              i.id AS instructor_id, i.name, i.email, i.photo_url,
+             i.school_id, i.onboarding_complete,
              COALESCE(i.is_admin, FALSE) AS is_admin
       FROM instructor_login_tokens t
       JOIN instructors i ON i.id = t.instructor_id
@@ -263,13 +265,13 @@ async function handleVerifyToken(req, res) {
 
     // Issue a JWT
     const secret   = process.env.JWT_SECRET;
-    const jwtPayload = { id: row.instructor_id, email: row.email, role: 'instructor' };
+    const jwtPayload = { id: row.instructor_id, email: row.email, role: 'instructor', school_id: row.school_id };
     if (row.is_admin) jwtPayload.isAdmin = true;
     const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: JWT_EXPIRY });
 
     return res.json({
       token: jwtToken,
-      instructor: { id: row.instructor_id, name: row.name, email: row.email, photo_url: row.photo_url, is_admin: !!row.is_admin }
+      instructor: { id: row.instructor_id, name: row.name, email: row.email, photo_url: row.photo_url, is_admin: !!row.is_admin, school_id: row.school_id, onboarding_complete: row.onboarding_complete }
     });
 
   } catch (err) {
@@ -286,6 +288,7 @@ async function handleSchedule(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -318,6 +321,7 @@ async function handleSchedule(req, res) {
       LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
+        AND lb.school_id = ${schoolId}
         AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '14 days')
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
@@ -1432,6 +1436,7 @@ async function handleCreateBooking(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const { learner_id, scheduled_date, start_time, lesson_type_id, payment_method, notes, pickup_address, dropoff_address } = req.body;
   if (!learner_id || !scheduled_date || !start_time)
@@ -1455,11 +1460,11 @@ async function handleCreateBooking(req, res) {
     // Look up lesson type (default to standard)
     let lessonType;
     if (lesson_type_id) {
-      const [lt] = await sql`SELECT * FROM lesson_types WHERE id = ${lesson_type_id} AND active = true`;
+      const [lt] = await sql`SELECT * FROM lesson_types WHERE id = ${lesson_type_id} AND active = true AND school_id = ${schoolId}`;
       lessonType = lt;
     }
     if (!lessonType) {
-      const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = 'standard' AND active = true`;
+      const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = 'standard' AND active = true AND school_id = ${schoolId}`;
       lessonType = lt || { id: null, duration_minutes: 90, name: 'Standard Lesson', price_pence: 8250 };
     }
     const durationMins = lessonType.duration_minutes;
@@ -1712,6 +1717,7 @@ async function handleMyLearners(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -1731,6 +1737,7 @@ async function handleMyLearners(req, res) {
       JOIN lesson_bookings lb ON lb.learner_id = lu.id
       LEFT JOIN instructor_learner_notes iln ON iln.learner_id = lu.id AND iln.instructor_id = ${instructor.id}
       WHERE lb.instructor_id = ${instructor.id}
+        AND lb.school_id = ${schoolId}
       GROUP BY lu.id, iln.notes, iln.test_date
       ORDER BY MAX(lb.scheduled_date) DESC
     `;
@@ -2199,6 +2206,7 @@ async function handleCreateOffer(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const { learner_email, scheduled_date, start_time, lesson_type_id, discount_pct } = req.body;
   if (!learner_email || !scheduled_date || !start_time)
@@ -2228,11 +2236,11 @@ async function handleCreateOffer(req, res) {
     // Look up lesson type (default to standard)
     let lessonType;
     if (lesson_type_id) {
-      const [lt] = await sql`SELECT * FROM lesson_types WHERE id = ${lesson_type_id} AND active = true`;
+      const [lt] = await sql`SELECT * FROM lesson_types WHERE id = ${lesson_type_id} AND active = true AND school_id = ${schoolId}`;
       lessonType = lt;
     }
     if (!lessonType) {
-      const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = 'standard' AND active = true`;
+      const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = 'standard' AND active = true AND school_id = ${schoolId}`;
       lessonType = lt || { id: null, duration_minutes: 90, name: 'Standard Lesson', price_pence: 8250 };
     }
     const durationMins = lessonType.duration_minutes;
@@ -2550,5 +2558,57 @@ async function handleNextPayoutPreview(req, res) {
     console.error('next-payout-preview error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to preview next payout' });
+  }
+}
+
+// ── POST /api/instructor?action=complete-onboarding ──────────────────────────
+async function handleCompleteOnboarding(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const auth = verifyInstructorAuth(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorised' });
+
+  const {
+    name, phone, bio, vehicle_make, vehicle_model, transmission_type,
+    adi_grade, years_experience, service_areas, languages
+  } = req.body || {};
+
+  // Validate transmission_type if provided
+  const allowedTransmissions = ['manual', 'automatic', 'both'];
+  if (transmission_type && !allowedTransmissions.includes(transmission_type)) {
+    return res.status(400).json({ error: 'Transmission type must be manual, automatic, or both' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [updated] = await sql`
+      UPDATE instructors SET
+        name               = COALESCE(${name?.trim() || null}, name),
+        phone              = COALESCE(${phone?.trim() || null}, phone),
+        bio                = COALESCE(${bio?.trim() || null}, bio),
+        vehicle_make       = COALESCE(${vehicle_make?.trim() || null}, vehicle_make),
+        vehicle_model      = COALESCE(${vehicle_model?.trim() || null}, vehicle_model),
+        transmission_type  = COALESCE(${transmission_type || null}, transmission_type),
+        adi_grade          = COALESCE(${adi_grade?.trim() || null}, adi_grade),
+        years_experience   = COALESCE(${years_experience != null ? parseInt(years_experience) : null}, years_experience),
+        service_areas      = COALESCE(${service_areas ? JSON.stringify(service_areas) : null}::jsonb, service_areas),
+        languages          = COALESCE(${languages ? JSON.stringify(languages) : null}::jsonb, languages),
+        onboarding_complete = TRUE
+      WHERE id = ${auth.id}
+      RETURNING id, name, email, phone, bio, vehicle_make, vehicle_model,
+                transmission_type, adi_grade, years_experience, service_areas,
+                languages, onboarding_complete
+    `;
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Instructor not found' });
+    }
+
+    return res.json({ ok: true, instructor: updated });
+  } catch (err) {
+    console.error('complete-onboarding error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to complete onboarding', details: err.message });
   }
 }

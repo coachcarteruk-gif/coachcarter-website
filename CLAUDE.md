@@ -1,6 +1,6 @@
-# CoachCarter Website
+# CoachCarter Platform
 
-Driving school website for CoachCarter (coachcarter.uk). Vanilla HTML/JS frontend on Vercel with serverless API routes and Neon Postgres.
+Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel with serverless API routes and Neon Postgres. Originally built for CoachCarter (coachcarter.uk), now supports multiple driving schools.
 
 ## IMPORTANT: Before starting ANY work
 
@@ -10,10 +10,13 @@ Driving school website for CoachCarter (coachcarter.uk). Vanilla HTML/JS fronten
 
 ## Project structure
 
-- `public/` — Static HTML pages (learner portal in `public/learner/`, instructor in `public/instructor/`, admin in `public/admin/`)
+- `public/` — Static HTML pages (learner portal in `public/learner/`, instructor in `public/instructor/`, admin in `public/admin/`, super admin in `public/superadmin/`)
 - `api/` — Vercel serverless functions. Files prefixed with `_` are shared utilities (not endpoints)
-- `db/migration.sql` — Single idempotent migration file defining all 26 tables
-- `public/shared/` — Shared CSS (learner.css, instructor.css) and auth JS (learner-auth.js, instructor-auth.js)
+- `api/_auth.js` — Centralised JWT auth module (decodeToken, requireAuth, getSchoolId, isSuperAdmin)
+- `api/schools.js` — School management API (CRUD, branding, stats)
+- `db/migration.sql` — Single idempotent migration file defining all tables
+- `public/shared/` — Shared CSS (learner.css, instructor.css), auth JS (learner-auth.js, instructor-auth.js), and branding JS (branding.js)
+- `public/shared/branding.js` — Dynamic school branding via CSS custom properties
 - `public/sidebar.js` — Context-aware sidebar nav used on all pages
 - `public/competency-config.js` — 10-category DL25 framework (39 sub-skills) shared across 6 features
 
@@ -22,9 +25,59 @@ Driving school website for CoachCarter (coachcarter.uk). Vanilla HTML/JS fronten
 - API routes use `?action=` routing (e.g. `/api/slots?action=book`)
 - Auth: JWT stored in localStorage (`cc_learner`, `cc_instructor`, `cc_admin`)
 - Frontend auth via `window.ccAuth` from shared auth JS files
-- All new pages must include `sidebar.js`
+- All new pages must include `sidebar.js` and `branding.js`
 - Phone numbers stored as UK format (07xxx), converted to +447xxx at send time
 - Always `await` async operations before `res.json()` — Vercel kills functions after response
+- **Every SQL query on tenant-scoped tables MUST filter by `school_id`**
+
+## Multi-tenancy (April 2026)
+
+The platform is multi-tenant. Each driving school is an isolated tenant with their own instructors, learners, bookings, lesson types, pricing, and branding.
+
+**Key tables:**
+- `schools` — school profile, branding (colours, logo), Stripe Connect account, config JSONB
+- `school_payouts` — platform-to-school payment transfers
+
+**Roles:**
+- `superadmin` — platform owner (Fraser). Can see all schools, create schools, manage school admins. JWT has `school_id: null`.
+- `admin` — school admin. Scoped to their `school_id`. Can manage their school's instructors, learners, bookings, payouts.
+- `instructor` — belongs to one school. JWT has `school_id`.
+- `learner` — belongs to one school. JWT has `school_id` and `role: 'learner'`.
+
+**Auth module (`api/_auth.js`):**
+- `requireAuth(req, { roles })` — validates JWT, returns payload with normalised `school_id`
+- `getSchoolId(payload, req)` — returns effective school_id. Superadmins can override via `?school_id=X`.
+- Old JWTs without `school_id` default to `school_id = 1` (CoachCarter).
+
+**Branding:**
+- `public/shared/branding.js` — loaded on all pages. Fetches school branding from API, caches in localStorage, applies CSS custom properties (`--brand-primary`, `--brand-secondary`, `--brand-accent`).
+- `GET /api/schools?action=branding&school_id=X` — public endpoint returning school name, colours, logo.
+- HTML elements with `data-brand-name` and `data-brand-logo` attributes are auto-updated.
+
+**Stripe payment flow:**
+- Learner pays → platform Stripe account → weekly cron transfers to school's Stripe Connect (minus platform fee) → school handles instructor payments externally.
+- CoachCarter (school #1) retains the legacy per-instructor payout system alongside.
+
+**School onboarding:**
+- Superadmin creates school via `/api/schools?action=create`
+- Superadmin creates school admin via `/api/schools?action=create-admin`
+- School admin creates instructors via `/api/admin?action=create-instructor` (sends invite email)
+- Admin/instructor invites learners via `/api/admin?action=invite-learner`
+
+**Rules when adding features:**
+1. Every new tenant-scoped table MUST have `school_id INTEGER NOT NULL REFERENCES schools(id)` with `DEFAULT 1`
+2. Every new SQL query MUST include `WHERE school_id = ${schoolId}`
+3. Every new JWT must include `school_id` in the payload
+4. Use `requireAuth` from `api/_auth.js`, not local auth functions
+5. Public endpoints that need school context accept `?school_id=X` or `?school=slug`
+
+**Future plans (documented, not yet built):**
+- Marketplace model (learners browse across schools)
+- Custom domains per school
+- Embeddable booking widget (like Setmore)
+- Self-service school signup
+- Multi-school instructors
+- Per-school content (videos, quizzes)
 
 ## Working practices
 

@@ -792,3 +792,244 @@ ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_staff_key TEXT;
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS max_travel_minutes INTEGER;
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_last_synced_at TIMESTAMPTZ;
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_sync_error TEXT;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- MULTI-TENANT: SCHOOLS
+-- ══════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS schools (
+  id                         SERIAL PRIMARY KEY,
+  name                       TEXT NOT NULL,
+  slug                       TEXT UNIQUE NOT NULL,
+  logo_url                   TEXT,
+  primary_colour             TEXT DEFAULT '#f97316',
+  secondary_colour           TEXT DEFAULT '#1e3a5f',
+  accent_colour              TEXT DEFAULT '#3b82f6',
+  contact_email              TEXT,
+  contact_phone              TEXT,
+  website_url                TEXT,
+  stripe_account_id          TEXT,
+  stripe_onboarding_complete BOOLEAN DEFAULT FALSE,
+  platform_fee_pct           NUMERIC(5,2) DEFAULT 0.00,
+  config                     JSONB DEFAULT '{}',
+  active                     BOOLEAN DEFAULT TRUE,
+  created_at                 TIMESTAMPTZ DEFAULT NOW(),
+  updated_at                 TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed CoachCarter as school #1
+INSERT INTO schools (id, name, slug, contact_email, contact_phone, primary_colour, secondary_colour, accent_colour)
+VALUES (1, 'CoachCarter Driving School', 'coachcarter', 'fraser@coachcarter.uk', NULL, '#f97316', '#1e3a5f', '#3b82f6')
+ON CONFLICT (id) DO NOTHING;
+
+-- Ensure sequence is ahead of seeded id
+SELECT setval('schools_id_seq', GREATEST(nextval('schools_id_seq'), 2));
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- MULTI-TENANT: SCHOOL PAYOUTS
+-- ══════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS school_payouts (
+  id                 SERIAL PRIMARY KEY,
+  school_id          INTEGER NOT NULL REFERENCES schools(id),
+  amount_pence       INTEGER NOT NULL,
+  platform_fee_pence INTEGER NOT NULL DEFAULT 0,
+  stripe_transfer_id TEXT,
+  period_start       DATE NOT NULL,
+  period_end         DATE NOT NULL,
+  booking_ids        INTEGER[] NOT NULL DEFAULT '{}',
+  status             TEXT NOT NULL DEFAULT 'pending'
+                     CHECK (status IN ('pending','processing','completed','failed','skipped')),
+  failure_reason     TEXT,
+  created_at         TIMESTAMPTZ DEFAULT NOW(),
+  completed_at       TIMESTAMPTZ
+);
+
+ALTER TABLE school_payouts ADD COLUMN IF NOT EXISTS booking_ids INTEGER[] NOT NULL DEFAULT '{}';
+
+CREATE INDEX IF NOT EXISTS idx_school_payouts_school_period
+  ON school_payouts(school_id, period_start);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- MULTI-TENANT: ADD school_id TO ALL TENANT-SCOPED TABLES
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- Add school_id column to each table, backfill to 1, set NOT NULL + default
+-- Using DO blocks so each ALTER is safe if column already exists
+
+-- 1. learner_users
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE learner_users SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE learner_users ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE learner_users ALTER COLUMN school_id SET DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_learner_users_school ON learner_users(school_id);
+
+-- 2. instructors
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE instructors SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE instructors ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE instructors ALTER COLUMN school_id SET DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_instructors_school ON instructors(school_id);
+
+-- 3. instructor_availability
+ALTER TABLE instructor_availability ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE instructor_availability SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE instructor_availability ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE instructor_availability ALTER COLUMN school_id SET DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_instructor_availability_school ON instructor_availability(school_id);
+
+-- 4. instructor_blackout_dates
+ALTER TABLE instructor_blackout_dates ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE instructor_blackout_dates SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE instructor_blackout_dates ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE instructor_blackout_dates ALTER COLUMN school_id SET DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_instructor_blackout_dates_school ON instructor_blackout_dates(school_id);
+
+-- 5. instructor_login_tokens
+ALTER TABLE instructor_login_tokens ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE instructor_login_tokens SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE instructor_login_tokens ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE instructor_login_tokens ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 6. instructor_external_events
+ALTER TABLE instructor_external_events ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE instructor_external_events SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE instructor_external_events ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE instructor_external_events ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 7. instructor_learner_notes
+ALTER TABLE instructor_learner_notes ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE instructor_learner_notes SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 8. instructor_payouts
+ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE instructor_payouts SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE instructor_payouts ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE instructor_payouts ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 9. payout_line_items
+ALTER TABLE payout_line_items ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE payout_line_items SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE payout_line_items ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE payout_line_items ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 10. lesson_bookings
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE lesson_bookings SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE lesson_bookings ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE lesson_bookings ALTER COLUMN school_id SET DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_lesson_bookings_school ON lesson_bookings(school_id);
+
+-- 11. slot_reservations
+ALTER TABLE slot_reservations ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE slot_reservations SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE slot_reservations ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE slot_reservations ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 12. credit_transactions
+ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE credit_transactions SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE credit_transactions ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE credit_transactions ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 13. lesson_types
+ALTER TABLE lesson_types ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE lesson_types SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE lesson_types ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE lesson_types ALTER COLUMN school_id SET DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_lesson_types_school ON lesson_types(school_id);
+
+-- 14. lesson_offers
+ALTER TABLE lesson_offers ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE lesson_offers SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE lesson_offers ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE lesson_offers ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 15. driving_sessions
+ALTER TABLE driving_sessions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE driving_sessions SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE driving_sessions ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE driving_sessions ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 16. skill_ratings
+ALTER TABLE skill_ratings ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE skill_ratings SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE skill_ratings ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE skill_ratings ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 17. learner_onboarding
+ALTER TABLE learner_onboarding ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE learner_onboarding SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE learner_onboarding ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE learner_onboarding ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 18. quiz_results
+ALTER TABLE quiz_results ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE quiz_results SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE quiz_results ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE quiz_results ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 19. mock_tests
+ALTER TABLE mock_tests ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE mock_tests SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE mock_tests ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE mock_tests ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 20. mock_test_faults
+ALTER TABLE mock_test_faults ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE mock_test_faults SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE mock_test_faults ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE mock_test_faults ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 21. learner_availability
+ALTER TABLE learner_availability ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE learner_availability SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE learner_availability ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE learner_availability ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 22. waitlist
+ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE waitlist SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE waitlist ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE waitlist ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 23. qa_questions
+ALTER TABLE qa_questions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE qa_questions SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE qa_questions ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE qa_questions ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 24. qa_answers
+ALTER TABLE qa_answers ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE qa_answers SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE qa_answers ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE qa_answers ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 25. sent_reminders
+ALTER TABLE sent_reminders ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE sent_reminders SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE sent_reminders ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE sent_reminders ALTER COLUMN school_id SET DEFAULT 1;
+
+-- 26. lesson_confirmations
+ALTER TABLE lesson_confirmations ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+UPDATE lesson_confirmations SET school_id = 1 WHERE school_id IS NULL;
+ALTER TABLE lesson_confirmations ALTER COLUMN school_id SET NOT NULL;
+ALTER TABLE lesson_confirmations ALTER COLUMN school_id SET DEFAULT 1;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- MULTI-TENANT: ADMIN USERS — link to school (NULL = superadmin / platform)
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
+-- Backfill existing admins to CoachCarter
+UPDATE admin_users SET school_id = 1 WHERE school_id IS NULL AND role = 'admin';
+-- superadmin rows keep school_id = NULL (platform-level)
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- MULTI-TENANT: INSTRUCTOR ONBOARDING FLAG
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS onboarding_complete BOOLEAN DEFAULT FALSE;
+-- Backfill existing instructors as complete
+UPDATE instructors SET onboarding_complete = TRUE WHERE onboarding_complete IS NULL OR onboarding_complete = FALSE;

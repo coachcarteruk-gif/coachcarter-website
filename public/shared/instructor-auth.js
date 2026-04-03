@@ -27,9 +27,22 @@
     return auth;
   }
 
+  /** After login, fetch school branding if available */
+  function onLogin(authData) {
+    if (window.ccBranding && authData && authData.token) {
+      try {
+        var payload = JSON.parse(atob(authData.token.split('.')[1]));
+        if (payload.school_id) {
+          window.ccBranding.fetchAndCacheBranding(payload.school_id);
+        }
+      } catch (e) { /* ignore decode errors */ }
+    }
+  }
+
   /** Log out: clear session and redirect to login */
   function logout() {
     localStorage.removeItem(STORAGE_KEY);
+    if (window.ccBranding) window.ccBranding.clearBranding();
     window.location.href = LOGIN_URL;
   }
 
@@ -39,6 +52,7 @@
     getToken: getToken,
     requireAuth: requireAuth,
     logout: logout,
+    onLogin: onLogin,
     STORAGE_KEY: STORAGE_KEY
   };
 })();

@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Schools — CoachCarter</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --sidebar-bg: #262626;
+  --sidebar-hover: #2e2e2e;
+  --sidebar-active: #383838;
+  --accent: #f97316;
+  --accent-dk: #ea580c;
+  --accent-lt: #fff4ec;
+  --accent-mid: rgba(249,115,22,0.12);
+  --primary: #262626;
+  --muted: #797879;
+  --border: #e0e0e0;
+  --bg: #ffffff;
+  --white: #ffffff;
+  --green: #22c55e;
+  --green-bg: #dcfce7;
+  --amber: #f59e0b;
+  --amber-bg: #fef3c7;
+  --red: #ef4444;
+  --red-bg: #fee2e2;
+  --blue: #3b82f6;
+  --blue-bg: #dbeafe;
+  --font-head: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Lato', sans-serif;
+  --radius: 14px;
+}
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--primary);
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 240px;
+  background: var(--sidebar-bg);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transition: transform 0.3s;
+}
+.sidebar-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 24px 20px 20px;
+  text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.sidebar-brand-text { font-family: var(--font-head); font-size: 1rem; font-weight: 700; color: #fff; }
+.sidebar-brand-sub { font-size: 0.7rem; color: var(--accent); font-weight: 600; }
+.sidebar-nav { flex: 1; padding: 16px 0; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  color: rgba(255,255,255,0.6);
+  text-decoration: none;
+  font-size: 0.9rem; font-weight: 500;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+.sidebar-nav a:hover { color: #fff; background: var(--sidebar-hover); }
+.sidebar-nav a.active {
+  color: var(--accent); background: var(--sidebar-hover);
+  border-left-color: var(--accent);
+}
+.sidebar-nav a .nav-icon { font-size: 1.1rem; width: 24px; text-align: center; }
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.sidebar-footer .admin-name { font-size: 0.85rem; color: rgba(255,255,255,0.8); font-weight: 600; }
+.sidebar-footer .admin-email { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+.logout-btn {
+  display: block; width: 100%;
+  margin-top: 12px; padding: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px; color: rgba(255,255,255,0.6);
+  font-size: 0.8rem; cursor: pointer;
+  transition: all 0.15s;
+}
+.logout-btn:hover { background: rgba(239,68,68,0.15); color: var(--red); border-color: rgba(239,68,68,0.3); }
+
+/* Mobile */
+.mobile-header {
+  display: none; position: fixed; top: 0; left: 0; right: 0;
+  background: var(--sidebar-bg); color: #fff; padding: 12px 16px;
+  z-index: 99; align-items: center; gap: 12px;
+}
+.hamburger { background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 99; }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .mobile-header { display: flex; }
+  .main { margin-left: 0 !important; padding-top: 64px !important; }
+}
+
+/* Main */
+.main {
+  flex: 1;
+  margin-left: 240px;
+  padding: 32px;
+  min-height: 100vh;
+}
+.page-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 28px; flex-wrap: wrap; gap: 12px;
+}
+.page-title { font-family: var(--font-head); font-size: 1.5rem; font-weight: 700; }
+.page-subtitle { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 8px;
+  font-family: var(--font-body); font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: var(--white);
+  color: var(--primary); transition: all 0.15s;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-dk); border-color: var(--accent-dk); color: #fff; }
+.btn-sm { padding: 5px 10px; font-size: 0.8rem; }
+.btn-danger { color: var(--red); }
+.btn-danger:hover { border-color: var(--red); background: var(--red-bg); }
+
+/* Panel / Table */
+.panel-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  text-align: left; padding: 12px 20px;
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--muted);
+  background: #fafafa; border-bottom: 1px solid var(--border);
+}
+.data-table td {
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+  font-size: 0.9rem; vertical-align: middle;
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #fafafa; }
+
+/* Badges */
+.badge {
+  display: inline-block; padding: 4px 10px; border-radius: 100px;
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+}
+.badge-green { background: var(--green-bg); color: #166534; }
+.badge-red { background: var(--red-bg); color: #991b1b; }
+
+/* Modal */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200; align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--white); border-radius: 16px;
+  width: 90%; max-width: 520px; max-height: 90vh;
+  overflow-y: auto; padding: 28px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+}
+.modal-title {
+  font-family: var(--font-head); font-size: 1.2rem; font-weight: 700;
+  margin-bottom: 20px;
+}
+.modal .form-group { margin-bottom: 14px; }
+.modal label {
+  display: block; font-size: 0.78rem; font-weight: 600;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+  margin-bottom: 5px;
+}
+.modal input[type="text"],
+.modal input[type="email"],
+.modal input[type="tel"] {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 8px; font-family: var(--font-body); font-size: 0.9rem;
+  outline: none; transition: border-color 0.2s; background: #fafafa;
+}
+.modal input:focus { border-color: var(--accent); background: #fff; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+/* Empty / Loading */
+.empty-state { text-align: center; padding: 48px 24px; color: var(--muted); font-size: 0.9rem; }
+.loading { text-align: center; padding: 48px; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<!-- Mobile header -->
+<div class="mobile-header">
+  <button class="hamburger" onclick="document.querySelector('.sidebar').classList.toggle('open'); document.querySelector('.sidebar-overlay').classList.toggle('open');">&#9776;</button>
+  <span style="font-family: var(--font-head); font-weight: 700;">Super Admin</span>
+</div>
+<div class="sidebar-overlay" onclick="document.querySelector('.sidebar').classList.remove('open'); this.classList.remove('open');"></div>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <a class="sidebar-brand" href="/superadmin/">
+    <div>
+      <div class="sidebar-brand-text">CoachCarter</div>
+      <div class="sidebar-brand-sub">SUPER ADMIN</div>
+    </div>
+  </a>
+  <div class="sidebar-nav">
+    <a href="/superadmin/"><span class="nav-icon">&#128200;</span> Platform Overview</a>
+    <a href="/superadmin/schools.html" class="active"><span class="nav-icon">&#127979;</span> Schools</a>
+  </div>
+  <div class="sidebar-footer">
+    <div class="admin-name" id="adminName">Super Admin</div>
+    <div class="admin-email" id="adminEmail"></div>
+    <button class="logout-btn" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+
+<!-- Create School Modal -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <h2 class="modal-title">Create School</h2>
+    <div class="form-group">
+      <label>School Name</label>
+      <input type="text" id="schoolName" placeholder="e.g. Premier Driving School">
+    </div>
+    <div class="form-group">
+      <label>Slug</label>
+      <input type="text" id="schoolSlug" placeholder="auto-generated from name">
+    </div>
+    <div class="form-group">
+      <label>Contact Email</label>
+      <input type="email" id="schoolEmail" placeholder="admin@example.com">
+    </div>
+    <div class="form-group">
+      <label>Contact Phone</label>
+      <input type="tel" id="schoolPhone" placeholder="07700 900000">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeCreateModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="createSchool()">Create School</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main content -->
+<div class="main">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Schools</h1>
+      <p class="page-subtitle">Manage all driving schools on the platform</p>
+    </div>
+    <button class="btn btn-primary" onclick="openCreateModal()">+ Create School</button>
+  </div>
+
+  <div id="loading" class="loading">Loading schools...</div>
+
+  <div id="content" style="display:none;">
+    <div class="panel-card">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Slug</th>
+            <th>Learners</th>
+            <th>Instructors</th>
+            <th>Bookings</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="schoolsBody">
+        </tbody>
+      </table>
+      <div id="emptyState" class="empty-state" style="display:none;">
+        No schools yet. Create your first school to get started.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Auth check
+  const stored = localStorage.getItem('cc_admin');
+  if (!stored) { window.location.href = '/admin/login.html'; return; }
+  const { token } = JSON.parse(stored);
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.role !== 'superadmin') {
+      alert('Access denied. Superadmin role required.');
+      window.location.href = '/admin/portal.html';
+      return;
+    }
+    document.getElementById('adminName').textContent = payload.name || 'Super Admin';
+    document.getElementById('adminEmail').textContent = payload.email || '';
+  } catch(e) {
+    window.location.href = '/admin/login.html';
+    return;
+  }
+
+  // API helpers
+  async function apiFetch(url) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    return res.json();
+  }
+  async function apiPost(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body)
+    });
+    return res.json();
+  }
+
+  // Auto-generate slug from name
+  document.getElementById('schoolName').addEventListener('input', function() {
+    const slug = this.value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    document.getElementById('schoolSlug').value = slug;
+  });
+
+  // Load schools
+  async function loadSchools() {
+    try {
+      const data = await apiFetch('/api/schools?action=list');
+      if (data.error) throw new Error(data.message || 'Failed to load schools');
+
+      const schools = data.schools || [];
+      const tbody = document.getElementById('schoolsBody');
+      tbody.innerHTML = '';
+
+      if (schools.length === 0) {
+        document.getElementById('emptyState').style.display = 'block';
+      } else {
+        document.getElementById('emptyState').style.display = 'none';
+        schools.forEach(s => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${esc(s.name)}</strong></td>
+            <td style="color:var(--muted); font-size:0.85rem;">${esc(s.slug)}</td>
+            <td>${s.learner_count ?? 0}</td>
+            <td>${s.instructor_count ?? 0}</td>
+            <td>${s.booking_count ?? 0}</td>
+            <td>
+              <span class="badge ${s.is_active ? 'badge-green' : 'badge-red'}">
+                ${s.is_active ? 'Active' : 'Inactive'}
+              </span>
+            </td>
+            <td>
+              <a class="btn btn-sm" href="/superadmin/school-detail.html?id=${s.id}">View</a>
+              <button class="btn btn-sm ${s.is_active ? 'btn-danger' : ''}" onclick="toggleSchool(${s.id}, ${s.is_active})">
+                ${s.is_active ? 'Deactivate' : 'Activate'}
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+    } catch(err) {
+      document.getElementById('loading').textContent = 'Error loading schools: ' + err.message;
+    }
+  }
+
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+  }
+
+  // Toggle school active/inactive
+  window.toggleSchool = async function(id, currentlyActive) {
+    const action = currentlyActive ? 'deactivate' : 'activate';
+    if (!confirm(`Are you sure you want to ${action} this school?`)) return;
+    try {
+      const data = await apiPost('/api/schools?action=toggle-status', { school_id: id, is_active: !currentlyActive });
+      if (data.error) throw new Error(data.message);
+      loadSchools();
+    } catch(err) {
+      alert('Error: ' + err.message);
+    }
+  };
+
+  // Create school modal
+  window.openCreateModal = function() {
+    document.getElementById('schoolName').value = '';
+    document.getElementById('schoolSlug').value = '';
+    document.getElementById('schoolEmail').value = '';
+    document.getElementById('schoolPhone').value = '';
+    document.getElementById('createModal').classList.add('open');
+  };
+  window.closeCreateModal = function() {
+    document.getElementById('createModal').classList.remove('open');
+  };
+
+  window.createSchool = async function() {
+    const name = document.getElementById('schoolName').value.trim();
+    const slug = document.getElementById('schoolSlug').value.trim();
+    const contact_email = document.getElementById('schoolEmail').value.trim();
+    const contact_phone = document.getElementById('schoolPhone').value.trim();
+
+    if (!name || !slug) { alert('Name and slug are required.'); return; }
+
+    try {
+      const data = await apiPost('/api/schools?action=create', { name, slug, contact_email, contact_phone });
+      if (data.error) throw new Error(data.message);
+      closeCreateModal();
+      loadSchools();
+    } catch(err) {
+      alert('Error creating school: ' + err.message);
+    }
+  };
+
+  // Logout
+  window.logout = function() {
+    localStorage.removeItem('cc_admin');
+    window.location.href = '/admin/login.html';
+  };
+
+  loadSchools();
+})();
+</script>
+</body>
+</html>

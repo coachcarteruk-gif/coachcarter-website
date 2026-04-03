@@ -11,7 +11,7 @@ const stripe   = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { neon } = require('@neondatabase/serverless');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
-const { processAllPayouts } = require('./_payout-helpers');
+const { processAllPayouts, processSchoolPayouts } = require('./_payout-helpers');
 const jwt = require('jsonwebtoken');
 
 function setCors(res) {
@@ -50,6 +50,8 @@ module.exports = async (req, res) => {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    // 1. Instructor payouts (existing)
     const results = await processAllPayouts(sql, stripe);
 
     // Send notification emails to instructors who received a payout
@@ -77,20 +79,44 @@ module.exports = async (req, res) => {
       } catch {} // fire-and-forget
     }
 
-    // Report any failures via error alert
+    // Report any instructor payout failures
     const failedPayouts = results.details.filter(d => d.status === 'failed' || d.status === 'error');
     if (failedPayouts.length > 0) {
       reportError('/api/cron-payouts', new Error(
-        `${failedPayouts.length} payout(s) failed: ${failedPayouts.map(f => `${f.instructor_name}: ${f.error}`).join('; ')}`
+        `${failedPayouts.length} instructor payout(s) failed: ${failedPayouts.map(f => `${f.instructor_name}: ${f.error}`).join('; ')}`
       ));
+    }
+
+    // 2. School payouts
+    let schoolResults = { processed: 0, skipped: 0, failed: 0, total_pence: 0, details: [] };
+    try {
+      schoolResults = await processSchoolPayouts(sql, stripe);
+
+      // Report any school payout failures
+      const failedSchool = schoolResults.details.filter(d => d.status === 'failed' || d.status === 'error');
+      if (failedSchool.length > 0) {
+        reportError('/api/cron-payouts', new Error(
+          `${failedSchool.length} school payout(s) failed: ${failedSchool.map(f => `${f.school_name}: ${f.error}`).join('; ')}`
+        ));
+      }
+    } catch (err) {
+      reportError('/api/cron-payouts (school payouts)', err);
     }
 
     return res.json({
       ok: true,
-      processed: results.processed,
-      skipped: results.skipped,
-      failed: results.failed,
-      total_transferred_pence: results.total_pence
+      instructors: {
+        processed: results.processed,
+        skipped: results.skipped,
+        failed: results.failed,
+        total_transferred_pence: results.total_pence
+      },
+      schools: {
+        processed: schoolResults.processed,
+        skipped: schoolResults.skipped,
+        failed: schoolResults.failed,
+        total_transferred_pence: schoolResults.total_pence
+      }
     });
   } catch (err) {
     reportError('/api/cron-payouts', err);

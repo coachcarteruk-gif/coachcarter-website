@@ -121,7 +121,8 @@ module.exports = async (req, res) => {
 async function handleAvailable(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { from, to, instructor_id, lesson_type_id, pickup_postcode } = req.query;
+  const { from, to, instructor_id, lesson_type_id, pickup_postcode, school_id } = req.query;
+  const schoolId = parseInt(school_id) || 1;
 
   // Validate dates
   if (!from || !to)
@@ -173,6 +174,7 @@ async function handleAvailable(req, res) {
           WHERE ia.instructor_id = ${instructor_id}
             AND ia.active = true
             AND i.active  = true
+            AND i.school_id = ${schoolId}
           ORDER BY ia.day_of_week, ia.start_time
         `
       : await sql`
@@ -189,6 +191,7 @@ async function handleAvailable(req, res) {
           WHERE ia.active = true
             AND i.active  = true
             AND i.email  != 'demo@coachcarter.uk'
+            AND i.school_id = ${schoolId}
           ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
         `;
 
@@ -537,6 +540,7 @@ async function handleBook(req, res) {
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   const { instructor_id, date, start_time, end_time, lesson_type_id, pickup_address, dropoff_address, repeat_weeks } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
@@ -709,10 +713,10 @@ async function handleBook(req, res) {
         const [b] = await sql`
           INSERT INTO lesson_bookings
             (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-             pickup_address, dropoff_address, lesson_type_id, minutes_deducted, series_id)
+             pickup_address, dropoff_address, lesson_type_id, minutes_deducted, series_id, school_id)
           VALUES
             (${user.id}, ${instructor_id}, ${bd.date}, ${start_time}, ${end_time}, 'confirmed',
-             ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${minsPerBooking}, ${seriesId})
+             ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${minsPerBooking}, ${seriesId}, ${schoolId})
           RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at
         `;
         createdBookings.push(b);
@@ -950,6 +954,7 @@ async function handleCheckoutSlot(req, res) {
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   const { instructor_id, date, start_time, end_time, lesson_type_id } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
@@ -1075,10 +1080,10 @@ async function handleCheckoutSlot(req, res) {
     // Reserve the slot (upsert in case learner retries)
     await sql`
       INSERT INTO slot_reservations
-        (learner_id, instructor_id, scheduled_date, start_time, end_time, stripe_session_id, expires_at)
+        (learner_id, instructor_id, scheduled_date, start_time, end_time, stripe_session_id, expires_at, school_id)
       VALUES
         (${user.id}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, ${session.id},
-         NOW() + INTERVAL '10 minutes')
+         NOW() + INTERVAL '10 minutes', ${schoolId})
       ON CONFLICT DO NOTHING
     `;
 
@@ -1098,6 +1103,7 @@ async function handleCancel(req, res) {
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   const { booking_id, cancel_series } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
@@ -1113,6 +1119,7 @@ async function handleCancel(req, res) {
       JOIN instructors i    ON i.id  = lb.instructor_id
       JOIN learner_users lu ON lu.id = lb.learner_id
       WHERE lb.id = ${booking_id} AND lb.learner_id = ${user.id}
+        AND COALESCE(lb.school_id, 1) = ${schoolId}
     `;
 
     if (!booking)
@@ -1385,6 +1392,7 @@ async function handleReschedule(req, res) {
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   const { booking_id, new_date, new_start_time } = req.body;
   if (!booking_id || !new_date || !new_start_time)
@@ -1428,6 +1436,7 @@ async function handleReschedule(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.id = ${booking_id} AND lb.learner_id = ${user.id}
+        AND COALESCE(lb.school_id, 1) = ${schoolId}
     `;
 
     if (!booking)
@@ -1628,6 +1637,7 @@ async function handleMyBookings(req, res) {
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -1658,6 +1668,7 @@ async function handleMyBookings(req, res) {
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.learner_id = ${user.id}
+        AND COALESCE(lb.school_id, 1) = ${schoolId}
       ORDER BY lb.scheduled_date DESC, lb.start_time DESC
       LIMIT 50
     `;
@@ -1698,6 +1709,7 @@ async function handleSeriesInfo(req, res) {
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   const { booking_id } = req.query;
   if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
@@ -1709,6 +1721,7 @@ async function handleSeriesInfo(req, res) {
     const [target] = await sql`
       SELECT series_id FROM lesson_bookings
       WHERE id = ${booking_id} AND learner_id = ${user.id}
+        AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (!target)
       return res.status(404).json({ error: 'Booking not found' });
@@ -1734,6 +1747,7 @@ async function handleSeriesInfo(req, res) {
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.series_id = ${target.series_id} AND lb.learner_id = ${user.id}
+        AND COALESCE(lb.school_id, 1) = ${schoolId}
       ORDER BY lb.scheduled_date, lb.start_time
     `;
 

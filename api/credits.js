@@ -67,12 +67,13 @@ async function handleBalance(req, res) {
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [balanceRow] = await sql`
-      SELECT credit_balance, balance_minutes FROM learner_users WHERE id = ${user.id}
+      SELECT credit_balance, balance_minutes FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}
     `;
 
     if (!balanceRow) return res.status(404).json({ error: 'Learner not found' });
@@ -80,7 +81,7 @@ async function handleBalance(req, res) {
     const transactions = await sql`
       SELECT id, type, credits, minutes, amount_pence, payment_method, created_at
       FROM credit_transactions
-      WHERE learner_id = ${user.id}
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId}
       ORDER BY created_at DESC
       LIMIT 20
     `;
@@ -107,6 +108,7 @@ async function handleCheckout(req, res) {
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   let hours;
   if (req.body.hours) {
@@ -159,7 +161,8 @@ async function handleCheckout(req, res) {
         minutes_purchased: String(minutes),
         hours_purchased:   String(hours),
         discount_pct:      String(discountPct),
-        amount_pence:      String(totalPence)
+        amount_pence:      String(totalPence),
+        school_id:         String(schoolId)
       },
       customer_email: user.email,
       billing_address_collection: 'required',
