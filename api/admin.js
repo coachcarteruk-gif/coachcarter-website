@@ -47,6 +47,7 @@ const { reportError } = require('./_error-alert');
 const { processAllPayouts, getEligibleBookings } = require('./_payout-helpers');
 const { requireAuth, getSchoolId, verifyAdminSecret: verifyAdminSecretNew, isSuperAdmin } = require('./_auth');
 const { createTransporter, generateToken } = require('./_auth-helpers');
+const { logAudit } = require('./_audit');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Helper: derive schoolId from admin JWT (superadmins can pass ?school_id= to target a specific school)
@@ -375,6 +376,8 @@ async function handleMarkComplete(req, res) {
       UPDATE lesson_bookings SET status = 'completed' WHERE id = ${booking_id}
     `;
 
+    await logAudit(sql, { adminId: admin.id, adminEmail: admin.email, action: 'mark-complete', targetType: 'booking', targetId: booking_id, details: { previous_status: booking.status }, schoolId, req });
+
     return res.json({ success: true, booking_id });
   } catch (err) {
     console.error('admin mark-complete error:', err);
@@ -519,6 +522,8 @@ async function handleCreateInstructor(req, res) {
       console.error('Failed to send instructor invite email:', emailErr.message);
     }
 
+    await logAudit(sql, { adminId: admin.id, adminEmail: admin.email, action: 'create-instructor', targetType: 'instructor', targetId: instructor.id, details: { name: instructor.name, email: instructor.email }, schoolId, req });
+
     return res.status(201).json({ success: true, instructor, invite_sent: true });
   } catch (err) {
     console.error('admin create-instructor error:', err);
@@ -569,6 +574,9 @@ async function handleUpdateInstructor(req, res) {
     `;
 
     if (rows.length === 0) return res.status(404).json({ error: 'Instructor not found' });
+
+    await logAudit(sql, { adminId: admin.id, adminEmail: admin.email, action: 'update-instructor', targetType: 'instructor', targetId: id, details: { name: name.trim(), email: normalised }, schoolId, req });
+
     return res.json({ success: true, instructor: rows[0] });
   } catch (err) {
     console.error('admin update-instructor error:', err);
@@ -597,6 +605,9 @@ async function handleToggleInstructor(req, res) {
     `;
 
     if (rows.length === 0) return res.status(404).json({ error: 'Instructor not found' });
+
+    await logAudit(sql, { adminId: admin.id, adminEmail: admin.email, action: 'toggle-instructor', targetType: 'instructor', targetId: id, details: { active: !!active, name: rows[0].name }, schoolId, req });
+
     return res.json({ success: true, instructor: rows[0] });
   } catch (err) {
     console.error('admin toggle-instructor error:', err);
@@ -760,6 +771,8 @@ async function handleAdjustCredits(req, res) {
       console.error('admin adjust-credits transaction log failed:', txErr.message);
     }
 
+    await logAudit(sql, { adminId: admin.id, adminEmail: admin.email, action: 'adjust-credits', targetType: 'learner', targetId: learner_id, details: { hours: hoursFloat, reason, previous: learner.balance_minutes || 0, new: updated.balance_minutes }, schoolId, req });
+
     return res.json({
       ok: true,
       previous_balance_minutes: learner.balance_minutes || 0,
@@ -810,6 +823,8 @@ async function handleDeleteLearner(req, res) {
 
     // Delete the learner
     await sql`DELETE FROM learner_users WHERE id = ${learner_id}`;
+
+    await logAudit(sql, { adminId: admin.id, adminEmail: admin.email, action: 'delete-learner', targetType: 'learner', targetId: learner_id, details: { name: learner.name, email: learner.email }, schoolId, req });
 
     return res.json({ success: true, deleted: { id: learner.id, name: learner.name, email: learner.email } });
   } catch (err) {

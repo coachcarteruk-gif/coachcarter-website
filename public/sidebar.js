@@ -196,6 +196,9 @@
         '<button class="cc-sb-logout" id="cc-sb-logout">' +
           '<span class="cc-sb-icon">' + icons.logOut + '</span>' +
           '<span>Sign Out</span>' +
+        '</button>' +
+        '<button class="cc-sb-cookie-settings" onclick="window.ccCookieConsent&&ccCookieConsent.show()" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;margin-top:4px;border:none;background:transparent;color:#797879;font-size:12px;cursor:pointer;font-family:inherit">' +
+          '<span>Cookie Settings</span>' +
         '</button></div>';
     } else {
       return '<div class="cc-sb-footer" id="cc-sb-footer">' +

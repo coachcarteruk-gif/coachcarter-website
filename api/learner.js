@@ -42,6 +42,9 @@ module.exports = async (req, res) => {
   if (action === 'pending-confirmations') return handlePendingConfirmations(req, res);
   if (action === 'my-availability')       return handleMyAvailability(req, res);
   if (action === 'set-availability')      return handleSetAvailability(req, res);
+  if (action === 'export-data')           return handleExportData(req, res);
+  if (action === 'request-deletion')      return handleRequestDeletion(req, res);
+  if (action === 'confirm-deletion')      return handleConfirmDeletion(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -991,5 +994,252 @@ async function handleSetAvailability(req, res) {
     console.error('set-availability error:', err);
     reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to save availability' });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GDPR: DATA EXPORT (Article 20 — Right to Portability)
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleExportData(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [profile] = await sql`
+      SELECT name, email, phone, pickup_address, test_date, test_time, prefer_contact_before, created_at, last_activity_at
+      FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
+
+    const onboarding = await sql`
+      SELECT prior_hours, previous_tests, transmission, test_date, main_concerns, created_at
+      FROM learner_onboarding WHERE learner_id = ${user.id}`;
+
+    const bookings = await sql`
+      SELECT lb.booking_date, lb.start_time, lb.end_time, lb.pickup_address, lb.status, lb.lesson_type, lb.created_at,
+             i.name AS instructor_name
+      FROM lesson_bookings lb LEFT JOIN instructors i ON lb.instructor_id = i.id
+      WHERE lb.learner_id = ${user.id} AND lb.school_id = ${schoolId}
+      ORDER BY lb.booking_date DESC`;
+
+    const transactions = await sql`
+      SELECT type, credits, minutes, amount_pence, payment_method, created_at
+      FROM credit_transactions WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY created_at DESC`;
+
+    const sessions = await sql`
+      SELECT session_date, duration_minutes, session_type, notes, created_at
+      FROM driving_sessions WHERE user_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY session_date DESC`;
+
+    const skills = await sql`
+      SELECT category, sub_skill, rating, note, rated_at
+      FROM skill_ratings WHERE user_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY rated_at DESC`;
+
+    const quizzes = await sql`
+      SELECT question_id, learner_answer, correct_answer, is_correct, answered_at
+      FROM quiz_results WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY answered_at DESC`;
+
+    const mockTests = await sql`
+      SELECT id, test_date, total_faults, serious_faults, dangerous_faults, result, notes, created_at
+      FROM mock_tests WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY test_date DESC`;
+
+    const questions = await sql`
+      SELECT title, body, category, status, created_at
+      FROM qa_questions WHERE user_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY created_at DESC`;
+
+    const exportData = {
+      _metadata: {
+        exported_at: new Date().toISOString(),
+        format: 'json',
+        data_categories: ['profile', 'onboarding', 'bookings', 'transactions', 'driving_sessions', 'skill_ratings', 'quiz_results', 'mock_tests', 'qa_questions']
+      },
+      profile: profile || {},
+      onboarding: onboarding[0] || null,
+      bookings,
+      transactions,
+      driving_sessions: sessions,
+      skill_ratings: skills,
+      quiz_results: quizzes,
+      mock_tests: mockTests,
+      qa_questions: questions
+    };
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="coachcarter-data-export-${dateStr}.json"`);
+    return res.json(exportData);
+  } catch (err) {
+    console.error('export-data error:', err);
+    reportError('/api/learner', err);
+    return res.status(500).json({ error: 'Failed to export data' });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GDPR: REQUEST ACCOUNT DELETION (Article 17 — Right to Erasure)
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleRequestDeletion(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const { generateToken } = require('./_auth-helpers');
+    const { createTransporter } = require('./_auth-helpers');
+
+    const [learner] = await sql`SELECT id, name, email FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
+    if (!learner || !learner.email) return res.status(400).json({ error: 'Account not found or no email on file' });
+
+    // Cancel any pending deletion requests
+    await sql`UPDATE deletion_requests SET status = 'cancelled' WHERE learner_id = ${user.id} AND status = 'pending'`;
+
+    const token = generateToken();
+    await sql`INSERT INTO deletion_requests (learner_id, token, school_id) VALUES (${user.id}, ${token}, ${schoolId})`;
+
+    const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+    const confirmUrl = `${baseUrl}/learner/confirm-deletion.html?token=${token}`;
+    const firstName = (learner.name || '').split(' ')[0] || 'there';
+
+    const mailer = createTransporter();
+    await mailer.sendMail({
+      from: 'CoachCarter <system@coachcarter.uk>',
+      to: learner.email,
+      subject: 'Confirm account deletion — CoachCarter',
+      html: `
+        <h2>Hi ${firstName},</h2>
+        <p>We received a request to permanently delete your CoachCarter account and all associated data.</p>
+        <p><strong>This action cannot be undone.</strong> Your bookings, progress, quiz results, and all personal data will be permanently removed.</p>
+        <p style="margin:28px 0">
+          <a href="${confirmUrl}"
+             style="background:#ef4444;color:white;padding:14px 28px;text-decoration:none;
+                    border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+            Confirm Deletion
+          </a>
+        </p>
+        <p style="color:#888;font-size:0.85em">This link expires in 24 hours. If you didn't request this, you can safely ignore this email.</p>
+      `
+    });
+
+    return res.json({ ok: true, message: 'Check your email to confirm deletion' });
+  } catch (err) {
+    console.error('request-deletion error:', err);
+    reportError('/api/learner', err);
+    return res.status(500).json({ error: 'Failed to process deletion request' });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GDPR: CONFIRM ACCOUNT DELETION
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleConfirmDeletion(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [request] = await sql`
+      SELECT id, learner_id, school_id, requested_at
+      FROM deletion_requests
+      WHERE token = ${token} AND status = 'pending'`;
+
+    if (!request) return res.status(400).json({ error: 'Invalid or expired deletion token' });
+
+    // Check 24hr expiry
+    const requestedAt = new Date(request.requested_at);
+    if (Date.now() - requestedAt.getTime() > 24 * 60 * 60 * 1000) {
+      await sql`UPDATE deletion_requests SET status = 'cancelled' WHERE id = ${request.id}`;
+      return res.status(400).json({ error: 'Deletion link has expired. Please request a new one.' });
+    }
+
+    const learnerId = request.learner_id;
+    const schoolId = request.school_id;
+
+    // Get learner email for confirmation
+    const [learner] = await sql`SELECT name, email FROM learner_users WHERE id = ${learnerId}`;
+
+    // Mark request as confirmed
+    await sql`UPDATE deletion_requests SET status = 'confirmed', confirmed_at = NOW() WHERE id = ${request.id}`;
+
+    // ── Cascading deletion ──
+    // 1. Anonymize credit_transactions (keep for 7-year tax retention)
+    await sql`UPDATE credit_transactions SET learner_id = NULL, anonymized = true WHERE learner_id = ${learnerId}`;
+
+    // 2. Delete related records (order matters for FK constraints)
+    const deleteTables = [
+      { table: 'skill_ratings', col: 'user_id' },
+      { table: 'driving_sessions', col: 'user_id' },
+      { table: 'quiz_results', col: 'learner_id' },
+      { table: 'mock_test_faults', col: 'mock_test_id', sub: `SELECT id FROM mock_tests WHERE learner_id = ${learnerId}` },
+      { table: 'mock_tests', col: 'learner_id' },
+      { table: 'qa_answers', col: 'question_id', sub: `SELECT id FROM qa_questions WHERE user_id = ${learnerId}` },
+      { table: 'qa_questions', col: 'user_id' },
+      { table: 'sent_reminders', col: 'learner_id' },
+      { table: 'slot_reservations', col: 'learner_id' },
+      { table: 'lesson_confirmations', col: 'learner_id' },
+      { table: 'lesson_bookings', col: 'learner_id' },
+      { table: 'learner_onboarding', col: 'learner_id' },
+      { table: 'waitlist', col: 'learner_id' },
+      { table: 'instructor_learner_notes', col: 'learner_id' },
+      { table: 'learner_availability', col: 'learner_id' },
+      { table: 'magic_link_tokens', col: 'email', val: learner?.email },
+    ];
+
+    for (const t of deleteTables) {
+      try {
+        if (t.sub) {
+          await sql(`DELETE FROM ${t.table} WHERE ${t.col} IN (${t.sub})`, []);
+        } else if (t.val) {
+          await sql(`DELETE FROM ${t.table} WHERE ${t.col} = $1`, [t.val]);
+        } else {
+          await sql(`DELETE FROM ${t.table} WHERE ${t.col} = $1`, [learnerId]);
+        }
+      } catch (e) { console.warn(`gdpr delete ${t.table} skipped:`, e.message); }
+    }
+
+    // 3. Nullify cookie consent references
+    try { await sql`UPDATE cookie_consents SET learner_id = NULL WHERE learner_id = ${learnerId}`; } catch (e) {}
+
+    // 4. Delete the learner
+    await sql`DELETE FROM learner_users WHERE id = ${learnerId}`;
+
+    // 5. Mark request completed
+    await sql`UPDATE deletion_requests SET status = 'completed', completed_at = NOW() WHERE id = ${request.id}`;
+
+    // 6. Send confirmation email
+    if (learner?.email) {
+      try {
+        const { createTransporter } = require('./_auth-helpers');
+        const mailer = createTransporter();
+        await mailer.sendMail({
+          from: 'CoachCarter <system@coachcarter.uk>',
+          to: learner.email,
+          subject: 'Account deleted — CoachCarter',
+          html: `
+            <h2>Your account has been deleted</h2>
+            <p>Your CoachCarter account and all associated personal data have been permanently removed.</p>
+            <p>Payment transaction records have been anonymized and retained for legal compliance (tax regulations).</p>
+            <p style="color:#888;font-size:0.85em">If you believe this was done in error, please contact us at info@coachcarter.uk</p>
+          `
+        });
+      } catch (e) { console.warn('deletion confirmation email failed:', e.message); }
+    }
+
+    return res.json({ ok: true, message: 'Account and all personal data have been permanently deleted' });
+  } catch (err) {
+    console.error('confirm-deletion error:', err);
+    reportError('/api/learner', err);
+    return res.status(500).json({ error: 'Failed to complete deletion' });
   }
 }

@@ -746,6 +746,9 @@ async function handleBook(req, res) {
       throw insertErr;
     }
 
+    // GDPR: update last activity timestamp
+    try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`; } catch (e) {}
+
     // 6. Get updated balance for response
     const [updated] = await sql`SELECT balance_minutes, credit_balance FROM learner_users WHERE id = ${user.id}`;
     const durationStr = formatHours(durationMins);

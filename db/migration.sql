@@ -1033,3 +1033,72 @@ UPDATE admin_users SET school_id = 1 WHERE school_id IS NULL AND role = 'admin';
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS onboarding_complete BOOLEAN DEFAULT FALSE;
 -- Backfill existing instructors as complete
 UPDATE instructors SET onboarding_complete = TRUE WHERE onboarding_complete IS NULL OR onboarding_complete = FALSE;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- GDPR: COOKIE CONSENTS
+-- ══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS cookie_consents (
+  id           SERIAL PRIMARY KEY,
+  visitor_id   TEXT NOT NULL,
+  learner_id   INTEGER REFERENCES learner_users(id) ON DELETE SET NULL,
+  analytics    BOOLEAN NOT NULL DEFAULT FALSE,
+  consented_at TIMESTAMPTZ DEFAULT NOW(),
+  ip_hash      TEXT,
+  user_agent   TEXT,
+  school_id    INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id)
+);
+CREATE INDEX IF NOT EXISTS idx_cookie_consents_visitor ON cookie_consents(visitor_id);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- GDPR: AUDIT LOG
+-- ══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS audit_log (
+  id           SERIAL PRIMARY KEY,
+  admin_id     INTEGER NOT NULL,
+  admin_email  TEXT,
+  action       TEXT NOT NULL,
+  target_type  TEXT,
+  target_id    INTEGER,
+  details      JSONB,
+  ip_address   TEXT,
+  school_id    INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_school ON audit_log(school_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_target ON audit_log(target_type, target_id);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- GDPR: DELETION REQUESTS
+-- ══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS deletion_requests (
+  id            SERIAL PRIMARY KEY,
+  learner_id    INTEGER NOT NULL REFERENCES learner_users(id),
+  token         TEXT NOT NULL UNIQUE,
+  status        TEXT NOT NULL DEFAULT 'pending',
+  requested_at  TIMESTAMPTZ DEFAULT NOW(),
+  confirmed_at  TIMESTAMPTZ,
+  completed_at  TIMESTAMPTZ,
+  school_id     INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id)
+);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- GDPR: DATA RETENTION COLUMNS
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMPTZ;
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+UPDATE learner_users SET last_activity_at = created_at WHERE last_activity_at IS NULL;
+
+ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- GDPR: CREDIT TRANSACTIONS — allow learner_id NULL for anonymization
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS anonymized BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE credit_transactions DROP CONSTRAINT IF EXISTS credit_transactions_learner_id_fkey;
+ALTER TABLE credit_transactions ALTER COLUMN learner_id DROP NOT NULL;
+DO $$ BEGIN
+  ALTER TABLE credit_transactions ADD CONSTRAINT credit_transactions_learner_id_fkey
+    FOREIGN KEY (learner_id) REFERENCES learner_users(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

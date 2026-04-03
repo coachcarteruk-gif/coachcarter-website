@@ -249,6 +249,9 @@ async function handleVerify(req, res) {
     const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
     const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '30d' });
 
+    // GDPR: update last activity timestamp
+    try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`; } catch (e) {}
+
     // Send welcome email to new users
     if (isNewUser && linkRecord.email) {
       try {
@@ -331,6 +334,9 @@ async function handleVerifyCode(req, res) {
     // Issue JWT
     const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
     const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '30d' });
+
+    // GDPR: update last activity timestamp
+    try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`; } catch (e) {}
 
     return res.json({
       success: true,
