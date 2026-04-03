@@ -126,8 +126,8 @@ module.exports = async (req, res) => {
       INSERT INTO credit_transactions (learner_id, type, credits, minutes, amount_pence, payment_method, school_id)
       VALUES
         (${mainLearner.id}, 'purchase', 5, 450, 41250, 'stripe', ${schoolId}),
-        (${mainLearner.id}, 'deduction', -1, -90, 0, 'booking', ${schoolId}),
-        (${mainLearner.id}, 'deduction', -1, -90, 0, 'booking', ${schoolId})`;
+        (${mainLearner.id}, 'admin_remove', -1, -90, 0, 'booking', ${schoolId}),
+        (${mainLearner.id}, 'admin_remove', -1, -90, 0, 'booking', ${schoolId})`;
 
     // Driving sessions
     const session1Date = new Date(today); session1Date.setDate(session1Date.getDate() - 14);
