@@ -78,9 +78,11 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── ask-examiner.js             # AI examiner Q&A with personalised learner context
 │   ├── address-lookup.js           # Address autocomplete API
 │   ├── qa-digest.js                # Q&A weekly digest emails
+│   ├── cron-retention.js           # GDPR data retention cron (weekly, archives/purges inactive data)
+│   ├── _audit.js                   # GDPR audit logging utility (logAudit)
 │   ├── reviews.js                  # Google Reviews API
 │   ├── status.js                   # Health check endpoint
-│   └── config.js                   # Shared config helpers
+│   └── config.js                   # Shared config helpers + GDPR consent recording
 │
 ├── public/                         # Static files served directly
 │   ├── index.html                  # Homepage (main marketing page)
@@ -105,7 +107,9 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── pwa.js                      # PWA install prompt + service worker registration
 │   ├── sw.js                       # Service worker (cache shell + network-first strategy)
 │   ├── sidebar.js                  # Context-aware sidebar navigation (public/learner/instructor) + floating pill bottom bar + card styling overrides
-│   ├── posthog-tracking.js         # PostHog analytics
+│   ├── cookie-consent.js           # GDPR cookie consent banner (vanilla JS, self-contained)
+│   ├── posthog-loader.js           # Consent-gated PostHog loader (only loads after analytics consent)
+│   ├── posthog-tracking.js         # PostHog custom event tracking (button clicks, scroll, forms)
 │   ├── offline.html                # Branded offline fallback page
 │   ├── icons/                      # PWA icons (multiple sizes + maskable variants)
 │   ├── admin/
@@ -781,6 +785,75 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Sidebar profile visibility** (#49) — hide My Profile link when not logged in
 - **Google Reviews** — embedded Google Reviews on public pages
 - **Q&A system** — learner/instructor Q&A forum with question threads and replies
+
+---
+
+---
+
+## GDPR Compliance (April 2026)
+
+Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all future changes.
+
+### API endpoints
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| `/api/learner?action=export-data` | POST | Learner JWT | Downloads all personal data as JSON (Article 20) |
+| `/api/learner?action=request-deletion` | POST | Learner JWT | Sends deletion verification email (Article 17) |
+| `/api/learner?action=confirm-deletion` | POST | None (token) | Confirms and executes account deletion |
+| `/api/config?action=record-consent` | POST | None | Records cookie consent decision to DB |
+| `/api/cron-retention` | GET | Vercel cron / CRON_SECRET | Weekly data retention enforcement |
+
+### Database tables
+
+| Table | Purpose |
+|---|---|
+| `cookie_consents` | Stores consent decisions (visitor_id, analytics boolean, ip_hash, timestamp) |
+| `audit_log` | Admin action audit trail (who did what to whom, when) |
+| `deletion_requests` | Tracks self-service deletion flow (pending → confirmed → completed) |
+
+### Key columns added to existing tables
+
+| Table | Column | Purpose |
+|---|---|---|
+| `learner_users` | `last_activity_at` | Tracks last login/booking for retention policy |
+| `learner_users` | `archived_at` | Soft-delete timestamp (set by retention cron) |
+| `enquiries` | `archived_at` | Soft-delete timestamp (set by retention cron) |
+| `credit_transactions` | `anonymized` | Boolean, set when learner is deleted (records kept for tax) |
+
+### Deletion cascade (user-initiated or retention cron)
+
+When a learner is deleted, data is handled as follows:
+- **Anonymized** (kept for tax): `credit_transactions` — `learner_id` set to NULL, `anonymized = true`
+- **Deleted**: skill_ratings, driving_sessions, quiz_results, mock_tests, qa_questions/answers, lesson_bookings, learner_onboarding, waitlist, instructor_learner_notes, learner_availability, magic_link_tokens, sent_reminders, slot_reservations, lesson_confirmations
+- **Nullified**: cookie_consents.learner_id set to NULL
+- **Confirmation email** sent after successful deletion
+
+### Retention policy (enforced by `cron-retention.js`)
+
+| Data | Retention | Action |
+|---|---|---|
+| Learner accounts | 3 years after last activity | Soft-archive → hard-delete after 90 days |
+| Enquiries | 2 years after submission | Soft-archive → hard-delete after 30 days |
+| Credit transactions | 7 years (legal/tax) | Anonymized, then purged after 7 years |
+| Cookie consents | 2 years | Deleted |
+| Deletion requests | 90 days after completion | Deleted |
+
+### Cookie consent flow
+
+1. User visits any page → `cookie-consent.js` shows banner (if no prior consent)
+2. User chooses Accept All / Reject All / Save Preferences
+3. Choice saved to `localStorage` key `cc_cookie_consent`
+4. Choice recorded to `cookie_consents` table via `/api/config?action=record-consent`
+5. `posthog-loader.js` checks consent — loads PostHog only if analytics accepted
+6. User can re-open banner via "Cookie Settings" link (sidebar footer + landing page footer)
+7. Revoking analytics consent calls `posthog.opt_out_capturing()` and clears PostHog localStorage
+
+### Frontend GDPR features (learner profile page)
+
+- **Export My Data** — downloads JSON file with all personal data
+- **Cookie Preferences** — opens consent banner to change analytics setting
+- **Delete My Account** — two-step confirmation dialog → verification email → token-based deletion
 
 ---
 

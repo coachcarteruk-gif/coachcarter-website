@@ -79,6 +79,46 @@ The platform is multi-tenant. Each driving school is an isolated tenant with the
 - Multi-school instructors
 - Per-school content (videos, quizzes)
 
+## GDPR Compliance (April 2026)
+
+The platform is GDPR-compliant. All future changes MUST follow these rules.
+
+### What's in place
+- **Cookie consent banner** (`public/cookie-consent.js`) — appears on all pages before any analytics load. PostHog only initialises after explicit consent via `public/posthog-loader.js`.
+- **Data export** (`POST /api/learner?action=export-data`) — learners can download all personal data as JSON from their profile page (Article 20 — Right to Portability).
+- **User-initiated deletion** (`POST /api/learner?action=request-deletion`, `confirm-deletion`) — email-verified cascading delete with credit_transactions anonymized for 7-year tax retention (Article 17 — Right to Erasure).
+- **Data retention cron** (`api/cron-retention.js`) — runs weekly (Sunday 3am UTC). Soft-archives learners inactive >3 years, hard-deletes after 90-day grace period. Archives enquiries >2 years.
+- **Audit logging** (`api/_audit.js`) — logs admin actions (delete-learner, adjust-credits, create/update/toggle-instructor, mark-complete) to `audit_log` table.
+- **Consent recording** (`POST /api/config?action=record-consent`) — stores cookie consent decisions with hashed IP and timestamp for audit proof.
+- **`last_activity_at`** — updated on login (`magic-link.js`) and booking creation (`slots.js`) to support retention policy.
+
+### GDPR tables
+- `cookie_consents` — visitor_id, learner_id, analytics boolean, ip_hash, user_agent, school_id
+- `audit_log` — admin_id, action, target_type, target_id, details JSONB, school_id
+- `deletion_requests` — learner_id, token, status (pending/confirmed/completed/cancelled), school_id
+
+### Rules for ALL future changes
+
+1. **New pages MUST include cookie consent**: Every HTML page must load `cookie-consent.js` and `posthog-loader.js` instead of inline PostHog. Never add inline PostHog scripts.
+2. **Never load analytics without consent**: PostHog, or any future tracking, must only load after the user accepts analytics cookies. Use the `posthog-loader.js` pattern.
+3. **New PII fields must be included in data export**: If you add a new table or column containing personal data, update `handleExportData()` in `api/learner.js` to include it.
+4. **New PII tables must be included in deletion cascade**: If you add a table referencing `learner_users`, add it to the deletion cascade in both `handleConfirmDeletion()` (learner.js) and `cron-retention.js`.
+5. **New tenant-scoped GDPR tables need school_id**: Cookie consents, audit logs, and deletion requests are all scoped by `school_id`.
+6. **Admin data mutations must be audit-logged**: Any new admin action that creates, modifies, or deletes user data must call `logAudit()` from `api/_audit.js`.
+7. **Credit/financial records must never be hard-deleted**: Always anonymize (`learner_id = NULL, anonymized = true`) instead. 7-year legal retention.
+8. **New third-party services**: If integrating a new service that processes personal data, update `public/privacy.html` to list it, and consider whether it needs consent.
+9. **Cookie consent categories**: Currently only "Necessary" (login tokens) and "Analytics" (PostHog). If adding marketing cookies or new tracking, add a new category to `cookie-consent.js`.
+10. **Data retention**: New tables with PII should have a retention policy. Add cleanup logic to `api/cron-retention.js` if data has a defined lifetime.
+
+### Key files
+- `public/cookie-consent.js` — consent banner UI + localStorage state + server recording
+- `public/posthog-loader.js` — consent-gated PostHog initialisation
+- `api/_audit.js` — shared `logAudit(sql, {...})` utility
+- `api/cron-retention.js` — weekly data retention enforcement (Vercel cron, Sunday 3am UTC)
+- `api/learner.js` — `export-data`, `request-deletion`, `confirm-deletion` actions
+- `public/learner/confirm-deletion.html` — token-based deletion confirmation page
+- `public/learner/profile.html` — "Privacy & Data" section (export, cookie settings, delete account)
+
 ## Working practices
 
 - Small fixes: commit directly to main

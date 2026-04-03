@@ -791,6 +791,26 @@ Unique referral link per learner. Both referrer and new learner receive hours bo
 
 URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareable links for marketing.
 
+### 3.7 — GDPR Full Compliance (3 April 2026)
+
+Full GDPR compliance pass across the entire platform. Addresses cookie consent, data portability, right to erasure, data retention, and audit logging.
+
+**What was built:**
+- Cookie consent banner on all 35 HTML pages — PostHog analytics only loads after explicit user consent
+- Data export API (`POST /api/learner?action=export-data`) — learners download all personal data as JSON
+- User-initiated account deletion (`request-deletion` + `confirm-deletion`) — email-verified cascading delete
+- Credit transactions anonymized (not deleted) for 7-year tax retention
+- Data retention cron (`api/cron-retention.js`) — weekly, archives inactive learners >3 years, purges after 90 days
+- Audit logging (`api/_audit.js`) — tracks admin data mutations (delete, adjust credits, instructor changes)
+- Consent recording to DB with hashed IP for audit proof
+- `last_activity_at` updates on login and booking for retention policy
+- Privacy & Data section in learner profile (export, cookie preferences, delete account)
+- Cookie Settings link in sidebar footer and landing page
+
+**Files created:** `public/cookie-consent.js`, `public/posthog-loader.js`, `public/learner/confirm-deletion.html`, `api/cron-retention.js`, `api/_audit.js`
+**Files modified:** 35 HTML files, `api/learner.js`, `api/admin.js`, `api/config.js`, `api/magic-link.js`, `api/slots.js`, `db/migration.sql`, `public/sidebar.js`, `public/learner/profile.html`, `vercel.json`
+**DB:** 3 new tables (`cookie_consents`, `audit_log`, `deletion_requests`), 5 new columns, FK change on `credit_transactions`
+
 ---
 
 ## Phase 4: Future Considerations (Not Yet Scoped)
