@@ -464,15 +464,12 @@
     <div class="profile-card-header">
       <div class="profile-card-title">Your Data Rights</div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:8px;padding:0 4px">
-      <button onclick="exportMyData(this)" style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:#f9f9f9;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit;text-align:left">
-        <span style="font-size:18px">&#128230;</span>
-        <span><strong>Export My Data</strong><br><span style="font-size:12px;color:#797879">Download all your personal data as JSON</span></span>
-      </button>
-      <button onclick="window.ccCookieConsent&&ccCookieConsent.show()" style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:#f9f9f9;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit;text-align:left">
-        <span style="font-size:18px">&#127850;</span>
-        <span><strong>Cookie Preferences</strong><br><span style="font-size:12px;color:#797879">Manage analytics and tracking settings</span></span>
-      </button>
+    <div style="padding:4px 4px 0;font-size:12px;color:#797879;line-height:1.8">
+      <a href="/learner/my-data.html" style="color:#797879;text-decoration:underline">View my data</a>
+      <span style="margin:0 6px">·</span>
+      <a href="#" onclick="event.preventDefault();window.ccCookieConsent&&ccCookieConsent.show()" style="color:#797879;text-decoration:underline">Cookie preferences</a>
+      <span style="margin:0 6px">·</span>
+      <a href="/privacy.html" style="color:#797879;text-decoration:underline">Privacy policy</a>
     </div>
     <div style="border-top:1px solid #fee2e2;margin-top:8px;padding-top:16px">
       <button onclick="requestDeletion(this)" style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit;text-align:left;width:100%;color:#dc2626">
@@ -968,27 +965,6 @@ async function loadWaitlist() {
   }
 }
 
-// ── GDPR: Export Data ──
-async function exportMyData(btn) {
-  btn.disabled = true; btn.style.opacity = '.6';
-  try {
-    const res = await fetch('/api/learner?action=export-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token }
-    });
-    if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Export failed'); }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = res.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g,'') || 'coachcarter-data-export.json';
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    alert(err.message || 'Failed to export data');
-  }
-  btn.disabled = false; btn.style.opacity = '1';
-}
 
 // ── GDPR: Request Account Deletion ──
 async function requestDeletion(btn) {
