@@ -18,9 +18,6 @@ const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin } = require('.
 const { reportError } = require('./_error-alert');
 
 function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 }
 
 // ── Handlers ────────────────────────────────────────────────────────────────
@@ -353,8 +350,6 @@ async function handleSchoolStats(req, res) {
 
 module.exports = async (req, res) => {
   setCors(res);
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query?.action;
 
   try {

@@ -57,9 +57,6 @@ function createTransporter() {
 }
 
 function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 }
 
 function formatDateDisplay(str) {
@@ -80,8 +77,6 @@ function formatTime12(t) {
 
 const handler = async (req, res) => {
   setCors(res);
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query.action;
   if (action === 'join')        return handleJoin(req, res);
   if (action === 'my-waitlist') return handleMyWaitlist(req, res);

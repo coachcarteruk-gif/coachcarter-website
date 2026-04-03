@@ -40,9 +40,6 @@ const { reportError }       = require('./_error-alert');
 const BASE_URL = process.env.BASE_URL || 'https://coachcarter.co.uk';
 
 function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 }
 
 function verifyInstructorAuth(req) {
@@ -72,8 +69,6 @@ function verifyAdminJWT(req) {
 
 module.exports = async (req, res) => {
   setCors(res);
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query.action;
   if (action === 'create-account')      return handleCreateAccount(req, res);
   if (action === 'onboarding-link')     return handleOnboardingLink(req, res);

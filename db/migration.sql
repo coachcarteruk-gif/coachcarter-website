@@ -1102,3 +1102,14 @@ DO $$ BEGIN
     FOREIGN KEY (learner_id) REFERENCES learner_users(id) ON DELETE SET NULL;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- SECURITY: RATE LIMITING
+-- ══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rate_limits (
+  id            SERIAL PRIMARY KEY,
+  key           TEXT NOT NULL,
+  request_count INTEGER NOT NULL DEFAULT 1,
+  window_start  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limits_key ON rate_limits(key);

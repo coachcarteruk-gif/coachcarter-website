@@ -2,7 +2,6 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { reportError } = require('./_error-alert');
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
 
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });

@@ -19,9 +19,6 @@ const jwt = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
 
 function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Admin-Secret');
 }
 
 // Accept either legacy ADMIN_SECRET or admin JWT token
@@ -49,8 +46,6 @@ function verifyAdmin(req) {
 
 module.exports = async (req, res) => {
   setCors(res);
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query.action;
 
   if (action === 'list')             return handleList(req, res);

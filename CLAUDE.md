@@ -119,6 +119,24 @@ The platform is GDPR-compliant. All future changes MUST follow these rules.
 - `public/learner/confirm-deletion.html` — token-based deletion confirmation page
 - `public/learner/profile.html` — "Privacy & Data" section (export, cookie settings, delete account)
 
+## Database & API Security (April 2026)
+
+### What's in place
+- **Security headers** — HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy set on every response via `middleware.js`
+- **Centralised CORS** — Handled in `middleware.js`. Only allows `coachcarter.uk`, `coachcarter.co.uk`, Vercel previews, and localhost. Individual API files no longer set CORS headers.
+- **Parameterized SQL only** — All queries use tagged template literals (`sql\`...\``). No dynamic table/column name interpolation.
+- **Rate limiting** — Magic link sends limited to 5 per email/phone per hour via `rate_limits` DB table.
+- **SSL/TLS** — Neon serverless library connects over HTTPS by default. No raw TCP.
+- **No credential exposure** — `POSTGRES_URL` never logged or sent to clients.
+
+### Rules for ALL future changes
+
+1. **Never use dynamic SQL identifiers**: No `sql(\`DELETE FROM ${tableName}\`)`. Always write explicit queries with tagged template literals.
+2. **Never add per-file CORS headers**: CORS is handled centrally in `middleware.js`. If a new origin needs access, add it to `ALLOWED_ORIGINS` in middleware.js.
+3. **Rate-limit sensitive public endpoints**: Any new unauthenticated endpoint that sends emails, SMS, or costs money must be rate-limited.
+4. **Don't expose error internals**: Never send `err.stack` or raw SQL errors to clients. Use `{ error: 'Human message', details: err.message }` at most.
+5. **Keep security headers in middleware.js**: Don't set or override security headers in individual API files.
+
 ## Working practices
 
 - Small fixes: commit directly to main

@@ -24,9 +24,6 @@ const jwt = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
 
 function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 }
 
 function verifyAdmin(req) {
@@ -61,8 +58,6 @@ async function cfFetch(path, options = {}) {
 
 module.exports = async (req, res) => {
   setCors(res);
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query.action;
 
   // Public

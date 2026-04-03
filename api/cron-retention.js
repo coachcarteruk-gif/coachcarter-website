@@ -20,8 +20,6 @@ function verifyCronAuth(req) {
 }
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
@@ -59,24 +57,24 @@ module.exports = async (req, res) => {
         // Anonymize credit_transactions
         await sql`UPDATE credit_transactions SET learner_id = NULL, anonymized = true WHERE learner_id = ${learner.id}`;
 
-        // Delete related records
-        const tables = [
-          { t: 'skill_ratings', c: 'user_id' },
-          { t: 'driving_sessions', c: 'user_id' },
-          { t: 'quiz_results', c: 'learner_id' },
-          { t: 'mock_tests', c: 'learner_id' },
-          { t: 'qa_questions', c: 'user_id' },
-          { t: 'sent_reminders', c: 'learner_id' },
-          { t: 'lesson_bookings', c: 'learner_id' },
-          { t: 'learner_onboarding', c: 'learner_id' },
-          { t: 'waitlist', c: 'learner_id' },
-          { t: 'instructor_learner_notes', c: 'learner_id' },
-          { t: 'learner_availability', c: 'learner_id' },
-          { t: 'deletion_requests', c: 'learner_id' },
-        ];
-        for (const { t, c } of tables) {
-          try { await sql(`DELETE FROM ${t} WHERE ${c} = $1`, [learner.id]); } catch (e) {}
-        }
+        // Delete related records using parameterized queries (no dynamic identifiers)
+        const lid = learner.id;
+        try { await sql`DELETE FROM skill_ratings WHERE user_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM driving_sessions WHERE user_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM quiz_results WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM mock_test_faults WHERE mock_test_id IN (SELECT id FROM mock_tests WHERE learner_id = ${lid})`; } catch (e) {}
+        try { await sql`DELETE FROM mock_tests WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM qa_answers WHERE question_id IN (SELECT id FROM qa_questions WHERE user_id = ${lid})`; } catch (e) {}
+        try { await sql`DELETE FROM qa_questions WHERE user_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM sent_reminders WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM slot_reservations WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM lesson_confirmations WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM lesson_bookings WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM learner_onboarding WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM waitlist WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM instructor_learner_notes WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM learner_availability WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM deletion_requests WHERE learner_id = ${lid}`; } catch (e) {}
         await sql`UPDATE cookie_consents SET learner_id = NULL WHERE learner_id = ${learner.id}`;
         if (learner.email) {
           try { await sql`DELETE FROM magic_link_tokens WHERE email = ${learner.email}`; } catch (e) {}
@@ -122,6 +120,9 @@ module.exports = async (req, res) => {
 
     // 8. Clean up old cookie consent records >2 years
     await sql`DELETE FROM cookie_consents WHERE consented_at < NOW() - INTERVAL '2 years'`;
+
+    // 9. Clean up expired rate limit entries
+    await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '2 hours'`;
 
     console.log('retention cron results:', results);
     return res.json({ ok: true, results });

@@ -42,16 +42,11 @@ function verifyAuth(req) {
 
 // ── CORS helper ───────────────────────────────────────────────────────────────
 function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   setCors(res);
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query.action;
 
   if (action === 'balance') return handleBalance(req, res);

@@ -79,9 +79,6 @@ function formatHours(minutes) {
 }
 
 function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 }
 
 function verifyAuth(req) {
@@ -103,8 +100,6 @@ function createTransporter() {
 
 module.exports = async (req, res) => {
   setCors(res);
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query.action;
   if (action === 'available')    return handleAvailable(req, res);
   if (action === 'book')         return handleBook(req, res);

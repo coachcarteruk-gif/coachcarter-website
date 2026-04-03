@@ -21,16 +21,10 @@ const { reportError } = require('./_error-alert');
  */
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   // Cache for 30s on GET — price doesn't change that often
   if (req.method === 'GET') {
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
   }
-
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const sql = neon(process.env.POSTGRES_URL);
 
   // ── GET: return current pricing state ─────────────────────────────────────

@@ -25,11 +25,6 @@ function generateSmsCode() {
 
 // ── CORS + routing ──────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query.action;
   if (action === 'send-link')   return handleSendLink(req, res);
   if (action === 'validate')    return handleValidate(req, res);
@@ -53,6 +48,22 @@ async function handleSendLink(req, res) {
     }
 
     const sql = neon(process.env.POSTGRES_URL);
+
+    // Rate limiting: max 5 magic link sends per email/phone per hour
+    const rateLimitKey = method === 'sms' ? `magic_sms:${phone}` : `magic_email:${(email || '').toLowerCase().trim()}`;
+    try {
+      // Clean up old windows and check current count
+      await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
+      const [existing] = await sql`SELECT request_count FROM rate_limits WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      if (existing && existing.request_count >= 5) {
+        return res.status(429).json({ error: 'Too many login requests. Please try again in an hour.' });
+      }
+      if (existing) {
+        await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      } else {
+        await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${rateLimitKey}, 1, NOW())`;
+      }
+    } catch (e) { /* rate limit check failed — allow request through */ }
 
     // Generate a secure random token
     const token = generateToken();

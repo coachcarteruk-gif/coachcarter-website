@@ -65,9 +65,6 @@ const TOKEN_EXPIRY_MINUTES = 30;
 const JWT_EXPIRY           = '7d';
 
 function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 }
 
 function verifyInstructorAuth(req) {
@@ -84,8 +81,6 @@ function verifyInstructorAuth(req) {
 
 module.exports = async (req, res) => {
   setCors(res);
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query.action;
   if (action === 'request-login')    return handleRequestLogin(req, res);
   if (action === 'validate-token')   return handleValidateToken(req, res);

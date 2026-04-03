@@ -14,11 +14,6 @@ function verifyAuth(req) {
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query.action;
   if (action === 'update-name')       return handleUpdateName(req, res);
   if (action === 'sessions')          return handleSessions(req, res);
@@ -1177,36 +1172,23 @@ async function handleConfirmDeletion(req, res) {
     await sql`UPDATE credit_transactions SET learner_id = NULL, anonymized = true WHERE learner_id = ${learnerId}`;
 
     // 2. Delete related records (order matters for FK constraints)
-    const deleteTables = [
-      { table: 'skill_ratings', col: 'user_id' },
-      { table: 'driving_sessions', col: 'user_id' },
-      { table: 'quiz_results', col: 'learner_id' },
-      { table: 'mock_test_faults', col: 'mock_test_id', sub: `SELECT id FROM mock_tests WHERE learner_id = ${learnerId}` },
-      { table: 'mock_tests', col: 'learner_id' },
-      { table: 'qa_answers', col: 'question_id', sub: `SELECT id FROM qa_questions WHERE user_id = ${learnerId}` },
-      { table: 'qa_questions', col: 'user_id' },
-      { table: 'sent_reminders', col: 'learner_id' },
-      { table: 'slot_reservations', col: 'learner_id' },
-      { table: 'lesson_confirmations', col: 'learner_id' },
-      { table: 'lesson_bookings', col: 'learner_id' },
-      { table: 'learner_onboarding', col: 'learner_id' },
-      { table: 'waitlist', col: 'learner_id' },
-      { table: 'instructor_learner_notes', col: 'learner_id' },
-      { table: 'learner_availability', col: 'learner_id' },
-      { table: 'magic_link_tokens', col: 'email', val: learner?.email },
-    ];
-
-    for (const t of deleteTables) {
-      try {
-        if (t.sub) {
-          await sql(`DELETE FROM ${t.table} WHERE ${t.col} IN (${t.sub})`, []);
-        } else if (t.val) {
-          await sql(`DELETE FROM ${t.table} WHERE ${t.col} = $1`, [t.val]);
-        } else {
-          await sql(`DELETE FROM ${t.table} WHERE ${t.col} = $1`, [learnerId]);
-        }
-      } catch (e) { console.warn(`gdpr delete ${t.table} skipped:`, e.message); }
-    }
+    // Delete related records using parameterized queries (no dynamic identifiers)
+    try { await sql`DELETE FROM skill_ratings WHERE user_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete skill_ratings skipped:', e.message); }
+    try { await sql`DELETE FROM driving_sessions WHERE user_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete driving_sessions skipped:', e.message); }
+    try { await sql`DELETE FROM quiz_results WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete quiz_results skipped:', e.message); }
+    try { await sql`DELETE FROM mock_test_faults WHERE mock_test_id IN (SELECT id FROM mock_tests WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete mock_test_faults skipped:', e.message); }
+    try { await sql`DELETE FROM mock_tests WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete mock_tests skipped:', e.message); }
+    try { await sql`DELETE FROM qa_answers WHERE question_id IN (SELECT id FROM qa_questions WHERE user_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete qa_answers skipped:', e.message); }
+    try { await sql`DELETE FROM qa_questions WHERE user_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete qa_questions skipped:', e.message); }
+    try { await sql`DELETE FROM sent_reminders WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete sent_reminders skipped:', e.message); }
+    try { await sql`DELETE FROM slot_reservations WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete slot_reservations skipped:', e.message); }
+    try { await sql`DELETE FROM lesson_confirmations WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete lesson_confirmations skipped:', e.message); }
+    try { await sql`DELETE FROM lesson_bookings WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete lesson_bookings skipped:', e.message); }
+    try { await sql`DELETE FROM learner_onboarding WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete learner_onboarding skipped:', e.message); }
+    try { await sql`DELETE FROM waitlist WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete waitlist skipped:', e.message); }
+    try { await sql`DELETE FROM instructor_learner_notes WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete instructor_learner_notes skipped:', e.message); }
+    try { await sql`DELETE FROM learner_availability WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete learner_availability skipped:', e.message); }
+    if (learner?.email) { try { await sql`DELETE FROM magic_link_tokens WHERE email = ${learner.email}`; } catch (e) { console.warn('gdpr delete magic_link_tokens skipped:', e.message); } }
 
     // 3. Nullify cookie consent references
     try { await sql`UPDATE cookie_consents SET learner_id = NULL WHERE learner_id = ${learnerId}`; } catch (e) {}

@@ -56,9 +56,6 @@ function getAdminSchoolId(admin, req) {
 }
 
 function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Admin-Secret');
 }
 
 // Verify admin JWT token (accepts admin/superadmin roles OR instructors with isAdmin flag)
@@ -85,8 +82,6 @@ function verifyAdminSecret(req) {
 
 module.exports = async (req, res) => {
   setCors(res);
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   const action = req.query.action;
   if (action === 'login')           return handleLogin(req, res);
   if (action === 'create-admin')    return handleCreateAdmin(req, res);
@@ -807,19 +802,12 @@ async function handleDeleteLearner(req, res) {
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
     // Delete associated data (order matters for foreign keys)
-    const tables = [
-      { name: 'skill_ratings', col: 'user_id' },
-      { name: 'driving_sessions', col: 'user_id' },
-      { name: 'credit_transactions', col: 'learner_id' },
-      { name: 'lesson_bookings', col: 'learner_id' },
-      { name: 'qa_questions', col: 'user_id' },
-    ];
-
-    for (const t of tables) {
-      try {
-        await sql(`DELETE FROM ${t.name} WHERE ${t.col} = $1`, [learner_id]);
-      } catch (e) { console.warn(`delete from ${t.name} skipped:`, e.message); }
-    }
+    // Anonymize credit transactions (7-year tax retention)
+    try { await sql`UPDATE credit_transactions SET learner_id = NULL, anonymized = true WHERE learner_id = ${learner_id}`; } catch (e) { console.warn('anonymize credit_transactions skipped:', e.message); }
+    try { await sql`DELETE FROM skill_ratings WHERE user_id = ${learner_id}`; } catch (e) { console.warn('delete skill_ratings skipped:', e.message); }
+    try { await sql`DELETE FROM driving_sessions WHERE user_id = ${learner_id}`; } catch (e) { console.warn('delete driving_sessions skipped:', e.message); }
+    try { await sql`DELETE FROM lesson_bookings WHERE learner_id = ${learner_id}`; } catch (e) { console.warn('delete lesson_bookings skipped:', e.message); }
+    try { await sql`DELETE FROM qa_questions WHERE user_id = ${learner_id}`; } catch (e) { console.warn('delete qa_questions skipped:', e.message); }
 
     // Delete the learner
     await sql`DELETE FROM learner_users WHERE id = ${learner_id}`;
