@@ -588,6 +588,8 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 | `cancel-booking` | POST | JWT | Cancel a confirmed booking (always refunds learner credit) |
 | `reschedule-booking` | POST | JWT | Move a booking to a new slot (no time restriction, no count limit) |
 | `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/free payment) |
+| `blackout-dates` | GET | JWT | Returns active/future blackout date ranges. Response: `{ blackout_dates: [{ id, start_date, end_date, reason }] }` |
+| `set-blackout-dates` | POST | JWT | Replace all future blackout ranges. Body: `{ ranges: [{ start_date, end_date, reason? }] }`. Validates no overlaps, max 365-day span |
 | `payout-history` | GET | JWT | Paginated payout records for the instructor |
 | `next-payout-preview` | GET | JWT | Estimated next Friday payout amount + eligible lesson count |
 
@@ -614,6 +616,8 @@ Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment.
 **`instructors`** — name, email, phone, bio, photo_url, active flag, buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error, stripe_account_id, stripe_onboarding_complete, payouts_paused, weekly_franchise_fee_pence (NULL = commission model, non-NULL = fixed weekly fee)
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
+
+**`instructor_blackout_dates`** — date ranges when an instructor is unavailable (holidays, sick days). Columns: blackout_date (start), end_date, reason. Single-day blackouts have end_date = blackout_date. Slot generation skips all dates within any active range. Indexed on (instructor_id, blackout_date, end_date).
 
 **`instructor_external_events`** — synced events from instructor's personal iCal feed (event_date, start_time, end_time, is_all_day, uid_hash for dedup). Indexed on (instructor_id, event_date). Used by slot generation to block slots that conflict with personal events.
 

@@ -852,6 +852,18 @@ URL parameter support: `/learner/book?type=2hr` pre-selects lesson type. Shareab
 
 **Files changed:** `public/learner/book.html`, `api/admin.js`
 
+## 2.53 — Instructor Blackout Date Ranges (3 April 2026)
+
+**What:** Instructors can now block out a date range (start + end date) instead of adding one day at a time. Ideal for holidays or extended time off.
+
+**Built:**
+- ✅ DB migration — added `end_date` column to `instructor_blackout_dates`, backfills existing single-day rows, new composite index
+- ✅ API — GET `blackout-dates` returns `start_date` + `end_date`; POST `set-blackout-dates` accepts `{ ranges: [{ start_date, end_date, reason }] }` with overlap + max 365-day validation
+- ✅ Slot filtering — range overlap query in `slots.js`, expands ranges into per-day Set entries (slot generation loop unchanged)
+- ✅ UI — two date pickers (start/end), end auto-follows start, overlap check on add, ranges display as "Mon 3 Apr – Fri 7 Apr 2026" with day count badge
+
+**Files changed:** `db/migration.sql`, `api/instructor.js`, `api/slots.js`, `public/instructor/availability.html`
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

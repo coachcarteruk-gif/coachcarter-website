@@ -32,6 +32,11 @@ Driving school website for CoachCarter (coachcarter.uk). Vanilla HTML/JS fronten
 - Bigger features: feature branch + PR
 - Never commit .env files or secrets
 - DB migrations: run via `GET /api/migrate?secret=MIGRATION_SECRET`
+- **Before pushing to main**, update the relevant docs for any non-trivial change:
+  - `PROJECT.md` — API actions, DB table descriptions, flow docs
+  - `DEVELOPMENT-ROADMAP.md` — new feature entry with date, description, files changed
+  - `MIGRATION-PLAN.md` — if new tables, API routes, or shared modules were added
+  - `CLAUDE.md` — if new conventions, env vars, or important design decisions were introduced
 
 ## Important env vars
 
