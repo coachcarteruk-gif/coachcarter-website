@@ -1037,17 +1037,17 @@ async function handleExportData(req, res) {
       ORDER BY created_at DESC`;
 
     const quizzes = await sql`
-      SELECT question_id, learner_answer, correct_answer, is_correct, answered_at
+      SELECT question_id, learner_answer, correct_answer, correct, answered_at
       FROM quiz_results WHERE learner_id = ${user.id} AND school_id = ${schoolId}
       ORDER BY answered_at DESC`;
 
     const mockTests = await sql`
-      SELECT id, test_date, total_faults, serious_faults, dangerous_faults, result, notes, created_at
+      SELECT id, started_at, completed_at, total_driving_faults, total_serious_faults, total_dangerous_faults, result, notes
       FROM mock_tests WHERE learner_id = ${user.id} AND school_id = ${schoolId}
-      ORDER BY test_date DESC`;
+      ORDER BY started_at DESC`;
 
     const questions = await sql`
-      SELECT title, body, category, status, created_at
+      SELECT title, body, status, created_at
       FROM qa_questions WHERE learner_id = ${user.id} AND school_id = ${schoolId}
       ORDER BY created_at DESC`;
 
