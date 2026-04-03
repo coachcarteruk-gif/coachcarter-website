@@ -833,6 +833,24 @@ Security hardening and query performance optimization across the entire platform
 
 ---
 
+## Competitive Differentiators
+
+> All 17 competitor-inspired features (from Total Drive and Setmore analysis) are complete.
+
+| Strength | Detail |
+|----------|--------|
+| Hours balance + Klarna | Flexible hour packages with bulk discounts |
+| Race-condition prevention | 10-minute slot reservation during Stripe checkout |
+| DL25 competency framework | 39 sub-skills across 10 categories |
+| AI Examiner + Quiz | Neither competitor has anything close |
+| WhatsApp notifications | More personal than SMS |
+| Multiple availability windows/day | More flexible than one open/close per day |
+| Recurring bookings | Weekly series with conflict detection |
+| Post-lesson skill self-assessment | Session logging is unique |
+| webcal:// subscription feeds | Learner + instructor feeds with VALARM reminders |
+
+---
+
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
 - **Capacitor native wrapper** — wrap PWA for App Store / Play Store submission

@@ -8,19 +8,9 @@ Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel wi
 2. **Never continue on an old feature branch** from a previous session — create a fresh branch from main
 3. **Never re-add removed features** — if something looks "missing" from navigation or pages, check this file first. It was probably removed intentionally.
 
-## Project structure
-
-- `public/` — Static HTML pages (learner portal in `public/learner/`, instructor in `public/instructor/`, admin in `public/admin/`, super admin in `public/superadmin/`)
-- `api/` — Vercel serverless functions. Files prefixed with `_` are shared utilities (not endpoints)
-- `api/_auth.js` — Centralised JWT auth module (decodeToken, requireAuth, getSchoolId, isSuperAdmin)
-- `api/schools.js` — School management API (CRUD, branding, stats)
-- `db/migration.sql` — Single idempotent migration file defining all tables
-- `public/shared/` — Shared CSS (learner.css, instructor.css), auth JS (learner-auth.js, instructor-auth.js), and branding JS (branding.js)
-- `public/shared/branding.js` — Dynamic school branding via CSS custom properties
-- `public/sidebar.js` — Context-aware sidebar nav used on all pages
-- `public/competency-config.js` — 10-category DL25 framework (39 sub-skills) shared across 6 features
-
 ## Key conventions
+
+> For full project structure, see [PROJECT.md](PROJECT.md).
 
 - API routes use `?action=` routing (e.g. `/api/slots?action=book`)
 - Auth: JWT stored in localStorage (`cc_learner`, `cc_instructor`, `cc_admin`)
@@ -156,11 +146,9 @@ The platform is GDPR-compliant. All future changes MUST follow these rules.
   - `MIGRATION-PLAN.md` — if new tables, API routes, or shared modules were added
   - `CLAUDE.md` — if new conventions, env vars, or important design decisions were introduced
 
-## Important env vars
-
-`POSTGRES_URL`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ANTHROPIC_API_KEY`, `MIGRATION_SECRET`, `ERROR_ALERT_EMAIL`, `STAFF_EMAIL`, `ADMIN_SECRET`, `BASE_URL`, `SETMORE_REFRESH_TOKEN`, `OPENROUTESERVICE_API_KEY`
-
 ## Error alerting
+
+> For full env var list, see [PROJECT.md](PROJECT.md).
 
 `api/_error-alert.js` sends email on 500 errors. All API files call `reportError()` before `res.status(500)`. Requires `ERROR_ALERT_EMAIL` env var.
 
@@ -291,7 +279,7 @@ This codebase is being prepared for migration to a React Native (Expo) app. See 
 
 ## Docs
 
+- `PROJECT.md` — complete project reference (APIs, tables, flows, env vars, design system)
+- `DEVELOPMENT-ROADMAP.md` — full feature history, roadmap, and competitor differentiators
+- `DESIGN-REVIEW.md` — UI/UX design principles, style guide, component standards
 - `MIGRATION-PLAN.md` — React Native app migration plan (keep updated)
-- `DEVELOPMENT-ROADMAP.md` — full feature history and roadmap
-- `PROJECT.md` — complete project reference (APIs, tables, flows)
-- `COMPETITOR-FEATURES-ROADMAP.md` — competitor-inspired features (all 17 done)

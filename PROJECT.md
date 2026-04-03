@@ -1,5 +1,7 @@
 # CoachCarter Website — Project Reference
 
+> **Last updated:** 3 April 2026
+
 A complete reference for the CoachCarter driving instructor website. Use this when continuing development with an AI assistant — paste it in at the start of a new session so the AI is fully up to speed.
 
 ---
@@ -177,24 +179,9 @@ So `/classroom.html` serves `public/classroom.html`, `/api/learner?action=login`
 
 ## Design system
 
-The site uses a consistent dark charcoal theme matching the CoachCarter logo exactly.
+> For full design tokens, colour palettes, and component standards, see [DESIGN-REVIEW.md](DESIGN-REVIEW.md).
 
-```css
---navy:     #262626   /* primary dark background — charcoal black from logo */
---navy-2:   #2e2e2e   /* card / panel background */
---navy-3:   #383838   /* elevated surfaces */
---orange:   #f58321   /* primary accent — matches logo orange exactly */
---orange-dk:#e07518   /* hover / pressed state */
---orange-lt:#fff4e8   /* light orange tint */
---text:     #e8eaf0   /* body text on dark backgrounds */
---muted:    #6b7484   /* secondary / placeholder text */
---border:   #e2e4eb   /* dividers on light backgrounds */
-```
-
-Fonts: **Bricolage Grotesque** (headings) + **Lato** (body). All pages link to them via:
-```html
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Lato:wght@300;400;700&display=swap">
-```
+**Quick ref:** Charcoal (`#262626`) + Orange (`#f58321`). Fonts: Bricolage Grotesque (headings) + Lato (body).
 
 ---
 
@@ -217,7 +204,7 @@ The site uses a **sidebar navigation** system (`public/sidebar.js`) that replace
 
 ## Competency system
 
-The site uses a unified 17-skill competency framework aligned to the DVSA DL25 marking sheet. All skills are defined in `public/competency-config.js` which is shared across:
+The site uses a unified competency framework (10 DL25 categories, 39 sub-skills) aligned to the DVSA DL25 marking sheet. All skills are defined in `public/competency-config.js` which is shared across:
 
 - Log Session (self-assessment ratings + fault tallies)
 - Mock Test (per-skill fault recording across 3 parts)
@@ -226,7 +213,7 @@ The site uses a unified 17-skill competency framework aligned to the DVSA DL25 m
 - Ask the Examiner (AI context injection)
 - Onboarding (initial self-assessment)
 
-### The 17 skills (grouped into 5 areas)
+### The 10 categories (39 sub-skills across 4 areas)
 
 **Vehicle Control**: Accelerator, Clutch, Gears, Footbrake, Parking Brake, Steering
 

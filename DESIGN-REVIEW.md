@@ -1,5 +1,7 @@
 # CoachCarter Design Review & Implementation Guide
 
+> **Last updated:** March 2026
+>
 > **Purpose**: This document is a comprehensive design review for the CoachCarter Driving School website. It contains specific, actionable instructions for improving the UI/UX across three core screens: the Homepage (`public/index.html`), the Learner Portal Dashboard (`public/learner/index.html`), and the Buy Credits page (`public/learner/buy-credits.html`). Every recommendation includes the reasoning behind it, the file(s) to change, and — where possible — concrete CSS/HTML guidance. This document also establishes design principles and a style guide that should be followed across all pages.
 
 ---
