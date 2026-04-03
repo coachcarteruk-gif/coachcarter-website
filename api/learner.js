@@ -1013,11 +1013,13 @@ async function handleExportData(req, res) {
       FROM learner_onboarding WHERE learner_id = ${user.id}`;
 
     const bookings = await sql`
-      SELECT lb.booking_date, lb.start_time, lb.end_time, lb.pickup_address, lb.status, lb.lesson_type, lb.created_at,
-             i.name AS instructor_name
-      FROM lesson_bookings lb LEFT JOIN instructors i ON lb.instructor_id = i.id
+      SELECT lb.scheduled_date, lb.start_time, lb.end_time, lb.pickup_address, lb.status, lb.created_at,
+             i.name AS instructor_name, lt.name AS lesson_type
+      FROM lesson_bookings lb
+        LEFT JOIN instructors i ON lb.instructor_id = i.id
+        LEFT JOIN lesson_types lt ON lb.lesson_type_id = lt.id
       WHERE lb.learner_id = ${user.id} AND lb.school_id = ${schoolId}
-      ORDER BY lb.booking_date DESC`;
+      ORDER BY lb.scheduled_date DESC`;
 
     const transactions = await sql`
       SELECT type, credits, minutes, amount_pence, payment_method, created_at
