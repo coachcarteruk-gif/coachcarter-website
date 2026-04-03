@@ -138,12 +138,14 @@ module.exports = async (req, res) => {
         (${mainLearner.id}, ${session1Date.toISOString().slice(0, 10)}, 90, 'instructor', 'First lesson — covered cockpit drill, moving off, and stopping. Good start.', ${schoolId}),
         (${mainLearner.id}, ${session2Date.toISOString().slice(0, 10)}, 90, 'instructor', 'Junctions and roundabouts. Needs more mirror checks.', ${schoolId})`;
 
-    // Skill ratings
+    // Skill ratings (session_id references a driving_sessions record)
+    const [latestSession] = await sql`SELECT id FROM driving_sessions WHERE user_id = ${mainLearner.id} ORDER BY id DESC LIMIT 1`;
+    const sessionId = latestSession?.id || 1;
     const skills = ['controls_steering', 'junctions_approach', 'mirrors_use', 'progress_appropriate_speed'];
     for (const skill of skills) {
       await sql`
-        INSERT INTO skill_ratings (user_id, category, sub_skill, rating, note, school_id)
-        VALUES (${mainLearner.id}, ${skill.split('_')[0]}, ${skill}, 'ok', 'Test rating', ${schoolId})`;
+        INSERT INTO skill_ratings (session_id, user_id, tier, skill_key, rating, note, school_id)
+        VALUES (${sessionId}, ${mainLearner.id}, 1, ${skill}, 'ok', 'Test rating', ${schoolId})`;
     }
 
     // Q&A question
@@ -153,8 +155,8 @@ module.exports = async (req, res) => {
 
     // Onboarding
     await sql`
-      INSERT INTO learner_onboarding (learner_id, prior_hours, previous_tests, transmission, test_date, main_concerns, school_id)
-      VALUES (${mainLearner.id}, 10, 0, 'manual', ${new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}, 'Roundabouts and parallel parking', ${schoolId})`;
+      INSERT INTO learner_onboarding (learner_id, prior_hours_pro, prior_hours_private, previous_tests, transmission, test_date, main_concerns, school_id)
+      VALUES (${mainLearner.id}, 8, 2, 0, 'manual', ${new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}, 'Roundabouts and parallel parking', ${schoolId})`;
 
     // Also give the delete test learner a booking so deletion has something to cascade
     const deleteDate = new Date(today); deleteDate.setDate(deleteDate.getDate() - 3);

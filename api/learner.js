@@ -1009,7 +1009,7 @@ async function handleExportData(req, res) {
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
 
     const onboarding = await sql`
-      SELECT prior_hours, previous_tests, transmission, test_date, main_concerns, created_at
+      SELECT prior_hours_pro, prior_hours_private, previous_tests, transmission, test_date, main_concerns, created_at
       FROM learner_onboarding WHERE learner_id = ${user.id}`;
 
     const bookings = await sql`
@@ -1032,9 +1032,9 @@ async function handleExportData(req, res) {
       ORDER BY session_date DESC`;
 
     const skills = await sql`
-      SELECT category, sub_skill, rating, note, rated_at
+      SELECT skill_key, rating, note, driving_faults, serious_faults, dangerous_faults, created_at
       FROM skill_ratings WHERE user_id = ${user.id} AND school_id = ${schoolId}
-      ORDER BY rated_at DESC`;
+      ORDER BY created_at DESC`;
 
     const quizzes = await sql`
       SELECT question_id, learner_answer, correct_answer, is_correct, answered_at
