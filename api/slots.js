@@ -275,20 +275,20 @@ async function handleAvailable(req, res) {
     // Merge pending offers into reservations so they block slots
     reservations = reservations.concat(pendingOffers);
 
-    // 2c. Load blackout dates in the date range
+    // 2c. Load blackout date ranges overlapping the requested window
     let blackouts = [];
     try {
       blackouts = instructor_id
         ? await sql`
-            SELECT instructor_id, blackout_date::text AS blackout_date
+            SELECT instructor_id, blackout_date::text AS start_date, end_date::text
             FROM instructor_blackout_dates
-            WHERE blackout_date BETWEEN ${from} AND ${to}
+            WHERE blackout_date <= ${to} AND end_date >= ${from}
               AND instructor_id = ${instructor_id}
           `
         : await sql`
-            SELECT instructor_id, blackout_date::text AS blackout_date
+            SELECT instructor_id, blackout_date::text AS start_date, end_date::text
             FROM instructor_blackout_dates
-            WHERE blackout_date BETWEEN ${from} AND ${to}
+            WHERE blackout_date <= ${to} AND end_date >= ${from}
           `;
     } catch (e) {
       // Table may not exist yet — that's fine, no blackout dates
@@ -315,10 +315,15 @@ async function handleAvailable(req, res) {
       // Table may not exist yet
     }
 
-    // Index blackout dates as "instructorId|date" for fast lookup
+    // Expand blackout ranges into individual "instructorId|date" entries for fast lookup
     const blackoutIndex = new Set();
     for (const b of blackouts) {
-      blackoutIndex.add(`${b.instructor_id}|${b.blackout_date}`);
+      const start = new Date(b.start_date + 'T00:00:00');
+      const end = new Date(b.end_date + 'T00:00:00');
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const ds = d.toISOString().slice(0, 10);
+        blackoutIndex.add(`${b.instructor_id}|${ds}`);
+      }
     }
 
     // Index bookings + reservations by "instructorId|date" for fast lookup

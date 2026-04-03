@@ -934,7 +934,7 @@ async function handleUpdateProfile(req, res) {
 }
 
 // ── GET /api/instructor?action=blackout-dates ─────────────────────────────────
-// Returns the instructor's blackout dates (future only).
+// Returns the instructor's blackout date ranges (active/future only).
 async function handleBlackoutDates(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -945,10 +945,10 @@ async function handleBlackoutDates(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const dates = await sql`
-      SELECT id, blackout_date::text, reason
+      SELECT id, blackout_date::text AS start_date, end_date::text, reason
       FROM instructor_blackout_dates
       WHERE instructor_id = ${instructor.id}
-        AND blackout_date >= CURRENT_DATE
+        AND end_date >= CURRENT_DATE
       ORDER BY blackout_date ASC
     `;
 
@@ -962,48 +962,62 @@ async function handleBlackoutDates(req, res) {
 }
 
 // ── POST /api/instructor?action=set-blackout-dates ────────────────────────────
-// Body: { dates: [{ date: "YYYY-MM-DD", reason?: "..." }, ...] }
-// Replaces all future blackout dates for this instructor.
+// Body: { ranges: [{ start_date, end_date, reason? }, ...] }
+// Replaces all future blackout date ranges for this instructor.
 async function handleSetBlackoutDates(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { dates } = req.body;
-  if (!Array.isArray(dates))
-    return res.status(400).json({ error: 'dates must be an array' });
+  const { ranges } = req.body;
+  if (!Array.isArray(ranges))
+    return res.status(400).json({ error: 'ranges must be an array' });
 
-  // Validate each date
-  for (const d of dates) {
-    if (!d.date || !/^\d{4}-\d{2}-\d{2}$/.test(d.date))
-      return res.status(400).json({ error: `Invalid date format: ${d.date}. Use YYYY-MM-DD` });
+  const dateRx = /^\d{4}-\d{2}-\d{2}$/;
+  for (const r of ranges) {
+    if (!r.start_date || !dateRx.test(r.start_date))
+      return res.status(400).json({ error: `Invalid start_date: ${r.start_date}. Use YYYY-MM-DD` });
+    if (!r.end_date || !dateRx.test(r.end_date))
+      return res.status(400).json({ error: `Invalid end_date: ${r.end_date}. Use YYYY-MM-DD` });
+    if (r.end_date < r.start_date)
+      return res.status(400).json({ error: `end_date must be >= start_date` });
+    // Max 365-day range
+    const diffMs = new Date(r.end_date) - new Date(r.start_date);
+    if (diffMs > 365 * 86400000)
+      return res.status(400).json({ error: 'Range cannot exceed 365 days' });
+  }
+
+  // Check for overlapping ranges within the submission
+  const sorted = [...ranges].sort((a, b) => a.start_date.localeCompare(b.start_date));
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].start_date <= sorted[i - 1].end_date)
+      return res.status(400).json({ error: 'Submitted ranges must not overlap' });
   }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Delete all future blackout dates for this instructor
+    // Delete all future/active blackout ranges for this instructor
     await sql`
       DELETE FROM instructor_blackout_dates
       WHERE instructor_id = ${instructor.id}
-        AND blackout_date >= CURRENT_DATE
+        AND end_date >= CURRENT_DATE
     `;
 
-    // Insert new blackout dates
-    for (const d of dates) {
+    // Insert new ranges
+    for (const r of ranges) {
       await sql`
-        INSERT INTO instructor_blackout_dates (instructor_id, blackout_date, reason)
-        VALUES (${instructor.id}, ${d.date}, ${d.reason || null})
-        ON CONFLICT (instructor_id, blackout_date) DO UPDATE SET reason = EXCLUDED.reason
+        INSERT INTO instructor_blackout_dates (instructor_id, blackout_date, end_date, reason)
+        VALUES (${instructor.id}, ${r.start_date}, ${r.end_date}, ${r.reason || null})
       `;
     }
 
     const saved = await sql`
-      SELECT id, blackout_date::text, reason
+      SELECT id, blackout_date::text AS start_date, end_date::text, reason
       FROM instructor_blackout_dates
       WHERE instructor_id = ${instructor.id}
-        AND blackout_date >= CURRENT_DATE
+        AND end_date >= CURRENT_DATE
       ORDER BY blackout_date ASC
     `;
 

@@ -164,8 +164,16 @@
       display: flex; align-items: center; gap: 12px;
       background: var(--surface); border-radius: 8px; padding: 10px 14px;
     }
+    .blackout-sep {
+      font-size: 0.825rem; color: var(--muted); font-weight: 600;
+    }
     .blackout-date-label {
       font-weight: 700; font-size: 0.875rem; min-width: 150px;
+    }
+    .blackout-days-badge {
+      font-size: 0.75rem; color: var(--accent); font-weight: 700;
+      background: var(--accent-lt, rgba(255,107,0,0.1)); border-radius: 10px;
+      padding: 2px 8px; white-space: nowrap;
     }
     .blackout-reason {
       font-size: 0.825rem; color: var(--muted); flex: 1;
@@ -215,12 +223,14 @@
 
   <div class="section-divider" id="blackoutSection" style="display:none">
     <h2>Blackout Dates</h2>
-    <p class="subtitle">Block specific dates when you're unavailable (holidays, sick days, etc.). No slots will be shown to learners on these dates.</p>
+    <p class="subtitle">Block date ranges when you're unavailable (holidays, sick days, etc.). No slots will be shown to learners on these dates.</p>
 
     <div class="blackout-add-row">
-      <input type="date" id="blackoutDateInput" min="">
+      <input type="date" id="blackoutStartInput" min="">
+      <span class="blackout-sep">to</span>
+      <input type="date" id="blackoutEndInput" min="">
       <input type="text" id="blackoutReasonInput" placeholder="Reason (optional)">
-      <button class="btn-add-blackout" onclick="addBlackoutDate()">+ Add date</button>
+      <button class="btn-add-blackout" onclick="addBlackoutDate()">+ Add</button>
     </div>
 
     <div class="blackout-list" id="blackoutList">
@@ -282,7 +292,7 @@
   let token         = null;
   let windows       = []; // [{ day_of_week, start_time, end_time }]
   let isDirty       = false;
-  let blackoutDates = []; // [{ date, reason }]
+  let blackoutRanges = []; // [{ start_date, end_date, reason }]
 
   function init() {
     const session = ccAuth.getAuth();
@@ -293,10 +303,18 @@
       const adminTab = document.getElementById('admin-tab');
       if (adminTab) adminTab.style.display = '';
     }
-    // Set min date on blackout date input to today
+    // Set min date on blackout date inputs to today
     const today = new Date().toISOString().slice(0, 10);
-    document.getElementById('blackoutDateInput').min = today;
-    document.getElementById('blackoutDateInput').value = today;
+    const startInput = document.getElementById('blackoutStartInput');
+    const endInput = document.getElementById('blackoutEndInput');
+    startInput.min = today;
+    startInput.value = today;
+    endInput.min = today;
+    endInput.value = today;
+    startInput.addEventListener('change', () => {
+      endInput.min = startInput.value;
+      if (endInput.value < startInput.value) endInput.value = startInput.value;
+    });
     loadAvailability();
     loadBlackoutDates();
   }
@@ -428,7 +446,7 @@
     setTimeout(() => t.classList.remove('show'), 3500);
   }
 
-  // ─── Blackout dates ────────────────────────────────────────────────────────
+  // ─── Blackout date ranges ──────────────────────────────────────────────────
   async function loadBlackoutDates() {
     try {
       const res = await fetch('/api/instructor?action=blackout-dates', {
@@ -437,8 +455,9 @@
       if (res.status === 401) return;
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      blackoutDates = (data.blackout_dates || []).map(d => ({
-        date: d.blackout_date,
+      blackoutRanges = (data.blackout_dates || []).map(d => ({
+        start_date: d.start_date,
+        end_date: d.end_date,
         reason: d.reason || ''
       }));
       renderBlackouts();
@@ -449,21 +468,33 @@
     }
   }
 
+  function formatDateUK(dateStr) {
+    return new Date(dateStr + 'T00:00:00Z').toLocaleDateString('en-GB', {
+      weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'
+    });
+  }
+
+  function dayCount(start, end) {
+    return Math.round((new Date(end) - new Date(start)) / 86400000) + 1;
+  }
+
   function renderBlackouts() {
     const list = document.getElementById('blackoutList');
-    if (blackoutDates.length === 0) {
+    if (blackoutRanges.length === 0) {
       list.innerHTML = '<p class="no-blackouts">No blackout dates set</p>';
       return;
     }
-    list.innerHTML = blackoutDates.map((d, i) => {
-      const dateObj = new Date(d.date + 'T00:00:00Z');
-      const label = dateObj.toLocaleDateString('en-GB', {
-        weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'
-      });
+    list.innerHTML = blackoutRanges.map((r, i) => {
+      const isSingle = r.start_date === r.end_date;
+      const label = isSingle
+        ? formatDateUK(r.start_date)
+        : `${formatDateUK(r.start_date)} – ${formatDateUK(r.end_date)}`;
+      const badge = isSingle ? '' : `<span class="blackout-days-badge">${dayCount(r.start_date, r.end_date)} days</span>`;
       return `
         <div class="blackout-row">
           <span class="blackout-date-label">${label}</span>
-          <span class="blackout-reason">${d.reason ? esc(d.reason) : ''}</span>
+          ${badge}
+          <span class="blackout-reason">${r.reason ? esc(r.reason) : ''}</span>
           <button class="btn-remove-blackout" onclick="removeBlackout(${i})" title="Remove">✕</button>
         </div>`;
     }).join('');
@@ -476,28 +507,34 @@
   }
 
   async function addBlackoutDate() {
-    const dateInput   = document.getElementById('blackoutDateInput');
+    const startInput  = document.getElementById('blackoutStartInput');
+    const endInput    = document.getElementById('blackoutEndInput');
     const reasonInput = document.getElementById('blackoutReasonInput');
-    const date   = dateInput.value;
-    const reason = reasonInput.value.trim();
+    const start_date  = startInput.value;
+    const end_date    = endInput.value || start_date;
+    const reason      = reasonInput.value.trim();
 
-    if (!date) { showToast('Please select a date', 'error'); return; }
+    if (!start_date) { showToast('Please select a start date', 'error'); return; }
+    if (end_date < start_date) { showToast('End date must be on or after start date', 'error'); return; }
 
-    // Check not already added
-    if (blackoutDates.some(d => d.date === date)) {
-      showToast('That date is already blocked', 'error');
+    // Check for overlap with existing ranges
+    const overlaps = blackoutRanges.some(r =>
+      start_date <= r.end_date && end_date >= r.start_date
+    );
+    if (overlaps) {
+      showToast('This range overlaps with an existing blackout', 'error');
       return;
     }
 
-    blackoutDates.push({ date, reason });
-    blackoutDates.sort((a, b) => a.date.localeCompare(b.date));
+    blackoutRanges.push({ start_date, end_date, reason });
+    blackoutRanges.sort((a, b) => a.start_date.localeCompare(b.start_date));
     renderBlackouts();
     reasonInput.value = '';
     await saveBlackoutDates();
   }
 
   async function removeBlackout(idx) {
-    blackoutDates.splice(idx, 1);
+    blackoutRanges.splice(idx, 1);
     renderBlackouts();
     await saveBlackoutDates();
   }
@@ -507,12 +544,13 @@
       const res = await fetch('/api/instructor?action=set-blackout-dates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ dates: blackoutDates })
+        body: JSON.stringify({ ranges: blackoutRanges })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      blackoutDates = (data.blackout_dates || []).map(d => ({
-        date: d.blackout_date,
+      blackoutRanges = (data.blackout_dates || []).map(d => ({
+        start_date: d.start_date,
+        end_date: d.end_date,
         reason: d.reason || ''
       }));
       renderBlackouts();

@@ -86,16 +86,48 @@ CREATE TABLE IF NOT EXISTS instructor_availability (
 );
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- INSTRUCTOR BLACKOUT DATES
+-- INSTRUCTOR BLACKOUT DATES (supports date ranges via blackout_date + end_date)
 -- ══════════════════════════════════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS instructor_blackout_dates (
   id            SERIAL PRIMARY KEY,
   instructor_id INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
   blackout_date DATE NOT NULL,
+  end_date      DATE,
   reason        TEXT,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT uq_blackout_date UNIQUE (instructor_id, blackout_date)
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migrate existing single-day blackouts: add end_date column if missing, backfill
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'instructor_blackout_dates' AND column_name = 'blackout_date'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'instructor_blackout_dates' AND column_name = 'end_date'
+  ) THEN
+    ALTER TABLE instructor_blackout_dates ADD COLUMN end_date DATE;
+  END IF;
+
+  -- Backfill end_date for existing single-day rows
+  UPDATE instructor_blackout_dates SET end_date = blackout_date WHERE end_date IS NULL;
+
+  -- Make end_date NOT NULL
+  ALTER TABLE instructor_blackout_dates ALTER COLUMN end_date SET NOT NULL;
+  ALTER TABLE instructor_blackout_dates ALTER COLUMN end_date SET DEFAULT CURRENT_DATE;
+
+  -- Drop old unique constraint if it exists (no longer valid for ranges)
+  IF EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'uq_blackout_date' AND table_name = 'instructor_blackout_dates'
+  ) THEN
+    ALTER TABLE instructor_blackout_dates DROP CONSTRAINT uq_blackout_date;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_blackout_ranges
+  ON instructor_blackout_dates(instructor_id, blackout_date, end_date);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- LESSON BOOKINGS
