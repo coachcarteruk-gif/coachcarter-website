@@ -1151,7 +1151,7 @@ CREATE INDEX IF NOT EXISTS idx_quiz_results_learner_id ON quiz_results(learner_i
 CREATE INDEX IF NOT EXISTS idx_mock_tests_learner_id ON mock_tests(learner_id);
 
 -- qa_questions — Q&A lookups by learner
-CREATE INDEX IF NOT EXISTS idx_qa_questions_user_id ON qa_questions(user_id);
+CREATE INDEX IF NOT EXISTS idx_qa_questions_learner_id ON qa_questions(learner_id);
 CREATE INDEX IF NOT EXISTS idx_qa_answers_question_id ON qa_answers(question_id);
 
 -- slot_reservations — booking flow

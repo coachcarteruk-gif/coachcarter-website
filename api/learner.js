@@ -1046,7 +1046,7 @@ async function handleExportData(req, res) {
 
     const questions = await sql`
       SELECT title, body, category, status, created_at
-      FROM qa_questions WHERE user_id = ${user.id} AND school_id = ${schoolId}
+      FROM qa_questions WHERE learner_id = ${user.id} AND school_id = ${schoolId}
       ORDER BY created_at DESC`;
 
     const exportData = {
@@ -1178,8 +1178,8 @@ async function handleConfirmDeletion(req, res) {
     try { await sql`DELETE FROM quiz_results WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete quiz_results skipped:', e.message); }
     try { await sql`DELETE FROM mock_test_faults WHERE mock_test_id IN (SELECT id FROM mock_tests WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete mock_test_faults skipped:', e.message); }
     try { await sql`DELETE FROM mock_tests WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete mock_tests skipped:', e.message); }
-    try { await sql`DELETE FROM qa_answers WHERE question_id IN (SELECT id FROM qa_questions WHERE user_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete qa_answers skipped:', e.message); }
-    try { await sql`DELETE FROM qa_questions WHERE user_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete qa_questions skipped:', e.message); }
+    try { await sql`DELETE FROM qa_answers WHERE question_id IN (SELECT id FROM qa_questions WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete qa_answers skipped:', e.message); }
+    try { await sql`DELETE FROM qa_questions WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete qa_questions skipped:', e.message); }
     try { await sql`DELETE FROM sent_reminders WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete sent_reminders skipped:', e.message); }
     try { await sql`DELETE FROM slot_reservations WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete slot_reservations skipped:', e.message); }
     try { await sql`DELETE FROM lesson_confirmations WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete lesson_confirmations skipped:', e.message); }
