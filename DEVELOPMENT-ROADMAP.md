@@ -858,12 +858,12 @@ System-wide dark mode support across all learner, instructor, admin, and public 
 **What was built:**
 - Dark mode CSS variable overrides in `learner.css`, `instructor.css`, `shared-auth.css`
 - `public/shared/dark-mode.js` — theme toggle logic, localStorage persistence, system preference detection, theme-color meta tag updates
-- Theme selector dropdown on learner profile and instructor profile pages
+- Theme selector dropdown in sidebar footer (above Sign Out button), available on every page for both logged-in and logged-out users
 - Converted hardcoded colours (#fff, #f9f9f9, #262626, #e0e0e0, #797879) to CSS variables across 27 HTML inline style blocks
 - Converted sidebar.js hardcoded colours to CSS variable fallback pattern
 
 **Files created:** `public/shared/dark-mode.js`
-**Files modified:** `public/shared/learner.css`, `public/shared/instructor.css`, `public/shared-auth.css`, `public/sidebar.js`, `public/learner/profile.html`, `public/instructor/profile.html`, 48 HTML files (dark-mode.js script tag + inline colour variable conversion)
+**Files modified:** `public/shared/learner.css`, `public/shared/instructor.css`, `public/shared-auth.css`, `public/sidebar.js`, 48 HTML files (dark-mode.js script tag + inline colour variable conversion)
 
 ---
 

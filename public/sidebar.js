@@ -190,18 +190,37 @@
     } catch(e) {}
 
     if (isLoggedIn) {
+      var currentTheme = (window.ccDarkMode ? ccDarkMode.get() : 'auto');
+      var themeLabel = currentTheme === 'dark' ? 'Dark' : currentTheme === 'light' ? 'Light' : 'Auto';
       return '<div class="cc-sb-footer" id="cc-sb-footer">' +
         '<div class="cc-sb-user" id="cc-sb-user"></div>' +
         '<div class="cc-sb-credits" id="cc-sb-credits"></div>' +
+        '<div class="cc-sb-theme" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;border-radius:6px;background:var(--surface, #f5f5f5);border:1px solid var(--border, #e5e5e5)">' +
+          '<span style="font-size:0.8rem;color:var(--muted, #6b7280);font-weight:500">Theme</span>' +
+          '<select id="cc-sb-theme-select" onchange="ccDarkMode.set(this.value)" style="background:var(--white, #fff);border:1px solid var(--border, #e5e5e5);border-radius:5px;color:var(--primary, #1a1a1a);font-family:inherit;font-size:0.78rem;padding:4px 8px;outline:none;cursor:pointer">' +
+            '<option value="auto"' + (currentTheme === 'auto' ? ' selected' : '') + '>Auto</option>' +
+            '<option value="light"' + (currentTheme === 'light' ? ' selected' : '') + '>Light</option>' +
+            '<option value="dark"' + (currentTheme === 'dark' ? ' selected' : '') + '>Dark</option>' +
+          '</select>' +
+        '</div>' +
         '<button class="cc-sb-logout" id="cc-sb-logout">' +
           '<span class="cc-sb-icon">' + icons.logOut + '</span>' +
           '<span>Sign Out</span>' +
         '</button>' +
-        '<button class="cc-sb-cookie-settings" onclick="window.ccCookieConsent&&ccCookieConsent.show()" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;margin-top:4px;border:none;background:transparent;color:#797879;font-size:12px;cursor:pointer;font-family:inherit">' +
+        '<button class="cc-sb-cookie-settings" onclick="window.ccCookieConsent&&ccCookieConsent.show()" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;margin-top:4px;border:none;background:transparent;color:var(--muted, #797879);font-size:12px;cursor:pointer;font-family:inherit">' +
           '<span>Cookie Settings</span>' +
         '</button></div>';
     } else {
+      var currentTheme2 = (window.ccDarkMode ? ccDarkMode.get() : 'auto');
       return '<div class="cc-sb-footer" id="cc-sb-footer">' +
+        '<div class="cc-sb-theme" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;border-radius:6px;background:var(--surface, #f5f5f5);border:1px solid var(--border, #e5e5e5)">' +
+          '<span style="font-size:0.8rem;color:var(--muted, #6b7280);font-weight:500">Theme</span>' +
+          '<select id="cc-sb-theme-select" onchange="ccDarkMode.set(this.value)" style="background:var(--white, #fff);border:1px solid var(--border, #e5e5e5);border-radius:5px;color:var(--primary, #1a1a1a);font-family:inherit;font-size:0.78rem;padding:4px 8px;outline:none;cursor:pointer">' +
+            '<option value="auto"' + (currentTheme2 === 'auto' ? ' selected' : '') + '>Auto</option>' +
+            '<option value="light"' + (currentTheme2 === 'light' ? ' selected' : '') + '>Light</option>' +
+            '<option value="dark"' + (currentTheme2 === 'dark' ? ' selected' : '') + '>Dark</option>' +
+          '</select>' +
+        '</div>' +
         '<a href="/" class="cc-sb-login">' +
           '<span class="cc-sb-icon">' + icons.logIn + '</span>' +
           '<span>Login</span>' +

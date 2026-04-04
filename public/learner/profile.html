@@ -461,26 +461,6 @@
     </div>
   </div>
 
-  <!-- APPEARANCE -->
-  <div class="section-title">Appearance</div>
-  <div class="profile-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-    <div>
-      <div class="profile-card-title" style="margin-bottom:4px">Theme</div>
-      <p style="font-size:0.78rem;color:var(--muted);line-height:1.4;margin:0">Choose light, dark, or match your device settings.</p>
-    </div>
-    <select id="themeSelect" onchange="ccDarkMode.set(this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--primary);font-family:var(--font-body);font-size:0.85rem;padding:8px 12px;outline:none;min-width:100px">
-      <option value="auto">Auto</option>
-      <option value="light">Light</option>
-      <option value="dark">Dark</option>
-    </select>
-  </div>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      var sel = document.getElementById('themeSelect');
-      if (sel && window.ccDarkMode) sel.value = ccDarkMode.get();
-    });
-  </script>
-
   <!-- PRIVACY & DATA -->
   <div class="section-title">Privacy & Data</div>
   <div class="profile-card" style="display:flex;flex-direction:column;gap:12px">

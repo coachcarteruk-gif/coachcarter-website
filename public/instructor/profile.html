@@ -456,17 +456,6 @@
         <div id="bookingLinksContainer"><span style="color:var(--muted);font-size:0.85rem">Loading…</span></div>
       </div>
 
-      <div class="form-card" style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div>
-          <div class="form-card-title" style="margin-bottom:4px;padding-bottom:0;border-bottom:none">Theme</div>
-          <p class="field-hint" style="margin-top:0">Choose light, dark, or match your device.</p>
-        </div>
-        <select id="themeSelect" onchange="ccDarkMode.set(this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--primary);font-family:var(--font-body);font-size:0.85rem;padding:8px 12px;outline:none;min-width:100px">
-          <option value="auto" ${(window.ccDarkMode?ccDarkMode.get():'auto')==='auto'?'selected':''}>Auto</option>
-          <option value="light" ${(window.ccDarkMode?ccDarkMode.get():'auto')==='light'?'selected':''}>Light</option>
-          <option value="dark" ${(window.ccDarkMode?ccDarkMode.get():'auto')==='dark'?'selected':''}>Dark</option>
-        </select>
-      </div>
     `;
     loadBookingLinks();
   }
