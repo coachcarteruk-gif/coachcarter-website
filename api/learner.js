@@ -37,6 +37,7 @@ module.exports = async (req, res) => {
   if (action === 'pending-confirmations') return handlePendingConfirmations(req, res);
   if (action === 'my-availability')       return handleMyAvailability(req, res);
   if (action === 'set-availability')      return handleSetAvailability(req, res);
+  if (action === 'accept-terms')          return handleAcceptTerms(req, res);
   if (action === 'export-data')           return handleExportData(req, res);
   if (action === 'request-deletion')      return handleRequestDeletion(req, res);
   if (action === 'confirm-deletion')      return handleConfirmDeletion(req, res);
@@ -995,6 +996,24 @@ async function handleSetAvailability(req, res) {
 // ══════════════════════════════════════════════════════════════════════════════
 // GDPR: DATA EXPORT (Article 20 — Right to Portability)
 // ══════════════════════════════════════════════════════════════════════════════
+// ── Accept Terms & Conditions ────────────────────────────────────────────────
+async function handleAcceptTerms(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = user.school_id || 1;
+    await sql`UPDATE learner_users SET terms_accepted_at = NOW() WHERE id = ${user.id} AND school_id = ${schoolId}`;
+    return res.json({ ok: true, terms_accepted: true });
+  } catch (err) {
+    console.error('accept-terms error:', err);
+    reportError('/api/learner', err);
+    return res.status(500).json({ error: 'Failed to accept terms' });
+  }
+}
+
 async function handleExportData(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyAuth(req);
@@ -1005,7 +1024,7 @@ async function handleExportData(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [profile] = await sql`
-      SELECT name, email, phone, pickup_address, test_date, test_time, prefer_contact_before, created_at, last_activity_at
+      SELECT name, email, phone, pickup_address, test_date, test_time, prefer_contact_before, terms_accepted_at, created_at, last_activity_at
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
 
     const onboarding = await sql`
@@ -1092,6 +1111,21 @@ async function handleRequestDeletion(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
     const { generateToken } = require('./_auth-helpers');
     const { createTransporter } = require('./_auth-helpers');
+
+    // Rate limit: max 3 deletion requests per user per hour
+    const rateLimitKey = `deletion:${user.id}`;
+    try {
+      await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
+      const [existing] = await sql`SELECT request_count FROM rate_limits WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      if (existing && existing.request_count >= 3) {
+        return res.status(429).json({ error: 'Too many deletion requests. Please try again later.' });
+      }
+      if (existing) {
+        await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      } else {
+        await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${rateLimitKey}, 1, NOW())`;
+      }
+    } catch (e) { /* rate limit check failed — allow through */ }
 
     const [learner] = await sql`SELECT id, name, email FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
     if (!learner || !learner.email) return res.status(400).json({ error: 'Account not found or no email on file' });
@@ -1182,9 +1216,9 @@ async function handleConfirmDeletion(req, res) {
     try { await sql`DELETE FROM mock_tests WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete mock_tests skipped:', e.message); }
     try { await sql`DELETE FROM qa_answers WHERE question_id IN (SELECT id FROM qa_questions WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete qa_answers skipped:', e.message); }
     try { await sql`DELETE FROM qa_questions WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete qa_questions skipped:', e.message); }
-    try { await sql`DELETE FROM sent_reminders WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete sent_reminders skipped:', e.message); }
+    try { await sql`DELETE FROM sent_reminders WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete sent_reminders skipped:', e.message); }
     try { await sql`DELETE FROM slot_reservations WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete slot_reservations skipped:', e.message); }
-    try { await sql`DELETE FROM lesson_confirmations WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete lesson_confirmations skipped:', e.message); }
+    try { await sql`DELETE FROM lesson_confirmations WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete lesson_confirmations skipped:', e.message); }
     try { await sql`DELETE FROM lesson_bookings WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete lesson_bookings skipped:', e.message); }
     try { await sql`DELETE FROM learner_onboarding WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete learner_onboarding skipped:', e.message); }
     try { await sql`DELETE FROM waitlist WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete waitlist skipped:', e.message); }

@@ -862,7 +862,7 @@ Security hardening and query performance optimization across the entire platform
 
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
-- **T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.
+- ~~**T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.~~ ✅ Done (2.54)
 - **Capacitor native wrapper** — wrap PWA for App Store / Play Store submission
 - ~~**Instructor dashboard** — earnings tracking, lesson stats, learner progress overview~~ ✅ Done (2.48)
 - **Theory test prep** — built-in revision tools integrated with competency system
@@ -931,6 +931,20 @@ Security hardening and query performance optimization across the entire platform
 - ✅ UI — two date pickers (start/end), end auto-follows start, overlap check on add, ranges display as "Mon 3 Apr – Fri 7 Apr 2026" with day count badge
 
 **Files changed:** `db/migration.sql`, `api/instructor.js`, `api/slots.js`, `public/instructor/availability.html`
+
+## 2.54 — Terms & Conditions Acceptance (4 April 2026)
+
+**What:** Learners must accept Terms & Conditions and Privacy Policy before accessing the dashboard. Gate appears after magic link login (both email and SMS flows). Also updated terms.html to use platform language consistent with privacy.html.
+
+**Built:**
+- ✅ DB — `terms_accepted_at TIMESTAMPTZ` column on `learner_users`
+- ✅ API — `POST /api/learner?action=accept-terms` sets timestamp
+- ✅ Magic link verify/verify-code responses now include `terms_accepted` boolean
+- ✅ Frontend gate — new screen in `login.html` with checkbox ("I agree to the Terms & Conditions and Privacy Policy") shown after successful auth when `terms_accepted` is false. New users always see it after name collection.
+- ✅ GDPR — `terms_accepted_at` included in `export-data` response. No deletion cascade change needed (column on `learner_users` which is already deleted).
+- ✅ `terms.html` rewritten with platform language — CoachCarter as platform operator, driving schools as service providers. Added "Platform and services" and "Your data and privacy" sections.
+
+**Files changed:** `db/migration.sql`, `api/magic-link.js`, `api/learner.js`, `public/learner/login.html`, `public/terms.html`, `PROJECT.md`
 
 ## Technical Notes
 

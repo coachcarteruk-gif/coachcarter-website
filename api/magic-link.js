@@ -49,8 +49,11 @@ async function handleSendLink(req, res) {
 
     const sql = neon(process.env.POSTGRES_URL);
 
+    const cleanEmail = email ? email.toLowerCase().trim() : null;
+    const cleanPhone = phone ? phone.replace(/\s+/g, '').trim() : null;
+
     // Rate limiting: max 5 magic link sends per email/phone per hour
-    const rateLimitKey = method === 'sms' ? `magic_sms:${phone}` : `magic_email:${(email || '').toLowerCase().trim()}`;
+    const rateLimitKey = method === 'sms' ? `magic_sms:${cleanPhone}` : `magic_email:${cleanEmail}`;
     try {
       // Clean up old windows and check current count
       await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
@@ -68,9 +71,6 @@ async function handleSendLink(req, res) {
     // Generate a secure random token
     const token = generateToken();
     const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
-
-    const cleanEmail = email ? email.toLowerCase().trim() : null;
-    const cleanPhone = phone ? phone.replace(/\s+/g, '').trim() : null;
 
     // Check if this email belongs to an instructor — redirect them early
     if (cleanEmail) {
@@ -282,7 +282,8 @@ async function handleVerify(req, res) {
         tier: user.current_tier
       },
       is_new_user: isNewUser,
-      needs_name: !user.name
+      needs_name: !user.name,
+      terms_accepted: !!user.terms_accepted_at
     });
   } catch (err) {
     console.error('verify error:', err);
@@ -359,7 +360,8 @@ async function handleVerifyCode(req, res) {
         tier: user.current_tier
       },
       is_new_user: isNewUser,
-      needs_name: !user.name
+      needs_name: !user.name,
+      terms_accepted: !!user.terms_accepted_at
     });
   } catch (err) {
     console.error('verify-code error:', err);

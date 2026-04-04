@@ -17,6 +17,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/shared-auth.css">
+  <style>
+    .terms-check {
+      display: flex; align-items: flex-start; gap: 10px;
+      text-align: left; margin: 24px 0 20px; cursor: pointer;
+      font-size: 0.9rem; color: #444; line-height: 1.5;
+    }
+    .terms-check input[type="checkbox"] {
+      margin-top: 3px; width: 18px; height: 18px; accent-color: #f58321;
+      flex-shrink: 0; cursor: pointer;
+    }
+    .terms-check a { color: #f58321; text-decoration: underline; }
+  </style>
 <script src="/sidebar.js"></script>
 </head>
 <body>
@@ -155,6 +167,22 @@
       <input type="text" id="input-name" placeholder="e.g. Alex Smith" autofocus>
       <button class="btn-primary" onclick="handleSetName()">Continue</button>
     </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 5b — Terms & Conditions acceptance
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-terms" style="text-align:center;">
+    <div class="result-icon orange">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    </div>
+    <div class="result-title">One last step</div>
+    <div class="result-sub">Please review and accept our terms to continue.</div>
+    <label class="terms-check" id="terms-label">
+      <input type="checkbox" id="terms-checkbox">
+      <span>I agree to the <a href="/terms.html" target="_blank">Terms &amp; Conditions</a> and <a href="/privacy.html" target="_blank">Privacy Policy</a></span>
+    </label>
+    <button class="btn-primary" id="accept-terms-btn" onclick="handleAcceptTerms()" disabled>Continue</button>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════
@@ -423,15 +451,9 @@
         return;
       }
 
-      // Existing user — redirect
+      // Existing user — check terms then redirect
       btn.textContent = 'Signed in!';
-      showScreen('success');
-      if (data.is_new_user) {
-        localStorage.setItem('cc_welcome', '1');
-        setTimeout(() => { window.location.href = '/learner/book.html'; }, 800);
-      } else {
-        setTimeout(() => { window.location.href = redirectTo; }, 800);
-      }
+      proceedOrShowTerms(data);
     } catch {
       errorEl.textContent = 'Network error. Please check your connection.';
       btn.disabled = false;
@@ -496,14 +518,8 @@
         return;
       }
 
-      // Existing user — show success and redirect
-      showScreen('success');
-      if (data.is_new_user) {
-        localStorage.setItem('cc_welcome', '1');
-        setTimeout(() => { window.location.href = '/learner/book.html'; }, 800);
-      } else {
-        setTimeout(() => { window.location.href = redirectTo; }, 800);
-      }
+      // Existing user — check terms then redirect
+      proceedOrShowTerms(data);
     } catch {
       showScreen('error');
       document.getElementById('error-title').textContent = 'Connection error';
@@ -533,12 +549,56 @@
       stored.user.name = name;
       localStorage.setItem('cc_learner', JSON.stringify(stored));
 
-      showScreen('success');
-      setTimeout(() => { window.location.href = '/learner/book.html'; }, 800);
+      // New users always need to accept terms
+      showScreen('terms');
     } catch {
-      // Even if name update fails, still redirect
+      // Even if name update fails, still show terms
+      showScreen('terms');
+    }
+  }
+
+  // ── Terms checkbox toggle ───────────────────────────────────────
+  document.getElementById('terms-checkbox')?.addEventListener('change', function() {
+    document.getElementById('accept-terms-btn').disabled = !this.checked;
+  });
+
+  // ── Accept terms & continue ────────────────────────────────────
+  async function handleAcceptTerms() {
+    const btn = document.getElementById('accept-terms-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+      const stored = JSON.parse(localStorage.getItem('cc_learner') || '{}');
+      const res = await fetch('/api/learner?action=accept-terms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + stored.token
+        }
+      });
+      if (!res.ok) throw new Error('Failed');
+
       showScreen('success');
+      setTimeout(() => { window.location.href = redirectTo; }, 800);
+    } catch {
+      btn.disabled = false;
+      btn.textContent = 'Continue';
+    }
+  }
+
+  // ── Helper: proceed after auth or show terms gate ──────────────
+  function proceedOrShowTerms(data) {
+    if (!data.terms_accepted) {
+      showScreen('terms');
+      return;
+    }
+    showScreen('success');
+    if (data.is_new_user) {
+      localStorage.setItem('cc_welcome', '1');
       setTimeout(() => { window.location.href = '/learner/book.html'; }, 800);
+    } else {
+      setTimeout(() => { window.location.href = redirectTo; }, 800);
     }
   }
 

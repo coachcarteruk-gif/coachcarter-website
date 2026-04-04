@@ -321,6 +321,7 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | `qa-reply` | POST | Yes | Reply to a question |
 | `my-availability` | GET | Yes | Returns learner's active weekly availability windows |
 | `set-availability` | POST | Yes | Replace all availability windows. Body: `{ windows: [{ day_of_week, start_time, end_time }] }` |
+| `accept-terms` | POST | Yes | Records T&C acceptance (`terms_accepted_at = NOW()`). Called from login flow gate. |
 
 ### API — `api/waitlist.js`
 
@@ -447,6 +448,7 @@ balance_minutes INTEGER DEFAULT 0  -- hours-based balance (stored as minutes)
 calendar_token TEXT UNIQUE         -- for iCal feed polling
 pickup_address TEXT
 prefer_contact_before BOOLEAN DEFAULT FALSE
+terms_accepted_at TIMESTAMPTZ           -- T&C acceptance timestamp (NULL = not yet accepted)
 created_at TIMESTAMPTZ
 ```
 

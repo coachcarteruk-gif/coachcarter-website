@@ -1194,3 +1194,8 @@ CREATE INDEX IF NOT EXISTS idx_admin_users_school_id ON admin_users(school_id) W
 
 -- Ensure new learners get last_activity_at set automatically
 ALTER TABLE learner_users ALTER COLUMN last_activity_at SET DEFAULT NOW();
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- GDPR: TERMS & CONDITIONS ACCEPTANCE
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
