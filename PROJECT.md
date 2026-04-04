@@ -591,6 +591,7 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 | `set-blackout-dates` | POST | JWT | Replace all future blackout ranges. Body: `{ ranges: [{ start_date, end_date, reason? }] }`. Validates no overlaps, max 365-day span |
 | `payout-history` | GET | JWT | Paginated payout records for the instructor |
 | `next-payout-preview` | GET | JWT | Estimated next Friday payout amount + eligible lesson count |
+| `running-late` | POST | JWT | Notify all remaining learners today that instructor is running late. Body: `{ delay_minutes }` (1-120). Sends WhatsApp + email to each learner with upcoming confirmed lessons. Returns `{ ok, notified }` |
 
 ### API — `api/connect.js` (Stripe Connect)
 

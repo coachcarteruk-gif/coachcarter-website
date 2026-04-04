@@ -1038,6 +1038,16 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 **Files changed:** `public/learner/lessons.html`, `public/instructor/dashboard.html`
 
+## 2.57 — Running Late Notification (4 April 2026)
+
+**What changed:**
+
+1. **Running late button on instructor dashboard** — new "Running Late" button in the dashboard header alongside "+ Book Lesson". Opens a modal with preset delay options (10/15/20/30 min) and a custom input field. Shows how many learners will be notified. Button is disabled when there are no upcoming lessons today, auto-updates as lessons are completed or cancelled.
+
+2. **Running late API action (`POST /api/instructor?action=running-late`)** — accepts `{ delay_minutes }`, queries today's remaining confirmed bookings where start_time is after the current time, sends WhatsApp (Twilio) and email to each learner with a personalised message including the lesson time and delay estimate. Returns `{ ok, notified }` count.
+
+**Files changed:** `api/instructor.js`, `public/instructor/dashboard.html`
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
