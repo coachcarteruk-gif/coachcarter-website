@@ -119,6 +119,7 @@ module.exports = async (req, res) => {
   if (action === 'payout-history')       return handlePayoutHistory(req, res);
   if (action === 'next-payout-preview')  return handleNextPayoutPreview(req, res);
   if (action === 'complete-onboarding')  return handleCompleteOnboarding(req, res);
+  if (action === 'running-late')         return handleRunningLate(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -2605,5 +2606,94 @@ async function handleCompleteOnboarding(req, res) {
     console.error('complete-onboarding error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to complete onboarding', details: err.message });
+  }
+}
+
+// ── Running Late ──────────────────────────────────────────────
+
+async function handleRunningLate(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+
+  const auth = verifyInstructorAuth(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+
+  const sql = neon(process.env.POSTGRES_URL);
+
+  try {
+    const { delay_minutes } = req.body || {};
+    const delay = parseInt(delay_minutes);
+    if (!delay || delay < 1 || delay > 120) {
+      return res.status(400).json({ error: 'delay_minutes must be between 1 and 120' });
+    }
+
+    // Get instructor name
+    const [instructor] = await sql`
+      SELECT name FROM instructors WHERE id = ${auth.id}
+    `;
+    if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
+
+    const firstName = instructor.name.split(' ')[0];
+
+    // Get today's remaining confirmed bookings (start_time > now)
+    const now = new Date();
+    const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    const currentTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+
+    const bookings = await sql`
+      SELECT lb.id, lb.start_time, lu.name AS learner_name, lu.phone AS learner_phone, lu.email AS learner_email
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      WHERE lb.instructor_id = ${auth.id}
+        AND lb.scheduled_date = ${today}
+        AND lb.status = 'confirmed'
+        AND lb.start_time > ${currentTime}
+      ORDER BY lb.start_time ASC
+    `;
+
+    if (bookings.length === 0) {
+      return res.json({ ok: true, notified: 0, message: 'No upcoming lessons to notify' });
+    }
+
+    const mailer = createTransporter();
+    let notified = 0;
+
+    for (const b of bookings) {
+      const learnerFirst = (b.learner_name || 'there').split(' ')[0];
+      const lessonTime = b.start_time.slice(0, 5);
+      const whatsappMsg = `Hi ${learnerFirst}, ${firstName} is running about ${delay} minutes late today. Your lesson at ${lessonTime} may start a little later than planned. Apologies for any inconvenience!`;
+
+      // Send WhatsApp
+      if (b.learner_phone) {
+        await sendWhatsApp(b.learner_phone, whatsappMsg);
+      }
+
+      // Send email
+      if (b.learner_email) {
+        try {
+          await mailer.sendMail({
+            from: 'CoachCarter <system@coachcarter.uk>',
+            to: b.learner_email,
+            subject: `${firstName} is running late today`,
+            html: `
+              <h2>Hi ${learnerFirst},</h2>
+              <p>${firstName} is running approximately <strong>${delay} minutes late</strong> today.</p>
+              <p>Your lesson at <strong>${lessonTime}</strong> may start a little later than planned.</p>
+              <p>Apologies for any inconvenience!</p>
+              <p style="color:#888;font-size:0.85rem;">— CoachCarter</p>
+            `
+          });
+        } catch (emailErr) {
+          console.warn('Running late email failed for', b.learner_email, emailErr.message);
+        }
+      }
+
+      notified++;
+    }
+
+    return res.json({ ok: true, notified });
+  } catch (err) {
+    console.error('running-late error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to send notifications', details: err.message });
   }
 }

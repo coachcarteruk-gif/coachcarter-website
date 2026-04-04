@@ -42,6 +42,16 @@
       cursor: pointer; transition: background 0.15s; white-space: nowrap;
     }
     .btn-book-lesson:hover { background: var(--accent-dk); }
+    .btn-running-late {
+      background: none; color: var(--muted); border: 1px solid var(--border);
+      padding: 10px 14px; border-radius: 10px;
+      font-family: var(--font-head); font-size: 0.85rem; font-weight: 700;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .btn-running-late:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-lt, #fff4ec); }
+    .btn-running-late:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-running-late:disabled:hover { border-color: var(--border); color: var(--muted); background: none; }
+    .dash-header-btns { display: flex; gap: 8px; align-items: center; }
 
     /* ── Stats strip ── */
     .dash-stats {
@@ -283,6 +293,45 @@
     .toast.show { transform: translateX(-50%) translateY(0); }
     .toast.success { background: #16a34a; }
     .toast.error { background: var(--red); }
+
+    /* ── Running Late Modal ── */
+    .late-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 500; padding: 20px;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .late-overlay.open { opacity: 1; pointer-events: all; }
+    .late-modal {
+      background: var(--white); border-radius: var(--radius);
+      padding: 28px; max-width: 360px; width: 100%;
+      transform: translateY(20px); transition: transform 0.2s;
+    }
+    .late-overlay.open .late-modal { transform: translateY(0); }
+    .late-pills {
+      display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0;
+    }
+    .late-pill {
+      padding: 10px 18px; border: 1px solid var(--border); border-radius: 10px;
+      font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      background: none; color: var(--primary); transition: all 0.15s;
+      font-family: var(--font-body);
+    }
+    .late-pill.selected { border-color: var(--accent); background: var(--accent-lt, #fff4ec); color: var(--accent); }
+    .late-pill:hover { border-color: var(--accent); }
+    .late-custom {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
+    }
+    .late-custom input {
+      width: 70px; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 0.9rem; text-align: center;
+      font-family: var(--font-body); background: var(--white); color: var(--primary);
+    }
+    .late-custom input:focus { outline: none; border-color: var(--accent); }
+    .late-custom span { font-size: 0.82rem; color: var(--muted); }
+    .late-count {
+      font-size: 0.82rem; color: var(--muted); margin-bottom: 12px;
+    }
   </style>
   <script src="/sidebar.js"></script>
   <script src="/shared/instructor-auth.js"></script>
@@ -294,7 +343,10 @@
   <!-- Header -->
   <div class="dash-header">
     <div class="dash-greeting" id="greeting">Hi there</div>
-    <button class="btn-book-lesson" onclick="openBookModal()">+ Book Lesson</button>
+    <div class="dash-header-btns">
+      <button class="btn-running-late" id="btnLate" onclick="openLateModal()" disabled title="No upcoming lessons">Running Late</button>
+      <button class="btn-book-lesson" onclick="openBookModal()">+ Book Lesson</button>
+    </div>
   </div>
   <div class="dash-stats" id="dashStats"></div>
 
@@ -373,6 +425,30 @@
       <textarea class="detail-notes-input" id="detailNotes" placeholder="Add notes about this lesson..."></textarea>
     </div>
     <div class="detail-actions" id="detailActions"></div>
+  </div>
+</div>
+
+<!-- ── Running Late Modal ── -->
+<div class="late-overlay" id="lateModal" onclick="if(event.target===this)closeLateModal()">
+  <div class="late-modal">
+    <div class="modal-title">Running Late</div>
+    <div class="modal-sub">Notify all remaining learners today that you're running late.</div>
+    <div class="late-pills">
+      <button class="late-pill selected" onclick="selectDelay(10, this)">10 min</button>
+      <button class="late-pill" onclick="selectDelay(15, this)">15 min</button>
+      <button class="late-pill" onclick="selectDelay(20, this)">20 min</button>
+      <button class="late-pill" onclick="selectDelay(30, this)">30 min</button>
+    </div>
+    <div class="late-custom">
+      <span>Or custom:</span>
+      <input type="number" id="lateCustom" min="1" max="120" placeholder="min" oninput="selectCustomDelay()">
+      <span>minutes</span>
+    </div>
+    <div class="late-count" id="lateCount"></div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeLateModal()">Cancel</button>
+      <button class="btn-modal-save" id="btnLateSend" onclick="sendRunningLate()">Notify Learners</button>
+    </div>
   </div>
 </div>
 
@@ -504,6 +580,7 @@ function renderLessons() {
     '</div>';
   }
   container.innerHTML = html;
+  updateLateButton();
 }
 
 // ── Book Lesson Modal ──
@@ -780,6 +857,94 @@ async function cancelFromDetail() {
     loadDashboard();
   } catch (err) {
     showToast(err.message || 'Failed to cancel lesson', 'error');
+  }
+}
+
+// ── Running Late Modal ──
+var selectedDelay = 10;
+
+function getUpcomingCount() {
+  var now = new Date();
+  return todayBookings.filter(function(b) {
+    if (b.status !== 'confirmed') return false;
+    var parts = b.start_time.split(':');
+    var t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(parts[0]), parseInt(parts[1]));
+    return t > now;
+  }).length;
+}
+
+function updateLateButton() {
+  var count = getUpcomingCount();
+  var btn = document.getElementById('btnLate');
+  if (count > 0) {
+    btn.disabled = false;
+    btn.title = 'Notify ' + count + ' upcoming learner' + (count > 1 ? 's' : '');
+  } else {
+    btn.disabled = true;
+    btn.title = 'No upcoming lessons';
+  }
+}
+
+function openLateModal() {
+  var count = getUpcomingCount();
+  if (count === 0) return;
+  selectedDelay = 10;
+  document.getElementById('lateCustom').value = '';
+  document.getElementById('lateCount').textContent = count + ' learner' + (count > 1 ? 's' : '') + ' will be notified via WhatsApp and email.';
+  document.getElementById('btnLateSend').disabled = false;
+  document.getElementById('btnLateSend').textContent = 'Notify Learners';
+
+  // Reset pill selection
+  var pills = document.querySelectorAll('.late-pill');
+  pills.forEach(function(p) { p.classList.remove('selected'); });
+  pills[0].classList.add('selected');
+
+  document.getElementById('lateModal').classList.add('open');
+}
+
+function closeLateModal() {
+  document.getElementById('lateModal').classList.remove('open');
+}
+
+function selectDelay(mins, el) {
+  selectedDelay = mins;
+  document.getElementById('lateCustom').value = '';
+  document.querySelectorAll('.late-pill').forEach(function(p) { p.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function selectCustomDelay() {
+  var val = parseInt(document.getElementById('lateCustom').value);
+  if (val && val > 0) {
+    selectedDelay = val;
+    document.querySelectorAll('.late-pill').forEach(function(p) { p.classList.remove('selected'); });
+  }
+}
+
+async function sendRunningLate() {
+  var btn = document.getElementById('btnLateSend');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  try {
+    var res = await fetch('/api/instructor?action=running-late', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ delay_minutes: selectedDelay })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send');
+
+    closeLateModal();
+    if (data.notified > 0) {
+      showToast('Notified ' + data.notified + ' learner' + (data.notified > 1 ? 's' : ''), 'success');
+    } else {
+      showToast('No learners to notify', 'error');
+    }
+  } catch (err) {
+    showToast(err.message || 'Failed to send notifications', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Notify Learners';
   }
 }
 
