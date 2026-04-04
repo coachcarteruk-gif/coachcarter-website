@@ -29,8 +29,8 @@
   --red-lt:     #fef2f2;
   --blue:       #3b82f6;
   --blue-lt:    #eff6ff;
-  --font-head:  'Bricolage Grotesque', sans-serif;
-  --font-body:  'Lato', sans-serif;
+  --font-head:  'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
+  --font-body:  'Lato', system-ui, -apple-system, sans-serif;
   --radius:     14px;
 }
 
@@ -40,6 +40,7 @@ body {
   background: var(--bg);
   color: var(--primary);
   min-height: 100vh;
+  overscroll-behavior: none;
 }
 
 /* Utility */
@@ -149,4 +150,44 @@ body {
   .site-nav { padding: 0 16px; }
   .site-nav-name { display: none; }
   .site-nav-link:not(.primary):not(.back) { display: none; }
+}
+
+/* ── Skeleton / Shimmer Loading States ───────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 37%, #f0f0f0 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 8px;
+  color: transparent !important;
+  pointer-events: none;
+  user-select: none;
+}
+.skeleton * { visibility: hidden; }
+@keyframes shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+.skeleton-text { height: 1em; border-radius: 4px; }
+.skeleton-text.w-40 { width: 40%; }
+.skeleton-text.w-60 { width: 60%; }
+.skeleton-text.w-80 { width: 80%; }
+.skeleton-text.w-full { width: 100%; }
+.skeleton-card {
+  height: 80px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+.skeleton-stat {
+  height: 72px;
+  border-radius: 12px;
+}
+.skeleton-pill {
+  height: 36px;
+  width: 140px;
+  border-radius: 100px;
+  display: inline-block;
+}
+.skeleton-hero {
+  height: 140px;
+  border-radius: 16px;
 }

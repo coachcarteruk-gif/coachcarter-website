@@ -15,7 +15,9 @@
   <title>My Progress — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="/shared/learner.css">
   <style>
     /* MAIN LAYOUT */
@@ -762,7 +764,14 @@
 
 <main>
   <!-- GREETING -->
-  <h1 class="greeting" id="welcome-msg">Loading…</h1>
+  <h1 class="greeting" id="welcome-msg"><span class="skeleton skeleton-text w-40" style="display:inline-block;height:1.2em">&nbsp;</span></h1>
+
+  <!-- SKELETON: shown while data loads, hidden by render() -->
+  <div id="dashboard-skeleton">
+    <div class="skeleton skeleton-hero" style="margin-bottom:16px"></div>
+    <div class="skeleton skeleton-card"></div>
+    <div class="skeleton skeleton-card"></div>
+  </div>
 
   <!-- NEXT LESSON HERO CARD -->
   <div class="next-lesson-card" id="next-lesson-card">
@@ -1087,6 +1096,10 @@ async function loadReadiness() {
 
 function render() {
   if (!PROGRESS) return;
+
+  // Remove skeleton
+  var skel = document.getElementById('dashboard-skeleton');
+  if (skel) skel.remove();
 
   document.getElementById('welcome-msg').textContent = `Hi, ${PROGRESS.name}`;
 

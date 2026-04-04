@@ -15,7 +15,9 @@
   <title>Book a Lesson — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="/shared/learner.css">
   <style>
     .site-nav { z-index: 200; }
@@ -560,6 +562,12 @@
   <div class="lesson-type-bar" id="lessonTypeBar" style="display:none">
     <div class="lesson-type-pills" id="lessonTypePills"></div>
   </div>
+  <!-- Skeleton pill bar (shown while types load) -->
+  <div class="lesson-type-bar" id="lessonTypeSkeleton" style="padding:12px 16px;display:flex;gap:8px;overflow:hidden">
+    <div class="skeleton skeleton-pill"></div>
+    <div class="skeleton skeleton-pill"></div>
+    <div class="skeleton skeleton-pill" style="width:120px"></div>
+  </div>
 
   <!-- Pickup postcode prompt (shown when learner has no address) -->
   <div id="postcodePrompt" style="display:none;background:var(--accent-lt);border:1px solid var(--accent);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:0.82rem;color:var(--primary);">
@@ -585,7 +593,13 @@
 
   <!-- Slot feed content -->
   <div id="calContent">
-    <div class="loading"><div class="spinner"></div><p>Loading available slots…</p></div>
+    <div id="slot-skeleton">
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+    </div>
   </div>
 
   <!-- Feed footer -->
@@ -908,6 +922,10 @@ async function loadLessonTypes() {
 }
 
 function renderLessonTypePills() {
+  // Remove pill skeleton
+  var pillSkel = document.getElementById('lessonTypeSkeleton');
+  if (pillSkel) pillSkel.remove();
+
   const bar = document.getElementById('lessonTypeBar');
   const container = document.getElementById('lessonTypePills');
   if (!bar || !container || lessonTypes.length <= 1) {

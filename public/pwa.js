@@ -8,9 +8,93 @@
       navigator.serviceWorker.register('/sw.js').then(function(reg) {
         // Check for updates periodically
         setInterval(function() { reg.update(); }, 60 * 60 * 1000); // every hour
+
+        // Detect when a new SW is waiting
+        reg.addEventListener('updatefound', function() {
+          var newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', function() {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              showUpdateBanner(reg);
+            }
+          });
+        });
       }).catch(function(err) {
         console.warn('SW registration failed:', err);
       });
+
+      // Reload when new SW takes over
+      var refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function() {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    });
+
+    // Request persistent storage so cache isn't evicted under pressure
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist();
+    }
+  }
+
+  // ── Update prompt ──────────────────────────────────────────────────────────
+  function showUpdateBanner(reg) {
+    if (document.getElementById('cc-update-banner')) return;
+
+    var banner = document.createElement('div');
+    banner.id = 'cc-update-banner';
+    banner.innerHTML =
+      '<div class="cc-update-inner">' +
+        '<span>A new version is available.</span>' +
+        '<button class="cc-update-btn" id="cc-update-yes">Update</button>' +
+        '<button class="cc-update-close" id="cc-update-no" aria-label="Dismiss">&times;</button>' +
+      '</div>';
+
+    var style = document.createElement('style');
+    style.textContent = [
+      '#cc-update-banner {',
+      '  position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000;',
+      '  background: #262626; color: #fff;',
+      '  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));',
+      '  transform: translateY(100%); animation: cc-slide-up 0.4s 0.3s forwards;',
+      '  box-shadow: 0 -4px 20px rgba(0,0,0,0.2);',
+      '}',
+      '.cc-update-inner {',
+      '  max-width: 720px; margin: 0 auto; display: flex;',
+      '  align-items: center; gap: 12px; font-size: 0.9rem;',
+      '}',
+      '.cc-update-inner span { flex: 1; }',
+      '.cc-update-btn {',
+      '  background: #f58321; color: #fff; border: none; border-radius: 100px;',
+      '  padding: 8px 18px; font-weight: 700; font-size: 0.85rem; cursor: pointer;',
+      '  white-space: nowrap; flex-shrink: 0;',
+      '}',
+      '.cc-update-close {',
+      '  background: none; border: none; color: rgba(255,255,255,0.4);',
+      '  font-size: 1.4rem; cursor: pointer; padding: 4px 8px; flex-shrink: 0;',
+      '}',
+      '@media (min-width: 960px) {',
+      '  #cc-update-banner { left: 240px; }',
+      '}'
+    ].join('\n');
+
+    document.head.appendChild(style);
+    document.body.appendChild(banner);
+
+    document.getElementById('cc-update-yes').addEventListener('click', function() {
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      banner.remove();
+    });
+
+    document.getElementById('cc-update-no').addEventListener('click', function() {
+      banner.style.transform = 'translateY(100%)';
+      banner.style.transition = 'transform 0.3s ease';
+      banner.style.animation = 'none';
+      setTimeout(function() { banner.remove(); }, 300);
     });
   }
 
@@ -56,7 +140,8 @@
     style.textContent = [
       '#cc-install-banner {',
       '  position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;',
-      '  background: #262626; color: #fff; padding: 12px 16px;',
+      '  background: #262626; color: #fff;',
+      '  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));',
       '  transform: translateY(100%); animation: cc-slide-up 0.4s 0.5s forwards;',
       '  box-shadow: 0 -4px 20px rgba(0,0,0,0.2);',
       '}',

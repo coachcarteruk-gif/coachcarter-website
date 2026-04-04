@@ -946,6 +946,32 @@ Security hardening and query performance optimization across the entire platform
 
 **Files changed:** `db/migration.sql`, `api/magic-link.js`, `api/learner.js`, `public/learner/login.html`, `public/terms.html`, `PROJECT.md`
 
+## 2.55 — PWA Enhancement Audit (4 April 2026)
+
+**What:** Comprehensive PWA audit against modern best practices. Used a pwa-enhance skill to detect issues and generate a prioritised roadmap (`PWA_ROADMAP.md`). Implemented 13 of 15 items.
+
+**Built:**
+- ✅ Non-blocking Google Fonts — `preload` + `media="print"` swap pattern on all 47 HTML files. Mobile FCP expected to drop from 2.9s → ~1.5s
+- ✅ Manifest `id` field — stable app identity decoupled from start_url
+- ✅ Manifest `screenshots` — 2 mobile + 1 desktop screenshot for richer Android install UI
+- ✅ Manifest `shortcuts` — Book a Lesson, My Progress, Practice Log (long-press quick actions)
+- ✅ `overscroll-behavior: none` on body in shared CSS — prevents rubber-banding and pull-to-refresh in standalone mode
+- ✅ Content Security Policy header (report-only) in `middleware.js` — covers Stripe, PostHog, fonts, CDNs, Cloudflare Stream
+- ✅ Service worker update flow — removed auto-`skipWaiting()`, added `SKIP_WAITING` message pattern + user-facing update banner
+- ✅ Cache size limits — max 100 items with `trimCache()`, `navigator.storage.persist()` request
+- ✅ `system-ui` font fallback in `--font-head` and `--font-body` CSS variables
+- ✅ Install banner + update banner safe-area padding (`env(safe-area-inset-bottom)`)
+- ✅ Bottom nav context menu prevention (`-webkit-touch-callout: none` + `contextmenu` event)
+- ✅ Skeleton shimmer loading states on dashboard, booking page, and progress page
+
+**Not implemented (documented in PWA_ROADMAP.md):**
+- Dark mode (`prefers-color-scheme` + manual toggle) — large cross-file effort, planned for next session
+- Background Sync for offline form submissions — low priority for this app's use case
+
+**Lighthouse scores (mobile, pre-change):** Performance 90 | Accessibility 96 | Best Practices 96 | SEO 100
+
+**Files changed:** `public/manifest.json`, `public/sw.js`, `public/pwa.js`, `public/sidebar.js`, `middleware.js`, `public/shared/learner.css`, `public/shared/instructor.css`, `public/learner/index.html`, `public/learner/book.html`, `public/learner/progress.html`, all 47 HTML files (font loading), `public/icons/screenshot-*.png` (new), `PWA_ROADMAP.md` (new)
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

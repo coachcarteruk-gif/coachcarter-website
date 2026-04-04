@@ -392,6 +392,8 @@
     '    padding: 5px;',
     '    box-shadow: 0 8px 32px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.07);',
     '    border: 1px solid rgba(0,0,0,0.06);',
+    '    -webkit-touch-callout: none;',
+    '    user-select: none;',
     '  }',
     '  .cc-bottom-tab {',
     '    flex: 1;',
@@ -521,6 +523,11 @@
     if (bottomBarHTML) {
       document.body.insertAdjacentHTML('beforeend', bottomBarHTML);
       document.body.classList.add('cc-has-bottom-bar');
+      // Prevent "Open in New Tab" context menu on bottom nav (native-app feel)
+      var bottomBar = document.querySelector('.cc-bottom-bar');
+      if (bottomBar) {
+        bottomBar.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+      }
     }
 
     // ── Mobile toggle behavior ─────────────────────────────────

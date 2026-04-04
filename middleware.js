@@ -73,6 +73,22 @@ function addSecurityHeaders(response) {
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   response.headers.set('X-XSS-Protection', '0');
+
+  // CSP — report-only mode to catch violations without breaking anything.
+  // Once verified clean, change to Content-Security-Policy to enforce.
+  response.headers.set('Content-Security-Policy-Report-Only', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://esm.sh https://js.stripe.com https://eu.i.posthog.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://unpkg.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https: blob:",
+    "media-src 'self' https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com blob:",
+    "connect-src 'self' https://api.stripe.com https://eu.i.posthog.com https://*.posthog.com https://api.postcodes.io https://api.openrouteservice.org https://esm.sh",
+    "frame-src https://js.stripe.com https://hooks.stripe.com https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+  ].join('; '));
+
   return response;
 }
 

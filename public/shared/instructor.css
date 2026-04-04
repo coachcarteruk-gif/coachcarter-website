@@ -27,8 +27,8 @@
   --red-lt:     #fef2f2;
   --blue:       #3b82f6;
   --blue-lt:    #eff6ff;
-  --font-head:  'Bricolage Grotesque', sans-serif;
-  --font-body:  'Lato', sans-serif;
+  --font-head:  'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
+  --font-body:  'Lato', system-ui, -apple-system, sans-serif;
   --radius:     14px;
 }
 
@@ -38,6 +38,7 @@ body {
   background: var(--bg);
   color: var(--primary);
   min-height: 100vh;
+  overscroll-behavior: none;
 }
 
 /* Utility */

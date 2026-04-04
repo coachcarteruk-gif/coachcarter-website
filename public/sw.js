@@ -1,7 +1,8 @@
 // ── CoachCarter Service Worker ────────────────────────────────────────────────
 // Strategy: Cache app shell for instant loads, network-first for API/dynamic content
 
-const CACHE_NAME = 'cc-v2';
+const CACHE_NAME = 'cc-v3';
+const MAX_CACHE_ITEMS = 100;
 const SHELL_ASSETS = [
   '/',
   '/learner/',
@@ -18,17 +19,26 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(SHELL_ASSETS))
-      .then(() => self.skipWaiting())
+    // New SW waits until user triggers update via SKIP_WAITING message
   );
 });
 
-// ── Activate: clean old caches ───────────────────────────────────────────────
+// ── Activate: clean old caches + trim size ──────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    )
+    .then(() => trimCache(CACHE_NAME, MAX_CACHE_ITEMS))
+    .then(() => self.clients.claim())
   );
+});
+
+// ── Message: controlled skipWaiting on user request ─────────────────────────
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // ── Fetch: network-first for API, stale-while-revalidate for pages ───────────
@@ -78,3 +88,13 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// ── Cache size management ────────────────────────────────────────────────────
+async function trimCache(cacheName, maxItems) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  if (keys.length > maxItems) {
+    await cache.delete(keys[0]);
+    return trimCache(cacheName, maxItems);
+  }
+}
