@@ -1028,6 +1028,16 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 **Files changed:** `public/manifest.json`, `public/sw.js`, `public/pwa.js`, `public/sidebar.js`, `middleware.js`, `public/shared/learner.css`, `public/shared/instructor.css`, `public/learner/index.html`, `public/learner/book.html`, `public/learner/progress.html`, all 47 HTML files (font loading), `public/icons/screenshot-*.png` (new), `PWA_ROADMAP.md` (new)
 
+## 2.56 — Learner Upcoming Lessons Page & Instructor Lesson Detail Modal (4 April 2026)
+
+**What changed:**
+
+1. **Learner upcoming lessons page (`/learner/lessons.html`)** — replaced the redirect-only page with a full lessons view. Shows upcoming and past lessons in tabbed view, grouped by date. Each card displays time, instructor, lesson type with colour accent, duration, and pickup address. Actions: Add to Calendar (ICS download), Reschedule (48hr+ away, max 2 per chain), Cancel (with full 48hr policy modal). Series bookings grouped with "Cancel series" option. Empty state links to booking page.
+
+2. **Instructor dashboard lesson detail modal** — tapping a lesson on the instructor dashboard now opens a detail modal instead of navigating to the calendar. Shows learner name, phone (tel: link), email, pickup/drop-off addresses, lesson type, duration, status, booking notes, and "prefer contact before" flag. Instructor can add notes and mark lessons as complete (past lessons only) or cancel (future lessons). Dashboard auto-refreshes after actions.
+
+**Files changed:** `public/learner/lessons.html`, `public/instructor/dashboard.html`
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

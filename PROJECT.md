@@ -137,11 +137,11 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   │   ├── profile.html            # Learner profile page (includes Privacy & Data links)
 │   │   ├── my-data.html            # GDPR "My Data" page — readable view of all personal data
 │   │   ├── confirm-deletion.html   # GDPR account deletion confirmation (token-based)
-│   │   ├── lessons.html            # Upcoming lessons view
+│   │   ├── lessons.html            # My Lessons — tabbed upcoming/past view with cancel, reschedule, calendar actions
 │   │   └── qa.html                 # Q&A forum
 │   ├── instructor/
 │   │   ├── login.html              # Magic-link login for instructors
-│   │   ├── dashboard.html          # Compact no-scroll dashboard — today's lessons + Book Lesson
+│   │   ├── dashboard.html          # Compact dashboard — today's lessons + Book Lesson + lesson detail modal
 │   │   ├── index.html              # Full calendar (monthly/weekly/daily/agenda views)
 │   │   ├── availability.html       # Instructor sets their own weekly availability
 │   │   ├── earnings.html           # Weekly earnings and payout history

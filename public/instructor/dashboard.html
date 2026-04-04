@@ -196,6 +196,81 @@
     .payment-radios input:checked + span { color: var(--accent); font-weight: 600; }
     .payment-radios label:has(input:checked) { border-color: var(--accent); background: var(--accent-lt); }
 
+    /* ── Lesson Detail Modal ── */
+    .detail-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 500; padding: 20px;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .detail-overlay.open { opacity: 1; pointer-events: all; }
+    .detail-modal {
+      background: var(--white); border-radius: var(--radius);
+      padding: 24px; max-width: 440px; width: 100%;
+      transform: translateY(20px); transition: transform 0.2s;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .detail-overlay.open .detail-modal { transform: translateY(0); }
+    .detail-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .detail-title {
+      font-family: var(--font-head); font-size: 1.15rem; font-weight: 800;
+      color: var(--primary);
+    }
+    .detail-close {
+      background: none; border: none; font-size: 1.3rem; cursor: pointer;
+      color: var(--muted); padding: 4px; line-height: 1;
+    }
+    .detail-close:hover { color: var(--primary); }
+    .detail-section {
+      background: var(--surface); border-radius: 10px; padding: 14px;
+      margin-bottom: 12px;
+    }
+    .detail-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 5px 0; font-size: 0.85rem;
+    }
+    .detail-row:not(:last-child) { border-bottom: 1px solid var(--border); }
+    .detail-label { color: var(--muted); flex-shrink: 0; }
+    .detail-value { font-weight: 600; color: var(--primary); text-align: right; word-break: break-word; }
+    .detail-value a { color: var(--accent); text-decoration: none; }
+    .detail-value a:hover { text-decoration: underline; }
+    .detail-flag {
+      font-size: 0.78rem; padding: 6px 12px; border-radius: 8px;
+      background: var(--accent-lt, #fff4ec); color: var(--accent);
+      margin-bottom: 12px; font-weight: 600;
+    }
+    .detail-notes-label {
+      font-size: 0.72rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
+    }
+    .detail-notes-input {
+      width: 100%; padding: 10px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 0.85rem; font-family: var(--font-body);
+      box-sizing: border-box; resize: vertical; min-height: 60px;
+      background: var(--white); color: var(--primary);
+    }
+    .detail-notes-input:focus { outline: none; border-color: var(--accent); }
+    .detail-actions {
+      display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;
+    }
+    .btn-detail {
+      flex: 1; padding: 12px; border-radius: 10px;
+      font-family: var(--font-head); font-size: 0.85rem; font-weight: 700;
+      cursor: pointer; transition: all 0.15s; border: none;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      min-width: 120px;
+    }
+    .btn-detail.complete { background: #16a34a; color: white; }
+    .btn-detail.complete:hover { background: #15803d; }
+    .btn-detail.complete:disabled { background: var(--border); cursor: not-allowed; }
+    .btn-detail.call { background: var(--accent); color: white; text-decoration: none; }
+    .btn-detail.call:hover { background: var(--accent-dk); }
+    .btn-detail.cancel-btn { background: none; border: 1px solid var(--border); color: var(--muted); }
+    .btn-detail.cancel-btn:hover { border-color: var(--red); color: var(--red); background: var(--red-lt, #fef2f2); }
+
     /* ── Toast ── */
     .toast {
       position: fixed; bottom: 72px; left: 50%;
@@ -281,6 +356,23 @@
       <button class="btn-modal-cancel" onclick="closeBookModal()">Cancel</button>
       <button class="btn-modal-save" id="bookBtn" onclick="confirmBook()">Book lesson</button>
     </div>
+  </div>
+</div>
+
+<!-- ── Lesson Detail Modal ── -->
+<div class="detail-overlay" id="detailModal" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-modal">
+    <div class="detail-header">
+      <div class="detail-title" id="detailTitle">Lesson Details</div>
+      <button class="detail-close" onclick="closeDetail()">&#x2715;</button>
+    </div>
+    <div id="detailFlag" class="detail-flag" style="display:none"></div>
+    <div class="detail-section" id="detailInfo"></div>
+    <div style="margin-bottom:12px;">
+      <div class="detail-notes-label">Instructor notes</div>
+      <textarea class="detail-notes-input" id="detailNotes" placeholder="Add notes about this lesson..."></textarea>
+    </div>
+    <div class="detail-actions" id="detailActions"></div>
   </div>
 </div>
 
@@ -402,7 +494,7 @@ function renderLessons() {
     else if (isCompleted) { badgeCls = 'badge-completed'; badgeText = 'Done'; }
     else if (b.status === 'awaiting_confirmation') { badgeCls = 'badge-awaiting'; badgeText = 'Pending'; }
 
-    html += '<div class="' + cls + '" onclick="window.location.href=\'/instructor/\'">' +
+    html += '<div class="' + cls + '" onclick="openDetail(' + i + ')">' +
       '<div class="dash-lesson-time">' + time + '</div>' +
       '<div class="dash-lesson-info">' +
         '<div class="dash-lesson-name">' + name + '</div>' +
@@ -557,6 +649,138 @@ function showToast(msg, type) {
   void t.offsetWidth;
   t.classList.add('show');
   setTimeout(function() { t.classList.remove('show'); }, 4000);
+}
+
+// ── Lesson Detail Modal ──
+var detailBooking = null;
+
+function openDetail(idx) {
+  var b = todayBookings[idx];
+  if (!b) return;
+  detailBooking = b;
+
+  var time = b.start_time.slice(0, 5) + ' — ' + (b.end_time || '').slice(0, 5);
+  var name = b.learner_name || 'Unknown';
+  document.getElementById('detailTitle').textContent = name;
+
+  // Prefer contact before flag
+  var flagEl = document.getElementById('detailFlag');
+  if (b.prefer_contact_before) {
+    flagEl.textContent = 'Learner prefers to be contacted before the lesson';
+    flagEl.style.display = 'block';
+  } else {
+    flagEl.style.display = 'none';
+  }
+
+  // Build info rows
+  var rows = '';
+  rows += detailRow('Time', time);
+  rows += detailRow('Status', capitalize(b.status));
+  if (b.lesson_type_name) rows += detailRow('Lesson type', b.lesson_type_name);
+  if (b.duration_minutes) {
+    var hrs = b.duration_minutes / 60;
+    rows += detailRow('Duration', (hrs % 1 === 0 ? hrs + ' hour' + (hrs > 1 ? 's' : '') : hrs.toFixed(1) + ' hours'));
+  }
+  var phone = b.learner_phone || '';
+  if (phone) {
+    var telHref = phone.startsWith('+') ? phone : (phone.startsWith('0') ? '+44' + phone.slice(1) : phone);
+    rows += detailRow('Phone', '<a href="tel:' + esc(telHref) + '">' + esc(phone) + '</a>');
+  }
+  if (b.learner_email) rows += detailRow('Email', esc(b.learner_email));
+  var pickup = b.learner_pickup_address || b.booking_pickup_address || '';
+  if (pickup) rows += detailRow('Pickup', esc(pickup));
+  if (b.booking_dropoff_address) rows += detailRow('Drop-off', esc(b.booking_dropoff_address));
+  if (b.notes) rows += detailRow('Booking notes', esc(b.notes));
+
+  document.getElementById('detailInfo').innerHTML = rows;
+
+  // Pre-fill instructor notes
+  document.getElementById('detailNotes').value = b.instructor_notes || '';
+
+  // Actions
+  var actions = '';
+  if (phone) {
+    var callHref = phone.startsWith('+') ? phone : (phone.startsWith('0') ? '+44' + phone.slice(1) : phone);
+    actions += '<a href="tel:' + esc(callHref) + '" class="btn-detail call">Call Learner</a>';
+  }
+
+  // Only show complete for past lessons (end time has passed)
+  var now = new Date();
+  var today = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+  var endParts = (b.end_time || b.start_time || '23:59').split(':');
+  var lessonEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(endParts[0]), parseInt(endParts[1]));
+  var isPast = lessonEnd <= now;
+
+  if (b.status === 'confirmed' && isPast) {
+    actions += '<button class="btn-detail complete" id="btnComplete" onclick="completeLesson()">Mark Complete</button>';
+  } else if (b.status === 'confirmed' && !isPast) {
+    actions += '<button class="btn-detail cancel-btn" onclick="cancelFromDetail()">Cancel Lesson</button>';
+  }
+
+  document.getElementById('detailActions').innerHTML = actions;
+  document.getElementById('detailModal').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detailModal').classList.remove('open');
+  detailBooking = null;
+}
+
+function detailRow(label, value) {
+  return '<div class="detail-row"><span class="detail-label">' + label + '</span><span class="detail-value">' + value + '</span></div>';
+}
+
+function capitalize(s) {
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
+}
+
+async function completeLesson() {
+  if (!detailBooking) return;
+  var btn = document.getElementById('btnComplete');
+  if (btn) { btn.disabled = true; btn.textContent = 'Completing...'; }
+
+  try {
+    var body = { booking_id: detailBooking.id };
+    var notes = document.getElementById('detailNotes').value.trim();
+    if (notes) body.instructor_notes = notes;
+
+    var res = await fetch('/api/instructor?action=complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to complete');
+
+    closeDetail();
+    showToast('Lesson marked as complete', 'success');
+    loadDashboard();
+  } catch (err) {
+    showToast(err.message || 'Failed to complete lesson', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Mark Complete'; }
+  }
+}
+
+async function cancelFromDetail() {
+  if (!detailBooking) return;
+  if (!confirm('Cancel this lesson with ' + (detailBooking.learner_name || 'the learner') + '?')) return;
+
+  try {
+    var res = await fetch('/api/instructor?action=cancel-booking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ booking_id: detailBooking.id })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to cancel');
+
+    closeDetail();
+    showToast('Lesson cancelled', 'success');
+    loadDashboard();
+  } catch (err) {
+    showToast(err.message || 'Failed to cancel lesson', 'error');
+  }
 }
 
 // Close dropdown when clicking outside
