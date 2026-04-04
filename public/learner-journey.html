@@ -16,6 +16,7 @@
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <script src="/shared/dark-mode.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -26,7 +27,7 @@
   --accent-lt:  #fff4ec;
   --accent-mid: rgba(245,131,33,0.12);
   --muted:      #797879;
-  --border:     #e0e0e0;
+  --border:     var(--border);
   --bg:         #ffffff;
   --surface:    #f9f9f9;
   --font-head:  'Bricolage Grotesque', sans-serif;
@@ -160,7 +161,7 @@ body {
 .hero-badges { display: flex; gap: 12px; flex-wrap: wrap; }
 .hero-badge {
   display: inline-flex; align-items: center; gap: 7px;
-  background: #fff; border: 1px solid var(--border); border-radius: 100px;
+  background: var(--white); border: 1px solid var(--border); border-radius: 100px;
   padding: 8px 16px; font-size: 0.8rem; font-weight: 700; color: var(--primary);
 }
 .hero-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
@@ -222,7 +223,7 @@ body {
 .tiers-section { padding: 100px 0; border-top: 1px solid var(--border); }
 
 .tier-card {
-  background: #fff; border: 1px solid var(--border); border-radius: 20px;
+  background: var(--white); border: 1px solid var(--border); border-radius: 20px;
   overflow: hidden; margin-bottom: 32px;
   opacity: 0; transform: translateY(24px);
   transition: opacity 0.6s ease, transform 0.6s ease;
@@ -290,7 +291,7 @@ body {
 .skill-list li, .pass-item {
   display: flex; align-items: flex-start; gap: 12px;
   font-size: 0.9rem; line-height: 1.5; color: var(--primary);
-  background: #fff; border: 1px solid var(--border);
+  background: var(--white); border: 1px solid var(--border);
   border-radius: 10px; padding: 10px 14px;
 }
 .skill-icon, .check-icon {
@@ -304,7 +305,7 @@ body {
 .t3 .skill-icon, .t3 .check-icon { background: var(--t3-mid); }
 
 .tier-weeks {
-  padding: 20px 48px; border-top: 1px solid var(--border); background: #fff;
+  padding: 20px 48px; border-top: 1px solid var(--border); background: var(--white);
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
 }
 .weeks-label {
@@ -529,7 +530,7 @@ body {
 }
 .btn-lg.primary { background: var(--accent); color: #fff; }
 .btn-lg.primary:hover { background: var(--accent-dk); transform: translateY(-2px); }
-.btn-lg.secondary { background: #fff; color: var(--primary); border: 1px solid var(--border); }
+.btn-lg.secondary { background: var(--white); color: var(--primary); border: 1px solid var(--border); }
 .btn-lg.secondary:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
 
 /* ── FOOTER ── */
@@ -543,16 +544,16 @@ footer a { color: var(--muted); text-decoration: underline; }
 .mobile-tab-bar {
   display: none;
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-  background: #fff; border-top: 1px solid #e0e0e0;
+  background: var(--white); border-top: 1px solid #e0e0e0;
   padding: 6px 0; padding-bottom: max(6px, env(safe-area-inset-bottom));
   box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
 }
 .mobile-tab-bar a {
   flex: 1; display: flex; flex-direction: column; align-items: center;
-  text-decoration: none; color: #797879; font-size: 0.62rem;
+  text-decoration: none; color: var(--muted); font-size: 0.62rem;
   font-weight: 600; gap: 2px; padding: 4px 0; transition: color 0.15s;
 }
-.mobile-tab-bar a:hover { color: #262626; }
+.mobile-tab-bar a:hover { color: var(--primary); }
 .mobile-tab-bar a.active { color: var(--accent); }
 .mobile-tab-bar a.cta { color: var(--accent); }
 .mobile-tab-icon { font-size: 1.2rem; line-height: 1; }

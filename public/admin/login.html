@@ -17,6 +17,7 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <script src="/shared/dark-mode.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -24,7 +25,7 @@
       --accent: #f58321;
       --accent-dk: #e07518;
       --muted: #797879;
-      --border: #e0e0e0;
+      --border: var(--border);
       --bg: #262626;
       --surface: #2e2e2e;
       --card: #ffffff;
@@ -69,7 +70,7 @@
       letter-spacing: 0.05em; margin-bottom: 6px;
     }
     input[type="email"], input[type="password"] {
-      width: 100%; background: #f9f9f9; border: 1px solid var(--border);
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
       border-radius: 8px; color: var(--primary); font-family: var(--font-body);
       font-size: 0.95rem; padding: 11px 14px; outline: none;
       transition: border-color 0.2s, background-color 0.2s;

@@ -842,6 +842,31 @@ Security hardening and query performance optimization across the entire platform
 
 ---
 
+### 3.9 — Dark Mode (4 April 2026)
+
+System-wide dark mode support across all learner, instructor, admin, and public pages.
+
+**How it works:**
+- CSS custom properties in `learner.css`, `instructor.css`, and `shared-auth.css` are overridden via `@media (prefers-color-scheme: dark)` and a `.dark-mode` class on `:root`
+- Dark palette uses dark greys (#1a1a1a body, #242424 surface, #2e2e2e cards) rather than pure black — matches existing #262626 brand colour
+- Orange accent (#f58321) stays the same in both modes
+- Manual toggle on learner and instructor profile pages — stored in `localStorage` key `cc_dark_mode` (values: `auto`, `light`, `dark`)
+- `public/shared/dark-mode.js` loaded on every page before DOM renders to prevent flash of wrong theme
+- Skeleton shimmer uses CSS variables instead of hardcoded greys
+- Sidebar, bottom nav, and mobile header all use CSS variables for dark mode compatibility
+
+**What was built:**
+- Dark mode CSS variable overrides in `learner.css`, `instructor.css`, `shared-auth.css`
+- `public/shared/dark-mode.js` — theme toggle logic, localStorage persistence, system preference detection, theme-color meta tag updates
+- Theme selector dropdown on learner profile and instructor profile pages
+- Converted hardcoded colours (#fff, #f9f9f9, #262626, #e0e0e0, #797879) to CSS variables across 27 HTML inline style blocks
+- Converted sidebar.js hardcoded colours to CSS variable fallback pattern
+
+**Files created:** `public/shared/dark-mode.js`
+**Files modified:** `public/shared/learner.css`, `public/shared/instructor.css`, `public/shared-auth.css`, `public/sidebar.js`, `public/learner/profile.html`, `public/instructor/profile.html`, 48 HTML files (dark-mode.js script tag + inline colour variable conversion)
+
+---
+
 ## Competitive Differentiators
 
 > All 17 competitor-inspired features (from Total Drive and Setmore analysis) are complete.

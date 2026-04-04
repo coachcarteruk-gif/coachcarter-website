@@ -26,6 +26,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="/shared/learner.css">
+  <script src="/shared/dark-mode.js"></script>
   <style>
     main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; }
 
@@ -238,11 +239,11 @@
 
     .fault-counter[data-type="serious"] { border-color: #ef4444; }
     .fault-counter[data-type="serious"] .fc-type { color: #ef4444; }
-    .fault-counter[data-type="serious"].has-val { background: #fef2f2; }
+    .fault-counter[data-type="serious"].has-val { background: var(--red-lt); }
 
     .fault-counter[data-type="dangerous"] { border-color: #991b1b; }
     .fault-counter[data-type="dangerous"] .fc-type { color: #991b1b; }
-    .fault-counter[data-type="dangerous"].has-val { background: #fef2f2; }
+    .fault-counter[data-type="dangerous"].has-val { background: var(--red-lt); }
 
     /* Running total */
     .fault-total-bar {
@@ -264,8 +265,8 @@
       font-weight: 700; font-family: var(--font-head);
     }
     .ft-pill.driving { background: #fffbeb; color: #b45309; }
-    .ft-pill.serious { background: #fef2f2; color: #dc2626; }
-    .ft-pill.dangerous { background: #fef2f2; color: #991b1b; }
+    .ft-pill.serious { background: var(--red-lt); color: #dc2626; }
+    .ft-pill.dangerous { background: var(--red-lt); color: #991b1b; }
 
     /* ── SCREEN 4: RESULTS ── */
     .results-screen { text-align: center; padding: 30px 0 20px; }
@@ -321,8 +322,8 @@
       font-size: 0.72rem; font-weight: 700; padding: 2px 8px;
       border-radius: 100px;
     }
-    .fault-badge.serious-badge { background: #fef2f2; color: #dc2626; }
-    .fault-badge.dangerous-badge { background: #fef2f2; color: #991b1b; }
+    .fault-badge.serious-badge { background: var(--red-lt); color: #dc2626; }
+    .fault-badge.dangerous-badge { background: var(--red-lt); color: #991b1b; }
     .fault-badge.driving-badge { background: #fffbeb; color: #b45309; }
 
     .result-section.clean-section { }

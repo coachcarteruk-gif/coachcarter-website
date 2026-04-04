@@ -18,14 +18,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="/shared-auth.css">
+  <script src="/shared/dark-mode.js"></script>
   <style>
-    .deletion-card { background: #fff; border-radius: 16px; padding: 32px 24px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+    .deletion-card { background: var(--white); border-radius: 16px; padding: 32px 24px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
     .deletion-card h2 { font-family: 'Bricolage Grotesque', sans-serif; margin-bottom: 12px; }
-    .deletion-card p { color: #797879; font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
+    .deletion-card p { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
     .deletion-card .status { padding: 16px; border-radius: 10px; font-weight: 600; }
     .status-processing { background: #fff4ec; color: #e07518; }
-    .status-success { background: #f0fdf4; color: #22c55e; }
-    .status-error { background: #fef2f2; color: #ef4444; }
+    .status-success { background: var(--green-lt); color: #22c55e; }
+    .status-error { background: var(--red-lt); color: #ef4444; }
     .home-link { display: inline-block; margin-top: 20px; color: #f58321; text-decoration: none; font-weight: 600; }
   </style>
 </head>

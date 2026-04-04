@@ -19,6 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="/shared/learner.css">
+  <script src="/shared/dark-mode.js"></script>
   <style>
     .site-nav { z-index: 200; }
     .credit-badge { font-size: 0.82rem; font-weight: 700; color: var(--accent); background: rgba(245,131,33,0.15); padding: 5px 12px; border-radius: 100px; text-decoration: none; border: 1px solid rgba(245,131,33,0.3); }
@@ -203,7 +204,7 @@
       padding: 5px 14px; cursor: pointer; color: var(--accent); font-size: 0.78rem;
       white-space: nowrap;
     }
-    .reschedule-banner button:hover { background: white; }
+    .reschedule-banner button:hover { background: var(--white); }
     .upcoming-cal-btn {
       background: none; border: 1px solid var(--border);
       border-radius: 7px; padding: 5px 10px; cursor: pointer;
@@ -225,14 +226,14 @@
     .repeat-date-item .repeat-num { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: white; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .repeat-date-item.conflict .repeat-num { background: var(--red); }
     .repeat-date-item.conflict { color: var(--red); }
-    .repeat-total { margin-top: 10px; font-size: 0.82rem; font-weight: 600; color: var(--muted); padding: 8px 10px; background: white; border-radius: 8px; border: 1px solid var(--border); }
+    .repeat-total { margin-top: 10px; font-size: 0.82rem; font-weight: 600; color: var(--muted); padding: 8px 10px; background: var(--white); border-radius: 8px; border: 1px solid var(--border); }
     .repeat-conflict-warning { margin-top: 8px; padding: 8px 10px; background: var(--red-lt); border: 1px solid var(--red); border-radius: 8px; font-size: 0.8rem; color: var(--red); }
 
     /* ── Series grouping in upcoming ─────────────────────────────────────── */
     .series-group { border: 1px solid var(--accent); border-radius: 10px; margin: 8px 0; overflow: hidden; }
     .series-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--accent-lt); font-size: 0.8rem; font-weight: 700; color: var(--accent); }
     .series-header button { background: none; border: 1px solid var(--accent); border-radius: 7px; padding: 4px 10px; font-size: 0.72rem; cursor: pointer; color: var(--accent); }
-    .series-header button:hover { background: white; }
+    .series-header button:hover { background: var(--white); }
     .series-group .upcoming-item:last-child { border-bottom: none; }
 
     /* ── Calendar Toolbar ─────────────────────────────────────────────────── */

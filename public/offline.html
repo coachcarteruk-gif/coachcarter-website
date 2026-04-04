@@ -11,10 +11,11 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Lato:wght@400;700&display=swap">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Lato:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Lato:wght@400;700&display=swap" rel="stylesheet"></noscript>
+  <script src="/shared/dark-mode.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Lato', sans-serif; background: #fff; color: #262626;
+      font-family: 'Lato', sans-serif; background: var(--white); color: var(--primary);
       min-height: 100vh; display: flex; align-items: center; justify-content: center;
       padding: 24px;
     }
@@ -33,7 +34,7 @@
     }
     .offline h1 em { font-style: normal; color: #f58321; }
     .offline p {
-      color: #797879; font-size: 0.95rem; line-height: 1.6; margin-bottom: 24px;
+      color: var(--muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 24px;
     }
     .offline button {
       background: #f58321; color: #fff; border: none; border-radius: 100px;
