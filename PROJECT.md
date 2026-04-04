@@ -82,6 +82,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── qa-digest.js                # Q&A weekly digest emails
 │   ├── cron-retention.js           # GDPR data retention cron (weekly, archives/purges inactive data)
 │   ├── _audit.js                   # GDPR audit logging utility (logAudit)
+│   ├── seed-test-data.js           # Test data seed/reset (3 test learner accounts, protected by MIGRATION_SECRET)
 │   ├── reviews.js                  # Google Reviews API
 │   ├── status.js                   # Health check endpoint
 │   └── config.js                   # Shared config helpers + GDPR consent recording
@@ -133,7 +134,9 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   │   ├── mock-test.html          # Mock driving test (3 × 10-min parts with DL25 fault recording)
 │   │   ├── onboarding.html         # "Build Your Driving Profile" — 3-step onboarding flow
 │   │   ├── progress.html           # My Progress — radar chart, skill breakdown, readiness scores
-│   │   ├── profile.html            # Learner profile page
+│   │   ├── profile.html            # Learner profile page (includes Privacy & Data links)
+│   │   ├── my-data.html            # GDPR "My Data" page — readable view of all personal data
+│   │   ├── confirm-deletion.html   # GDPR account deletion confirmation (token-based)
 │   │   ├── lessons.html            # Upcoming lessons view
 │   │   └── qa.html                 # Q&A forum
 │   ├── instructor/
@@ -838,7 +841,7 @@ When a learner is deleted, data is handled as follows:
 
 ### Frontend GDPR features (learner profile page)
 
-- **Export My Data** — downloads JSON file with all personal data
+- **View my data** — opens `/learner/my-data.html` showing all personal data in a readable format
 - **Cookie Preferences** — opens consent banner to change analytics setting
 - **Delete My Account** — two-step confirmation dialog → verification email → token-based deletion
 

@@ -828,7 +828,16 @@ Security hardening and query performance optimization across the entire platform
 - Partial indexes on magic_link_tokens (email/phone WHERE NOT NULL)
 - Medium priority: lesson_confirmations, sent_reminders, lesson_offers, instructor_availability, admin_users
 
-**Files modified:** `middleware.js`, `api/admin.js`, `api/learner.js`, `api/cron-retention.js`, `api/magic-link.js`, `db/migration.sql`, 31 API files (CORS removal), `CLAUDE.md`
+**Also in this session:**
+- Replaced JSON data export download with readable "My Data" page (`/learner/my-data.html`) matching privacy/terms page style
+- Profile page: Export button replaced with subtle text links (View my data · Cookie preferences · Privacy policy)
+- Test data seed endpoint (`/api/seed-test-data`) creating 3 test accounts with realistic data for GDPR flow testing
+- Updated privacy policy to platform model (CoachCarter as sole Data Controller for all schools)
+- Cookie consent banner added to all 47 HTML pages (11 were missing initially)
+- Fixed multiple column name mismatches in export queries (qa_questions, skill_ratings, quiz_results, mock_tests, learner_onboarding)
+
+**Files created:** `api/seed-test-data.js`, `public/learner/my-data.html`
+**Files modified:** `middleware.js`, `api/admin.js`, `api/learner.js`, `api/cron-retention.js`, `api/magic-link.js`, `db/migration.sql`, 31 API files (CORS removal), `public/privacy.html`, `public/learner/profile.html`, `CLAUDE.md`
 **DB:** 1 new table (`rate_limits`), 28 new indexes, `last_activity_at` DEFAULT NOW()
 
 ---
@@ -853,6 +862,7 @@ Security hardening and query performance optimization across the entire platform
 
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
+- **T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.
 - **Capacitor native wrapper** — wrap PWA for App Store / Play Store submission
 - ~~**Instructor dashboard** — earnings tracking, lesson stats, learner progress overview~~ ✅ Done (2.48)
 - **Theory test prep** — built-in revision tools integrated with competency system
