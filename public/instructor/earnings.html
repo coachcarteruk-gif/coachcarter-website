@@ -21,23 +21,7 @@
   <link rel="stylesheet" href="/shared/instructor.css">
   <script src="/shared/dark-mode.js"></script>
   <style>
-    .bottom-nav {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      background: var(--white); border-top: 1px solid var(--border);
-      display: flex; z-index: 200;
-      padding-bottom: env(safe-area-inset-bottom);
-      box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
-    }
-    .bottom-nav-item {
-      flex: 1; display: flex; flex-direction: column; align-items: center;
-      padding: 10px 8px; text-decoration: none; color: var(--muted);
-      font-size: 0.68rem; font-weight: 600; transition: color 0.15s; gap: 3px;
-    }
-    .bottom-nav-item:hover  { color: var(--primary); }
-    .bottom-nav-item.active { color: var(--accent); }
-    .bottom-nav-icon { font-size: 1.25rem; line-height: 1; }
-
-    .page { max-width: 600px; margin: 0 auto; padding: 28px 16px 100px; margin-top: 64px; }
+    .page { max-width: 600px; margin: 0 auto; padding: 28px 16px 24px; }
     h1 { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; }
     .subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 4px; margin-bottom: 28px; }
 
@@ -236,19 +220,6 @@
 </head>
 <body>
 
-<nav class="site-nav">
-  <a class="site-nav-logo" href="/">
-    <img src="/Logo.png" alt="CoachCarter">
-    <span>Coach<em>Carter</em></span>
-  </a>
-  <div class="site-nav-links">
-    <a class="site-nav-link" href="/learner-journey.html">Pricing</a>
-    <a class="site-nav-link" href="/classroom.html">Free Videos</a>
-    <a class="site-nav-link" href="/learner/login.html">Learner Login</a>
-    <a class="site-nav-link" href="/instructor/login.html">Instructor Login</a>
-    <a class="site-nav-link primary" href="/learner/login.html?redirect=/learner/book.html">Book Free Trial</a>
-  </div>
-</nav>
 
 <div class="page">
   <h1>Earnings</h1>
@@ -259,36 +230,6 @@
   </div>
 </div>
 
-<nav class="bottom-nav">
-  <a href="/instructor/" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F4C5;</span>
-    <span>Schedule</span>
-  </a>
-  <a href="/instructor/availability.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F550;</span>
-    <span>Availability</span>
-  </a>
-  <a href="/instructor/learners.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F465;</span>
-    <span>Learners</span>
-  </a>
-  <a href="/instructor/qa.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F4AC;</span>
-    <span>Q&A</span>
-  </a>
-  <a href="/instructor/earnings.html" class="bottom-nav-item active">
-    <span class="bottom-nav-icon">&#x1F4B0;</span>
-    <span>Earnings</span>
-  </a>
-  <a href="/instructor/profile.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon">&#x1F464;</span>
-    <span>Profile</span>
-  </a>
-  <a href="/admin/portal.html" class="bottom-nav-item" id="admin-tab" style="display:none">
-    <span class="bottom-nav-icon">&#x2699;&#xFE0F;</span>
-    <span>Admin</span>
-  </a>
-</nav>
 
 <script>
   let token = null;
@@ -682,12 +623,6 @@
     const auth = ccAuth.requireAuth();
     if (!auth) return;
     token = auth.token;
-
-    // Show admin tab if instructor is admin
-    if (auth.payload?.is_admin) {
-      const adminTab = document.getElementById('admin-tab');
-      if (adminTab) adminTab.style.display = '';
-    }
 
     currentWeekStart = getMondayISO(0);
 

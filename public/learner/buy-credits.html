@@ -20,56 +20,11 @@
   <link rel="stylesheet" href="/shared/learner.css">
   <script src="/shared/dark-mode.js"></script>
   <style>
-    .header-balance {
-      font-size: 0.82rem; font-weight: 700; color: var(--accent);
-      background: rgba(245,131,33,0.15); padding: 5px 12px;
-      border-radius: 100px; border: 1px solid rgba(245,131,33,0.3);
-    }
-
-    /* BOTTOM NAV */
-    .bottom-nav {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      background: rgba(255,255,255,0.95); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-      border-top: 1px solid rgba(0,0,0,0.06);
-      display: flex; z-index: 200;
-      padding-bottom: env(safe-area-inset-bottom);
-      box-shadow: 0 -4px 24px rgba(245,131,33,0.04);
-    }
-    .bottom-nav-item {
-      flex: 1; display: flex; flex-direction: column; align-items: center;
-      padding: 8px 8px 6px; text-decoration: none; color: var(--muted);
-      font-size: 0.68rem; font-weight: 600; transition: color 0.2s, transform 0.2s; gap: 4px;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .bottom-nav-item:hover { color: var(--primary); }
-    .bottom-nav-item:active { transform: scale(0.92); }
-    .bottom-nav-item.active { color: var(--accent); }
-    .bottom-nav-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
-    .bottom-nav-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-
-    /* ── Sub-tabs ── */
-    .sub-tabs {
-      display: flex; max-width: 680px; margin: 0 auto; padding: 0 20px; margin-top: 64px;
-      border-bottom: 1px solid var(--border); background: var(--white);
-    }
-    .sub-tab {
-      flex: 1; padding: 14px 8px; text-align: center;
-      font-family: var(--font-head); font-size: 0.85rem; font-weight: 700;
-      color: var(--muted); text-decoration: none; position: relative;
-      transition: color 0.2s;
-    }
-    .sub-tab:hover { color: var(--primary); }
-    .sub-tab.active { color: var(--accent); }
-    .sub-tab.active::after {
-      content: ''; position: absolute; bottom: -1px; left: 20%; right: 20%;
-      height: 2px; background: var(--accent); border-radius: 1px;
-    }
-
     /* ── Page layout ── */
     main {
       max-width: 680px;
       margin: 0 auto;
-      padding: 48px 20px 80px;
+      padding: 24px 20px 24px;
     }
 
     h1 {
@@ -488,34 +443,6 @@
 </head>
 <body>
 
-<nav class="site-nav">
-  <a class="site-nav-logo" href="/learner/">
-    <img src="/Logo.png" alt="CoachCarter">
-    <span>Coach<em>Carter</em></span>
-  </a>
-  <div class="site-nav-links">
-    <span class="header-balance" id="headerBalance">⏳ loading…</span>
-    <button class="site-nav-link logout" onclick="window.location='/learner/'">← Dashboard</button>
-    <button class="nav-menu-toggle" aria-label="Menu" aria-expanded="false">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
-      </svg>
-    </button>
-  </div>
-</nav>
-<div class="nav-dropdown">
-  <a href="/learner-journey.html">Pricing</a>
-  <a href="/classroom.html">Free Videos</a>
-  <a href="/">Home</a>
-  <div class="divider"></div>
-  <button onclick="logout()">Sign out</button>
-</div>
-
-<div class="sub-tabs">
-  <a href="/learner/book.html" class="sub-tab">Book a Lesson</a>
-  <a href="/learner/buy-credits.html" class="sub-tab active">Buy Credits</a>
-</div>
-
 <main>
   <h1>Buy Hours</h1>
   <p class="subtitle">Buy hours and book any lesson type. The more you buy, the more you save.</p>
@@ -729,20 +656,6 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  // ── Hamburger menu toggle ──
-  document.querySelector('.nav-menu-toggle')?.addEventListener('click', function() {
-    const dd = document.querySelector('.nav-dropdown');
-    const open = dd.classList.toggle('open');
-    this.setAttribute('aria-expanded', open);
-  });
-  document.addEventListener('click', function(e) {
-    if (!e.target.closest('.nav-menu-toggle') && !e.target.closest('.nav-dropdown')) {
-      document.querySelector('.nav-dropdown')?.classList.remove('open');
-      document.querySelector('.nav-menu-toggle')?.setAttribute('aria-expanded', 'false');
-    }
-  });
-  function logout() { ccAuth.logout(); }
-
   const PRICE_PER_HOUR_PENCE = 5500; // £55.00 per hour
 
   const PACKAGES = [
@@ -794,10 +707,8 @@
       const hrsStr = hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
       document.getElementById('balanceValue').textContent = hrsStr;
       document.getElementById('balanceUnit').textContent = 'hours';
-      document.getElementById('headerBalance').textContent = `${hrsStr} hrs`;
     } catch (err) {
       document.getElementById('balanceValue').textContent = '?';
-      document.getElementById('headerBalance').textContent = 'Balance unavailable';
     }
   }
 
@@ -979,27 +890,5 @@
   if (token) loadBalance();
 </script>
 
-<nav class="bottom-nav">
-  <a href="/learner/" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
-    <span>Dashboard</span>
-  </a>
-  <a href="/learner/lessons.html" class="bottom-nav-item active">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
-    <span>Lessons</span>
-  </a>
-  <a href="/learner/videos.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"/></svg></span>
-    <span>Videos</span>
-  </a>
-  <a href="/learner/qa.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-    <span>Q&A</span>
-  </a>
-  <a href="/learner/log-session.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
-    <span>Session Log</span>
-  </a>
-</nav>
 </body>
 </html>

@@ -21,59 +21,17 @@
   <link rel="stylesheet" href="/shared/learner.css">
   <script src="/shared/dark-mode.js"></script>
   <style>
-    .site-nav { z-index: 200; }
-    .credit-badge { font-size: 0.82rem; font-weight: 700; color: var(--accent); background: rgba(245,131,33,0.15); padding: 5px 12px; border-radius: 100px; text-decoration: none; border: 1px solid rgba(245,131,33,0.3); }
-    .credit-badge.zero { color: #ff6b6b; background: rgba(255,107,107,0.12); border-color: rgba(255,107,107,0.3); }
-
-    /* ── Bottom Nav ───────────────────────────────────────────────────────── */
-    .bottom-nav {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      background: rgba(255,255,255,0.95); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-      border-top: 1px solid rgba(0,0,0,0.06);
-      display: flex; z-index: 200;
-      padding-bottom: env(safe-area-inset-bottom);
-      box-shadow: 0 -4px 24px rgba(245,131,33,0.04);
-    }
-    .bottom-nav-item {
-      flex: 1; display: flex; flex-direction: column; align-items: center;
-      padding: 8px 8px 6px; text-decoration: none; color: var(--muted);
-      font-size: 0.68rem; font-weight: 600; transition: color 0.2s, transform 0.2s; gap: 4px;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .bottom-nav-item:hover { color: var(--primary); }
-    .bottom-nav-item:active { transform: scale(0.92); }
-    .bottom-nav-item.active { color: var(--accent); }
-    .bottom-nav-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
-    .bottom-nav-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-
-    /* ── Sub-tabs ────────────────────────────────────────────────────────── */
-    .sub-tabs {
-      display: flex; max-width: 960px; margin: 0 auto; padding: 0 16px; margin-top: 64px;
-      border-bottom: 1px solid var(--border); background: var(--white);
-    }
-    .sub-tab {
-      flex: 1; padding: 14px 8px; text-align: center;
-      font-family: var(--font-head); font-size: 0.85rem; font-weight: 700;
-      color: var(--muted); text-decoration: none; position: relative;
-      transition: color 0.2s;
-    }
-    .sub-tab:hover { color: var(--primary); }
-    .sub-tab.active { color: var(--accent); }
-    .sub-tab.active::after {
-      content: ''; position: absolute; bottom: -1px; left: 20%; right: 20%;
-      height: 2px; background: var(--accent); border-radius: 1px;
-    }
-
-    /* ── Lesson Type Pill Bar (sticky) ───────────────────────────────────── */
-    .lesson-type-bar {
+    /* ── Toolbar (sticky: pills + filter) ────────────────────────────────── */
+    .cal-toolbar {
       position: sticky; top: 0; z-index: 50;
-      background: rgba(255,255,255,0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      background: var(--white); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--border);
-      margin: 0 -16px; padding: 10px 16px;
-      width: calc(100% + 32px);
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; margin: 0 -16px;
+      width: calc(100% + 32px); flex-wrap: wrap;
     }
     .lesson-type-pills {
-      display: flex; gap: 8px; overflow-x: auto;
+      display: flex; gap: 8px; overflow-x: auto; flex: 1; min-width: 0;
       scrollbar-width: none; -ms-overflow-style: none;
     }
     .lesson-type-pills::-webkit-scrollbar { display: none; }
@@ -84,7 +42,7 @@
       font-family: var(--font-head); font-size: 0.8rem; font-weight: 600;
       color: var(--muted); white-space: nowrap;
     }
-    .lt-pill:hover { border-color: var(--lt-colour, var(--accent)); color: var(--primary); }
+    .lt-pill:hover { border-color: var(--muted); color: var(--primary); }
     .lt-pill.active {
       border-color: var(--lt-colour, var(--accent));
       background: color-mix(in srgb, var(--lt-colour, var(--accent)) 10%, white);
@@ -93,7 +51,13 @@
     }
 
     /* ── Slot Feed ────────────────────────────────────────────────────────── */
-    .slot-feed { display: flex; flex-direction: column; gap: 10px; }
+    .slot-feed { display: flex; flex-direction: column; gap: 6px; }
+    .feed-date-header {
+      font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+      padding: 18px 0 6px;
+    }
+    .feed-date-header:first-child { padding-top: 4px; }
     .feed-card {
       display: flex; align-items: center; gap: 14px;
       background: var(--white); border: 1.5px solid var(--border);
@@ -101,17 +65,13 @@
       cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.1s;
       -webkit-tap-highlight-color: transparent;
     }
-    .feed-card:hover { border-color: var(--accent); background: var(--accent-lt); transform: translateY(-1px); }
+    .feed-card:hover { border-color: var(--muted); background: var(--surface); transform: translateY(-1px); }
     .feed-card:active { transform: scale(0.99); }
     .feed-card-accent {
       width: 4px; align-self: stretch; border-radius: 2px; flex-shrink: 0;
       background: var(--lt-colour, var(--accent));
     }
     .feed-card-body { flex: 1; min-width: 0; }
-    .feed-card-date {
-      font-size: 0.72rem; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px;
-    }
     .feed-card-time {
       font-family: var(--font-head); font-size: 1.05rem; font-weight: 800;
       color: var(--primary); margin-bottom: 3px;
@@ -124,75 +84,53 @@
       flex-shrink: 0; width: 20px; height: 20px; color: var(--border);
       transition: color 0.15s;
     }
-    .feed-card:hover .feed-card-chevron { color: var(--accent); }
+    .feed-card:hover .feed-card-chevron { color: var(--primary); }
 
     /* Feed footer */
     .feed-footer { text-align: center; padding: 20px 0 8px; }
     .feed-status { font-size: 0.82rem; color: var(--muted); margin-bottom: 12px; }
     .btn-load-more {
       display: inline-block; padding: 12px 32px; border-radius: 10px;
-      border: 1.5px solid var(--accent); background: transparent;
-      color: var(--accent); font-family: var(--font-head);
+      border: 1.5px solid var(--border); background: transparent;
+      color: var(--primary); font-family: var(--font-head);
       font-size: 0.88rem; font-weight: 700; cursor: pointer;
       transition: all 0.15s;
     }
-    .btn-load-more:hover { background: var(--accent-lt); }
+    .btn-load-more:hover { background: var(--surface); }
     .btn-load-more:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* ── Page ──────────────────────────────────────────────────────────────── */
-    .page { max-width: 960px; margin: 0 auto; padding: 24px 16px 100px; }
+    .page { max-width: 960px; margin: 0 auto; padding: 24px 16px 24px; }
 
     /* ── Welcome / no-credits banners ─────────────────────────────────────── */
     .banner {
-      border-radius: var(--radius); padding: 18px 24px;
+      border-radius: var(--radius); padding: 14px 20px;
       display: flex; align-items: center; justify-content: space-between;
-      gap: 14px; margin-bottom: 18px; font-size: 0.875rem;
+      gap: 14px; margin-bottom: 12px; font-size: 0.85rem;
     }
-    .banner-welcome { background: var(--green-lt); border: 1.5px solid var(--green); }
-    .banner-credits { background: var(--accent-lt); border: 1.5px solid var(--accent); }
-    .banner strong { color: var(--accent); }
+    .banner-welcome { background: var(--surface); border: 1.5px solid var(--border); }
+    .banner-credits { background: var(--surface); border: 1.5px solid var(--border); }
+    .banner strong { color: var(--primary); }
     .banner-dismiss { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--muted); padding: 4px; }
-    .btn-buy-now {
-      background: var(--accent); color: white; border: none;
-      padding: 9px 18px; border-radius: 8px; font-family: var(--font-head);
-      font-size: 0.85rem; font-weight: 700; cursor: pointer; white-space: nowrap;
-      text-decoration: none; display: inline-block;
-    }
-    .btn-buy-now:hover { background: var(--accent-dk); }
 
-    /* ── Upcoming strip ───────────────────────────────────────────────────── */
-    .upcoming-strip {
+    /* ── Next lesson card ─────────────────────────────────────────────────── */
+    .next-lesson-card {
+      display: flex; align-items: center; justify-content: space-between;
       background: var(--white); border: 1px solid var(--border);
-      border-radius: var(--radius); margin-bottom: 20px; overflow: hidden;
+      border-radius: var(--radius); padding: 12px 16px;
+      margin-bottom: 12px; font-size: 0.85rem;
     }
-    .upcoming-header {
-      padding: 12px 20px; font-family: var(--font-head);
-      font-size: 0.9rem; font-weight: 700;
-      border-bottom: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: center;
+    .next-lesson-label {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--muted); display: block; margin-bottom: 2px;
     }
-    .upcoming-list { display: flex; flex-direction: column; }
-    .upcoming-item {
-      display: flex; align-items: center; gap: 14px;
-      padding: 12px 20px; border-bottom: 1px solid var(--border);
-      font-size: 0.85rem;
+    .next-lesson-detail { font-weight: 600; color: var(--primary); }
+    .next-lesson-link {
+      font-size: 0.82rem; color: var(--accent); font-weight: 600;
+      text-decoration: none; white-space: nowrap;
     }
-    .upcoming-item:last-child { border-bottom: none; }
-    .upcoming-date { font-weight: 700; min-width: 100px; }
-    .upcoming-time { color: var(--muted); min-width: 90px; }
-    .upcoming-instructor { flex: 1; }
-    .upcoming-cancel {
-      background: none; border: 1px solid var(--border);
-      border-radius: 7px; padding: 5px 12px; font-size: 0.78rem;
-      cursor: pointer; color: var(--muted); transition: all 0.15s;
-    }
-    .upcoming-cancel:hover { border-color: var(--red); color: var(--red); background: var(--red-lt); }
-    .upcoming-reschedule {
-      background: none; border: 1px solid var(--border);
-      border-radius: 7px; padding: 5px 12px; font-size: 0.78rem;
-      cursor: pointer; color: var(--accent); transition: all 0.15s;
-    }
-    .upcoming-reschedule:hover { border-color: var(--accent); background: var(--accent-lt); }
+    .next-lesson-link:hover { text-decoration: underline; }
+
     .reschedule-banner {
       background: var(--accent-lt); border: 1px solid var(--accent); border-radius: 10px;
       padding: 12px 20px; margin-bottom: 16px; display: flex; align-items: center;
@@ -228,24 +166,6 @@
     .repeat-date-item.conflict { color: var(--red); }
     .repeat-total { margin-top: 10px; font-size: 0.82rem; font-weight: 600; color: var(--muted); padding: 8px 10px; background: var(--white); border-radius: 8px; border: 1px solid var(--border); }
     .repeat-conflict-warning { margin-top: 8px; padding: 8px 10px; background: var(--red-lt); border: 1px solid var(--red); border-radius: 8px; font-size: 0.8rem; color: var(--red); }
-
-    /* ── Series grouping in upcoming ─────────────────────────────────────── */
-    .series-group { border: 1px solid var(--accent); border-radius: 10px; margin: 8px 0; overflow: hidden; }
-    .series-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--accent-lt); font-size: 0.8rem; font-weight: 700; color: var(--accent); }
-    .series-header button { background: none; border: 1px solid var(--accent); border-radius: 7px; padding: 4px 10px; font-size: 0.72rem; cursor: pointer; color: var(--accent); }
-    .series-header button:hover { background: var(--white); }
-    .series-group .upcoming-item:last-child { border-bottom: none; }
-
-    /* ── Calendar Toolbar ─────────────────────────────────────────────────── */
-    .cal-toolbar {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
-    }
-    .cal-title-block { display: flex; align-items: center; gap: 10px; }
-    .cal-title { font-family: var(--font-head); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
-    .cal-subtitle { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
-
-    .cal-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
     .filter-select {
       border: 1px solid var(--border); border-radius: 8px;
@@ -396,31 +316,6 @@
     }
     .btn-done:hover { background: var(--accent-dk); }
 
-    /* Calendar sync page banner */
-    .cal-sync-banner {
-      background: var(--accent-lt); border: 1px solid #fcd4b0;
-      border-radius: var(--radius, 14px); padding: 14px 18px;
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
-    }
-    .cal-sync-banner-text { display: flex; flex-direction: column; gap: 2px; }
-    .cal-sync-banner-text strong { font-family: var(--font-head); font-size: 0.92rem; font-weight: 700; }
-    .cal-sync-banner-text span { font-size: 0.82rem; color: var(--muted); }
-    .cal-sync-banner-actions { display: flex; align-items: center; gap: 8px; }
-    .cal-sync-page-btn {
-      background: var(--accent); color: white; border: none;
-      border-radius: 8px; padding: 8px 18px; font-size: 0.85rem;
-      font-weight: 700; cursor: pointer; text-decoration: none;
-      white-space: nowrap; transition: background 0.15s;
-    }
-    .cal-sync-page-btn:hover { background: var(--accent-dk); }
-    .cal-sync-dismiss {
-      background: none; border: none; color: var(--muted); cursor: pointer;
-      font-size: 1.1rem; padding: 4px 8px; border-radius: 4px;
-      transition: all 0.15s; line-height: 1;
-    }
-    .cal-sync-dismiss:hover { color: var(--primary); background: rgba(0,0,0,0.05); }
-
     /* Cancel modal */
     .cancel-modal h2 { color: var(--red); }
     .cancel-policy {
@@ -460,13 +355,32 @@
     .toast.success { background: #16a34a; }
     .toast.error   { background: var(--red); }
 
+    /* ── Postcode prompt ──────────────────────────────────────────────────── */
+    .postcode-prompt {
+      width: 100%; display: none;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px; font-size: 0.82rem;
+      color: var(--primary); margin-top: 8px;
+    }
+    .postcode-prompt-hint { margin: 0 0 6px; color: var(--muted); font-size: 0.78rem; }
+    .postcode-prompt-row { display: flex; gap: 8px; align-items: center; }
+    .postcode-prompt-row input {
+      flex: 1; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 0.85rem; text-transform: uppercase;
+    }
+    .postcode-prompt-error { display: none; color: #e74c3c; font-size: 0.75rem; margin: 6px 0 0; }
+
+    /* ── Travel-hidden banner ─────────────────────────────────────────────── */
+    .travel-hidden-banner {
+      display: none; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;
+      font-size: 0.82rem; color: var(--muted);
+    }
+
     /* ── Responsive ───────────────────────────────────────────────────────── */
     @media (max-width: 700px) {
-      .cal-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
-      .cal-title-block { width: 100%; }
-      .cal-title-block > div { width: 100%; }
-      .cal-controls { width: 100%; justify-content: space-between; }
-      .upcoming-time, .upcoming-instructor { display: none; }
+      .cal-toolbar { flex-direction: column; align-items: stretch; }
     }
   </style>
 <script src="/sidebar.js"></script>
@@ -475,67 +389,26 @@
 </head>
 <body>
 
-<!-- ── Header ── -->
-<nav class="site-nav">
-  <a class="site-nav-logo" href="/learner/">
-    <img src="/Logo.png" alt="CoachCarter">
-    <span>Coach<em>Carter</em></span>
-  </a>
-  <div class="site-nav-links">
-    <a href="/learner/buy-credits.html" class="credit-badge" id="creditBadge">⏳ …</a>
-    <button class="site-nav-link logout" onclick="window.location='/learner/'">← Dashboard</button>
-    <button class="nav-menu-toggle" aria-label="Menu" aria-expanded="false">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
-      </svg>
-    </button>
-  </div>
-</nav>
-<div class="nav-dropdown">
-  <a href="/learner-journey.html">Pricing</a>
-  <a href="/classroom.html">Free Videos</a>
-  <a href="/">Home</a>
-  <div class="divider"></div>
-  <button onclick="logout()">Sign out</button>
-</div>
-
-<div class="sub-tabs">
-  <a href="/learner/book.html" class="sub-tab active">Book a Lesson</a>
-  <a href="/learner/buy-credits.html" class="sub-tab">Buy Credits</a>
-</div>
-
 <div class="page">
 
   <!-- Welcome banner -->
   <div class="banner banner-welcome" id="welcomeBanner" style="display:none">
-    <div>
-      <strong style="font-family:var(--font-head);font-size:1.05rem">Welcome to CoachCarter!</strong>
-      <p style="font-size:0.85rem;color:var(--muted);margin-top:4px">Buy lessons and pick any slot below to book your first 1.5-hour driving lesson.</p>
-    </div>
-    <button class="banner-dismiss" onclick="dismissWelcome()">✕</button>
+    <span><strong>Welcome!</strong> Buy hours and pick any slot below to book your first lesson.</span>
+    <button class="banner-dismiss" onclick="dismissWelcome()">&#x2715;</button>
   </div>
 
   <!-- No credits banner -->
   <div class="banner banner-credits" id="noCreditsBanner" style="display:none">
-    <p><strong>No lessons on your account.</strong> No worries — you can pay when you book, or <a href="/learner/buy-credits.html" style="color:var(--accent);font-weight:700">buy a bundle to save</a>.</p>
+    <p>No hours on your account. <a href="/learner/buy-credits.html" style="color:var(--accent);font-weight:700">Buy hours</a> or pay when you book.</p>
   </div>
 
-  <!-- Upcoming bookings strip -->
-  <div class="upcoming-strip" id="upcomingStrip" style="display:none">
-    <div class="upcoming-header"><span>Upcoming lessons</span></div>
-    <div class="upcoming-list" id="upcomingList"></div>
-  </div>
-
-  <!-- Calendar sync banner (persistent) -->
-  <div class="cal-sync-banner" id="calSyncPageBanner" style="display:none">
-    <div class="cal-sync-banner-text">
-      <strong>Sync lessons to your phone calendar</strong>
-      <span>All bookings and cancellations will appear automatically — with reminders.</span>
+  <!-- Next lesson card (replaces full upcoming strip) -->
+  <div class="next-lesson-card" id="nextLessonCard" style="display:none">
+    <div>
+      <span class="next-lesson-label">Next lesson</span>
+      <span class="next-lesson-detail" id="nextLessonDetail"></span>
     </div>
-    <div class="cal-sync-banner-actions">
-      <a class="cal-sync-page-btn" id="calSyncPageBtn" href="#">Sync Calendar</a>
-      <button class="cal-sync-dismiss" id="calSyncPageDismiss" title="Dismiss">&times;</button>
-    </div>
+    <a href="/learner/lessons.html" class="next-lesson-link">View all &rarr;</a>
   </div>
 
   <!-- Reschedule banner (visible when in reschedule mode) -->
@@ -544,51 +417,24 @@
     <button onclick="cancelRescheduleMode()">Cancel</button>
   </div>
 
-  <!-- Toolbar -->
-  <div class="cal-toolbar">
-    <div class="cal-title-block">
-      <div>
-        <div class="cal-title">Book a Lesson</div>
-        <div class="cal-subtitle" id="calSubtitle">Pick any available slot.</div>
-      </div>
-    </div>
-    <div class="cal-controls">
-      <select class="filter-select" id="instructorFilter" onchange="onFilterChange()">
-        <option value="">All instructors</option>
-      </select>
-    </div>
-  </div>
-
-  <!-- Sticky lesson type pill bar -->
-  <div class="lesson-type-bar" id="lessonTypeBar" style="display:none">
+  <!-- Toolbar: lesson type pills + instructor filter -->
+  <div class="cal-toolbar" id="calToolbar">
     <div class="lesson-type-pills" id="lessonTypePills"></div>
-  </div>
-  <!-- Skeleton pill bar (shown while types load) -->
-  <div class="lesson-type-bar" id="lessonTypeSkeleton" style="padding:12px 16px;display:flex;gap:8px;overflow:hidden">
-    <div class="skeleton skeleton-pill"></div>
-    <div class="skeleton skeleton-pill"></div>
-    <div class="skeleton skeleton-pill" style="width:120px"></div>
-  </div>
-
-  <!-- Pickup postcode prompt (shown when learner has no address) -->
-  <div id="postcodePrompt" style="display:none;background:var(--accent-lt);border:1px solid var(--accent);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:0.82rem;color:var(--primary);">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-      <span style="font-size:1.1rem;">📍</span>
-      <strong>Add your pickup postcode</strong>
+    <select class="filter-select" id="instructorFilter" onchange="onFilterChange()">
+      <option value="">All instructors</option>
+    </select>
+    <!-- Postcode prompt (shown when learner has no address) -->
+    <div class="postcode-prompt" id="postcodePrompt">
+      <p class="postcode-prompt-hint">Add your pickup postcode to hide slots too far away.</p>
+      <div class="postcode-prompt-row">
+        <input type="text" id="postcodeInput" placeholder="e.g. SW1A 1AA" maxlength="10">
+        <button id="btnSavePostcode" onclick="savePickupPostcode()" class="btn-primary" style="padding:8px 16px;font-size:0.82rem;white-space:nowrap;">Save</button>
+      </div>
+      <p class="postcode-prompt-error" id="postcodeError"></p>
     </div>
-    <p style="margin:0 0 8px;color:var(--muted);font-size:0.78rem;">We'll hide slots your instructor can't reach in time — saving you scrolling.</p>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <input type="text" id="postcodeInput" placeholder="e.g. SW1A 1AA" maxlength="10"
-        style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;text-transform:uppercase;">
-      <button id="btnSavePostcode" onclick="savePickupPostcode()" class="btn-primary"
-        style="padding:8px 16px;font-size:0.82rem;white-space:nowrap;">Save</button>
-    </div>
-    <p id="postcodeError" style="display:none;color:#e74c3c;font-size:0.75rem;margin:6px 0 0;"></p>
   </div>
-
   <!-- Travel-filtered slots notice -->
-  <div id="travelHiddenBanner" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.82rem;color:var(--muted);align-items:center;gap:8px;">
-    <span style="font-size:1.1rem;">📍</span>
+  <div class="travel-hidden-banner" id="travelHiddenBanner">
     <span id="travelHiddenText"></span>
   </div>
 
@@ -757,43 +603,7 @@
 
 <div class="toast" id="toast"></div>
 
-<nav class="bottom-nav">
-  <a href="/learner/" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
-    <span>Dashboard</span>
-  </a>
-  <a href="/learner/lessons.html" class="bottom-nav-item active">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
-    <span>Lessons</span>
-  </a>
-  <a href="/learner/videos.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"/></svg></span>
-    <span>Videos</span>
-  </a>
-  <a href="/learner/qa.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-    <span>Q&A</span>
-  </a>
-  <a href="/learner/log-session.html" class="bottom-nav-item">
-    <span class="bottom-nav-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
-    <span>Session Log</span>
-  </a>
-</nav>
-
 <script>
-// ── Hamburger menu toggle ──
-document.querySelector('.nav-menu-toggle')?.addEventListener('click', function() {
-  const dd = document.querySelector('.nav-dropdown');
-  const open = dd.classList.toggle('open');
-  this.setAttribute('aria-expanded', open);
-});
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.nav-menu-toggle') && !e.target.closest('.nav-dropdown')) {
-    document.querySelector('.nav-dropdown')?.classList.remove('open');
-    document.querySelector('.nav-menu-toggle')?.setAttribute('aria-expanded', 'false');
-  }
-});
-function logout() { ccAuth.logout(); }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -849,7 +659,6 @@ function init() {
   Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile(), loadLessonTypes()])
     .then(() => {
       initFeed();
-      initCalSyncPageBanner();
       showPostcodePromptIfNeeded();
     });
 
@@ -893,9 +702,6 @@ function formatBalanceHours(mins) {
 }
 
 function updateCreditBadge() {
-  const badge = document.getElementById('creditBadge');
-  badge.textContent = formatBalanceHours(balanceMinutes);
-  badge.className = 'credit-badge' + (balanceMinutes === 0 ? ' zero' : '');
   document.getElementById('noCreditsBanner').style.display = balanceMinutes === 0 ? 'flex' : 'none';
 }
 
@@ -923,17 +729,8 @@ async function loadLessonTypes() {
 }
 
 function renderLessonTypePills() {
-  // Remove pill skeleton
-  var pillSkel = document.getElementById('lessonTypeSkeleton');
-  if (pillSkel) pillSkel.remove();
-
-  const bar = document.getElementById('lessonTypeBar');
   const container = document.getElementById('lessonTypePills');
-  if (!bar || !container || lessonTypes.length <= 1) {
-    if (bar) bar.style.display = 'none';
-    return;
-  }
-  bar.style.display = 'block';
+  if (!container || lessonTypes.length <= 1) return;
   container.innerHTML = lessonTypes.map(lt => {
     const hrs = lt.duration_minutes / 60;
     const hrsStr = hrs % 1 === 0 ? `${hrs}hr` : `${hrs.toFixed(1)}hr`;
@@ -948,9 +745,6 @@ function renderLessonTypePills() {
 function selectLessonType(id) {
   selectedLessonType = lessonTypes.find(lt => lt.id === id) || lessonTypes[0];
   renderLessonTypePills();
-  const hrs = selectedLessonType.duration_minutes / 60;
-  const hrsStr = hrs % 1 === 0 ? `${hrs} hour${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hours`;
-  document.getElementById('calSubtitle').textContent = `${selectedLessonType.name} (${hrsStr}) — pick any slot below.`;
   slotCache = {};
   loadedRanges = [];
   initFeed();
@@ -972,67 +766,21 @@ async function loadInstructors() {
   } catch {}
 }
 
-// ─── Upcoming bookings ───────────────────────────────────────────────────────
+// ─── Upcoming bookings (compact next-lesson card) ───────────────────────────
 async function loadUpcoming() {
   try {
     const res = await fetch('/api/slots?action=my-bookings', { headers: { Authorization: 'Bearer ' + token } });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     const upcoming = data.upcoming || [];
-    const strip = document.getElementById('upcomingStrip');
-    const list  = document.getElementById('upcomingList');
-    if (upcoming.length === 0) { strip.style.display = 'none'; return; }
-
-    strip.style.display = 'block';
-
-    // Group series bookings together
-    const seriesMap = {};
-    const standalone = [];
-    for (const b of upcoming) {
-      if (b.series_id) {
-        if (!seriesMap[b.series_id]) seriesMap[b.series_id] = [];
-        seriesMap[b.series_id].push(b);
-      } else {
-        standalone.push(b);
-      }
-    }
-
-    function renderBookingItem(b) {
-      const dateStr = new Date(b.scheduled_date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
-      const start = b.start_time.slice(0,5);
-      const end = b.end_time.slice(0,5);
-      const lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
-      const hoursUntil = (lessonMs - Date.now()) / 3600000;
-      const canCancel = hoursUntil > 0;
-      const ltColour = b.lesson_type_colour || 'var(--accent)';
-      const ltName   = b.lesson_type_name || '';
-      return `
-        <div class="upcoming-item" style="border-left:3px solid ${ltColour}">
-          <div class="upcoming-date">${dateStr}${ltName ? ` <span style="font-size:0.7rem;font-weight:600;color:${ltColour}">${esc(ltName)}</span>` : ''}</div>
-          <div class="upcoming-time">${start} – ${end}</div>
-          <div class="upcoming-instructor">${b.instructor_name}</div>
-          ${canCancel ? `<button class="upcoming-cal-btn" onclick="downloadCalendar(${b.id})" title="Add to calendar">📅</button>` : ''}
-          ${canCancel && hoursUntil >= 48 && (b.reschedule_count || 0) < 2 ? `<button class="upcoming-reschedule" onclick="startRescheduleMode(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${esc(b.instructor_name)}', ${b.instructor_id})">Reschedule</button>` : ''}
-          ${canCancel ? `<button class="upcoming-cancel" onclick="openCancelModal(${b.id}, '${b.scheduled_date}', '${start}', '${end}', '${esc(b.instructor_name)}', ${hoursUntil}, '${b.series_id || ''}')">Cancel</button>` : '<span style="font-size:0.8rem;color:var(--muted)">Past</span>'}
-        </div>`;
-    }
-
-    let html = '';
-    // Render series groups first
-    for (const [sid, bookings] of Object.entries(seriesMap)) {
-      const remaining = bookings.length;
-      // Get total from series (we only have future confirmed ones, but that's fine for display)
-      html += `<div class="series-group">
-        <div class="series-header">
-          <span>Weekly series — ${remaining} remaining</span>
-          <button onclick="openCancelModal(${bookings[0].id}, '${bookings[0].scheduled_date}', '${bookings[0].start_time.slice(0,5)}', '${bookings[0].end_time.slice(0,5)}', '${esc(bookings[0].instructor_name)}', 999, '${sid}')">Cancel series</button>
-        </div>
-        ${bookings.map(renderBookingItem).join('')}
-      </div>`;
-    }
-    // Then standalone bookings
-    html += standalone.map(renderBookingItem).join('');
-    list.innerHTML = html;
+    const card = document.getElementById('nextLessonCard');
+    if (upcoming.length === 0) { card.style.display = 'none'; return; }
+    const next = upcoming[0];
+    const dateStr = new Date(next.scheduled_date + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
+    document.getElementById('nextLessonDetail').textContent =
+      `${dateStr} at ${next.start_time.slice(0,5)} with ${next.instructor_name}`;
+    card.style.display = 'flex';
   } catch {}
 }
 
@@ -1049,7 +797,6 @@ async function loadLearnerProfile() {
 function showPostcodePromptIfNeeded() {
   const prompt = document.getElementById('postcodePrompt');
   if (!prompt) return;
-  // Show only if logged in and no pickup address
   if (token && !learnerProfile.pickup_address?.trim()) {
     prompt.style.display = 'block';
   } else {
@@ -1217,14 +964,20 @@ function renderFeed() {
 
   const today = new Date(); today.setHours(0,0,0,0);
   let html = '<div class="slot-feed">';
+  let lastDateStr = '';
   for (const s of allSlots) {
-    const d = new Date(s.date + 'T00:00:00');
-    const isToday = fmtDate(d) === fmtDate(today);
-    const isTomorrow = fmtDate(d) === fmtDate(addDaysLocal(today, 1));
-    let dateLabel;
-    if (isToday) dateLabel = 'Today';
-    else if (isTomorrow) dateLabel = 'Tomorrow';
-    else dateLabel = `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+    // Date header when date changes
+    if (s.date !== lastDateStr) {
+      lastDateStr = s.date;
+      const d = new Date(s.date + 'T00:00:00');
+      const isToday = fmtDate(d) === fmtDate(today);
+      const isTomorrow = fmtDate(d) === fmtDate(addDaysLocal(today, 1));
+      let dateLabel;
+      if (isToday) dateLabel = 'Today';
+      else if (isTomorrow) dateLabel = 'Tomorrow';
+      else dateLabel = `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+      html += `<div class="feed-date-header">${dateLabel}</div>`;
+    }
 
     const timeStr = `${s.start_time.slice(0,5)} – ${s.end_time.slice(0,5)}`;
     const colour = s.colour || (selectedLessonType ? selectedLessonType.colour : 'var(--accent)');
@@ -1240,7 +993,6 @@ function renderFeed() {
       data-instructor-name="${esc(s.instructor_name || '')}">
       <div class="feed-card-accent" style="background:${colour}"></div>
       <div class="feed-card-body">
-        <div class="feed-card-date">${dateLabel}</div>
         <div class="feed-card-time">${timeStr}</div>
         <div class="feed-card-instructor">${avatar} ${esc(s.instructor_name || 'Instructor')}</div>
       </div>
@@ -1613,24 +1365,10 @@ async function handleCalendarSubscribe(e) {
     setTimeout(() => {
       document.getElementById('calSyncPrompt').style.display = 'none';
       document.getElementById('calSyncedNote').style.display = 'block';
-      var pageBanner = document.getElementById('calSyncPageBanner');
-      if (pageBanner) pageBanner.style.display = 'none';
     }, 1000);
   } catch { showToast('Could not set up calendar sync', 'error'); }
 }
 
-function initCalSyncPageBanner() {
-  if (!shouldShowCalSync() || !token) return;
-  var banner = document.getElementById('calSyncPageBanner');
-  if (!banner) return;
-  banner.style.display = 'flex';
-
-  document.getElementById('calSyncPageBtn').onclick = handleCalendarSubscribe;
-  document.getElementById('calSyncPageDismiss').onclick = function() {
-    localStorage.setItem('cc_cal_subscribed', String(Date.now()));
-    banner.style.display = 'none';
-  };
-}
 
 async function downloadCalendar(bookingId) {
   try {
