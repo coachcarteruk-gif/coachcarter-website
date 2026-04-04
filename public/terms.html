@@ -23,118 +23,12 @@
   --primary:    #262626;
   --accent:     #f58321;
   --accent-dk:  #e07518;
-  --accent-lt:  #fff4ec;
-  --accent-mid: rgba(245,131,33,0.12);
   --muted:      #797879;
-  --border:     #e0e0e0;
-  --bg:         #ffffff;
-  --surface:    #f9f9f9;
-  --white:      #ffffff;
   --font-head:  'Bricolage Grotesque', sans-serif;
   --font-body:  'Lato', sans-serif;
-  --radius:     14px;
 }
-body { background: var(--bg); color: var(--primary); font-family: var(--font-body); font-size: 16px; line-height: 1.7; }
-.site-nav {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 100;
-  padding: 0 32px;
-  height: 64px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  background: rgba(38, 38, 38, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-}
-.site-nav-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-}
-.site-nav-logo img {
-  width: 34px; height: 34px;
-  object-fit: contain;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.08);
-  padding: 4px;
-}
-.site-nav-logo span {
-  font-family: var(--font-head);
-  font-size: 1.1rem;
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: -0.02em;
-}
-.site-nav-logo span em { font-style: normal; color: var(--accent); }
-.site-nav-links {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-.site-nav-cta {
-  display: flex;
-  justify-content: flex-end;
-}
-.site-nav-link {
-  color: rgba(255,255,255,0.6);
-  font-family: var(--font-body);
-  font-weight: 500;
-  font-size: 0.85rem;
-  padding: 8px 16px;
-  border-radius: 100px;
-  border: 1px solid transparent;
-  text-decoration: none;
-  transition: all 0.18s;
-  white-space: nowrap;
-  background: transparent;
-  cursor: pointer;
-}
-.site-nav-link:hover {
-  color: #fff;
-  border-color: rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.05);
-}
-.site-nav-link.primary {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-  font-weight: 600;
-}
-.site-nav-link.primary:hover {
-  background: var(--accent-dk);
-  border-color: var(--accent-dk);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(245,131,33,0.35);
-}
-/* ── Mobile bottom tab bar ── */
-.mobile-tab-bar {
-  display: none;
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-  background: var(--white); border-top: 1px solid var(--border);
-  padding: 6px 0; padding-bottom: max(6px, env(safe-area-inset-bottom));
-  box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
-}
-.mobile-tab-bar a {
-  flex: 1; display: flex; flex-direction: column; align-items: center;
-  text-decoration: none; color: var(--muted); font-size: 0.62rem;
-  font-weight: 600; gap: 2px; padding: 4px 0; transition: color 0.15s;
-}
-.mobile-tab-bar a:hover { color: var(--primary); }
-.mobile-tab-bar a.active { color: var(--accent); }
-.mobile-tab-bar a.cta { color: var(--accent); }
-.mobile-tab-icon { font-size: 1.2rem; line-height: 1; }
-@media (max-width: 900px) {
-  .site-nav { padding: 0 16px; }
-  .site-nav-links, .site-nav-cta { display: none; }
-  .mobile-tab-bar { display: flex; }
-  footer { margin-bottom: 64px; }
-}
-.wrap { max-width: 760px; margin: 0 auto; padding: 128px 24px 96px; }
+body { background: #fff; color: var(--primary); font-family: var(--font-body); font-size: 16px; line-height: 1.7; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 32px 24px 96px; }
 h1 { font-family: var(--font-head); font-size: 2.4rem; font-weight: 800; margin-bottom: 8px; }
 .updated { color: var(--muted); font-size: 0.9rem; margin-bottom: 48px; }
 h2 { font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; margin: 40px 0 12px; }
@@ -142,27 +36,11 @@ p { margin-bottom: 16px; color: #444; }
 ul { margin: 0 0 16px 20px; color: #444; }
 ul li { margin-bottom: 6px; }
 a { color: var(--accent); }
-@media (max-width: 600px) { .wrap { padding: 104px 20px 64px; } h1 { font-size: 1.8rem; } }
+@media (max-width: 600px) { .wrap { padding: 24px 20px 64px; } h1 { font-size: 1.8rem; } }
 </style>
 <script src="/sidebar.js"></script>
 </head>
 <body>
-
-<nav class="site-nav">
-  <a class="site-nav-logo" href="/">
-    <img src="/Logo.png" alt="CoachCarter">
-    <span>Coach<em>Carter</em></span>
-  </a>
-  <div class="site-nav-links">
-    <a class="site-nav-link" href="/">Home</a>
-    <a class="site-nav-link" href="/learner-journey.html">Pricing</a>
-    <a class="site-nav-link" href="/classroom.html">Videos</a>
-    <a class="site-nav-link" href="/learner/login.html?redirect=/learner/book.html">Book</a>
-  </div>
-  <div class="site-nav-cta">
-    <a class="site-nav-link primary" href="/learner/login.html">Login</a>
-  </div>
-</nav>
 
 <div class="wrap">
   <h1>Terms &amp; Conditions</h1>
@@ -230,21 +108,6 @@ a { color: var(--accent); }
   <p>These terms are governed by the laws of England and Wales. Any disputes shall be subject to the exclusive jurisdiction of the courts of England and Wales.</p>
 </div>
 
-<footer style="background: var(--primary); padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
-  <span style="font-size: 0.75rem; color: rgba(255,255,255,0.25);">© 2026 CoachCarter Driving School · Reading</span>
-  <div style="display: flex; gap: 20px;">
-    <a href="/privacy.html" style="font-size: 0.75rem; color: rgba(255,255,255,0.3); text-decoration: none;">Privacy</a>
-    <a href="/terms.html" style="font-size: 0.75rem; color: rgba(255,255,255,0.3); text-decoration: none;">Terms</a>
-  </div>
-</footer>
-
-<nav class="mobile-tab-bar">
-  <a href="/"><span class="mobile-tab-icon">🏠</span>Home</a>
-  <a href="/learner-journey.html"><span class="mobile-tab-icon">💰</span>Pricing</a>
-  <a href="/classroom.html"><span class="mobile-tab-icon">🎬</span>Videos</a>
-  <a href="/learner/login.html"><span class="mobile-tab-icon">👤</span>Log in</a>
-  <a href="/learner/login.html?redirect=/learner/book.html" class="cta"><span class="mobile-tab-icon">📅</span>Book</a>
-</nav>
 
 </body>
 </html>
