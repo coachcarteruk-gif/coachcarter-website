@@ -249,7 +249,15 @@ The site is designed as an app experience. Do NOT re-add any of the removed item
 - My Profile (standalone, auth-gated)
 - Accordion behaviour — one group open at a time; auto-expands to current section on page load
 
-**Fixed bottom tabs (instructor)**: Calendar | Learners | Q&A | Profile
+**Fixed bottom tabs (instructor)**: Dashboard | Calendar | Learners | Earnings | Profile
+- Dashboard (`/instructor/dashboard.html`) — compact no-scroll view of today's lessons + "Book Lesson" action
+- Calendar (`/instructor/`) — full calendar with monthly/weekly/daily/agenda views
+- Q&A is accessible from the sidebar only (not in bottom tabs)
+
+**Sidebar items (instructor)**:
+- Dashboard, Calendar, Availability, My Learners, Earnings
+- (divider)
+- Q&A, Profile
 
 **Desktop**: Fixed 240px sidebar with the same collapsible group structure. No bottom bar.
 
@@ -258,8 +266,12 @@ The site is designed as an app experience. Do NOT re-add any of the removed item
 - Lesson Advisor
 - Privacy Policy tab (page still exists, just not in nav)
 - Terms tab (page still exists, just not in nav)
-- Q&A (hidden for now)
-- Dashboard as a permanent bottom tab
+- Q&A as a bottom tab (moved to sidebar only — April 2026)
+- Old `.site-nav` dark top bar on any page (sidebar.js handles all nav)
+- Old `.bottom-nav` inline bottom bar on any page (sidebar.js handles all nav)
+- Old `.sub-tabs` on learner booking/buy-credits pages (sidebar handles navigation)
+- Quick-access pill row and action cards on instructor dashboard (sidebar duplicates these)
+- Calendar sync banner on booking/dashboard pages (accessible via profile or success modal)
 - Menu/hamburger as a bottom tab (sidebar opened via top header hamburger instead)
 
 ## Migration awareness (React Native app planned)

@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>Dashboard — CoachCarter Instructor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/instructor.css">
+  <script src="/shared/dark-mode.js"></script>
+  <style>
+    .dash {
+      max-width: 600px; margin: 0 auto; padding: 20px 16px 16px;
+      display: flex; flex-direction: column;
+    }
+
+    /* ── Header row ── */
+    .dash-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .dash-greeting {
+      font-family: var(--font-head); font-size: 1.3rem; font-weight: 800;
+      color: var(--primary); letter-spacing: -0.02em;
+    }
+    .btn-book-lesson {
+      background: var(--accent); color: white; border: none;
+      padding: 10px 20px; border-radius: 10px;
+      font-family: var(--font-head); font-size: 0.85rem; font-weight: 700;
+      cursor: pointer; transition: background 0.15s; white-space: nowrap;
+    }
+    .btn-book-lesson:hover { background: var(--accent-dk); }
+
+    /* ── Stats strip ── */
+    .dash-stats {
+      font-size: 0.82rem; color: var(--muted); font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    /* ── Date header ── */
+    .dash-date {
+      font-family: var(--font-head); font-size: 0.78rem; font-weight: 700;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+    }
+
+    /* ── Lesson list ── */
+    .dash-lessons {
+      flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+    }
+    .dash-lesson {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+      text-decoration: none; color: inherit; transition: background 0.1s;
+      cursor: pointer; border-radius: 0; margin: 0 -4px; padding-left: 4px; padding-right: 4px;
+    }
+    .dash-lesson:last-child { border-bottom: none; }
+    .dash-lesson:hover { background: var(--surface); border-radius: 8px; }
+    .dash-lesson.is-next { border-left: 3px solid var(--accent); padding-left: 10px; margin-left: -4px; }
+    .dash-lesson.is-completed { opacity: 0.5; }
+    .dash-lesson.is-completed .dash-lesson-time { text-decoration: line-through; }
+
+    .dash-lesson-time {
+      font-family: var(--font-head); font-size: 0.92rem; font-weight: 700;
+      color: var(--primary); min-width: 48px; flex-shrink: 0;
+    }
+    .dash-lesson-info { flex: 1; min-width: 0; }
+    .dash-lesson-name {
+      font-weight: 600; font-size: 0.88rem; color: var(--primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dash-lesson-detail {
+      font-size: 0.78rem; color: var(--muted); margin-top: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dash-lesson-badge {
+      font-size: 0.68rem; font-weight: 700; padding: 3px 8px;
+      border-radius: 4px; flex-shrink: 0; text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .badge-confirmed { background: var(--green-lt, #f0fdf4); color: var(--green, #22c55e); }
+    .badge-completed { background: var(--surface); color: var(--muted); }
+    .badge-cancelled { background: var(--red-lt, #fef2f2); color: var(--red, #ef4444); }
+    .badge-awaiting { background: var(--accent-lt, #fff4ec); color: var(--accent); }
+
+    /* ── Empty state ── */
+    .dash-empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; color: var(--muted); padding: 40px 20px;
+    }
+    .dash-empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .dash-empty h3 {
+      font-family: var(--font-head); font-size: 1.1rem; font-weight: 700;
+      color: var(--primary); margin-bottom: 6px;
+    }
+    .dash-empty p { font-size: 0.85rem; margin-bottom: 16px; }
+    .btn-empty-book {
+      background: var(--accent); color: white; border: none;
+      padding: 12px 28px; border-radius: 10px;
+      font-family: var(--font-head); font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .btn-empty-book:hover { background: var(--accent-dk); }
+
+    /* ── Loading ── */
+    .dash-loading { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.7s linear infinite; margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Book Lesson Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 500; padding: 20px;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--white); border-radius: var(--radius);
+      padding: 28px; max-width: 420px; width: 100%;
+      transform: translateY(20px); transition: transform 0.2s;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+    .modal-title { font-family: var(--font-head); font-size: 1.2rem; font-weight: 800; margin-bottom: 4px; }
+    .modal-sub { font-size: 0.82rem; color: var(--muted); margin-bottom: 16px; }
+    .modal-field { margin-bottom: 12px; }
+    .modal-label { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+    .modal-input {
+      width: 100%; padding: 10px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 0.9rem; font-family: var(--font-body);
+      box-sizing: border-box; background: var(--white); color: var(--primary);
+    }
+    .modal-input:focus { outline: none; border-color: var(--accent); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+    .btn-modal-cancel {
+      flex: 0; padding: 12px 20px; background: none; border: 1px solid var(--border);
+      border-radius: 10px; font-size: 0.88rem; cursor: pointer; color: var(--muted);
+    }
+    .btn-modal-save {
+      flex: 1; padding: 12px; background: var(--accent); color: white; border: none;
+      border-radius: 10px; font-family: var(--font-head); font-size: 0.92rem;
+      font-weight: 700; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-modal-save:hover { background: var(--accent-dk); }
+    .btn-modal-save:disabled { background: var(--border); cursor: not-allowed; }
+
+    /* Learner search */
+    .learner-search-wrap { position: relative; }
+    .learner-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; max-height: 200px;
+      overflow-y: auto; background: var(--white); border: 1px solid var(--border);
+      border-top: none; border-radius: 0 0 8px 8px; z-index: 10; display: none;
+    }
+    .learner-dropdown.open { display: block; }
+    .learner-option {
+      padding: 10px 12px; cursor: pointer; font-size: 0.85rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .learner-option:last-child { border-bottom: none; }
+    .learner-option:hover { background: var(--surface); }
+    .learner-opt-name { font-weight: 600; }
+    .learner-opt-detail { color: var(--muted); font-size: 0.78rem; }
+
+    .selected-learner {
+      display: none; margin-top: 8px; padding: 8px 12px;
+      background: var(--surface); border-radius: 8px; font-size: 0.85rem;
+      align-items: center; justify-content: space-between;
+    }
+    .selected-learner.show { display: flex; }
+
+    .payment-radios { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .payment-radios label {
+      display: flex; align-items: center; gap: 5px; cursor: pointer;
+      font-size: 0.82rem; padding: 6px 12px; border: 1px solid var(--border);
+      border-radius: 8px; transition: all 0.15s;
+    }
+    .payment-radios input:checked + span { color: var(--accent); font-weight: 600; }
+    .payment-radios label:has(input:checked) { border-color: var(--accent); background: var(--accent-lt); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 72px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--primary); color: white;
+      padding: 14px 24px; border-radius: 10px;
+      font-size: 0.9rem; font-weight: 600;
+      transition: transform 0.3s; z-index: 9999; white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.success { background: #16a34a; }
+    .toast.error { background: var(--red); }
+  </style>
+  <script src="/sidebar.js"></script>
+  <script src="/shared/instructor-auth.js"></script>
+  <script src="/auth-gate.js"></script>
+</head>
+<body>
+
+<div class="dash">
+  <!-- Header -->
+  <div class="dash-header">
+    <div class="dash-greeting" id="greeting">Hi there</div>
+    <button class="btn-book-lesson" onclick="openBookModal()">+ Book Lesson</button>
+  </div>
+  <div class="dash-stats" id="dashStats"></div>
+
+  <!-- Date header -->
+  <div class="dash-date" id="dashDate"></div>
+
+  <!-- Today's lessons -->
+  <div class="dash-lessons" id="dashLessons">
+    <div class="dash-loading"><div class="spinner"></div><p>Loading schedule...</p></div>
+  </div>
+</div>
+
+<!-- ── Book Lesson Modal ── -->
+<div class="modal-overlay" id="bookModal" onclick="if(event.target===this)closeBookModal()">
+  <div class="modal">
+    <div class="modal-title">Book Lesson</div>
+    <div class="modal-sub">Search for an existing learner or enter an email to send an offer.</div>
+    <div class="modal-field">
+      <div class="modal-label">Learner</div>
+      <div class="learner-search-wrap">
+        <input type="text" class="modal-input" id="bookSearch" placeholder="Search by name, email or phone..." oninput="filterLearners()" onfocus="document.getElementById('bookDropdown').classList.add('open')" autocomplete="off">
+        <div class="learner-dropdown" id="bookDropdown"></div>
+      </div>
+      <div class="selected-learner" id="bookSelected">
+        <div><span id="bookSelectedName"></span> <span id="bookSelectedDetail" style="color:var(--muted);font-size:0.82rem;margin-left:4px"></span></div>
+        <button onclick="clearLearner()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:0.9rem;">&#x2715;</button>
+      </div>
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Date</div>
+      <input type="date" class="modal-input" id="bookDate">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Start time</div>
+      <input type="time" class="modal-input" id="bookTime" step="1800">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Lesson type</div>
+      <select class="modal-input" id="bookType"></select>
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Payment</div>
+      <div class="payment-radios">
+        <label><input type="radio" name="bookPay" value="cash" checked><span>Cash</span></label>
+        <label><input type="radio" name="bookPay" value="credit"><span>Deduct credit</span></label>
+        <label><input type="radio" name="bookPay" value="free"><span>Free</span></label>
+      </div>
+      <div id="bookCreditNote" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:4px;"></div>
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Drop-off (optional)</div>
+      <input type="text" class="modal-input" id="bookDropoff" placeholder="e.g. School, work, test centre...">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Notes (optional)</div>
+      <textarea class="modal-input" id="bookNotes" rows="2" placeholder="e.g. Test prep, phone booking..." style="resize:vertical;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeBookModal()">Cancel</button>
+      <button class="btn-modal-save" id="bookBtn" onclick="confirmBook()">Book lesson</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+let token = null;
+let instructor = null;
+let todayBookings = [];
+let allLearners = [];
+let selectedLearnerId = null;
+let selectedLearnerCredits = 0;
+
+function init() {
+  const session = ccAuth.getAuth();
+  token = session?.token;
+  instructor = session?.instructor;
+  if (!token) { window.location.href = '/instructor/login.html'; return; }
+
+  // Greeting
+  document.getElementById('greeting').textContent = 'Hi, ' + (instructor?.name?.split(' ')[0] || 'there');
+
+  // Date header
+  const now = new Date();
+  const dayName = DAY_SHORT[now.getDay()];
+  const date = now.getDate();
+  const month = MON_SHORT[now.getMonth()];
+  document.getElementById('dashDate').textContent = 'TODAY \u2014 ' + dayName + ' ' + date + ' ' + month;
+
+  loadDashboard();
+}
+
+async function loadDashboard() {
+  try {
+    // Fetch today's schedule and stats in parallel
+    const today = new Date();
+    const ds = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+
+    const [schedRes, statsRes] = await Promise.all([
+      fetch('/api/instructor?action=schedule-range&from=' + ds + '&to=' + ds, { headers: { Authorization: 'Bearer ' + token } }),
+      fetch('/api/instructor?action=stats', { headers: { Authorization: 'Bearer ' + token } })
+    ]);
+
+    const schedData = await schedRes.json();
+    const statsData = await statsRes.json();
+
+    // Stats strip
+    if (statsRes.ok) {
+      const t = statsData.today || 0;
+      const w = statsData.thisWeek || 0;
+      document.getElementById('dashStats').textContent = t + ' today \u00B7 ' + w + ' this week';
+    }
+
+    // Today's bookings
+    if (schedRes.ok) {
+      todayBookings = schedData.bookings || [];
+      // Sort by start_time
+      todayBookings.sort(function(a, b) { return a.start_time < b.start_time ? -1 : 1; });
+      renderLessons();
+    }
+  } catch (err) {
+    document.getElementById('dashLessons').innerHTML =
+      '<div class="dash-empty"><div class="dash-empty-icon">&#x26A0;&#xFE0F;</div><p>' + (err.message || 'Failed to load') + '</p></div>';
+  }
+}
+
+function renderLessons() {
+  var container = document.getElementById('dashLessons');
+  var confirmed = todayBookings.filter(function(b) { return b.status !== 'cancelled'; });
+
+  if (confirmed.length === 0) {
+    container.innerHTML =
+      '<div class="dash-empty">' +
+        '<div class="dash-empty-icon">&#x2600;&#xFE0F;</div>' +
+        '<h3>No lessons today</h3>' +
+        '<p>Enjoy your day off, or book a lesson.</p>' +
+        '<button class="btn-empty-book" onclick="openBookModal()">+ Book Lesson</button>' +
+      '</div>';
+    return;
+  }
+
+  // Find next upcoming lesson
+  var now = new Date();
+  var nextId = null;
+  for (var i = 0; i < confirmed.length; i++) {
+    var b = confirmed[i];
+    if (b.status !== 'confirmed') continue;
+    var parts = b.start_time.split(':');
+    var lessonTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(parts[0]), parseInt(parts[1]));
+    if (lessonTime > now) { nextId = b.id; break; }
+  }
+
+  var html = '';
+  for (var i = 0; i < todayBookings.length; i++) {
+    var b = todayBookings[i];
+    var isNext = b.id === nextId;
+    var isCompleted = b.status === 'completed';
+    var isCancelled = b.status === 'cancelled';
+
+    var cls = 'dash-lesson';
+    if (isNext) cls += ' is-next';
+    if (isCompleted) cls += ' is-completed';
+    if (isCancelled) cls += ' is-completed';
+
+    var time = b.start_time.slice(0, 5);
+    var name = esc(b.learner_name || 'Unknown');
+    var addr = b.learner_pickup_address || b.booking_pickup_address || '';
+    // Extract just the postcode from address
+    var pcMatch = addr.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i);
+    var detail = pcMatch ? pcMatch[1].toUpperCase() : (addr ? addr.split(',')[0].trim() : '');
+    if (b.lesson_type_name) detail = b.lesson_type_name + (detail ? ' \u00B7 ' + detail : '');
+
+    var badgeCls = 'badge-confirmed';
+    var badgeText = '';
+    if (isCancelled) { badgeCls = 'badge-cancelled'; badgeText = 'Cancelled'; }
+    else if (isCompleted) { badgeCls = 'badge-completed'; badgeText = 'Done'; }
+    else if (b.status === 'awaiting_confirmation') { badgeCls = 'badge-awaiting'; badgeText = 'Pending'; }
+
+    html += '<div class="' + cls + '" onclick="window.location.href=\'/instructor/\'">' +
+      '<div class="dash-lesson-time">' + time + '</div>' +
+      '<div class="dash-lesson-info">' +
+        '<div class="dash-lesson-name">' + name + '</div>' +
+        (detail ? '<div class="dash-lesson-detail">' + esc(detail) + '</div>' : '') +
+      '</div>' +
+      (badgeText ? '<span class="dash-lesson-badge ' + badgeCls + '">' + badgeText + '</span>' : '') +
+    '</div>';
+  }
+  container.innerHTML = html;
+}
+
+// ── Book Lesson Modal ──
+async function openBookModal() {
+  document.getElementById('bookModal').classList.add('open');
+  document.getElementById('bookSearch').value = '';
+  document.getElementById('bookSelected').classList.remove('show');
+  selectedLearnerId = null;
+  selectedLearnerCredits = 0;
+
+  // Set defaults
+  var now = new Date();
+  var ds = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+  document.getElementById('bookDate').value = ds;
+  document.getElementById('bookTime').value = '09:00';
+  document.querySelector('input[name="bookPay"][value="cash"]').checked = true;
+  document.getElementById('bookDropoff').value = '';
+  document.getElementById('bookNotes').value = '';
+  document.getElementById('bookCreditNote').style.display = 'none';
+  document.getElementById('bookBtn').disabled = false;
+  document.getElementById('bookBtn').textContent = 'Book lesson';
+
+  // Load learners and lesson types
+  try {
+    var [lRes, tRes] = await Promise.all([
+      fetch('/api/instructor?action=my-learners', { headers: { Authorization: 'Bearer ' + token } }),
+      fetch('/api/lesson-types?action=list')
+    ]);
+    var lData = await lRes.json();
+    var tData = await tRes.json();
+
+    allLearners = lData.learners || lData || [];
+    var types = tData.lesson_types || [];
+    var sel = document.getElementById('bookType');
+    sel.innerHTML = types.map(function(t) {
+      var hrs = t.duration_minutes / 60;
+      var hrsStr = hrs % 1 === 0 ? hrs + 'hr' : hrs.toFixed(1) + 'hr';
+      return '<option value="' + t.id + '">' + esc(t.name) + ' (' + hrsStr + ')</option>';
+    }).join('');
+  } catch (e) {}
+}
+
+function closeBookModal() {
+  document.getElementById('bookModal').classList.remove('open');
+}
+
+function filterLearners() {
+  var q = document.getElementById('bookSearch').value.toLowerCase().trim();
+  var dd = document.getElementById('bookDropdown');
+  if (!q || q.length < 2) { dd.classList.remove('open'); return; }
+  var matches = allLearners.filter(function(l) {
+    return (l.name || '').toLowerCase().includes(q) ||
+           (l.email || '').toLowerCase().includes(q) ||
+           (l.phone || '').includes(q);
+  }).slice(0, 15);
+
+  if (matches.length === 0) {
+    dd.innerHTML = '<div style="padding:10px 12px;color:var(--muted);font-size:0.85rem;">No learners found</div>';
+  } else {
+    dd.innerHTML = matches.map(function(l) {
+      var det = l.email || l.phone || '';
+      return '<div class="learner-option" onclick="selectLearner(' + l.id + ',\'' + esc(l.name) + '\',\'' + esc(det) + '\',' + (l.credit_balance || 0) + ')">' +
+        '<div class="learner-opt-name">' + esc(l.name) + '</div>' +
+        '<div class="learner-opt-detail">' + esc(det) + '</div>' +
+      '</div>';
+    }).join('');
+  }
+  dd.classList.add('open');
+}
+
+function selectLearner(id, name, detail, credits) {
+  selectedLearnerId = id;
+  selectedLearnerCredits = credits;
+  document.getElementById('bookSearch').value = '';
+  document.getElementById('bookDropdown').classList.remove('open');
+  document.getElementById('bookSelectedName').textContent = name;
+  document.getElementById('bookSelectedDetail').textContent = detail;
+  document.getElementById('bookSelected').classList.add('show');
+
+  // Show credit note
+  var note = document.getElementById('bookCreditNote');
+  if (credits > 0) {
+    note.textContent = 'Learner has ' + credits + ' credit(s) available.';
+    note.style.display = 'block';
+  } else {
+    note.style.display = 'none';
+  }
+}
+
+function clearLearner() {
+  selectedLearnerId = null;
+  selectedLearnerCredits = 0;
+  document.getElementById('bookSelected').classList.remove('show');
+  document.getElementById('bookCreditNote').style.display = 'none';
+  document.getElementById('bookSearch').value = '';
+}
+
+async function confirmBook() {
+  if (!selectedLearnerId) { showToast('Please select a learner', 'error'); return; }
+  var date = document.getElementById('bookDate').value;
+  var time = document.getElementById('bookTime').value;
+  if (!date || !time) { showToast('Please fill in date and time', 'error'); return; }
+
+  var btn = document.getElementById('bookBtn');
+  btn.disabled = true;
+  btn.textContent = 'Booking...';
+
+  try {
+    var body = {
+      learner_id: selectedLearnerId,
+      scheduled_date: date,
+      start_time: time.slice(0,5),
+      lesson_type_id: parseInt(document.getElementById('bookType').value),
+      payment_method: document.querySelector('input[name="bookPay"]:checked').value,
+      notes: document.getElementById('bookNotes').value.trim() || null,
+      dropoff_address: document.getElementById('bookDropoff').value.trim() || null
+    };
+
+    var res = await fetch('/api/instructor?action=create-booking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Booking failed');
+
+    closeBookModal();
+    showToast('Lesson booked with ' + (data.learner_name || 'learner'), 'success');
+    loadDashboard(); // Refresh
+  } catch (err) {
+    showToast(err.message || 'Booking failed', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Book lesson';
+  }
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (type ? ' ' + type : '');
+  void t.offsetWidth;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 4000);
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.learner-search-wrap')) {
+    var dd = document.getElementById('bookDropdown');
+    if (dd) dd.classList.remove('open');
+  }
+});
+
+init();
+</script>
+</body>
+</html>

@@ -141,8 +141,11 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   │   └── qa.html                 # Q&A forum
 │   ├── instructor/
 │   │   ├── login.html              # Magic-link login for instructors
-│   │   ├── index.html              # Instructor schedule calendar (monthly/weekly/daily views)
+│   │   ├── dashboard.html          # Compact no-scroll dashboard — today's lessons + Book Lesson
+│   │   ├── index.html              # Full calendar (monthly/weekly/daily/agenda views)
 │   │   ├── availability.html       # Instructor sets their own weekly availability
+│   │   ├── earnings.html           # Weekly earnings and payout history
+│   │   ├── learners.html           # Learner management and skill tracking
 │   │   ├── profile.html            # Instructor updates bio, contact details, and buffer time
 │   │   └── qa.html                 # Instructor Q&A management
 │   ├── demo/

@@ -80,8 +80,7 @@
     .month-booking-pill.cancelled { background: var(--red-lt); color: var(--red); opacity: 0.7; }
 
     @media print {
-      .cc-sb, .cc-bottom-bar, .cc-mob-header, .cal-toolbar, .toast, .modal-overlay,
-      .greeting, .next-lesson-card, .new-bookings-banner, .qa-banner { display: none !important; }
+      .cc-sb, .cc-bottom-bar, .cc-mob-header, .cal-toolbar, .toast, .modal-overlay { display: none !important; }
       .page { max-width: 100%; margin: 0; padding: 10px; box-shadow: none; }
       .daily-booking-card { break-inside: avoid; border: 1px solid #ccc; }
       .week-event { border: 1px solid #ccc; }
@@ -531,61 +530,7 @@
       .month-day-num { font-size: 0.78rem; }
     }
 
-    /* ── Today at a Glance ── */
-    .glance-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-    .glance-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
-    .glance-num { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; color: var(--primary); line-height: 1; }
-    .glance-num.accent { color: var(--accent); }
-    .glance-label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
 
-    /* ── Greeting ── */
-    .greeting { font-size: 1.3rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); letter-spacing: -0.02em; margin-bottom: 16px; }
-
-    /* ── Next Lesson Card (compact) ── */
-    .next-lesson-card {
-      display: none; align-items: center; justify-content: space-between;
-      background: var(--white); border: 1px solid var(--border);
-      border-left: 4px solid var(--accent); border-radius: var(--radius);
-      padding: 14px 16px; margin-bottom: 12px; gap: 16px;
-    }
-    .next-lesson-card.show { display: flex; }
-    .next-lesson-label {
-      font-size: 0.72rem; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 2px;
-    }
-    .next-lesson-time {
-      font-family: var(--font-head); font-weight: 700; color: var(--primary); font-size: 0.95rem;
-    }
-    .next-lesson-details { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
-    .next-lesson-details strong { color: var(--primary); }
-    .nl-stat { text-align: center; flex-shrink: 0; }
-    .nl-stat-num { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; line-height: 1; color: var(--accent); }
-    .nl-stat-label { font-size: 0.65rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
-
-    /* Next lesson empty state */
-    .next-lesson-empty {
-      border: 2px dashed var(--border); border-radius: var(--radius);
-      padding: 24px; text-align: center; margin-bottom: 20px; display: none;
-    }
-    .next-lesson-empty.show { display: block; }
-    .next-lesson-empty p { font-size: 0.9rem; color: var(--muted); margin-bottom: 12px; }
-    .nle-btn { display: inline-block; background: var(--accent); color: #fff; border-radius: 100px; padding: 10px 24px; font-size: 0.85rem; font-weight: 700; text-decoration: none; font-family: var(--font-head); transition: all 0.18s; border: none; cursor: pointer; }
-    .nle-btn:hover { background: var(--accent-dk); transform: translateY(-1px); }
-    /* ── New Bookings Banner ── */
-    .new-bookings-banner { display: none; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 14px 20px; margin-bottom: 12px; align-items: center; justify-content: space-between; gap: 12px; }
-    .new-bookings-banner strong { color: var(--primary); font-size: 0.875rem; }
-    .btn-view-schedule {
-      background: var(--surface); color: var(--primary); border: 1px solid var(--border);
-      padding: 8px 18px; border-radius: 8px; font-family: var(--font-head);
-      font-size: 0.82rem; font-weight: 700; cursor: pointer; white-space: nowrap;
-      text-decoration: none; transition: all 0.15s;
-    }
-    .btn-view-schedule:hover { border-color: var(--muted); }
-
-    /* ── Q&A Banner ── */
-    .qa-banner { display: none; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 14px 20px; margin-bottom: 12px; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.875rem; }
-    .qa-banner strong { color: var(--primary); }
-    .qa-banner-sub { color: var(--muted); font-size: 0.82rem; margin-left: 6px; }
 
     /* ── Instructor Notes Textarea ── */
     .notes-field { width: 100%; min-height: 60px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-body); font-size: 0.85rem; color: var(--primary); resize: vertical; background: var(--bg); margin-top: 8px; }
@@ -635,43 +580,6 @@
 <body>
 
 <div class="page">
-  <!-- GREETING -->
-  <h1 class="greeting" id="greeting">Loading…</h1>
-
-  <!-- Compact next lesson card -->
-  <div class="next-lesson-card" id="nextLessonCard" style="display:none">
-    <div>
-      <span class="next-lesson-label" id="nextLessonWhen">Next lesson</span>
-      <span class="next-lesson-detail" id="nextLessonTime"></span>
-      <span class="next-lesson-details" id="nextLessonDetails"></span>
-    </div>
-    <div class="nl-stat" id="nlStat" style="display:none">
-      <div class="nl-stat-num" id="nlStatNum">0</div>
-      <div class="nl-stat-label">today</div>
-    </div>
-  </div>
-
-  <!-- Next lesson empty state -->
-  <div class="next-lesson-empty" id="nextLessonEmpty">
-    <p>No upcoming lessons today</p>
-    <button class="nle-btn" onclick="openAddLessonModal()">Add a Lesson</button>
-  </div>
-
-  <!-- New Bookings Banner -->
-  <div class="new-bookings-banner" id="newBookingsBanner">
-    <strong id="newBookingsText"></strong>
-    <button class="btn-view-schedule" onclick="goToday()">View schedule</button>
-  </div>
-
-  <!-- Q&A unanswered banner -->
-  <div class="qa-banner" id="qa-banner" style="display:none">
-    <div>
-      <strong id="qa-banner-text">You have unanswered questions</strong>
-      <span class="qa-banner-sub">from learners</span>
-    </div>
-    <a href="/instructor/qa.html" class="btn-view-schedule">Answer now</a>
-  </div>
-
   <!-- Toolbar (sticky) -->
   <div class="cal-toolbar">
     <div class="cal-nav">
@@ -690,14 +598,6 @@
     <button class="btn-today" onclick="openOfferModal()" title="Send a lesson offer">Offer</button>
     <button class="btn-today cal-filter-btn" id="btnHideWeekends" onclick="toggleHideWeekends()" title="Hide weekends">Weekdays</button>
     <button class="btn-today cal-filter-btn" id="btnShowCancelled" onclick="toggleShowCancelled()" title="Show cancelled">Cancelled</button>
-  </div>
-
-  <!-- Stats (below toolbar) -->
-  <div class="glance-row" id="glanceRow" style="display:none">
-    <div class="glance-card"><div class="glance-num accent" id="glToday">—</div><div class="glance-label">Today</div></div>
-    <div class="glance-card"><div class="glance-num" id="glWeek">—</div><div class="glance-label">This week</div></div>
-    <div class="glance-card"><div class="glance-num" id="glMonth">—</div><div class="glance-label">This month</div></div>
-    <div class="glance-card"><div class="glance-num" id="glAllTime">—</div><div class="glance-label">All time</div></div>
   </div>
 
   <!-- Calendar content -->
@@ -915,7 +815,6 @@ function init() {
   token      = session?.token || null;
   instructor = session?.instructor || null;
   if (!token) { window.location.href = '/instructor/login.html'; return; }
-  document.getElementById('greeting').textContent = 'Hi, ' + (instructor?.name?.split(' ')[0] || 'there');
 
   // Load calendar preferences from profile
   loadCalendarPrefs();
@@ -924,8 +823,6 @@ function init() {
   cursor = new Date(); cursor.setHours(0,0,0,0);
   setView('daily'); // start in daily view on today
   loadAvailability();
-  loadQABanner();
-  loadStats();
 }
 
 async function loadCalendarPrefs() {
@@ -940,26 +837,7 @@ async function loadCalendarPrefs() {
   } catch {}
 }
 
-async function loadQABanner() {
-  try {
-    const res = await fetch('/api/instructor?action=qa-list&status=open&limit=50', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
-    const data = await res.json();
-    if (!res.ok) return;
-    const openCount = (data.questions || []).length;
-    if (openCount > 0) {
-      const banner = document.getElementById('qa-banner');
-      banner.style.display = 'flex';
-      document.getElementById('qa-banner-text').textContent =
-        openCount === 1 ? '1 unanswered question' : openCount + ' unanswered questions';
-    }
-  } catch (err) {
-    console.error('qa-banner error:', err);
-  }
-}
-
-// ─── View switching ──────────────────────────────────────────────────────────
+// ─── View switching ──────────────────────────────────���───────────────────────
 function setView(view) {
   currentView = view;
   document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
@@ -1724,94 +1602,7 @@ function shouldShowInstructorCalSync() {
 
 // Calendar sync banner removed — accessible via profile page
 
-// ─── Stats + Dashboard ───────────────────────────────────────────────────────
-async function loadStats() {
-  try {
-    const res = await fetch('/api/instructor?action=stats', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
-    const data = await res.json();
-    if (!res.ok) return;
-
-    document.getElementById('glToday').textContent = data.today;
-    document.getElementById('glWeek').textContent = data.thisWeek;
-    document.getElementById('glMonth').textContent = (data.thisMonth.completed + data.thisMonth.upcoming);
-    document.getElementById('glAllTime').textContent = data.allTimeCompleted;
-    document.getElementById('glanceRow').style.display = '';
-
-    // New bookings banner
-    if (data.newBookingsLast24h > 0) {
-      const banner = document.getElementById('newBookingsBanner');
-      banner.style.display = 'flex';
-      document.getElementById('newBookingsText').textContent =
-        data.newBookingsLast24h === 1
-          ? '1 new booking in the last 24 hours'
-          : data.newBookingsLast24h + ' new bookings in the last 24 hours';
-    }
-
-    // Next lesson card — find from today's cache after data loads
-    setTimeout(showNextLesson, 500);
-  } catch (err) {
-    console.error('stats error:', err);
-  }
-}
-
-function showNextLesson() {
-  const now = new Date();
-  const todayDS = dateStr(now);
-  const todayBookings = (bookingCache[todayDS] || []).filter(b => b.status === 'confirmed');
-  const card = document.getElementById('nextLessonCard');
-  const empty = document.getElementById('nextLessonEmpty');
-
-  // Find next confirmed lesson today
-  let next = null;
-  for (const b of todayBookings) {
-    const [h, m] = b.start_time.split(':').map(Number);
-    const lessonTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
-    if (lessonTime > now) { next = b; break; }
-  }
-
-  if (!next) {
-    card.classList.remove('show');
-    empty.classList.add('show');
-    return;
-  }
-
-  empty.classList.remove('show');
-  card.classList.add('show');
-
-  // Countdown
-  const [h, m] = next.start_time.split(':').map(Number);
-  const lessonTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
-  const diffMs = lessonTime - now;
-  const diffMins = Math.floor(diffMs / 60000);
-  let countdown = 'Next lesson';
-  if (diffMins <= 0) {
-    countdown = 'Starting now';
-  } else if (diffMins < 60) {
-    countdown = 'In ' + diffMins + ' min';
-  } else {
-    countdown = 'In ' + Math.floor(diffMins / 60) + 'h ' + (diffMins % 60) + 'm';
-  }
-
-  document.getElementById('nextLessonWhen').textContent = countdown;
-  document.getElementById('nextLessonTime').textContent =
-    next.start_time.slice(0,5) + ' – ' + next.end_time.slice(0,5);
-
-  let details = '<strong>' + esc(next.learner_name) + '</strong>';
-  if (next.learner_pickup_address) details += ' · 📍 ' + esc(next.learner_pickup_address);
-  if (next.learner_phone) details += ' · 📞 ' + esc(next.learner_phone);
-  if (next.prefer_contact_before) details += '<br><span style="color:var(--muted)">Wants a call before first lesson</span>';
-  document.getElementById('nextLessonDetails').innerHTML = details;
-
-  // Show today's lesson count in the stat bubble
-  const stat = document.getElementById('nlStat');
-  const statNum = document.getElementById('nlStatNum');
-  if (todayBookings.length > 0) {
-    stat.style.display = '';
-    statNum.textContent = todayBookings.length;
-  }
-}
+// Stats + next lesson moved to /instructor/dashboard.html
 
 // ─── Instructor Notes in Complete Flow ───────────────────────────────────────
 function openBookingDetail(bookingId) {

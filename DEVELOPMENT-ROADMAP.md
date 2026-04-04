@@ -883,6 +883,37 @@ System-wide dark mode support across all learner, instructor, admin, and public 
 | Post-lesson skill self-assessment | Session logging is unique |
 | webcal:// subscription feeds | Learner + instructor feeds with VALARM reminders |
 
+### UX Cleanup — Learner Booking & Instructor Portal (4 April 2026)
+
+Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation, cluttered banners, and orange overload.
+
+**Learner booking page (`book.html`) + buy-credits:**
+- Removed old `.site-nav`, `.sub-tabs`, `.bottom-nav` (sidebar.js handles all nav)
+- Replaced full upcoming bookings strip with compact "Next lesson" card + "View all" link
+- Grouped slot feed by date headers instead of repeating date on every card
+- Toned down orange: neutral pills/card hover/banners, accent only on primary CTAs
+- Merged lesson type pills + instructor filter into one sticky toolbar row
+- Removed redundant "Book a Lesson" title heading and calendar sync banner
+
+**Instructor portal (all 6 pages):**
+- Removed old `.site-nav` and `.bottom-nav` from availability, earnings, learners, qa, profile, index
+- Removed duplicated `.bottom-nav` CSS from each page's style block
+
+**Instructor dashboard redesign:**
+- Created new `/instructor/dashboard.html` — compact no-scroll view of today's lessons
+- Shows greeting, inline stats strip ("3 today · 12 this week"), today's lesson list
+- Next upcoming lesson highlighted with accent left-border; completed lessons muted
+- "Book Lesson" button with learner search modal (reuses create-booking API)
+- Removed pill-row, action-cards, orange gradient hero card, calendar sync banner from calendar page
+- Calendar page (`/instructor/index.html`) is now pure calendar with sticky toolbar
+
+**Navigation update:**
+- Instructor bottom tabs: Dashboard | Calendar | Learners | Earnings | Profile (was: Calendar | Learners | Earnings | Q&A | Profile)
+- Q&A moved to sidebar-only (not removed, just deprioritised from bottom tabs)
+- Dashboard added as first sidebar item
+
+**Files changed:** `sidebar.js`, `public/instructor/dashboard.html` (new), `public/instructor/index.html`, `public/instructor/availability.html`, `public/instructor/earnings.html`, `public/instructor/learners.html`, `public/instructor/qa.html`, `public/instructor/profile.html`, `public/learner/book.html`, `public/learner/buy-credits.html`
+
 ---
 
 ## Phase 4: Future Considerations (Not Yet Scoped)
