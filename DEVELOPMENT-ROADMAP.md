@@ -1048,6 +1048,32 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 **Files changed:** `api/instructor.js`, `public/instructor/dashboard.html`
 
+## 2.58 — Unauthenticated Booking Page Enhancements (5 April 2026)
+
+**What changed:**
+
+1. **Instructor filter and lesson type pills for unauthenticated users** — the booking page now loads the instructor dropdown and lesson type pill bar for visitors who aren't logged in. Previously these only loaded after authentication, leaving guests with an empty "All instructors" dropdown.
+
+2. **Instructor-specific booking links (`?instructor=X`)** — booking page accepts an `instructor` URL parameter to pre-filter slots to a single instructor. Combined with `?type=` for full control (e.g. `?instructor=4&type=standard`). Instructor profile page now shows a "Your booking page" link at the top of the Booking Links section with per-lesson-type variants that include the instructor ID.
+
+**Files changed:** `public/learner/book.html`, `public/instructor/profile.html`
+
+---
+
+## 2.59 — Guest Checkout (5 April 2026)
+
+**What changed:**
+
+1. **Guest booking without account** — learners can now book and pay for lessons without creating an account first. When an unauthenticated user clicks a slot, the booking modal shows guest fields (name, email, phone, pickup address, terms checkbox) instead of requiring login. The API creates the learner account immediately before Stripe payment so the existing webhook handler works unchanged.
+
+2. **New API action (`POST /api/slots?action=checkout-slot-guest`)** — unauthenticated endpoint that validates guest fields, finds-or-creates a learner account by email (backfills empty fields on existing accounts), reserves the slot with the real learner_id, and creates a Stripe Checkout session. Rate limited: 10 per IP per hour + 5 per phone per hour.
+
+3. **Modal scroll fix** — added `max-height` and `overflow-y: auto` to the booking modal so the guest form doesn't push buttons off-screen on mobile viewports.
+
+**Files changed:** `api/slots.js`, `public/learner/book.html`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

@@ -238,6 +238,8 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 - **Lesson type pill bar:** Sticky bar below header. Compact pills with type name, duration, price. Selecting a type re-fetches slots.
 - **Progressive loading:** 14 days at a time. "Show more slots" button loads the next 14 days (max 90).
 - **Instructor filter:** Dropdown in toolbar filters slots by instructor.
+- **URL parameters:** `?instructor=X` pre-selects instructor filter, `?type=slug` pre-selects lesson type. Both work for unauthenticated visitors.
+- **Guest checkout:** Unauthenticated users can book without creating an account. The modal shows guest fields (name, email, phone, pickup address, terms). Account created server-side before Stripe payment via `checkout-slot-guest` action. Existing webhook handles booking creation unchanged.
 - No view toggles, no date navigation arrows, no cursor state.
 
 ## Navigation design (app mode — March 2026)

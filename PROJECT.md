@@ -273,6 +273,7 @@ Base rate: **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Learners 
 - Booking is instant — no instructor approval needed
 - **With hours balance:** Duration deducted from `balance_minutes` on booking; returned automatically on 48+ hour cancellations
 - **Without balance (pay-per-slot):** Slot reserved for 10 minutes during Stripe Checkout; on payment, hours added + deducted atomically, booking created, .ics calendar attachment sent to both parties
+- **Guest checkout (no account):** Unauthenticated learners can book via `checkout-slot-guest`. They provide name, email, phone, and pickup address in the booking modal. The API creates a learner account immediately (find-or-create by email), reserves the slot with the real learner_id, then redirects to Stripe. The existing webhook handles the rest unchanged. Rate limited by IP and phone number. Guest bookings tagged with `created_by = 'guest_checkout'`
 - **Demo instructor:** Bookings against the demo instructor (email `demo@coachcarter.uk`) are free — no credit check or deduction. The demo instructor is excluded from real booking flows via email check in `api/instructors.js` and `api/slots.js`. No emails sent to the demo instructor on book/cancel. Cancel returns no credits (since none were taken).
 - Race condition protection via DB unique index on `(instructor_id, scheduled_date, start_time)` + slot reservations table
 
@@ -360,6 +361,7 @@ Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancell
 | `available` | GET | No | Available slots for a lesson type duration. Params: `from`, `to`, `instructor_id?`, `lesson_type_id?` |
 | `book` | POST | Yes | Book a slot — deducts `duration_minutes` from `balance_minutes`. Body includes `lesson_type_id` |
 | `checkout-slot` | POST | Yes | Pay-per-slot: reserves slot, creates Stripe Checkout at lesson type's price |
+| `checkout-slot-guest` | POST | No | Guest checkout: validates guest fields (name, email, phone, pickup), finds-or-creates learner account, reserves slot, creates Stripe Checkout. Rate limited: 10/IP/hr + 5/phone/hr |
 | `cancel` | POST | Yes | Cancel a booking (returns `minutes_deducted` to balance if 48hr+ policy met) |
 | `reschedule` | POST | Yes | Move a confirmed booking to a new slot (48hr+ notice, max 2 per chain, no balance change) |
 | `my-bookings` | GET | Yes | Learner's bookings with lesson type info (name, colour, duration) |
