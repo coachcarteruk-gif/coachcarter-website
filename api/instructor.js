@@ -107,6 +107,7 @@ module.exports = async (req, res) => {
   if (action === 'my-learners')        return handleMyLearners(req, res);
   if (action === 'update-notes')       return handleUpdateNotes(req, res);
   if (action === 'learner-notes')      return handleLearnerNotes(req, res);
+  if (action === 'learner-mock-tests') return handleLearnerMockTests(req, res);
   if (action === 'update-learner-notes') return handleUpdateLearnerNotes(req, res);
   if (action === 'earnings-week')        return handleEarningsWeek(req, res);
   if (action === 'earnings-history')     return handleEarningsHistory(req, res);
@@ -1781,6 +1782,51 @@ async function handleUpdateNotes(req, res) {
     console.error('update-notes error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to update notes' });
+  }
+}
+
+// ── GET /api/instructor?action=learner-mock-tests&learner_id=X ──────────────
+// Returns mock test history for a learner (scoped to instructor's school).
+async function handleLearnerMockTests(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const learner_id = req.query.learner_id;
+  if (!learner_id) return res.status(400).json({ error: 'learner_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = instructor.school_id || 1;
+
+    const tests = await sql`
+      SELECT mt.id, mt.started_at, mt.completed_at, mt.result, mt.mode,
+        mt.total_driving_faults, mt.total_serious_faults, mt.total_dangerous_faults,
+        mt.notes,
+        COALESCE(json_agg(
+          json_build_object(
+            'part', f.part, 'skill_key', f.skill_key,
+            'driving_faults', f.driving_faults,
+            'serious_faults', f.serious_faults,
+            'dangerous_faults', f.dangerous_faults,
+            'supervisor_rating', f.supervisor_rating
+          ) ORDER BY f.part, f.skill_key
+        ) FILTER (WHERE f.id IS NOT NULL), '[]') AS faults
+      FROM mock_tests mt
+      LEFT JOIN mock_test_faults f ON f.mock_test_id = mt.id
+      WHERE mt.learner_id = ${learner_id}
+        AND mt.school_id = ${schoolId}
+        AND mt.completed_at IS NOT NULL
+      GROUP BY mt.id
+      ORDER BY mt.started_at DESC
+      LIMIT 10`;
+
+    return res.json({ mock_tests: tests });
+  } catch (err) {
+    console.error('learner-mock-tests error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to load mock tests' });
   }
 }
 

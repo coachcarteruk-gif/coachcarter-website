@@ -29,6 +29,7 @@ module.exports = async (req, res) => {
   if (action === 'qa-reply')         return handleQAReply(req, res);
   if (action === 'mock-tests')       return handleMockTests(req, res);
   if (action === 'mock-test-faults') return handleMockTestFaults(req, res);
+  if (action === 'focused-practice') return handleFocusedPractice(req, res);
   if (action === 'quiz-results')     return handleQuizResults(req, res);
   if (action === 'competency')       return handleCompetency(req, res);
   if (action === 'onboarding')       return handleOnboarding(req, res);
@@ -481,6 +482,7 @@ async function handleMockTests(req, res) {
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
   const sql = neon(process.env.POSTGRES_URL);
+  const schoolId = user.school_id || 1;
 
   if (req.method === 'GET') {
     try {
@@ -491,12 +493,13 @@ async function handleMockTests(req, res) {
               'part', f.part, 'skill_key', f.skill_key,
               'driving_faults', f.driving_faults,
               'serious_faults', f.serious_faults,
-              'dangerous_faults', f.dangerous_faults
+              'dangerous_faults', f.dangerous_faults,
+              'supervisor_rating', f.supervisor_rating
             ) ORDER BY f.part, f.skill_key
           ) FILTER (WHERE f.id IS NOT NULL), '[]') AS faults
         FROM mock_tests mt
         LEFT JOIN mock_test_faults f ON f.mock_test_id = mt.id
-        WHERE mt.learner_id = ${user.id}
+        WHERE mt.learner_id = ${user.id} AND mt.school_id = ${schoolId}
         GROUP BY mt.id
         ORDER BY mt.started_at DESC
         LIMIT 20`;
@@ -510,11 +513,27 @@ async function handleMockTests(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { mock_test_id, complete, notes } = req.body;
+      const { mock_test_id, complete, notes, mode, route_id, instructor_id } = req.body;
 
       // Complete an existing mock test
       if (complete && mock_test_id) {
-        // Sum faults from mock_test_faults
+        // Check mode to determine result logic
+        const [testRow] = await sql`
+          SELECT mode FROM mock_tests WHERE id = ${mock_test_id} AND learner_id = ${user.id}`;
+        if (!testRow) return res.status(404).json({ error: 'Mock test not found' });
+
+        if (testRow.mode === 'supervisor') {
+          // Supervisor mode: no pass/fail, just mark complete
+          await sql`
+            UPDATE mock_tests SET
+              completed_at = NOW(),
+              result = NULL,
+              notes = ${notes || null}
+            WHERE id = ${mock_test_id} AND learner_id = ${user.id}`;
+          return res.json({ success: true, mock_test_id, result: null });
+        }
+
+        // Instructor mode (or legacy): pass/fail based on D/S/X
         const [totals] = await sql`
           SELECT
             COALESCE(SUM(driving_faults), 0)::int AS total_d,
@@ -538,10 +557,11 @@ async function handleMockTests(req, res) {
         return res.json({ success: true, mock_test_id, result, totals });
       }
 
-      // Create new mock test
+      // Create new mock test (with mode)
+      const testMode = mode === 'supervisor' ? 'supervisor' : mode === 'instructor' ? 'instructor' : null;
       const [row] = await sql`
-        INSERT INTO mock_tests (learner_id)
-        VALUES (${user.id})
+        INSERT INTO mock_tests (learner_id, school_id, mode, route_id, instructor_id)
+        VALUES (${user.id}, ${schoolId}, ${testMode}, ${route_id || null}, ${instructor_id || null})
         RETURNING id, started_at`;
 
       return res.json({ success: true, mock_test_id: row.id, started_at: row.started_at });
@@ -555,7 +575,7 @@ async function handleMockTests(req, res) {
 }
 
 // ── Mock Test Faults (save faults for a part) ───────────────────────────────
-// POST: { mock_test_id, part (1-3), faults: [{ skill_key, sub_key?, driving, serious, dangerous }] }
+// POST: { mock_test_id, part, faults: [{ skill_key, sub_key?, driving?, serious?, dangerous?, supervisor_rating? }] }
 async function handleMockTestFaults(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyAuth(req);
@@ -563,10 +583,11 @@ async function handleMockTestFaults(req, res) {
 
   try {
     const { mock_test_id, part, faults } = req.body;
-    if (!mock_test_id || !part || part < 1 || part > 3)
-      return res.status(400).json({ error: 'mock_test_id and part (1-3) required' });
+    if (!mock_test_id || !part || part < 1 || part > 10)
+      return res.status(400).json({ error: 'mock_test_id and part (1-10) required' });
 
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = user.school_id || 1;
 
     // Verify ownership
     const [test] = await sql`
@@ -576,13 +597,15 @@ async function handleMockTestFaults(req, res) {
     // Clear any existing faults for this part (allow re-recording)
     await sql`DELETE FROM mock_test_faults WHERE mock_test_id = ${mock_test_id} AND part = ${part}`;
 
-    // Insert new faults (only skills that had faults)
+    // Insert new faults
     if (faults?.length > 0) {
       for (const f of faults) {
-        if ((f.driving || 0) + (f.serious || 0) + (f.dangerous || 0) > 0) {
+        const hasDSX = (f.driving || 0) + (f.serious || 0) + (f.dangerous || 0) > 0;
+        const hasSupervisor = !!f.supervisor_rating;
+        if (hasDSX || hasSupervisor) {
           await sql`
-            INSERT INTO mock_test_faults (mock_test_id, part, skill_key, sub_key, driving_faults, serious_faults, dangerous_faults)
-            VALUES (${mock_test_id}, ${part}, ${f.skill_key}, ${f.sub_key || null}, ${f.driving || 0}, ${f.serious || 0}, ${f.dangerous || 0})`;
+            INSERT INTO mock_test_faults (mock_test_id, school_id, part, skill_key, sub_key, driving_faults, serious_faults, dangerous_faults, supervisor_rating)
+            VALUES (${mock_test_id}, ${schoolId}, ${part}, ${f.skill_key}, ${f.sub_key || null}, ${f.driving || 0}, ${f.serious || 0}, ${f.dangerous || 0}, ${f.supervisor_rating || null})`;
         }
       }
     }
@@ -593,6 +616,74 @@ async function handleMockTestFaults(req, res) {
     reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to save faults' });
   }
+}
+
+// ── Focused Practice Sessions ────────────────────────────────────────────────
+// GET: return history  POST: create session with reflections
+async function handleFocusedPractice(req, res) {
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const sql = neon(process.env.POSTGRES_URL);
+  const schoolId = user.school_id || 1;
+
+  if (req.method === 'GET') {
+    try {
+      const sessions = await sql`
+        SELECT fp.*, ds.session_date, ds.duration_minutes
+        FROM focused_practice_sessions fp
+        JOIN driving_sessions ds ON ds.id = fp.session_id
+        WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}
+        ORDER BY fp.created_at DESC
+        LIMIT 20`;
+      return res.json({ sessions });
+    } catch (err) {
+      console.error('focused-practice GET error:', err);
+      reportError('/api/learner', err);
+      return res.status(500).json({ error: 'Failed to load practice sessions' });
+    }
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const { focus_areas, suggested_areas, duration_minutes, reflections } = req.body;
+      if (!focus_areas || !Array.isArray(focus_areas) || focus_areas.length === 0 || focus_areas.length > 3) {
+        return res.status(400).json({ error: 'focus_areas must be 1-3 items' });
+      }
+
+      // Create driving_session
+      const [session] = await sql`
+        INSERT INTO driving_sessions (user_id, session_date, duration_minutes, session_type, school_id)
+        VALUES (${user.id}, NOW()::date, ${duration_minutes || 0}, 'focused_practice', ${schoolId})
+        RETURNING id`;
+
+      // Create focused_practice_sessions row
+      const [fp] = await sql`
+        INSERT INTO focused_practice_sessions (session_id, learner_id, school_id, focus_areas, suggested_areas, reflections, completed_at)
+        VALUES (${session.id}, ${user.id}, ${schoolId}, ${JSON.stringify(focus_areas)}, ${JSON.stringify(suggested_areas || null)}, ${JSON.stringify(reflections || null)}, NOW())
+        RETURNING id`;
+
+      // Create skill_ratings for each reflected area
+      if (reflections && typeof reflections === 'object') {
+        for (const [skillKey, data] of Object.entries(reflections)) {
+          if (data && data.rating) {
+            await sql`
+              INSERT INTO skill_ratings (session_id, user_id, skill_key, rating, note, tier, school_id)
+              VALUES (${session.id}, ${user.id}, ${skillKey}, ${data.rating}, ${data.note || null}, 1, ${schoolId})`;
+          }
+        }
+      }
+
+      // Update last_activity_at
+      await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`;
+
+      return res.json({ success: true, session_id: session.id, practice_id: fp.id });
+    } catch (err) {
+      console.error('focused-practice POST error:', err);
+      reportError('/api/learner', err);
+      return res.status(500).json({ error: 'Failed to save practice session' });
+    }
+  }
+  return res.status(405).json({ error: 'Method not allowed' });
 }
 
 // ── Quiz Results (persist per-question answers) ─────────────────────────────
@@ -659,6 +750,7 @@ async function handleCompetency(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -667,7 +759,7 @@ async function handleCompetency(req, res) {
     const lessonData = await sql`
       SELECT skill_key, rating, created_at
       FROM skill_ratings
-      WHERE user_id = ${user.id}
+      WHERE user_id = ${user.id} AND school_id = ${schoolId}
       ORDER BY skill_key, created_at DESC`;
 
     // Quiz accuracy per skill
@@ -676,17 +768,17 @@ async function handleCompetency(req, res) {
         COUNT(*)::int AS attempts,
         COUNT(*) FILTER (WHERE correct)::int AS correct_count
       FROM quiz_results
-      WHERE learner_id = ${user.id}
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId}
       GROUP BY skill_key`;
 
-    // Mock test summary
+    // Mock test summary (only instructor-mode or legacy tests count for pass/fail)
     const mockData = await sql`
       SELECT
         COUNT(*)::int AS total_tests,
         COUNT(*) FILTER (WHERE result = 'pass')::int AS passes,
         COUNT(*) FILTER (WHERE result = 'fail')::int AS fails
       FROM mock_tests
-      WHERE learner_id = ${user.id} AND completed_at IS NOT NULL`;
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId} AND completed_at IS NOT NULL`;
 
     // Mock test faults aggregated by skill
     const mockFaults = await sql`
@@ -696,21 +788,28 @@ async function handleCompetency(req, res) {
         SUM(f.dangerous_faults)::int AS total_dangerous
       FROM mock_test_faults f
       JOIN mock_tests mt ON mt.id = f.mock_test_id
-      WHERE mt.learner_id = ${user.id}
+      WHERE mt.learner_id = ${user.id} AND mt.school_id = ${schoolId}
       GROUP BY f.skill_key`;
 
     // Session stats
     const stats = await sql`
       SELECT COUNT(*)::int as total_sessions,
         COALESCE(SUM(duration_minutes), 0)::int as total_minutes
-      FROM driving_sessions WHERE user_id = ${user.id}`;
+      FROM driving_sessions WHERE user_id = ${user.id} AND school_id = ${schoolId}`;
+
+    // Focused practice session count
+    const fpStats = await sql`
+      SELECT COUNT(*)::int as total_sessions
+      FROM focused_practice_sessions
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
 
     return res.json({
       lesson_ratings: lessonData,
       quiz_accuracy: quizData,
       mock_summary: mockData[0] || { total_tests: 0, passes: 0, fails: 0 },
       mock_faults: mockFaults,
-      session_stats: stats[0] || { total_sessions: 0, total_minutes: 0 }
+      session_stats: stats[0] || { total_sessions: 0, total_minutes: 0 },
+      focused_practice_count: (fpStats[0] || {}).total_sessions || 0
     });
   } catch (err) {
     console.error('competency error:', err);
@@ -1061,9 +1160,17 @@ async function handleExportData(req, res) {
       ORDER BY answered_at DESC`;
 
     const mockTests = await sql`
-      SELECT id, started_at, completed_at, total_driving_faults, total_serious_faults, total_dangerous_faults, result, notes
+      SELECT id, started_at, completed_at, total_driving_faults, total_serious_faults, total_dangerous_faults, result, mode, notes
       FROM mock_tests WHERE learner_id = ${user.id} AND school_id = ${schoolId}
       ORDER BY started_at DESC`;
+
+    const focusedPractice = await sql`
+      SELECT fp.id, fp.focus_areas, fp.suggested_areas, fp.reflections, fp.completed_at, fp.created_at,
+             ds.session_date, ds.duration_minutes
+      FROM focused_practice_sessions fp
+      JOIN driving_sessions ds ON ds.id = fp.session_id
+      WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}
+      ORDER BY fp.created_at DESC`;
 
     const questions = await sql`
       SELECT title, body, status, created_at
@@ -1074,7 +1181,7 @@ async function handleExportData(req, res) {
       _metadata: {
         exported_at: new Date().toISOString(),
         format: 'json',
-        data_categories: ['profile', 'onboarding', 'bookings', 'transactions', 'driving_sessions', 'skill_ratings', 'quiz_results', 'mock_tests', 'qa_questions']
+        data_categories: ['profile', 'onboarding', 'bookings', 'transactions', 'driving_sessions', 'skill_ratings', 'quiz_results', 'mock_tests', 'focused_practice', 'qa_questions']
       },
       profile: profile || {},
       onboarding: onboarding[0] || null,
@@ -1084,6 +1191,7 @@ async function handleExportData(req, res) {
       skill_ratings: skills,
       quiz_results: quizzes,
       mock_tests: mockTests,
+      focused_practice: focusedPractice,
       qa_questions: questions
     };
 
@@ -1214,6 +1322,7 @@ async function handleConfirmDeletion(req, res) {
     try { await sql`DELETE FROM quiz_results WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete quiz_results skipped:', e.message); }
     try { await sql`DELETE FROM mock_test_faults WHERE mock_test_id IN (SELECT id FROM mock_tests WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete mock_test_faults skipped:', e.message); }
     try { await sql`DELETE FROM mock_tests WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete mock_tests skipped:', e.message); }
+    try { await sql`DELETE FROM focused_practice_sessions WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete focused_practice_sessions skipped:', e.message); }
     try { await sql`DELETE FROM qa_answers WHERE question_id IN (SELECT id FROM qa_questions WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete qa_answers skipped:', e.message); }
     try { await sql`DELETE FROM qa_questions WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete qa_questions skipped:', e.message); }
     try { await sql`DELETE FROM sent_reminders WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete sent_reminders skipped:', e.message); }

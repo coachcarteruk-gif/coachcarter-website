@@ -64,6 +64,7 @@ module.exports = async (req, res) => {
         try { await sql`DELETE FROM quiz_results WHERE learner_id = ${lid}`; } catch (e) {}
         try { await sql`DELETE FROM mock_test_faults WHERE mock_test_id IN (SELECT id FROM mock_tests WHERE learner_id = ${lid})`; } catch (e) {}
         try { await sql`DELETE FROM mock_tests WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM focused_practice_sessions WHERE learner_id = ${lid}`; } catch (e) {}
         try { await sql`DELETE FROM qa_answers WHERE question_id IN (SELECT id FROM qa_questions WHERE learner_id = ${lid})`; } catch (e) {}
         try { await sql`DELETE FROM qa_questions WHERE learner_id = ${lid}`; } catch (e) {}
         try { await sql`DELETE FROM sent_reminders WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${lid})`; } catch (e) {}

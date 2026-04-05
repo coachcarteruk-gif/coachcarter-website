@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Focused Practice | Coach Carter</title>
+  <meta name="description" content="Pick your top areas to improve and practice with targeted reflection. Track your progress over time.">
+<script src="/cookie-consent.js"></script>
+<script src="/posthog-loader.js"></script>
+<script src="/competency-config.js"></script>
+<script src="/sidebar.js"></script>
+<script src="/shared/learner-auth.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/learner.css">
+  <script src="/shared/dark-mode.js"></script>
+  <style>
+    main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; }
+    .screen { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .hidden { display: none !important; }
+
+    .btn-primary {
+      display: block; width: 100%; padding: 16px; border-radius: 12px; border: none;
+      background: var(--accent); color: #fff; font-family: var(--font-body);
+      font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.18s;
+      text-decoration: none; text-align: center;
+    }
+    .btn-primary:hover { background: var(--accent-dk); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.35); }
+    .btn-primary:disabled { background: var(--border); cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-secondary {
+      display: block; width: 100%; padding: 14px; border-radius: 12px;
+      border: 1px solid var(--border); background: var(--white); color: var(--primary);
+      font-family: var(--font-body); font-size: 0.95rem; font-weight: 700;
+      cursor: pointer; transition: all 0.18s; text-decoration: none; text-align: center;
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── SETUP SCREEN ── */
+    .setup-screen { padding: 20px 0; }
+    .setup-screen h1 {
+      font-family: var(--font-head); font-size: 1.6rem; font-weight: 800;
+      letter-spacing: -0.03em; margin-bottom: 8px;
+    }
+    .setup-subtitle { color: var(--muted); font-size: 0.92rem; line-height: 1.6; margin-bottom: 24px; }
+    .suggested-label {
+      font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
+      color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 12px;
+    }
+    .area-pick-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+    .area-pick {
+      display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+      border-radius: var(--radius); border: 2px solid var(--border);
+      background: var(--white); cursor: pointer; transition: all 0.18s;
+      user-select: none;
+    }
+    .area-pick:hover { border-color: var(--accent); }
+    .area-pick.selected { border-color: var(--accent); background: var(--accent-lt); box-shadow: 0 0 0 3px rgba(245,131,33,0.12); }
+    .area-pick-icon { font-size: 1.3rem; }
+    .area-pick-text { flex: 1; }
+    .area-pick-name { font-family: var(--font-head); font-size: 0.92rem; font-weight: 700; }
+    .area-pick-desc { font-size: 0.82rem; color: var(--muted); line-height: 1.4; margin-top: 2px; }
+    .area-pick-score {
+      font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 100px;
+      font-family: var(--font-head);
+    }
+    .area-pick-check {
+      width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 800; color: var(--white); transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .area-pick.selected .area-pick-check { background: var(--accent); border-color: var(--accent); }
+    .pick-count { text-align: center; font-size: 0.85rem; color: var(--muted); margin-bottom: 16px; font-weight: 600; }
+    .browse-toggle {
+      display: block; width: 100%; text-align: center; background: none; border: none;
+      color: var(--accent); font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      padding: 8px; margin-bottom: 16px; font-family: var(--font-body);
+    }
+
+    /* ── FOCUS GUIDE ── */
+    .focus-guide {
+      background: var(--accent-lt); border: 1px solid rgba(245,131,33,0.2);
+      border-radius: var(--radius); padding: 16px 20px; margin-bottom: 20px;
+    }
+    .focus-guide h3 {
+      font-family: var(--font-head); font-size: 0.88rem; font-weight: 700;
+      color: var(--accent-dk); margin-bottom: 8px;
+    }
+    .focus-guide ul { list-style: none; padding: 0; margin: 0; }
+    .focus-guide li {
+      font-size: 0.84rem; padding: 4px 0 4px 18px; position: relative; line-height: 1.4;
+    }
+    .focus-guide li::before { content: '\2022'; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+
+    /* ── DRIVING SCREEN ── */
+    .drive-screen { text-align: center; padding: 40px 0 20px; }
+    .focus-pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 24px; }
+    .focus-pill {
+      padding: 6px 14px; border-radius: 100px; font-size: 0.78rem; font-weight: 700;
+      font-family: var(--font-head); background: var(--accent-lt); color: var(--accent);
+      border: 1px solid rgba(245,131,33,0.2);
+    }
+    .timer-display {
+      font-family: var(--font-head); font-size: 3rem; font-weight: 800;
+      color: var(--primary); margin-bottom: 8px; letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums;
+    }
+    .timer-label { font-size: 0.82rem; color: var(--muted); margin-bottom: 28px; }
+    .btn-group { display: flex; flex-direction: column; gap: 10px; }
+
+    /* ── REFLECTION SCREEN ── */
+    .reflect-screen { padding: 20px 0; }
+    .reflect-screen h2 {
+      font-family: var(--font-head); font-size: 1.3rem; font-weight: 700; margin-bottom: 4px;
+    }
+    .reflect-subtitle { font-size: 0.85rem; color: var(--muted); margin-bottom: 24px; }
+    .reflect-area {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px;
+    }
+    .reflect-area-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+    }
+    .reflect-area-icon { font-size: 1.2rem; }
+    .reflect-area-q {
+      font-family: var(--font-head); font-size: 0.92rem; font-weight: 700; flex: 1;
+    }
+    .reflect-btns { display: flex; gap: 8px; margin-bottom: 10px; }
+    .reflect-btn {
+      flex: 1; padding: 12px 8px; border-radius: 10px; border: 2px solid var(--border);
+      background: var(--white); cursor: pointer; text-align: center;
+      font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
+      transition: all 0.15s; color: var(--primary);
+    }
+    .reflect-btn:hover { border-color: var(--accent); }
+    .reflect-btn.sel-struggled { border-color: #ef4444; background: var(--red-lt); color: #dc2626; }
+    .reflect-btn.sel-ok { border-color: #f59e0b; background: #fffbeb; color: #b45309; }
+    .reflect-btn.sel-nailed { border-color: #22c55e; background: #dcfce7; color: #166534; }
+    .reflect-note {
+      width: 100%; border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 12px; font-size: 0.85rem; font-family: var(--font-body);
+      resize: vertical; min-height: 48px; background: var(--white); color: var(--primary);
+    }
+    .reflect-note::placeholder { color: var(--muted); }
+
+    /* ── RESULTS SCREEN ── */
+    .results-screen { padding: 30px 0 20px; text-align: center; }
+    .results-screen h2 {
+      font-family: var(--font-head); font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;
+    }
+    .results-subtitle { font-size: 0.88rem; color: var(--muted); margin-bottom: 24px; }
+    .result-area-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 20px; margin-bottom: 12px;
+      text-align: left;
+    }
+    .result-area-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .result-area-name { font-family: var(--font-head); font-size: 0.92rem; font-weight: 700; flex: 1; }
+    .result-area-badge {
+      padding: 4px 12px; border-radius: 100px; font-size: 0.78rem; font-weight: 700;
+      font-family: var(--font-head);
+    }
+    .result-area-badge.struggled { background: var(--red-lt); color: #dc2626; }
+    .result-area-badge.ok { background: #fffbeb; color: #b45309; }
+    .result-area-badge.nailed { background: #dcfce7; color: #166534; }
+    .result-area-trajectory {
+      display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--muted);
+    }
+    .trajectory-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .result-area-note { font-size: 0.82rem; color: var(--muted); margin-top: 8px; font-style: italic; }
+    .result-next {
+      background: var(--accent-lt); border: 1px solid rgba(245,131,33,0.2);
+      border-radius: var(--radius); padding: 16px 20px; margin: 24px 0;
+      text-align: left;
+    }
+    .result-next h3 {
+      font-family: var(--font-head); font-size: 0.9rem; font-weight: 700;
+      color: var(--accent-dk); margin-bottom: 8px;
+    }
+    .result-next p { font-size: 0.85rem; line-height: 1.5; color: var(--primary); }
+    .results-actions { display: flex; flex-direction: column; gap: 10px; }
+  </style>
+</head>
+<body>
+
+<main>
+  <!-- ── SCREEN 1: SETUP ── -->
+  <section id="screen-setup" class="screen">
+    <div class="setup-screen">
+      <h1>Focused Practice</h1>
+      <p class="setup-subtitle">Pick up to 3 areas to focus on during your drive. We'll suggest your weakest areas, or you can choose your own.</p>
+
+      <div id="suggested-section">
+        <div class="suggested-label">Suggested for you</div>
+        <div id="suggested-areas" class="area-pick-list"></div>
+      </div>
+
+      <button class="browse-toggle" id="browse-toggle" onclick="toggleBrowseAll()">Browse all areas</button>
+      <div id="all-areas" class="area-pick-list hidden"></div>
+
+      <p class="pick-count" id="pick-count">0 of 3 selected</p>
+
+      <div id="focus-guides"></div>
+
+      <button class="btn-primary" id="btn-start-practice" onclick="startPractice()" disabled>Start Practice Session</button>
+    </div>
+  </section>
+
+  <!-- ── SCREEN 2: DRIVING ── -->
+  <section id="screen-drive" class="screen hidden">
+    <div class="drive-screen">
+      <h2>Driving...</h2>
+      <div class="focus-pills" id="focus-pills"></div>
+
+      <div class="timer-display" id="timer-display">00:00</div>
+      <div class="timer-label" id="timer-label">Focus on your selected areas</div>
+
+      <div class="btn-group">
+        <button class="btn-primary" id="btn-reflect" onclick="goToReflection()">I've Pulled Over &mdash; Reflect</button>
+        <button class="btn-secondary" onclick="goToReflection()" style="font-size:0.85rem;">End early</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SCREEN 3: REFLECTION ── -->
+  <section id="screen-reflect" class="screen hidden">
+    <div class="reflect-screen">
+      <h2>Reflect on Your Drive</h2>
+      <p class="reflect-subtitle">Rate how each focus area went and add any notes.</p>
+      <div id="reflect-areas"></div>
+      <button class="btn-primary" id="btn-save-reflect" onclick="saveReflection()" disabled>Save &amp; View Results</button>
+    </div>
+  </section>
+
+  <!-- ── SCREEN 4: RESULTS ── -->
+  <section id="screen-results" class="screen hidden">
+    <div class="results-screen">
+      <h2>Practice Complete</h2>
+      <p class="results-subtitle" id="results-subtitle"></p>
+      <div id="result-cards"></div>
+      <div id="result-next"></div>
+      <div class="results-actions">
+        <button class="btn-primary" onclick="location.reload()">Start Another Session</button>
+        <a href="/learner/progress.html" class="btn-secondary">View My Progress</a>
+        <a href="/learner/" class="btn-secondary">Back to Dashboard</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ── State ── */
+var AUTH;
+var selectedAreas = []; // array of supervisor category keys
+var suggestedAreas = [];
+var competencyData = null;
+var skillScores = {};
+var timerInterval = null;
+var timerSeconds = 0;
+var wakeLock = null;
+var reflections = {}; // { catKey: { rating, note, dl25Skills } }
+
+var SUP_CATS = CC_COMPETENCY.SUPERVISOR_CATEGORIES;
+var RATINGS = CC_COMPETENCY.RATINGS;
+
+/* ── Helpers ── */
+function showScreen(id) {
+  ['screen-setup', 'screen-drive', 'screen-reflect', 'screen-results'].forEach(function(sid) {
+    document.getElementById(sid).classList.add('hidden');
+  });
+  document.getElementById(id).classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function formatTime(seconds) {
+  var m = Math.floor(seconds / 60);
+  var s = seconds % 60;
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+function apiCall(method, action, body) {
+  var opts = {
+    method: method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AUTH.token }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  return fetch('/api/learner?action=' + action, opts);
+}
+
+/* ── Init ── */
+window.addEventListener('DOMContentLoaded', async function() {
+  AUTH = ccAuth.getAuth();
+  if (!AUTH || !AUTH.token) {
+    window.location.href = '/learner/login.html?redirect=/learner/focused-practice.html';
+    return;
+  }
+  await loadCompetencyData();
+});
+
+async function loadCompetencyData() {
+  try {
+    var res = await apiCall('GET', 'competency');
+    if (!res.ok) throw new Error('API error');
+    competencyData = await res.json();
+    buildSkillScores();
+    renderSetup();
+  } catch (e) {
+    console.warn('Failed to load competency data:', e);
+    renderSetup();
+  }
+}
+
+function buildSkillScores() {
+  if (!competencyData) return;
+  var lr = competencyData.lesson_ratings || [];
+  var qa = competencyData.quiz_accuracy || [];
+  var mf = competencyData.mock_faults || [];
+
+  // Build per-skill readiness
+  var SKILLS = CC_COMPETENCY.SKILLS;
+  for (var i = 0; i < SKILLS.length; i++) {
+    var sk = SKILLS[i];
+    var lessonRatings = lr.filter(function(r) { return CC_COMPETENCY.mapLegacySkill(r.skill_key) === sk.key; })
+      .map(function(r) { return { score: r.rating === 'nailed' ? 3 : r.rating === 'ok' ? 2 : 1, date: r.created_at }; });
+    var quizResults = qa.filter(function(q) { return q.skill_key === sk.key; })
+      .map(function(q) { return { correct: q.correct_count > 0, date: null }; });
+    var mockFaults = mf.filter(function(f) { return CC_COMPETENCY.mapLegacySkill(f.skill_key) === sk.key; });
+
+    var lastDates = lessonRatings.map(function(r) { return r.date; }).filter(Boolean);
+    var lastPractised = lastDates.length > 0 ? lastDates.sort().reverse()[0] : null;
+
+    skillScores[sk.key] = CC_COMPETENCY.readinessScore({
+      lessonRatings: lessonRatings,
+      quizResults: quizResults,
+      mockFaults: mockFaults,
+      lastPractised: lastPractised
+    });
+  }
+}
+
+/* ── Screen 1: Setup ── */
+function renderSetup() {
+  var weakAreas = CC_COMPETENCY.getWeakAreas(skillScores, 3);
+  suggestedAreas = weakAreas.map(function(w) { return w.category.key; });
+
+  // Pre-select suggested areas
+  selectedAreas = suggestedAreas.slice();
+
+  // Render suggested
+  var sugContainer = document.getElementById('suggested-areas');
+  if (weakAreas.length > 0 && weakAreas[0].score > 0) {
+    sugContainer.innerHTML = weakAreas.map(function(w) {
+      return renderAreaPick(w.category, w.score, selectedAreas.indexOf(w.category.key) >= 0);
+    }).join('');
+  } else {
+    // No data — show all areas instead
+    document.getElementById('suggested-section').classList.add('hidden');
+    document.getElementById('browse-toggle').classList.add('hidden');
+    document.getElementById('all-areas').classList.remove('hidden');
+  }
+
+  // Render all areas
+  var allContainer = document.getElementById('all-areas');
+  allContainer.innerHTML = SUP_CATS.map(function(cat) {
+    var catScore = 0;
+    var n = 0;
+    for (var j = 0; j < cat.dl25Skills.length; j++) {
+      var s = skillScores[cat.dl25Skills[j]];
+      if (typeof s === 'number') { catScore += s; n++; }
+    }
+    var avg = n > 0 ? Math.round(catScore / n) : 0;
+    return renderAreaPick(cat, avg, selectedAreas.indexOf(cat.key) >= 0);
+  }).join('');
+
+  updatePickCount();
+  updateFocusGuides();
+}
+
+function renderAreaPick(cat, score, isSelected) {
+  var scoreColor = score >= 70 ? '#166534' : score >= 40 ? '#b45309' : '#dc2626';
+  var scoreBg = score >= 70 ? '#dcfce7' : score >= 40 ? '#fffbeb' : 'var(--red-lt)';
+  var scoreText = score > 0 ? score + '%' : 'New';
+  return '<div class="area-pick' + (isSelected ? ' selected' : '') + '" onclick="toggleArea(\'' + cat.key + '\')" data-cat="' + cat.key + '">' +
+    '<span class="area-pick-icon">' + cat.icon + '</span>' +
+    '<div class="area-pick-text">' +
+      '<div class="area-pick-name">' + cat.label + '</div>' +
+      '<div class="area-pick-desc">' + cat.description + '</div>' +
+    '</div>' +
+    '<span class="area-pick-score" style="background:' + scoreBg + ';color:' + scoreColor + ';">' + scoreText + '</span>' +
+    '<span class="area-pick-check">' + (isSelected ? '\u2713' : '') + '</span>' +
+  '</div>';
+}
+
+function toggleArea(catKey) {
+  var idx = selectedAreas.indexOf(catKey);
+  if (idx >= 0) {
+    selectedAreas.splice(idx, 1);
+  } else if (selectedAreas.length < 3) {
+    selectedAreas.push(catKey);
+  }
+  // Update all pick elements
+  document.querySelectorAll('.area-pick').forEach(function(el) {
+    var k = el.getAttribute('data-cat');
+    var sel = selectedAreas.indexOf(k) >= 0;
+    el.classList.toggle('selected', sel);
+    el.querySelector('.area-pick-check').textContent = sel ? '\u2713' : '';
+  });
+  updatePickCount();
+  updateFocusGuides();
+}
+
+function updatePickCount() {
+  document.getElementById('pick-count').textContent = selectedAreas.length + ' of 3 selected';
+  document.getElementById('btn-start-practice').disabled = selectedAreas.length === 0;
+}
+
+function updateFocusGuides() {
+  var container = document.getElementById('focus-guides');
+  if (selectedAreas.length === 0) { container.innerHTML = ''; return; }
+
+  var html = '';
+  selectedAreas.forEach(function(catKey) {
+    var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
+    if (!cat) return;
+    html += '<div class="focus-guide">';
+    html += '<h3>' + cat.icon + ' ' + cat.label + ' \u2014 What to focus on</h3>';
+    html += '<ul>';
+    cat.faultHints.forEach(function(hint) {
+      html += '<li>' + hint + '</li>';
+    });
+    html += '</ul></div>';
+  });
+  container.innerHTML = html;
+}
+
+function toggleBrowseAll() {
+  var allEl = document.getElementById('all-areas');
+  var btn = document.getElementById('browse-toggle');
+  if (allEl.classList.contains('hidden')) {
+    allEl.classList.remove('hidden');
+    btn.textContent = 'Hide all areas';
+  } else {
+    allEl.classList.add('hidden');
+    btn.textContent = 'Browse all areas';
+  }
+}
+
+/* ── Screen 2: Driving ── */
+function startPractice() {
+  // Show focus pills
+  var pillsHtml = '';
+  selectedAreas.forEach(function(catKey) {
+    var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
+    if (cat) pillsHtml += '<span class="focus-pill">' + cat.icon + ' ' + cat.label + '</span>';
+  });
+  document.getElementById('focus-pills').innerHTML = pillsHtml;
+
+  // Start timer
+  timerSeconds = 0;
+  document.getElementById('timer-display').textContent = '00:00';
+  timerInterval = setInterval(function() {
+    timerSeconds++;
+    document.getElementById('timer-display').textContent = formatTime(timerSeconds);
+  }, 1000);
+
+  // Wake lock
+  requestWakeLock();
+
+  if (typeof posthog !== 'undefined') {
+    posthog.capture('focused_practice_started', { areas: selectedAreas });
+  }
+
+  showScreen('screen-drive');
+}
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { try { wakeLock.release(); } catch(e) {} wakeLock = null; }
+}
+
+/* ── Screen 3: Reflection ── */
+function goToReflection() {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+
+  var container = document.getElementById('reflect-areas');
+  var html = '';
+
+  selectedAreas.forEach(function(catKey) {
+    var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
+    if (!cat) return;
+    reflections[catKey] = { rating: null, note: '', dl25Skills: cat.dl25Skills };
+
+    html += '<div class="reflect-area" data-cat="' + catKey + '">';
+    html += '<div class="reflect-area-header">';
+    html += '<span class="reflect-area-icon">' + cat.icon + '</span>';
+    html += '<span class="reflect-area-q">' + cat.reflectionQ + '</span>';
+    html += '</div>';
+    html += '<div class="reflect-btns">';
+    RATINGS.forEach(function(r) {
+      html += '<button class="reflect-btn" data-cat="' + catKey + '" data-rating="' + r.key + '" onclick="setReflection(\'' + catKey + '\', \'' + r.key + '\')">' + r.label + '</button>';
+    });
+    html += '</div>';
+    html += '<textarea class="reflect-note" data-cat="' + catKey + '" placeholder="Optional notes..." oninput="setReflectionNote(\'' + catKey + '\', this.value)"></textarea>';
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+  checkReflectionComplete();
+  showScreen('screen-reflect');
+}
+
+function setReflection(catKey, rating) {
+  reflections[catKey].rating = rating;
+  // Update button styles
+  document.querySelectorAll('.reflect-btn[data-cat="' + catKey + '"]').forEach(function(btn) {
+    btn.className = 'reflect-btn';
+    if (btn.getAttribute('data-rating') === rating) {
+      btn.classList.add('sel-' + rating);
+    }
+  });
+  checkReflectionComplete();
+}
+
+function setReflectionNote(catKey, note) {
+  if (reflections[catKey]) reflections[catKey].note = note;
+}
+
+function checkReflectionComplete() {
+  var allRated = true;
+  for (var key in reflections) {
+    if (!reflections[key].rating) { allRated = false; break; }
+  }
+  document.getElementById('btn-save-reflect').disabled = !allRated;
+}
+
+/* ── Save & Results ── */
+async function saveReflection() {
+  var btn = document.getElementById('btn-save-reflect');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  releaseWakeLock();
+
+  // Build API payload — reflections keyed by DL25 skill_key
+  var apiReflections = {};
+  for (var catKey in reflections) {
+    var r = reflections[catKey];
+    for (var i = 0; i < r.dl25Skills.length; i++) {
+      apiReflections[r.dl25Skills[i]] = { rating: r.rating, note: r.note };
+    }
+  }
+
+  try {
+    await apiCall('POST', 'focused-practice', {
+      focus_areas: selectedAreas,
+      suggested_areas: suggestedAreas,
+      duration_minutes: Math.ceil(timerSeconds / 60),
+      reflections: apiReflections
+    });
+  } catch (e) {
+    console.warn('Failed to save practice session:', e);
+  }
+
+  if (typeof posthog !== 'undefined') {
+    posthog.capture('focused_practice_completed', {
+      areas: selectedAreas,
+      duration_minutes: Math.ceil(timerSeconds / 60)
+    });
+  }
+
+  showResultsScreen();
+}
+
+function showResultsScreen() {
+  var durationMin = Math.ceil(timerSeconds / 60);
+  document.getElementById('results-subtitle').textContent =
+    durationMin + ' minute' + (durationMin !== 1 ? 's' : '') + ' of focused practice completed.';
+
+  var cardsHtml = '';
+  var needsWork = [];
+
+  selectedAreas.forEach(function(catKey) {
+    var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
+    var r = reflections[catKey];
+    if (!cat || !r) return;
+
+    var ratingObj = RATINGS.find(function(rt) { return rt.key === r.rating; });
+    var ratingLabel = ratingObj ? ratingObj.label : r.rating;
+    var badgeClass = r.rating;
+
+    cardsHtml += '<div class="result-area-card">';
+    cardsHtml += '<div class="result-area-header">';
+    cardsHtml += '<span style="font-size:1.1rem;">' + cat.icon + '</span>';
+    cardsHtml += '<span class="result-area-name">' + cat.label + '</span>';
+    cardsHtml += '<span class="result-area-badge ' + badgeClass + '">' + ratingLabel + '</span>';
+    cardsHtml += '</div>';
+    if (r.note) {
+      cardsHtml += '<div class="result-area-note">"' + r.note + '"</div>';
+    }
+    cardsHtml += '</div>';
+
+    if (r.rating === 'struggled') needsWork.push(cat.label);
+  });
+
+  document.getElementById('result-cards').innerHTML = cardsHtml;
+
+  // Next steps suggestion
+  var nextHtml = '<div class="result-next">';
+  nextHtml += '<h3>What next?</h3>';
+  if (needsWork.length > 0) {
+    nextHtml += '<p>Keep practising <strong>' + needsWork.join(', ') + '</strong> \u2014 try another focused session on ' + (needsWork.length === 1 ? 'this area' : 'these areas') + ', or take a mock test to see how you\'d do overall.</p>';
+  } else {
+    nextHtml += '<p>Great session! Consider trying a mock test to see how you perform across all areas, or pick some new areas to focus on.</p>';
+  }
+  nextHtml += '</div>';
+  document.getElementById('result-next').innerHTML = nextHtml;
+
+  showScreen('screen-results');
+}
+</script>
+</body>
+</html>

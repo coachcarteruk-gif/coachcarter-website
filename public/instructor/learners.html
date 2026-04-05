@@ -375,12 +375,15 @@ async function openLearner(id) {
   window.scrollTo(0, 0);
 
   try {
-    // Fetch history and notes in parallel
-    const [historyRes, notesRes] = await Promise.all([
+    // Fetch history, notes, and mock tests in parallel
+    const [historyRes, notesRes, mockRes] = await Promise.all([
       fetch('/api/instructor?action=learner-history&learner_id=' + id, {
         headers: { Authorization: 'Bearer ' + token }
       }),
       fetch('/api/instructor?action=learner-notes&learner_id=' + id, {
+        headers: { Authorization: 'Bearer ' + token }
+      }),
+      fetch('/api/instructor?action=learner-mock-tests&learner_id=' + id, {
         headers: { Authorization: 'Bearer ' + token }
       })
     ]);
@@ -391,13 +394,16 @@ async function openLearner(id) {
     let notesData = { notes: '', test_date: null };
     if (notesRes.ok) notesData = await notesRes.json();
 
-    renderDetail(historyData, notesData);
+    let mockData = { mock_tests: [] };
+    if (mockRes.ok) mockData = await mockRes.json();
+
+    renderDetail(historyData, notesData, mockData);
   } catch (err) {
     dv.querySelector('#detail-content').innerHTML = '<div style="color:var(--red);padding:24px;text-align:center">Failed to load learner details.</div>';
   }
 }
 
-function renderDetail(data, notesData) {
+function renderDetail(data, notesData, mockData) {
   const l = data.learner;
   const tierLabels = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' };
   const tier = l.current_tier || 1;
@@ -478,6 +484,58 @@ function renderDetail(data, notesData) {
   }
 
   html += '</div>';
+
+  // ── Mock Test History ──
+  var mocks = (mockData && mockData.mock_tests) || [];
+  if (mocks.length > 0) {
+    html += '<div class="section-title" style="margin-top:24px">Mock Test History</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    mocks.forEach(function(mt) {
+      var date = mt.completed_at ? new Date(mt.completed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'In progress';
+      var modeLabel = mt.mode === 'supervisor' ? 'Supervisor' : mt.mode === 'instructor' ? 'Instructor' : 'Legacy';
+      var modeBg = mt.mode === 'supervisor' ? '#ede9fe' : '#dbeafe';
+      var modeColor = mt.mode === 'supervisor' ? '#7c3aed' : '#2563eb';
+
+      var resultHtml = '';
+      if (mt.mode === 'supervisor') {
+        // Count supervisor ratings from faults
+        var good = 0, nw = 0, con = 0;
+        var seen = {};
+        if (mt.faults) {
+          mt.faults.forEach(function(f) {
+            var k = f.skill_key + '_' + f.part;
+            if (seen[k]) return;
+            seen[k] = true;
+            if (f.supervisor_rating === 'good') good++;
+            else if (f.supervisor_rating === 'needs_work') nw++;
+            else if (f.supervisor_rating === 'concern') con++;
+          });
+        }
+        resultHtml = '<span style="color:#166534;font-weight:700;">' + good + ' \u2713</span> &nbsp;';
+        resultHtml += '<span style="color:#b45309;font-weight:700;">' + nw + ' \u26A0</span> &nbsp;';
+        resultHtml += '<span style="color:#dc2626;font-weight:700;">' + con + ' \u2716</span>';
+      } else {
+        var resultColor = mt.result === 'pass' ? '#166534' : '#dc2626';
+        var resultBg = mt.result === 'pass' ? '#dcfce7' : '#fee2e2';
+        var resultText = mt.result ? mt.result.toUpperCase() : '\u2014';
+        resultHtml = '<span style="background:' + resultBg + ';color:' + resultColor + ';padding:2px 10px;border-radius:100px;font-weight:700;font-size:0.78rem;">' + resultText + '</span>';
+        if (mt.total_driving_faults != null) {
+          resultHtml += ' <span style="font-size:0.8rem;color:var(--muted);">' + mt.total_driving_faults + 'D ' + mt.total_serious_faults + 'S ' + mt.total_dangerous_faults + '\u2716</span>';
+        }
+      }
+
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+      html += '<span style="font-weight:600;font-size:0.88rem;">' + date + '</span>';
+      html += '<span style="background:' + modeBg + ';color:' + modeColor + ';padding:2px 8px;border-radius:100px;font-size:0.72rem;font-weight:700;">' + modeLabel + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:0.85rem;">' + resultHtml + '</div>';
+      if (mt.notes) html += '<div style="font-size:0.82rem;color:var(--muted);margin-top:4px;font-style:italic;">' + esc(mt.notes) + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
   document.getElementById('detail-content').innerHTML = html;
 }
 

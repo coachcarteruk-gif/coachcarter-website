@@ -143,6 +143,97 @@ window.CC_COMPETENCY = (function () {
     { key: 'forward_park',        label: 'Forward park' }
   ];
 
+  // ── Supervisor Categories (simplified for parents / supervising drivers) ──
+  //
+  // 7 plain-English groupings that map back to DL25 skills.
+  // Used in supervisor mock test mode and focused practice setup.
+  //
+  var SUPERVISOR_CATEGORIES = [
+    { key: 'observation',  label: 'Observation & Awareness',
+      icon: '👁️', colour: '#0ea5e9',
+      description: 'Checking mirrors and being aware of what\u2019s around the car',
+      dl25Skills: ['mirrors', 'judgement'],
+      faultHints: [
+        'Not checking mirrors before changing speed or direction',
+        'Missing other road users when pulling out or changing lanes',
+        'Reacting late to hazards like pedestrians or cyclists'
+      ],
+      reflectionQ: 'How were their mirror checks and awareness of other road users?' },
+
+    { key: 'speed_control', label: 'Speed & Control',
+      icon: '🚗', colour: '#6366f1',
+      description: 'Smooth use of pedals, gears, steering, and appropriate speed',
+      dl25Skills: ['control', 'progress'],
+      faultHints: [
+        'Harsh braking, stalling, or rough gear changes',
+        'Driving too fast or too slow for the road conditions',
+        'Hesitating unnecessarily or not making progress when safe'
+      ],
+      reflectionQ: 'How smooth was their control of the car and choice of speed?' },
+
+    { key: 'junctions',    label: 'Junctions & Roundabouts',
+      icon: '🔀', colour: '#ef4444',
+      description: 'Approaching, observing, and turning at junctions and roundabouts',
+      dl25Skills: ['junctions'],
+      faultHints: [
+        'Approaching junctions too fast or not looking properly',
+        'Pulling out when it\u2019s not safe to do so',
+        'Wrong lane or position at roundabouts'
+      ],
+      reflectionQ: 'How did they handle junctions and roundabouts?' },
+
+    { key: 'positioning',  label: 'Road Positioning',
+      icon: '🛣️', colour: '#0d9488',
+      description: 'Staying in the correct lane and keeping a safe distance',
+      dl25Skills: ['positioning'],
+      faultHints: [
+        'Drifting into the wrong lane or straddling lanes',
+        'Following the car in front too closely',
+        'Not leaving enough room when passing parked cars'
+      ],
+      reflectionQ: 'How was their lane position and following distance?' },
+
+    { key: 'signals',      label: 'Signals & Communication',
+      icon: '🔶', colour: '#f59e0b',
+      description: 'Using indicators correctly and responding to signs and traffic lights',
+      dl25Skills: ['signals', 'signs_signals'],
+      faultHints: [
+        'Forgetting to indicate or indicating too late',
+        'Missing road signs, traffic lights, or road markings',
+        'Confusing other road users with wrong or no signals'
+      ],
+      reflectionQ: 'How well did they use signals and respond to road signs?' },
+
+    { key: 'manoeuvres',   label: 'Manoeuvres',
+      icon: '🅿️', colour: '#10b981',
+      description: 'Parking, reversing, and turning the car around safely',
+      dl25Skills: ['manoeuvres'],
+      faultHints: [
+        'Poor control or accuracy during parking or reversing',
+        'Not checking all around the car before and during the manoeuvre',
+        'Mounting the kerb or ending up far from it'
+      ],
+      reflectionQ: 'How did their manoeuvres (parking, reversing) go?' },
+
+    { key: 'moving_off',   label: 'Moving Off',
+      icon: '🟢', colour: '#22c55e',
+      description: 'Starting the car and pulling away safely on flat, hills, and at angles',
+      dl25Skills: ['move_off'],
+      faultHints: [
+        'Not checking mirrors and blind spots before moving off',
+        'Stalling or rolling back on a hill',
+        'Pulling out into traffic without enough gap'
+      ],
+      reflectionQ: 'How confident were they when moving off and pulling away?' }
+  ];
+
+  // ── Supervisor Ratings (simplified for parents) ────────────────
+  var SUPERVISOR_RATINGS = [
+    { key: 'good',       label: 'Went well',   colour: '#22c55e', score: 3 },
+    { key: 'needs_work', label: 'Needs work',   colour: '#f59e0b', score: 2 },
+    { key: 'concern',    label: 'Concern',       colour: '#ef4444', score: 1 }
+  ];
+
   // ── Fault Types ────────────────────────────────────────────────
   var FAULT_TYPES = [
     { key: 'driving',   label: 'Driving fault',   shortLabel: 'D',  colour: '#f59e0b', description: 'Not potentially dangerous, but shows a lapse in skill or knowledge' },
@@ -382,6 +473,59 @@ window.CC_COMPETENCY = (function () {
     return 0;
   }
 
+  // ── Supervisor Helpers ──────────────────────────────────────────
+
+  /** Get a supervisor category by key */
+  function getSupervisorCategory(key) {
+    for (var i = 0; i < SUPERVISOR_CATEGORIES.length; i++) {
+      if (SUPERVISOR_CATEGORIES[i].key === key) return SUPERVISOR_CATEGORIES[i];
+    }
+    return null;
+  }
+
+  /**
+   * Map a supervisor category rating to DL25 skill_ratings entries for storage.
+   * Returns an array of { skill_key, rating } objects using the lesson rating scale.
+   */
+  function supervisorToDL25(categoryKey, supervisorRating) {
+    var cat = getSupervisorCategory(categoryKey);
+    if (!cat) return [];
+    // Map supervisor ratings to lesson rating keys
+    var ratingMap = { good: 'nailed', needs_work: 'ok', concern: 'struggled' };
+    var mapped = ratingMap[supervisorRating] || 'ok';
+    var result = [];
+    for (var i = 0; i < cat.dl25Skills.length; i++) {
+      result.push({ skill_key: cat.dl25Skills[i], rating: mapped });
+    }
+    return result;
+  }
+
+  /**
+   * Get the N weakest areas using supervisor-friendly categories.
+   * Aggregates readiness scores from underlying DL25 skills.
+   *
+   * @param {Object} skillScores - map of skill_key -> readiness score (0-100)
+   * @param {number} count - how many weak areas to return (default 3)
+   * @returns {Array} sorted array of { category, score } (lowest first)
+   */
+  function getWeakAreas(skillScores, count) {
+    count = count || 3;
+    var scored = [];
+    for (var i = 0; i < SUPERVISOR_CATEGORIES.length; i++) {
+      var cat = SUPERVISOR_CATEGORIES[i];
+      var total = 0;
+      var n = 0;
+      for (var j = 0; j < cat.dl25Skills.length; j++) {
+        var s = skillScores[cat.dl25Skills[j]];
+        if (typeof s === 'number') { total += s; n++; }
+      }
+      var avg = n > 0 ? Math.round(total / n) : 0;
+      scored.push({ category: cat, score: avg });
+    }
+    scored.sort(function(a, b) { return a.score - b.score; });
+    return scored.slice(0, count);
+  }
+
   // ── Public API ─────────────────────────────────────────────────
   return {
     AREAS:            AREAS,
@@ -389,17 +533,22 @@ window.CC_COMPETENCY = (function () {
     FAULT_TYPES:      FAULT_TYPES,
     RATINGS:          RATINGS,
     MOCK_TEST:        MOCK_TEST,
-    MANOEUVRE_TYPES:  MANOEUVRE_TYPES,
-    LEGACY_MAP:       LEGACY_MAP,
-    QUIZ_DL25_MAP:    QUIZ_DL25_MAP,
+    MANOEUVRE_TYPES:        MANOEUVRE_TYPES,
+    SUPERVISOR_CATEGORIES: SUPERVISOR_CATEGORIES,
+    SUPERVISOR_RATINGS:    SUPERVISOR_RATINGS,
+    LEGACY_MAP:            LEGACY_MAP,
+    QUIZ_DL25_MAP:         QUIZ_DL25_MAP,
 
-    getSkill:        getSkill,
-    getSkillsByArea: getSkillsByArea,
-    getAreaForSkill: getAreaForSkill,
-    quizRefToSkill:  quizRefToSkill,
-    mapLegacySkill:  mapLegacySkill,
-    hasSubs:         hasSubs,
-    mockTestResult:  mockTestResult,
-    readinessScore:  readinessScore
+    getSkill:               getSkill,
+    getSkillsByArea:        getSkillsByArea,
+    getAreaForSkill:        getAreaForSkill,
+    quizRefToSkill:         quizRefToSkill,
+    mapLegacySkill:         mapLegacySkill,
+    hasSubs:                hasSubs,
+    mockTestResult:         mockTestResult,
+    readinessScore:         readinessScore,
+    getSupervisorCategory:  getSupervisorCategory,
+    supervisorToDL25:       supervisorToDL25,
+    getWeakAreas:           getWeakAreas
   };
 })();

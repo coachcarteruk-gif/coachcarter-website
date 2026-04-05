@@ -399,6 +399,91 @@
     .btn-skip { color: var(--muted); font-size: 0.85rem; text-align: center; margin-top: 8px; background: none; border: none; cursor: pointer; text-decoration: underline; font-family: var(--font-body); }
     .btn-skip:hover { color: var(--primary); }
 
+    /* ── MODE SELECTION ── */
+    .mode-screen { text-align: center; padding: 40px 0 20px; }
+    .mode-screen h1 {
+      font-family: var(--font-head); font-size: 1.8rem; font-weight: 800;
+      letter-spacing: -0.03em; margin-bottom: 8px;
+    }
+    .mode-subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 28px; line-height: 1.5; }
+    .mode-cards { display: flex; flex-direction: column; gap: 12px; max-width: 420px; margin: 0 auto; }
+    .mode-card {
+      display: block; width: 100%; text-align: left; padding: 20px; border-radius: var(--radius);
+      border: 2px solid var(--border); background: var(--white); cursor: pointer;
+      transition: all 0.18s; font-family: var(--font-body);
+    }
+    .mode-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+    .mode-card-icon { font-size: 1.6rem; margin-bottom: 8px; }
+    .mode-card-title { font-family: var(--font-head); font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
+    .mode-card-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+
+    /* ── SUPERVISOR FAULT RECORDING ── */
+    .sup-category { margin-bottom: 12px; }
+    .sup-category-card {
+      border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--white); overflow: hidden;
+    }
+    .sup-category-header {
+      display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+      cursor: pointer; user-select: none;
+    }
+    .sup-category-header .area-icon { font-size: 1.2rem; }
+    .sup-category-header .area-label { flex: 1; font-family: var(--font-head); font-size: 0.92rem; font-weight: 700; }
+    .sup-category-badge {
+      padding: 3px 10px; border-radius: 100px; font-size: 0.72rem; font-weight: 700;
+      font-family: var(--font-head); background: var(--surface); color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .sup-category-badge.rated-good { background: #dcfce7; color: #166534; border-color: #22c55e; }
+    .sup-category-badge.rated-needs_work { background: #fffbeb; color: #b45309; border-color: #f59e0b; }
+    .sup-category-badge.rated-concern { background: var(--red-lt); color: #dc2626; border-color: #ef4444; }
+    .sup-category-body {
+      max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+    }
+    .sup-category.open .sup-category-body { max-height: 500px; }
+    .sup-category-body-inner {
+      padding: 0 16px 16px; border-top: 1px solid var(--border);
+    }
+    .sup-desc { font-size: 0.84rem; color: var(--muted); margin: 12px 0 8px; line-height: 1.5; }
+    .sup-hints {
+      list-style: none; padding: 0; margin: 0 0 14px;
+    }
+    .sup-hints li {
+      font-size: 0.82rem; color: var(--primary); padding: 4px 0 4px 20px;
+      position: relative; line-height: 1.4;
+    }
+    .sup-hints li::before { content: '\26A0'; position: absolute; left: 0; font-size: 0.75rem; color: var(--muted); }
+    .sup-rating-btns { display: flex; gap: 8px; }
+    .sup-rating-btn {
+      flex: 1; padding: 12px 8px; border-radius: 10px; border: 2px solid var(--border);
+      background: var(--white); cursor: pointer; text-align: center;
+      font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
+      transition: all 0.15s; color: var(--primary);
+    }
+    .sup-rating-btn:hover { border-color: var(--accent); }
+    .sup-rating-btn.selected-good { border-color: #22c55e; background: #dcfce7; color: #166534; }
+    .sup-rating-btn.selected-needs_work { border-color: #f59e0b; background: #fffbeb; color: #b45309; }
+    .sup-rating-btn.selected-concern { border-color: #ef4444; background: var(--red-lt); color: #dc2626; }
+
+    /* ── SUPERVISOR RESULTS ── */
+    .sup-result-summary {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px; margin-bottom: 24px; text-align: center;
+    }
+    .sup-result-message {
+      font-family: var(--font-head); font-size: 1.1rem; font-weight: 700;
+      line-height: 1.4; margin-bottom: 8px;
+    }
+    .sup-result-sub { font-size: 0.88rem; color: var(--muted); line-height: 1.5; }
+    .sup-result-pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 24px; }
+    .sup-result-pill {
+      padding: 8px 16px; border-radius: 100px; font-size: 0.85rem; font-weight: 700;
+      font-family: var(--font-head); border: 1px solid var(--border);
+    }
+    .sup-result-pill.good { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+    .sup-result-pill.needs_work { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+    .sup-result-pill.concern { background: var(--red-lt); color: #dc2626; border-color: #fecaca; }
+
     /* ── FAULT MAP ── */
     .map-screen { padding: 20px 0; }
     .map-screen h2 {
@@ -461,8 +546,28 @@
 <body>
 
 <main>
+  <!-- ── SCREEN 0: MODE SELECTION ── -->
+  <section id="screen-mode" class="screen">
+    <div class="mode-screen">
+      <h1>Mock Driving Test</h1>
+      <p class="mode-subtitle">Who will be marking faults during this test?</p>
+      <div class="mode-cards">
+        <button class="mode-card" onclick="selectMode('supervisor')">
+          <div class="mode-card-icon">&#128106;</div>
+          <div class="mode-card-title">Practising with a supervisor</div>
+          <div class="mode-card-desc">Simplified marking for parents or supervising drivers. 7 easy-to-understand categories with guidance on what to look for.</div>
+        </button>
+        <button class="mode-card" onclick="selectMode('instructor')">
+          <div class="mode-card-icon">&#127891;</div>
+          <div class="mode-card-title">My instructor is running this</div>
+          <div class="mode-card-desc">Full DL25 marking sheet with detailed fault types (driving, serious, dangerous) across all 10 skill areas.</div>
+        </button>
+      </div>
+    </div>
+  </section>
+
   <!-- ── SCREEN 1: START ── -->
-  <section id="screen-start" class="screen">
+  <section id="screen-start" class="screen hidden">
     <div class="start-screen">
       <h1>Mock Driving Test</h1>
 
@@ -605,12 +710,14 @@
 /* ── State ── */
 let AUTH;
 let mockTestId = null;
+let testMode = null; // 'supervisor' or 'instructor'
 let currentPart = 0; // 0-indexed internally
 let timerInterval = null;
 let timerSeconds = 0;
 let isDriving = false;
 let partTimes = [0]; // elapsed seconds per part (grows dynamically)
-let partFaults = [{}]; // per-part: { skill_key: { driving, serious, dangerous } }
+let partFaults = [{}]; // per-part: { skill_key: { driving, serious, dangerous } } (instructor) or { catKey: rating } (supervisor)
+let supervisorRatings = [{}]; // per-part: { catKey: 'good'|'needs_work'|'concern' }
 let longPressTimer = null;
 
 // Route selection
@@ -652,7 +759,7 @@ function formatTime(seconds) {
 }
 
 function showScreen(id) {
-  ['screen-start', 'screen-route', 'screen-part', 'screen-faults', 'screen-results', 'screen-map'].forEach(function(sid) {
+  ['screen-mode', 'screen-start', 'screen-route', 'screen-part', 'screen-faults', 'screen-results', 'screen-map'].forEach(function(sid) {
     document.getElementById(sid).classList.add('hidden');
   });
   document.getElementById(id).classList.remove('hidden');
@@ -683,6 +790,26 @@ function apiCall(method, action, body) {
   return fetch('/api/learner?action=' + action, opts);
 }
 
+/* ── Screen 0: Mode Selection ── */
+function selectMode(mode) {
+  testMode = mode;
+
+  // Update warning box text based on mode
+  var warningBox = document.querySelector('.warning-box');
+  if (mode === 'supervisor') {
+    warningBox.innerHTML = '<strong>&#9888;&#65039; IMPORTANT</strong>' +
+      'Mobile phones must not be used while driving. The supervising driver should observe during the drive, then pull over to record ratings.';
+    document.querySelector('.start-desc').textContent =
+      'Drive in 10-minute sections. After each section, pull over and your supervising driver will rate how you did across 7 key areas. Simple, clear, and no exam jargon.';
+  } else {
+    warningBox.innerHTML = '<strong>&#9888;&#65039; IMPORTANT</strong>' +
+      'Mobile phones must not be used by the driver or supervising driver during this test. Pull over safely at each 10-minute interval to record faults.';
+    document.querySelector('.start-desc').textContent =
+      'This mock test mirrors the real DVSA practical test. Drive in 10-minute sections, stopping briefly between each to record any faults. You can end the test at any point or continue for as many sections as you need.';
+  }
+  showScreen('screen-start');
+}
+
 /* ── Screen 1: Begin ── */
 async function beginMockTest() {
   var btn = document.getElementById('btn-begin');
@@ -690,7 +817,9 @@ async function beginMockTest() {
   btn.textContent = 'Starting...';
 
   try {
-    var res = await apiCall('POST', 'mock-tests', {});
+    var payload = { mode: testMode };
+    if (selectedRoute) payload.route_id = selectedRoute.id;
+    var res = await apiCall('POST', 'mock-tests', payload);
     if (!res.ok) throw new Error('API error ' + res.status);
     var data = await res.json();
     mockTestId = data.mock_test_id;
@@ -706,6 +835,7 @@ async function beginMockTest() {
   currentPart = 0;
   partTimes = [0];
   partFaults = [{}];
+  supervisorRatings = [{}];
   showPartScreen();
 }
 
@@ -786,26 +916,36 @@ function pullOver() {
 
 /* ── Screen 3: Fault Recording ── */
 function showFaultScreen() {
-  var partDef = MOCK_TEST.parts[currentPart % MOCK_TEST.parts.length];
-  document.getElementById('fault-title').textContent = 'Record Faults \u2014 Part ' + (currentPart + 1);
   document.getElementById('fault-time').textContent = formatTime(partTimes[currentPart]) + ' driven';
 
-  // Initialize fault data for this part if empty
-  if (Object.keys(partFaults[currentPart]).length === 0) {
-    SKILLS.forEach(function(skill) {
-      var entry = { driving: 0, serious: 0, dangerous: 0 };
-      if (skill.subs) {
-        entry.subs = {};
-        skill.subs.forEach(function(sub) {
-          entry.subs[sub.key] = { driving: 0, serious: 0, dangerous: 0 };
-        });
-      }
-      partFaults[currentPart][skill.key] = entry;
-    });
+  if (testMode === 'supervisor') {
+    document.getElementById('fault-title').textContent = 'Rate Performance \u2014 Part ' + (currentPart + 1);
+    document.querySelector('.fault-subtitle').textContent = 'Rate each area based on what you observed. Tap a category to expand it.';
+    // Initialize supervisor ratings for this part if empty
+    if (!supervisorRatings[currentPart] || Object.keys(supervisorRatings[currentPart]).length === 0) {
+      supervisorRatings[currentPart] = {};
+    }
+    renderSupervisorFaults();
+    updateSupervisorTotals();
+  } else {
+    document.getElementById('fault-title').textContent = 'Record Faults \u2014 Part ' + (currentPart + 1);
+    document.querySelector('.fault-subtitle').textContent = 'Tap a counter to add a fault. Long-press to reset to 0.';
+    // Initialize fault data for this part if empty
+    if (Object.keys(partFaults[currentPart]).length === 0) {
+      SKILLS.forEach(function(skill) {
+        var entry = { driving: 0, serious: 0, dangerous: 0 };
+        if (skill.subs) {
+          entry.subs = {};
+          skill.subs.forEach(function(sub) {
+            entry.subs[sub.key] = { driving: 0, serious: 0, dangerous: 0 };
+          });
+        }
+        partFaults[currentPart][skill.key] = entry;
+      });
+    }
+    renderFaultAreas();
+    updateFaultTotals();
   }
-
-  renderFaultAreas();
-  updateFaultTotals();
   showScreen('screen-faults');
 }
 
@@ -891,6 +1031,83 @@ function renderFaultAreas() {
 function toggleArea(btn) {
   var group = btn.parentElement;
   group.classList.toggle('open');
+}
+
+/* ── Supervisor Fault Recording ── */
+var SUP_CATS = CC_COMPETENCY.SUPERVISOR_CATEGORIES;
+var SUP_RATINGS = CC_COMPETENCY.SUPERVISOR_RATINGS;
+
+function renderSupervisorFaults() {
+  var container = document.getElementById('fault-areas');
+  var html = '';
+  var ratings = supervisorRatings[currentPart];
+
+  for (var i = 0; i < SUP_CATS.length; i++) {
+    var cat = SUP_CATS[i];
+    var currentRating = ratings[cat.key] || null;
+    var badgeClass = currentRating ? 'rated-' + currentRating : '';
+    var badgeText = currentRating ? SUP_RATINGS.find(function(r){ return r.key === currentRating; }).label : 'Not rated';
+
+    html += '<div class="sup-category' + (currentRating ? '' : ' open') + '" data-cat="' + cat.key + '">';
+    html += '<div class="sup-category-card">';
+    html += '<div class="sup-category-header" onclick="toggleSupCategory(this)">';
+    html += '<span class="area-icon">' + cat.icon + '</span>';
+    html += '<span class="area-label">' + cat.label + '</span>';
+    html += '<span class="sup-category-badge ' + badgeClass + '">' + badgeText + '</span>';
+    html += '</div>';
+
+    html += '<div class="sup-category-body"><div class="sup-category-body-inner">';
+    html += '<p class="sup-desc">' + cat.description + '</p>';
+    html += '<ul class="sup-hints">';
+    for (var h = 0; h < cat.faultHints.length; h++) {
+      html += '<li>' + cat.faultHints[h] + '</li>';
+    }
+    html += '</ul>';
+
+    html += '<div class="sup-rating-btns">';
+    for (var r = 0; r < SUP_RATINGS.length; r++) {
+      var rt = SUP_RATINGS[r];
+      var selected = currentRating === rt.key ? ' selected-' + rt.key : '';
+      html += '<button class="sup-rating-btn' + selected + '" onclick="rateSupervisorCategory(\'' + cat.key + '\', \'' + rt.key + '\')">' + rt.label + '</button>';
+    }
+    html += '</div>';
+
+    html += '</div></div>';
+    html += '</div></div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleSupCategory(header) {
+  var cat = header.closest('.sup-category');
+  cat.classList.toggle('open');
+}
+
+function rateSupervisorCategory(catKey, rating) {
+  supervisorRatings[currentPart][catKey] = rating;
+  renderSupervisorFaults();
+  updateSupervisorTotals();
+}
+
+function updateSupervisorTotals() {
+  var ratings = supervisorRatings[currentPart];
+  var good = 0, needsWork = 0, concern = 0;
+  for (var key in ratings) {
+    if (ratings[key] === 'good') good++;
+    else if (ratings[key] === 'needs_work') needsWork++;
+    else if (ratings[key] === 'concern') concern++;
+  }
+  var total = good + needsWork + concern;
+  var html = '<span class="ft-pill" style="background:#dcfce7;color:#166534;">' + good + ' went well</span>';
+  html += '<span class="ft-pill" style="background:#fffbeb;color:#b45309;">' + needsWork + ' needs work</span>';
+  html += '<span class="ft-pill" style="background:var(--red-lt);color:#dc2626;">' + concern + ' concern</span>';
+  document.getElementById('fault-total-pills').innerHTML = html;
+
+  // Enable save button once at least one category is rated
+  var btn = document.getElementById('btn-save-faults');
+  btn.disabled = total === 0;
+  btn.textContent = total < SUP_CATS.length ? 'Save Ratings (' + total + '/' + SUP_CATS.length + ')' : 'Save Ratings';
 }
 
 function toggleSubs(skillKey) {
@@ -1045,25 +1262,41 @@ async function saveFaults() {
   btn.disabled = true;
   btn.textContent = 'Saving...';
 
-  // Build fault array (only non-zero), including sub_key for subcategory faults
   var faultArray = [];
-  var faults = partFaults[currentPart];
-  Object.keys(faults).forEach(function(key) {
-    var f = faults[key];
-    // Direct parent-level faults
-    if (f.driving > 0 || f.serious > 0 || f.dangerous > 0) {
-      faultArray.push({ skill_key: key, sub_key: null, driving: f.driving, serious: f.serious, dangerous: f.dangerous });
-    }
-    // Subcategory faults
-    if (f.subs) {
-      Object.keys(f.subs).forEach(function(sk) {
-        var sf = f.subs[sk];
-        if (sf.driving > 0 || sf.serious > 0 || sf.dangerous > 0) {
-          faultArray.push({ skill_key: key, sub_key: sk, driving: sf.driving, serious: sf.serious, dangerous: sf.dangerous });
-        }
-      });
-    }
-  });
+
+  if (testMode === 'supervisor') {
+    // Build supervisor fault array — one entry per DL25 skill mapped from each rated category
+    var ratings = supervisorRatings[currentPart];
+    Object.keys(ratings).forEach(function(catKey) {
+      var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
+      if (!cat) return;
+      for (var i = 0; i < cat.dl25Skills.length; i++) {
+        faultArray.push({
+          skill_key: cat.dl25Skills[i],
+          sub_key: null,
+          driving: 0, serious: 0, dangerous: 0,
+          supervisor_rating: ratings[catKey]
+        });
+      }
+    });
+  } else {
+    // Build instructor fault array (only non-zero), including sub_key for subcategory faults
+    var faults = partFaults[currentPart];
+    Object.keys(faults).forEach(function(key) {
+      var f = faults[key];
+      if (f.driving > 0 || f.serious > 0 || f.dangerous > 0) {
+        faultArray.push({ skill_key: key, sub_key: null, driving: f.driving, serious: f.serious, dangerous: f.dangerous });
+      }
+      if (f.subs) {
+        Object.keys(f.subs).forEach(function(sk) {
+          var sf = f.subs[sk];
+          if (sf.driving > 0 || sf.serious > 0 || sf.dangerous > 0) {
+            faultArray.push({ skill_key: key, sub_key: sk, driving: sf.driving, serious: sf.serious, dangerous: sf.dangerous });
+          }
+        });
+      }
+    });
+  }
 
   // POST faults
   try {
@@ -1080,7 +1313,8 @@ async function saveFaults() {
     posthog.capture('mock_test_part_recorded', {
       mock_test_id: mockTestId,
       part: currentPart + 1,
-      fault_count: faultArray.length
+      fault_count: faultArray.length,
+      mode: testMode
     });
   }
 
@@ -1103,6 +1337,7 @@ function continueToNextPart() {
   // Add new part
   currentPart++;
   partFaults.push({});
+  supervisorRatings.push({});
   partTimes.push(0);
   showPartScreen();
 }
@@ -1130,6 +1365,161 @@ async function endMockTest() {
 function showResults() {
   updateStepIndicator('done');
 
+  if (testMode === 'supervisor') {
+    showSupervisorResults();
+  } else {
+    showInstructorResults();
+  }
+
+  // Show map button if GPS data was recorded OR a route was selected
+  if (gpsTrack.length > 0 || selectedRoute) {
+    document.getElementById('btn-show-map').classList.remove('hidden');
+  }
+
+  showScreen('screen-results');
+}
+
+function showSupervisorResults() {
+  // Aggregate all ratings across parts — take the worst rating per category
+  var allRatings = {};
+  var ratingPriority = { concern: 0, needs_work: 1, good: 2 };
+
+  for (var p = 0; p < supervisorRatings.length; p++) {
+    var ratings = supervisorRatings[p];
+    for (var catKey in ratings) {
+      if (!allRatings[catKey] || ratingPriority[ratings[catKey]] < ratingPriority[allRatings[catKey]]) {
+        allRatings[catKey] = ratings[catKey];
+      }
+    }
+  }
+
+  // Count ratings
+  var good = 0, needsWork = 0, concern = 0;
+  for (var key in allRatings) {
+    if (allRatings[key] === 'good') good++;
+    else if (allRatings[key] === 'needs_work') needsWork++;
+    else if (allRatings[key] === 'concern') concern++;
+  }
+
+  // Generate confidence message (no pass/fail)
+  var badge = document.getElementById('result-badge');
+  var message, subMessage;
+  if (concern === 0 && needsWork <= 1) {
+    badge.textContent = '\u2B50';
+    badge.className = 'result-badge pass';
+    message = 'Looking strong!';
+    subMessage = needsWork === 0
+      ? 'Great drive \u2014 all areas went well. Keep this up!'
+      : 'Nearly there \u2014 just one area to polish before test day.';
+  } else if (concern === 0) {
+    badge.textContent = '\uD83D\uDCAA';
+    badge.className = 'result-badge';
+    badge.style.background = '#f59e0b';
+    message = 'Good progress, some areas to work on';
+    subMessage = needsWork + ' area' + (needsWork !== 1 ? 's' : '') + ' need' + (needsWork === 1 ? 's' : '') + ' more practice. Focus on these in your next session.';
+  } else {
+    badge.textContent = '\uD83D\uDCDD';
+    badge.className = 'result-badge fail';
+    message = 'A few areas to work on before test day';
+    subMessage = concern + ' area' + (concern !== 1 ? 's' : '') + ' of concern and ' + needsWork + ' needing work. Don\u2019t worry \u2014 this is what practice is for!';
+  }
+
+  // Hide the pass/fail criteria text
+  document.querySelector('.result-criteria').textContent = '';
+
+  // Build summary instead of fault totals
+  var totalsHtml = '<div class="sup-result-summary">';
+  totalsHtml += '<div class="sup-result-message">' + message + '</div>';
+  totalsHtml += '<div class="sup-result-sub">' + subMessage + '</div>';
+  totalsHtml += '</div>';
+  document.getElementById('result-totals').innerHTML = totalsHtml;
+
+  // Rating pills
+  var pillsHtml = '';
+  for (var i = 0; i < SUP_CATS.length; i++) {
+    var cat = SUP_CATS[i];
+    var rating = allRatings[cat.key];
+    if (!rating) continue;
+    var rLabel = SUP_RATINGS.find(function(r){ return r.key === rating; }).label;
+    pillsHtml += '<span class="sup-result-pill ' + rating + '">' + cat.icon + ' ' + cat.label + ' \u2014 ' + rLabel + '</span>';
+  }
+
+  // Show concerns first, then needs_work, then good
+  var sSection = document.getElementById('result-serious-section');
+  var concerns = [], needsWorkList = [];
+  for (var c = 0; c < SUP_CATS.length; c++) {
+    var ct = SUP_CATS[c];
+    if (allRatings[ct.key] === 'concern') concerns.push(ct);
+    else if (allRatings[ct.key] === 'needs_work') needsWorkList.push(ct);
+  }
+
+  var sHtml = '';
+  if (concerns.length > 0) {
+    sHtml += '<div class="result-section"><h3>\uD83D\uDD34 Areas of Concern</h3><ul>';
+    concerns.forEach(function(ct) {
+      sHtml += '<li><span>' + ct.icon + ' ' + ct.label + '</span><span class="fault-badge serious-badge">Concern</span></li>';
+    });
+    sHtml += '</ul></div>';
+  }
+  sSection.innerHTML = sHtml;
+
+  var dSection = document.getElementById('result-driving-section');
+  var dHtml = '';
+  if (needsWorkList.length > 0) {
+    dHtml += '<div class="result-section"><h3>\uD83D\uDFE1 Needs More Practice</h3><ul>';
+    needsWorkList.forEach(function(ct) {
+      dHtml += '<li><span>' + ct.icon + ' ' + ct.label + '</span><span class="fault-badge driving-badge">Needs work</span></li>';
+    });
+    dHtml += '</ul></div>';
+  }
+  dSection.innerHTML = dHtml;
+
+  // Clean areas
+  var cleanList = [];
+  for (var g = 0; g < SUP_CATS.length; g++) {
+    if (allRatings[SUP_CATS[g].key] === 'good') cleanList.push(SUP_CATS[g]);
+  }
+  var cSection = document.getElementById('result-clean-section');
+  if (cleanList.length > 0) {
+    var cHtml = '<div class="result-section clean-section"><h3>\uD83D\uDFE2 Went Well</h3><ul>';
+    cleanList.forEach(function(ct) {
+      cHtml += '<li><span>' + ct.icon + ' ' + ct.label + '</span><span style="color:var(--green);font-weight:700;">\u2713</span></li>';
+    });
+    cHtml += '</ul></div>';
+    cSection.innerHTML = cHtml;
+  } else {
+    cSection.innerHTML = '';
+  }
+
+  // Per-part breakdown (supervisor)
+  var pbHtml = '';
+  for (var p = 0; p < supervisorRatings.length; p++) {
+    var pr = supervisorRatings[p];
+    var pg = 0, pn = 0, pc = 0;
+    for (var k in pr) {
+      if (pr[k] === 'good') pg++;
+      else if (pr[k] === 'needs_work') pn++;
+      else if (pr[k] === 'concern') pc++;
+    }
+    pbHtml += '<div class="part-breakdown-row">';
+    pbHtml += '<span class="part-breakdown-label">Part ' + (p + 1) + '</span>';
+    pbHtml += '<span class="part-breakdown-faults">';
+    pbHtml += '<span style="color:#166534;">' + pg + ' \u2713</span>';
+    pbHtml += '<span style="color:#b45309;">' + pn + ' \u26A0</span>';
+    pbHtml += '<span style="color:#dc2626;">' + pc + ' \u2716</span>';
+    pbHtml += '</span></div>';
+  }
+  document.getElementById('part-breakdown-rows').innerHTML = pbHtml;
+
+  if (typeof posthog !== 'undefined') {
+    posthog.capture('mock_test_completed', {
+      mock_test_id: mockTestId, mode: 'supervisor',
+      good: good, needs_work: needsWork, concern: concern
+    });
+  }
+}
+
+function showInstructorResults() {
   // Aggregate all faults across all parts (including sub-faults)
   var allFaults = {};
   SKILLS.forEach(function(skill) {
@@ -1161,6 +1551,10 @@ function showResults() {
   var badge = document.getElementById('result-badge');
   badge.textContent = passed ? 'PASS' : 'FAIL';
   badge.className = 'result-badge ' + (passed ? 'pass' : 'fail');
+  badge.style.background = '';
+
+  // Criteria
+  document.querySelector('.result-criteria').textContent = 'Pass requires: 0 serious/dangerous faults and no more than 15 driving faults';
 
   // Totals
   var totalsHtml = '';
@@ -1267,7 +1661,7 @@ function showResults() {
 
   if (typeof posthog !== 'undefined') {
     posthog.capture('mock_test_completed', {
-      mock_test_id: mockTestId,
+      mock_test_id: mockTestId, mode: 'instructor',
       passed: passed,
       driving_faults: totals.driving,
       serious_faults: totals.serious,

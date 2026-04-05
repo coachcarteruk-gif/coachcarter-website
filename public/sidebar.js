@@ -53,6 +53,7 @@
       { icon: 'clipboard', label: 'Practice', children: [
         { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
         { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
+        { icon: 'play', label: 'Focused Practice', href: '/learner/focused-practice.html' },
         { icon: 'dashboard', label: 'My Progress', href: '/learner/progress.html' }
       ]},
       { icon: 'play', label: 'Learn', children: [
@@ -84,7 +85,7 @@
         { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
           activeOn: ['/learner/buy-credits', '/learner/lessons'] },
         { icon: 'clipboard', label: 'Practice', href: '/learner/log-session.html',
-          activeOn: ['/learner/mock-test', '/learner/progress'] },
+          activeOn: ['/learner/mock-test', '/learner/focused-practice', '/learner/progress'] },
         { icon: 'play', label: 'Learn', href: '/learner/videos.html',
           activeOn: ['/learner/ask-examiner', '/learner/examiner-quiz'] },
         { icon: 'user', label: 'Profile', href: '/learner/profile.html',

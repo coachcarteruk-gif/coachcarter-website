@@ -1199,3 +1199,31 @@ ALTER TABLE learner_users ALTER COLUMN last_activity_at SET DEFAULT NOW();
 -- GDPR: TERMS & CONDITIONS ACCEPTANCE
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- MOCK TEST MODES & FOCUSED PRACTICE (April 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- Mock test mode split: supervisor vs instructor
+ALTER TABLE mock_tests ADD COLUMN IF NOT EXISTS mode TEXT;
+ALTER TABLE mock_tests ADD COLUMN IF NOT EXISTS route_id TEXT;
+ALTER TABLE mock_tests ADD COLUMN IF NOT EXISTS instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_mock_tests_instructor ON mock_tests(instructor_id) WHERE instructor_id IS NOT NULL;
+
+-- Supervisor rating on fault records (D/S/X stay 0 in supervisor mode)
+ALTER TABLE mock_test_faults ADD COLUMN IF NOT EXISTS supervisor_rating TEXT;
+
+-- Focused practice sessions (companion to driving_sessions)
+CREATE TABLE IF NOT EXISTS focused_practice_sessions (
+  id              SERIAL PRIMARY KEY,
+  session_id      INTEGER NOT NULL REFERENCES driving_sessions(id) ON DELETE CASCADE,
+  learner_id      INTEGER NOT NULL REFERENCES learner_users(id) ON DELETE CASCADE,
+  school_id       INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  focus_areas     JSONB NOT NULL,
+  suggested_areas JSONB,
+  reflections     JSONB,
+  completed_at    TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_focused_practice_learner ON focused_practice_sessions(learner_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_focused_practice_session ON focused_practice_sessions(session_id);
