@@ -651,13 +651,31 @@ function init() {
     window.history.replaceState({}, '', '/learner/book.html');
   }
 
+  // Pre-select instructor from URL param (e.g. ?instructor=4)
+  const preselectedInstructorId = params.get('instructor');
+
   if (!token) {
-    initFeed();
+    Promise.all([loadInstructors(), loadLessonTypes()])
+      .then(() => {
+        if (preselectedInstructorId) {
+          const sel = document.getElementById('instructorFilter');
+          if (sel.querySelector(`option[value="${preselectedInstructorId}"]`)) {
+            sel.value = preselectedInstructorId;
+          }
+        }
+        initFeed();
+      });
     return;
   }
 
   Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile(), loadLessonTypes()])
     .then(() => {
+      if (preselectedInstructorId) {
+        const sel = document.getElementById('instructorFilter');
+        if (sel.querySelector(`option[value="${preselectedInstructorId}"]`)) {
+          sel.value = preselectedInstructorId;
+        }
+      }
       initFeed();
       showPostcodePromptIfNeeded();
     });
