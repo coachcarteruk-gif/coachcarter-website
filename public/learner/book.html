@@ -250,6 +250,7 @@
     .modal {
       background: var(--white); border-radius: var(--radius);
       padding: 32px; max-width: 420px; width: 100%;
+      max-height: calc(100vh - 40px); overflow-y: auto;
       transform: translateY(20px); transition: transform 0.2s;
     }
     .modal-overlay.open .modal { transform: translateY(0); }
