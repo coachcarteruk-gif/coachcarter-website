@@ -469,6 +469,30 @@
         <div class="modal-detail-row"><span>Type</span><span id="mdType">Standard Lesson</span></div>
         <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">1.5 hours</span></div>
       </div>
+      <!-- Guest checkout fields (hidden for logged-in users) -->
+      <div id="guestFields" style="display:none;margin:12px 0">
+        <div style="margin-bottom:10px">
+          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Your name *</label>
+          <input type="text" id="mdGuestName" placeholder="Full name" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Email *</label>
+          <input type="email" id="mdGuestEmail" placeholder="you@example.com" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Phone number *</label>
+          <input type="tel" id="mdGuestPhone" placeholder="07xxx xxx xxx" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup address *</label>
+          <input type="text" id="mdGuestPickup" placeholder="e.g. 12 High Street, RG1 2AB" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+        </div>
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:0.8rem;color:var(--muted);cursor:pointer;margin-top:4px">
+          <input type="checkbox" id="mdGuestTerms" style="margin-top:2px">
+          <span>I agree to the <a href="/terms.html" target="_blank" style="color:var(--accent)">terms</a> and <a href="/privacy.html" target="_blank" style="color:var(--accent)">privacy policy</a></span>
+        </label>
+      </div>
+
       <div style="margin:12px 0">
         <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off address (optional)</label>
         <input type="text" id="mdDropoff" placeholder="e.g. School, work, test centre…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
@@ -643,7 +667,10 @@ function init() {
   const params = new URLSearchParams(window.location.search);
   const preselectedTypeSlug = params.get('type'); // ?type=standard or ?type=2hr
   if (params.get('paid') === '1') {
-    showToast('Payment successful — your lesson is booked! Check your email for details.', 'success');
+    const paidMsg = token
+      ? 'Payment successful — your lesson is booked! Check your email for details.'
+      : 'Booking confirmed! Check your email for details and a link to manage your bookings.';
+    showToast(paidMsg, 'success');
     window.history.replaceState({}, '', '/learner/book.html');
   }
   if (params.get('cancelled') === '1') {
@@ -653,6 +680,21 @@ function init() {
 
   // Pre-select instructor from URL param (e.g. ?instructor=4)
   const preselectedInstructorId = params.get('instructor');
+
+  // Wire up modal buttons (must work for both guest and authenticated users)
+  document.getElementById('bookModalClose').onclick = closeBookModal;
+  document.getElementById('bookModalCloseAlt').onclick = closeBookModal;
+  document.getElementById('btnConfirmBook').onclick = confirmBookWithCredit;
+  document.getElementById('btnPayAndBook').onclick = confirmPayAndBook;
+  document.getElementById('btnSuccessDone').onclick = closeBookModal;
+  document.getElementById('btnSyncCalendar').onclick = handleCalendarSubscribe;
+  document.getElementById('cancelModalClose').onclick = () => document.getElementById('cancelModal').classList.remove('open');
+  document.getElementById('btnConfirmCancel').onclick = confirmCancel;
+
+  // Close modals on overlay click
+  document.getElementById('bookModal').addEventListener('click', e => { if (e.target === document.getElementById('bookModal')) closeBookModal(); });
+  document.getElementById('cancelModal').addEventListener('click', e => { if (e.target === document.getElementById('cancelModal')) document.getElementById('cancelModal').classList.remove('open'); });
+  document.getElementById('rescheduleModal').addEventListener('click', e => { if (e.target === document.getElementById('rescheduleModal')) closeRescheduleModal(); });
 
   if (!token) {
     Promise.all([loadInstructors(), loadLessonTypes()])
@@ -679,21 +721,6 @@ function init() {
       initFeed();
       showPostcodePromptIfNeeded();
     });
-
-  // Wire up modal buttons
-  document.getElementById('bookModalClose').onclick = closeBookModal;
-  document.getElementById('bookModalCloseAlt').onclick = closeBookModal;
-  document.getElementById('btnConfirmBook').onclick = confirmBookWithCredit;
-  document.getElementById('btnPayAndBook').onclick = confirmPayAndBook;
-  document.getElementById('btnSuccessDone').onclick = closeBookModal;
-  document.getElementById('btnSyncCalendar').onclick = handleCalendarSubscribe;
-  document.getElementById('cancelModalClose').onclick = () => document.getElementById('cancelModal').classList.remove('open');
-  document.getElementById('btnConfirmCancel').onclick = confirmCancel;
-
-  // Close modals on overlay click
-  document.getElementById('bookModal').addEventListener('click', e => { if (e.target === document.getElementById('bookModal')) closeBookModal(); });
-  document.getElementById('cancelModal').addEventListener('click', e => { if (e.target === document.getElementById('cancelModal')) document.getElementById('cancelModal').classList.remove('open'); });
-  document.getElementById('rescheduleModal').addEventListener('click', e => { if (e.target === document.getElementById('rescheduleModal')) closeRescheduleModal(); });
 }
 
 function dismissWelcome() {
@@ -1063,14 +1090,17 @@ function showError(msg) { document.getElementById('calContent').innerHTML = `<di
 
 // ─── Book modal ──────────────────────────────────────────────────────────────
 function openBookModal(el) {
-  if (window.ccAuth && !window.ccAuth.requireAuth()) return;
-  if (!isProfileComplete()) {
+  const isGuest = !token;
+
+  // Authenticated users must have profile complete; guests fill in details in the modal
+  if (!isGuest && !isProfileComplete()) {
     showToast('Please add your phone number and pickup address in your Profile before booking.', 'error');
     return;
   }
 
-  // If in reschedule mode, redirect to reschedule confirmation
+  // If in reschedule mode, redirect to reschedule confirmation (auth required)
   if (pendingReschedule) {
+    if (isGuest) { if (window.ccAuth) window.ccAuth.requireAuth(); return; }
     const slotInstructorId = el.dataset.instructorId;
     openRescheduleConfirm({
       instructor_id: slotInstructorId,
@@ -1102,18 +1132,37 @@ function openBookModal(el) {
   document.getElementById('mdDuration').textContent = ltHrsStr;
   document.getElementById('mdDeductHours').textContent = ltHrsStr;
   const ltPrice    = selectedLessonType ? selectedLessonType.price_pence : 8250;
-  const hasCreds   = balanceMinutes >= ltDuration;
-  document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
-  document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
 
-  if (hasCreds) {
-    document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
-    document.getElementById('bookSpinner').style.display = 'none';
-    document.getElementById('btnConfirmBook').disabled = false;
-  } else {
+  // Guest flow: show guest fields, force pay path, hide repeat/credit options
+  if (isGuest) {
+    document.getElementById('guestFields').style.display = 'block';
+    document.getElementById('repeatSection').style.display = 'none';
+    document.getElementById('modalCreditPath').style.display = 'none';
+    document.getElementById('modalPayPath').style.display = 'block';
     document.getElementById('payBtnLabel').textContent = `Pay £${(ltPrice / 100).toFixed(2)} & book`;
     document.getElementById('paySpinner').style.display = 'none';
     document.getElementById('btnPayAndBook').disabled = false;
+    // Clear previous guest field values
+    document.getElementById('mdGuestName').value = '';
+    document.getElementById('mdGuestEmail').value = '';
+    document.getElementById('mdGuestPhone').value = '';
+    document.getElementById('mdGuestPickup').value = '';
+    document.getElementById('mdGuestTerms').checked = false;
+  } else {
+    document.getElementById('guestFields').style.display = 'none';
+    document.getElementById('repeatSection').style.display = '';
+    const hasCreds = balanceMinutes >= ltDuration;
+    document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
+    document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
+    if (hasCreds) {
+      document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
+      document.getElementById('bookSpinner').style.display = 'none';
+      document.getElementById('btnConfirmBook').disabled = false;
+    } else {
+      document.getElementById('payBtnLabel').textContent = `Pay £${(ltPrice / 100).toFixed(2)} & book`;
+      document.getElementById('paySpinner').style.display = 'none';
+      document.getElementById('btnPayAndBook').disabled = false;
+    }
   }
 
   document.getElementById('mdDropoff').value = '';
@@ -1292,21 +1341,65 @@ async function confirmPayAndBook() {
   const btn = document.getElementById('btnPayAndBook');
   const label = document.getElementById('payBtnLabel');
   const spinner = document.getElementById('paySpinner');
+  const ltPrice = selectedLessonType ? selectedLessonType.price_pence : 8250;
+  const isGuest = !token;
+
+  // Guest validation
+  if (isGuest) {
+    const gName  = document.getElementById('mdGuestName').value.trim();
+    const gEmail = document.getElementById('mdGuestEmail').value.trim();
+    const gPhone = document.getElementById('mdGuestPhone').value.trim();
+    const gAddr  = document.getElementById('mdGuestPickup').value.trim();
+    const gTerms = document.getElementById('mdGuestTerms').checked;
+    if (!gName) { showToast('Please enter your name.', 'error'); return; }
+    if (!gEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gEmail)) { showToast('Please enter a valid email address.', 'error'); return; }
+    if (!gPhone || !/^(?:07\d{3}\s?\d{3}\s?\d{3}|\+447\d{9})$/.test(gPhone.replace(/\s+/g, '').length === 11 ? gPhone.replace(/\s+/g, '') : gPhone)) {
+      // Simpler check: strip spaces, must be 07 followed by 9 digits or +447 followed by 9 digits
+      const stripped = gPhone.replace(/\s+/g, '');
+      if (!/^07\d{9}$/.test(stripped) && !/^\+447\d{9}$/.test(stripped)) {
+        showToast('Please enter a valid UK phone number (07xxx xxx xxx).', 'error'); return;
+      }
+    }
+    if (!gAddr) { showToast('Please enter your pickup address.', 'error'); return; }
+    if (!gTerms) { showToast('Please accept the terms and privacy policy.', 'error'); return; }
+  }
+
   btn.disabled = true; label.textContent = 'Redirecting to payment…'; spinner.style.display = 'block';
 
   try {
-    const payBody = { ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined };
-    if (selectedLessonType && selectedLessonType.id) payBody.lesson_type_id = selectedLessonType.id;
-    const res = await fetch('/api/slots?action=checkout-slot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify(payBody)
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    window.location.href = data.url;
+    if (isGuest) {
+      // Guest checkout — no auth required
+      const payBody = {
+        ...pendingSlot,
+        lesson_type_id: selectedLessonType?.id,
+        dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined,
+        guest_name:           document.getElementById('mdGuestName').value.trim(),
+        guest_email:          document.getElementById('mdGuestEmail').value.trim(),
+        guest_phone:          document.getElementById('mdGuestPhone').value.replace(/\s+/g, '').trim(),
+        guest_pickup_address: document.getElementById('mdGuestPickup').value.trim()
+      };
+      const res = await fetch('/api/slots?action=checkout-slot-guest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payBody)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      window.location.href = data.url;
+    } else {
+      // Authenticated checkout
+      const payBody = { ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined };
+      if (selectedLessonType && selectedLessonType.id) payBody.lesson_type_id = selectedLessonType.id;
+      const res = await fetch('/api/slots?action=checkout-slot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify(payBody)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      window.location.href = data.url;
+    }
   } catch (err) {
-    const ltPrice = selectedLessonType ? selectedLessonType.price_pence : 8250;
     showToast(err.message || 'Could not start payment. Please try again.', 'error');
     btn.disabled = false; label.textContent = `Pay £${(ltPrice / 100).toFixed(2)} & book`; spinner.style.display = 'none';
   }

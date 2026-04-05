@@ -104,6 +104,7 @@ module.exports = async (req, res) => {
   if (action === 'available')    return handleAvailable(req, res);
   if (action === 'book')         return handleBook(req, res);
   if (action === 'checkout-slot') return handleCheckoutSlot(req, res);
+  if (action === 'checkout-slot-guest') return handleCheckoutSlotGuest(req, res);
   if (action === 'cancel')       return handleCancel(req, res);
   if (action === 'reschedule')   return handleReschedule(req, res);
   if (action === 'my-bookings')  return handleMyBookings(req, res);
@@ -1089,6 +1090,226 @@ async function handleCheckoutSlot(req, res) {
   } catch (err) {
     console.error('checkout-slot error:', err);
     reportError('/api/slots', err);
+    return res.status(500).json({ error: 'Failed to create checkout', details: err.message });
+  }
+}
+
+// ── POST /api/slots?action=checkout-slot-guest ────────────────────────────────
+// Guest checkout: no auth required. Creates learner account, reserves slot, returns Stripe URL.
+// Body: { instructor_id, date, start_time, end_time, lesson_type_id?, guest_name, guest_email, guest_phone, guest_pickup_address }
+async function handleCheckoutSlotGuest(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { instructor_id, date, start_time, end_time, lesson_type_id,
+          guest_name, guest_email, guest_phone, guest_pickup_address } = req.body;
+
+  // Validate required guest fields
+  if (!guest_name || !guest_name.trim())
+    return res.status(400).json({ error: 'Name is required' });
+  if (!guest_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guest_email.trim()))
+    return res.status(400).json({ error: 'A valid email address is required' });
+  if (!guest_phone || !/^(?:07\d{9}|\+447\d{9})$/.test(guest_phone.replace(/\s+/g, '')))
+    return res.status(400).json({ error: 'A valid UK phone number is required (07xxx xxx xxx)' });
+  if (!guest_pickup_address || !guest_pickup_address.trim())
+    return res.status(400).json({ error: 'Pickup address is required' });
+  if (!instructor_id || !date || !start_time || !end_time)
+    return res.status(400).json({ error: 'instructor_id, date, start_time, end_time required' });
+
+  const cleanEmail = guest_email.toLowerCase().trim();
+  const cleanPhone = guest_phone.replace(/\s+/g, '').trim();
+  const cleanName  = guest_name.trim();
+  const cleanAddr  = guest_pickup_address.trim();
+  const schoolId   = parseInt(req.body.school_id, 10) || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // ── Rate limiting: 10 per IP per hour, 5 per phone per hour ──
+    const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+    const ipKey = `guest_checkout_ip:${ip}`;
+    const phoneKey = `guest_checkout_phone:${cleanPhone}`;
+    try {
+      await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
+      const [ipLimit] = await sql`SELECT request_count FROM rate_limits WHERE key = ${ipKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      if (ipLimit && ipLimit.request_count >= 10)
+        return res.status(429).json({ error: 'Too many booking attempts. Please try again later.' });
+      const [phoneLimit] = await sql`SELECT request_count FROM rate_limits WHERE key = ${phoneKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      if (phoneLimit && phoneLimit.request_count >= 5)
+        return res.status(429).json({ error: 'Too many booking attempts for this phone number. Please try again later.' });
+      // Increment counters
+      for (const key of [ipKey, phoneKey]) {
+        const [ex] = await sql`SELECT request_count FROM rate_limits WHERE key = ${key} AND window_start > NOW() - INTERVAL '1 hour'`;
+        if (ex) {
+          await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${key} AND window_start > NOW() - INTERVAL '1 hour'`;
+        } else {
+          await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${key}, 1, NOW())`;
+        }
+      }
+    } catch (e) { /* rate limit check failed — allow request through */ }
+
+    // ── Slot validation (same as authenticated flow) ──
+    const startMins = timeToMinutes(start_time);
+    const endMins   = timeToMinutes(end_time);
+    const checkoutDate = parseDate(date);
+    const todayStart   = startOfDay(new Date());
+    if (checkoutDate && checkoutDate.getTime() === todayStart.getTime()) {
+      const now = new Date();
+      const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+      if (startMins <= nowMins)
+        return res.status(400).json({ error: 'This slot has already started. Please choose a later time.' });
+    }
+
+    const lessonType = await getLessonType(sql, lesson_type_id);
+    if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    const durationMins = lessonType.duration_minutes;
+    const pricePence   = lessonType.price_pence;
+    const durationStr  = formatHours(durationMins);
+
+    if (endMins - startMins !== durationMins)
+      return res.status(400).json({ error: `Slot must be exactly ${durationStr} for ${lessonType.name}` });
+
+    await sql`DELETE FROM slot_reservations WHERE expires_at < NOW()`;
+
+    const [existingBooking] = await sql`
+      SELECT id FROM lesson_bookings
+      WHERE instructor_id = ${instructor_id}
+        AND scheduled_date = ${date}
+        AND start_time = ${start_time}::time
+        AND status = 'confirmed'
+    `;
+    if (existingBooking)
+      return res.status(409).json({ error: 'Sorry, that slot is already booked.' });
+
+    const [existingReservation] = await sql`
+      SELECT id FROM slot_reservations
+      WHERE instructor_id = ${instructor_id}
+        AND scheduled_date = ${date}
+        AND start_time = ${start_time}::time
+        AND expires_at > NOW()
+    `;
+    if (existingReservation)
+      return res.status(409).json({ error: 'Someone else is currently booking this slot. Try another or wait a few minutes.' });
+
+    try {
+      const [existingOffer] = await sql`
+        SELECT id FROM lesson_offers
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ${date}
+          AND start_time = ${start_time}::time
+          AND status = 'pending'
+          AND expires_at > NOW()
+      `;
+      if (existingOffer)
+        return res.status(409).json({ error: 'This slot is currently held for a pending lesson offer.' });
+    } catch (e) { /* table may not exist yet */ }
+
+    const [instructor] = await sql`
+      SELECT id, name FROM instructors WHERE id = ${instructor_id} AND active = true
+    `;
+    if (!instructor)
+      return res.status(404).json({ error: 'Instructor not found' });
+
+    // ── Find or create learner ──
+    let learnerId;
+    const [existingLearner] = await sql`
+      SELECT id, name, phone, pickup_address FROM learner_users
+      WHERE LOWER(email) = ${cleanEmail} AND school_id = ${schoolId}
+    `;
+
+    if (existingLearner) {
+      learnerId = existingLearner.id;
+      // Backfill empty fields only — never overwrite existing data
+      const needsUpdate = (!existingLearner.name && cleanName) ||
+                          (!existingLearner.phone && cleanPhone) ||
+                          (!existingLearner.pickup_address && cleanAddr);
+      if (needsUpdate) {
+        await sql`
+          UPDATE learner_users SET
+            name = COALESCE(NULLIF(name, ''), ${cleanName}),
+            phone = COALESCE(phone, ${cleanPhone}),
+            pickup_address = COALESCE(NULLIF(pickup_address, ''), ${cleanAddr}),
+            last_activity_at = NOW()
+          WHERE id = ${learnerId}
+        `;
+      }
+    } else {
+      try {
+        const [newLearner] = await sql`
+          INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance, school_id)
+          VALUES (${cleanName}, ${cleanEmail}, ${cleanPhone}, ${cleanAddr}, 0, 0, ${schoolId})
+          RETURNING id
+        `;
+        learnerId = newLearner.id;
+      } catch (insertErr) {
+        if (insertErr.message?.includes('learner_users_phone_key') || insertErr.message?.includes('unique')) {
+          // Phone already in use by another account — retry without phone
+          console.warn('⚠️ Guest checkout: phone conflict, retrying without phone');
+          const [newLearner] = await sql`
+            INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
+            VALUES (${cleanName}, ${cleanEmail}, ${cleanAddr}, 0, 0, ${schoolId})
+            RETURNING id
+          `;
+          learnerId = newLearner.id;
+        } else {
+          throw insertErr;
+        }
+      }
+    }
+
+    // ── Create Stripe Checkout session ──
+    const origin = req.headers.origin || 'https://coachcarter.uk';
+    const lessonDate = new Date(date + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card', 'klarna'],
+      line_items: [{
+        price_data: {
+          currency: 'gbp',
+          unit_amount: pricePence,
+          product_data: {
+            name: `${lessonType.name} — ${lessonDate} ${start_time}–${end_time}`,
+            description: `${durationStr} lesson with ${instructor.name}. Slot held for ${RESERVATION_MINUTES} minutes.`
+          }
+        },
+        quantity: 1
+      }],
+      metadata: {
+        payment_type:    'slot_booking',
+        learner_id:      String(learnerId),
+        learner_email:   cleanEmail,
+        instructor_id:   String(instructor_id),
+        instructor_name: instructor.name,
+        scheduled_date:  date,
+        start_time,
+        end_time,
+        lesson_type_id:  String(lessonType.id),
+        duration_minutes: String(durationMins),
+        amount_pence:    String(pricePence),
+        school_id:       String(schoolId)
+      },
+      customer_email: cleanEmail,
+      billing_address_collection: 'required',
+      allow_promotion_codes: true,
+      success_url: `${origin}/learner/book.html?paid=1`,
+      cancel_url:  `${origin}/learner/book.html?cancelled=1`
+    });
+
+    // Reserve the slot
+    await sql`
+      INSERT INTO slot_reservations
+        (learner_id, instructor_id, scheduled_date, start_time, end_time, stripe_session_id, expires_at, school_id)
+      VALUES
+        (${learnerId}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, ${session.id},
+         NOW() + INTERVAL '10 minutes', ${schoolId})
+      ON CONFLICT DO NOTHING
+    `;
+
+    return res.json({ url: session.url });
+  } catch (err) {
+    console.error('checkout-slot-guest error:', err);
+    reportError('/api/slots?action=checkout-slot-guest', err);
     return res.status(500).json({ error: 'Failed to create checkout', details: err.message });
   }
 }
