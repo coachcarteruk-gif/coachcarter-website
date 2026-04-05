@@ -62,10 +62,10 @@ The platform is multi-tenant. Each driving school is an isolated tenant with the
 5. Public endpoints that need school context accept `?school_id=X` or `?school=slug`
 
 **Future plans (documented, not yet built):**
-- Marketplace model (learners browse across schools)
+- Marketplace model (learners browse across schools) — phased for 2027+ (see `INSTRUCTORBOOK-PLAN.md` section 9)
 - Custom domains per school
 - Embeddable booking widget (like Setmore)
-- Self-service school signup
+- Self-service school signup — priority for InstructorBook launch
 - Multi-school instructors
 - Per-school content (videos, quizzes)
 
@@ -133,6 +133,18 @@ The platform is GDPR-compliant. All future changes MUST follow these rules.
 4. **Don't expose error internals**: Never send `err.stack` or raw SQL errors to clients. Use `{ error: 'Human message', details: err.message }` at most.
 5. **Keep security headers in middleware.js**: Don't set or override security headers in individual API files.
 6. **Index all new FK columns**: Every new foreign key column must have a corresponding `CREATE INDEX IF NOT EXISTS` in `db/migration.sql`.
+
+## InstructorBook (April 2026)
+
+The platform is being launched nationally as **InstructorBook** (instructorbook.co.uk) — an independent SaaS brand for driving schools. CoachCarter is school #1 in the InstructorBook network.
+
+**Key principles:**
+- **One codebase, two front doors** — InstructorBook and CoachCarter share API, database, and backend. Different presentation layers.
+- **InstructorBook is invisible to learners** — learners on coachcarter.uk (or any school) never see "InstructorBook." School brands are primary.
+- **InstructorBook is independent** — not publicly tied to Fraser or CoachCarter. Competing schools must trust it as a neutral platform.
+- **Feature flags per school** — `schools.config` JSONB controls which features are enabled (e.g., `learnerbook_enabled`). CoachCarter has everything; new InstructorBook schools get booking/payments only.
+- **Pricing: Model D** — free to use, 0.75% fee on automated weekly payouts.
+- **Full strategy in `INSTRUCTORBOOK-PLAN.md`** — pricing analysis, competitive landscape, marketplace phasing, brand architecture, implementation priorities.
 
 ## Working practices
 
@@ -295,3 +307,10 @@ This codebase is being prepared for migration to a React Native (Expo) app. See 
 - `DEVELOPMENT-ROADMAP.md` — full feature history, roadmap, and competitor differentiators
 - `DESIGN-REVIEW.md` — UI/UX design principles, style guide, component standards
 - `MIGRATION-PLAN.md` — React Native app migration plan (keep updated)
+<<<<<<< HEAD
+=======
+- `DEVELOPMENT-ROADMAP.md` — full feature history and roadmap
+- `PROJECT.md` — complete project reference (APIs, tables, flows)
+- `COMPETITOR-FEATURES-ROADMAP.md` — competitor-inspired features (all 17 done)
+- `INSTRUCTORBOOK-PLAN.md` — InstructorBook national SaaS strategy, pricing, competitive analysis, marketplace phasing
+>>>>>>> db9937c (Docs: add InstructorBook product strategy and plan)
