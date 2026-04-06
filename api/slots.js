@@ -289,7 +289,8 @@ async function handleAvailable(req, res) {
             FROM instructor_blackout_dates
             WHERE blackout_date <= ${to} AND end_date >= ${from}
           `;
-      console.error('DEBUG blackouts:', JSON.stringify({ from, to, instructor_id, count: blackouts.length, blackouts }));
+      console.error('BLKOUT count=' + blackouts.length + ' from=' + from + ' to=' + to + ' iid=' + (instructor_id || 'all'));
+      for (const b of blackouts) console.error('BLKOUT row iid=' + b.instructor_id + ' s=' + b.start_date + ' e=' + b.end_date);
     } catch (e) {
       console.warn('Blackout query failed (end_date column may be missing — run migration):', e.message);
       // Fallback: try single-date query without end_date
