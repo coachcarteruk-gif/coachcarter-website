@@ -2258,7 +2258,7 @@ async function loadLessonTypes() {
   const body = document.getElementById('lesson-types-body');
   body.innerHTML = '<tr><td colspan="8">Loading...</td></tr>';
   try {
-    const res = await fetch('/api/lesson-types?action=all', { headers: { Authorization: 'Bearer ' + token } });
+    const res = await fetch('/api/lesson-types?action=all', { headers: HEADERS });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || data.error);
     lessonTypesCache = data.lesson_types || [];
@@ -2338,7 +2338,7 @@ async function saveLessonType() {
   try {
     const res = await fetch(`/api/lesson-types?action=${action}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: HEADERS,
       body: JSON.stringify(payload)
     });
     const data = await res.json();
@@ -2355,7 +2355,7 @@ async function toggleLessonType(id, active) {
   try {
     const res = await fetch('/api/lesson-types?action=toggle', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: HEADERS,
       body: JSON.stringify({ id, active })
     });
     const data = await res.json();
