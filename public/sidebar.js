@@ -246,6 +246,30 @@
     return html;
   }
 
+  // ── Build sub-tab bar HTML (mobile, section children) ──────────
+  function buildSubTabsHTML() {
+    if (context !== 'learner' && context !== 'instructor') return '';
+    var navItems = sections[context];
+    for (var i = 0; i < navItems.length; i++) {
+      var item = navItems[i];
+      if (!item || !item.children) continue;
+      var isInGroup = false;
+      for (var j = 0; j < item.children.length; j++) {
+        if (isActive(item.children[j].href, [])) { isInGroup = true; break; }
+      }
+      if (!isInGroup) continue;
+      var html = '<div class="cc-sub-tabs">';
+      for (var j = 0; j < item.children.length; j++) {
+        var child = item.children[j];
+        var active = isActive(child.href, []) ? ' active' : '';
+        html += '<a href="' + child.href + '" class="cc-sub-tab' + active + '">' + child.label + '</a>';
+      }
+      html += '</div>';
+      return html;
+    }
+    return '';
+  }
+
   // ── Ensure viewport-fit=cover for iOS safe area ────────────────
   var vpMeta = document.querySelector('meta[name="viewport"]');
   if (vpMeta) {
@@ -490,6 +514,42 @@
     '  font-weight: 600;',
     '  letter-spacing: 0.05em;',
     '  color: #999;',
+    '}',
+
+    /* Sub-tab bar for section navigation (mobile only) */
+    '.cc-sub-tabs { display: none; }',
+    '@media (max-width: 959px) {',
+    '  .cc-sub-tabs {',
+    '    display: flex;',
+    '    gap: 6px;',
+    '    padding: 8px 16px;',
+    '    overflow-x: auto;',
+    '    -webkit-overflow-scrolling: touch;',
+    '    scrollbar-width: none;',
+    '    background: var(--white, #fff);',
+    '    border-bottom: 1px solid var(--border, #e5e5e5);',
+    '    position: sticky;',
+    '    top: 56px;',
+    '    z-index: 90;',
+    '  }',
+    '  .cc-sub-tabs::-webkit-scrollbar { display: none; }',
+    '  .cc-sub-tab {',
+    '    flex-shrink: 0;',
+    '    padding: 6px 14px;',
+    '    border-radius: 20px;',
+    '    font-size: 0.8rem;',
+    '    font-weight: 600;',
+    '    text-decoration: none;',
+    '    color: var(--muted, #6b7280);',
+    '    background: var(--surface, #f5f5f5);',
+    '    white-space: nowrap;',
+    '    transition: background 0.15s, color 0.15s;',
+    '    font-family: "Lato", sans-serif;',
+    '  }',
+    '  .cc-sub-tab.active {',
+    '    background: var(--brand-primary, #f58321);',
+    '    color: #fff;',
+    '  }',
     '}'
   ].join('\n');
   document.head.appendChild(css);
@@ -536,6 +596,15 @@
         document.querySelectorAll('[data-brand-logo]').forEach(function(el) {
           el.src = cached.logo_url;
         });
+      }
+    }
+
+    // ── Sub-tab bar (mobile, section children navigation) ──────────
+    var subTabsHTML = buildSubTabsHTML();
+    if (subTabsHTML) {
+      var mobHeader = document.getElementById('cc-mob-header');
+      if (mobHeader) {
+        mobHeader.insertAdjacentHTML('afterend', subTabsHTML);
       }
     }
 
