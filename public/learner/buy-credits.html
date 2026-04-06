@@ -315,7 +315,7 @@
       font-weight: 600;
       transition: transform 0.3s ease;
       z-index: 999;
-      white-space: nowrap;
+      max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
     }
     .toast.show { transform: translateX(-50%) translateY(0); }
     .toast.error { background: var(--red); }

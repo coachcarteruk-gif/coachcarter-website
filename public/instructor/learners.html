@@ -137,7 +137,7 @@
       position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
       background: var(--primary); color: #fff; padding: 12px 24px; border-radius: 100px;
       font-size: 0.85rem; font-weight: 600; opacity: 0; transition: all 0.3s;
-      pointer-events: none; z-index: 400; white-space: nowrap;
+      pointer-events: none; z-index: 400; max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     .toast.error { background: var(--red); }
@@ -286,7 +286,7 @@ async function loadLearners() {
     renderLearners();
   } catch (err) {
     document.getElementById('learners-list').innerHTML =
-      '<div style="text-align:center;color:var(--muted);padding:24px">Failed to load learners.</div>';
+      '<div style="text-align:center;color:var(--muted);padding:24px">Failed to load learners.<br><button onclick="loadLearners()" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>';
   }
 }
 
@@ -399,7 +399,7 @@ async function openLearner(id) {
 
     renderDetail(historyData, notesData, mockData);
   } catch (err) {
-    dv.querySelector('#detail-content').innerHTML = '<div style="color:var(--red);padding:24px;text-align:center">Failed to load learner details.</div>';
+    dv.querySelector('#detail-content').innerHTML = '<div style="color:var(--red);padding:24px;text-align:center">Failed to load learner details.<br><button onclick="openLearner(' + id + ')" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>';
   }
 }
 

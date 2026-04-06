@@ -135,6 +135,26 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Confirm modal ── */
+    .confirm-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 600;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .confirm-overlay.open { opacity: 1; pointer-events: all; }
+    .confirm-box {
+      background: var(--white); border-radius: var(--radius); padding: 24px;
+      max-width: 360px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .confirm-box p { font-size: 0.9rem; color: var(--primary); margin: 0 0 20px; line-height: 1.5; }
+    .confirm-actions { display: flex; gap: 10px; }
+    .confirm-actions button {
+      flex: 1; padding: 11px; border-radius: 8px; font-weight: 600; font-size: 0.85rem;
+      cursor: pointer; border: none; transition: background 0.15s;
+    }
+    .btn-confirm-no { background: var(--border); color: var(--primary); }
+    .btn-confirm-yes { background: var(--red); color: white; }
+
     /* ── Book Lesson Modal ── */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -156,7 +176,7 @@
     .modal-label { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
     .modal-input {
       width: 100%; padding: 10px; border: 1px solid var(--border);
-      border-radius: 8px; font-size: 0.9rem; font-family: var(--font-body);
+      border-radius: 8px; font-size: 16px; font-family: var(--font-body);
       box-sizing: border-box; background: var(--white); color: var(--primary);
     }
     .modal-input:focus { outline: none; border-color: var(--accent); }
@@ -288,7 +308,7 @@
       background: var(--primary); color: white;
       padding: 14px 24px; border-radius: 10px;
       font-size: 0.9rem; font-weight: 600;
-      transition: transform 0.3s; z-index: 9999; white-space: nowrap;
+      transition: transform 0.3s; z-index: 9999; max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
     }
     .toast.show { transform: translateX(-50%) translateY(0); }
     .toast.success { background: #16a34a; }
@@ -335,6 +355,7 @@
   </style>
   <script src="/sidebar.js"></script>
   <script src="/shared/instructor-auth.js"></script>
+  <script src="/shared/instructor-booking-actions.js"></script>
   <script src="/auth-gate.js"></script>
 </head>
 <body>
@@ -454,6 +475,16 @@
 
 <div class="toast" id="toast"></div>
 
+<div class="confirm-overlay" id="cancelConfirmModal" onclick="if(event.target===this)closeCancelConfirm(false)">
+  <div class="confirm-box">
+    <p>Cancel this lesson with <strong id="cancelConfirmName"></strong>?</p>
+    <div class="confirm-actions">
+      <button class="btn-confirm-no" onclick="closeCancelConfirm(false)">Go back</button>
+      <button class="btn-confirm-yes" onclick="closeCancelConfirm(true)">Cancel lesson</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -480,6 +511,9 @@ function init() {
   const date = now.getDate();
   const month = MON_SHORT[now.getMonth()];
   document.getElementById('dashDate').textContent = 'TODAY \u2014 ' + dayName + ' ' + date + ' ' + month;
+
+  // Init shared booking actions (cancel with reason, reschedule, add lesson)
+  BookingActions.init({ token, showToast, onRefresh: loadDashboard });
 
   loadDashboard();
 }
@@ -514,7 +548,7 @@ async function loadDashboard() {
     }
   } catch (err) {
     document.getElementById('dashLessons').innerHTML =
-      '<div class="dash-empty"><div class="dash-empty-icon">&#x26A0;&#xFE0F;</div><p>' + (err.message || 'Failed to load') + '</p></div>';
+      '<div class="dash-empty"><div class="dash-empty-icon">&#x26A0;&#xFE0F;</div><p>' + (err.message || 'Failed to load') + '</p><button onclick="loadDashboard()" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>';
   }
 }
 
@@ -595,7 +629,11 @@ async function openBookModal() {
   var now = new Date();
   var ds = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
   document.getElementById('bookDate').value = ds;
-  document.getElementById('bookTime').value = '09:00';
+  // Default to next half-hour
+  var mins = now.getMinutes();
+  now.setMinutes(mins < 30 ? 30 : 0);
+  if (mins >= 30) now.setHours(now.getHours() + 1);
+  document.getElementById('bookTime').value = now.toTimeString().slice(0, 5);
   document.querySelector('input[name="bookPay"][value="cash"]').checked = true;
   document.getElementById('bookDropoff').value = '';
   document.getElementById('bookNotes').value = '';
@@ -839,25 +877,14 @@ async function completeLesson() {
   }
 }
 
-async function cancelFromDetail() {
+function cancelFromDetail() {
   if (!detailBooking) return;
-  if (!confirm('Cancel this lesson with ' + (detailBooking.learner_name || 'the learner') + '?')) return;
-
-  try {
-    var res = await fetch('/api/instructor?action=cancel-booking', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ booking_id: detailBooking.id })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to cancel');
-
-    closeDetail();
-    showToast('Lesson cancelled', 'success');
-    loadDashboard();
-  } catch (err) {
-    showToast(err.message || 'Failed to cancel lesson', 'error');
-  }
+  closeDetail();
+  BookingActions.openCancel(detailBooking);
+}
+function closeCancelConfirm(result) {
+  document.getElementById('cancelConfirmModal').classList.remove('open');
+  if (pendingCancelResolve) { pendingCancelResolve(result); pendingCancelResolve = null; }
 }
 
 // ── Running Late Modal ──

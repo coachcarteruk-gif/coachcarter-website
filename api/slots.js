@@ -1857,62 +1857,60 @@ async function handleMyBookings(req, res) {
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = user.school_id || 1;
+  const pastLimit = Math.min(parseInt(new URL(req.url, 'http://x').searchParams.get('past_limit')) || 20, 100);
+  const pastOffset = parseInt(new URL(req.url, 'http://x').searchParams.get('past_offset')) || 0;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const nowISO = new Date().toISOString().slice(0, 10);
 
-    const bookings = await sql`
+    // Upcoming: all confirmed future lessons (no limit)
+    const upcoming = await sql`
       SELECT
-        lb.id,
-        lb.scheduled_date::text,
-        lb.start_time::text,
-        lb.end_time::text,
-        lb.status,
-        lb.cancelled_at,
-        lb.credit_returned,
+        lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
+        lb.status, lb.cancelled_at, lb.credit_returned,
         COALESCE(lb.reschedule_count, 0) AS reschedule_count,
-        lb.rescheduled_from,
-        lb.pickup_address,
-        lb.dropoff_address,
-        lb.lesson_type_id,
-        lb.minutes_deducted,
-        lb.series_id,
-        i.id   AS instructor_id,
-        i.name AS instructor_name,
-        i.photo_url AS instructor_photo,
-        lt.name AS lesson_type_name,
-        lt.colour AS lesson_type_colour,
+        lb.rescheduled_from, lb.pickup_address, lb.dropoff_address,
+        lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
+        i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
+        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
         COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.learner_id = ${user.id}
         AND COALESCE(lb.school_id, 1) = ${schoolId}
-      ORDER BY lb.scheduled_date DESC, lb.start_time DESC
-      LIMIT 50
+        AND lb.status = 'confirmed'
+        AND lb.scheduled_date >= ${nowISO}
+      ORDER BY lb.scheduled_date ASC, lb.start_time ASC
     `;
 
-    // Split into upcoming (confirmed, future) and past
-    const now      = new Date();
-    const upcoming = [];
-    const past     = [];
+    // Past: paginated (completed, cancelled, or past confirmed)
+    const past = await sql`
+      SELECT
+        lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
+        lb.status, lb.cancelled_at, lb.credit_returned,
+        COALESCE(lb.reschedule_count, 0) AS reschedule_count,
+        lb.rescheduled_from, lb.pickup_address, lb.dropoff_address,
+        lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
+        i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
+        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
+        COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
+      FROM lesson_bookings lb
+      JOIN instructors i ON i.id = lb.instructor_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      WHERE lb.learner_id = ${user.id}
+        AND COALESCE(lb.school_id, 1) = ${schoolId}
+        AND NOT (lb.status = 'confirmed' AND lb.scheduled_date >= ${nowISO})
+      ORDER BY lb.scheduled_date DESC, lb.start_time DESC
+      LIMIT ${pastLimit + 1}
+      OFFSET ${pastOffset}
+    `;
 
-    for (const b of bookings) {
-      const lessonTime = new Date(`${b.scheduled_date}T${b.start_time}:00Z`);
-      if (b.status === 'confirmed' && lessonTime > now) {
-        upcoming.push(b);
-      } else {
-        past.push(b);
-      }
-    }
+    const hasMorePast = past.length > pastLimit;
+    if (hasMorePast) past.pop();
 
-    // Sort upcoming soonest-first
-    upcoming.sort((a, b) =>
-      a.scheduled_date.localeCompare(b.scheduled_date) ||
-      a.start_time.localeCompare(b.start_time)
-    );
-
-    return res.json({ upcoming, past });
+    return res.json({ upcoming, past, hasMorePast });
 
   } catch (err) {
     console.error('slots my-bookings error:', err);

@@ -61,8 +61,9 @@
     .time-sep { color: var(--muted); font-size: 0.85rem; }
     .btn-remove-window {
       background: none; border: none; color: var(--muted); cursor: pointer;
-      font-size: 1rem; padding: 2px 6px; border-radius: 4px; transition: all 0.15s;
-      line-height: 1;
+      font-size: 1.1rem; min-width: 44px; min-height: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 8px; transition: all 0.15s; line-height: 1;
     }
     .btn-remove-window:hover { color: var(--red); background: var(--red-lt); }
     .no-windows { font-size: 0.825rem; color: var(--muted); padding: 8px 0 4px; font-style: italic; }
@@ -92,7 +93,7 @@
       background: var(--primary); color: white;
       padding: 12px 22px; border-radius: 10px;
       font-size: 0.875rem; font-weight: 600;
-      transition: transform 0.3s; z-index: 999; white-space: nowrap;
+      transition: transform 0.3s; z-index: 999; max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
     }
     .toast.show    { transform: translateX(-50%) translateY(0); }
     .toast.success { background: #16a34a; }
@@ -161,8 +162,9 @@
     }
     .btn-remove-blackout {
       background: none; border: none; color: var(--muted); cursor: pointer;
-      font-size: 1rem; padding: 2px 6px; border-radius: 4px; transition: all 0.15s;
-      line-height: 1;
+      font-size: 1.1rem; min-width: 44px; min-height: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 8px; transition: all 0.15s; line-height: 1;
     }
     .btn-remove-blackout:hover { color: var(--red); background: var(--red-lt); }
     .no-blackouts { font-size: 0.825rem; color: var(--muted); font-style: italic; }
@@ -231,6 +233,8 @@
   let windows       = []; // [{ day_of_week, start_time, end_time }]
   let isDirty       = false;
   let blackoutRanges = []; // [{ start_date, end_date, reason }]
+  let savedBlackoutRanges = []; // last known-good server state
+  let blackoutsDirty = false;
 
   function init() {
     const session = ccAuth.getAuth();
@@ -268,7 +272,7 @@
       isDirty  = false;
       render();
     } catch (err) {
-      document.getElementById('availContent').innerHTML = `<p style="color:var(--red);padding:20px">${err.message}</p>`;
+      document.getElementById('availContent').innerHTML = `<p style="color:var(--red);padding:20px;text-align:center">${err.message}<br><button onclick="loadAvailability()" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></p>`;
     }
   }
 
@@ -325,7 +329,7 @@
   }
 
   function updateSaveBar() {
-    document.getElementById('saveBar').classList.toggle('visible', isDirty);
+    document.getElementById('saveBar').classList.toggle('visible', isDirty || blackoutsDirty);
   }
 
   async function saveAvailability() {
@@ -342,22 +346,31 @@
     btn.textContent = 'Saving…';
 
     try {
-      const res  = await fetch('/api/instructor?action=set-availability', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body:    JSON.stringify({ windows })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      // Save availability windows if changed
+      if (isDirty) {
+        const res  = await fetch('/api/instructor?action=set-availability', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body:    JSON.stringify({ windows })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
 
-      windows = (data.windows || []).map(w => ({
-        day_of_week: w.day_of_week,
-        start_time:  w.start_time.slice(0, 5),
-        end_time:    w.end_time.slice(0, 5)
-      }));
-      isDirty = false;
-      render();
-      showToast('Availability saved ✓', 'success');
+        windows = (data.windows || []).map(w => ({
+          day_of_week: w.day_of_week,
+          start_time:  w.start_time.slice(0, 5),
+          end_time:    w.end_time.slice(0, 5)
+        }));
+        isDirty = false;
+        render();
+      }
+
+      // Save blackout dates if changed
+      if (blackoutsDirty) {
+        await saveBlackoutDates();
+      } else if (!blackoutsDirty) {
+        showToast('Changes saved', 'success');
+      }
     } catch (err) {
       showToast(err.message || 'Failed to save', 'error');
     } finally {
@@ -393,6 +406,8 @@
         end_date: d.end_date,
         reason: d.reason || ''
       }));
+      savedBlackoutRanges = JSON.parse(JSON.stringify(blackoutRanges));
+      blackoutsDirty = false;
       renderBlackouts();
       document.getElementById('blackoutSection').style.display = '';
     } catch (err) {
@@ -463,13 +478,15 @@
     blackoutRanges.sort((a, b) => a.start_date.localeCompare(b.start_date));
     renderBlackouts();
     reasonInput.value = '';
-    await saveBlackoutDates();
+    blackoutsDirty = true;
+    updateSaveBar();
   }
 
-  async function removeBlackout(idx) {
+  function removeBlackout(idx) {
     blackoutRanges.splice(idx, 1);
     renderBlackouts();
-    await saveBlackoutDates();
+    blackoutsDirty = true;
+    updateSaveBar();
   }
 
   async function saveBlackoutDates() {
@@ -486,9 +503,17 @@
         end_date: d.end_date,
         reason: d.reason || ''
       }));
+      savedBlackoutRanges = JSON.parse(JSON.stringify(blackoutRanges));
+      blackoutsDirty = false;
       renderBlackouts();
-      showToast('Blackout dates saved', 'success');
+      updateSaveBar();
+      showToast('Changes saved', 'success');
     } catch (err) {
+      // Rollback to last known-good state on failure
+      blackoutRanges = JSON.parse(JSON.stringify(savedBlackoutRanges));
+      blackoutsDirty = false;
+      renderBlackouts();
+      updateSaveBar();
       showToast(err.message || 'Failed to save blackout dates', 'error');
     }
   }

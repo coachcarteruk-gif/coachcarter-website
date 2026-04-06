@@ -1774,8 +1774,8 @@ async function handleUpdateNotes(req, res) {
     `;
 
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== 'completed')
-      return res.status(400).json({ error: 'Can only edit notes on completed lessons' });
+    if (!['confirmed', 'completed'].includes(booking.status))
+      return res.status(400).json({ error: 'Can only edit notes on confirmed or completed lessons' });
 
     await sql`
       UPDATE lesson_bookings

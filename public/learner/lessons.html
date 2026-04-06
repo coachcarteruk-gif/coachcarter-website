@@ -231,7 +231,7 @@
       background: var(--primary); color: white;
       padding: 14px 24px; border-radius: 10px;
       font-size: 0.9rem; font-weight: 600;
-      transition: transform 0.3s; z-index: 9999; white-space: nowrap;
+      transition: transform 0.3s; z-index: 9999; max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
     }
     .toast.show { transform: translateX(-50%) translateY(0); }
     .toast.success { background: #16a34a; }
@@ -310,6 +310,9 @@
 var token = null;
 var upcomingBookings = [];
 var pastBookings = [];
+var hasMorePast = false;
+var pastOffset = 0;
+var PAST_PAGE_SIZE = 20;
 var activeTab = 'upcoming';
 var pendingCancel = null;
 
@@ -336,7 +339,8 @@ function init() {
 
 async function loadBookings() {
   try {
-    var res = await fetch('/api/slots?action=my-bookings', {
+    pastOffset = 0;
+    var res = await fetch('/api/slots?action=my-bookings&past_limit=' + PAST_PAGE_SIZE + '&past_offset=0', {
       headers: { Authorization: 'Bearer ' + token }
     });
     var data = await res.json();
@@ -344,16 +348,37 @@ async function loadBookings() {
 
     upcomingBookings = data.upcoming || [];
     pastBookings = data.past || [];
+    hasMorePast = data.hasMorePast || false;
 
     // Update tab labels with counts
     document.getElementById('tabUpcoming').textContent = 'Upcoming' + (upcomingBookings.length ? ' (' + upcomingBookings.length + ')' : '');
-    document.getElementById('tabPast').textContent = 'Past' + (pastBookings.length ? ' (' + pastBookings.length + ')' : '');
+    document.getElementById('tabPast').textContent = 'Past' + (pastBookings.length ? '+' : '');
 
     renderTab();
   } catch (err) {
     document.getElementById('lessonContent').innerHTML =
       '<div class="empty-state"><div class="empty-icon">&#x26A0;&#xFE0F;</div>' +
       '<p>' + esc(err.message || 'Failed to load lessons') + '</p></div>';
+  }
+}
+
+async function loadMorePast() {
+  var btn = document.getElementById('btnLoadMorePast');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+  try {
+    pastOffset += PAST_PAGE_SIZE;
+    var res = await fetch('/api/slots?action=my-bookings&past_limit=' + PAST_PAGE_SIZE + '&past_offset=' + pastOffset, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    pastBookings = pastBookings.concat(data.past || []);
+    hasMorePast = data.hasMorePast || false;
+    renderPast();
+  } catch (err) {
+    showToast(err.message || 'Failed to load more', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Load more'; }
   }
 }
 
@@ -430,7 +455,11 @@ function renderPast() {
     return;
   }
 
-  container.innerHTML = groupByDate(pastBookings, true);
+  var html = groupByDate(pastBookings, true);
+  if (hasMorePast) {
+    html += '<div style="text-align:center;padding:16px 0"><button id="btnLoadMorePast" onclick="loadMorePast()" style="padding:10px 24px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body);color:var(--primary)">Load more</button></div>';
+  }
+  container.innerHTML = html;
 }
 
 function groupByDate(bookings, isPast) {
@@ -514,14 +543,27 @@ function renderLessonCard(b, isPast) {
   if (canAct) {
     html += '<div class="lesson-actions">';
     html += '<button class="btn-lesson calendar" onclick="downloadCalendar(' + b.id + ')">Add to Calendar</button>';
+    var rCount = b.reschedule_count || 0;
     if (canReschedule) {
+      var rLabel = rCount === 0 ? 'Reschedule' : 'Reschedule (' + rCount + ' of 2 used)';
       html += '<button class="btn-lesson reschedule" onclick="openRescheduleModal(' + b.id + ', \'' +
         b.scheduled_date + '\', \'' + start + '\', \'' + end + '\', \'' + esc(b.instructor_name) + '\', ' +
-        b.instructor_id + ')">Reschedule</button>';
+        b.instructor_id + ', ' + (b.lesson_type_id || 'null') + ')">' + rLabel + '</button>';
+    } else if (canAct && hoursUntil >= 48 && rCount >= 2) {
+      html += '<span style="font-size:0.75rem;color:var(--muted);padding:4px 0">Reschedule limit reached</span>';
     }
     html += '<button class="btn-lesson cancel" onclick="openCancelModal(' + b.id + ', \'' +
       b.scheduled_date + '\', \'' + start + '\', \'' + end + '\', \'' + esc(b.instructor_name) + '\', ' +
       hoursUntil.toFixed(1) + ', \'' + (b.series_id || '') + '\')">Cancel</button>';
+    html += '</div>';
+  }
+
+  // Rebook shortcut for past completed lessons
+  if (isPast && isCompleted && b.instructor_id) {
+    var rebookUrl = '/learner/book.html?instructor=' + b.instructor_id;
+    if (b.lesson_type_id) rebookUrl += '&type_id=' + b.lesson_type_id;
+    html += '<div class="lesson-actions">';
+    html += '<button class="btn-lesson reschedule" onclick="window.location.href=\'' + rebookUrl + '\'">Book again</button>';
     html += '</div>';
   }
 
@@ -636,13 +678,15 @@ async function confirmCancel() {
 }
 
 // ── Reschedule ──
-function openRescheduleModal(bookingId, date, start, end, instructorName, instructorId) {
+function openRescheduleModal(bookingId, date, start, end, instructorName, instructorId, lessonTypeId) {
   var dateStr = new Date(date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
   document.getElementById('rmCurrentDateTime').textContent = dateStr + ' at ' + start;
   document.getElementById('rmInstructor').textContent = instructorName;
   document.getElementById('btnGoReschedule').onclick = function() {
-    window.location.href = '/learner/book.html?reschedule=' + bookingId;
+    var url = '/learner/book.html?reschedule=' + bookingId + '&instructor=' + instructorId;
+    if (lessonTypeId) url += '&type_id=' + lessonTypeId;
+    window.location.href = url;
   };
   document.getElementById('rescheduleModal').classList.add('open');
 }

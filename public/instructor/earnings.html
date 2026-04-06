@@ -138,6 +138,39 @@
     .btn-load-more:hover { background: var(--border); }
     .btn-load-more:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 72px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--primary); color: white;
+      padding: 12px 22px; border-radius: 10px;
+      font-size: 0.875rem; font-weight: 600;
+      transition: transform 0.3s; z-index: 9999; max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.success { background: #16a34a; }
+    .toast.error { background: var(--red); }
+
+    /* ── Confirm modal ── */
+    .confirm-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .confirm-overlay.open { opacity: 1; pointer-events: all; }
+    .confirm-box {
+      background: var(--card); border-radius: var(--radius); padding: 24px;
+      max-width: 360px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .confirm-box p { font-size: 0.9rem; color: var(--primary); margin: 0 0 20px; line-height: 1.5; }
+    .confirm-actions { display: flex; gap: 10px; }
+    .confirm-actions button {
+      flex: 1; padding: 11px; border-radius: 8px; font-weight: 600; font-size: 0.85rem;
+      cursor: pointer; border: none; transition: background 0.15s;
+    }
+    .btn-confirm-no { background: var(--border); color: var(--primary); }
+    .btn-confirm-yes { background: var(--accent); color: white; }
+
     .commission-note {
       text-align: center; font-size: 0.78rem; color: var(--muted); margin-top: 20px;
     }
@@ -530,10 +563,10 @@
       if (data.ok && data.onboarding_url) {
         window.location.href = data.onboarding_url;
       } else {
-        alert(data.message || 'Failed to start setup. Please try again.');
+        showToast(data.message || 'Failed to start setup. Please try again.', 'error');
       }
     } catch (err) {
-      alert('Something went wrong. Please try again.');
+      showToast('Something went wrong. Please try again.', 'error');
     }
   }
 
@@ -546,15 +579,21 @@
       if (data.ok && data.onboarding_url) {
         window.location.href = data.onboarding_url;
       } else {
-        alert(data.message || 'Failed to get onboarding link. Please try again.');
+        showToast(data.message || 'Failed to get onboarding link. Please try again.', 'error');
       }
     } catch (err) {
-      alert('Something went wrong. Please try again.');
+      showToast('Something went wrong. Please try again.', 'error');
     }
   }
 
+  let pendingDismissResolve = null;
   async function dismissConnect() {
-    if (!confirm('This will hide the payout setup banner. You can re-enable it from the admin portal later.')) return;
+    // Show confirmation modal instead of window.confirm()
+    const confirmed = await new Promise(resolve => {
+      pendingDismissResolve = resolve;
+      document.getElementById('dismissConfirmModal').classList.add('open');
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch('/api/connect?action=dismiss-connect', {
         method: 'POST',
@@ -562,14 +601,17 @@
       });
       const data = await res.json();
       if (data.ok) {
-        // Remove the banner from the page
         document.querySelector('.connect-banner')?.remove();
       } else {
-        alert(data.message || 'Failed to dismiss.');
+        showToast(data.message || 'Failed to dismiss.', 'error');
       }
     } catch (err) {
-      alert('Something went wrong. Please try again.');
+      showToast('Something went wrong. Please try again.', 'error');
     }
+  }
+  function closeDismissModal(result) {
+    document.getElementById('dismissConfirmModal').classList.remove('open');
+    if (pendingDismissResolve) { pendingDismissResolve(result); pendingDismissResolve = null; }
   }
 
   async function openStripeDashboard() {
@@ -581,10 +623,10 @@
       if (data.ok && data.dashboard_url) {
         window.open(data.dashboard_url, '_blank');
       } else {
-        alert(data.message || 'Failed to open dashboard.');
+        showToast(data.message || 'Failed to open dashboard.', 'error');
       }
     } catch (err) {
-      alert('Something went wrong. Please try again.');
+      showToast('Something went wrong. Please try again.', 'error');
     }
   }
 
@@ -665,11 +707,33 @@
     } catch (err) {
       console.error('Failed to load earnings:', err);
       document.getElementById('earningsContent').innerHTML =
-        '<div class="empty-state">Failed to load earnings data. Please try again.</div>';
+        '<div class="empty-state">Failed to load earnings data.<br><button onclick="init()" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>';
     }
+  }
+
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (type ? ' ' + type : '');
+    void t.offsetWidth;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3500);
   }
 
   init();
 </script>
+
+<div id="toast" class="toast"></div>
+
+<div class="confirm-overlay" id="dismissConfirmModal" onclick="if(event.target===this)closeDismissModal(false)">
+  <div class="confirm-box">
+    <p>This will hide the payout setup banner. You can re-enable it from the admin portal later.</p>
+    <div class="confirm-actions">
+      <button class="btn-confirm-no" onclick="closeDismissModal(false)">Cancel</button>
+      <button class="btn-confirm-yes" onclick="closeDismissModal(true)">Yes, hide it</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

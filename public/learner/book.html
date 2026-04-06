@@ -343,6 +343,13 @@
     .btn-confirm-cancel:hover { background: #dc2626; }
     .btn-confirm-cancel:disabled { background: var(--border); cursor: not-allowed; }
 
+    /* ── Inline field errors ── */
+    .field-error-msg {
+      display: none; font-size: 0.75rem; color: var(--red); margin-top: 3px;
+    }
+    .field-error-msg.show { display: block; }
+    .input-error { border-color: var(--red) !important; }
+
     /* ── Toast ────────────────────────────────────────────────────────────── */
     .toast {
       position: fixed; bottom: 72px; left: 50%;
@@ -350,7 +357,7 @@
       background: var(--primary); color: white;
       padding: 14px 24px; border-radius: 10px;
       font-size: 0.9rem; font-weight: 600;
-      transition: transform 0.3s; z-index: 9999; white-space: nowrap;
+      transition: transform 0.3s; z-index: 9999; max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
     }
     .toast.show { transform: translateX(-50%) translateY(0); }
     .toast.success { background: #16a34a; }
@@ -470,6 +477,9 @@
         <div class="modal-detail-row"><span>Type</span><span id="mdType">Standard Lesson</span></div>
         <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">1.5 hours</span></div>
       </div>
+      <div id="slotTimer" style="display:none;text-align:center;font-size:0.78rem;color:var(--muted);padding:6px 0">
+        Slot held for <span id="slotTimerValue" style="font-weight:600">10:00</span>
+      </div>
       <!-- Profile completion fields for logged-in users missing phone/address -->
       <div id="profileFields" style="display:none;margin:12px 0">
         <p style="font-size:0.8rem;color:var(--muted);margin-bottom:10px">We need a couple of details for your first booking:</p>
@@ -487,24 +497,29 @@
       <div id="guestFields" style="display:none;margin:12px 0">
         <div style="margin-bottom:10px">
           <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Your name *</label>
-          <input type="text" id="mdGuestName" placeholder="Full name" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+          <input type="text" id="mdGuestName" placeholder="Full name" oninput="clearFieldError(this)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:16px;box-sizing:border-box;">
+          <div class="field-error-msg" id="errGuestName">Full name is required</div>
         </div>
         <div style="margin-bottom:10px">
           <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Email *</label>
-          <input type="email" id="mdGuestEmail" placeholder="you@example.com" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+          <input type="email" id="mdGuestEmail" placeholder="you@example.com" oninput="clearFieldError(this)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:16px;box-sizing:border-box;">
+          <div class="field-error-msg" id="errGuestEmail">Enter a valid email address</div>
         </div>
         <div style="margin-bottom:10px">
           <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Phone number *</label>
-          <input type="tel" id="mdGuestPhone" placeholder="07xxx xxx xxx" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+          <input type="tel" id="mdGuestPhone" placeholder="07xxx xxx xxx" oninput="clearFieldError(this)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:16px;box-sizing:border-box;">
+          <div class="field-error-msg" id="errGuestPhone">Enter a valid UK mobile number (07...)</div>
         </div>
         <div style="margin-bottom:10px">
           <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup address *</label>
-          <input type="text" id="mdGuestPickup" placeholder="e.g. 12 High Street, RG1 2AB" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+          <input type="text" id="mdGuestPickup" placeholder="e.g. 12 High Street, RG1 2AB" oninput="clearFieldError(this)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:16px;box-sizing:border-box;">
+          <div class="field-error-msg" id="errGuestPickup">Pickup address is required</div>
         </div>
         <label style="display:flex;align-items:flex-start;gap:8px;font-size:0.8rem;color:var(--muted);cursor:pointer;margin-top:4px">
-          <input type="checkbox" id="mdGuestTerms" style="margin-top:2px">
+          <input type="checkbox" id="mdGuestTerms" onchange="clearFieldError(this);" style="margin-top:2px">
           <span>I agree to the <a href="/terms.html" target="_blank" style="color:var(--accent)">terms</a> and <a href="/privacy.html" target="_blank" style="color:var(--accent)">privacy policy</a></span>
         </label>
+        <div class="field-error-msg" id="errGuestTerms">You must accept the terms and privacy policy</div>
       </div>
 
       <div style="margin:12px 0">
@@ -681,6 +696,7 @@ function init() {
   // Handle URL params
   const params = new URLSearchParams(window.location.search);
   preselectedTypeSlug = params.get('type'); // ?type=standard or ?type=2hr
+  const preselectedTypeId = params.get('type_id'); // ?type_id=3 (from reschedule)
   if (params.get('paid') === '1') {
     const paidMsg = token
       ? 'Payment successful — your lesson is booked! Check your email for details.'
@@ -774,7 +790,9 @@ async function loadLessonTypes() {
     lessonTypes = data.lesson_types || [];
     // Auto-select from ?type=slug URL param, or default to first
     if (lessonTypes.length > 0 && !selectedLessonType) {
-      if (preselectedTypeSlug) {
+      if (preselectedTypeId) {
+        selectedLessonType = lessonTypes.find(lt => lt.id === parseInt(preselectedTypeId)) || lessonTypes[0];
+      } else if (preselectedTypeSlug) {
         selectedLessonType = lessonTypes.find(lt => lt.slug === preselectedTypeSlug) || lessonTypes[0];
       } else {
         selectedLessonType = lessonTypes[0];
@@ -1232,9 +1250,11 @@ function openBookModal(el) {
   document.getElementById('bookConfirmStep').style.display = 'block';
   document.getElementById('bookSuccessStep').style.display = 'none';
   document.getElementById('bookModal').classList.add('open');
+  startSlotTimer();
 }
 
 function closeBookModal() {
+  clearSlotTimer();
   document.getElementById('bookModal').classList.remove('open');
   document.getElementById('repeatToggle').checked = false;
   document.getElementById('repeatOptions').classList.remove('open');
@@ -1413,24 +1433,24 @@ async function confirmPayAndBook() {
   const ltPrice = selectedLessonType ? selectedLessonType.price_pence : 8250;
   const isGuest = !token;
 
-  // Guest validation
+  // Guest validation — inline per-field errors
   if (isGuest) {
-    const gName  = document.getElementById('mdGuestName').value.trim();
-    const gEmail = document.getElementById('mdGuestEmail').value.trim();
-    const gPhone = document.getElementById('mdGuestPhone').value.trim();
-    const gAddr  = document.getElementById('mdGuestPickup').value.trim();
-    const gTerms = document.getElementById('mdGuestTerms').checked;
-    if (!gName) { showToast('Please enter your name.', 'error'); return; }
-    if (!gEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gEmail)) { showToast('Please enter a valid email address.', 'error'); return; }
-    if (!gPhone || !/^(?:07\d{3}\s?\d{3}\s?\d{3}|\+447\d{9})$/.test(gPhone.replace(/\s+/g, '').length === 11 ? gPhone.replace(/\s+/g, '') : gPhone)) {
-      // Simpler check: strip spaces, must be 07 followed by 9 digits or +447 followed by 9 digits
-      const stripped = gPhone.replace(/\s+/g, '');
-      if (!/^07\d{9}$/.test(stripped) && !/^\+447\d{9}$/.test(stripped)) {
-        showToast('Please enter a valid UK phone number (07xxx xxx xxx).', 'error'); return;
-      }
-    }
-    if (!gAddr) { showToast('Please enter your pickup address.', 'error'); return; }
-    if (!gTerms) { showToast('Please accept the terms and privacy policy.', 'error'); return; }
+    clearAllGuestErrors();
+    let hasError = false;
+    const nameEl  = document.getElementById('mdGuestName');
+    const emailEl = document.getElementById('mdGuestEmail');
+    const phoneEl = document.getElementById('mdGuestPhone');
+    const addrEl  = document.getElementById('mdGuestPickup');
+    const termsEl = document.getElementById('mdGuestTerms');
+
+    if (!nameEl.value.trim()) { showFieldError(nameEl, 'errGuestName'); hasError = true; }
+    if (!emailEl.value.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value.trim())) { showFieldError(emailEl, 'errGuestEmail'); hasError = true; }
+    const stripped = phoneEl.value.replace(/\s+/g, '');
+    if (!stripped || (!/^07\d{9}$/.test(stripped) && !/^\+447\d{9}$/.test(stripped))) { showFieldError(phoneEl, 'errGuestPhone'); hasError = true; }
+    if (!addrEl.value.trim()) { showFieldError(addrEl, 'errGuestPickup'); hasError = true; }
+    if (!termsEl.checked) { showFieldError(termsEl, 'errGuestTerms'); hasError = true; }
+
+    if (hasError) { showToast('Please fix the highlighted fields', 'error'); return; }
   }
 
   btn.disabled = true; label.textContent = 'Redirecting to payment…'; spinner.style.display = 'block';
@@ -1757,6 +1777,55 @@ function showToast(msg, type = '') {
   setTimeout(() => t.classList.remove('show'), 4000);
 }
 
+// ─── Slot reservation countdown ──────────────────────────────────────────────
+let slotTimerInterval = null;
+function startSlotTimer() {
+  clearSlotTimer();
+  let remaining = 600; // 10 minutes in seconds
+  const timerEl = document.getElementById('slotTimer');
+  const valEl = document.getElementById('slotTimerValue');
+  timerEl.style.display = 'block';
+  valEl.style.color = 'var(--muted)';
+  function tick() {
+    const mins = Math.floor(remaining / 60);
+    const secs = remaining % 60;
+    valEl.textContent = mins + ':' + String(secs).padStart(2, '0');
+    if (remaining <= 60) valEl.style.color = 'var(--red)';
+    if (remaining <= 0) {
+      clearSlotTimer();
+      valEl.textContent = 'expired';
+      showToast('Your slot reservation has expired. Please select a new slot.', 'error');
+      closeBookModal();
+      return;
+    }
+    remaining--;
+  }
+  tick();
+  slotTimerInterval = setInterval(tick, 1000);
+}
+function clearSlotTimer() {
+  if (slotTimerInterval) { clearInterval(slotTimerInterval); slotTimerInterval = null; }
+  const el = document.getElementById('slotTimer');
+  if (el) el.style.display = 'none';
+}
+
+// ─── Inline field validation helpers ─────────────────────────────────────────
+function showFieldError(inputEl, errId) {
+  inputEl.classList.add('input-error');
+  const msg = document.getElementById(errId);
+  if (msg) msg.classList.add('show');
+}
+function clearFieldError(inputEl) {
+  inputEl.classList.remove('input-error');
+  const errEl = inputEl.closest('div')?.querySelector('.field-error-msg') ||
+                inputEl.parentElement?.querySelector('.field-error-msg');
+  if (errEl) errEl.classList.remove('show');
+}
+function clearAllGuestErrors() {
+  document.querySelectorAll('#guestFields .input-error').forEach(el => el.classList.remove('input-error'));
+  document.querySelectorAll('#guestFields .field-error-msg.show').forEach(el => el.classList.remove('show'));
+}
+
 // ─── Waitlist ────────────────────────────────────────────────────────────────
 
 function showWaitlistJoin(dayOfWeek, dateStr) {
@@ -1835,7 +1904,7 @@ async function submitWaitlistJoin() {
     if (day !== '') body.preferred_day = parseInt(day);
     if (start && end) {
       if (start >= end) {
-        alert('End time must be after start time');
+        showToast('End time must be after start time', 'error');
         btn.disabled = false; btn.textContent = 'Join Waitlist';
         return;
       }
@@ -1862,7 +1931,7 @@ async function submitWaitlistJoin() {
         You're on the waitlist! We'll WhatsApp and email you when a matching slot opens.
       </div>`;
   } catch (err) {
-    alert(err.message || 'Failed to join waitlist');
+    showToast(err.message || 'Failed to join waitlist', 'error');
     btn.disabled = false; btn.textContent = 'Join Waitlist';
   }
 }

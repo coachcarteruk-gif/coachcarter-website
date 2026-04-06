@@ -465,7 +465,7 @@
     .modal-label { font-size: 0.8rem; font-weight: 700; color: var(--muted); margin-bottom: 6px; display: block; letter-spacing: 0.03em; text-transform: uppercase; }
     .modal-input {
       width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
-      padding: 9px 12px; font-size: 0.9rem; font-family: var(--font-body);
+      padding: 9px 12px; font-size: 16px; font-family: var(--font-body);
       background: var(--white); color: var(--primary); outline: none;
       transition: border-color 0.15s;
     }
@@ -506,15 +506,36 @@
       background: var(--primary); color: white;
       padding: 12px 22px; border-radius: 10px;
       font-size: 0.875rem; font-weight: 600;
-      transition: transform 0.3s; z-index: 9999; white-space: nowrap;
+      transition: transform 0.3s; z-index: 9999; max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
     }
     .toast.show { transform: translateX(-50%) translateY(0); }
     .toast.success { background: #16a34a; }
     .toast.error   { background: var(--red); }
 
+    /* ── Toolbar overflow menu ──────────────────────────────────────────── */
+    .toolbar-overflow-wrap { position: relative; display: none; }
+    .toolbar-overflow-btn { font-size: 1.2rem; letter-spacing: 2px; padding: 6px 10px; }
+    .toolbar-overflow-menu {
+      display: none; position: absolute; top: 100%; right: 0; margin-top: 4px;
+      background: var(--white); border: 1px solid var(--border); border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 60; min-width: 160px;
+      overflow: hidden;
+    }
+    .toolbar-overflow-menu.open { display: block; }
+    .toolbar-overflow-item {
+      display: block; width: 100%; text-align: left; padding: 10px 16px;
+      font-size: 0.85rem; font-weight: 500; border: none; background: none;
+      cursor: pointer; color: var(--primary); font-family: var(--font-body);
+      transition: background 0.1s;
+    }
+    .toolbar-overflow-item:hover { background: var(--surface); }
+    .toolbar-overflow-item + .toolbar-overflow-item { border-top: 1px solid var(--border); }
+
     /* ── Responsive ───────────────────────────────────────────────────────── */
     @media (max-width: 700px) {
       .cal-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .toolbar-secondary { display: none; }
+      .toolbar-overflow-wrap { display: block; }
       .cal-controls { width: 100%; justify-content: space-between; }
       .month-cell { min-height: 60px; }
       .month-booking-pill { display: none; }
@@ -576,6 +597,7 @@
   </style>
 <script src="/sidebar.js"></script>
 <script src="/shared/instructor-auth.js"></script>
+<script src="/shared/instructor-booking-actions.js"></script>
 </head>
 <body>
 
@@ -595,9 +617,19 @@
       <button class="view-btn" id="btnAgenda"  onclick="setView('agenda')">Agenda</button>
     </div>
     <button class="btn-add-lesson" onclick="openAddLessonModal()">+ Add Lesson</button>
-    <button class="btn-today" onclick="openOfferModal()" title="Send a lesson offer">Offer</button>
-    <button class="btn-today cal-filter-btn" id="btnHideWeekends" onclick="toggleHideWeekends()" title="Hide weekends">Weekdays</button>
-    <button class="btn-today cal-filter-btn" id="btnShowCancelled" onclick="toggleShowCancelled()" title="Show cancelled">Cancelled</button>
+    <span class="toolbar-secondary">
+      <button class="btn-today" onclick="openOfferModal()" title="Send a lesson offer">Offer</button>
+      <button class="btn-today cal-filter-btn" id="btnHideWeekends" onclick="toggleHideWeekends()" title="Hide weekends">Weekdays</button>
+      <button class="btn-today cal-filter-btn" id="btnShowCancelled" onclick="toggleShowCancelled()" title="Show cancelled">Cancelled</button>
+    </span>
+    <div class="toolbar-overflow-wrap">
+      <button class="btn-today toolbar-overflow-btn" onclick="toggleToolbarOverflow()" title="More options">&#x22EF;</button>
+      <div class="toolbar-overflow-menu" id="toolbarOverflow">
+        <button class="toolbar-overflow-item" onclick="openOfferModal();toggleToolbarOverflow()">Offer Lesson</button>
+        <button class="toolbar-overflow-item" id="btnHideWeekendsOF" onclick="toggleHideWeekends();toggleToolbarOverflow()">Weekdays only</button>
+        <button class="toolbar-overflow-item" id="btnShowCancelledOF" onclick="toggleShowCancelled();toggleToolbarOverflow()">Show cancelled</button>
+      </div>
+    </div>
   </div>
 
   <!-- Calendar content -->
@@ -810,17 +842,18 @@ let loadedRanges = []; // [{from, to}] already fetched
 let selectedBooking = null;
 
 // ─── Init ────────────────────────────────────────────────────────────────────
-function init() {
+async function init() {
   const session = ccAuth.getAuth();
   token      = session?.token || null;
   instructor = session?.instructor || null;
   if (!token) { window.location.href = '/instructor/login.html'; return; }
 
-  // Load calendar preferences from profile
-  loadCalendarPrefs();
-
   // Default to today
   cursor = new Date(); cursor.setHours(0,0,0,0);
+
+  // Load calendar start hour before first render to prevent layout jump
+  await loadCalendarPrefs();
+
   setView('daily'); // start in daily view on today
   loadAvailability();
 }
@@ -850,14 +883,30 @@ function setView(view) {
 function toggleHideWeekends() {
   hideWeekends = !hideWeekends;
   document.getElementById('btnHideWeekends').classList.toggle('active', hideWeekends);
+  const ofBtn = document.getElementById('btnHideWeekendsOF');
+  if (ofBtn) ofBtn.textContent = hideWeekends ? 'Show weekends' : 'Weekdays only';
   renderCurrentView();
 }
 
 function toggleShowCancelled() {
   showCancelled = !showCancelled;
   document.getElementById('btnShowCancelled').classList.toggle('active', showCancelled);
+  const ofBtn = document.getElementById('btnShowCancelledOF');
+  if (ofBtn) ofBtn.textContent = showCancelled ? 'Hide cancelled' : 'Show cancelled';
   renderCurrentView();
 }
+
+function toggleToolbarOverflow() {
+  const menu = document.getElementById('toolbarOverflow');
+  menu.classList.toggle('open');
+}
+// Close overflow menu when clicking outside
+document.addEventListener('click', function(e) {
+  const wrap = document.querySelector('.toolbar-overflow-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('toolbarOverflow')?.classList.remove('open');
+  }
+});
 
 function navPrev() {
   if (currentView === 'monthly') { cursor.setMonth(cursor.getMonth() - 1); }
@@ -873,6 +922,27 @@ function navNext() {
   else { cursor.setDate(cursor.getDate() + 1); }
   renderCurrentView();
 }
+// ─── Swipe navigation for daily/weekly views ─────────────────────────────────
+(function() {
+  let touchStartX = 0, touchStartY = 0;
+  const calEl = document.getElementById('calContent');
+  if (!calEl) return;
+  calEl.addEventListener('touchstart', function(e) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  calEl.addEventListener('touchend', function(e) {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    // Only trigger on horizontal swipe (not vertical scroll), min 60px
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (currentView === 'daily' || currentView === 'weekly') {
+        if (dx > 0) navPrev(); else navNext();
+      }
+    }
+  }, { passive: true });
+})();
+
 function goToday() {
   cursor = new Date(); cursor.setHours(0,0,0,0);
   renderCurrentView();
@@ -961,7 +1031,7 @@ function showLoading() {
   document.getElementById('calContent').innerHTML = `<div class="loading"><div class="spinner"></div><p>Loading…</p></div>`;
 }
 function showError(msg) {
-  document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
+  document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p><button onclick="renderCurrentView()" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>`;
 }
 
 // ─── Availability fetching ───────────────────────────────────────────────────
@@ -1353,7 +1423,7 @@ async function submitConfirmation(bookingId) {
     // Refresh the calendar view
     loadView();
   } catch (err) {
-    alert('Failed to submit confirmation: ' + err.message);
+    showToast('Failed to submit confirmation: ' + err.message, 'error');
   }
 }
 
@@ -1568,9 +1638,14 @@ async function refreshSchedule(silent) {
   if (!silent) showToast('Schedule refreshed', 'success');
 }
 
-// Auto-refresh every 60s when page is visible
+// Auto-refresh every 60s when page is visible (skip if user is typing)
 setInterval(() => {
-  if (document.visibilityState === 'visible' && token) refreshSchedule(true);
+  if (document.visibilityState === 'visible' && token) {
+    const active = document.activeElement;
+    const calEl = document.getElementById('calContent');
+    if (active && calEl && calEl.contains(active) && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName)) return;
+    refreshSchedule(true);
+  }
 }, 60000);
 
 function esc(str) {
@@ -1704,6 +1779,9 @@ async function openLearnerHistory(learnerId) {
     const l = data.learner;
     const initials = l.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
 
+    // Format phone for WhatsApp (07xxx → 447xxx)
+    const waPhone = l.phone ? l.phone.replace(/\s+/g, '').replace(/^0/, '44') : '';
+
     let html = `
       <div class="history-header">
         <div class="history-avatar">${initials}</div>
@@ -1712,6 +1790,11 @@ async function openLearnerHistory(learnerId) {
           <div class="history-meta">${esc(l.email)}${l.phone ? ' · ' + esc(l.phone) : ''}</div>
           <div class="history-meta">${data.totalLessons} completed lesson${data.totalLessons !== 1 ? 's' : ''} with you${l.tier ? ' · ' + esc(l.tier) : ''}</div>
         </div>
+      </div>
+      <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap">
+        ${l.phone ? `<a href="tel:${esc(l.phone)}" style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);font-size:0.82rem;font-weight:600;text-decoration:none;color:var(--primary);background:var(--white);cursor:pointer">Call</a>` : ''}
+        ${waPhone ? `<a href="https://wa.me/${waPhone}" target="_blank" style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);font-size:0.82rem;font-weight:600;text-decoration:none;color:var(--primary);background:var(--white);cursor:pointer">WhatsApp</a>` : ''}
+        <button onclick="closeHistoryModal();openAddLessonModal()" style="padding:6px 14px;border-radius:8px;border:1px solid var(--accent);font-size:0.82rem;font-weight:600;color:var(--accent);background:var(--white);cursor:pointer">Book Lesson</button>
       </div>
       <div class="history-list">`;
 
@@ -1747,7 +1830,7 @@ async function openLearnerHistory(learnerId) {
     html += '</div>';
     document.getElementById('historyContent').innerHTML = html;
   } catch (err) {
-    document.getElementById('historyContent').innerHTML = '<div style="color:var(--red);padding:20px">' + (err.message || 'Failed to load') + '</div>';
+    document.getElementById('historyContent').innerHTML = '<div style="color:var(--red);padding:20px;text-align:center">' + (err.message || 'Failed to load') + '<br><button onclick="renderBookingHistory()" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>';
   }
 }
 
@@ -1886,7 +1969,12 @@ async function openAddLessonModal() {
   const dateVal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   document.getElementById('addLessonDate').value = dateVal;
   document.getElementById('addLessonDate').min = new Date().toISOString().slice(0, 10);
-  document.getElementById('addLessonTime').value = '09:00';
+  // Default to next half-hour
+  const now = new Date();
+  const mins = now.getMinutes();
+  now.setMinutes(mins < 30 ? 30 : 0);
+  if (mins >= 30) now.setHours(now.getHours() + 1);
+  document.getElementById('addLessonTime').value = now.toTimeString().slice(0, 5);
 
   // Reset payment to cash
   document.querySelector('input[name="addLessonPay"][value="cash"]').checked = true;
