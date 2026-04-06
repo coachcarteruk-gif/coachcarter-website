@@ -1430,9 +1430,9 @@ async function handleRescheduleBooking(req, res) {
       new_end_time
     });
   } catch (err) {
-    console.error('instructor reschedule-booking error:', err.message, err.code, err.constraint, JSON.stringify(err));
+    console.error('instructor reschedule-booking error:', err);
     reportError('/api/instructor', err);
-    return res.status(500).json({ error: 'Failed to reschedule booking', debug: err.message });
+    return res.status(500).json({ error: 'Failed to reschedule booking' });
   }
 }
 

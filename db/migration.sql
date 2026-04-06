@@ -756,7 +756,7 @@ CREATE INDEX IF NOT EXISTS idx_payout_lines_payout
 -- ── Fix lesson_bookings status constraint to include all valid statuses ──
 ALTER TABLE lesson_bookings DROP CONSTRAINT IF EXISTS lesson_bookings_status_check;
 ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_status_check
-  CHECK (status IN ('confirmed', 'completed', 'cancelled', 'awaiting_confirmation', 'disputed', 'no_show'));
+  CHECK (status IN ('confirmed', 'completed', 'cancelled', 'rescheduled', 'awaiting_confirmation', 'disputed', 'no_show'));
 
 -- ── Weekly franchise fee model (alternative to commission_rate) ──
 -- When non-NULL, platform takes this fixed amount per week instead of per-lesson commission.
