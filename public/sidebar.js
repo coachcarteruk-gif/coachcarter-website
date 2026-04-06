@@ -249,9 +249,10 @@
   // ── Build sub-tab bar HTML (mobile, section children) ──────────
   function buildSubTabsHTML() {
     if (context !== 'learner' && context !== 'instructor') return '';
-    var navItems = sections[context];
-    for (var i = 0; i < navItems.length; i++) {
-      var item = navItems[i];
+    var items = navItems[context];
+    if (!items) return '';
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
       if (!item || !item.children) continue;
       var isInGroup = false;
       for (var j = 0; j < item.children.length; j++) {

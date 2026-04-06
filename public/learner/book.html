@@ -664,6 +664,7 @@ const FEED_CHUNK_DAYS = 14;
 const FEED_MAX_DAYS   = 90;
 let pendingSlot   = null;
 let pendingCancel = null;
+let preselectedTypeSlug = null;
 let pendingReschedule = null; // { bookingId, date, start, end, instructorName, instructorId }
 let lastBookingId = null;
 let learnerProfile = { phone: '', pickup_address: '' };
@@ -679,7 +680,7 @@ function init() {
 
   // Handle URL params
   const params = new URLSearchParams(window.location.search);
-  const preselectedTypeSlug = params.get('type'); // ?type=standard or ?type=2hr
+  preselectedTypeSlug = params.get('type'); // ?type=standard or ?type=2hr
   if (params.get('paid') === '1') {
     const paidMsg = token
       ? 'Payment successful — your lesson is booked! Check your email for details.'
