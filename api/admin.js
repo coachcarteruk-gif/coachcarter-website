@@ -104,6 +104,8 @@ module.exports = async (req, res) => {
   if (action === 'process-payouts')      return handleProcessPayouts(req, res);
   if (action === 'instructor-payout-history') return handleInstructorPayoutHistory(req, res);
   if (action === 'invite-learner')           return handleInviteLearner(req, res);
+  if (action === 'instructor-blackouts')     return handleInstructorBlackouts(req, res);
+  if (action === 'set-instructor-blackouts') return handleSetInstructorBlackouts(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -1174,5 +1176,96 @@ async function handleInviteLearner(req, res) {
     console.error('invite-learner error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to invite learner', details: err.message });
+  }
+}
+
+// ── GET /api/admin?action=instructor-blackouts&instructor_id=X ───────────────
+async function handleInstructorBlackouts(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  const instructorId = parseInt(req.query.instructor_id, 10);
+  if (!instructorId) return res.status(400).json({ error: 'instructor_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const dates = await sql`
+      SELECT id, blackout_date::text AS start_date, end_date::text, reason
+      FROM instructor_blackout_dates
+      WHERE instructor_id = ${instructorId}
+        AND end_date >= CURRENT_DATE
+      ORDER BY blackout_date ASC
+    `;
+    return res.json({ blackout_dates: dates });
+  } catch (err) {
+    console.error('instructor-blackouts error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to load blackout dates' });
+  }
+}
+
+// ── POST /api/admin?action=set-instructor-blackouts ──────────────────────────
+// Body: { instructor_id, ranges: [{ start_date, end_date, reason? }] }
+async function handleSetInstructorBlackouts(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  const { instructor_id, ranges } = req.body;
+  if (!instructor_id) return res.status(400).json({ error: 'instructor_id required' });
+  if (!Array.isArray(ranges)) return res.status(400).json({ error: 'ranges must be an array' });
+
+  const dateRx = /^\d{4}-\d{2}-\d{2}$/;
+  for (const r of ranges) {
+    if (!r.start_date || !dateRx.test(r.start_date))
+      return res.status(400).json({ error: `Invalid start_date: ${r.start_date}. Use YYYY-MM-DD` });
+    if (!r.end_date || !dateRx.test(r.end_date))
+      return res.status(400).json({ error: `Invalid end_date: ${r.end_date}. Use YYYY-MM-DD` });
+    if (r.end_date < r.start_date)
+      return res.status(400).json({ error: 'end_date must be >= start_date' });
+    const diffMs = new Date(r.end_date) - new Date(r.start_date);
+    if (diffMs > 365 * 86400000)
+      return res.status(400).json({ error: 'Range cannot exceed 365 days' });
+  }
+
+  // Check for overlapping ranges
+  const sorted = [...ranges].sort((a, b) => a.start_date.localeCompare(b.start_date));
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].start_date <= sorted[i - 1].end_date)
+      return res.status(400).json({ error: 'Submitted ranges must not overlap' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Delete all future/active blackout ranges for this instructor
+    await sql`
+      DELETE FROM instructor_blackout_dates
+      WHERE instructor_id = ${instructor_id}
+        AND end_date >= CURRENT_DATE
+    `;
+
+    // Insert new ranges
+    for (const r of ranges) {
+      await sql`
+        INSERT INTO instructor_blackout_dates (instructor_id, blackout_date, end_date, reason)
+        VALUES (${instructor_id}, ${r.start_date}, ${r.end_date}, ${r.reason || null})
+      `;
+    }
+
+    const saved = await sql`
+      SELECT id, blackout_date::text AS start_date, end_date::text, reason
+      FROM instructor_blackout_dates
+      WHERE instructor_id = ${instructor_id}
+        AND end_date >= CURRENT_DATE
+      ORDER BY blackout_date ASC
+    `;
+
+    return res.json({ ok: true, blackout_dates: saved });
+  } catch (err) {
+    console.error('set-instructor-blackouts error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to save blackout dates' });
   }
 }
