@@ -290,7 +290,24 @@ async function handleAvailable(req, res) {
             WHERE blackout_date <= ${to} AND end_date >= ${from}
           `;
     } catch (e) {
-      // Table may not exist yet — that's fine, no blackout dates
+      console.warn('Blackout query failed (end_date column may be missing — run migration):', e.message);
+      // Fallback: try single-date query without end_date
+      try {
+        blackouts = instructor_id
+          ? await sql`
+              SELECT instructor_id, blackout_date::text AS start_date, blackout_date::text AS end_date
+              FROM instructor_blackout_dates
+              WHERE blackout_date BETWEEN ${from} AND ${to}
+                AND instructor_id = ${instructor_id}
+            `
+          : await sql`
+              SELECT instructor_id, blackout_date::text AS start_date, blackout_date::text AS end_date
+              FROM instructor_blackout_dates
+              WHERE blackout_date BETWEEN ${from} AND ${to}
+            `;
+      } catch (e2) {
+        // Table genuinely doesn't exist
+      }
     }
 
     // 2d. Load external calendar events (iCal sync) in the date range
