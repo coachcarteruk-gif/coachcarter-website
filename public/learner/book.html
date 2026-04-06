@@ -433,7 +433,7 @@
     </select>
     <!-- Postcode prompt (shown when learner has no address) -->
     <div class="postcode-prompt" id="postcodePrompt">
-      <p class="postcode-prompt-hint">Add your pickup postcode to hide slots too far away.</p>
+      <p class="postcode-prompt-hint">Enter your postcode so we only show times your instructor can reach. You can change this anytime in your profile.</p>
       <div class="postcode-prompt-row">
         <input type="text" id="postcodeInput" placeholder="e.g. SW1A 1AA" maxlength="10">
         <button id="btnSavePostcode" onclick="savePickupPostcode()" class="btn-primary" style="padding:8px 16px;font-size:0.82rem;white-space:nowrap;">Save</button>
@@ -469,7 +469,10 @@
 <div class="modal-overlay" id="bookModal">
   <div class="modal">
     <div id="bookConfirmStep">
-      <h2>Confirm booking</h2>
+      <div class="modal-header">
+        <h2>Confirm booking</h2>
+        <button class="modal-close-x" aria-label="Close" id="bookModalCloseX">&times;</button>
+      </div>
       <div class="modal-detail">
         <div class="modal-detail-row"><span>Date</span><span id="mdDate">—</span></div>
         <div class="modal-detail-row"><span>Time</span><span id="mdTime">—</span></div>
@@ -564,13 +567,13 @@
       </div>
       <div id="modalPayPath" style="display:none">
         <p class="modal-credit-note" style="background:var(--accent-lt);border-color:var(--accent)">
-          You have no lessons on your account. Pay <strong>£82.50</strong> now and we'll book this slot instantly.
+          You have no lessons on your account. Pay <strong id="mdPayAmount">—</strong> now and we'll book this slot instantly.
           Cancel 48+ hours before and it returns as a lesson credit.
         </p>
         <div class="modal-actions">
           <button class="btn-modal-cancel" id="bookModalCloseAlt">Cancel</button>
           <button class="btn-confirm" id="btnPayAndBook">
-            <span id="payBtnLabel">Pay £82.50 & book</span>
+            <span id="payBtnLabel">Pay & book</span>
             <div class="modal-spinner" id="paySpinner"></div>
           </button>
         </div>
@@ -606,7 +609,10 @@
 <!-- ── Cancel confirmation modal ── -->
 <div class="modal-overlay" id="cancelModal">
   <div class="modal cancel-modal">
-    <h2>Cancel lesson?</h2>
+    <div class="modal-header">
+      <h2>Cancel lesson?</h2>
+      <button class="modal-close-x" aria-label="Close" id="cancelModalCloseX">&times;</button>
+    </div>
     <div class="modal-detail">
       <div class="modal-detail-row"><span>Date</span><span id="cmDate">—</span></div>
       <div class="modal-detail-row"><span>Time</span><span id="cmTime">—</span></div>
@@ -636,7 +642,10 @@
 <!-- ── Reschedule confirmation modal ── -->
 <div class="modal-overlay" id="rescheduleModal">
   <div class="modal">
-    <h2>Reschedule lesson?</h2>
+    <div class="modal-header">
+      <h2>Reschedule lesson?</h2>
+      <button class="modal-close-x" aria-label="Close" id="rescheduleModalCloseX">&times;</button>
+    </div>
     <div class="modal-detail">
       <div class="modal-detail-row"><span>Was</span><span id="rmOldDateTime" style="text-decoration:line-through;color:var(--muted)">—</span></div>
       <div class="modal-detail-row"><span>Now</span><span id="rmNewDateTime" style="color:var(--accent);font-weight:700">—</span></div>
@@ -663,6 +672,8 @@ const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const DAY_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MON_FULL  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+const DEFAULT_PRICE_PENCE = 8250; // fallback if lesson-types API fails
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let token         = null;
@@ -715,17 +726,31 @@ function init() {
   // Wire up modal buttons (must work for both guest and authenticated users)
   document.getElementById('bookModalClose').onclick = closeBookModal;
   document.getElementById('bookModalCloseAlt').onclick = closeBookModal;
+  document.getElementById('bookModalCloseX').onclick = closeBookModal;
   document.getElementById('btnConfirmBook').onclick = confirmBookWithCredit;
   document.getElementById('btnPayAndBook').onclick = confirmPayAndBook;
   document.getElementById('btnSuccessDone').onclick = closeBookModal;
   document.getElementById('btnSyncCalendar').onclick = handleCalendarSubscribe;
-  document.getElementById('cancelModalClose').onclick = () => document.getElementById('cancelModal').classList.remove('open');
+  const closeCancelModal = () => document.getElementById('cancelModal').classList.remove('open');
+  document.getElementById('cancelModalClose').onclick = closeCancelModal;
+  document.getElementById('cancelModalCloseX').onclick = closeCancelModal;
+  document.getElementById('rescheduleModalCloseX').onclick = closeRescheduleModal;
   document.getElementById('btnConfirmCancel').onclick = confirmCancel;
 
   // Close modals on overlay click
   document.getElementById('bookModal').addEventListener('click', e => { if (e.target === document.getElementById('bookModal')) closeBookModal(); });
-  document.getElementById('cancelModal').addEventListener('click', e => { if (e.target === document.getElementById('cancelModal')) document.getElementById('cancelModal').classList.remove('open'); });
+  document.getElementById('cancelModal').addEventListener('click', e => { if (e.target === document.getElementById('cancelModal')) closeCancelModal(); });
   document.getElementById('rescheduleModal').addEventListener('click', e => { if (e.target === document.getElementById('rescheduleModal')) closeRescheduleModal(); });
+
+  // Close modals on Escape key
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('bookModal').classList.contains('open')) closeBookModal();
+    else if (document.getElementById('cancelModal').classList.contains('open')) closeCancelModal();
+    else if (document.getElementById('rescheduleModal').classList.contains('open')) closeRescheduleModal();
+  });
+
+  const isGuest = !token;
 
   if (!token) {
     Promise.all([loadInstructors(), loadLessonTypes()])
@@ -737,6 +762,7 @@ function init() {
           }
         }
         initFeed();
+        window.posthog && posthog.capture('booking_page_viewed', { is_guest: true, has_type_preselect: !!preselectedTypeSlug });
       });
     return;
   }
@@ -751,6 +777,7 @@ function init() {
       }
       initFeed();
       showPostcodePromptIfNeeded();
+      window.posthog && posthog.capture('booking_page_viewed', { is_guest: false, has_type_preselect: !!preselectedTypeSlug });
     });
 }
 
@@ -801,7 +828,7 @@ async function loadLessonTypes() {
     renderLessonTypePills();
   } catch (err) {
     console.error('Failed to load lesson types:', err);
-    lessonTypes = [{ id: null, name: 'Standard Lesson', slug: 'standard', duration_minutes: 90, price_pence: 8250, colour: '#3b82f6' }];
+    lessonTypes = [{ id: null, name: 'Standard Lesson', slug: 'standard', duration_minutes: 90, price_pence: DEFAULT_PRICE_PENCE, colour: '#3b82f6' }];
     selectedLessonType = lessonTypes[0];
   }
 }
@@ -1180,6 +1207,11 @@ function openBookModal(el) {
     return;
   }
 
+  window.posthog && posthog.capture('slot_clicked', {
+    lesson_type_slug: selectedLessonType?.slug, instructor_id: el.dataset.instructorId,
+    date: el.dataset.date, is_guest: isGuest
+  });
+
   pendingSlot = {
     instructor_id:   el.dataset.instructorId,
     date:            el.dataset.date,
@@ -1200,7 +1232,13 @@ function openBookModal(el) {
   document.getElementById('mdType').textContent = ltName;
   document.getElementById('mdDuration').textContent = ltHrsStr;
   document.getElementById('mdDeductHours').textContent = ltHrsStr;
-  const ltPrice    = selectedLessonType ? selectedLessonType.price_pence : 8250;
+  const ltPrice    = selectedLessonType ? selectedLessonType.price_pence : DEFAULT_PRICE_PENCE;
+  const ltPriceStr = '£' + (ltPrice / 100).toFixed(2);
+  // Always populate price in pay-path elements (for both guest and authenticated users)
+  document.getElementById('mdPayAmount').textContent = ltPriceStr;
+  document.getElementById('payBtnLabel').textContent = `Pay ${ltPriceStr} & book`;
+  document.getElementById('paySpinner').style.display = 'none';
+  document.getElementById('btnPayAndBook').disabled = false;
 
   // Guest flow: show guest fields, force pay path, hide repeat/credit options
   if (isGuest) {
@@ -1208,9 +1246,6 @@ function openBookModal(el) {
     document.getElementById('repeatSection').style.display = 'none';
     document.getElementById('modalCreditPath').style.display = 'none';
     document.getElementById('modalPayPath').style.display = 'block';
-    document.getElementById('payBtnLabel').textContent = `Pay £${(ltPrice / 100).toFixed(2)} & book`;
-    document.getElementById('paySpinner').style.display = 'none';
-    document.getElementById('btnPayAndBook').disabled = false;
     // Clear previous guest field values
     document.getElementById('mdGuestName').value = '';
     document.getElementById('mdGuestEmail').value = '';
@@ -1240,9 +1275,7 @@ function openBookModal(el) {
       document.getElementById('bookSpinner').style.display = 'none';
       document.getElementById('btnConfirmBook').disabled = false;
     } else {
-      document.getElementById('payBtnLabel').textContent = `Pay £${(ltPrice / 100).toFixed(2)} & book`;
-      document.getElementById('paySpinner').style.display = 'none';
-      document.getElementById('btnPayAndBook').disabled = false;
+      // pay path — price already populated above
     }
   }
 
@@ -1254,6 +1287,8 @@ function openBookModal(el) {
 }
 
 function closeBookModal() {
+  const wasSuccess = document.getElementById('bookSuccessStep').style.display !== 'none';
+  window.posthog && posthog.capture('booking_modal_closed', { completed: wasSuccess });
   clearSlotTimer();
   document.getElementById('bookModal').classList.remove('open');
   document.getElementById('repeatToggle').checked = false;
@@ -1411,6 +1446,7 @@ async function confirmBookWithCredit() {
     balanceMinutes = data.balance_minutes || 0;
     lastBookingId = data.booking_id;
     updateCreditBadge();
+    window.posthog && posthog.capture('booking_confirmed', { method: 'credit', lesson_type_slug: selectedLessonType?.slug });
     showBookSuccess(weeks, data.dates);
     refreshAfterBooking();
   } catch (err) {
@@ -1430,7 +1466,7 @@ async function confirmPayAndBook() {
   const btn = document.getElementById('btnPayAndBook');
   const label = document.getElementById('payBtnLabel');
   const spinner = document.getElementById('paySpinner');
-  const ltPrice = selectedLessonType ? selectedLessonType.price_pence : 8250;
+  const ltPrice = selectedLessonType ? selectedLessonType.price_pence : DEFAULT_PRICE_PENCE;
   const isGuest = !token;
 
   // Guest validation — inline per-field errors
@@ -1454,6 +1490,7 @@ async function confirmPayAndBook() {
   }
 
   btn.disabled = true; label.textContent = 'Redirecting to payment…'; spinner.style.display = 'block';
+  window.posthog && posthog.capture('booking_pay_initiated', { method: 'stripe', is_guest: isGuest, lesson_type_slug: selectedLessonType?.slug });
 
   try {
     if (isGuest) {
@@ -1490,7 +1527,8 @@ async function confirmPayAndBook() {
     }
   } catch (err) {
     showToast(err.message || 'Could not start payment. Please try again.', 'error');
-    btn.disabled = false; label.textContent = `Pay £${(ltPrice / 100).toFixed(2)} & book`; spinner.style.display = 'none';
+    const priceStr = '£' + (ltPrice / 100).toFixed(2);
+    btn.disabled = false; label.textContent = `Pay ${priceStr} & book`; spinner.style.display = 'none';
   }
 }
 

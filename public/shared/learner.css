@@ -12,11 +12,11 @@
   --brand-accent: #3b82f6;
 
   --primary:    #262626;
-  --accent:     #f58321;
-  --accent-dk:  #e07518;
-  --accent-lt:  #fff4ec;
-  --accent-mid: rgba(245,131,33,0.12);
-  --accent-glow: rgba(245,131,33,0.25);
+  --accent:     #c96a00;
+  --accent-dk:  #a85800;
+  --accent-lt:  #fff7f0;
+  --accent-mid: rgba(201,106,0,0.12);
+  --accent-glow: rgba(201,106,0,0.25);
   --muted:      #797879;
   --border:     #e0e0e0;
   --bg:         #ffffff;
@@ -245,3 +245,13 @@ body {
   height: 140px;
   border-radius: 16px;
 }
+
+/* ── Modal Header & Close Button ─────────────────────────────────────────── */
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.modal-header h2 { margin-bottom: 0; }
+.modal-close-x {
+  background: none; border: none; font-size: 1.5rem; color: var(--muted);
+  cursor: pointer; padding: 4px 8px; border-radius: 6px; line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.modal-close-x:hover { background: var(--surface); color: var(--primary); }
