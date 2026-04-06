@@ -1696,6 +1696,7 @@ async function handleReschedule(req, res) {
         AND scheduled_date = ${new_date}
         AND start_time = ${new_start_time}::time
         AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (existingBooking)
       return res.status(409).json({ error: 'That slot is already booked. Please choose another.' });
@@ -1725,12 +1726,13 @@ async function handleReschedule(req, res) {
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            rescheduled_from, reschedule_count, pickup_address, dropoff_address,
-           lesson_type_id, minutes_deducted)
+           lesson_type_id, minutes_deducted, school_id)
         VALUES
           (${user.id}, ${booking.instructor_id}, ${new_date}, ${new_start_time}, ${new_end_time},
            'confirmed', ${booking_id}, ${booking.reschedule_count + 1},
            ${booking.pickup_address || null}, ${booking.dropoff_address || null},
-           ${booking.lesson_type_id || null}, ${booking.minutes_deducted || null})
+           ${booking.lesson_type_id || null}, ${booking.minutes_deducted != null ? booking.minutes_deducted : null},
+           ${schoolId})
         RETURNING id, scheduled_date, start_time::text, end_time::text, status,
                   rescheduled_from, reschedule_count
       `;
@@ -1742,7 +1744,7 @@ async function handleReschedule(req, res) {
         SET status = 'confirmed', cancelled_at = NULL
         WHERE id = ${booking_id}
       `;
-      if (insertErr.message?.includes('uq_booking_slot')) {
+      if (insertErr.message?.includes('uq_booking_slot') || insertErr.code === '23505') {
         return res.status(409).json({ error: 'That slot was just booked by someone else. Please choose another.' });
       }
       throw insertErr;

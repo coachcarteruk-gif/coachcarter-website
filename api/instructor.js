@@ -1310,10 +1310,12 @@ async function handleRescheduleBooking(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
+    const schoolId = instructor.school_id || 1;
+
     // Load booking — must belong to this instructor
     const [booking] = await sql`
       SELECT lb.id, lb.status, lb.learner_id, lb.scheduled_date, lb.start_time, lb.end_time,
-             lb.instructor_id, COALESCE(lb.reschedule_count, 0) AS reschedule_count,
+             lb.instructor_id, lb.school_id, COALESCE(lb.reschedule_count, 0) AS reschedule_count,
              lb.lesson_type_id, lb.minutes_deducted, lb.pickup_address, lb.dropoff_address,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name,
@@ -1323,6 +1325,7 @@ async function handleRescheduleBooking(req, res) {
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.id = ${booking_id} AND lb.instructor_id = ${instructor.id}
+        AND COALESCE(lb.school_id, 1) = ${schoolId}
     `;
 
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
@@ -1343,6 +1346,7 @@ async function handleRescheduleBooking(req, res) {
         AND scheduled_date = ${new_date}
         AND start_time = ${new_start_time}::time
         AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (existingBooking)
       return res.status(409).json({ error: 'That slot is already booked.' });
@@ -1361,12 +1365,12 @@ async function handleRescheduleBooking(req, res) {
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            rescheduled_from, reschedule_count, lesson_type_id, minutes_deducted,
-           pickup_address, dropoff_address)
+           pickup_address, dropoff_address, school_id)
         VALUES
           (${booking.learner_id}, ${booking.instructor_id}, ${new_date}, ${new_start_time},
            ${new_end_time}, 'confirmed', ${booking_id}, ${booking.reschedule_count + 1},
-           ${booking.lesson_type_id || null}, ${booking.minutes_deducted || null},
-           ${booking.pickup_address || null}, ${booking.dropoff_address || null})
+           ${booking.lesson_type_id || null}, ${booking.minutes_deducted != null ? booking.minutes_deducted : null},
+           ${booking.pickup_address || null}, ${booking.dropoff_address || null}, ${schoolId})
         RETURNING id, scheduled_date, start_time::text, end_time::text, reschedule_count
       `;
       newBooking = b;
@@ -1376,7 +1380,7 @@ async function handleRescheduleBooking(req, res) {
         UPDATE lesson_bookings SET status = 'confirmed', cancelled_at = NULL
         WHERE id = ${booking_id}
       `;
-      if (insertErr.message?.includes('uq_booking_slot')) {
+      if (insertErr.message?.includes('uq_booking_slot') || insertErr.code === '23505') {
         return res.status(409).json({ error: 'That slot was just taken. Please choose another.' });
       }
       throw insertErr;
@@ -1522,12 +1526,12 @@ async function handleCreateBooking(req, res) {
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            created_by, payment_method, instructor_notes, pickup_address, dropoff_address,
-           lesson_type_id, minutes_deducted)
+           lesson_type_id, minutes_deducted, school_id)
         VALUES
           (${learner_id}, ${instructor.id}, ${scheduled_date}, ${start_time}, ${end_time},
            'confirmed', 'instructor', ${payMethod}, ${notes || null},
            ${bookingPickup}, ${bookingDropoff},
-           ${lessonType.id}, ${payMethod === 'credit' ? durationMins : 0})
+           ${lessonType.id}, ${payMethod === 'credit' ? durationMins : 0}, ${schoolId})
         RETURNING id, scheduled_date, start_time::text, end_time::text, status
       `;
       booking = b;
@@ -1536,7 +1540,7 @@ async function handleCreateBooking(req, res) {
       if (creditDeducted) {
         await sql`UPDATE learner_users SET balance_minutes = balance_minutes + ${durationMins}, credit_balance = credit_balance + 1 WHERE id = ${learner_id}`;
       }
-      if (insertErr.message?.includes('uq_booking_slot')) {
+      if (insertErr.message?.includes('uq_booking_slot') || insertErr.code === '23505') {
         return res.status(409).json({ error: 'That slot is already booked. Please choose another time.' });
       }
       throw insertErr;
