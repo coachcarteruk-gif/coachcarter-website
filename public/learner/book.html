@@ -708,6 +708,7 @@ function init() {
   const params = new URLSearchParams(window.location.search);
   preselectedTypeSlug = params.get('type'); // ?type=standard or ?type=2hr
   const preselectedTypeId = params.get('type_id'); // ?type_id=3 (from reschedule)
+  const rescheduleBookingId = params.get('reschedule'); // ?reschedule=BOOKING_ID
   if (params.get('paid') === '1') {
     const paidMsg = token
       ? 'Payment successful — your lesson is booked! Check your email for details.'
@@ -768,7 +769,7 @@ function init() {
   }
 
   Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile(), loadLessonTypes()])
-    .then(() => {
+    .then(async () => {
       if (preselectedInstructorId) {
         const sel = document.getElementById('instructorFilter');
         if (sel.querySelector(`option[value="${preselectedInstructorId}"]`)) {
@@ -777,6 +778,39 @@ function init() {
       }
       initFeed();
       showPostcodePromptIfNeeded();
+
+      // Activate reschedule mode if ?reschedule=BOOKING_ID is in the URL
+      if (rescheduleBookingId && token) {
+        try {
+          const res = await fetch('/api/slots?action=my-bookings', { headers: { Authorization: 'Bearer ' + token } });
+          const data = await res.json();
+          if (res.ok) {
+            const booking = (data.upcoming || []).find(b => String(b.id) === rescheduleBookingId);
+            if (booking) {
+              // Pre-select the instructor filter to show only their slots
+              const sel = document.getElementById('instructorFilter');
+              if (sel.querySelector(`option[value="${booking.instructor_id}"]`)) {
+                sel.value = String(booking.instructor_id);
+                loadedRanges = []; slotCache = {};
+                await initFeed();
+              }
+              startRescheduleMode(
+                booking.id,
+                booking.scheduled_date,
+                booking.start_time.slice(0, 5),
+                booking.end_time.slice(0, 5),
+                booking.instructor_name,
+                booking.instructor_id
+              );
+              // Clean the URL
+              window.history.replaceState({}, '', '/learner/book.html');
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to load reschedule booking:', err);
+        }
+      }
+
       window.posthog && posthog.capture('booking_page_viewed', { is_guest: false, has_type_preselect: !!preselectedTypeSlug });
     });
 }
