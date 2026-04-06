@@ -1074,6 +1074,54 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 ---
 
+## 2.60 — Inline Profile Completion in Booking Modal (6 April 2026)
+
+**What changed:**
+
+1. **Profile fields in booking modal** — logged-in users who haven't set their phone number or pickup address now see those fields inline in the booking modal instead of being blocked with a "go update your profile" error. Details are saved to their profile automatically before the booking proceeds. Only missing fields are shown — if they already have a phone number, only pickup address appears.
+
+**Files changed:** `public/learner/book.html`
+
+---
+
+## 2.61 — Sub-Tab Navigation for Mobile Sections (6 April 2026)
+
+**What changed:**
+
+1. **Sub-tab pill bar** — pages within sidebar groups (Lessons, Practice, Learn) now show a horizontal pill bar below the mobile header for navigating between sub-pages. Previously users had to open the hamburger sidebar to switch between e.g. Book / Buy Credits / Upcoming within the Lessons section. Built into `sidebar.js` and auto-generated from the existing nav config.
+
+2. **Videos removed from Learn navigation** — Videos page hidden from sidebar and bottom tab. Learn tab now defaults to Examiner AI. Page code retained for future re-enablement.
+
+**Files changed:** `public/sidebar.js`
+
+---
+
+## 2.62 — Bug Fixes: Instructor Cancel, Lesson Types Admin, Sidebar (6 April 2026)
+
+**What changed:**
+
+1. **Instructor cancel-booking fix** — the refund query used non-existent `credits` column instead of `credit_balance`, causing every instructor cancellation to fail with a 500 error. Now correctly returns `balance_minutes` and `credit_balance`, sets `credit_returned` and `cancelled_at` on the booking, and fetches `minutes_deducted` to return the correct amount.
+
+2. **Admin lesson types fix** — lesson types section used undefined lowercase `token` instead of the admin portal's `HEADERS` constant. Load, save, and toggle lesson type actions were all broken.
+
+3. **Sidebar sub-tabs fix** — `buildSubTabsHTML` referenced undefined `sections` variable instead of `navItems`. `preselectedTypeSlug` moved to module scope so `loadLessonTypes` can access it from the unauthenticated code path.
+
+**Files changed:** `api/instructor.js`, `public/admin/portal.html`, `public/sidebar.js`, `public/learner/book.html`
+
+---
+
+## 2.63 — Admin Management of Instructor Blackout Dates (6 April 2026)
+
+**What changed:**
+
+1. **Admin blackout dates UI** — the Availability section of the admin portal now includes a "Blackout Dates" sub-section below the availability grid. When an instructor is selected, their blackout dates load automatically. Admins can add date ranges with optional reasons, remove individual blackouts, and save. Same validation as the instructor portal (no overlaps, max 365-day range).
+
+2. **New admin API actions** — `GET /api/admin?action=instructor-blackouts&instructor_id=X` returns future blackout dates. `POST /api/admin?action=set-instructor-blackouts` with `{ instructor_id, ranges }` replaces all future blackout dates. Both use admin JWT auth.
+
+**Files changed:** `api/admin.js`, `public/admin/portal.html`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

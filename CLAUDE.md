@@ -287,6 +287,7 @@ The site is designed as an app experience. Do NOT re-add any of the removed item
 - Quick-access pill row and action cards on instructor dashboard (sidebar duplicates these)
 - Calendar sync banner on booking/dashboard pages (accessible via profile or success modal)
 - Menu/hamburger as a bottom tab (sidebar opened via top header hamburger instead)
+- Videos in Learn section navigation (page still exists at `/learner/videos.html`, just not in nav — April 2026)
 
 ## Migration awareness (React Native app planned)
 

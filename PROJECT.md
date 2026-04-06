@@ -652,6 +652,9 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 | `payout-overview` | GET | JWT | All instructors' connect status, upcoming estimates, recent payouts |
 | `process-payouts` | POST | JWT | Manual trigger for payout processing (same logic as cron) |
 | `instructor-payout-history` | GET | JWT | Payout history with line items for a specific instructor |
+| `invite-learner` | POST | JWT | Create learner account and send 7-day magic link invite email |
+| `instructor-blackouts` | GET | JWT | Get future blackout dates for an instructor (`?instructor_id=X`) |
+| `set-instructor-blackouts` | POST | JWT | Replace all future blackout dates for an instructor. Body: `{ instructor_id, ranges }` |
 
 **`admin_users`** table: email, bcrypt password_hash, role (`admin` / `superadmin`).
 
