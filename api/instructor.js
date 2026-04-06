@@ -1226,6 +1226,7 @@ async function handleCancelBooking(req, res) {
 
     const [booking] = await sql`
       SELECT lb.id, lb.status, lb.learner_id, lb.scheduled_date, lb.start_time,
+             COALESCE(lb.minutes_deducted, 90) AS minutes_deducted,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name
       FROM lesson_bookings lb
@@ -1238,16 +1239,21 @@ async function handleCancelBooking(req, res) {
     if (booking.status !== 'confirmed')
       return res.status(400).json({ error: `Cannot cancel a booking with status "${booking.status}"` });
 
+    const minsToReturn = booking.minutes_deducted || 90;
+
     // Cancel the booking
     await sql`
       UPDATE lesson_bookings SET status = 'cancelled',
+        credit_returned = true, cancelled_at = NOW(),
         instructor_notes = ${reason ? 'Cancelled: ' + reason.trim() : 'Cancelled by instructor'}
       WHERE id = ${booking_id}
     `;
 
-    // Refund the learner's credit
+    // Refund the learner's balance (minutes + credit count)
     await sql`
-      UPDATE learner_users SET credits = credits + 1
+      UPDATE learner_users
+      SET balance_minutes = balance_minutes + ${minsToReturn},
+          credit_balance = credit_balance + 1
       WHERE id = ${booking.learner_id}
     `;
 
