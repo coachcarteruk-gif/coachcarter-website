@@ -470,6 +470,19 @@
         <div class="modal-detail-row"><span>Type</span><span id="mdType">Standard Lesson</span></div>
         <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">1.5 hours</span></div>
       </div>
+      <!-- Profile completion fields for logged-in users missing phone/address -->
+      <div id="profileFields" style="display:none;margin:12px 0">
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:10px">We need a couple of details for your first booking:</p>
+        <div id="profilePhoneRow" style="margin-bottom:10px">
+          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Phone number *</label>
+          <input type="tel" id="mdProfilePhone" placeholder="07xxx xxx xxx" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+        </div>
+        <div id="profilePickupRow" style="margin-bottom:10px">
+          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup address *</label>
+          <input type="text" id="mdProfilePickup" placeholder="e.g. 12 High Street, RG1 2AB" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+        </div>
+      </div>
+
       <!-- Guest checkout fields (hidden for logged-in users) -->
       <div id="guestFields" style="display:none;margin:12px 0">
         <div style="margin-bottom:10px">
@@ -899,6 +912,45 @@ function isProfileComplete() {
   return !!(learnerProfile.phone && learnerProfile.phone.trim() && learnerProfile.pickup_address && learnerProfile.pickup_address.trim());
 }
 
+// Save phone/pickup from modal fields to learner profile (for users who haven't set them yet)
+async function saveProfileFieldsFromModal() {
+  const profileFieldsEl = document.getElementById('profileFields');
+  if (!profileFieldsEl || profileFieldsEl.style.display === 'none') return true;
+
+  const phone = document.getElementById('mdProfilePhone').value.trim();
+  const pickup = document.getElementById('mdProfilePickup').value.trim();
+  const needsPhone = document.getElementById('profilePhoneRow').style.display !== 'none';
+  const needsPickup = document.getElementById('profilePickupRow').style.display !== 'none';
+
+  if (needsPhone && !phone) { showToast('Please enter your phone number.', 'error'); return false; }
+  if (needsPhone) {
+    const stripped = phone.replace(/\s+/g, '');
+    if (!/^07\d{9}$/.test(stripped) && !/^\+447\d{9}$/.test(stripped)) {
+      showToast('Please enter a valid UK phone number (07xxx xxx xxx).', 'error'); return false;
+    }
+  }
+  if (needsPickup && !pickup) { showToast('Please enter your pickup address.', 'error'); return false; }
+
+  try {
+    const body = {};
+    if (needsPhone && phone) body.phone = phone.replace(/\s+/g, '');
+    if (needsPickup && pickup) body.pickup_address = pickup;
+    const res = await fetch('/api/learner?action=update-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error('Failed to save profile');
+    // Update local profile so future bookings don't show the fields again
+    if (body.phone) learnerProfile.phone = body.phone;
+    if (body.pickup_address) learnerProfile.pickup_address = body.pickup_address;
+    return true;
+  } catch (err) {
+    showToast('Could not save your details. Please try again.', 'error');
+    return false;
+  }
+}
+
 function getLearnerPostcode() {
   if (!learnerProfile.pickup_address) return null;
   const match = learnerProfile.pickup_address.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i);
@@ -1093,11 +1145,8 @@ function showError(msg) { document.getElementById('calContent').innerHTML = `<di
 function openBookModal(el) {
   const isGuest = !token;
 
-  // Authenticated users must have profile complete; guests fill in details in the modal
-  if (!isGuest && !isProfileComplete()) {
-    showToast('Please add your phone number and pickup address in your Profile before booking.', 'error');
-    return;
-  }
+  // Authenticated users with incomplete profile see inline fields (same as guest) instead of being blocked
+  const needsProfileFields = !isGuest && !isProfileComplete();
 
   // If in reschedule mode, redirect to reschedule confirmation (auth required)
   if (pendingReschedule) {
@@ -1152,6 +1201,18 @@ function openBookModal(el) {
   } else {
     document.getElementById('guestFields').style.display = 'none';
     document.getElementById('repeatSection').style.display = '';
+    // Show profile completion fields if phone or pickup missing
+    if (needsProfileFields) {
+      document.getElementById('profileFields').style.display = 'block';
+      const hasPhone = !!(learnerProfile.phone && learnerProfile.phone.trim());
+      const hasAddr  = !!(learnerProfile.pickup_address && learnerProfile.pickup_address.trim());
+      document.getElementById('profilePhoneRow').style.display = hasPhone ? 'none' : '';
+      document.getElementById('profilePickupRow').style.display = hasAddr ? 'none' : '';
+      document.getElementById('mdProfilePhone').value = '';
+      document.getElementById('mdProfilePickup').value = '';
+    } else {
+      document.getElementById('profileFields').style.display = 'none';
+    }
     const hasCreds = balanceMinutes >= ltDuration;
     document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
     document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
@@ -1294,6 +1355,9 @@ window.updateRepeatDates = updateRepeatDates;
 // ─── Confirm with credit ─────────────────────────────────────────────────────
 async function confirmBookWithCredit() {
   if (!pendingSlot) return;
+  // Save profile fields first if shown (phone/pickup for incomplete profiles)
+  if (!(await saveProfileFieldsFromModal())) return;
+
   const btn = document.getElementById('btnConfirmBook');
   const label = document.getElementById('bookBtnLabel');
   const spinner = document.getElementById('bookSpinner');
@@ -1339,6 +1403,9 @@ async function confirmBookWithCredit() {
 // ─── Pay & book (Stripe) ─────────────────────────────────────────────────────
 async function confirmPayAndBook() {
   if (!pendingSlot) return;
+  // Save profile fields first if shown (phone/pickup for incomplete profiles)
+  if (!(!token) && !(await saveProfileFieldsFromModal())) return;
+
   const btn = document.getElementById('btnPayAndBook');
   const label = document.getElementById('payBtnLabel');
   const spinner = document.getElementById('paySpinner');
