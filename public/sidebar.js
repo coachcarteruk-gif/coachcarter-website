@@ -57,7 +57,6 @@
         { icon: 'dashboard', label: 'My Progress', href: '/learner/progress.html' }
       ]},
       { icon: 'play', label: 'Learn', children: [
-        { icon: 'play', label: 'Videos', href: '/learner/videos.html' },
         { icon: 'message', label: 'Examiner AI', href: '/learner/ask-examiner.html' },
         { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
       ]},
@@ -86,8 +85,8 @@
           activeOn: ['/learner/buy-credits', '/learner/lessons'] },
         { icon: 'clipboard', label: 'Practice', href: '/learner/log-session.html',
           activeOn: ['/learner/mock-test', '/learner/focused-practice', '/learner/progress'] },
-        { icon: 'play', label: 'Learn', href: '/learner/videos.html',
-          activeOn: ['/learner/ask-examiner', '/learner/examiner-quiz'] },
+        { icon: 'play', label: 'Learn', href: '/learner/ask-examiner.html',
+          activeOn: ['/learner/examiner-quiz'] },
         { icon: 'user', label: 'Profile', href: '/learner/profile.html',
           activeOn: [] }
       ]
