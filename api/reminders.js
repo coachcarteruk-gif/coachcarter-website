@@ -33,9 +33,6 @@ function sendWhatsApp(to, message) {
   }).catch(err => { console.warn('WhatsApp failed:', err.message); });
 }
 
-function setCors(res) {
-}
-
 function verifyInstructorAuth(req) {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) return null;
@@ -76,7 +73,6 @@ function formatDateDisplay(dateStr) {
 // ── Router ───────────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
-  setCors(res);
   const action = req.query.action;
   if (action === 'send-due')        return handleSendDue(req, res);
   if (action === 'daily-schedule')  return handleDailySchedule(req, res);
@@ -115,7 +111,9 @@ async function handleSendDue(req, res) {
         COALESCE(lt.name, 'Lesson') AS lesson_type_name
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
+        AND lu.school_id = lb.school_id
       JOIN instructors i    ON i.id  = lb.instructor_id
+        AND i.school_id = lb.school_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.status = 'confirmed'
         AND (lb.scheduled_date + lb.start_time)
@@ -220,13 +218,14 @@ async function handleDailySchedule(req, res) {
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
     const tomorrowStr = tomorrow.toISOString().slice(0, 10);
 
-    // Get instructors who want daily schedule emails
+    // Get instructors who want daily schedule emails (with school info)
     const instructors = await sql`
-      SELECT id, name, email
-      FROM instructors
-      WHERE active = TRUE
-        AND COALESCE(daily_schedule_email, true) = true
-        AND email IS NOT NULL
+      SELECT i.id, i.name, i.email, i.school_id, s.name AS school_name
+      FROM instructors i
+      JOIN schools s ON s.id = i.school_id
+      WHERE i.active = TRUE
+        AND COALESCE(i.daily_schedule_email, true) = true
+        AND i.email IS NOT NULL
     `;
 
     if (instructors.length === 0) {
@@ -441,7 +440,9 @@ async function handlePromptConfirmations(req, res) {
              i.name AS instructor_name, i.email AS instructor_email, i.phone AS instructor_phone
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
+        AND lu.school_id = lb.school_id
       JOIN instructors i ON i.id = lb.instructor_id
+        AND i.school_id = lb.school_id
       LEFT JOIN sent_reminders sr ON sr.booking_id = lb.id AND sr.reminder_type = 'confirmation_prompt'
       WHERE lb.status = 'confirmed'
         AND (lb.scheduled_date + lb.end_time) < NOW()

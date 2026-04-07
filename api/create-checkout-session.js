@@ -2,8 +2,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { reportError } = require('./_error-alert');
 
 module.exports = async (req, res) => {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  // CORS handled centrally by middleware.js
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;

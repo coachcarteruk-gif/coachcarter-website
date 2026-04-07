@@ -17,35 +17,9 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
-
-function setCors(res) {
-}
-
-// Accept either legacy ADMIN_SECRET or admin JWT token
-function verifyAdmin(req) {
-  // 1. Check legacy ADMIN_SECRET
-  const secret = process.env.ADMIN_SECRET;
-  if (secret) {
-    if ((req.body?.admin_secret === secret) ||
-        (req.headers['x-admin-secret'] === secret)) return true;
-  }
-  // 2. Check admin JWT
-  const auth = req.headers.authorization;
-  if (auth && auth.startsWith('Bearer ')) {
-    const jwtSecret = process.env.JWT_SECRET;
-    if (jwtSecret) {
-      try {
-        const payload = jwt.verify(auth.slice(7), jwtSecret);
-        if (payload.role === 'admin' || payload.role === 'superadmin') return true;
-        if (payload.role === 'instructor' && payload.isAdmin === true) return true;
-      } catch {}
-    }
-  }
-  return false;
-}
+const { requireAuth, getSchoolId } = require('./_auth');
 
 module.exports = async (req, res) => {
-  setCors(res);
   const action = req.query.action;
 
   if (action === 'list')             return handleList(req, res);
@@ -62,10 +36,12 @@ async function handleList(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = parseInt(req.query.school_id) || 1;
     const instructors = await sql`
       SELECT id, name, email, phone, bio, photo_url, active, created_at
       FROM instructors
       WHERE active = true
+        AND school_id = ${schoolId}
         AND email != 'demo@coachcarter.uk'
       ORDER BY name ASC
     `;
@@ -105,7 +81,9 @@ async function handleAvailability(req, res) {
 // ── POST /api/instructors?action=create ──────────────────────────────────────
 async function handleCreate(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!verifyAdmin(req))     return res.status(401).json({ error: 'Unauthorised' });
+  const payload = requireAuth(req, { roles: ['admin'] });
+  if (!payload) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getSchoolId(payload, req);
 
   const { name, email, phone, bio, photo_url, buffer_minutes } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'name and email are required' });
@@ -113,21 +91,22 @@ async function handleCreate(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    const existing = await sql`SELECT id FROM instructors WHERE email = ${email.toLowerCase().trim()}`;
+    const existing = await sql`SELECT id FROM instructors WHERE email = ${email.toLowerCase().trim()} AND school_id = ${schoolId}`;
     if (existing.length > 0)
       return res.status(400).json({ error: 'An instructor with this email already exists' });
 
     const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null) ? parseInt(buffer_minutes) : 30;
 
     const [instructor] = await sql`
-      INSERT INTO instructors (name, email, phone, bio, photo_url, buffer_minutes)
+      INSERT INTO instructors (name, email, phone, bio, photo_url, buffer_minutes, school_id)
       VALUES (
         ${name.trim()},
         ${email.toLowerCase().trim()},
         ${phone || null},
         ${bio || null},
         ${photo_url || null},
-        ${bufVal}
+        ${bufVal},
+        ${schoolId}
       )
       RETURNING id, name, email, phone, bio, photo_url, active, created_at, buffer_minutes
     `;
@@ -142,7 +121,9 @@ async function handleCreate(req, res) {
 // ── POST /api/instructors?action=update ──────────────────────────────────────
 async function handleUpdate(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!verifyAdmin(req))     return res.status(401).json({ error: 'Unauthorised' });
+  const payload = requireAuth(req, { roles: ['admin'] });
+  if (!payload) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getSchoolId(payload, req);
 
   const { id, name, email, phone, bio, photo_url, active, buffer_minutes, commission_rate, max_travel_minutes } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required' });
@@ -168,7 +149,7 @@ async function handleUpdate(req, res) {
         max_travel_minutes = COALESCE(${travelVal}, max_travel_minutes),
         commission_rate = COALESCE(${rateVal}, commission_rate),
         weekly_franchise_fee_pence = CASE WHEN ${hasFranchiseFee} THEN ${franchiseFeeVal != null ? parseInt(franchiseFeeVal) : null}::integer ELSE weekly_franchise_fee_pence END
-      WHERE id = ${id}
+      WHERE id = ${id} AND school_id = ${schoolId}
       RETURNING id, name, email, phone, bio, photo_url, active, COALESCE(buffer_minutes, 30) AS buffer_minutes, max_travel_minutes, COALESCE(commission_rate, 0.85) AS commission_rate, weekly_franchise_fee_pence
     `;
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
@@ -189,7 +170,9 @@ async function handleUpdate(req, res) {
 // day_of_week: 0=Sunday, 1=Monday, … 6=Saturday
 async function handleSetAvailability(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!verifyAdmin(req))     return res.status(401).json({ error: 'Unauthorised' });
+  const payload = requireAuth(req, { roles: ['admin'] });
+  if (!payload) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getSchoolId(payload, req);
 
   const { instructor_id, windows } = req.body;
   if (!instructor_id)           return res.status(400).json({ error: 'instructor_id required' });
@@ -208,8 +191,8 @@ async function handleSetAvailability(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Verify instructor exists
-    const [instructor] = await sql`SELECT id FROM instructors WHERE id = ${instructor_id}`;
+    // Verify instructor exists and belongs to this school
+    const [instructor] = await sql`SELECT id FROM instructors WHERE id = ${instructor_id} AND school_id = ${schoolId}`;
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
 
     // Delete existing windows and insert new ones in one go

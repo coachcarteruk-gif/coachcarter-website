@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Page Not Found</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <link rel="stylesheet" href="/shared-auth.css">
+  <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/branding.js" defer></script>
+  <style>
+    body {
+      padding-top: max(24px, env(safe-area-inset-top, 24px));
+      justify-content: center;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+    }
+    .error-container {
+      text-align: center;
+      padding: 2rem;
+      max-width: 480px;
+    }
+    .error-code {
+      font-size: 5rem;
+      font-weight: 800;
+      color: var(--brand-primary, #f58321);
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+    .error-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+    .error-message {
+      color: var(--text-secondary, #6b7280);
+      margin-bottom: 2rem;
+      line-height: 1.5;
+    }
+    .error-btn {
+      display: inline-block;
+      background: var(--brand-primary, #f58321);
+      color: #fff;
+      padding: 14px 28px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: opacity 0.15s;
+    }
+    .error-btn:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <div class="error-code">404</div>
+    <h1 class="error-title">Page not found</h1>
+    <p class="error-message">The page you're looking for doesn't exist or has been moved.</p>
+    <a href="/" class="error-btn">Go to homepage</a>
+  </div>
+</body>
+</html>

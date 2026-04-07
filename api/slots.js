@@ -1479,7 +1479,8 @@ async function handleCancel(req, res) {
           scheduled_date:  sb.scheduled_date,
           start_time:      sb.start_time,
           end_time:        sb.end_time,
-          lesson_type_id:  booking.lesson_type_id
+          lesson_type_id:  booking.lesson_type_id,
+          school_id:       booking.school_id
         }).catch(err => {
           console.warn('waitlist series check failed:', err.message);
           reportError('/api/slots:waitlist-series', err);
@@ -1593,7 +1594,8 @@ async function handleCancel(req, res) {
       scheduled_date:  String(booking.scheduled_date).slice(0, 10),
       start_time:      booking.start_time,
       end_time:        booking.end_time,
-      lesson_type_id:  booking.lesson_type_id
+      lesson_type_id:  booking.lesson_type_id,
+      school_id:       booking.school_id
     }).catch(err => {
       console.warn('waitlist check failed:', err.message);
       reportError('/api/slots:waitlist', err);

@@ -1,0 +1,8 @@
+{
+  "launch_type": "public",
+  "handles_payments": true,
+  "stores_pii": true,
+  "multi_tenant": true,
+  "rollback_capable": false,
+  "configured_at": "2026-04-07T00:00:00Z"
+}

@@ -6,8 +6,7 @@ const { reportError } = require('./_error-alert');
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 module.exports = async (req, res) => {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  // CORS handled centrally by middleware.js
   // GET — fetch submissions (admin use)
   if (req.method === 'GET') {
     try {

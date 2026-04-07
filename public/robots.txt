@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Admin and portal pages
+Disallow: /admin/
+Disallow: /instructor/
+Disallow: /learner/
+Disallow: /superadmin/
+Disallow: /demo/
+Disallow: /api/
+
+Sitemap: https://coachcarter.uk/sitemap.xml

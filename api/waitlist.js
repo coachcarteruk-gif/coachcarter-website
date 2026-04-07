@@ -18,6 +18,7 @@ const nodemailer = require('nodemailer');
 const jwt        = require('jsonwebtoken');
 const twilio     = require('twilio');
 const { reportError } = require('./_error-alert');
+const { requireAuth, getSchoolId } = require('./_auth');
 
 // ── Helpers (duplicated from slots.js per project convention) ────────────────
 
@@ -39,14 +40,6 @@ function sendWhatsApp(to, message) {
   }).catch(err => { console.warn('WhatsApp failed:', err.message); });
 }
 
-function verifyAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try { return jwt.verify(auth.slice(7), secret); } catch { return null; }
-}
-
 function createTransporter() {
   return nodemailer.createTransport({
     host:   process.env.SMTP_HOST,
@@ -54,9 +47,6 @@ function createTransporter() {
     secure: process.env.SMTP_PORT === '465',
     auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
   });
-}
-
-function setCors(res) {
 }
 
 function formatDateDisplay(str) {
@@ -76,7 +66,6 @@ function formatTime12(t) {
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 const handler = async (req, res) => {
-  setCors(res);
   const action = req.query.action;
   if (action === 'join')        return handleJoin(req, res);
   if (action === 'my-waitlist') return handleMyWaitlist(req, res);
@@ -89,8 +78,9 @@ const handler = async (req, res) => {
 async function handleJoin(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const user = verifyAuth(req);
+  const user = requireAuth(req, { roles: ['learner'] });
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getSchoolId(user, req);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -142,6 +132,7 @@ async function handleJoin(req, res) {
     const [existing] = await sql`
       SELECT 1 FROM waitlist
       WHERE learner_id = ${user.id}
+        AND school_id = ${schoolId}
         AND status = 'active'
         AND instructor_id IS NOT DISTINCT FROM ${instructor_id}
         AND preferred_day IS NOT DISTINCT FROM ${preferred_day}
@@ -155,15 +146,15 @@ async function handleJoin(req, res) {
     // Cap active entries per learner
     const [countRow] = await sql`
       SELECT COUNT(*)::int AS cnt FROM waitlist
-      WHERE learner_id = ${user.id} AND status = 'active'`;
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId} AND status = 'active'`;
     if (countRow.cnt >= 10)
       return res.status(400).json({ error: 'Maximum 10 active waitlist entries' });
 
     const [entry] = await sql`
       INSERT INTO waitlist (learner_id, instructor_id, preferred_day,
-        preferred_start_time, preferred_end_time, lesson_type_id)
+        preferred_start_time, preferred_end_time, lesson_type_id, school_id)
       VALUES (${user.id}, ${instructor_id}, ${preferred_day},
-        ${preferred_start_time}, ${preferred_end_time}, ${lesson_type_id})
+        ${preferred_start_time}, ${preferred_end_time}, ${lesson_type_id}, ${schoolId})
       RETURNING id, status, expires_at`;
 
     return res.json({ success: true, entry });
@@ -179,8 +170,9 @@ async function handleJoin(req, res) {
 async function handleMyWaitlist(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const user = verifyAuth(req);
+  const user = requireAuth(req, { roles: ['learner'] });
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getSchoolId(user, req);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -188,7 +180,7 @@ async function handleMyWaitlist(req, res) {
     // Expire stale entries
     await sql`
       UPDATE waitlist SET status = 'expired'
-      WHERE learner_id = ${user.id} AND status = 'active' AND expires_at < NOW()`;
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId} AND status = 'active' AND expires_at < NOW()`;
 
     const entries = await sql`
       SELECT w.id, w.instructor_id, w.preferred_day,
@@ -197,9 +189,10 @@ async function handleMyWaitlist(req, res) {
              i.name AS instructor_name,
              lt.name AS lesson_type_name
       FROM waitlist w
-      LEFT JOIN instructors i ON i.id = w.instructor_id
+      LEFT JOIN instructors i ON i.id = w.instructor_id AND i.school_id = ${schoolId}
       LEFT JOIN lesson_types lt ON lt.id = w.lesson_type_id
       WHERE w.learner_id = ${user.id}
+        AND w.school_id = ${schoolId}
         AND w.status IN ('active', 'notified')
       ORDER BY w.created_at DESC`;
 
@@ -216,7 +209,7 @@ async function handleMyWaitlist(req, res) {
 async function handleLeave(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const user = verifyAuth(req);
+  const user = requireAuth(req, { roles: ['learner'] });
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
   try {
@@ -243,13 +236,14 @@ async function handleLeave(req, res) {
 // ── Internal: check waitlist after a cancellation ────────────────────────────
 // Called from api/slots.js — fire-and-forget, errors are caught by caller.
 
-async function checkWaitlistOnCancel({ instructor_id, instructor_name, scheduled_date, start_time, end_time, lesson_type_id }) {
+async function checkWaitlistOnCancel({ instructor_id, instructor_name, scheduled_date, start_time, end_time, lesson_type_id, school_id }) {
   const sql = neon(process.env.POSTGRES_URL);
+  const schoolId = school_id || 1;
 
   // 1. Expire stale entries first
   await sql`
     UPDATE waitlist SET status = 'expired'
-    WHERE status = 'active' AND expires_at < NOW()`;
+    WHERE school_id = ${schoolId} AND status = 'active' AND expires_at < NOW()`;
 
   // 2. Compute day of week for the cancelled slot
   const cancelledDay = new Date(scheduled_date + 'T00:00:00Z').getUTCDay();
@@ -265,6 +259,7 @@ async function checkWaitlistOnCancel({ instructor_id, instructor_name, scheduled
     FROM waitlist w
     JOIN learner_users lu ON lu.id = w.learner_id
     WHERE w.status = 'active'
+      AND w.school_id = ${schoolId}
       AND (w.instructor_id = ${instructor_id} OR w.instructor_id IS NULL)
       AND (w.lesson_type_id = ${lesson_type_id || null} OR w.lesson_type_id IS NULL)
       AND (
