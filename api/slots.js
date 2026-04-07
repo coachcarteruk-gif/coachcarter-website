@@ -289,14 +289,6 @@ async function handleAvailable(req, res) {
             FROM instructor_blackout_dates
             WHERE blackout_date <= ${to} AND end_date >= ${from}
           `;
-      console.error('BLKOUT count=' + blackouts.length + ' from=' + from + ' to=' + to + ' iid=' + (instructor_id || 'all'));
-      for (const b of blackouts) console.error('BLKOUT row iid=' + b.instructor_id + ' s=' + b.start_date + ' e=' + b.end_date);
-      // Temp: dump ALL blackout rows to diagnose missing data
-      try {
-        const allRows = await sql`SELECT id, instructor_id, blackout_date::text AS bd, end_date::text AS ed FROM instructor_blackout_dates ORDER BY id`;
-        for (const r of allRows) console.error('BLKOUT-ALL id=' + r.id + ' iid=' + r.instructor_id + ' bd=' + r.bd + ' ed=' + r.ed);
-        if (allRows.length === 0) console.error('BLKOUT-ALL table is empty');
-      } catch (e2) { console.error('BLKOUT-ALL err=' + e2.message); }
     } catch (e) {
       console.warn('Blackout query failed (end_date column may be missing — run migration):', e.message);
       // Fallback: try single-date query without end_date
@@ -544,12 +536,6 @@ async function handleAvailable(req, res) {
       slots: result
     };
     if (travelHiddenCount > 0) response.travel_hidden = travelHiddenCount;
-    // Temp debug: include blackout data in response
-    try {
-      const allBlackouts = await sql`SELECT id, instructor_id, blackout_date::text AS bd, end_date::text AS ed FROM instructor_blackout_dates ORDER BY id`;
-      response._debug_blackouts = allBlackouts;
-      response._debug_blackout_index = Array.from(blackoutIndex);
-    } catch (e) { response._debug_blackouts_err = e.message; }
     return res.json(response);
 
   } catch (err) {
