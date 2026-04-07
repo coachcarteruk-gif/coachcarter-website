@@ -544,6 +544,12 @@ async function handleAvailable(req, res) {
       slots: result
     };
     if (travelHiddenCount > 0) response.travel_hidden = travelHiddenCount;
+    // Temp debug: include blackout data in response
+    try {
+      const allBlackouts = await sql`SELECT id, instructor_id, blackout_date::text AS bd, end_date::text AS ed FROM instructor_blackout_dates ORDER BY id`;
+      response._debug_blackouts = allBlackouts;
+      response._debug_blackout_index = Array.from(blackoutIndex);
+    } catch (e) { response._debug_blackouts_err = e.message; }
     return res.json(response);
 
   } catch (err) {
