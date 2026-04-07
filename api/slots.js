@@ -291,6 +291,12 @@ async function handleAvailable(req, res) {
           `;
       console.error('BLKOUT count=' + blackouts.length + ' from=' + from + ' to=' + to + ' iid=' + (instructor_id || 'all'));
       for (const b of blackouts) console.error('BLKOUT row iid=' + b.instructor_id + ' s=' + b.start_date + ' e=' + b.end_date);
+      // Temp: dump ALL blackout rows to diagnose missing data
+      try {
+        const allRows = await sql`SELECT id, instructor_id, blackout_date::text AS bd, end_date::text AS ed FROM instructor_blackout_dates ORDER BY id`;
+        for (const r of allRows) console.error('BLKOUT-ALL id=' + r.id + ' iid=' + r.instructor_id + ' bd=' + r.bd + ' ed=' + r.ed);
+        if (allRows.length === 0) console.error('BLKOUT-ALL table is empty');
+      } catch (e2) { console.error('BLKOUT-ALL err=' + e2.message); }
     } catch (e) {
       console.warn('Blackout query failed (end_date column may be missing — run migration):', e.message);
       // Fallback: try single-date query without end_date
