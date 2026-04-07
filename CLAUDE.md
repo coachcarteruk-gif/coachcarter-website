@@ -201,6 +201,7 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 **Key rules:**
 - Do NOT delete or modify the `setmore_key` column or `idx_bookings_setmore_key` index
 - Do NOT add CHECK constraints on lesson_bookings duration — multiple lesson types exist (60, 90, 120, 165 min). A `chk_booking_90_min` constraint was removed in April 2026 because it blocked non-standard durations.
+- **Valid booking statuses:** `confirmed`, `completed`, `cancelled`, `rescheduled`, `awaiting_confirmation`, `disputed`, `no_show`. The `lesson_bookings_status_check` CHECK constraint enforces this. If adding a new status, update the constraint in `db/migration.sql`.
 - Do NOT send notifications for imported bookings (the sync deliberately skips this)
 - Imported bookings block slots automatically — no changes needed in `slots.js`
 - The service mapping in `setmore-sync.js` is hardcoded to Fraser's Setmore account — update if services change
@@ -310,10 +311,4 @@ This codebase is being prepared for migration to a React Native (Expo) app. See 
 - `DEVELOPMENT-ROADMAP.md` — full feature history, roadmap, and competitor differentiators
 - `DESIGN-REVIEW.md` — UI/UX design principles, style guide, component standards
 - `MIGRATION-PLAN.md` — React Native app migration plan (keep updated)
-<<<<<<< HEAD
-=======
-- `DEVELOPMENT-ROADMAP.md` — full feature history and roadmap
-- `PROJECT.md` — complete project reference (APIs, tables, flows)
-- `COMPETITOR-FEATURES-ROADMAP.md` — competitor-inspired features (all 17 done)
 - `INSTRUCTORBOOK-PLAN.md` — InstructorBook national SaaS strategy, pricing, competitive analysis, marketplace phasing
->>>>>>> db9937c (Docs: add InstructorBook product strategy and plan)

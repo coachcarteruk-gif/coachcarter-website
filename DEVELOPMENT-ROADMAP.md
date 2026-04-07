@@ -1122,6 +1122,38 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 ---
 
+## 2.64 — Booking Flow Audit & Instructor Booking Actions (6 April 2026)
+
+**What changed:**
+
+1. **Booking flow audit** — comprehensive code-level UX review of the end-to-end booking flow, resulting in `BOOKING-FLOW-AUDIT.md` with 24 items across P0–P3 priorities. 20 items implemented across 4 sprints.
+
+2. **Shared instructor booking actions** — new `public/shared/instructor-booking-actions.js` module providing cancel, reschedule, and add-lesson modals used across instructor dashboard and calendar pages. Includes real-time conflict checking during reschedule.
+
+3. **Various UX improvements** — auto-refresh fix, blackout save pattern, toast CSS, pre-lesson notes, styled modals replacing alert()/confirm(), default time inputs, guest validation, touch targets, retry buttons, reschedule count display, mobile toolbar overflow.
+
+**Files changed:** `public/shared/instructor-booking-actions.js` (new), `api/admin.js`, `api/instructor.js`, `api/slots.js`, `public/admin/portal.html`, `public/instructor/*.html`, `public/learner/book.html`, `public/learner/buy-credits.html`, `public/learner/lessons.html`, `public/sidebar.js`
+
+---
+
+## 2.65 — Reschedule & Blackout Bug Fixes (7 April 2026)
+
+**What changed:**
+
+1. **Reschedule 500 fix** — the `lesson_bookings` status CHECK constraint didn't include `'rescheduled'`, causing every reschedule attempt to fail with a DB constraint violation. Added `'rescheduled'` to the CHECK constraint.
+
+2. **Missing school_id in reschedule/create-booking INSERTs** — both learner and instructor reschedule handlers, plus instructor create-booking, were missing `school_id` in their INSERT statements. Added explicit `school_id` from JWT payload. Also improved unique constraint error detection with PostgreSQL error code `23505` fallback.
+
+3. **Learner reschedule flow broken** — `book.html` never read the `?reschedule=BOOKING_ID` URL param from `lessons.html`, so reschedule mode was never activated. Now fetches booking details, pre-selects the instructor filter, and activates reschedule mode with the confirmation modal.
+
+4. **Blackout date fallback** — the blackout query in slot generation silently failed if the `end_date` column was missing. Added fallback to single-date query with warning log.
+
+5. **Calendar wording** — renamed "Subscribe"/"Sync" calendar buttons to "Auto-update your calendar" across learner booking page, dashboard, and demo page.
+
+**Files changed:** `api/slots.js`, `api/instructor.js`, `db/migration.sql`, `public/learner/book.html`, `public/learner/index.html`, `public/demo/book.html`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
