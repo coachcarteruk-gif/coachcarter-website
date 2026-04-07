@@ -1154,6 +1154,28 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 ---
 
+## 2.66 — Launch Readiness Audit & Multi-tenant Fixes (7 April 2026)
+
+**What changed:**
+
+1. **Launch readiness audit** — ran a comprehensive 9-phase code-level audit covering security, accessibility, GDPR, SEO, performance, infrastructure, code quality, broken links, and data isolation. Overall score: 72% with 4 launch blockers (all LB-7: missing school_id filtering). Full report saved as `LAUNCH-AUDIT-REPORT.md`.
+
+2. **Multi-tenant data isolation fixes (launch blockers):**
+   - `api/instructors.js` — added `school_id` filter to public list endpoint, switched admin actions (create/update/set-availability) from local `verifyAdmin()` to centralised `requireAuth()`/`getSchoolId()` from `_auth.js`. Instructors are now scoped to their school.
+   - `api/waitlist.js` — replaced local `verifyAuth()` with `requireAuth()` from `_auth.js`, added `school_id` filtering to all waitlist queries (join, my-waitlist, leave).
+   - `api/qa-digest.js` — restructured from "send all questions to all instructors" to per-school processing. Questions grouped by `school_id`, each school's instructors only receive their own school's unanswered questions.
+   - `api/reminders.js` — added cross-table `school_id` consistency JOINs (`lu.school_id = lb.school_id`, `i.school_id = lb.school_id`) to send-due, daily-schedule, and prompt-confirmations cron actions. Prevents cross-tenant data in reminder emails. Daily schedule now JOINs `schools` table for future branding use.
+
+3. **Cookie consent school_id** — `api/config.js` record-consent action now includes `school_id` in the `cookie_consents` INSERT.
+
+4. **CORS cleanup** — removed dead per-file CORS stubs from `api/availability.js`, `api/create-checkout-session.js`, `api/instructors.js`, `api/waitlist.js`, `api/reminders.js` (CORS handled centrally by `middleware.js`).
+
+5. **SEO & infrastructure** — created `public/robots.txt` (blocks admin/portal/api paths), `public/sitemap.xml` (public-facing pages), and branded `public/404.html` error page.
+
+**Files changed:** `api/instructors.js`, `api/waitlist.js`, `api/qa-digest.js`, `api/reminders.js`, `api/config.js`, `api/availability.js`, `api/create-checkout-session.js`, `public/robots.txt` (new), `public/sitemap.xml` (new), `public/404.html` (new), `LAUNCH-AUDIT-REPORT.md` (new), `.launch-audit-config.json` (new)
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
