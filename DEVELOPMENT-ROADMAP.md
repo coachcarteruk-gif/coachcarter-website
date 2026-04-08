@@ -1220,6 +1220,18 @@ Zero video references now remain in `/learner/`. The public `/classroom.html` pa
 
 ---
 
+## 2.69 — Fix Setmore Sync Duration Fallback for Unrecognised Services (8 April 2026)
+
+**What changed:**
+
+When a Setmore appointment's `service_key` wasn't in the hardcoded `SERVICE_MAP`, the sync fell back to the raw Setmore slot duration (which includes a 30-min buffer) and defaulted the lesson type to 'standard'. This caused e.g. 2hr lessons to import as 3-hour "Standard Lesson" bookings.
+
+Added `inferFromDuration()` fallback that subtracts the Setmore buffer and infers the correct lesson type slug from the resulting real duration. Unrecognised service keys are now logged via `console.warn` for monitoring.
+
+**Files changed:** `api/setmore-sync.js`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
