@@ -1232,6 +1232,26 @@ Added `inferFromDuration()` fallback that subtracts the Setmore buffer and infer
 
 ---
 
+## 2.70 — Sort Upcoming Bookings Soonest-First (8 April 2026)
+
+**What changed:**
+
+The admin `all-bookings` API endpoint sorted results `DESC` (furthest-away first). The admin dashboard's "Upcoming Lessons" section filters to future bookings and takes the first 10, so it was displaying the 10 furthest-away bookings instead of the 10 soonest. Changed sort order to `ASC` so upcoming bookings display soonest-first.
+
+**Files changed:** `api/admin.js`
+
+---
+
+## 2.71 — Redesign Instructor Daily Calendar as Lesson List (8 April 2026)
+
+**What changed:**
+
+The instructor daily calendar view showed a full time-grid with every hour slot from early morning to evening, most of which were empty rows. Replaced with a compact lesson-list layout that only shows booked lessons — matching the style of the existing agenda and weekly views. All booking card content preserved (learner name, email, phone, pickup/dropoff addresses, action buttons, status badges, notes, feedback). Empty days show a clean message with availability windows if set.
+
+**Files changed:** `public/instructor/index.html`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
