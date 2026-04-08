@@ -336,7 +336,7 @@ async function handleAllBookings(req, res) {
         AND (${instructorFilter}::integer IS NULL OR lb.instructor_id = ${instructorFilter})
         AND (${fromFilter}::date IS NULL OR lb.scheduled_date >= ${fromFilter}::date)
         AND (${toFilter}::date IS NULL OR lb.scheduled_date <= ${toFilter}::date)
-      ORDER BY lb.scheduled_date DESC, lb.start_time DESC
+      ORDER BY lb.scheduled_date ASC, lb.start_time ASC
       LIMIT 200
     `;
 

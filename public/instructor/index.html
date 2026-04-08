@@ -1177,28 +1177,9 @@ function renderDaily() {
   const dow      = cursor.getDay(); // 0=Sun
   const availWins = availCache.filter(w => w.day_of_week === dow);
 
-  // Build a map: hour -> bookings starting in that hour
-  const byHour = {};
-  for (const b of bookings) {
-    const h = parseInt(b.start_time.split(':')[0]);
-    if (!byHour[h]) byHour[h] = [];
-    byHour[h].push(b);
-  }
+  // Sort bookings by start time (soonest first)
+  bookings.sort((a, b) => a.start_time < b.start_time ? -1 : a.start_time > b.start_time ? 1 : 0);
 
-  // Determine hour range to show (default from calendarStartHour to 21:00)
-  let minH = calendarStartHour, maxH = 21;
-  for (const w of availWins) {
-    minH = Math.min(minH, parseInt(w.start_time));
-    maxH = Math.max(maxH, parseInt(w.end_time) + 1);
-  }
-  for (const b of bookings) {
-    minH = Math.min(minH, parseInt(b.start_time));
-    maxH = Math.max(maxH, parseInt(b.end_time) + 1);
-  }
-  minH = Math.max(0, minH - 1);
-  maxH = Math.min(24, maxH);
-
-  const dateLabel = `${DAY_FULL[cursor.getDay()]}, ${cursor.getDate()} ${MON_FULL[cursor.getMonth()]} ${cursor.getFullYear()}`;
   const todayBadge = isToday ? `<span style="background:var(--accent);color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px;">Today</span>` : '';
 
   let html = `
@@ -1209,59 +1190,36 @@ function renderDaily() {
       </div>
       <button class="btn-add-avail" onclick="openAvailModal()">+ Add availability</button>
     </div>
-    <div class="daily-timeline">`;
+    <div class="daily-timeline" style="display:flex;flex-direction:column;gap:12px;padding:12px 0;">`;
 
-  for (let h = minH; h < maxH; h++) {
-    const hLabel = String(h).padStart(2,'0') + ':00';
-    const hBookings = byHour[h] || [];
-
-    // Check if this hour falls within any availability window
-    const inAvail = availWins.some(w => {
-      const ws = parseInt(w.start_time);
-      const we = parseInt(w.end_time);
-      return h >= ws && h < we;
-    });
-
-    const nonWorkingCls = !inAvail ? ' non-working' : '';
-    html += `<div class="daily-hour-row${nonWorkingCls}">
-      <div class="daily-time-label">${hLabel}</div>
-      <div class="daily-slot-area">`;
-
-    if (hBookings.length > 0) {
-      for (const b of hBookings) {
-        const isCompleted = b.status === 'completed';
-        const waUrl = whatsappUrl(b.learner_phone);
-        const ltColour = b.lesson_type_colour || 'var(--accent)';
-        const ltName   = b.lesson_type_name || 'Standard Lesson';
-        const cardStyle = b.status === 'cancelled' ? '' :
-          `style="border-left-color:${ltColour};${isCompleted ? `background:${ltColour}08;border-color:${ltColour}40;` : `background:${ltColour}12;border-color:${ltColour}50;`}"`;
-        html += `
-          <div class="daily-booking-card ${isCompleted ? 'completed' : b.status === 'cancelled' ? 'cancelled' : ''}" ${cardStyle}>
-            <div class="daily-booking-time">${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)} <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span></div>
-            <div>
-              <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before their first lesson">📞 Contact first</span>' : ''}</div>
-              <div class="daily-booking-email">${esc(b.learner_email)}</div>
-              ${b.learner_phone ? `<div class="daily-booking-contact"><a href="tel:${esc(b.learner_phone)}">📞 ${esc(b.learner_phone)}</a>${waUrl ? `<a href="${waUrl}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}</div>` : ''}
-              ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="daily-booking-email">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</div>` : ''}
-              ${b.booking_dropoff_address ? `<div class="daily-booking-email">🏁 ${esc(b.booking_dropoff_address)}</div>` : ''}
-            </div>
-            <span class="daily-booking-status status-${b.status}">${statusLabel(b.status)}</span>
-            ${b.status === 'awaiting_confirmation' ? `<button class="btn-confirm-sm" onclick="toggleConfirmForm(${b.id})">Confirm lesson</button><div id="confirm-form-${b.id}" style="display:none">${renderConfirmForm(b.id)}</div>` : ''}
-            ${b.status === 'confirmed' && !isCompleted ? `<button class="btn-complete-sm" id="complete-${b.id}" onclick="markComplete(${b.id})">Mark complete</button>` : ''}
-            ${isCompleted ? renderInlineNotes(b) : ''}
-            ${isCompleted ? renderFeedbackHTML(b) : ''}
-          </div>`;
-      }
-    } else if (inAvail) {
-      html += `<div class="daily-avail-badge">🟢 Available</div>`;
-    } else {
-      html += `<div class="daily-empty-hour"></div>`;
+  if (bookings.length > 0) {
+    for (const b of bookings) {
+      const isCompleted = b.status === 'completed';
+      const waUrl = whatsappUrl(b.learner_phone);
+      const ltColour = b.lesson_type_colour || 'var(--accent)';
+      const ltName   = b.lesson_type_name || 'Standard Lesson';
+      const cardStyle = b.status === 'cancelled' ? '' :
+        `style="border-left-color:${ltColour};${isCompleted ? `background:${ltColour}08;border-color:${ltColour}40;` : `background:${ltColour}12;border-color:${ltColour}50;`}"`;
+      html += `
+        <div class="daily-booking-card ${isCompleted ? 'completed' : b.status === 'cancelled' ? 'cancelled' : ''}" ${cardStyle}>
+          <div class="daily-booking-time">${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)} <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span></div>
+          <div>
+            <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before their first lesson">📞 Contact first</span>' : ''}</div>
+            <div class="daily-booking-email">${esc(b.learner_email)}</div>
+            ${b.learner_phone ? `<div class="daily-booking-contact"><a href="tel:${esc(b.learner_phone)}">📞 ${esc(b.learner_phone)}</a>${waUrl ? `<a href="${waUrl}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}</div>` : ''}
+            ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="daily-booking-email">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</div>` : ''}
+            ${b.booking_dropoff_address ? `<div class="daily-booking-email">🏁 ${esc(b.booking_dropoff_address)}</div>` : ''}
+          </div>
+          <span class="daily-booking-status status-${b.status}">${statusLabel(b.status)}</span>
+          ${b.status === 'awaiting_confirmation' ? `<button class="btn-confirm-sm" onclick="toggleConfirmForm(${b.id})">Confirm lesson</button><div id="confirm-form-${b.id}" style="display:none">${renderConfirmForm(b.id)}</div>` : ''}
+          ${b.status === 'confirmed' && !isCompleted ? `<button class="btn-complete-sm" id="complete-${b.id}" onclick="markComplete(${b.id})">Mark complete</button>` : ''}
+          ${isCompleted ? renderInlineNotes(b) : ''}
+          ${isCompleted ? renderFeedbackHTML(b) : ''}
+        </div>`;
     }
-
-    html += `</div></div>`;
-  }
-
-  if (bookings.length === 0 && availWins.length === 0) {
+  } else if (availWins.length > 0) {
+    html += `<div style="padding:28px 20px;text-align:center;color:var(--muted);font-size:0.875rem;">No lessons booked for this day.<br>You're available ${availWins.map(w => w.start_time + '–' + w.end_time).join(', ')}.</div>`;
+  } else {
     html += `<div style="padding:28px 20px;text-align:center;color:var(--muted);font-size:0.875rem;">No lessons or availability set for this day. Tap <b>+ Add availability</b> to make yourself bookable.</div>`;
   }
 
