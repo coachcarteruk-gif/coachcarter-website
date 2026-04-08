@@ -149,7 +149,7 @@ async function handleLogin(req, res) {
   } catch (err) {
     console.error('admin login error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Login failed', details: err.message });
+    return res.status(500).json({ error: 'Login failed', details: 'Internal server error' });
   }
 }
 
@@ -192,7 +192,7 @@ async function handleCreateAdmin(req, res) {
   } catch (err) {
     console.error('admin create error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to create admin', details: err.message });
+    return res.status(500).json({ error: 'Failed to create admin', details: 'Internal server error' });
   }
 }
 
@@ -287,7 +287,7 @@ async function handleDashboardStats(req, res) {
   } catch (err) {
     console.error('admin dashboard-stats error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to load stats', details: err.message });
+    return res.status(500).json({ error: 'Failed to load stats', details: 'Internal server error' });
   }
 }
 
@@ -344,7 +344,7 @@ async function handleAllBookings(req, res) {
   } catch (err) {
     console.error('admin all-bookings error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to load bookings', details: err.message });
+    return res.status(500).json({ error: 'Failed to load bookings', details: 'Internal server error' });
   }
 }
 
@@ -379,7 +379,7 @@ async function handleMarkComplete(req, res) {
   } catch (err) {
     console.error('admin mark-complete error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to mark complete', details: err.message });
+    return res.status(500).json({ error: 'Failed to mark complete', details: 'Internal server error' });
   }
 }
 
@@ -404,9 +404,9 @@ async function handleAllInstructors(req, res) {
         i.weekly_franchise_fee_pence,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.instructor_id = i.id AND lb.status = 'confirmed'
-           AND lb.scheduled_date >= CURRENT_DATE) AS upcoming_bookings,
+           AND lb.scheduled_date >= CURRENT_DATE AND lb.school_id = ${schoolId}) AS upcoming_bookings,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
-         WHERE lb.instructor_id = i.id AND lb.status = 'completed') AS completed_lessons
+         WHERE lb.instructor_id = i.id AND lb.status = 'completed' AND lb.school_id = ${schoolId}) AS completed_lessons
       FROM instructors i
       WHERE i.school_id = ${schoolId}
       ORDER BY i.active DESC, i.name ASC
@@ -437,7 +437,7 @@ async function handleAllInstructors(req, res) {
   } catch (err) {
     console.error('admin all-instructors error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to load instructors', details: err.message });
+    return res.status(500).json({ error: 'Failed to load instructors', details: 'Internal server error' });
   }
 }
 
@@ -525,7 +525,7 @@ async function handleCreateInstructor(req, res) {
   } catch (err) {
     console.error('admin create-instructor error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to create instructor', details: err.message });
+    return res.status(500).json({ error: 'Failed to create instructor', details: 'Internal server error' });
   }
 }
 
@@ -578,7 +578,7 @@ async function handleUpdateInstructor(req, res) {
   } catch (err) {
     console.error('admin update-instructor error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to update instructor', details: err.message });
+    return res.status(500).json({ error: 'Failed to update instructor', details: 'Internal server error' });
   }
 }
 
@@ -609,7 +609,7 @@ async function handleToggleInstructor(req, res) {
   } catch (err) {
     console.error('admin toggle-instructor error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to update instructor', details: err.message });
+    return res.status(500).json({ error: 'Failed to update instructor', details: 'Internal server error' });
   }
 }
 
@@ -632,14 +632,14 @@ async function handleAllLearners(req, res) {
         lu.pickup_address, lu.prefer_contact_before,
         lu.created_at,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
-         WHERE lb.learner_id = lu.id) AS total_bookings,
+         WHERE lb.learner_id = lu.id AND lb.school_id = ${schoolId}) AS total_bookings,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.learner_id = lu.id AND lb.status = 'confirmed'
-           AND lb.scheduled_date >= CURRENT_DATE) AS upcoming_bookings,
+           AND lb.scheduled_date >= CURRENT_DATE AND lb.school_id = ${schoolId}) AS upcoming_bookings,
         (SELECT MAX(lb.scheduled_date)::text FROM lesson_bookings lb
-         WHERE lb.learner_id = lu.id) AS last_booking_date,
+         WHERE lb.learner_id = lu.id AND lb.school_id = ${schoolId}) AS last_booking_date,
         (SELECT COUNT(*)::int FROM driving_sessions ds
-         WHERE ds.user_id = lu.id) AS total_sessions
+         WHERE ds.user_id = lu.id AND ds.school_id = ${schoolId}) AS total_sessions
       FROM learner_users lu
       WHERE lu.school_id = ${schoolId}
       ORDER BY lu.created_at DESC
@@ -649,7 +649,7 @@ async function handleAllLearners(req, res) {
   } catch (err) {
     console.error('admin all-learners error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to load learners', details: err.message });
+    return res.status(500).json({ error: 'Failed to load learners', details: 'Internal server error' });
   }
 }
 
@@ -684,14 +684,14 @@ async function handleLearnerDetail(req, res) {
         i.name AS instructor_name
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
-      WHERE lb.learner_id = ${learnerId}
+      WHERE lb.learner_id = ${learnerId} AND lb.school_id = ${schoolId}
       ORDER BY lb.scheduled_date DESC, lb.start_time DESC
     `;
 
     const transactions = await sql`
       SELECT id, type, credits, amount_pence, payment_method, created_at
       FROM credit_transactions
-      WHERE learner_id = ${learnerId}
+      WHERE learner_id = ${learnerId} AND school_id = ${schoolId}
       ORDER BY created_at DESC
     `;
 
@@ -700,7 +700,7 @@ async function handleLearnerDetail(req, res) {
         COUNT(*)::int AS total_sessions,
         COALESCE(SUM(duration_minutes), 0)::int AS total_minutes
       FROM driving_sessions
-      WHERE user_id = ${learnerId}
+      WHERE user_id = ${learnerId} AND school_id = ${schoolId}
     `;
 
     return res.json({
@@ -711,7 +711,7 @@ async function handleLearnerDetail(req, res) {
   } catch (err) {
     console.error('admin learner-detail error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to load learner details', details: err.message });
+    return res.status(500).json({ error: 'Failed to load learner details', details: 'Internal server error' });
   }
 }
 
@@ -761,8 +761,8 @@ async function handleAdjustCredits(req, res) {
     // Log transaction (best-effort — don't fail the request if this errors)
     try {
       await sql`
-        INSERT INTO credit_transactions (learner_id, type, credits, minutes, amount_pence, payment_method)
-        VALUES (${learner_id}, ${minutesDelta > 0 ? 'admin_add' : 'admin_remove'}, ${creditsDelta}, ${minutesDelta}, 0, ${reason || 'Admin adjustment'})
+        INSERT INTO credit_transactions (learner_id, type, credits, minutes, amount_pence, payment_method, school_id)
+        VALUES (${learner_id}, ${minutesDelta > 0 ? 'admin_add' : 'admin_remove'}, ${creditsDelta}, ${minutesDelta}, 0, ${reason || 'Admin adjustment'}, ${schoolId})
       `;
     } catch (txErr) {
       console.error('admin adjust-credits transaction log failed:', txErr.message);
@@ -779,7 +779,7 @@ async function handleAdjustCredits(req, res) {
   } catch (err) {
     console.error('admin adjust-credits error:', err.message, err.stack);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to adjust hours', details: err.message });
+    return res.status(500).json({ error: 'Failed to adjust hours', details: 'Internal server error' });
   }
 }
 
@@ -820,7 +820,7 @@ async function handleDeleteLearner(req, res) {
   } catch (err) {
     console.error('admin delete-learner error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to delete learner', details: err.message });
+    return res.status(500).json({ error: 'Failed to delete learner', details: 'Internal server error' });
   }
 }
 
@@ -1175,7 +1175,7 @@ async function handleInviteLearner(req, res) {
   } catch (err) {
     console.error('invite-learner error:', err);
     reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to invite learner', details: err.message });
+    return res.status(500).json({ error: 'Failed to invite learner', details: 'Internal server error' });
   }
 }
 

@@ -49,7 +49,7 @@ async function handleList(req, res) {
   } catch (err) {
     console.error('instructors list error:', err);
     reportError('/api/instructors', err);
-    return res.status(500).json({ error: 'Failed to load instructors', details: err.message });
+    return res.status(500).json({ error: 'Failed to load instructors', details: 'Internal server error' });
   }
 }
 
@@ -74,7 +74,7 @@ async function handleAvailability(req, res) {
   } catch (err) {
     console.error('instructors availability error:', err);
     reportError('/api/instructors', err);
-    return res.status(500).json({ error: 'Failed to load availability', details: err.message });
+    return res.status(500).json({ error: 'Failed to load availability', details: 'Internal server error' });
   }
 }
 
@@ -114,7 +114,7 @@ async function handleCreate(req, res) {
   } catch (err) {
     console.error('instructors create error:', err);
     reportError('/api/instructors', err);
-    return res.status(500).json({ error: 'Failed to create instructor', details: err.message });
+    return res.status(500).json({ error: 'Failed to create instructor', details: 'Internal server error' });
   }
 }
 
@@ -157,7 +157,7 @@ async function handleUpdate(req, res) {
   } catch (err) {
     console.error('instructors update error:', err);
     reportError('/api/instructors', err);
-    return res.status(500).json({ error: 'Failed to update instructor', details: err.message });
+    return res.status(500).json({ error: 'Failed to update instructor', details: 'Internal server error' });
   }
 }
 
@@ -220,7 +220,7 @@ async function handleSetAvailability(req, res) {
   } catch (err) {
     console.error('instructors set-availability error:', err);
     reportError('/api/instructors', err);
-    return res.status(500).json({ error: 'Failed to save availability', details: err.message });
+    return res.status(500).json({ error: 'Failed to save availability', details: 'Internal server error' });
   }
 }
 

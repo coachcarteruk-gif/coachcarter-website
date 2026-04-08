@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
     } catch (err) {
       console.error('config GET error:', err);
       reportError('/api/config', err);
-      return res.status(500).json({ error: 'Failed to load config', details: err.message });
+      return res.status(500).json({ error: 'Failed to load config', details: 'Internal server error' });
     }
   }
 
@@ -97,7 +97,7 @@ module.exports = async (req, res) => {
     } catch (err) {
       console.error('config POST error:', err);
       reportError('/api/config', err);
-      return res.status(500).json({ error: 'Failed to save config', details: err.message });
+      return res.status(500).json({ error: 'Failed to save config', details: 'Internal server error' });
     }
   }
 

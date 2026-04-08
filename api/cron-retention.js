@@ -130,6 +130,6 @@ module.exports = async (req, res) => {
   } catch (err) {
     console.error('cron-retention error:', err);
     reportError('/api/cron-retention', err);
-    return res.status(500).json({ error: 'Retention cron failed', details: err.message });
+    return res.status(500).json({ error: 'Retention cron failed', details: 'Internal server error' });
   }
 };

@@ -1089,6 +1089,8 @@ ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
 UPDATE learner_users SET last_activity_at = created_at WHERE last_activity_at IS NULL;
 
 ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS school_id INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id);
+CREATE INDEX IF NOT EXISTS idx_enquiries_school_id ON enquiries(school_id);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- GDPR: CREDIT TRANSACTIONS — allow learner_id NULL for anonymization
@@ -1184,6 +1186,7 @@ CREATE INDEX IF NOT EXISTS idx_instructor_login_tokens_instructor_id ON instruct
 -- magic_link_tokens — login lookups by email/phone
 CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_email ON magic_link_tokens(email) WHERE email IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_phone ON magic_link_tokens(phone) WHERE phone IS NOT NULL;
+ALTER TABLE magic_link_tokens ADD COLUMN IF NOT EXISTS school_id INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id);
 
 -- admin_users — school scoping
 CREATE INDEX IF NOT EXISTS idx_admin_users_school_id ON admin_users(school_id) WHERE school_id IS NOT NULL;

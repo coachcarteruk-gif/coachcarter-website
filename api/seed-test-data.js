@@ -183,6 +183,6 @@ module.exports = async (req, res) => {
     });
   } catch (err) {
     console.error('seed-test-data error:', err);
-    return res.status(500).json({ error: 'Failed to seed test data', details: err.message });
+    return res.status(500).json({ error: 'Failed to seed test data', details: 'Internal server error' });
   }
 };

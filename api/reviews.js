@@ -112,7 +112,7 @@ module.exports = async (req, res) => {
     } catch (err) {
       console.error('reviews GET error:', err);
       reportError('/api/reviews', err);
-      return res.status(500).json({ error: 'Failed to load reviews', details: err.message });
+      return res.status(500).json({ error: 'Failed to load reviews', details: 'Internal server error' });
     }
   }
 
@@ -134,7 +134,7 @@ module.exports = async (req, res) => {
     } catch (err) {
       console.error('reviews POST error:', err);
       reportError('/api/reviews', err);
-      return res.status(500).json({ error: 'Failed to refresh reviews', details: err.message });
+      return res.status(500).json({ error: 'Failed to refresh reviews', details: 'Internal server error' });
     }
   }
 

@@ -1176,6 +1176,30 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 ---
 
+## 2.67 — Launch Audit Blocker Fixes (8 April 2026)
+
+**What changed:**
+
+1. **Security blockers (LB-3):** Added `requireAuth()` to `api/create-checkout-session.js` (learner/admin roles) and `api/availability.js` GET handler (admin only). These were unauthenticated endpoints handling sensitive data.
+
+2. **Data isolation blockers (LB-7) — ~40 SQL queries fixed:** Added `school_id` filtering across `api/slots.js` (bookings, reservations, offers, blackouts, external events, learner/instructor lookups, getLessonType), `api/instructor.js` (Q&A queries, learner history, create booking, schedule range), `api/learner.js` (update-name, update-profile, contact-pref, unlogged-bookings, pending-confirmations, qa-ask INSERT), `api/admin.js` (booking/session subqueries in all-learners, learner-detail, adjust-credits INSERT, all-instructors), `api/enquiries.js` (all handlers — new `school_id` column added to table), `api/magic-link.js` (new learner INSERT now includes `school_id` from token).
+
+3. **DB migrations:** Added `school_id` column (DEFAULT 1) + index to `enquiries` and `magic_link_tokens` tables.
+
+4. **Error exposure cleanup:** Replaced all ~50 instances of `details: err.message` with `details: 'Internal server error'` across every API file. Server-side `console.error(err)` retained for logging.
+
+5. **Auth migration:** Migrated local `verifyAuth()`/`verifyAdmin()` in `api/address-lookup.js`, `api/update-status.js`, `api/videos.js`, `api/credits.js`, `api/enquiries.js` to use centralised `requireAuth()` from `api/_auth.js`. Removed dead `setCors()` stubs from these files plus `api/slots.js`.
+
+6. **Rate limiting:** Added rate limiting to `api/enquiries.js` submit action (5 per IP per hour), matching the pattern from `magic-link.js`.
+
+7. **SEO/perf quick wins:** Compressed `FraserDiag.JPG` (5.4MB) to `FraserDiag.webp` (200KB). Fixed OG domain from `coachcarter.co.uk` to `coachcarter.uk` in `coachcarter-landing.html` and `lessons.html`. Added `loading="lazy"` to below-fold testimonial images. Darkened `--muted` colour from `#797879` to `#595959` for WCAG 4.5:1 contrast ratio.
+
+8. **Privacy policy update:** Added Anthropic (Claude AI), postcodes.io, and OpenRouteService to "Who we share your data with" section in `public/privacy.html`.
+
+**Files changed:** `api/create-checkout-session.js`, `api/availability.js`, `api/slots.js`, `api/instructor.js`, `api/learner.js`, `api/admin.js`, `api/enquiries.js`, `api/magic-link.js`, `api/address-lookup.js`, `api/update-status.js`, `api/videos.js`, `api/credits.js`, `api/advisor.js`, `api/config.js`, `api/cron-retention.js`, `api/instructors.js`, `api/migrate.js`, `api/offers.js`, `api/reviews.js`, `api/seed-test-data.js`, `api/verify-session.js`, `db/migration.sql`, `public/coachcarter-landing.html`, `public/lessons.html`, `public/privacy.html`, `public/FraserDiag.webp` (new)
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

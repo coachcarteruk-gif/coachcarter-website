@@ -1,6 +1,7 @@
 const { Resend } = require('resend');
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
+const { requireAuth } = require('./_auth');
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -9,6 +10,9 @@ module.exports = async (req, res) => {
   // CORS handled centrally by middleware.js
   // GET — fetch submissions (admin use)
   if (req.method === 'GET') {
+    const admin = requireAuth(req, { roles: ['admin'] });
+    if (!admin) return res.status(401).json({ error: 'Unauthorised — admin access required' });
+
     try {
       const sql = neon(process.env.POSTGRES_URL);
       const { status, limit = 50, offset = 0 } = req.query;
@@ -32,7 +36,7 @@ module.exports = async (req, res) => {
       });
     } catch (err) {
       reportError('/api/availability', err);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Internal server error' });
     }
   }
 
@@ -125,6 +129,6 @@ module.exports = async (req, res) => {
   } catch (err) {
     console.error('Error processing availability:', err);
     reportError('/api/availability', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 };

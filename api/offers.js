@@ -216,7 +216,7 @@ async function handleAcceptOffer(req, res) {
   } catch (err) {
     console.error('accept-offer error:', err);
     reportError('/api/offers', err);
-    return res.status(500).json({ error: 'Failed to create checkout', details: err.message });
+    return res.status(500).json({ error: 'Failed to create checkout', details: 'Internal server error' });
   }
 }
 

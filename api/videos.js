@@ -20,23 +20,11 @@
 //   POST /api/videos?action=delete-category
 
 const { neon } = require('@neondatabase/serverless');
-const jwt = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
-
-function setCors(res) {
-}
+const { requireAuth } = require('./_auth');
 
 function verifyAdmin(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return false;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return false;
-  try {
-    const payload = jwt.verify(auth.slice(7), secret);
-    if (payload.role === 'admin' || payload.role === 'superadmin') return true;
-    if (payload.role === 'instructor' && payload.isAdmin === true) return true;
-    return false;
-  } catch { return false; }
+  return !!requireAuth(req, { roles: ['admin'] });
 }
 
 // ── Cloudflare Stream API helper ─────────────────────────────────────────────
@@ -57,7 +45,6 @@ async function cfFetch(path, options = {}) {
 }
 
 module.exports = async (req, res) => {
-  setCors(res);
   const action = req.query.action;
 
   // Public
@@ -116,7 +103,7 @@ async function handleList(req, res) {
   } catch (err) {
     console.error('videos list error:', err);
     reportError('/api/videos', err);
-    return res.status(500).json({ error: 'Failed to load videos', details: err.message });
+    return res.status(500).json({ error: 'Failed to load videos', details: 'Internal server error' });
   }
 }
 
@@ -173,7 +160,7 @@ async function handleUploadUrl(req, res) {
   } catch (err) {
     console.error('upload-url error:', err);
     reportError('/api/videos', err);
-    return res.status(500).json({ error: 'Failed to get upload URL', details: err.message });
+    return res.status(500).json({ error: 'Failed to get upload URL', details: 'Internal server error' });
   }
 }
 
@@ -202,7 +189,7 @@ async function handleFetchMeta(req, res) {
   } catch (err) {
     console.error('fetch-meta error:', err);
     reportError('/api/videos', err);
-    return res.status(500).json({ error: 'Failed to fetch metadata', details: err.message });
+    return res.status(500).json({ error: 'Failed to fetch metadata', details: 'Internal server error' });
   }
 }
 
@@ -235,7 +222,7 @@ async function handleCreate(req, res) {
   } catch (err) {
     console.error('video create error:', err);
     reportError('/api/videos', err);
-    return res.status(500).json({ error: 'Failed to create video', details: err.message });
+    return res.status(500).json({ error: 'Failed to create video', details: 'Internal server error' });
   }
 }
 
@@ -428,7 +415,7 @@ async function handleCreateCategory(req, res) {
   } catch (err) {
     console.error('category create error:', err);
     reportError('/api/videos', err);
-    return res.status(500).json({ error: 'Failed to create category', details: err.message });
+    return res.status(500).json({ error: 'Failed to create category', details: 'Internal server error' });
   }
 }
 

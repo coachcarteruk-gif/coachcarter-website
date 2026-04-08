@@ -380,6 +380,7 @@ async function handleScheduleRange(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const { from, to } = req.query;
   if (!from || !to) return res.status(400).json({ error: '"from" and "to" are required (YYYY-MM-DD)' });
@@ -415,6 +416,7 @@ async function handleScheduleRange(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
+        AND lb.school_id = ${schoolId}
         AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
         AND lb.scheduled_date >= ${from}::date
         AND lb.scheduled_date <= ${to}::date
@@ -427,7 +429,7 @@ async function handleScheduleRange(req, res) {
   } catch (err) {
     console.error('schedule-range err:', err.message);
     reportError('/api/instructor', err);
-    return res.status(500).json({ error: 'Failed to load schedule', details: err.message });
+    return res.status(500).json({ error: 'Failed to load schedule', details: 'Internal server error' });
   }
 }
 
@@ -1036,6 +1038,7 @@ async function handleQAList(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -1053,6 +1056,7 @@ async function handleQAList(req, res) {
         JOIN learner_users lu ON lu.id = q.learner_id
         LEFT JOIN qa_answers a ON a.question_id = q.id
         WHERE q.status = ${status}
+          AND q.school_id = ${schoolId}
         GROUP BY q.id, lu.name
         ORDER BY q.created_at DESC
         LIMIT ${limit}`;
@@ -1065,6 +1069,7 @@ async function handleQAList(req, res) {
         FROM qa_questions q
         JOIN learner_users lu ON lu.id = q.learner_id
         LEFT JOIN qa_answers a ON a.question_id = q.id
+        WHERE q.school_id = ${schoolId}
         GROUP BY q.id, lu.name
         ORDER BY q.created_at DESC
         LIMIT ${limit}`;
@@ -1082,6 +1087,7 @@ async function handleQADetail(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const questionId = req.query.question_id;
   if (!questionId) return res.status(400).json({ error: 'question_id required' });
@@ -1093,7 +1099,7 @@ async function handleQADetail(req, res) {
       SELECT q.*, lu.name AS learner_name
       FROM qa_questions q
       JOIN learner_users lu ON lu.id = q.learner_id
-      WHERE q.id = ${questionId}`;
+      WHERE q.id = ${questionId} AND q.school_id = ${schoolId}`;
     if (!question) return res.status(404).json({ error: 'Question not found' });
 
     const answers = await sql`
@@ -1120,6 +1126,7 @@ async function handleQAReply(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const { question_id, body } = req.body;
   if (!question_id) return res.status(400).json({ error: 'question_id required' });
@@ -1128,7 +1135,7 @@ async function handleQAReply(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    const [question] = await sql`SELECT id, status FROM qa_questions WHERE id = ${question_id}`;
+    const [question] = await sql`SELECT id, status FROM qa_questions WHERE id = ${question_id} AND school_id = ${schoolId}`;
     if (!question) return res.status(404).json({ error: 'Question not found' });
 
     const [answer] = await sql`
@@ -1157,6 +1164,7 @@ async function handleLearnerHistory(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const learnerId = req.query.learner_id;
   if (!learnerId) return res.status(400).json({ error: 'learner_id required' });
@@ -1167,7 +1175,7 @@ async function handleLearnerHistory(req, res) {
     const [learner] = await sql`
       SELECT id, name, email, phone, current_tier, created_at,
              pickup_address, prefer_contact_before
-      FROM learner_users WHERE id = ${learnerId}
+      FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}
     `;
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
@@ -1488,14 +1496,14 @@ async function handleCreateBooking(req, res) {
     // Verify learner exists
     const [learner] = await sql`
       SELECT id, name, email, phone, credit_balance, balance_minutes, pickup_address
-      FROM learner_users WHERE id = ${learner_id}
+      FROM learner_users WHERE id = ${learner_id} AND school_id = ${schoolId}
     `;
     if (!learner)
       return res.status(404).json({ error: 'Learner not found' });
 
     // Get instructor details for notifications
     const [instrDetails] = await sql`
-      SELECT id, name, email, phone FROM instructors WHERE id = ${instructor.id}
+      SELECT id, name, email, phone FROM instructors WHERE id = ${instructor.id} AND school_id = ${schoolId}
     `;
 
     // Handle credit/hours deduction if paying by credit
@@ -2661,7 +2669,7 @@ async function handleCompleteOnboarding(req, res) {
   } catch (err) {
     console.error('complete-onboarding error:', err);
     reportError('/api/instructor', err);
-    return res.status(500).json({ error: 'Failed to complete onboarding', details: err.message });
+    return res.status(500).json({ error: 'Failed to complete onboarding', details: 'Internal server error' });
   }
 }
 
@@ -2750,6 +2758,6 @@ async function handleRunningLate(req, res) {
   } catch (err) {
     console.error('running-late error:', err);
     reportError('/api/instructor', err);
-    return res.status(500).json({ error: 'Failed to send notifications', details: err.message });
+    return res.status(500).json({ error: 'Failed to send notifications', details: 'Internal server error' });
   }
 }

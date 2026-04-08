@@ -1,7 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { neon } = require('@neondatabase/serverless');
-const jwt = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
+const { requireAuth } = require('./_auth');
 
 const PRICE_PER_STANDARD_LESSON_PENCE = 8250; // £82.50 per 1.5 hrs
 const STANDARD_LESSON_MINUTES = 90;
@@ -31,22 +31,12 @@ function calcTotal(hours) {
   return { fullPence, discountPct, discountAmt, totalPence: fullPence - discountAmt, pricePerHourPence };
 }
 
-// ── Auth helper ───────────────────────────────────────────────────────────────
 function verifyAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try { return jwt.verify(auth.slice(7), secret); } catch { return null; }
-}
-
-// ── CORS helper ───────────────────────────────────────────────────────────────
-function setCors(res) {
+  return requireAuth(req, { roles: ['learner', 'admin'] });
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
-  setCors(res);
   const action = req.query.action;
 
   if (action === 'balance') return handleBalance(req, res);
@@ -90,7 +80,7 @@ async function handleBalance(req, res) {
   } catch (err) {
     console.error('credits balance error:', err);
     reportError('/api/credits', err);
-    return res.status(500).json({ error: 'Failed to load balance', details: err.message });
+    return res.status(500).json({ error: 'Failed to load balance', details: 'Internal server error' });
   }
 }
 
@@ -170,6 +160,6 @@ async function handleCheckout(req, res) {
   } catch (err) {
     console.error('credits checkout error:', err);
     reportError('/api/credits', err);
-    return res.status(500).json({ error: 'Failed to create checkout session', details: err.message });
+    return res.status(500).json({ error: 'Failed to create checkout session', details: 'Internal server error' });
   }
 }

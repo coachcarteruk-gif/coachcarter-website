@@ -56,7 +56,8 @@ async function handleUpdateName(req, res) {
     if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
 
     const sql = neon(process.env.POSTGRES_URL);
-    await sql`UPDATE learner_users SET name = ${name.trim()} WHERE id = ${user.id}`;
+    const schoolId = user.school_id || 1;
+    await sql`UPDATE learner_users SET name = ${name.trim()} WHERE id = ${user.id} AND school_id = ${schoolId}`;
     return res.json({ success: true, name: name.trim() });
   } catch (err) {
     console.error('update-name error:', err);
@@ -88,7 +89,7 @@ async function handleSessions(req, res) {
       return res.json({ sessions });
     } catch (err) {
       reportError('/api/learner', err);
-      return res.status(500).json({ error: 'Failed to load sessions', details: err.message });
+      return res.status(500).json({ error: 'Failed to load sessions', details: 'Internal server error' });
     }
   }
 
@@ -125,7 +126,7 @@ async function handleSessions(req, res) {
       return res.json({ success: true, session_id: sessionId });
     } catch (err) {
       reportError('/api/learner', err);
-      return res.status(500).json({ error: 'Failed to save session', details: err.message });
+      return res.status(500).json({ error: 'Failed to save session', details: 'Internal server error' });
     }
   }
   return res.status(405).json({ error: 'Method not allowed' });
@@ -164,7 +165,7 @@ async function handleProgress(req, res) {
     });
   } catch (err) {
     reportError('/api/learner', err);
-    return res.status(500).json({ error: 'Failed to load progress', details: err.message });
+    return res.status(500).json({ error: 'Failed to load progress', details: 'Internal server error' });
   }
 }
 
@@ -198,8 +199,9 @@ async function handleSetContactPref(req, res) {
     const { prefer_contact_before } = req.body;
     const val = prefer_contact_before === true;
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = user.school_id || 1;
     await sql`
-      UPDATE learner_users SET prefer_contact_before = ${val} WHERE id = ${user.id}
+      UPDATE learner_users SET prefer_contact_before = ${val} WHERE id = ${user.id} AND school_id = ${schoolId}
     `;
     return res.json({ success: true, prefer_contact_before: val });
   } catch (err) {
@@ -242,6 +244,7 @@ async function handleUnloggedBookings(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = user.school_id || 1;
     const bookings = await sql`
       SELECT lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
              i.name AS instructor_name, i.id AS instructor_id
@@ -251,6 +254,7 @@ async function handleUnloggedBookings(req, res) {
       WHERE lb.learner_id = ${user.id}
         AND lb.status = 'completed'
         AND ds.id IS NULL
+        AND lb.school_id = ${schoolId}
       ORDER BY lb.scheduled_date DESC
       LIMIT 20`;
     return res.json({ bookings });
@@ -271,13 +275,14 @@ async function handleUpdateProfile(req, res) {
   try {
     const { phone, pickup_address } = req.body;
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = user.school_id || 1;
 
     // No migration needed — pickup_address column already exists in learner_users
     const [updated] = await sql`
       UPDATE learner_users SET
         phone          = COALESCE(${phone || null}, phone),
         pickup_address = COALESCE(${pickup_address || null}, pickup_address)
-      WHERE id = ${user.id}
+      WHERE id = ${user.id} AND school_id = ${schoolId}
       RETURNING name, email, phone, pickup_address
     `;
     return res.json({ success: true, profile: updated });
@@ -288,7 +293,7 @@ async function handleUpdateProfile(req, res) {
       return res.status(409).json({ error: 'This phone number is already linked to another account.' });
     }
     reportError('/api/learner', err);
-    return res.status(500).json({ error: 'Failed to update profile', details: err.message });
+    return res.status(500).json({ error: 'Failed to update profile', details: 'Internal server error' });
   }
 }
 
@@ -390,15 +395,16 @@ async function handleQAAsk(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = user.school_id || 1;
 
     const [question] = await sql`
-      INSERT INTO qa_questions (learner_id, booking_id, session_id, title, body)
-      VALUES (${user.id}, ${booking_id || null}, ${session_id || null}, ${title.trim()}, ${body || null})
+      INSERT INTO qa_questions (learner_id, booking_id, session_id, title, body, school_id)
+      VALUES (${user.id}, ${booking_id || null}, ${session_id || null}, ${title.trim()}, ${body || null}, ${schoolId})
       RETURNING id, created_at`;
 
     // Send email notification to all active instructors
     try {
-      const instructors = await sql`SELECT name, email FROM instructors WHERE active = TRUE`;
+      const instructors = await sql`SELECT name, email FROM instructors WHERE active = TRUE AND school_id = ${schoolId}`;
       if (instructors.length > 0) {
         const nodemailer = require('nodemailer');
         const mailer = nodemailer.createTransport({
@@ -1007,6 +1013,7 @@ async function handlePendingConfirmations(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = user.school_id || 1;
 
     const bookings = await sql`
       SELECT lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
@@ -1018,6 +1025,7 @@ async function handlePendingConfirmations(req, res) {
       WHERE lb.learner_id = ${user.id}
         AND lb.status = 'awaiting_confirmation'
         AND lc.id IS NULL
+        AND lb.school_id = ${schoolId}
       ORDER BY lb.scheduled_date DESC, lb.start_time DESC
       LIMIT 20
     `;
