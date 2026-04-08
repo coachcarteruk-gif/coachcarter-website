@@ -22,10 +22,8 @@
     }
   ],
   "rewrites": [
-    { "source": "/book/:slug", "destination": "/public/learner/book.html" }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/(.*)", "dest": "/public/$1" }
+    { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/book/:slug", "destination": "/public/learner/book.html" },
+    { "source": "/:path*", "destination": "/public/:path*" }
   ]
 }
