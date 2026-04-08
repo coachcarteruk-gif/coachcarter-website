@@ -888,10 +888,21 @@ function renderLessonTypePills() {
   const container = document.getElementById('lessonTypePills');
   if (!container || lessonTypes.length <= 1) return;
   const needsPrompt = !selectedLessonType && lessonTypes.length > 1;
+  // When showing prompt, switch to vertical card layout
+  if (needsPrompt) {
+    container.style.flexDirection = 'column';
+    container.style.overflow = 'visible';
+    container.style.gap = '8px';
+  } else {
+    container.style.flexDirection = '';
+    container.style.overflow = '';
+    container.style.gap = '';
+  }
   let html = '';
   if (needsPrompt) {
-    html += '<div style="font-size:0.82rem;font-weight:700;color:var(--primary);margin-bottom:4px;width:100%">Choose your lesson length</div>';
+    html += '<div style="font-size:0.85rem;font-weight:700;color:var(--primary)">Choose your lesson length</div>';
   }
+  html += (needsPrompt ? '<div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none">' : '');
   html += lessonTypes.map(lt => {
     const hrs = lt.duration_minutes / 60;
     const hrsStr = hrs % 1 === 0 ? `${hrs}hr` : `${hrs.toFixed(1)}hr`;
@@ -901,6 +912,7 @@ function renderLessonTypePills() {
       ${esc(lt.name)} · ${hrsStr} · ${priceStr}
     </button>`;
   }).join('');
+  html += (needsPrompt ? '</div>' : '');
   container.innerHTML = html;
 }
 
