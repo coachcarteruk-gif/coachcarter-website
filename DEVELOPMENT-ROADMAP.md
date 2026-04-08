@@ -1252,6 +1252,26 @@ The instructor daily calendar view showed a full time-grid with every hour slot 
 
 ---
 
+## 2.72 — Per-Learner Custom Hourly Rate (8 April 2026)
+
+**What changed:**
+
+Instructors can now set a custom hourly rate per learner from the learner detail page (My Learners → tap learner → "Custom hourly rate" field). The rate scales to all lesson lengths (e.g. £50/hr = £75 for 90 min, £100 for 2 hours). Leave blank to use the standard school rate. The custom rate applies everywhere: booking page prices, Stripe checkout, earnings view, and payout calculations.
+
+**Files changed:** `db/migration.sql`, `api/instructor.js`, `api/slots.js`, `api/lesson-types.js`, `api/_payout-helpers.js`, `public/instructor/learners.html`, `public/learner/book.html`
+
+---
+
+## 2.73 — Clean Booking URLs & Dashboard Link (8 April 2026)
+
+**What changed:**
+
+Instructor booking links now use friendly URLs: `coachcarter.uk/book/fraser` instead of `/learner/book.html?instructor=4`. Slugs are auto-generated from instructor first names and stored in the `instructors.slug` column. The instructor profile page generates clean URLs for sharing. The booking link is also now surfaced on the instructor dashboard as a compact bar with a "Copy link" button, making it easy to share without navigating to Profile. Old `?instructor=ID` URLs still work as a fallback.
+
+**Files changed:** `db/migration.sql`, `api/instructors.js`, `api/instructor.js`, `vercel.json`, `public/learner/book.html`, `public/instructor/profile.html`, `public/instructor/dashboard.html`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

@@ -59,6 +59,24 @@
       margin-bottom: 16px;
     }
 
+    /* ── Booking link bar ── */
+    .dash-booking-link {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px; margin-bottom: 14px;
+    }
+    .dash-booking-link-url {
+      flex: 1; min-width: 0; font-size: 0.82rem; color: var(--muted);
+      font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .dash-booking-link-btn {
+      background: var(--accent); color: white; border: none;
+      border-radius: 6px; padding: 6px 12px; font-size: 0.78rem;
+      font-weight: 700; cursor: pointer; white-space: nowrap;
+      font-family: var(--font-body); transition: background 0.15s;
+    }
+    .dash-booking-link-btn:hover { background: var(--accent-dk); }
+
     /* ── Date header ── */
     .dash-date {
       font-family: var(--font-head); font-size: 0.78rem; font-weight: 700;
@@ -371,6 +389,12 @@
   </div>
   <div class="dash-stats" id="dashStats"></div>
 
+  <!-- Booking link -->
+  <div class="dash-booking-link" id="dashBookingLink" style="display:none">
+    <div class="dash-booking-link-url" id="dashBookingUrl"></div>
+    <button class="dash-booking-link-btn" id="dashCopyBtn" onclick="copyDashBookingLink()">Copy link</button>
+  </div>
+
   <!-- Date header -->
   <div class="dash-date" id="dashDate"></div>
 
@@ -524,9 +548,10 @@ async function loadDashboard() {
     const today = new Date();
     const ds = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
 
-    const [schedRes, statsRes] = await Promise.all([
+    const [schedRes, statsRes, profileRes] = await Promise.all([
       fetch('/api/instructor?action=schedule-range&from=' + ds + '&to=' + ds, { headers: { Authorization: 'Bearer ' + token } }),
-      fetch('/api/instructor?action=stats', { headers: { Authorization: 'Bearer ' + token } })
+      fetch('/api/instructor?action=stats', { headers: { Authorization: 'Bearer ' + token } }),
+      fetch('/api/instructor?action=profile', { headers: { Authorization: 'Bearer ' + token } })
     ]);
 
     const schedData = await schedRes.json();
@@ -537,6 +562,18 @@ async function loadDashboard() {
       const t = statsData.today || 0;
       const w = statsData.thisWeek || 0;
       document.getElementById('dashStats').textContent = t + ' today \u00B7 ' + w + ' this week';
+    }
+
+    // Booking link
+    if (profileRes.ok) {
+      const profileData = await profileRes.json();
+      const slug = profileData.instructor?.slug || profileData.instructor?.id;
+      if (slug) {
+        const url = window.location.origin + '/book/' + slug;
+        document.getElementById('dashBookingUrl').textContent = url;
+        document.getElementById('dashBookingLink').style.display = 'flex';
+        document.getElementById('dashBookingLink').dataset.url = url;
+      }
     }
 
     // Today's bookings
@@ -982,6 +1019,22 @@ document.addEventListener('click', function(e) {
     if (dd) dd.classList.remove('open');
   }
 });
+
+function copyDashBookingLink() {
+  const url = document.getElementById('dashBookingLink').dataset.url;
+  const btn = document.getElementById('dashCopyBtn');
+  navigator.clipboard.writeText(url).then(() => {
+    btn.textContent = 'Copied!';
+    btn.style.background = 'var(--green, #22c55e)';
+    setTimeout(() => { btn.textContent = 'Copy link'; btn.style.background = ''; }, 2000);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    btn.textContent = 'Copied!';
+    btn.style.background = 'var(--green, #22c55e)';
+    setTimeout(() => { btn.textContent = 'Copy link'; btn.style.background = ''; }, 2000);
+  });
+}
 
 init();
 </script>
