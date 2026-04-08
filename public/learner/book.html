@@ -691,6 +691,7 @@ const FEED_MAX_DAYS   = 90;
 let pendingSlot   = null;
 let pendingCancel = null;
 let preselectedTypeSlug = null;
+let preselectedInstructorSlug = null;
 let pendingReschedule = null; // { bookingId, date, start, end, instructorName, instructorId }
 let lastBookingId = null;
 let learnerProfile = { phone: '', pickup_address: '' };
@@ -723,7 +724,6 @@ function init() {
 
   // Pre-select instructor from URL param (e.g. ?instructor=4) or /book/:slug path
   let preselectedInstructorId = params.get('instructor');
-  let preselectedInstructorSlug = null;
   const bookPathMatch = window.location.pathname.match(/^\/book\/([^/]+)$/);
   if (bookPathMatch) {
     preselectedInstructorSlug = decodeURIComponent(bookPathMatch[1]).toLowerCase();
