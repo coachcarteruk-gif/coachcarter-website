@@ -866,12 +866,13 @@ async function loadLessonTypes() {
     if (!res.ok) throw new Error(data.error);
     lessonTypes = data.lesson_types || [];
     // Auto-select from ?type=slug URL param, or default to first
+    // When arriving via /book/:slug (no ?type=), don't auto-select — let learner choose
     if (lessonTypes.length > 0 && !selectedLessonType) {
       if (preselectedTypeId) {
         selectedLessonType = lessonTypes.find(lt => lt.id === parseInt(preselectedTypeId)) || lessonTypes[0];
       } else if (preselectedTypeSlug) {
         selectedLessonType = lessonTypes.find(lt => lt.slug === preselectedTypeSlug) || lessonTypes[0];
-      } else {
+      } else if (!preselectedInstructorSlug) {
         selectedLessonType = lessonTypes[0];
       }
     }
@@ -886,7 +887,12 @@ async function loadLessonTypes() {
 function renderLessonTypePills() {
   const container = document.getElementById('lessonTypePills');
   if (!container || lessonTypes.length <= 1) return;
-  container.innerHTML = lessonTypes.map(lt => {
+  const needsPrompt = !selectedLessonType && lessonTypes.length > 1;
+  let html = '';
+  if (needsPrompt) {
+    html += '<div style="font-size:0.82rem;font-weight:700;color:var(--primary);margin-bottom:4px;width:100%">Choose your lesson length</div>';
+  }
+  html += lessonTypes.map(lt => {
     const hrs = lt.duration_minutes / 60;
     const hrsStr = hrs % 1 === 0 ? `${hrs}hr` : `${hrs.toFixed(1)}hr`;
     const priceStr = '£' + (lt.price_pence / 100).toFixed(0);
@@ -895,6 +901,7 @@ function renderLessonTypePills() {
       ${esc(lt.name)} · ${hrsStr} · ${priceStr}
     </button>`;
   }).join('');
+  container.innerHTML = html;
 }
 
 function selectLessonType(id) {
@@ -1061,6 +1068,16 @@ function getLearnerPostcode() {
 function onFilterChange() { loadedRanges = []; slotCache = {}; loadLessonTypes(); initFeed(); }
 
 async function initFeed() {
+  // If no lesson type selected yet, show a prompt instead of loading slots
+  if (!selectedLessonType && lessonTypes.length > 1) {
+    document.getElementById('calContent').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">👆</div>
+        <h3>Select a lesson length</h3>
+        <p>Choose a lesson type above to see available time slots.</p>
+      </div>`;
+    return;
+  }
   feedFrom = new Date(); feedFrom.setHours(0,0,0,0);
   feedTo = addDaysLocal(feedFrom, FEED_CHUNK_DAYS - 1);
   const maxDate = addDaysLocal(feedFrom, FEED_MAX_DAYS);
