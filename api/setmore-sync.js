@@ -111,6 +111,18 @@ async function setSyncError(sql, instructorId, message) {
   } catch { /* best effort */ }
 }
 
+// ── Fallback duration logic ─────────────────────────────────────────────────
+// Setmore adds a 30-min buffer to every service. When we don't recognise a
+// service_key we subtract the buffer and infer the lesson type from the result.
+const DURATION_TO_SLUG = { 60: '1hr', 90: 'standard', 120: '2hr', 165: '3hr' };
+const SETMORE_BUFFER_MINUTES = 30;
+
+function inferFromDuration(rawDuration) {
+  const real = rawDuration - SETMORE_BUFFER_MINUTES;
+  const slug = DURATION_TO_SLUG[real] || 'standard';
+  return { realMinutes: real > 0 ? real : rawDuration, slug };
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
@@ -236,8 +248,17 @@ module.exports = async (req, res) => {
 
       // Map service to real duration
       const serviceInfo = SERVICE_MAP[appt.service_key];
-      const realMinutes = serviceInfo ? serviceInfo.realMinutes : appt.duration;
-      const slug = serviceInfo ? serviceInfo.slug : 'standard';
+      let realMinutes, slug;
+      if (serviceInfo) {
+        realMinutes = serviceInfo.realMinutes;
+        slug = serviceInfo.slug;
+      } else {
+        // Unrecognised service key — subtract Setmore buffer and infer type
+        const inferred = inferFromDuration(appt.duration);
+        realMinutes = inferred.realMinutes;
+        slug = inferred.slug;
+        console.warn(`[setmore-sync] Unrecognised service_key: ${appt.service_key} (duration=${appt.duration}min → inferred ${realMinutes}min/${slug})`);
+      }
       const lessonTypeId = typeBySlug[slug] || typeBySlug['standard'];
 
       // Convert UTC times to London
