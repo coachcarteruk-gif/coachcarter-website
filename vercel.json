@@ -23,7 +23,7 @@
   ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
-    { "source": "/book/:slug", "destination": "/public/learner/book.html" },
+    { "source": "/book/:slug", "destination": "/learner/book.html" },
     { "source": "/:path*", "destination": "/public/:path*" }
   ]
 }
