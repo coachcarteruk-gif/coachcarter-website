@@ -45,20 +45,20 @@
     ],
     learner: [
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
-      { icon: 'calendar', label: 'Lessons', children: [
+      { icon: 'calendar', label: 'Lessons', href: '/learner/lessons-hub.html', children: [
         { icon: 'home', label: 'Overview', href: '/learner/lessons-hub.html' },
         { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
         { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html' },
         { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' }
       ]},
-      { icon: 'clipboard', label: 'Practice', children: [
+      { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html', children: [
         { icon: 'home', label: 'Overview', href: '/learner/practice.html' },
         { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
         { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
         { icon: 'play', label: 'Focused Practice', href: '/learner/focused-practice.html' },
         { icon: 'dashboard', label: 'My Progress', href: '/learner/progress.html' }
       ]},
-      { icon: 'play', label: 'Learn', children: [
+      { icon: 'play', label: 'Learn', href: '/learner/learn.html', children: [
         { icon: 'home', label: 'Overview', href: '/learner/learn.html' },
         { icon: 'message', label: 'Examiner AI', href: '/learner/ask-examiner.html' },
         { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
@@ -154,12 +154,13 @@
             if (isActive(item.children[c].href)) { childActive = true; break; }
           }
           var openClass = childActive ? ' open' : '';
+          var groupHref = item.href || '#';
           html += '<div class="cc-sb-group' + openClass + '">' +
-            '<button class="cc-sb-link cc-sb-group-toggle" type="button">' +
+            '<a href="' + groupHref + '" class="cc-sb-link cc-sb-group-toggle">' +
               '<span class="cc-sb-icon">' + icons[item.icon] + '</span>' +
               '<span>' + item.label + '</span>' +
               '<span class="cc-sb-chevron">' + icons.chevron + '</span>' +
-            '</button>' +
+            '</a>' +
             '<div class="cc-sb-group-children">';
           for (var j = 0; j < item.children.length; j++) {
             var child = item.children[j];
@@ -321,7 +322,7 @@
     '.cc-sb-divider { height: 1px; background: var(--border, #e5e5e5); margin: 8px 20px; }',
 
     /* Collapsible group */
-    '.cc-sb-group-toggle { width: 100%; background: none; border: none; cursor: pointer; position: relative; }',
+    '.cc-sb-group-toggle { width: 100%; background: none; border: none; cursor: pointer; position: relative; text-decoration: none; display: flex; }',
     '.cc-sb-chevron { margin-left: auto; width: 16px; height: 16px; display: flex; align-items: center;',
     '  justify-content: center; transition: transform 0.25s ease; }',
     '.cc-sb-chevron svg { width: 14px; height: 14px; stroke: currentColor; fill: none;',
@@ -655,13 +656,24 @@
     // ── Collapsible group toggles (accordion: one open at a time) ─
     var toggles = document.querySelectorAll('.cc-sb-group-toggle');
     for (var t = 0; t < toggles.length; t++) {
-      toggles[t].addEventListener('click', function() {
+      toggles[t].addEventListener('click', function(e) {
         var parent = this.parentElement;
         var wasOpen = parent.classList.contains('open');
-        var allGroups = document.querySelectorAll('.cc-sb-group');
-        for (var g = 0; g < allGroups.length; g++) {
-          allGroups[g].classList.remove('open');
+        var isDesktop = window.innerWidth >= 960;
+
+        if (isDesktop && this.href && this.getAttribute('href') !== '#') {
+          // Desktop: toggle open AND navigate to the hub page
+          var allGroups = document.querySelectorAll('.cc-sb-group');
+          for (var g = 0; g < allGroups.length; g++) allGroups[g].classList.remove('open');
+          if (!wasOpen) parent.classList.add('open');
+          // Let the <a> navigate naturally
+          return;
         }
+
+        // Mobile: just toggle the accordion, don't navigate
+        e.preventDefault();
+        var allGroups = document.querySelectorAll('.cc-sb-group');
+        for (var g = 0; g < allGroups.length; g++) allGroups[g].classList.remove('open');
         if (!wasOpen) parent.classList.add('open');
       });
     }
