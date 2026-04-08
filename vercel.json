@@ -21,9 +21,11 @@
       "permanent": true
     }
   ],
+  "rewrites": [
+    { "source": "/book/:slug", "destination": "/public/learner/book.html" }
+  ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/book/([^/]+)$", "dest": "/public/learner/book.html" },
     { "src": "/(.*)", "dest": "/public/$1" }
   ]
 }
