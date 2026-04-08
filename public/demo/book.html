@@ -312,12 +312,12 @@
 
     /* ── Toast ────────────────────────────────────────────────────────────── */
     .toast {
-      position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+      position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(120px);
       background: var(--primary); color: white; padding: 12px 24px; border-radius: 10px;
       font-size: 0.85rem; font-weight: 500; opacity: 0; transition: all 0.3s;
       pointer-events: none; z-index: 600; max-width: 90vw; text-align: center;
     }
-    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
     .toast.success { background: var(--green); }
     .toast.error { background: var(--red); }
 

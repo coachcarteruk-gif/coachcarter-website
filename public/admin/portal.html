@@ -324,10 +324,11 @@ body {
   padding: 12px 20px; border-radius: 8px;
   font-size: 0.85rem; font-weight: 600;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  transform: translateY(100px); opacity: 0;
+  transform: translateY(120px); opacity: 0;
   transition: all 0.3s; z-index: 300;
+  pointer-events: none;
 }
-.toast.show { transform: translateY(0); opacity: 1; }
+.toast.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
 .toast.success { background: #166534; }
 .toast.error { background: #991b1b; }
 </style>
