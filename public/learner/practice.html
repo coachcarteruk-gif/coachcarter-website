@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>Practice — CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/learner.css">
+  <script src="/shared/dark-mode.js"></script>
+  <style>
+    main { max-width: 640px; margin: 0 auto; padding: 24px 16px 100px; margin-top: 64px; }
+    .hub-header { margin-bottom: 24px; }
+    .hub-title { font-family: var(--font-head); font-size: 1.5rem; font-weight: 800; color: var(--primary); letter-spacing: -0.02em; margin: 0 0 4px; }
+    .hub-subtitle { font-family: var(--font-body); font-size: 0.92rem; color: var(--muted); margin: 0; }
+    .hub-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 480px) { .hub-grid { grid-template-columns: 1fr 1fr; } }
+    .hub-card {
+      display: flex; align-items: flex-start; gap: 14px; padding: 18px;
+      border: 1.5px solid var(--border); border-radius: var(--radius);
+      background: var(--white); text-decoration: none; color: inherit;
+      transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+    }
+    .hub-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,0.06); transform: translateY(-2px); }
+    .hub-card:active { transform: translateY(0); }
+    .hub-icon {
+      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--accent-lt); color: var(--accent);
+    }
+    .hub-icon svg { width: 22px; height: 22px; }
+    .hub-card-body { flex: 1; min-width: 0; }
+    .hub-card-title { font-family: var(--font-head); font-size: 0.95rem; font-weight: 700; color: var(--primary); margin: 0 0 3px; }
+    .hub-card-desc { font-family: var(--font-body); font-size: 0.82rem; color: var(--muted); margin: 0; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="hub-header">
+      <h1 class="hub-title">Practice</h1>
+      <p class="hub-subtitle">Build your skills between lessons</p>
+    </div>
+    <div class="hub-grid">
+      <a href="/learner/log-session.html" class="hub-card">
+        <div class="hub-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+        </div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">Log Session</div>
+          <p class="hub-card-desc">Record your private practice sessions and track hours behind the wheel</p>
+        </div>
+      </a>
+      <a href="/learner/mock-test.html" class="hub-card">
+        <div class="hub-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">Mock Test</div>
+          <p class="hub-card-desc">Simulate a real driving test route and get scored on your performance</p>
+        </div>
+      </a>
+      <a href="/learner/focused-practice.html" class="hub-card">
+        <div class="hub-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        </div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">Focused Practice</div>
+          <p class="hub-card-desc">Targeted drills for specific skills like roundabouts, parking, and junctions</p>
+        </div>
+      </a>
+      <a href="/learner/progress.html" class="hub-card">
+        <div class="hub-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        </div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">My Progress</div>
+          <p class="hub-card-desc">See your competency scores, practice stats, and readiness for your test</p>
+        </div>
+      </a>
+    </div>
+  </main>
+  <script src="/sidebar.js"></script>
+  <script src="/shared/branding.js"></script>
+</body>
+</html>

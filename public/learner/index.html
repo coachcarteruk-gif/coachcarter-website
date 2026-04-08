@@ -10,9 +10,9 @@
   <script src="/pwa.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<script src="/cookie-consent.js"></script>
-<script src="/posthog-loader.js"></script>
-  <title>My Progress — CoachCarter</title>
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>Dashboard — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
@@ -21,8 +21,7 @@
   <link rel="stylesheet" href="/shared/learner.css">
   <script src="/shared/dark-mode.js"></script>
   <style>
-    /* MAIN LAYOUT */
-    main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; margin-top: 64px; }
+    main { max-width: 640px; margin: 0 auto; padding: 24px 16px 100px; margin-top: 64px; }
 
     /* GREETING */
     .greeting { font-size: 1.3rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); letter-spacing: -0.02em; margin-bottom: 16px; }
@@ -43,7 +42,7 @@
     .nl-btn { display: inline-block; background: rgba(255,255,255,0.22); color: #fff; border-radius: 100px; padding: 6px 16px; font-size: 0.78rem; font-weight: 700; text-decoration: none; transition: background 0.15s; backdrop-filter: blur(4px); }
     .nl-btn:hover { background: rgba(255,255,255,0.35); }
 
-    /* Readiness ring (small, for hero card) */
+    /* Readiness ring */
     .readiness-ring { position: relative; width: 52px; height: 52px; flex-shrink: 0; cursor: pointer; text-decoration: none; }
     .readiness-ring svg { width: 52px; height: 52px; transform: rotate(-90deg); }
     .readiness-ring .ring-bg { fill: none; stroke: rgba(255,255,255,0.25); stroke-width: 4.5; }
@@ -66,172 +65,6 @@
     .nle-btn { display: inline-block; background: var(--accent); color: #fff; border-radius: 100px; padding: 10px 24px; font-size: 0.85rem; font-weight: 700; text-decoration: none; font-family: var(--font-head); transition: all 0.18s; }
     .nle-btn:hover { background: var(--accent-dk); transform: translateY(-1px); }
 
-    /* PILL ROW (Klarna-style shortcuts) */
-    .pill-row {
-      display: flex; gap: 18px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 18px;
-      -ms-overflow-style: none; scrollbar-width: none;
-    }
-    .pill-row::-webkit-scrollbar { display: none; }
-    .pill-item { display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; flex-shrink: 0; min-width: 56px; }
-    .pill-icon {
-      width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      transition: transform 0.18s, box-shadow 0.18s;
-    }
-    .pill-item:hover .pill-icon { transform: scale(1.08); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
-    .pill-icon svg { width: 22px; height: 22px; }
-    .pill-icon-progress { background: rgba(59,130,246,0.12); color: #3b82f6; }
-    .pill-icon-videos { background: rgba(168,85,247,0.12); color: #a855f7; }
-    .pill-icon-quiz { background: rgba(245,131,33,0.12); color: #f58321; }
-    .pill-icon-examiner { background: rgba(34,197,94,0.12); color: #22c55e; }
-    .pill-icon-mock { background: rgba(239,68,68,0.12); color: #ef4444; }
-    .pill-label { font-size: 0.68rem; font-weight: 600; color: var(--primary); white-space: nowrap; }
-
-    /* ACTION CARDS (Zing-style) */
-    .action-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 24px; }
-    .action-card {
-      border-radius: 14px; padding: 18px 14px; display: flex; flex-direction: column; justify-content: space-between;
-      color: #fff; text-decoration: none; min-height: 100px;
-      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
-    }
-    .action-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
-    .action-card svg { width: 28px; height: 28px; margin-bottom: 10px; opacity: 0.9; }
-    .action-card-label { font-family: var(--font-head); font-size: 0.85rem; font-weight: 700; line-height: 1.2; }
-    .action-card-book { background: linear-gradient(135deg, #f58321, #ff9a3c); }
-    .action-card-credits { background: linear-gradient(135deg, #22c55e, #4ade80); }
-    .action-card-mock { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
-    @media (max-width: 340px) {
-      .action-cards { display: flex; overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
-      .action-cards::-webkit-scrollbar { display: none; }
-      .action-card { min-width: 130px; flex-shrink: 0; }
-    }
-
-    /* UPCOMING LESSONS */
-    .upcoming-card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-left: 4px solid var(--accent);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex-wrap: wrap;
-      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .upcoming-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
-    .upcoming-card.is-today { border-left-color: var(--green); background: #fafff7; }
-    .upcoming-date-block { min-width: 54px; text-align: center; flex-shrink: 0; }
-    .upcoming-date-day {
-      font-family: var(--font-head); font-size: 1.5rem; font-weight: 700;
-      color: var(--primary); line-height: 1;
-    }
-    .upcoming-date-month { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .upcoming-date-dow { font-size: 0.7rem; color: var(--muted); margin-top: 1px; }
-    .upcoming-info { flex: 1; min-width: 140px; }
-    .upcoming-time { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
-    .upcoming-instructor { font-size: 0.82rem; color: var(--accent); font-weight: 600; margin-top: 2px; }
-    .upcoming-countdown { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
-    .upcoming-actions { display: flex; gap: 6px; flex-shrink: 0; }
-    .btn-upcoming-cal {
-      font-size: 0.78rem; color: var(--accent);
-      border: 1.5px solid var(--border); background: none;
-      border-radius: 8px; padding: 6px 10px;
-      cursor: pointer; white-space: nowrap; transition: all 0.2s;
-      text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
-    }
-    .btn-upcoming-cal:hover { border-color: var(--accent); background: var(--accent-lt); }
-    .btn-cancel-lesson {
-      font-size: 0.78rem; color: var(--muted);
-      border: 1.5px solid var(--border); background: none;
-      border-radius: 8px; padding: 6px 12px;
-      cursor: pointer; text-decoration: none; white-space: nowrap;
-      transition: all 0.2s; font-weight: 500;
-    }
-    .btn-cancel-lesson:hover { color: #ef4444; border-color: #ef4444; }
-    .upcoming-empty {
-      text-align: center; padding: 32px 16px;
-      color: var(--muted); font-size: 0.85rem;
-      line-height: 1.5;
-    }
-    .upcoming-empty .upcoming-empty-icon { font-size: 2rem; margin-bottom: 8px; display: block; opacity: 0.6; }
-    .upcoming-empty a { color: var(--accent); font-weight: 600; text-decoration: none; }
-    .upcoming-empty a:hover { text-decoration: underline; }
-
-    /* CALENDAR SYNC BANNER */
-    .cal-sync-banner {
-      background: var(--accent-lt); border: 1px solid #fcd4b0;
-      border-radius: var(--radius); padding: 14px 18px;
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
-    }
-    .cal-sync-banner-text { display: flex; flex-direction: column; gap: 2px; }
-    .cal-sync-banner-text strong { font-family: var(--font-head); font-size: 0.92rem; font-weight: 700; }
-    .cal-sync-banner-text span { font-size: 0.82rem; color: var(--muted); }
-    .cal-sync-banner-actions { display: flex; align-items: center; gap: 8px; }
-    .cal-sync-btn {
-      background: var(--accent); color: white; border: none;
-      border-radius: 8px; padding: 8px 18px; font-size: 0.85rem;
-      font-weight: 700; cursor: pointer; text-decoration: none;
-      white-space: nowrap; transition: background 0.15s;
-    }
-    .cal-sync-btn:hover { background: var(--accent-dk); }
-    .cal-sync-dismiss {
-      background: none; border: none; color: var(--muted); cursor: pointer;
-      font-size: 1.1rem; padding: 4px 8px; border-radius: 4px;
-      transition: all 0.15s; line-height: 1;
-    }
-    .cal-sync-dismiss:hover { color: var(--primary); background: rgba(0,0,0,0.05); }
-
-    /* STATS BAR */
-    .stats-bar {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin-bottom: 24px;
-    }
-    .stat-pill {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px 12px;
-      text-align: center;
-      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .stat-pill:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(245,131,33,0.08);
-    }
-    .stat-pill .num {
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: var(--primary);
-      font-family: var(--font-head);
-      font-variant-numeric: tabular-nums;
-    }
-    .stat-pill .lbl { font-size: 0.68rem; color: var(--muted); margin-top: 4px; font-weight: 500; }
-
-    /* LOG SESSION BUTTON */
-    .log-btn {
-      display: block;
-      width: 100%;
-      background: var(--accent);
-      color: #fff;
-      text-decoration: none;
-      border-radius: var(--radius);
-      padding: 16px;
-      text-align: center;
-      font-size: 1rem;
-      font-weight: 700;
-      margin-bottom: 28px;
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-      font-family: var(--font-head);
-    }
-    .log-btn:hover { background: var(--accent-dk); transform: translateY(-2px); box-shadow: 0 8px 24px var(--accent-glow); }
-
     /* PROFILE COMPLETION CARD */
     .profile-card {
       background: var(--accent-lt); border: 1px solid rgba(245,131,33,0.2);
@@ -239,34 +72,14 @@
       display: none;
     }
     .profile-card.show { display: block; }
-    .profile-card-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .profile-card-title {
-      font-family: var(--font-head); font-weight: 700; font-size: 0.95rem;
-    }
-    .profile-card-dismiss {
-      background: none; border: none; color: var(--muted); cursor: pointer;
-      font-size: 0.8rem; padding: 4px 8px;
-    }
-    .profile-bar-bg {
-      height: 8px; background: rgba(245,131,33,0.15); border-radius: 8px;
-      overflow: hidden; margin-bottom: 8px;
-    }
-    .profile-bar-fill {
-      height: 100%; background: var(--accent); border-radius: 8px;
-      transition: width 0.6s ease;
-    }
-    .profile-pct {
-      font-size: 0.78rem; font-weight: 600; color: var(--accent-dk);
-      margin-bottom: 12px;
-    }
+    .profile-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .profile-card-title { font-family: var(--font-head); font-weight: 700; font-size: 0.95rem; }
+    .profile-card-dismiss { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.8rem; padding: 4px 8px; }
+    .profile-bar-bg { height: 8px; background: rgba(245,131,33,0.15); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+    .profile-bar-fill { height: 100%; background: var(--accent); border-radius: 8px; transition: width 0.6s ease; }
+    .profile-pct { font-size: 0.78rem; font-weight: 600; color: var(--accent-dk); margin-bottom: 12px; }
     .profile-steps { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-    .profile-step {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 0.82rem; color: var(--muted);
-    }
+    .profile-step { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--muted); }
     .profile-step.done { color: var(--primary); }
     .profile-step-icon { width: 18px; text-align: center; }
     .profile-card .btn-complete {
@@ -277,405 +90,11 @@
     }
     .profile-card .btn-complete:hover { background: var(--accent-dk); }
 
-    /* QUICK ACTIONS */
-    .quick-actions {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 10px;
-      margin-bottom: 24px;
-    }
-    @media (max-width: 520px) {
-      .quick-actions {
-        grid-template-columns: repeat(3, 1fr);
-      }
-    }
-    .quick-action-card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px 12px;
-      text-align: center;
-      text-decoration: none;
-      color: var(--primary);
-      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .quick-action-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(245,131,33,0.08);
-    }
-    .quick-action-icon {
-      font-size: 1.5rem;
-      margin-bottom: 8px;
-    }
-    .quick-action-label {
-      font-size: 0.82rem;
-      font-weight: 700;
-      font-family: var(--font-head);
-    }
-
-    /* SECTION TITLE */
-    .section-title {
-      font-size: 0.72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      margin-bottom: 12px;
-      font-family: var(--font-body);
-    }
-
-    /* PROGRESS GROUPS */
-    .progress-card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      margin-bottom: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .progress-card:hover { border-color: rgba(245,131,33,0.2); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
-    .progress-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 18px;
-      cursor: pointer;
-      user-select: none;
-    }
-    .progress-header-left { display: flex; align-items: center; gap: 12px; }
-    .progress-group-name {
-      font-size: 0.95rem;
-      font-weight: 700;
-      font-family: var(--font-head);
-      color: var(--primary);
-      letter-spacing: -0.01em;
-    }
-    .progress-group-sub { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
-    .chevron {
-      font-size: 0.7rem;
-      color: var(--muted);
-      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .chevron.open { transform: rotate(180deg); }
-
-    .progress-body { display: none; padding: 0 18px 18px; }
-    .progress-body.open { display: block; }
-
-    /* QUESTION ROWS */
-    .q-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--border);
-      gap: 12px;
-    }
-    .q-row:last-child { border-bottom: none; }
-    .q-num {
-      font-size: 0.68rem;
-      font-weight: 700;
-      color: var(--muted);
-      flex-shrink: 0;
-      width: 22px;
-    }
-    .q-text { font-size: 0.88rem; color: var(--primary); flex: 1; line-height: 1.4; }
-    .q-badge {
-      flex-shrink: 0;
-      font-size: 0.72rem;
-      font-weight: 700;
-      padding: 4px 12px;
-      border-radius: 20px;
-    }
-    .badge-always    { background: rgba(34,197,94,0.1);  color: #15803d; }
-    .badge-usually   { background: rgba(34,197,94,0.1); color: #15803d; }
-    .badge-sometimes { background: rgba(245,158,11,0.1); color: #92400e; }
-    .badge-never     { background: rgba(239,68,68,0.1);  color: #7f1d1d; }
-    .badge-none      { background: var(--surface); color: var(--muted); }
-
-    /* GROUP SCORE BAR */
-    .group-score {
-      background: var(--accent-lt);
-      border: 1px solid rgba(245,131,33,0.15);
-      border-radius: 12px;
-      padding: 14px 16px;
-      margin-top: 12px;
-    }
-    .group-score-label {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.8rem;
-      margin-bottom: 8px;
-    }
-    .group-score-label .title { color: var(--primary); }
-    .group-score-label .pct { font-weight: 700; color: var(--primary); }
-    .score-bar-bg {
-      background: rgba(0,0,0,0.08);
-      border-radius: 4px;
-      height: 6px;
-      overflow: hidden;
-    }
-    .score-bar-fill {
-      height: 100%;
-      border-radius: 4px;
-      background: linear-gradient(90deg, var(--green), #4ade80);
-      transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .score-note {
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin-top: 6px;
-    }
-
-    /* PER-QUESTION NOTES */
-    .q-notes-list {
-      margin-top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .q-note-item {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-      font-size: 0.8rem;
-      color: var(--primary);
-      background: var(--surface);
-      border-radius: 8px;
-      padding: 8px 12px;
-    }
-    .q-note-item .q-note-label {
-      font-weight: 700;
-      color: var(--accent);
-      flex-shrink: 0;
-      font-size: 0.72rem;
-    }
-    .q-note-item .q-note-text {
-      font-style: italic;
-      line-height: 1.4;
-    }
-
-    /* SESSIONS LIST */
-    .session-card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 8px;
-      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .session-card:hover { border-color: rgba(245,131,33,0.2); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
-    .session-meta {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 8px;
-      flex-wrap: wrap;
-    }
-    .session-date { font-size: 0.88rem; font-weight: 600; color: var(--primary); }
-    .session-chip {
-      font-size: 0.72rem;
-      font-weight: 600;
-      padding: 3px 10px;
-      border-radius: 12px;
-    }
-    .chip-instructor { background: var(--accent-mid); color: var(--accent); }
-    .chip-private { background: rgba(168,85,247,0.1); color: #7c3aed; }
-    .chip-duration { background: var(--surface); color: var(--muted); }
-    .session-ratings {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .session-skill-pill {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      padding: 4px 12px;
-      border-radius: 12px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--primary);
-    }
-    .session-notes {
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-top: 6px;
-      font-style: italic;
-    }
-
-    /* RATING LEGEND */
-    .rating-legend {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      font-size: 0.78rem;
-      color: var(--muted);
-      margin-bottom: 12px;
-      align-items: center;
-    }
-
-    /* PROFILE CARD */
-    .profile-card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 16px;
-      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
-      transition: all 0.25s;
-    }
-    .profile-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
-    .profile-card-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 14px;
-    }
-    .profile-card-title { font-size: 0.95rem; font-weight: 700; font-family: var(--font-head); }
-    .profile-card-badge {
-      font-size: 0.7rem; font-weight: 700; padding: 3px 10px;
-      border-radius: 20px; white-space: nowrap;
-    }
-    .badge-complete { background: rgba(34,197,94,0.1); color: #15803d; }
-    .badge-incomplete { background: rgba(239,68,68,0.1); color: #b91c1c; }
-    .profile-fields { display: flex; flex-direction: column; gap: 10px; }
-    .profile-field label {
-      display: block; font-size: 0.72rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.08em;
-      color: var(--muted); margin-bottom: 4px;
-    }
-    .profile-field input,
-    .profile-field textarea {
-      width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
-      padding: 9px 12px; font-size: 0.88rem; font-family: var(--font-body);
-      background: var(--white); color: var(--primary); outline: none;
-      transition: border-color 0.15s; resize: vertical;
-    }
-    .profile-field input:focus,
-    .profile-field textarea:focus { border-color: var(--accent); }
-    .profile-field textarea { min-height: 60px; }
-    .postcode-lookup-row {
-      display: flex; gap: 8px; margin-bottom: 6px;
-    }
-    .postcode-lookup-row input {
-      flex: 1; text-transform: uppercase;
-    }
-    .btn-lookup {
-      background: var(--accent); color: white; border: none;
-      border-radius: 8px; padding: 9px 16px;
-      font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
-      cursor: pointer; transition: background 0.15s; white-space: nowrap;
-    }
-    .btn-lookup:hover { background: var(--accent-dk); }
-    .btn-lookup:disabled { opacity: 0.6; cursor: not-allowed; }
-    .postcode-error {
-      font-size: 0.78rem; color: var(--red); margin-top: 2px;
-    }
-    .postcode-confirmed {
-      font-size: 0.82rem; color: #15803d; background: rgba(34,197,94,0.08);
-      padding: 8px 12px; border-radius: 8px; margin-bottom: 6px;
-    }
-    .profile-save-row {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-top: 12px; gap: 12px;
-    }
-    .profile-save-note { font-size: 0.78rem; color: var(--muted); }
-    .btn-save-profile {
-      background: var(--accent); color: white; border: none;
-      border-radius: 8px; padding: 9px 20px;
-      font-family: var(--font-head); font-size: 0.85rem; font-weight: 700;
-      cursor: pointer; transition: background 0.15s; white-space: nowrap;
-    }
-    .btn-save-profile:hover { background: var(--accent-dk); }
-    .btn-save-profile:disabled { opacity: 0.6; cursor: not-allowed; }
-
-    /* CONTACT PREFERENCE CARD */
-    .pref-card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px 24px;
-      margin-bottom: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
-      transition: all 0.25s;
-    }
-    .pref-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
-    .pref-card-left { flex: 1; }
-    .pref-card-title { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
-    .pref-card-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
-    .toggle-wrap {
-      position: relative;
-      width: 48px; height: 26px;
-      flex-shrink: 0;
-    }
-    .toggle-wrap input {
-      opacity: 0; width: 0; height: 0; position: absolute;
-    }
-    .toggle-slider {
-      position: absolute; inset: 0;
-      background: var(--border);
-      border-radius: 26px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .toggle-slider::before {
-      content: '';
-      position: absolute;
-      left: 3px; top: 3px;
-      width: 20px; height: 20px;
-      background: var(--white);
-      border-radius: 50%;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      transition: transform 0.2s;
-    }
-    .toggle-wrap input:checked + .toggle-slider {
-      background: var(--accent);
-    }
-    .toggle-wrap input:checked + .toggle-slider::before {
-      transform: translateX(22px);
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 48px 24px;
-      color: var(--muted);
-    }
-    .empty-state .emoji { font-size: 2.5rem; margin-bottom: 12px; display: block; }
-    .empty-state p { font-size: 0.9rem; line-height: 1.5; }
-    .empty-state .empty-cta {
-      display: inline-block;
-      margin-top: 16px;
-      background: var(--accent);
-      color: #fff;
-      padding: 10px 24px;
-      border-radius: 10px;
-      font-family: var(--font-head);
-      font-size: 0.85rem;
-      font-weight: 700;
-      text-decoration: none;
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .empty-state .empty-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px var(--accent-glow); }
-
     /* UNLOGGED BANNER */
     .unlogged-banner {
-      background: var(--accent-lt);
-      border: 1px solid rgba(245,131,33,0.25);
-      border-radius: 12px;
-      padding: 16px 20px;
-      margin-bottom: 20px;
-      display: none;
-      align-items: center;
-      gap: 14px;
-      flex-wrap: wrap;
+      background: var(--accent-lt); border: 1px solid rgba(245,131,33,0.25);
+      border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;
+      display: none; align-items: center; gap: 14px; flex-wrap: wrap;
     }
     .unlogged-banner.show { display: flex; }
     .unlogged-banner-icon { font-size: 1.4rem; flex-shrink: 0; }
@@ -690,46 +109,35 @@
     }
     .btn-log-now:hover { background: var(--accent-dk); }
 
-    /* TRAFFIC LIGHT DOT */
-    .tl-dot-sm {
-      width: 14px; height: 14px; border-radius: 50%; display: inline-block;
+    /* SECTION TITLE */
+    .section-title {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px;
+      font-family: var(--font-body);
     }
-    .dot-struggled { background: var(--red); }
-    .dot-ok { background: var(--accent); }
-    .dot-nailed { background: var(--green); }
 
-    /* BOTTOM NAV */
-    .bottom-nav {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      background: rgba(255,255,255,0.95);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border-top: 1px solid rgba(0,0,0,0.06);
-      display: flex;
-      z-index: 200;
-      padding-bottom: env(safe-area-inset-bottom);
-      box-shadow: 0 -4px 24px rgba(245,131,33,0.04);
+    /* HUB CARDS */
+    .hub-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 480px) { .hub-grid { grid-template-columns: 1fr 1fr; } }
+    .hub-card {
+      display: flex; align-items: flex-start; gap: 14px; padding: 18px;
+      border: 1.5px solid var(--border); border-radius: var(--radius);
+      background: var(--white); text-decoration: none; color: inherit;
+      transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
     }
-    .bottom-nav-item {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 8px 8px 6px;
-      text-decoration: none;
-      color: var(--muted);
-      font-size: 0.68rem;
-      font-weight: 600;
-      transition: color 0.2s, transform 0.2s;
-      gap: 4px;
-      -webkit-tap-highlight-color: transparent;
+    .hub-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,0.06); transform: translateY(-2px); }
+    .hub-card:active { transform: translateY(0); }
+    .hub-icon {
+      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
     }
-    .bottom-nav-item:hover { color: var(--primary); }
-    .bottom-nav-item:active { transform: scale(0.92); }
-    .bottom-nav-item.active { color: var(--accent); }
-    .bottom-nav-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
-    .bottom-nav-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .hub-icon svg { width: 22px; height: 22px; }
+    .hub-icon-lessons { background: rgba(245,131,33,0.12); color: #f58321; }
+    .hub-icon-practice { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .hub-icon-learn { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .hub-card-body { flex: 1; min-width: 0; }
+    .hub-card-title { font-family: var(--font-head); font-size: 0.95rem; font-weight: 700; color: var(--primary); margin: 0 0 3px; }
+    .hub-card-desc { font-family: var(--font-body); font-size: 0.82rem; color: var(--muted); margin: 0; line-height: 1.4; }
   </style>
 <script src="/sidebar.js"></script>
 <script src="/competency-config.js"></script>
@@ -738,38 +146,13 @@
 </head>
 <body>
 
-<nav class="site-nav">
-  <a class="site-nav-logo" href="/learner/">
-    <img src="/Logo.png" alt="CoachCarter">
-    <span>Coach<em>Carter</em></span>
-  </a>
-  <div class="site-nav-links">
-    <span class="site-nav-link site-nav-name" id="header-name"></span>
-    <button class="nav-menu-toggle" aria-label="Menu" aria-expanded="false">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
-      </svg>
-    </button>
-  </div>
-</nav>
-<div class="nav-dropdown">
-  <a href="/learner/examiner-quiz.html">Examiner Quiz</a>
-  <a href="/learner/ask-examiner.html">Ask the Examiner</a>
-  <div class="divider"></div>
-  <a href="/learner-journey.html">Pricing</a>
-  <a href="/">Home</a>
-  <div class="divider"></div>
-  <button onclick="logout()">Sign out</button>
-</div>
-
 <main>
   <!-- GREETING -->
   <h1 class="greeting" id="welcome-msg"><span class="skeleton skeleton-text w-40" style="display:inline-block;height:1.2em">&nbsp;</span></h1>
 
-  <!-- SKELETON: shown while data loads, hidden by render() -->
+  <!-- SKELETON -->
   <div id="dashboard-skeleton">
     <div class="skeleton skeleton-hero" style="margin-bottom:16px"></div>
-    <div class="skeleton skeleton-card"></div>
     <div class="skeleton skeleton-card"></div>
   </div>
 
@@ -780,7 +163,7 @@
       <div class="nl-time" id="nl-time"></div>
       <div class="nl-instructor" id="nl-instructor"></div>
       <div class="nl-actions">
-        <a href="/learner/book.html" class="nl-btn">View Lessons</a>
+        <a href="/learner/lessons-hub.html" class="nl-btn">View Lessons</a>
       </div>
     </div>
     <a href="/learner/progress.html" class="readiness-ring" id="readiness-ring" style="display:none" title="View full progress">
@@ -811,69 +194,7 @@
     <div class="profile-bar-bg"><div class="profile-bar-fill" id="profile-bar-fill" style="width:0%"></div></div>
     <div class="profile-pct" id="profile-pct">0% complete</div>
     <div class="profile-steps" id="profile-steps"></div>
-    <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete Next Step →</a>
-  </div>
-
-  <!-- QUICK ACCESS PILLS -->
-  <div class="pill-row">
-    <a href="/learner/progress.html" class="pill-item">
-      <div class="pill-icon pill-icon-progress">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="14" width="4" height="6" rx="1"/><rect x="10" y="9" width="4" height="11" rx="1"/><rect x="16" y="4" width="4" height="16" rx="1"/></svg>
-      </div>
-      <span class="pill-label">Progress</span>
-    </a>
-    <a href="/learner/examiner-quiz.html" class="pill-item">
-      <div class="pill-icon pill-icon-quiz">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      </div>
-      <span class="pill-label">Quiz</span>
-    </a>
-    <a href="/learner/ask-examiner.html" class="pill-item">
-      <div class="pill-icon pill-icon-examiner">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      </div>
-      <span class="pill-label">Examiner AI</span>
-    </a>
-    <a href="/learner/log-session.html" class="pill-item">
-      <div class="pill-icon pill-icon-mock">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-      </div>
-      <span class="pill-label">Log Session</span>
-    </a>
-  </div>
-
-  <!-- ACTION CARDS -->
-  <div class="action-cards">
-    <a href="/learner/book.html" class="action-card action-card-book">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
-      <span class="action-card-label">Book Lesson</span>
-    </a>
-    <a href="/learner/buy-credits.html" class="action-card action-card-credits">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
-      <span class="action-card-label">Buy Credits</span>
-    </a>
-    <a href="/learner/mock-test.html" class="action-card action-card-mock">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>
-      <span class="action-card-label">Mock Test</span>
-    </a>
-  </div>
-
-  <!-- Calendar sync banner (outside upcoming section so it always shows) -->
-  <div class="cal-sync-banner" id="calSyncBanner" style="display:none">
-    <div class="cal-sync-banner-text">
-      <strong>Auto-update your calendar</strong>
-      <span>All bookings and cancellations will appear automatically — with reminders.</span>
-    </div>
-    <div class="cal-sync-banner-actions">
-      <a class="cal-sync-btn" id="calSyncBtn" href="#">Auto-update calendar</a>
-      <button class="cal-sync-dismiss" id="calSyncDismiss" title="Dismiss">&times;</button>
-    </div>
-  </div>
-
-  <!-- UPCOMING LESSONS (shows 2nd+ lessons) -->
-  <div id="upcoming-section" style="margin-bottom: 24px; display: none;">
-    <div class="section-title">More Upcoming</div>
-    <div id="upcoming-list"></div>
+    <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete Next Step</a>
   </div>
 
   <!-- UNLOGGED BOOKING BANNER -->
@@ -886,62 +207,41 @@
     <a class="btn-log-now" id="unlogged-btn" href="#">Log now</a>
   </div>
 
-
+  <!-- EXPLORE SECTIONS -->
+  <div class="section-title">Explore</div>
+  <div class="hub-grid">
+    <a href="/learner/lessons-hub.html" class="hub-card">
+      <div class="hub-icon hub-icon-lessons">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </div>
+      <div class="hub-card-body">
+        <div class="hub-card-title">Lessons</div>
+        <p class="hub-card-desc">Book, manage, and track your driving lessons</p>
+      </div>
+    </a>
+    <a href="/learner/practice.html" class="hub-card">
+      <div class="hub-icon hub-icon-practice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+      </div>
+      <div class="hub-card-body">
+        <div class="hub-card-title">Practice</div>
+        <p class="hub-card-desc">Log sessions, mock tests, and track your progress</p>
+      </div>
+    </a>
+    <a href="/learner/learn.html" class="hub-card">
+      <div class="hub-icon hub-icon-learn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+      </div>
+      <div class="hub-card-body">
+        <div class="hub-card-title">Learn</div>
+        <p class="hub-card-desc">Examiner AI and quizzes to prepare for your test</p>
+      </div>
+    </a>
+  </div>
 </main>
 
 <script>
-// ── Hamburger menu toggle ──
-document.querySelector('.nav-menu-toggle')?.addEventListener('click', function() {
-  const dd = document.querySelector('.nav-dropdown');
-  const open = dd.classList.toggle('open');
-  this.setAttribute('aria-expanded', open);
-});
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.nav-menu-toggle') && !e.target.closest('.nav-dropdown')) {
-    document.querySelector('.nav-dropdown')?.classList.remove('open');
-    document.querySelector('.nav-menu-toggle')?.setAttribute('aria-expanded', 'false');
-  }
-});
-
-// ── New skill-based system ──
-const SKILLS = [
-  { key: 'speed_choice', label: 'Speed choice' },
-  { key: 'lane_choice',  label: 'Lane choice' },
-  { key: 'mirrors',      label: 'Using mirrors' },
-  { key: 'lane_keeping', label: 'Staying in lane' },
-  { key: 'stay_or_go',   label: 'Stay or go' },
-  { key: 'roundabouts',  label: 'Roundabouts' },
-  { key: 'manoeuvres',   label: 'Manoeuvres' },
-];
-
-const EMOJI_MAP = { struggled: '😬', ok: '😊', nailed: '🤩' };
-const RATING_DISPLAY = {
-  // New emoji ratings
-  nailed: { emoji: '🤩', label: 'Nailed it', color: '#22c55e' },
-  ok:     { emoji: '😊', label: 'OK',        color: '#f58321' },
-  struggled: { emoji: '😬', label: 'Struggled', color: '#ef4444' },
-  // Legacy ratings (for old sessions)
-  always:    { emoji: '🤩', label: 'Always',    color: '#22c55e' },
-  usually:   { emoji: '😊', label: 'Usually',   color: '#86efac' },
-  sometimes: { emoji: '😊', label: 'Sometimes', color: '#f59e0b' },
-  never:     { emoji: '😬', label: 'Needs work', color: '#ef4444' },
-};
-
-// Skill key → friendly label (includes new + legacy keys)
-const SKILL_LABELS = {};
-SKILLS.forEach(s => { SKILL_LABELS[s.key] = s.label; });
-// Legacy question keys
-const LEGACY_LABELS = {
-  q1_speed_react: 'Speed & react', q2_speed_lane: 'Slowing for lanes',
-  q3_mirrors_routine: 'Mirror routine', q4_mirrors_unexp: 'Mirrors (unexpected)',
-  q5_awareness: 'Awareness', q6_mice_order: 'MICE order',
-  q7_lane_choice: 'Lane choice', q8_safe_to_go: 'Stay or go',
-  q9_roundabout_space: 'Roundabout spacing', q10_reversing: 'Reversing',
-  t1_move: 'Moving off', t1_stop: 'Stopping', t1_steer: 'Steering',
-  t1_mirrors: 'Mirror checks', t1_mice: 'MICE routine', t1_eval: 'Overall'
-};
-
-let AUTH, PROGRESS, SESSIONS_DATA, BOOKINGS_DATA, UNLOGGED_DATA;
+let AUTH, BOOKINGS_DATA, UNLOGGED_DATA;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = ccAuth.getAuth();
@@ -949,14 +249,19 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (!AUTH?.token) {
     document.getElementById('welcome-msg').textContent = 'Welcome!';
     document.getElementById('next-lesson-empty').classList.add('show');
+    removeSkeleton();
     return;
   }
-  document.getElementById('header-name').textContent = AUTH.user.name;
-  await Promise.all([loadProgress(), loadBookings(), loadUnlogged(), loadReadiness()]);
+
+  await Promise.all([loadBookings(), loadUnlogged(), loadReadiness()]);
   render();
-  initCalSyncBanner();
   loadProfileCompleteness();
 });
+
+function removeSkeleton() {
+  var skel = document.getElementById('dashboard-skeleton');
+  if (skel) skel.remove();
+}
 
 // ── Profile Completion Card ──
 async function loadProfileCompleteness() {
@@ -968,35 +273,30 @@ async function loadProfileCompleteness() {
     });
     if (!res.ok) return;
     const data = await res.json();
-    const card = document.getElementById('profile-card');
 
     const stepLabels = {
       prior_experience: 'Prior experience',
       initial_assessment: 'Initial skill assessment'
     };
-    // Only show the 2 profile-building steps
     const profileSteps = ['prior_experience', 'initial_assessment'];
     const stepsEl = document.getElementById('profile-steps');
     stepsEl.innerHTML = profileSteps.map(function(key) {
       var done = data.steps[key];
       return '<div class="profile-step ' + (done ? 'done' : '') + '">' +
-        '<span class="profile-step-icon">' + (done ? '✅' : '⬜') + '</span>' +
+        '<span class="profile-step-icon">' + (done ? '\u2705' : '\u2B1C') + '</span>' +
         '<span>' + (stepLabels[key] || key) + '</span></div>';
     }).join('');
 
-    // Recalculate percentage based on just these 2 steps
     var profileDone = profileSteps.filter(function(k) { return data.steps[k]; }).length;
-    if (profileDone >= 2) return; // Both done — don't show card
-    card.classList.add('show');
+    if (profileDone >= 2) return;
+    document.getElementById('profile-card').classList.add('show');
     var profilePct = Math.round((profileDone / 2) * 100);
     document.getElementById('profile-bar-fill').style.width = profilePct + '%';
     document.getElementById('profile-pct').textContent = profilePct + '% complete';
-
-    // CTA always points to onboarding
     document.getElementById('profile-cta').href = '/learner/onboarding.html';
     document.getElementById('profile-cta').textContent = !data.steps.prior_experience
-      ? 'Add Your Experience →'
-      : 'Complete Skill Assessment →';
+      ? 'Add Your Experience \u2192'
+      : 'Complete Skill Assessment \u2192';
   } catch (e) { console.warn('Profile completeness check failed:', e); }
 }
 
@@ -1006,15 +306,6 @@ function dismissProfile() {
 }
 
 function logout() { ccAuth.logout(); }
-
-async function loadProgress() {
-  try {
-    const res = await fetch('/api/learner?action=progress', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
-    if (res.status === 401) { logout(); return; }
-    PROGRESS = await res.json();
-  } catch (e) { console.error(e); }
-}
-
 
 async function loadBookings() {
   try {
@@ -1038,7 +329,6 @@ async function loadReadiness() {
     const CC = window.CC_COMPETENCY;
     if (!CC) return;
 
-    // Process lesson ratings
     const lessonMap = {};
     (data.lesson_ratings || []).forEach(lr => {
       const key = CC.mapLegacySkill(lr.skill_key);
@@ -1051,13 +341,11 @@ async function loadReadiness() {
       lessonMap[k].sort((a, b) => new Date(b.date) - new Date(a.date));
     });
 
-    // Process quiz accuracy
     const quizMap = {};
     (data.quiz_accuracy || []).forEach(qa => {
       quizMap[qa.skill_key] = { attempts: qa.attempts, correct: qa.correct_count };
     });
 
-    // Calculate overall readiness
     let sum = 0;
     CC.SKILLS.forEach(sk => {
       const lessonRatings = lessonMap[sk.key] || [];
@@ -1071,7 +359,6 @@ async function loadReadiness() {
     });
     const pct = Math.round(sum / CC.SKILLS.length);
 
-    // Render ring
     const ring = document.getElementById('readiness-ring');
     const fill = document.getElementById('ring-fill');
     const val = document.getElementById('readiness-value');
@@ -1079,26 +366,31 @@ async function loadReadiness() {
 
     ring.style.display = '';
     val.textContent = pct + '%';
-    const circumference = 2 * Math.PI * 21; // r=21 (52px ring)
+    const circumference = 2 * Math.PI * 21;
     const offset = circumference * (1 - pct / 100);
     fill.style.strokeDashoffset = offset;
-
-    // On the orange hero card, ring is always white — colour handled by CSS
     fill.style.stroke = '#fff';
   } catch (e) { console.error('Readiness load failed:', e); }
 }
 
+const MON_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DOW_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
 function render() {
-  if (!PROGRESS) return;
+  removeSkeleton();
 
-  // Remove skeleton
-  var skel = document.getElementById('dashboard-skeleton');
-  if (skel) skel.remove();
+  // Greeting — use name from bookings response or fallback
+  const upcoming = (BOOKINGS_DATA && BOOKINGS_DATA.upcoming) ? BOOKINGS_DATA.upcoming : [];
+  const nameEl = document.getElementById('welcome-msg');
 
-  document.getElementById('welcome-msg').textContent = `Hi, ${PROGRESS.name}`;
+  // Try to get name from auth
+  if (AUTH?.user?.name) {
+    nameEl.textContent = 'Hi, ' + AUTH.user.name;
+  } else {
+    nameEl.textContent = 'Welcome!';
+  }
 
   renderNextLesson();
-  renderUpcoming();
   renderUnlogged();
 }
 
@@ -1124,7 +416,6 @@ function renderNextLesson() {
   const start = b.start_time ? b.start_time.slice(0, 5) : '';
   const end = b.end_time ? b.end_time.slice(0, 5) : '';
 
-  // Countdown
   const now = Date.now();
   const lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
   const diffMs = lessonMs - now;
@@ -1142,81 +433,8 @@ function renderNextLesson() {
   }
 
   document.getElementById('nl-when').textContent = countdown;
-  document.getElementById('nl-time').textContent = `${dow} ${dayNum} ${month} · ${start} – ${end}`;
+  document.getElementById('nl-time').textContent = `${dow} ${dayNum} ${month} \u00B7 ${start} \u2013 ${end}`;
   document.getElementById('nl-instructor').textContent = `with ${b.instructor_name}`;
-}
-
-
-// ── Upcoming lessons ─────────────────────────────────────────────────────────
-const MON_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const DOW_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-function renderUpcoming() {
-  const section = document.getElementById('upcoming-section');
-  const list = document.getElementById('upcoming-list');
-  const upcoming = (BOOKINGS_DATA && BOOKINGS_DATA.upcoming) ? BOOKINGS_DATA.upcoming : [];
-
-  // First lesson is in the hero card — show remaining here
-  const rest = upcoming.slice(1);
-  if (rest.length === 0) {
-    section.style.display = 'none';
-    return;
-  }
-
-  section.style.display = '';
-  const now = Date.now();
-  const todayStr = new Date().toISOString().slice(0, 10);
-
-  list.innerHTML = rest.map(b => {
-    const date = new Date(b.scheduled_date + 'T00:00:00Z');
-    const dayNum = date.getUTCDate();
-    const month = MON_ABBR[date.getUTCMonth()];
-    const dow = DOW_ABBR[date.getUTCDay()];
-    const start = b.start_time ? b.start_time.slice(0, 5) : '';
-    const end = b.end_time ? b.end_time.slice(0, 5) : '';
-    const isToday = b.scheduled_date === todayStr;
-
-    const lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
-    const diffMs = lessonMs - now;
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffHours / 24);
-    let countdown = '';
-    if (diffMs < 0) {
-      countdown = 'In progress or just finished';
-    } else if (diffDays === 0 && diffHours < 24) {
-      countdown = diffHours <= 1 ? 'Starting very soon' : 'In ' + diffHours + ' hours';
-    } else if (diffDays === 1) {
-      countdown = 'Tomorrow';
-    } else {
-      countdown = 'In ' + diffDays + ' days';
-    }
-
-    const canCancel = diffMs > 0;
-
-    return `
-      <div class="upcoming-card ${isToday ? 'is-today' : ''}">
-        <div class="upcoming-date-block">
-          <div class="upcoming-date-day">${dayNum}</div>
-          <div class="upcoming-date-month">${month}</div>
-          <div class="upcoming-date-dow">${dow}</div>
-        </div>
-        <div class="upcoming-info">
-          <div class="upcoming-time">${start} – ${end}</div>
-          <div class="upcoming-instructor">with ${b.instructor_name}</div>
-          <div class="upcoming-countdown">${countdown}</div>
-        </div>
-        <div class="upcoming-actions">
-          ${canCancel ? `<button class="btn-upcoming-cal" onclick="downloadICS(${b.id})" title="Add to calendar">📅</button>` : ''}
-          ${canCancel ? `<a href="/learner/book.html" class="btn-cancel-lesson">Manage</a>` : '<span style="font-size:0.78rem;color:var(--muted)">Done</span>'}
-        </div>
-      </div>`;
-  }).join('');
-
-  if (upcoming.length > 3) {
-    list.innerHTML += `<div style="text-align:center;margin-top:8px;">
-      <a href="/learner/lessons.html" style="font-size:0.82rem;font-weight:600;color:var(--accent);text-decoration:none;">
-        View all ${upcoming.length} lessons →</a></div>`;
-  }
 }
 
 function renderUnlogged() {
@@ -1231,61 +449,8 @@ function renderUnlogged() {
     '/learner/log-session.html?booking_id=' + bookings[0].id;
   banner.classList.add('show');
 }
-
-async function downloadICS(bookingId) {
-  try {
-    const res = await fetch('/api/calendar?action=download&booking_id=' + bookingId, {
-      headers: { Authorization: 'Bearer ' + AUTH.token }
-    });
-    if (!res.ok) throw new Error('Failed');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'coachcarter-lesson.ics';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch {}
-}
-
-// ── Calendar Sync Banner ──
-function shouldShowCalSync() {
-  const val = localStorage.getItem('cc_cal_subscribed');
-  if (!val) return true;
-  if (val === '1') return false; // legacy permanent dismiss
-  const ts = parseInt(val, 10);
-  if (isNaN(ts)) return true;
-  return Date.now() - ts > 30 * 24 * 60 * 60 * 1000; // 30 days
-}
-
-function initCalSyncBanner() {
-  if (!shouldShowCalSync()) return;
-  const banner = document.getElementById('calSyncBanner');
-  if (!banner) return;
-  banner.style.display = 'flex';
-
-  document.getElementById('calSyncBtn').onclick = async function(e) {
-    e.preventDefault();
-    try {
-      const res = await fetch('/api/calendar?action=feed-url', {
-        headers: { Authorization: 'Bearer ' + AUTH.token }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      localStorage.setItem('cc_cal_subscribed', String(Date.now()));
-      window.location.href = data.webcal_url;
-      setTimeout(() => { banner.style.display = 'none'; }, 1000);
-    } catch (err) {
-      showToast(err.message || 'Could not set up calendar sync', 'error');
-    }
-  };
-
-  document.getElementById('calSyncDismiss').onclick = function() {
-    localStorage.setItem('cc_cal_subscribed', String(Date.now()));
-    banner.style.display = 'none';
-  };
-}
-
 </script>
 
+<script src="/shared/branding.js"></script>
 </body>
 </html>

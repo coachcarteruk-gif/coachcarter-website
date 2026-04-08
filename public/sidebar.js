@@ -46,17 +46,20 @@
     learner: [
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
       { icon: 'calendar', label: 'Lessons', children: [
+        { icon: 'home', label: 'Overview', href: '/learner/lessons-hub.html' },
         { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
         { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html' },
         { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' }
       ]},
       { icon: 'clipboard', label: 'Practice', children: [
+        { icon: 'home', label: 'Overview', href: '/learner/practice.html' },
         { icon: 'clipboard', label: 'Log Session', href: '/learner/log-session.html' },
         { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
         { icon: 'play', label: 'Focused Practice', href: '/learner/focused-practice.html' },
         { icon: 'dashboard', label: 'My Progress', href: '/learner/progress.html' }
       ]},
       { icon: 'play', label: 'Learn', children: [
+        { icon: 'home', label: 'Overview', href: '/learner/learn.html' },
         { icon: 'message', label: 'Examiner AI', href: '/learner/ask-examiner.html' },
         { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
       ]},
@@ -81,12 +84,12 @@
       tabs: [
         { icon: 'home', label: 'Home', href: '/learner/',
           activeOn: [] },
-        { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
-          activeOn: ['/learner/buy-credits', '/learner/lessons'] },
-        { icon: 'clipboard', label: 'Practice', href: '/learner/log-session.html',
-          activeOn: ['/learner/mock-test', '/learner/focused-practice', '/learner/progress'] },
-        { icon: 'play', label: 'Learn', href: '/learner/ask-examiner.html',
-          activeOn: ['/learner/examiner-quiz'] },
+        { icon: 'calendar', label: 'Lessons', href: '/learner/lessons-hub.html',
+          activeOn: ['/learner/book', '/learner/buy-credits', '/learner/lessons'] },
+        { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html',
+          activeOn: ['/learner/log-session', '/learner/mock-test', '/learner/focused-practice', '/learner/progress'] },
+        { icon: 'play', label: 'Learn', href: '/learner/learn.html',
+          activeOn: ['/learner/ask-examiner', '/learner/examiner-quiz'] },
         { icon: 'user', label: 'Profile', href: '/learner/profile.html',
           activeOn: [] }
       ]
