@@ -524,7 +524,7 @@ function renderLessonCard(b, isPast) {
 
   if (ltName) {
     html += '<span class="lesson-meta-dot"></span>' +
-      '<span class="lesson-type-badge" style="background:color-mix(in srgb,' + ltColour + ' 12%,white);color:' + ltColour + '">' + esc(ltName) + '</span>';
+      '<span class="lesson-type-badge" style="background:color-mix(in srgb,' + ltColour + ' 15%,var(--white));color:' + ltColour + '">' + esc(ltName) + '</span>';
   }
 
   if (b.duration_minutes) {
