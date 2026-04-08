@@ -1200,6 +1200,26 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 ---
 
+## 2.68 — Remove Stale Video Links from Learner Portal (8 April 2026)
+
+**What changed:**
+
+Videos were removed from sidebar.js navigation in 2.64 (commit `89cb4fd`), but 6 learner pages still had hardcoded inline nav referencing `/classroom.html` and `/learner/videos.html`. These pre-dated the `sidebar.js` overhaul and were never cleaned up.
+
+Removed video links from:
+- `learner/index.html` — dropdown menu "Free Videos" link and quick-access pill row "Videos" pill
+- `learner/confirm-lesson.html` — site-nav "Free Videos" link
+- `learner/log-session.html` — dropdown "Free Videos" link and bottom-nav "Videos" tab
+- `learner/login.html` — site-nav "Videos" link
+- `learner/qa.html` — bottom-nav "Videos" tab
+- `learner/videos.html` — dropdown "Free Videos" link and bottom-nav "Videos" tab (page itself retained for future re-enablement)
+
+Zero video references now remain in `/learner/`. The public `/classroom.html` page and its landing page links are unaffected — those are marketing-facing, not part of the learner portal nav.
+
+**Files changed:** `public/learner/index.html`, `public/learner/confirm-lesson.html`, `public/learner/log-session.html`, `public/learner/login.html`, `public/learner/qa.html`, `public/learner/videos.html`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
