@@ -15,11 +15,15 @@ async function getEligibleBookings(sql, instructorId) {
            lb.start_time,
            lb.end_time,
            lb.status,
-           COALESCE(lt.price_pence, 8250) AS price_pence,
+           CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL
+             THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
+             ELSE COALESCE(lt.price_pence, 8250)
+           END AS price_pence,
            COALESCE(lt.duration_minutes, 90) AS duration_minutes,
            COALESCE(lt.name, 'Standard Lesson') AS lesson_type_name
       FROM lesson_bookings lb
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
       LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
      WHERE lb.instructor_id = ${instructorId}
        AND pli.id IS NULL
@@ -208,10 +212,14 @@ async function getEligibleSchoolBookings(sql, schoolId) {
     SELECT lb.id AS booking_id,
            lb.scheduled_date,
            lb.instructor_id,
-           COALESCE(lt.price_pence, 8250) AS price_pence,
+           CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL
+             THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
+             ELSE COALESCE(lt.price_pence, 8250)
+           END AS price_pence,
            COALESCE(lt.name, 'Standard Lesson') AS lesson_type_name
       FROM lesson_bookings lb
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
      WHERE lb.school_id = ${schoolId}
        AND (
          lb.status = 'completed'

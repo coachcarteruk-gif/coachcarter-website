@@ -340,6 +340,12 @@ function renderLearners() {
       testBadge = '<span class="test-date-badge">Test: ' + testLabel + '</span>';
     }
 
+    // Custom rate badge
+    let rateBadge = '';
+    if (l.custom_hourly_rate_pence) {
+      rateBadge = '<span class="test-date-badge" style="background:var(--accent-lt);color:var(--accent)">£' + (l.custom_hourly_rate_pence / 100).toFixed(0) + '/hr</span>';
+    }
+
     // Notes preview
     let notesPreview = '';
     if (l.instructor_notes) {
@@ -350,7 +356,7 @@ function renderLearners() {
     return `
       <div class="learner-card fade-in" style="cursor:pointer" onclick="openLearner(${l.id})">
         <div class="learner-card-top">
-          <span class="learner-name">${esc(l.name || 'Unnamed')}${l.prefer_contact_before ? '<span class="contact-pref-badge">Contact first</span>' : ''}${testBadge}</span>
+          <span class="learner-name">${esc(l.name || 'Unnamed')}${l.prefer_contact_before ? '<span class="contact-pref-badge">Contact first</span>' : ''}${testBadge}${rateBadge}</span>
           <span class="tier-badge tier-${tier}">${tierLabels[tier] || 'Tier ' + tier}</span>
         </div>
         <div class="learner-stats">
@@ -452,6 +458,15 @@ function renderDetail(data, notesData, mockData) {
             <label for="detail-test-date">Test date</label>
             <input type="date" id="detail-test-date" value="${notesData.test_date || ''}">
           </div>
+          <div class="detail-form-group">
+            <label for="detail-hourly-rate">Custom hourly rate</label>
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="font-weight:700;font-size:0.95rem">&pound;</span>
+              <input type="number" id="detail-hourly-rate" min="0" step="0.50" placeholder="Default" value="${notesData.custom_hourly_rate_pence ? (notesData.custom_hourly_rate_pence / 100).toFixed(2) : ''}" style="width:100px">
+              <span style="font-size:0.78rem;color:var(--muted)">/hr</span>
+            </div>
+            <div style="font-size:0.72rem;color:var(--muted);margin-top:2px">Leave blank for standard school rate</div>
+          </div>
         </div>
         <button class="btn-save-notes" id="save-notes-btn" onclick="saveLearnerNotes()">Save notes</button>
       </div>
@@ -544,6 +559,8 @@ async function saveLearnerNotes() {
   const btn = document.getElementById('save-notes-btn');
   const notes = document.getElementById('detail-notes-text').value.trim();
   const testDate = document.getElementById('detail-test-date').value || null;
+  const rateInput = document.getElementById('detail-hourly-rate').value;
+  const customHourlyRatePence = rateInput !== '' ? Math.round(parseFloat(rateInput) * 100) : null;
 
   btn.disabled = true; btn.textContent = 'Saving…';
 
@@ -551,7 +568,7 @@ async function saveLearnerNotes() {
     const res = await fetch('/api/instructor?action=update-learner-notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ learner_id: currentDetailLearnerId, notes: notes || null, test_date: testDate })
+      body: JSON.stringify({ learner_id: currentDetailLearnerId, notes: notes || null, test_date: testDate, custom_hourly_rate_pence: customHourlyRatePence })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
@@ -561,6 +578,7 @@ async function saveLearnerNotes() {
     if (cached) {
       cached.instructor_notes = notes || null;
       cached.test_date = testDate;
+      cached.custom_hourly_rate_pence = customHourlyRatePence;
     }
 
     showToast('Notes saved');

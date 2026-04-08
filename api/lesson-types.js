@@ -49,6 +49,7 @@ module.exports = async (req, res) => {
 };
 
 // Public — active lesson types
+// Optional: ?learner_id=X&instructor_id=Y to apply per-learner custom hourly rate
 async function handleList(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -59,6 +60,23 @@ async function handleList(req, res) {
       WHERE active = true AND school_id = ${schoolId}
       ORDER BY sort_order, id
     `;
+
+    // If learner + instructor provided, check for custom hourly rate override
+    const learnerId = parseInt(req.query.learner_id);
+    const instructorId = parseInt(req.query.instructor_id);
+    if (learnerId && instructorId) {
+      const [custom] = await sql`
+        SELECT custom_hourly_rate_pence FROM instructor_learner_notes
+        WHERE instructor_id = ${instructorId} AND learner_id = ${learnerId}
+      `;
+      if (custom?.custom_hourly_rate_pence) {
+        const rate = custom.custom_hourly_rate_pence;
+        for (const lt of rows) {
+          lt.price_pence = Math.round(rate * lt.duration_minutes / 60);
+        }
+      }
+    }
+
     return res.json({ ok: true, lesson_types: rows });
   } catch (err) {
     reportError('/api/lesson-types?action=list', err);

@@ -38,7 +38,7 @@ async function handleList(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = parseInt(req.query.school_id) || 1;
     const instructors = await sql`
-      SELECT id, name, email, phone, bio, photo_url, active, created_at
+      SELECT id, name, email, phone, bio, photo_url, active, slug, created_at
       FROM instructors
       WHERE active = true
         AND school_id = ${schoolId}

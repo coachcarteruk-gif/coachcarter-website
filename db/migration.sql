@@ -902,6 +902,7 @@ ALTER TABLE instructor_learner_notes ADD COLUMN IF NOT EXISTS school_id INTEGER 
 UPDATE instructor_learner_notes SET school_id = 1 WHERE school_id IS NULL;
 ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET NOT NULL;
 ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET DEFAULT 1;
+ALTER TABLE instructor_learner_notes ADD COLUMN IF NOT EXISTS custom_hourly_rate_pence INTEGER;
 
 -- 8. instructor_payouts
 ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
@@ -1033,6 +1034,15 @@ UPDATE admin_users SET school_id = 1 WHERE school_id IS NULL AND role = 'admin';
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS onboarding_complete BOOLEAN DEFAULT FALSE;
 -- Backfill existing instructors as complete
 UPDATE instructors SET onboarding_complete = TRUE WHERE onboarding_complete IS NULL OR onboarding_complete = FALSE;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- INSTRUCTOR BOOKING SLUG (friendly URLs: /book/fraser)
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS slug TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_instructors_slug ON instructors (slug) WHERE slug IS NOT NULL;
+-- Backfill slugs from first name (lowercase, alphanumeric + hyphens only)
+UPDATE instructors SET slug = LOWER(REGEXP_REPLACE(SPLIT_PART(name, ' ', 1), '[^a-zA-Z0-9]', '', 'g'))
+  WHERE slug IS NULL AND name IS NOT NULL;
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- GDPR: COOKIE CONSENTS

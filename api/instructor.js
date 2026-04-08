@@ -740,7 +740,7 @@ async function handleProfile(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [profile] = await sql`
-      SELECT id, name, email, phone, bio, photo_url, active, created_at,
+      SELECT id, name, email, phone, bio, photo_url, active, slug, created_at,
              COALESCE(buffer_minutes, 30) AS buffer_minutes,
              COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
              adi_grade, pass_rate, years_experience,
@@ -1747,13 +1747,14 @@ async function handleMyLearners(req, res) {
         MAX(lb.scheduled_date)::text AS last_lesson_date,
         MIN(lb.scheduled_date)::text AS first_lesson_date,
         iln.notes AS instructor_notes,
-        iln.test_date::text AS test_date
+        iln.test_date::text AS test_date,
+        iln.custom_hourly_rate_pence
       FROM learner_users lu
       JOIN lesson_bookings lb ON lb.learner_id = lu.id
       LEFT JOIN instructor_learner_notes iln ON iln.learner_id = lu.id AND iln.instructor_id = ${instructor.id}
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.school_id = ${schoolId}
-      GROUP BY lu.id, iln.notes, iln.test_date
+      GROUP BY lu.id, iln.notes, iln.test_date, iln.custom_hourly_rate_pence
       ORDER BY MAX(lb.scheduled_date) DESC
     `;
 
@@ -1862,11 +1863,11 @@ async function handleLearnerNotes(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const [row] = await sql`
-      SELECT notes, test_date::text
+      SELECT notes, test_date::text, custom_hourly_rate_pence
       FROM instructor_learner_notes
       WHERE instructor_id = ${instructor.id} AND learner_id = ${learner_id}
     `;
-    return res.json({ notes: row?.notes || '', test_date: row?.test_date || null });
+    return res.json({ notes: row?.notes || '', test_date: row?.test_date || null, custom_hourly_rate_pence: row?.custom_hourly_rate_pence || null });
   } catch (err) {
     console.error('learner-notes error:', err);
     reportError('/api/instructor', err);
@@ -1883,16 +1884,19 @@ async function handleUpdateLearnerNotes(req, res) {
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { learner_id, notes, test_date } = req.body;
+  const { learner_id, notes, test_date, custom_hourly_rate_pence } = req.body;
   if (!learner_id) return res.status(400).json({ error: 'learner_id required' });
+
+  const ratePence = custom_hourly_rate_pence != null && custom_hourly_rate_pence !== '' ? parseInt(custom_hourly_rate_pence) : null;
+  if (ratePence != null && (isNaN(ratePence) || ratePence < 0)) return res.status(400).json({ error: 'Invalid hourly rate' });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
     await sql`
-      INSERT INTO instructor_learner_notes (instructor_id, learner_id, notes, test_date, updated_at)
-      VALUES (${instructor.id}, ${learner_id}, ${notes || null}, ${test_date || null}, NOW())
+      INSERT INTO instructor_learner_notes (instructor_id, learner_id, notes, test_date, custom_hourly_rate_pence, updated_at)
+      VALUES (${instructor.id}, ${learner_id}, ${notes || null}, ${test_date || null}, ${ratePence}, NOW())
       ON CONFLICT (instructor_id, learner_id)
-      DO UPDATE SET notes = ${notes || null}, test_date = ${test_date || null}, updated_at = NOW()
+      DO UPDATE SET notes = ${notes || null}, test_date = ${test_date || null}, custom_hourly_rate_pence = ${ratePence}, updated_at = NOW()
     `;
     return res.json({ ok: true });
   } catch (err) {
@@ -1936,11 +1940,15 @@ async function handleEarningsWeek(req, res) {
         lb.status,
         lu.name AS learner_name,
         lt.name AS lesson_type_name,
-        COALESCE(lt.price_pence, 8250) AS price_pence,
+        CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL
+          THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
+          ELSE COALESCE(lt.price_pence, 8250)
+        END AS price_pence,
         COALESCE(lt.duration_minutes, 90) AS duration_minutes
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
         AND lb.scheduled_date >= ${weekRow.week_start}

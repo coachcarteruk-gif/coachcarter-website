@@ -137,6 +137,7 @@
 <script>
   let token = null;
   let currentProfileId = null;
+  let currentProfileSlug = null;
 
   function init() {
     const session = ccAuth.getAuth();
@@ -154,6 +155,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       currentProfileId = data.instructor.id;
+      currentProfileSlug = data.instructor.slug;
       renderProfile(data.instructor);
     } catch (err) {
       document.getElementById('profileContent').innerHTML =
@@ -407,7 +409,8 @@
       if (!container) return;
 
       // Instructor-specific link (shows only this instructor's slots)
-      var myUrl = window.location.origin + '/learner/book.html?instructor=' + currentProfileId;
+      var slug = currentProfileSlug || currentProfileId;
+      var myUrl = window.location.origin + '/book/' + slug;
       var html = '<div style="margin-bottom:16px">'
         + '<div style="font-weight:700;font-size:0.95rem;margin-bottom:6px">Your booking page</div>'
         + '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'
@@ -427,7 +430,7 @@
 
       html += '<div style="font-weight:700;font-size:0.95rem;margin-bottom:6px">By lesson type</div>';
       html += types.map(function(lt) {
-        var url = window.location.origin + '/learner/book.html?instructor=' + currentProfileId + '&type=' + encodeURIComponent(lt.slug);
+        var url = window.location.origin + '/book/' + slug + '?type=' + encodeURIComponent(lt.slug);
         return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'
           + '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + lt.colour + ';flex-shrink:0"></span>'
           + '<div style="flex:1;min-width:0">'

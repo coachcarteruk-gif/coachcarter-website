@@ -721,8 +721,13 @@ function init() {
     window.history.replaceState({}, '', '/learner/book.html');
   }
 
-  // Pre-select instructor from URL param (e.g. ?instructor=4)
-  const preselectedInstructorId = params.get('instructor');
+  // Pre-select instructor from URL param (e.g. ?instructor=4) or /book/:slug path
+  let preselectedInstructorId = params.get('instructor');
+  let preselectedInstructorSlug = null;
+  const bookPathMatch = window.location.pathname.match(/^\/book\/([^/]+)$/);
+  if (bookPathMatch) {
+    preselectedInstructorSlug = decodeURIComponent(bookPathMatch[1]).toLowerCase();
+  }
 
   // Wire up modal buttons (must work for both guest and authenticated users)
   document.getElementById('bookModalClose').onclick = closeBookModal;
@@ -753,15 +758,22 @@ function init() {
 
   const isGuest = !token;
 
+  function preselectInstructor() {
+    const sel = document.getElementById('instructorFilter');
+    // Resolve slug from /book/:slug path to instructor ID
+    if (preselectedInstructorSlug && !preselectedInstructorId && instructors.length) {
+      const match = instructors.find(i => i.slug === preselectedInstructorSlug);
+      if (match) preselectedInstructorId = String(match.id);
+    }
+    if (preselectedInstructorId && sel.querySelector(`option[value="${preselectedInstructorId}"]`)) {
+      sel.value = preselectedInstructorId;
+    }
+  }
+
   if (!token) {
     Promise.all([loadInstructors(), loadLessonTypes()])
       .then(() => {
-        if (preselectedInstructorId) {
-          const sel = document.getElementById('instructorFilter');
-          if (sel.querySelector(`option[value="${preselectedInstructorId}"]`)) {
-            sel.value = preselectedInstructorId;
-          }
-        }
+        preselectInstructor();
         initFeed();
         window.posthog && posthog.capture('booking_page_viewed', { is_guest: true, has_type_preselect: !!preselectedTypeSlug });
       });
@@ -770,12 +782,7 @@ function init() {
 
   Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile(), loadLessonTypes()])
     .then(async () => {
-      if (preselectedInstructorId) {
-        const sel = document.getElementById('instructorFilter');
-        if (sel.querySelector(`option[value="${preselectedInstructorId}"]`)) {
-          sel.value = preselectedInstructorId;
-        }
-      }
+      preselectInstructor();
       initFeed();
       showPostcodePromptIfNeeded();
 
@@ -845,7 +852,16 @@ function updateCreditBadge() {
 // ─── Lesson Types ───────────────────────────────────────────────────────────
 async function loadLessonTypes() {
   try {
-    const res = await fetch('/api/lesson-types?action=list');
+    let url = '/api/lesson-types?action=list';
+    // Pass learner + instructor context for per-learner custom rate
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const instrId = document.getElementById('instructorFilter')?.value;
+        if (payload.id && instrId) url += '&learner_id=' + payload.id + '&instructor_id=' + instrId;
+      } catch (e) { /* ignore JWT parse errors */ }
+    }
+    const res = await fetch(url);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     lessonTypes = data.lesson_types || [];
@@ -1042,7 +1058,7 @@ function getLearnerPostcode() {
 }
 
 // ─── Feed controls ──────────────────────────────────────────────────────────
-function onFilterChange() { loadedRanges = []; slotCache = {}; initFeed(); }
+function onFilterChange() { loadedRanges = []; slotCache = {}; loadLessonTypes(); initFeed(); }
 
 async function initFeed() {
   feedFrom = new Date(); feedFrom.setHours(0,0,0,0);

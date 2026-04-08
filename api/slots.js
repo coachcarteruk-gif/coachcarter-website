@@ -1007,8 +1007,17 @@ async function handleCheckoutSlot(req, res) {
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const durationMins = lessonType.duration_minutes;
-    const pricePence   = lessonType.price_pence;
+    let pricePence     = lessonType.price_pence;
     const durationStr  = formatHours(durationMins);
+
+    // Check for per-learner custom hourly rate
+    const [customRate] = await sql`
+      SELECT custom_hourly_rate_pence FROM instructor_learner_notes
+      WHERE instructor_id = ${instructor_id} AND learner_id = ${user.id}
+    `;
+    if (customRate?.custom_hourly_rate_pence) {
+      pricePence = Math.round(customRate.custom_hourly_rate_pence * durationMins / 60);
+    }
 
     // Validate slot duration matches lesson type
     if (endMins - startMins !== durationMins)
@@ -1191,7 +1200,7 @@ async function handleCheckoutSlotGuest(req, res) {
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const durationMins = lessonType.duration_minutes;
-    const pricePence   = lessonType.price_pence;
+    let pricePence     = lessonType.price_pence;
     const durationStr  = formatHours(durationMins);
 
     if (endMins - startMins !== durationMins)
@@ -1283,6 +1292,15 @@ async function handleCheckoutSlotGuest(req, res) {
           throw insertErr;
         }
       }
+    }
+
+    // Check for per-learner custom hourly rate (existing learners only)
+    const [guestCustomRate] = await sql`
+      SELECT custom_hourly_rate_pence FROM instructor_learner_notes
+      WHERE instructor_id = ${instructor_id} AND learner_id = ${learnerId}
+    `;
+    if (guestCustomRate?.custom_hourly_rate_pence) {
+      pricePence = Math.round(guestCustomRate.custom_hourly_rate_pence * durationMins / 60);
     }
 
     // ── Create Stripe Checkout session ──
