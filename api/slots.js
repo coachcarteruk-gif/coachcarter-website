@@ -63,30 +63,19 @@ const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
 const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
 
 // Look up a lesson type by ID (or return the default 'standard' type)
-async function getLessonType(sql, lessonTypeId) {
+async function getLessonType(sql, lessonTypeId, schoolId) {
   if (lessonTypeId) {
-    const [lt] = await sql`SELECT * FROM lesson_types WHERE id = ${lessonTypeId} AND active = true`;
+    const [lt] = await sql`SELECT * FROM lesson_types WHERE id = ${lessonTypeId} AND active = true AND school_id = ${schoolId}`;
     return lt || null;
   }
   // Default to standard lesson
-  const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = 'standard' AND active = true`;
+  const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = 'standard' AND active = true AND school_id = ${schoolId}`;
   return lt || { id: null, name: 'Standard Lesson', slug: 'standard', duration_minutes: 90, price_pence: 8250, colour: '#3b82f6' };
 }
 
 function formatHours(minutes) {
   const hrs = minutes / 60;
   return hrs % 1 === 0 ? `${hrs} hour${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hours`;
-}
-
-function setCors(res) {
-}
-
-function verifyAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try { return jwt.verify(auth.slice(7), secret); } catch { return null; }
 }
 
 function createTransporter() {
@@ -98,8 +87,13 @@ function createTransporter() {
   });
 }
 
+// verifyAuth delegates to centralised _auth.js
+function verifyAuth(req) {
+  const { requireAuth } = require('./_auth');
+  return requireAuth(req);
+}
+
 module.exports = async (req, res) => {
-  setCors(res);
   const action = req.query.action;
   if (action === 'available')    return handleAvailable(req, res);
   if (action === 'book')         return handleBook(req, res);
@@ -150,7 +144,7 @@ async function handleAvailable(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // 0. Look up lesson type to get duration
-    const lessonType = await getLessonType(sql, lesson_type_id);
+    const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const slotMinutes = lessonType.duration_minutes;
 
@@ -203,6 +197,7 @@ async function handleAvailable(req, res) {
           WHERE scheduled_date BETWEEN ${from} AND ${to}
             AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
             AND instructor_id = ${instructor_id}
+            AND school_id = ${schoolId}
         `
       : await sql`
           SELECT instructor_id,
@@ -213,6 +208,7 @@ async function handleAvailable(req, res) {
           FROM lesson_bookings
           WHERE scheduled_date BETWEEN ${from} AND ${to}
             AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+            AND school_id = ${schoolId}
         `;
 
     // 2b. Also load active slot reservations (held during Stripe checkout)
@@ -228,6 +224,7 @@ async function handleAvailable(req, res) {
             WHERE scheduled_date BETWEEN ${from} AND ${to}
               AND expires_at > NOW()
               AND instructor_id = ${instructor_id}
+              AND school_id = ${schoolId}
           `
         : await sql`
             SELECT instructor_id,
@@ -237,6 +234,7 @@ async function handleAvailable(req, res) {
             FROM slot_reservations
             WHERE scheduled_date BETWEEN ${from} AND ${to}
               AND expires_at > NOW()
+              AND school_id = ${schoolId}
           `;
     } catch (e) {
       // Table may not exist yet — that's fine, no reservations
@@ -256,6 +254,7 @@ async function handleAvailable(req, res) {
               AND status = 'pending'
               AND expires_at > NOW()
               AND instructor_id = ${instructor_id}
+              AND school_id = ${schoolId}
           `
         : await sql`
             SELECT instructor_id,
@@ -266,6 +265,7 @@ async function handleAvailable(req, res) {
             WHERE scheduled_date BETWEEN ${from} AND ${to}
               AND status = 'pending'
               AND expires_at > NOW()
+              AND school_id = ${schoolId}
           `;
     } catch (e) {
       // Table may not exist yet
@@ -279,15 +279,19 @@ async function handleAvailable(req, res) {
     try {
       blackouts = instructor_id
         ? await sql`
-            SELECT instructor_id, blackout_date::text AS start_date, end_date::text
-            FROM instructor_blackout_dates
-            WHERE blackout_date <= ${to} AND end_date >= ${from}
-              AND instructor_id = ${instructor_id}
+            SELECT ibd.instructor_id, ibd.blackout_date::text AS start_date, ibd.end_date::text
+            FROM instructor_blackout_dates ibd
+            JOIN instructors i ON i.id = ibd.instructor_id
+            WHERE ibd.blackout_date <= ${to} AND ibd.end_date >= ${from}
+              AND ibd.instructor_id = ${instructor_id}
+              AND i.school_id = ${schoolId}
           `
         : await sql`
-            SELECT instructor_id, blackout_date::text AS start_date, end_date::text
-            FROM instructor_blackout_dates
-            WHERE blackout_date <= ${to} AND end_date >= ${from}
+            SELECT ibd.instructor_id, ibd.blackout_date::text AS start_date, ibd.end_date::text
+            FROM instructor_blackout_dates ibd
+            JOIN instructors i ON i.id = ibd.instructor_id
+            WHERE ibd.blackout_date <= ${to} AND ibd.end_date >= ${from}
+              AND i.school_id = ${schoolId}
           `;
     } catch (e) {
       console.warn('Blackout query failed (end_date column may be missing — run migration):', e.message);
@@ -295,15 +299,19 @@ async function handleAvailable(req, res) {
       try {
         blackouts = instructor_id
           ? await sql`
-              SELECT instructor_id, blackout_date::text AS start_date, blackout_date::text AS end_date
-              FROM instructor_blackout_dates
-              WHERE blackout_date BETWEEN ${from} AND ${to}
-                AND instructor_id = ${instructor_id}
+              SELECT ibd.instructor_id, ibd.blackout_date::text AS start_date, ibd.blackout_date::text AS end_date
+              FROM instructor_blackout_dates ibd
+              JOIN instructors i ON i.id = ibd.instructor_id
+              WHERE ibd.blackout_date BETWEEN ${from} AND ${to}
+                AND ibd.instructor_id = ${instructor_id}
+                AND i.school_id = ${schoolId}
             `
           : await sql`
-              SELECT instructor_id, blackout_date::text AS start_date, blackout_date::text AS end_date
-              FROM instructor_blackout_dates
-              WHERE blackout_date BETWEEN ${from} AND ${to}
+              SELECT ibd.instructor_id, ibd.blackout_date::text AS start_date, ibd.blackout_date::text AS end_date
+              FROM instructor_blackout_dates ibd
+              JOIN instructors i ON i.id = ibd.instructor_id
+              WHERE ibd.blackout_date BETWEEN ${from} AND ${to}
+                AND i.school_id = ${schoolId}
             `;
       } catch (e2) {
         // Table genuinely doesn't exist
@@ -315,17 +323,21 @@ async function handleAvailable(req, res) {
     try {
       externalEvents = instructor_id
         ? await sql`
-            SELECT instructor_id, event_date::text AS event_date,
-                   start_time::text AS start_time, end_time::text AS end_time, is_all_day
-            FROM instructor_external_events
-            WHERE event_date BETWEEN ${from} AND ${to}
-              AND instructor_id = ${instructor_id}
+            SELECT iee.instructor_id, iee.event_date::text AS event_date,
+                   iee.start_time::text AS start_time, iee.end_time::text AS end_time, iee.is_all_day
+            FROM instructor_external_events iee
+            JOIN instructors i ON i.id = iee.instructor_id
+            WHERE iee.event_date BETWEEN ${from} AND ${to}
+              AND iee.instructor_id = ${instructor_id}
+              AND i.school_id = ${schoolId}
           `
         : await sql`
-            SELECT instructor_id, event_date::text AS event_date,
-                   start_time::text AS start_time, end_time::text AS end_time, is_all_day
-            FROM instructor_external_events
-            WHERE event_date BETWEEN ${from} AND ${to}
+            SELECT iee.instructor_id, iee.event_date::text AS event_date,
+                   iee.start_time::text AS start_time, iee.end_time::text AS end_time, iee.is_all_day
+            FROM instructor_external_events iee
+            JOIN instructors i ON i.id = iee.instructor_id
+            WHERE iee.event_date BETWEEN ${from} AND ${to}
+              AND i.school_id = ${schoolId}
           `;
     } catch (e) {
       // Table may not exist yet
@@ -541,7 +553,7 @@ async function handleAvailable(req, res) {
   } catch (err) {
     console.error('slots available error:', err);
     reportError('/api/slots', err);
-    return res.status(500).json({ error: 'Failed to generate slots', details: err.message });
+    return res.status(500).json({ error: 'Failed to generate slots', details: 'Internal server error' });
   }
 }
 
@@ -601,7 +613,7 @@ async function handleBook(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // 0. Look up lesson type
-    const lessonType = await getLessonType(sql, lesson_type_id);
+    const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const durationMins = lessonType.duration_minutes;
 
@@ -612,7 +624,7 @@ async function handleBook(req, res) {
     // 1. Check learner has enough hours
     const [learner] = await sql`
       SELECT id, name, email, phone, credit_balance, balance_minutes, pickup_address
-      FROM learner_users WHERE id = ${user.id}
+      FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}
     `;
     if (!learner)
       return res.status(404).json({ error: 'Learner account not found' });
@@ -620,7 +632,7 @@ async function handleBook(req, res) {
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
       SELECT id, name, email, phone, max_travel_minutes FROM instructors
-      WHERE id = ${instructor_id} AND active = true
+      WHERE id = ${instructor_id} AND active = true AND school_id = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found or unavailable' });
@@ -956,7 +968,7 @@ async function handleBook(req, res) {
   } catch (err) {
     console.error('slots book error:', err);
     reportError('/api/slots', err);
-    return res.status(500).json({ error: 'Booking failed', details: err.message });
+    return res.status(500).json({ error: 'Booking failed', details: 'Internal server error' });
   }
 }
 
@@ -992,7 +1004,7 @@ async function handleCheckoutSlot(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // 0. Look up lesson type for pricing
-    const lessonType = await getLessonType(sql, lesson_type_id);
+    const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const durationMins = lessonType.duration_minutes;
     const pricePence   = lessonType.price_pence;
@@ -1107,7 +1119,7 @@ async function handleCheckoutSlot(req, res) {
   } catch (err) {
     console.error('checkout-slot error:', err);
     reportError('/api/slots', err);
-    return res.status(500).json({ error: 'Failed to create checkout', details: err.message });
+    return res.status(500).json({ error: 'Failed to create checkout', details: 'Internal server error' });
   }
 }
 
@@ -1176,7 +1188,7 @@ async function handleCheckoutSlotGuest(req, res) {
         return res.status(400).json({ error: 'This slot has already started. Please choose a later time.' });
     }
 
-    const lessonType = await getLessonType(sql, lesson_type_id);
+    const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const durationMins = lessonType.duration_minutes;
     const pricePence   = lessonType.price_pence;
@@ -1327,7 +1339,7 @@ async function handleCheckoutSlotGuest(req, res) {
   } catch (err) {
     console.error('checkout-slot-guest error:', err);
     reportError('/api/slots?action=checkout-slot-guest', err);
-    return res.status(500).json({ error: 'Failed to create checkout', details: err.message });
+    return res.status(500).json({ error: 'Failed to create checkout', details: 'Internal server error' });
   }
 }
 
@@ -1618,7 +1630,7 @@ async function handleCancel(req, res) {
   } catch (err) {
     console.error('slots cancel error:', err);
     reportError('/api/slots', err);
-    return res.status(500).json({ error: 'Cancellation failed', details: err.message });
+    return res.status(500).json({ error: 'Cancellation failed', details: 'Internal server error' });
   }
 }
 
@@ -1866,7 +1878,7 @@ async function handleReschedule(req, res) {
   } catch (err) {
     console.error('slots reschedule error:', err);
     reportError('/api/slots', err);
-    return res.status(500).json({ error: 'Reschedule failed', details: err.message });
+    return res.status(500).json({ error: 'Reschedule failed', details: 'Internal server error' });
   }
 }
 
@@ -1936,7 +1948,7 @@ async function handleMyBookings(req, res) {
   } catch (err) {
     console.error('slots my-bookings error:', err);
     reportError('/api/slots', err);
-    return res.status(500).json({ error: 'Failed to load bookings', details: err.message });
+    return res.status(500).json({ error: 'Failed to load bookings', details: 'Internal server error' });
   }
 }
 
@@ -2004,7 +2016,7 @@ async function handleSeriesInfo(req, res) {
   } catch (err) {
     console.error('slots series-info error:', err);
     reportError('/api/slots', err);
-    return res.status(500).json({ error: 'Failed to load series info', details: err.message });
+    return res.status(500).json({ error: 'Failed to load series info', details: 'Internal server error' });
   }
 }
 

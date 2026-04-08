@@ -270,7 +270,7 @@ module.exports = async (req, res) => {
       } catch (err) {
         console.error('Stripe checkout error:', err);
         reportError('/api/advisor', err);
-        return res.status(500).json({ error: 'Failed to create checkout session', details: err.message });
+        return res.status(500).json({ error: 'Failed to create checkout session', details: 'Internal server error' });
       }
     }
 

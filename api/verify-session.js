@@ -64,6 +64,6 @@ module.exports = async (req, res) => {
   } catch (err) {
     console.error('Error verifying session:', err);
     reportError('/api/verify-session', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 };

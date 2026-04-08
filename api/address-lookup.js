@@ -1,17 +1,9 @@
-const jwt = require('jsonwebtoken');
-
-function verifyAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try { return jwt.verify(auth.slice(7), secret); } catch { return null; }
-}
+const { requireAuth } = require('./_auth');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const user = verifyAuth(req);
+  const user = requireAuth(req, { roles: ['learner', 'instructor', 'admin'] });
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
   const postcode = (req.query.postcode || '').trim().replace(/\s+/g, '');

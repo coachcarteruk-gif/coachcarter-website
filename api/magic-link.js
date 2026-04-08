@@ -86,10 +86,13 @@ async function handleSendLink(req, res) {
       }
     }
 
+    // Derive school_id from request (login pages pass it as a query/body param)
+    const schoolId = parseInt(req.body.school_id || req.query.school_id) || 1;
+
     // Store the token
     await sql`
-      INSERT INTO magic_link_tokens (token, email, phone, method, expires_at)
-      VALUES (${token}, ${cleanEmail}, ${cleanPhone}, ${method || 'email'}, ${expiresAt})`;
+      INSERT INTO magic_link_tokens (token, email, phone, method, expires_at, school_id)
+      VALUES (${token}, ${cleanEmail}, ${cleanPhone}, ${method || 'email'}, ${expiresAt}, ${schoolId})`;
 
     // Clean up expired tokens periodically
     await sql`DELETE FROM magic_link_tokens WHERE expires_at < NOW() OR used = true`;
@@ -223,9 +226,10 @@ async function handleVerify(req, res) {
 
         // Auto-create new learner account
         isNewUser = true;
+        const newSchoolId = linkRecord.school_id || 1;
         const newRows = await sql`
-          INSERT INTO learner_users (email, credit_balance)
-          VALUES (${linkRecord.email}, ${FREE_TRIAL_CREDITS})
+          INSERT INTO learner_users (email, credit_balance, school_id)
+          VALUES (${linkRecord.email}, ${FREE_TRIAL_CREDITS}, ${newSchoolId})
           RETURNING *`;
         user = newRows[0];
 
@@ -242,9 +246,10 @@ async function handleVerify(req, res) {
         user = existing[0];
       } else {
         isNewUser = true;
+        const newSchoolId2 = linkRecord.school_id || 1;
         const newRows = await sql`
-          INSERT INTO learner_users (phone, credit_balance)
-          VALUES (${linkRecord.phone}, ${FREE_TRIAL_CREDITS})
+          INSERT INTO learner_users (phone, credit_balance, school_id)
+          VALUES (${linkRecord.phone}, ${FREE_TRIAL_CREDITS}, ${newSchoolId2})
           RETURNING *`;
         user = newRows[0];
 
@@ -330,9 +335,10 @@ async function handleVerifyCode(req, res) {
       user = existing[0];
     } else {
       isNewUser = true;
+      const smsSchoolId = linkRecord.school_id || 1;
       const newRows = await sql`
-        INSERT INTO learner_users (phone, email, credit_balance)
-        VALUES (${linkRecord.phone}, ${linkRecord.email || null}, ${FREE_TRIAL_CREDITS})
+        INSERT INTO learner_users (phone, email, credit_balance, school_id)
+        VALUES (${linkRecord.phone}, ${linkRecord.email || null}, ${FREE_TRIAL_CREDITS}, ${smsSchoolId})
         RETURNING *`;
       user = newRows[0];
 

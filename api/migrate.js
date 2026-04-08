@@ -48,7 +48,7 @@ module.exports = async function handler(req, res) {
     });
   } catch (err) {
     reportError('/api/migrate', err);
-    return res.status(500).json({ error: 'Migration failed', details: err.message });
+    return res.status(500).json({ error: 'Migration failed', details: 'Internal server error' });
   }
 };
 

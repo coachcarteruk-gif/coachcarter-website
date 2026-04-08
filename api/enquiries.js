@@ -10,8 +10,8 @@
 const { Resend }     = require('resend');
 const nodemailer     = require('nodemailer');
 const { neon }       = require('@neondatabase/serverless');
-const jwt            = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
+const { requireAuth, getSchoolId } = require('./_auth');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -22,67 +22,48 @@ const transporter = nodemailer.createTransport({
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
 });
 
-// Admin auth — checks JWT or ADMIN_SECRET
-function verifyAdmin(req) {
-  const auth = req.headers.authorization;
-  if (auth && auth.startsWith('Bearer ')) {
-    try {
-      const decoded = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
-      if (decoded.role === 'admin' || decoded.role === 'superadmin') return true;
-      if (decoded.role === 'instructor' && decoded.isAdmin === true) return true;
-    } catch {}
-  }
-  const secret = process.env.ADMIN_SECRET;
-  if (!secret) return false;
-  const provided = req.body?.admin_secret || req.headers['x-admin-secret'];
-  return provided === secret;
-}
-
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Credentials', true);
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, X-Admin-Secret');
-}
-
 module.exports = async (req, res) => {
-  setCors(res);
   const action = req.query.action;
 
   if (action === 'submit')        return handleSubmit(req, res);
 
   // Admin-only endpoints
-  if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorised — admin access required' });
-  if (action === 'list')          return handleList(req, res);
-  if (action === 'get')           return handleGet(req, res);
-  if (action === 'update-status') return handleUpdateStatus(req, res);
+  const admin = requireAuth(req, { roles: ['admin'] });
+  if (!admin) return res.status(401).json({ error: 'Unauthorised — admin access required' });
+  const schoolId = getSchoolId(admin, req);
+
+  if (action === 'list')          return handleList(req, res, schoolId);
+  if (action === 'get')           return handleGet(req, res, schoolId);
+  if (action === 'update-status') return handleUpdateStatus(req, res, schoolId);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
 
 // ── GET /api/enquiries?action=list ────────────────────────────────────────────
-async function handleList(req, res) {
+async function handleList(req, res, schoolId) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
     const enquiries = await sql`
-      SELECT * FROM enquiries ORDER BY submitted_at DESC LIMIT 50
+      SELECT * FROM enquiries WHERE school_id = ${schoolId} ORDER BY submitted_at DESC LIMIT 50
     `;
     return res.json({ enquiries });
   } catch (err) {
     console.error('enquiries list error:', err);
     reportError('/api/enquiries', err);
-    return res.status(500).json({ error: 'Database error', details: err.message });
+    return res.status(500).json({ error: 'Database error' });
   }
 }
 
 // ── GET /api/enquiries?action=get&id=123 ──────────────────────────────────────
-async function handleGet(req, res) {
+async function handleGet(req, res, schoolId) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const { id } = req.query;
   if (!id) return res.status(400).json({ error: 'ID required' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const [enquiry] = await sql`SELECT * FROM enquiries WHERE id = ${id}`;
+    const [enquiry] = await sql`SELECT * FROM enquiries WHERE id = ${id} AND school_id = ${schoolId}`;
     if (!enquiry) return res.status(404).json({ error: 'Not found' });
     return res.json({ enquiry });
   } catch (err) {
@@ -100,20 +81,38 @@ async function handleSubmit(req, res) {
   if (!name || !email || !phone || !enquiryType)
     return res.status(400).json({ error: 'Missing required fields' });
 
+  // Rate limiting: max 5 submissions per IP per hour
+  const sql = neon(process.env.POSTGRES_URL);
+  const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  const rateLimitKey = `enquiry_submit:${clientIp}`;
+  try {
+    await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
+    const [existing] = await sql`SELECT request_count FROM rate_limits WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+    if (existing && existing.request_count >= 5) {
+      return res.status(429).json({ error: 'Too many submissions. Please try again later.' });
+    }
+    if (existing) {
+      await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+    } else {
+      await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${rateLimitKey}, 1, NOW())`;
+    }
+  } catch (e) { /* rate limit check failed — allow request through */ }
+
+  const schoolId = parseInt(req.body.school_id) || 1;
+
   let dbSaved = false;
   let enquiryId;
   let sheetsSaved = false;
 
   // Save to DB
   try {
-    const sql = neon(process.env.POSTGRES_URL);
-
     const result = await sql`
-      INSERT INTO enquiries (name, email, phone, enquiry_type, message, marketing_consent, submitted_at)
+      INSERT INTO enquiries (name, email, phone, enquiry_type, message, marketing_consent, submitted_at, school_id)
       VALUES (
         ${name}, ${email}, ${phone}, ${enquiryType},
         ${message || null}, ${marketing || false},
-        ${submittedAt || new Date().toISOString()}
+        ${submittedAt || new Date().toISOString()},
+        ${schoolId}
       )
       RETURNING id
     `;
@@ -229,13 +228,13 @@ async function handleSubmit(req, res) {
 }
 
 // ── POST /api/enquiries?action=update-status ──────────────────────────────────
-async function handleUpdateStatus(req, res) {
+async function handleUpdateStatus(req, res, schoolId) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { id, status } = req.body;
   if (!id || !status) return res.status(400).json({ error: 'ID and status required' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    await sql`UPDATE enquiries SET status = ${status} WHERE id = ${id}`;
+    await sql`UPDATE enquiries SET status = ${status} WHERE id = ${id} AND school_id = ${schoolId}`;
     return res.json({ success: true });
   } catch (err) {
     console.error('enquiries update-status error:', err);
