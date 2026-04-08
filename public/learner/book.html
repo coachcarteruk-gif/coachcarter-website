@@ -692,6 +692,7 @@ let pendingSlot   = null;
 let pendingCancel = null;
 let preselectedTypeSlug = null;
 let preselectedInstructorSlug = null;
+let preselectedTypeId = null;
 let pendingReschedule = null; // { bookingId, date, start, end, instructorName, instructorId }
 let lastBookingId = null;
 let learnerProfile = { phone: '', pickup_address: '' };
@@ -708,7 +709,7 @@ function init() {
   // Handle URL params
   const params = new URLSearchParams(window.location.search);
   preselectedTypeSlug = params.get('type'); // ?type=standard or ?type=2hr
-  const preselectedTypeId = params.get('type_id'); // ?type_id=3 (from reschedule)
+  preselectedTypeId = params.get('type_id'); // ?type_id=3 (from reschedule)
   const rescheduleBookingId = params.get('reschedule'); // ?reschedule=BOOKING_ID
   if (params.get('paid') === '1') {
     const paidMsg = token
