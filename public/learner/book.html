@@ -1020,7 +1020,11 @@ async function saveProfileFieldsFromModal() {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify(body)
     });
-    if (!res.ok) throw new Error('Failed to save profile');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showToast(data.error || 'Could not save your details. Please try again.', 'error');
+      return false;
+    }
     // Update local profile so future bookings don't show the fields again
     if (body.phone) learnerProfile.phone = body.phone;
     if (body.pickup_address) learnerProfile.pickup_address = body.pickup_address;
