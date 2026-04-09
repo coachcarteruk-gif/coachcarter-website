@@ -88,6 +88,7 @@ module.exports = async (req, res) => {
   if (action === 'verify')          return handleVerify(req, res);
   if (action === 'dashboard-stats') return handleDashboardStats(req, res);
   if (action === 'all-bookings')    return handleAllBookings(req, res);
+  if (action === 'edit-booking')    return handleEditBooking(req, res);
   if (action === 'mark-complete')   return handleMarkComplete(req, res);
   if (action === 'all-instructors')   return handleAllInstructors(req, res);
   if (action === 'create-instructor') return handleCreateInstructor(req, res);
@@ -321,6 +322,11 @@ async function handleAllBookings(req, res) {
         lb.credit_returned,
         lb.notes,
         lb.created_at,
+        lb.lesson_type_id,
+        lb.minutes_deducted,
+        lb.edited_at,
+        lt.name AS lesson_type_name,
+        COALESCE(lt.duration_minutes, 90) AS duration_minutes,
         lu.id   AS learner_id,
         lu.name AS learner_name,
         lu.email AS learner_email,
@@ -331,6 +337,7 @@ async function handleAllBookings(req, res) {
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       JOIN instructors i    ON i.id  = lb.instructor_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.school_id = ${schoolId}
         AND (${statusFilter}::text IS NULL OR lb.status = ${statusFilter})
         AND (${instructorFilter}::integer IS NULL OR lb.instructor_id = ${instructorFilter})
@@ -345,6 +352,150 @@ async function handleAllBookings(req, res) {
     console.error('admin all-bookings error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load bookings', details: 'Internal server error' });
+  }
+}
+
+// ── POST /api/admin?action=edit-booking ──────────────────────────────────────
+// Body: { booking_id, scheduled_date?, start_time?, lesson_type_id? }
+async function handleEditBooking(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const { booking_id, scheduled_date, start_time, lesson_type_id } = req.body;
+  if (!booking_id) return res.status(400).json({ error: 'booking_id is required' });
+  if (!scheduled_date && !start_time && !lesson_type_id)
+    return res.status(400).json({ error: 'At least one field to edit is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [booking] = await sql`
+      SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id,
+             lb.scheduled_date::text AS scheduled_date, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
+             lb.lesson_type_id, lb.minutes_deducted, lb.setmore_key,
+             lu.name AS learner_name, lu.email AS learner_email, lu.balance_minutes,
+             i.name AS instructor_name,
+             COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+             COALESCE(lt.duration_minutes, 90) AS type_duration_minutes
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN instructors i ON i.id = lb.instructor_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      WHERE lb.id = ${booking_id} AND lb.school_id = ${schoolId}
+    `;
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== 'confirmed' && booking.status !== 'awaiting_confirmation')
+      return res.status(400).json({ error: `Cannot edit a booking with status "${booking.status}"` });
+
+    // Block lesson type change if already paid out
+    if (lesson_type_id && lesson_type_id !== booking.lesson_type_id) {
+      const [paidOut] = await sql`SELECT id FROM payout_line_items WHERE booking_id = ${booking_id}`;
+      if (paidOut) return res.status(400).json({ error: 'Cannot change lesson type — booking already included in a payout' });
+    }
+
+    let newDate = scheduled_date || booking.scheduled_date;
+    let newStartTime = start_time || String(booking.start_time).slice(0, 5);
+    let newLessonTypeId = lesson_type_id || booking.lesson_type_id;
+    let newDuration = parseInt(booking.type_duration_minutes) || 90;
+
+    if (lesson_type_id && lesson_type_id !== booking.lesson_type_id) {
+      const [newType] = await sql`SELECT duration_minutes FROM lesson_types WHERE id = ${lesson_type_id} AND active = true AND school_id = ${schoolId}`;
+      if (!newType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+      newDuration = newType.duration_minutes;
+    }
+
+    const startParts = newStartTime.split(':').map(Number);
+    const startMins = startParts[0] * 60 + startParts[1];
+    const endMins = startMins + newDuration;
+    const newEndTime = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+
+    // Overlap check with buffer
+    const buffer = parseInt(booking.buffer_minutes) || 30;
+    const [conflict] = await sql`
+      SELECT id FROM lesson_bookings
+      WHERE instructor_id = ${booking.instructor_id}
+        AND scheduled_date = ${newDate}
+        AND id != ${booking_id}
+        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND ${newStartTime}::time < (end_time + (${buffer} || ' minutes')::interval)
+        AND ${newEndTime}::time > start_time
+    `;
+    if (conflict) return res.status(409).json({ error: 'This time conflicts with another booking' });
+
+    // Credit/balance adjustment
+    const oldMinutes = parseInt(booking.minutes_deducted) || 0;
+    const delta = newDuration - oldMinutes;
+    if (delta !== 0 && oldMinutes > 0) {
+      if (delta > 0 && booking.balance_minutes < delta)
+        return res.status(402).json({ error: `Learner has insufficient balance (needs ${delta} more minutes, has ${booking.balance_minutes})` });
+      await sql`UPDATE learner_users SET balance_minutes = balance_minutes - ${delta} WHERE id = ${booking.learner_id}`;
+      await sql`INSERT INTO credit_transactions (learner_id, type, minutes, credits, amount_pence, payment_method, school_id)
+        VALUES (${booking.learner_id}, 'edit_adjustment', ${-delta}, 0, 0, 'edit', ${schoolId})`;
+    }
+
+    await sql`
+      UPDATE lesson_bookings
+      SET scheduled_date = ${newDate}, start_time = ${newStartTime}::time, end_time = ${newEndTime}::time,
+          lesson_type_id = ${newLessonTypeId}, minutes_deducted = ${oldMinutes > 0 ? newDuration : 0},
+          edited_at = NOW(), setmore_key = NULL
+      WHERE id = ${booking_id}
+    `;
+
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email, action: 'edit-booking',
+      targetType: 'booking', targetId: booking_id,
+      details: {
+        old: { date: booking.scheduled_date, start: String(booking.start_time).slice(0,5), lesson_type_id: booking.lesson_type_id },
+        new: { date: newDate, start: newStartTime, lesson_type_id: newLessonTypeId }
+      },
+      schoolId, req
+    });
+
+    // Email learner if time changed
+    const timeChanged = newDate !== booking.scheduled_date ||
+      newStartTime !== String(booking.start_time).slice(0, 5) ||
+      newEndTime !== String(booking.end_time).slice(0, 5);
+
+    if (timeChanged && booking.learner_email) {
+      try {
+        const mailer = createTransporter();
+        const oldDateFmt = new Date(booking.scheduled_date + 'T00:00:00Z')
+          .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+        const newDateFmt = new Date(newDate + 'T00:00:00Z')
+          .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+        const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
+        const durationStr = newDuration >= 60
+          ? (newDuration % 60 === 0 ? (newDuration/60) + ' hour' + (newDuration/60 !== 1 ? 's' : '') : (newDuration/60).toFixed(1) + ' hours')
+          : newDuration + ' mins';
+        await mailer.sendMail({
+          from: 'CoachCarter <system@coachcarter.uk>',
+          to: booking.learner_email,
+          subject: `Lesson updated — now ${newDateFmt} at ${newStartTime}`,
+          html: `<h2>Hi ${firstName},</h2>
+            <p>Your lesson has been updated:</p>
+            <table>
+              <tr><td><strong>Was:</strong></td><td><s>${oldDateFmt} at ${String(booking.start_time).slice(0,5)}</s></td></tr>
+              <tr><td><strong>Now:</strong></td><td>${newDateFmt} at ${newStartTime}</td></tr>
+              <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
+            </table>
+            <p style="margin:28px 0">
+              <a href="https://coachcarter.uk/learner/book.html"
+                 style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                        border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+                View my bookings →
+              </a>
+            </p>`
+        });
+      } catch (emailErr) { console.error('Failed to send edit email:', emailErr); }
+    }
+
+    return res.json({ ok: true, booking_id });
+  } catch (err) {
+    console.error('admin edit-booking error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to edit booking', details: 'Internal server error' });
   }
 }
 

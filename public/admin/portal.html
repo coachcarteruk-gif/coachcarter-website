@@ -915,6 +915,27 @@ body {
   <button class="btn btn-sm" onclick="clearBulkSelection()">Cancel</button>
 </div>
 
+<!-- Edit Booking Modal -->
+<div class="modal-overlay" id="adminEditBookingModal" onclick="if(event.target===this)closeAdminEditBooking()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white,#fff);border-radius:12px;max-width:400px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.15)">
+    <h3 style="margin:0 0 16px;font-size:1.1rem">Edit Booking</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Date</label>
+        <input type="date" id="adminEditDate" class="input" style="width:100%"></div>
+      <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Start time</label>
+        <input type="time" id="adminEditTime" class="input" style="width:100%" step="1800" oninput="updateAdminEditEnd()"></div>
+      <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Lesson type</label>
+        <select id="adminEditType" class="input" style="width:100%" onchange="updateAdminEditEnd()"></select></div>
+      <div style="font-size:0.85rem;color:var(--muted)">End time: <strong id="adminEditEndTime">—</strong></div>
+      <div id="adminEditBalanceInfo" style="font-size:0.82rem;display:none"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">
+      <button class="btn" onclick="closeAdminEditBooking()">Cancel</button>
+      <button class="btn btn-success" id="adminEditSaveBtn" onclick="confirmAdminEditBooking()">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -1489,14 +1510,17 @@ function renderBookings() {
   }
 
   body.innerHTML = filtered.map(b => {
+    const canEdit = b.status === 'confirmed' || b.status === 'awaiting_confirmation';
     const canComplete = b.status === 'confirmed';
+    const typeLabel = b.lesson_type_name ? '<br><span style="font-size:0.78rem;color:var(--muted)">' + esc(b.lesson_type_name) + '</span>' : '';
     return '<tr>' +
       '<td>' + formatDate(b.scheduled_date) + '</td>' +
-      '<td>' + formatTime(b.start_time) + ' – ' + formatTime(b.end_time) + '</td>' +
+      '<td>' + formatTime(b.start_time) + ' – ' + formatTime(b.end_time) + typeLabel + '</td>' +
       '<td><strong>' + esc(b.learner_name) + '</strong><br><span style="font-size:0.8rem;color:var(--muted)">' + esc(b.learner_email) + '</span></td>' +
       '<td>' + esc(b.instructor_name) + '</td>' +
-      '<td>' + statusBadge(b.status) + '</td>' +
-      '<td>' +
+      '<td>' + statusBadge(b.status) + (b.edited_at ? ' <span style="font-size:0.7rem;color:var(--muted)">(edited)</span>' : '') + '</td>' +
+      '<td style="white-space:nowrap">' +
+        (canEdit ? '<button class="btn btn-sm" onclick="openAdminEditBooking(' + b.id + ')" style="margin-right:4px">Edit</button>' : '') +
         (canComplete ? '<button class="btn btn-sm btn-success" onclick="markComplete(' + b.id + ')">Complete</button>' : '') +
       '</td>' +
     '</tr>';
@@ -1514,6 +1538,100 @@ async function markComplete(bookingId) {
     loadBookings();
   } catch (err) {
     toast(err.message, 'error');
+  }
+}
+
+// ── Edit Booking (Admin) ────────────────────────────────────────────────────
+let adminEditBookingId = null;
+let adminEditLessonTypes = [];
+let adminEditOrigMinutes = 0;
+
+async function openAdminEditBooking(bookingId) {
+  const b = allBookings.find(x => x.id === bookingId);
+  if (!b) return;
+  adminEditBookingId = bookingId;
+  adminEditOrigMinutes = parseInt(b.minutes_deducted) || 0;
+
+  document.getElementById('adminEditDate').value = b.scheduled_date;
+  document.getElementById('adminEditTime').value = b.start_time.slice(0, 5);
+
+  // Load lesson types
+  try {
+    const res = await fetch('/api/lesson-types?action=list', { headers: HEADERS });
+    const data = await res.json();
+    adminEditLessonTypes = data.lesson_types || [];
+  } catch { adminEditLessonTypes = []; }
+
+  const sel = document.getElementById('adminEditType');
+  sel.innerHTML = adminEditLessonTypes.map(function(lt) {
+    return '<option value="' + lt.id + '" data-duration="' + lt.duration_minutes + '"' +
+      (lt.id === b.lesson_type_id ? ' selected' : '') + '>' +
+      esc(lt.name) + ' (' + (lt.duration_minutes >= 60 ? (lt.duration_minutes/60) + 'hr' : lt.duration_minutes + 'min') + ')' +
+      '</option>';
+  }).join('');
+
+  updateAdminEditEnd();
+  document.getElementById('adminEditSaveBtn').disabled = false;
+  document.getElementById('adminEditSaveBtn').textContent = 'Save changes';
+  document.getElementById('adminEditBookingModal').style.display = 'flex';
+}
+
+function updateAdminEditEnd() {
+  var startVal = document.getElementById('adminEditTime').value;
+  var sel = document.getElementById('adminEditType');
+  var opt = sel.options[sel.selectedIndex];
+  var duration = parseInt(opt && opt.dataset.duration) || 90;
+
+  if (startVal) {
+    var parts = startVal.split(':').map(Number);
+    var endMins = parts[0] * 60 + parts[1] + duration;
+    document.getElementById('adminEditEndTime').textContent =
+      String(Math.floor(endMins / 60)).padStart(2, '0') + ':' + String(endMins % 60).padStart(2, '0');
+  }
+
+  var infoEl = document.getElementById('adminEditBalanceInfo');
+  if (adminEditOrigMinutes > 0) {
+    var delta = duration - adminEditOrigMinutes;
+    if (delta > 0) {
+      infoEl.textContent = 'Learner will be charged ' + delta + ' extra minutes.';
+      infoEl.style.color = 'var(--red, #e00)';
+      infoEl.style.display = 'block';
+    } else if (delta < 0) {
+      infoEl.textContent = Math.abs(delta) + ' minutes refunded to learner.';
+      infoEl.style.color = 'var(--green, #16a34a)';
+      infoEl.style.display = 'block';
+    } else { infoEl.style.display = 'none'; }
+  } else { infoEl.style.display = 'none'; }
+}
+
+function closeAdminEditBooking() {
+  document.getElementById('adminEditBookingModal').style.display = 'none';
+  adminEditBookingId = null;
+}
+
+async function confirmAdminEditBooking() {
+  if (!adminEditBookingId) return;
+  var btn = document.getElementById('adminEditSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    var res = await fetch('/api/admin?action=edit-booking', {
+      method: 'POST', headers: HEADERS,
+      body: JSON.stringify({
+        booking_id: adminEditBookingId,
+        scheduled_date: document.getElementById('adminEditDate').value,
+        start_time: document.getElementById('adminEditTime').value.slice(0, 5),
+        lesson_type_id: parseInt(document.getElementById('adminEditType').value)
+      })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    closeAdminEditBooking();
+    toast('Booking updated', 'success');
+    loadBookings();
+  } catch (err) {
+    toast(err.message || 'Failed to edit', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save changes';
   }
 }
 

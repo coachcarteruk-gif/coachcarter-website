@@ -721,6 +721,37 @@
   </div>
 </div>
 
+<!-- ── Edit Booking Modal ── -->
+<div class="modal-overlay" id="editBookingModal" onclick="if(event.target===this)closeEditBookingModal()">
+  <div class="modal">
+    <div class="modal-title">Edit Lesson</div>
+    <div class="modal-sub">Change the date, time, or lesson type.</div>
+    <div style="margin:16px 0">
+      <div class="booking-detail-row" style="margin-bottom:8px"><span class="booking-detail-label">Learner</span><span class="booking-detail-val" id="editBookingLearner">—</span></div>
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
+        <div>
+          <div class="notes-label">Date</div>
+          <input type="date" id="editBookingDate" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--primary)">
+        </div>
+        <div>
+          <div class="notes-label">Start time</div>
+          <input type="time" id="editBookingTime" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--primary)" step="1800">
+        </div>
+        <div>
+          <div class="notes-label">Lesson type</div>
+          <select id="editBookingType" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--primary)" onchange="updateEditEndTime()"></select>
+        </div>
+        <div class="booking-detail-row"><span class="booking-detail-label">End time</span><span class="booking-detail-val" id="editBookingEndTime">—</span></div>
+        <div id="editBookingBalanceInfo" style="font-size:0.82rem;color:var(--muted);display:none"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeEditBookingModal()">Cancel</button>
+      <button class="btn-modal-save" id="editBookingSaveBtn" onclick="confirmEditBooking()">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Add Lesson Modal ── -->
 <div class="modal-overlay" id="addLessonModal" onclick="if(event.target===this)closeAddLessonModal()">
   <div class="modal" style="max-width:420px">
@@ -1684,6 +1715,7 @@ function openBookingDetail(bookingId) {
     actions.innerHTML = `
       <button class="btn-modal-cancel" style="color:var(--red)" onclick="openCancelModal(${b.id})">Cancel lesson</button>
       <button class="btn-modal-cancel" style="color:var(--accent)" onclick="openRescheduleModal(${b.id}, '${b.scheduled_date}', '${b.start_time.slice(0,5)}', '${b.end_time.slice(0,5)}', '${esc(b.learner_name)}')">Reschedule</button>
+      <button class="btn-modal-cancel" onclick="openEditBookingModal(${b.id})">Edit</button>
       <button class="btn-modal-cancel" onclick="closeBookingModal()">Close</button>
       <button class="btn-modal-save" id="detailCompleteBtn" onclick="markCompleteFromModal(${b.id})">Mark complete</button>`;
   } else {
@@ -1908,6 +1940,132 @@ async function confirmInstrReschedule() {
     btn.disabled = false; btn.textContent = 'Move lesson';
   }
 }
+
+// ─── Edit Booking ─────────────────────────────────────────────────────────
+let editBookingId = null;
+let editBookingLessonTypes = [];
+let editBookingOrigMinutes = 0;
+
+async function openEditBookingModal(bookingId) {
+  let b = null;
+  for (const ds in bookingCache) {
+    b = bookingCache[ds].find(x => x.id === bookingId);
+    if (b) break;
+  }
+  if (!b) return;
+
+  editBookingId = bookingId;
+  editBookingOrigMinutes = parseInt(b.minutes_deducted) || 0;
+  closeBookingModal();
+
+  document.getElementById('editBookingLearner').textContent = b.learner_name;
+  document.getElementById('editBookingDate').value = b.scheduled_date;
+  document.getElementById('editBookingDate').min = new Date().toISOString().slice(0, 10);
+  document.getElementById('editBookingTime').value = b.start_time.slice(0, 5);
+
+  // Load lesson types for dropdown
+  try {
+    const res = await fetch('/api/lesson-types?action=list');
+    const data = await res.json();
+    editBookingLessonTypes = data.lesson_types || [];
+  } catch { editBookingLessonTypes = []; }
+
+  const sel = document.getElementById('editBookingType');
+  sel.innerHTML = editBookingLessonTypes.map(lt =>
+    '<option value="' + lt.id + '" data-duration="' + lt.duration_minutes + '"' +
+    (lt.id === b.lesson_type_id ? ' selected' : '') + '>' +
+    esc(lt.name) + ' (' + (lt.duration_minutes >= 60 ? (lt.duration_minutes/60) + 'hr' : lt.duration_minutes + 'min') + ')' +
+    '</option>'
+  ).join('');
+
+  updateEditEndTime();
+  document.getElementById('editBookingSaveBtn').disabled = false;
+  document.getElementById('editBookingSaveBtn').textContent = 'Save changes';
+  document.getElementById('editBookingModal').classList.add('open');
+}
+
+function updateEditEndTime() {
+  const startVal = document.getElementById('editBookingTime').value;
+  const sel = document.getElementById('editBookingType');
+  const opt = sel.options[sel.selectedIndex];
+  const duration = parseInt(opt?.dataset?.duration) || 90;
+
+  if (startVal) {
+    const parts = startVal.split(':').map(Number);
+    const endMins = parts[0] * 60 + parts[1] + duration;
+    const endStr = String(Math.floor(endMins / 60)).padStart(2, '0') + ':' + String(endMins % 60).padStart(2, '0');
+    document.getElementById('editBookingEndTime').textContent = endStr;
+  }
+
+  // Show balance adjustment info
+  const infoEl = document.getElementById('editBookingBalanceInfo');
+  if (editBookingOrigMinutes > 0) {
+    const delta = duration - editBookingOrigMinutes;
+    if (delta > 0) {
+      infoEl.textContent = 'Learner will be charged ' + delta + ' extra minutes from their balance.';
+      infoEl.style.color = 'var(--red)';
+      infoEl.style.display = 'block';
+    } else if (delta < 0) {
+      infoEl.textContent = Math.abs(delta) + ' minutes will be refunded to the learner\'s balance.';
+      infoEl.style.color = 'var(--green, #16a34a)';
+      infoEl.style.display = 'block';
+    } else {
+      infoEl.style.display = 'none';
+    }
+  } else {
+    infoEl.style.display = 'none';
+  }
+}
+
+function closeEditBookingModal() {
+  document.getElementById('editBookingModal').classList.remove('open');
+  editBookingId = null;
+}
+
+async function confirmEditBooking() {
+  if (!editBookingId) return;
+  const newDate = document.getElementById('editBookingDate').value;
+  const newTime = document.getElementById('editBookingTime').value;
+  const newTypeId = parseInt(document.getElementById('editBookingType').value);
+  if (!newDate || !newTime) { showToast('Please select a date and time', 'error'); return; }
+
+  const btn = document.getElementById('editBookingSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const res = await fetch('/api/instructor?action=edit-booking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({
+        booking_id: editBookingId,
+        scheduled_date: newDate,
+        start_time: newTime.slice(0, 5),
+        lesson_type_id: newTypeId
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // Clear cache for affected dates so they reload
+    delete bookingCache[newDate];
+    // Also clear the original date if it's different
+    for (const ds in bookingCache) {
+      const idx = bookingCache[ds].findIndex(b => b.id === editBookingId);
+      if (idx !== -1) { delete bookingCache[ds]; break; }
+    }
+
+    closeEditBookingModal();
+    showToast('Lesson updated' + (data.balanceAdjusted ? ' — balance adjusted' : ''), 'success');
+    renderCurrentView();
+  } catch (err) {
+    showToast(err.message || 'Failed to edit booking', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save changes';
+  }
+}
+
+// Wire up time input change to recalculate end time
+document.getElementById('editBookingTime')?.addEventListener('input', updateEditEndTime);
 
 // ─── Add Lesson (Instructor-Initiated Booking) ──────────────────────────────
 let addLessonLearners = [];

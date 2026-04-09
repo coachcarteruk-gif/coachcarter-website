@@ -222,9 +222,11 @@ module.exports = async (req, res) => {
 
       // Skip if already imported (but backfill pickup_address if missing)
       const [existing] = await sql`
-        SELECT id, pickup_address FROM lesson_bookings WHERE setmore_key = ${appt.key}
+        SELECT id, pickup_address, edited_at FROM lesson_bookings WHERE setmore_key = ${appt.key}
       `;
       if (existing) {
+        // Never overwrite manually edited bookings
+        if (existing.edited_at) { skipped++; continue; }
         // Backfill pickup_address for previously imported bookings that lack one
         if (!existing.pickup_address && appt.customer_key) {
           let addr = customerAddressCache[appt.customer_key];

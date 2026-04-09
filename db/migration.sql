@@ -903,6 +903,7 @@ UPDATE instructor_learner_notes SET school_id = 1 WHERE school_id IS NULL;
 ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET NOT NULL;
 ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET DEFAULT 1;
 ALTER TABLE instructor_learner_notes ADD COLUMN IF NOT EXISTS custom_hourly_rate_pence INTEGER;
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
 
 -- 8. instructor_payouts
 ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
