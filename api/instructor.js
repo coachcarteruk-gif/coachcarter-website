@@ -1454,7 +1454,7 @@ async function handleEditBooking(req, res) {
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { booking_id, scheduled_date, start_time, lesson_type_id, force } = req.body;
+  const { booking_id, scheduled_date, start_time, lesson_type_id, force, notify } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id is required' });
   if (!scheduled_date && !start_time && !lesson_type_id)
     return res.status(400).json({ error: 'At least one field to edit is required' });
@@ -1595,12 +1595,13 @@ async function handleEditBooking(req, res) {
       WHERE id = ${booking_id}
     `;
 
-    // Email learner if date/time changed
+    // Email learner if date/time changed and notify is not explicitly false
     const timeChanged = newDate !== booking.scheduled_date ||
       newStartTime !== String(booking.start_time).slice(0, 5) ||
       newEndTime !== String(booking.end_time).slice(0, 5);
+    const shouldNotify = notify !== false;
 
-    if (timeChanged && booking.learner_email) {
+    if (timeChanged && shouldNotify && booking.learner_email) {
       try {
         const mailer = createTransporter();
         const oldDate = new Date(booking.scheduled_date + 'T00:00:00Z')

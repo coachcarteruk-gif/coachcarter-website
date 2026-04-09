@@ -743,6 +743,10 @@
         </div>
         <div class="booking-detail-row"><span class="booking-detail-label">End time</span><span class="booking-detail-val" id="editBookingEndTime">—</span></div>
         <div id="editBookingBalanceInfo" style="font-size:0.82rem;color:var(--muted);display:none"></div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:0.85rem;cursor:pointer">
+          <input type="checkbox" id="editBookingNotify" checked>
+          Notify learner of changes
+        </label>
       </div>
     </div>
     <div class="modal-actions">
@@ -2126,7 +2130,8 @@ async function confirmEditBooking(forceOverride) {
         scheduled_date: newDate,
         start_time: newTime.slice(0, 5),
         lesson_type_id: newTypeId,
-        force: !!forceOverride
+        force: !!forceOverride,
+        notify: !!document.getElementById('editBookingNotify').checked
       })
     });
     const data = await res.json();
