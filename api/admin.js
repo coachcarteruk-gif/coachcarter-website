@@ -401,7 +401,7 @@ async function handleEditBooking(req, res) {
     let newDuration = parseInt(booking.type_duration_minutes) || 90;
 
     if (lesson_type_id && lesson_type_id !== booking.lesson_type_id) {
-      const [newType] = await sql`SELECT duration_minutes FROM lesson_types WHERE id = ${lesson_type_id} AND active = true AND school_id = ${schoolId}`;
+      const [newType] = await sql`SELECT duration_minutes FROM lesson_types WHERE id = ${lesson_type_id} AND school_id = ${schoolId}`;
       if (!newType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
       newDuration = newType.duration_minutes;
     }

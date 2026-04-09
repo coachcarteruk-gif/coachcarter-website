@@ -1555,9 +1555,9 @@ async function openAdminEditBooking(bookingId) {
   document.getElementById('adminEditDate').value = b.scheduled_date;
   document.getElementById('adminEditTime').value = b.start_time.slice(0, 5);
 
-  // Load lesson types
+  // Load lesson types (include inactive for legacy corrections)
   try {
-    const res = await fetch('/api/lesson-types?action=list', { headers: HEADERS });
+    const res = await fetch('/api/lesson-types?action=list&include_inactive=true', { headers: HEADERS });
     const data = await res.json();
     adminEditLessonTypes = data.lesson_types || [];
   } catch { adminEditLessonTypes = []; }
@@ -1567,6 +1567,7 @@ async function openAdminEditBooking(bookingId) {
     return '<option value="' + lt.id + '" data-duration="' + lt.duration_minutes + '"' +
       (lt.id === b.lesson_type_id ? ' selected' : '') + '>' +
       esc(lt.name) + ' (' + (lt.duration_minutes >= 60 ? (lt.duration_minutes/60) + 'hr' : lt.duration_minutes + 'min') + ')' +
+      (lt.active === false ? ' [hidden]' : '') +
       '</option>';
   }).join('');
 

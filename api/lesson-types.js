@@ -54,10 +54,11 @@ async function handleList(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = parseInt(req.query.school_id) || 1;
+    const includeInactive = req.query.include_inactive === 'true';
     const rows = await sql`
-      SELECT id, name, slug, duration_minutes, price_pence, colour, sort_order
+      SELECT id, name, slug, duration_minutes, price_pence, colour, active, sort_order
       FROM lesson_types
-      WHERE active = true AND school_id = ${schoolId}
+      WHERE (active = true OR ${includeInactive}) AND school_id = ${schoolId}
       ORDER BY sort_order, id
     `;
 
