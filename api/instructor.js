@@ -1228,7 +1228,7 @@ async function handleCancelBooking(req, res) {
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { booking_id, reason } = req.body;
+  const { booking_id, reason, notify } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
 
   try {
@@ -1267,8 +1267,8 @@ async function handleCancelBooking(req, res) {
       WHERE id = ${booking.learner_id}
     `;
 
-    // Email the learner
-    try {
+    // Email the learner (unless notify is explicitly false)
+    if (notify !== false) try {
       const mailer = createTransporter();
       const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
       const dateObj = new Date(booking.scheduled_date + 'T00:00:00Z');

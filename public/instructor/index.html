@@ -691,6 +691,10 @@
     <div>
       <div class="notes-label">Reason (optional — will be shared with the learner)</div>
       <textarea class="cancel-reason" id="cancelReason" placeholder="e.g. Car in for service, feeling unwell…"></textarea>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:0.85rem;cursor:pointer">
+        <input type="checkbox" id="cancelNotify" checked>
+        Notify learner
+      </label>
     </div>
     <div class="modal-actions">
       <button class="btn-modal-cancel" onclick="closeCancelModal()">Go back</button>
@@ -1956,7 +1960,7 @@ async function confirmCancel() {
     const res = await fetch('/api/instructor?action=cancel-booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ booking_id: cancelBookingId, reason: reason || null })
+      body: JSON.stringify({ booking_id: cancelBookingId, reason: reason || null, notify: !!document.getElementById('cancelNotify').checked })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
