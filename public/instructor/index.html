@@ -1042,12 +1042,16 @@ async function fetchNeededData() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
+    // Replace cache entries for this date range with fresh data
+    // (clear dates in range first, then populate — prevents stale/duplicate entries)
+    const rangeStart = new Date(from + 'T00:00:00');
+    const rangeEnd = new Date(to + 'T00:00:00');
+    for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+      delete bookingCache[dateStr(d)];
+    }
     for (const b of (data.bookings || [])) {
       if (!bookingCache[b.scheduled_date]) bookingCache[b.scheduled_date] = [];
-      // avoid duplicates
-      if (!bookingCache[b.scheduled_date].find(x => x.id === b.id)) {
-        bookingCache[b.scheduled_date].push(b);
-      }
+      bookingCache[b.scheduled_date].push(b);
     }
     loadedRanges.push({ from, to });
   } catch (err) {
@@ -1621,7 +1625,9 @@ async function saveInlineNotes(bookingId) {
 async function refreshSchedule(silent) {
   const btn = document.getElementById('refreshBtn');
   if (btn && !silent) btn.textContent = '⟳';
-  bookingCache = {};
+  // Clear loaded ranges so fetchNeededData re-fetches, but keep bookingCache
+  // so the calendar doesn't flash empty while waiting for the API response.
+  // fetchNeededData will merge fresh data into cache (dedup by id).
   loadedRanges = [];
   await renderCurrentView();
   if (btn) btn.textContent = '↻';
@@ -1923,17 +1929,20 @@ async function confirmInstrReschedule() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
-    // Update cache — mark old as rescheduled
+    // Update cache — mark old as rescheduled (don't delete, just update status)
     for (const ds in bookingCache) {
       const bk = bookingCache[ds].find(b => b.id === rescheduleBookingId);
       if (bk) { bk.status = 'rescheduled'; break; }
     }
-    // Clear cache for new date so it reloads
-    delete bookingCache[newDate];
 
     closeInstrRescheduleModal();
     showToast('Lesson rescheduled — learner notified', 'success');
-    renderCurrentView();
+    // Re-render immediately from updated cache, then refresh from API in background
+    if (currentView === 'monthly') renderMonthly();
+    else if (currentView === 'weekly') renderWeekly();
+    else if (currentView === 'agenda') renderAgenda();
+    else renderDaily();
+    refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to reschedule', 'error');
   } finally {
@@ -2067,16 +2076,47 @@ async function confirmEditBooking(forceOverride) {
 
     if (!res.ok) throw new Error(data.error || data.message);
 
-    // Clear cache for affected dates so they reload
-    delete bookingCache[newDate];
-    for (const ds in bookingCache) {
-      const idx = bookingCache[ds].findIndex(b => b.id === editBookingId);
-      if (idx !== -1) { delete bookingCache[ds]; break; }
-    }
+    // Update the booking in cache in-place so the calendar doesn't flash empty
+    const oldDate = (() => {
+      for (const ds in bookingCache) {
+        const idx = bookingCache[ds].findIndex(b => b.id === editBookingId);
+        if (idx !== -1) {
+          const bk = bookingCache[ds][idx];
+          // If date changed, remove from old date's cache
+          if (ds !== newDate) {
+            bookingCache[ds].splice(idx, 1);
+            if (!bookingCache[newDate]) bookingCache[newDate] = [];
+            bk.scheduled_date = newDate;
+            bookingCache[newDate].push(bk);
+          }
+          // Update cached fields
+          bk.start_time = newTime.slice(0, 5) + ':00';
+          bk.end_time = data.newEndTime + ':00';
+          if (data.newLessonTypeId) bk.lesson_type_id = data.newLessonTypeId;
+          // Update lesson type name from the dropdown
+          const selOpt = document.getElementById('editBookingType');
+          if (selOpt) {
+            const opt = selOpt.options[selOpt.selectedIndex];
+            if (opt) {
+              bk.lesson_type_name = opt.textContent.split(' (')[0];
+              bk.duration_minutes = parseInt(opt.dataset.duration) || bk.duration_minutes;
+            }
+          }
+          return ds;
+        }
+      }
+      return null;
+    })();
 
     closeEditBookingModal();
     showToast('Lesson updated' + (data.balanceAdjusted ? ' — balance adjusted' : ''), 'success');
-    renderCurrentView();
+    // Re-render immediately from updated cache (no flash), then refresh from API in background
+    if (currentView === 'monthly') renderMonthly();
+    else if (currentView === 'weekly') renderWeekly();
+    else if (currentView === 'agenda') renderAgenda();
+    else renderDaily();
+    // Background refresh to sync fully with server
+    refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to edit booking', 'error');
   } finally {
@@ -2243,12 +2283,10 @@ async function confirmCreateBooking() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
-    // Clear cache for the booked date so it reloads
-    delete bookingCache[newDate];
-
     closeAddLessonModal();
     showToast(`Lesson booked for ${data.learner_name || 'learner'} — they've been notified`, 'success');
-    renderCurrentView();
+    // Background refresh — don't delete cache (causes empty flash)
+    refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to create booking', 'error');
   } finally {
