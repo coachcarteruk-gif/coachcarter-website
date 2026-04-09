@@ -453,7 +453,7 @@ async function handleEditBooking(req, res) {
       UPDATE lesson_bookings
       SET scheduled_date = ${newDate}, start_time = ${newStartTime}::time, end_time = ${newEndTime}::time,
           lesson_type_id = ${newLessonTypeId}, minutes_deducted = ${oldMinutes > 0 ? newDuration : 0},
-          edited_at = NOW(), setmore_key = NULL
+          edited_at = NOW()
       WHERE id = ${booking_id}
     `;
 

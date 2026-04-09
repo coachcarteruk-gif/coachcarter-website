@@ -1583,7 +1583,7 @@ async function handleEditBooking(req, res) {
       balanceAdjusted = true;
     }
 
-    // Update the booking
+    // Update the booking (keep setmore_key so sync can find and skip it via edited_at check)
     await sql`
       UPDATE lesson_bookings
       SET scheduled_date = ${newDate},
@@ -1591,8 +1591,7 @@ async function handleEditBooking(req, res) {
           end_time = ${newEndTime}::time,
           lesson_type_id = ${newLessonTypeId},
           minutes_deducted = ${oldMinutes > 0 ? newMinutes : 0},
-          edited_at = NOW(),
-          setmore_key = NULL
+          edited_at = NOW()
       WHERE id = ${booking_id}
     `;
 
