@@ -905,6 +905,22 @@ ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET DEFAULT 1;
 ALTER TABLE instructor_learner_notes ADD COLUMN IF NOT EXISTS custom_hourly_rate_pence INTEGER;
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
 
+-- One-off cleanup: delete duplicate bookings created when edit-booking cleared setmore_key,
+-- causing the Setmore sync to re-import the same appointment. Duplicates are bookings WITHOUT
+-- a setmore_key that match an existing booking WITH a setmore_key on same date/time/instructor.
+DELETE FROM lesson_bookings dup
+WHERE dup.setmore_key IS NULL
+  AND dup.id NOT IN (SELECT booking_id FROM payout_line_items)
+  AND EXISTS (
+    SELECT 1 FROM lesson_bookings orig
+    WHERE orig.setmore_key IS NOT NULL
+      AND orig.instructor_id = dup.instructor_id
+      AND orig.scheduled_date = dup.scheduled_date
+      AND orig.start_time = dup.start_time
+      AND orig.learner_id = dup.learner_id
+      AND orig.id != dup.id
+  );
+
 -- 8. instructor_payouts
 ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
 UPDATE instructor_payouts SET school_id = 1 WHERE school_id IS NULL;
