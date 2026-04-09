@@ -1716,9 +1716,10 @@ async function injectTravelIndicators() {
 async function refreshSchedule(silent) {
   const btn = document.getElementById('refreshBtn');
   if (btn && !silent) btn.textContent = '⟳';
-  // Clear loaded ranges so fetchNeededData re-fetches, but keep bookingCache
-  // so the calendar doesn't flash empty while waiting for the API response.
-  // fetchNeededData will merge fresh data into cache (dedup by id).
+  // Full refresh: clear everything and re-fetch + re-render in one step.
+  // renderCurrentView calls fetchNeededData (which awaits) before rendering,
+  // so the calendar shows fresh data directly without flashing empty.
+  bookingCache = {};
   loadedRanges = [];
   await renderCurrentView();
   if (btn) btn.textContent = '↻';
