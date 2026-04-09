@@ -42,6 +42,7 @@ const jwt        = require('jsonwebtoken');
 const twilio     = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { reportError } = require('./_error-alert');
+const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
 const { resolveConfirmations } = require('./_confirmation-resolver');
 const { getEligibleBookings }  = require('./_payout-helpers');
 
@@ -1453,7 +1454,7 @@ async function handleEditBooking(req, res) {
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { booking_id, scheduled_date, start_time, lesson_type_id } = req.body;
+  const { booking_id, scheduled_date, start_time, lesson_type_id, force } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id is required' });
   if (!scheduled_date && !start_time && !lesson_type_id)
     return res.status(400).json({ error: 'At least one field to edit is required' });
@@ -1508,18 +1509,57 @@ async function handleEditBooking(req, res) {
     const endMins = startMins + newDuration;
     const newEndTime = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
 
-    // Slot conflict check (proper overlap with buffer, excluding this booking)
+    // Slot conflict check — return details for confirmation instead of blocking
     const buffer = parseInt(booking.buffer_minutes) || 30;
-    const [conflict] = await sql`
-      SELECT id FROM lesson_bookings
-      WHERE instructor_id = ${booking.instructor_id}
-        AND scheduled_date = ${newDate}
-        AND id != ${booking_id}
-        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
-        AND ${newStartTime}::time < (end_time + (${buffer} || ' minutes')::interval)
-        AND ${newEndTime}::time > start_time
+    const conflicts = await sql`
+      SELECT lb.id, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
+             lb.pickup_address, lu.name AS learner_name
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      WHERE lb.instructor_id = ${booking.instructor_id}
+        AND lb.scheduled_date = ${newDate}
+        AND lb.id != ${booking_id}
+        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND ${newStartTime}::time < (lb.end_time + (${buffer} || ' minutes')::interval)
+        AND ${newEndTime}::time > lb.start_time
+      ORDER BY lb.start_time
     `;
-    if (conflict) return res.status(409).json({ error: 'This time conflicts with another booking' });
+
+    if (conflicts.length > 0 && !force) {
+      // Estimate travel time between pickup addresses if available
+      const thisPickup = booking.pickup_address || booking.learner_pickup_address;
+      const conflictDetails = [];
+      for (const c of conflicts) {
+        const detail = {
+          id: c.id,
+          learner_name: c.learner_name,
+          time: c.start_time.slice(0,5) + ' – ' + c.end_time.slice(0,5),
+          travel_minutes: null
+        };
+        // Try to estimate travel time between pickups
+        if (thisPickup && c.pickup_address) {
+          try {
+            const pcA = extractPostcode(thisPickup);
+            const pcB = extractPostcode(c.pickup_address);
+            if (pcA && pcB && pcA.replace(/\s/g,'') !== pcB.replace(/\s/g,'')) {
+              const coords = await bulkGeocodeUK([pcA, pcB]);
+              if (coords[pcA] && coords[pcB]) {
+                detail.travel_minutes = estimateDriveMinutes(coords[pcA].lat, coords[pcA].lon, coords[pcB].lat, coords[pcB].lon);
+              }
+            } else if (pcA && pcB) {
+              detail.travel_minutes = 0;
+            }
+          } catch { /* skip travel estimate */ }
+        }
+        conflictDetails.push(detail);
+      }
+      return res.status(409).json({
+        error: 'conflict',
+        message: 'This time overlaps with another booking',
+        conflicts: conflictDetails,
+        can_force: true
+      });
+    }
 
     // Credit/balance adjustment
     const oldMinutes = parseInt(booking.minutes_deducted) || 0;

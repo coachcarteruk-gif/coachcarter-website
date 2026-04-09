@@ -48,6 +48,7 @@ const { processAllPayouts, getEligibleBookings } = require('./_payout-helpers');
 const { requireAuth, getSchoolId, verifyAdminSecret: verifyAdminSecretNew, isSuperAdmin } = require('./_auth');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { logAudit } = require('./_audit');
+const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Helper: derive schoolId from admin JWT (superadmins can pass ?school_id= to target a specific school)
@@ -363,7 +364,7 @@ async function handleEditBooking(req, res) {
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = getAdminSchoolId(admin, req);
 
-  const { booking_id, scheduled_date, start_time, lesson_type_id } = req.body;
+  const { booking_id, scheduled_date, start_time, lesson_type_id, force } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id is required' });
   if (!scheduled_date && !start_time && !lesson_type_id)
     return res.status(400).json({ error: 'At least one field to edit is required' });
@@ -411,18 +412,31 @@ async function handleEditBooking(req, res) {
     const endMins = startMins + newDuration;
     const newEndTime = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
 
-    // Overlap check with buffer
+    // Overlap check with buffer — warn with details, allow force override
     const buffer = parseInt(booking.buffer_minutes) || 30;
-    const [conflict] = await sql`
-      SELECT id FROM lesson_bookings
-      WHERE instructor_id = ${booking.instructor_id}
-        AND scheduled_date = ${newDate}
-        AND id != ${booking_id}
-        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
-        AND ${newStartTime}::time < (end_time + (${buffer} || ' minutes')::interval)
-        AND ${newEndTime}::time > start_time
+    const conflicts = await sql`
+      SELECT lb.id, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
+             lb.pickup_address, lu.name AS learner_name
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      WHERE lb.instructor_id = ${booking.instructor_id}
+        AND lb.scheduled_date = ${newDate}
+        AND lb.id != ${booking_id}
+        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND ${newStartTime}::time < (lb.end_time + (${buffer} || ' minutes')::interval)
+        AND ${newEndTime}::time > lb.start_time
+      ORDER BY lb.start_time
     `;
-    if (conflict) return res.status(409).json({ error: 'This time conflicts with another booking' });
+    if (conflicts.length > 0 && !force) {
+      const conflictDetails = conflicts.map(c => ({
+        id: c.id, learner_name: c.learner_name,
+        time: c.start_time.slice(0,5) + ' – ' + c.end_time.slice(0,5)
+      }));
+      return res.status(409).json({
+        error: 'conflict', message: 'This time overlaps with another booking',
+        conflicts: conflictDetails, can_force: true
+      });
+    }
 
     // Credit/balance adjustment
     const oldMinutes = parseInt(booking.minutes_deducted) || 0;

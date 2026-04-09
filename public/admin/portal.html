@@ -1610,7 +1610,7 @@ function closeAdminEditBooking() {
   adminEditBookingId = null;
 }
 
-async function confirmAdminEditBooking() {
+async function confirmAdminEditBooking(forceOverride) {
   if (!adminEditBookingId) return;
   var btn = document.getElementById('adminEditSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -1621,11 +1621,23 @@ async function confirmAdminEditBooking() {
         booking_id: adminEditBookingId,
         scheduled_date: document.getElementById('adminEditDate').value,
         start_time: document.getElementById('adminEditTime').value.slice(0, 5),
-        lesson_type_id: parseInt(document.getElementById('adminEditType').value)
+        lesson_type_id: parseInt(document.getElementById('adminEditType').value),
+        force: !!forceOverride
       })
     });
     var data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    if (res.status === 409 && data.can_force && data.conflicts) {
+      var msg = 'This time overlaps with:\n\n';
+      for (var i = 0; i < data.conflicts.length; i++) {
+        var c = data.conflicts[i];
+        msg += '• ' + c.learner_name + ' (' + c.time + ')\n';
+      }
+      msg += '\nSave anyway?';
+      btn.disabled = false; btn.textContent = 'Save changes';
+      if (confirm(msg)) return confirmAdminEditBooking(true);
+      return;
+    }
+    if (!res.ok) throw new Error(data.error || data.message);
     closeAdminEditBooking();
     toast('Booking updated', 'success');
     loadBookings();
