@@ -988,6 +988,8 @@ async function renderCurrentView() {
   else if (currentView === 'weekly') renderWeekly();
   else if (currentView === 'agenda') renderAgenda();
   else renderDaily();
+  // Async — populate travel time indicators between consecutive bookings
+  injectTravelIndicators();
 }
 
 function updateToolbarLabel() {
@@ -1229,11 +1231,23 @@ function renderDaily() {
     <div class="daily-timeline" style="display:flex;flex-direction:column;gap:12px;padding:12px 0;">`;
 
   if (bookings.length > 0) {
-    for (const b of bookings) {
+    for (let i = 0; i < bookings.length; i++) {
+      const b = bookings[i];
       const isCompleted = b.status === 'completed';
       const waUrl = whatsappUrl(b.learner_phone);
       const ltColour = b.lesson_type_colour || 'var(--accent)';
       const ltName   = b.lesson_type_name || 'Standard Lesson';
+      const thisAddr = b.booking_pickup_address || b.learner_pickup_address || '';
+
+      // Travel indicator between consecutive bookings
+      if (i > 0 && b.status !== 'cancelled' && b.status !== 'rescheduled') {
+        const prev = bookings[i - 1];
+        const prevAddr = prev.booking_pickup_address || prev.learner_pickup_address || '';
+        if (prevAddr && thisAddr && prev.status !== 'cancelled' && prev.status !== 'rescheduled') {
+          html += `<div class="travel-indicator" data-travel-from="${esc(prevAddr)}" data-travel-to="${esc(thisAddr)}" style="text-align:center;padding:2px 0"></div>`;
+        }
+      }
+
       const cardStyle = b.status === 'cancelled' ? '' :
         `style="border-left-color:${ltColour};${isCompleted ? `background:${ltColour}08;border-color:${ltColour}40;` : `background:${ltColour}12;border-color:${ltColour}50;`}"`;
       html += `
@@ -1315,7 +1329,9 @@ function renderAgenda() {
       <span class="agenda-date-count">${groups[ds].length} lesson${groups[ds].length !== 1 ? 's' : ''}</span>
     </div>`;
 
-    for (const b of groups[ds]) {
+    const daySlots = groups[ds];
+    for (let i = 0; i < daySlots.length; i++) {
+      const b = daySlots[i];
       const ltColour = b.lesson_type_colour || 'var(--accent)';
       const ltName   = b.lesson_type_name || 'Standard Lesson';
       const isCancelled = b.status === 'cancelled' || b.status === 'rescheduled';
@@ -1323,6 +1339,16 @@ function renderAgenda() {
       const isAwaiting = b.status === 'awaiting_confirmation';
       const cardCls = isCancelled ? 'agenda-card cancelled' : isCompleted ? 'agenda-card completed' : isAwaiting ? 'agenda-card' : 'agenda-card';
       const waUrl = whatsappUrl(b.learner_phone);
+      const thisAddr = b.booking_pickup_address || b.learner_pickup_address || '';
+
+      // Travel indicator between consecutive bookings
+      if (i > 0 && !isCancelled) {
+        const prev = daySlots[i - 1];
+        const prevAddr = prev.booking_pickup_address || prev.learner_pickup_address || '';
+        if (prevAddr && thisAddr && prev.status !== 'cancelled' && prev.status !== 'rescheduled') {
+          html += `<div class="travel-indicator" data-travel-from="${esc(prevAddr)}" data-travel-to="${esc(thisAddr)}" style="text-align:center;padding:2px 0"></div>`;
+        }
+      }
 
       html += `
         <div class="${cardCls}" style="border-left-color:${isCancelled ? 'var(--muted)' : ltColour}" onclick="openBookingDetail(${b.id})">
@@ -1332,7 +1358,7 @@ function renderAgenda() {
           </div>
           <div class="agenda-card-mid">
             <div class="agenda-learner">${esc(b.learner_name)}${b.prefer_contact_before ? ' <span class="contact-badge">📞</span>' : ''}</div>
-            ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="agenda-address">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</div>` : ''}
+            ${thisAddr ? `<div class="agenda-address">📍 ${esc(thisAddr)}</div>` : ''}
           </div>
           <div class="agenda-card-right">
             <span class="agenda-status status-${b.status}">${isCompleted ? '✓' : isCancelled ? '✕' : '●'}</span>
@@ -1619,6 +1645,71 @@ async function saveInlineNotes(bookingId) {
   } finally {
     btn.disabled = false; btn.textContent = 'Save';
   }
+}
+
+// ─── Travel time between consecutive bookings ──────────────────────────────
+const UK_PC_RE = /([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})/i;
+function clientExtractPostcode(addr) {
+  if (!addr) return null;
+  const m = addr.match(UK_PC_RE);
+  return m ? m[1].toUpperCase().replace(/\s+/g, ' ') : null;
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function clientEstimateDrive(lat1, lon1, lat2, lon2) {
+  return Math.round(haversineKm(lat1, lon1, lat2, lon2) * 1.3 / 48 * 60);
+}
+
+async function injectTravelIndicators() {
+  const indicators = document.querySelectorAll('[data-travel-from][data-travel-to]');
+  if (indicators.length === 0) return;
+
+  // Collect unique postcodes
+  const postcodes = new Set();
+  indicators.forEach(el => {
+    const from = clientExtractPostcode(el.dataset.travelFrom);
+    const to = clientExtractPostcode(el.dataset.travelTo);
+    if (from) postcodes.add(from);
+    if (to) postcodes.add(to);
+  });
+  if (postcodes.size === 0) return;
+
+  // Bulk geocode via postcodes.io
+  let coordMap = {};
+  try {
+    const resp = await fetch('https://api.postcodes.io/postcodes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postcodes: [...postcodes] })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      for (const item of (data.result || [])) {
+        if (item.result) {
+          coordMap[item.query.toUpperCase().replace(/\s+/g, ' ')] = { lat: item.result.latitude, lon: item.result.longitude };
+        }
+      }
+    }
+  } catch { return; }
+
+  // Inject travel time into each indicator
+  indicators.forEach(el => {
+    const from = clientExtractPostcode(el.dataset.travelFrom);
+    const to = clientExtractPostcode(el.dataset.travelTo);
+    if (!from || !to || !coordMap[from] || !coordMap[to]) return;
+    if (from.replace(/\s/g,'') === to.replace(/\s/g,'')) {
+      el.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">🚗 Same area</span>';
+      return;
+    }
+    const mins = clientEstimateDrive(coordMap[from].lat, coordMap[from].lon, coordMap[to].lat, coordMap[to].lon);
+    const colour = mins <= 15 ? 'var(--green,#16a34a)' : mins <= 30 ? 'var(--accent)' : 'var(--red,#e00)';
+    el.innerHTML = `<span style="font-size:0.75rem;color:${colour}">🚗 ~${mins} min travel</span>`;
+  });
 }
 
 // ─── Refresh schedule ─────────────────────────────────────────────────────────
