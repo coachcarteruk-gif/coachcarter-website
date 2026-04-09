@@ -205,6 +205,8 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 - Do NOT send notifications for imported bookings (the sync deliberately skips this)
 - Imported bookings block slots automatically — no changes needed in `slots.js`
 - The service mapping in `setmore-sync.js` is hardcoded to Fraser's Setmore account — update if services change
+- **Edit-booking protection:** Editing a booking sets `edited_at` on the booking. The Setmore sync checks `edited_at` and skips manually edited bookings. Do NOT clear `setmore_key` when editing — the sync needs it to find and skip the booking.
+- **Notification toggles:** Both `edit-booking` and `cancel-booking` accept a `notify` param (default true). Instructors can untick "Notify learner" when doing bulk data cleanup.
 
 **Cancellation sync:** The sync also detects cancelled/removed Setmore appointments and marks the corresponding `lesson_bookings` entry as cancelled. Checks both the appointment `status` field and missing appointments (removed from Setmore entirely).
 

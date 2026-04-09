@@ -1272,6 +1272,38 @@ Instructor booking links now use friendly URLs: `coachcarter.uk/book/fraser` ins
 
 ---
 
+## 2.74 — Lesson Type Chooser on Booking Links (9 April 2026)
+
+**What changed:**
+
+When a learner arrives via an instructor's clean booking link (e.g. `/book/fraser`) without a `?type=` param, they now see a "Choose your lesson length" prompt with lesson type pills instead of auto-selecting Standard Lesson. Slots only load after they pick a type. Also fixed variable scoping bugs (`preselectedInstructorSlug` and `preselectedTypeId` were declared inside `init()` but referenced by `loadLessonTypes()`). Fixed dark mode readability for active lesson type pills and buy-credits cards (replaced literal CSS `white` with `var(--white)` in `color-mix()`). Fixed toast notification element peeking above viewport bottom on desktop across 12 pages.
+
+**Files changed:** `public/learner/book.html`, `public/learner/buy-credits.html`, `public/learner/lessons.html`, plus 9 other pages for toast fix
+
+---
+
+## 2.75 — Edit Booking (Date, Time & Lesson Type) (9 April 2026)
+
+**What changed:**
+
+Instructors and admins can now edit a confirmed booking's date, start time, and lesson type directly via an "Edit" button in the booking detail modal (instructor calendar) or bookings table (admin portal). This is an in-place UPDATE (not reschedule) designed for correcting Setmore import data.
+
+Key features:
+- Credit/balance adjustment when lesson type changes (charge extra or refund difference)
+- Slot conflict check with override — conflicts show learner name, time, and estimated travel time between pickups; instructor can force-save
+- Learner email notification toggle (default: on, uncheck for data cleanup)
+- Cancel notification toggle added to the cancel modal too
+- Setmore sync protection: edited bookings have `edited_at` set; sync skips them
+- Payout protection: blocks lesson type changes on already-paid-out bookings
+- Inactive lesson types (e.g. 1-Hour) available in the edit dropdown for legacy corrections
+- Audit logging on admin edits
+- Travel time indicators between consecutive bookings on daily and agenda calendar views
+- One-off migration cleanup deletes Setmore re-imported duplicates
+
+**Files changed:** `db/migration.sql`, `api/instructor.js`, `api/admin.js`, `api/lesson-types.js`, `api/setmore-sync.js`, `public/instructor/index.html`, `public/admin/portal.html`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

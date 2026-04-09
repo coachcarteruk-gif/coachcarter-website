@@ -388,7 +388,7 @@ Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancell
 
 **Env:** `SETMORE_REFRESH_TOKEN` — Setmore OAuth2 refresh token, swapped for access token on each run.
 
-**DB columns:** `lesson_bookings.setmore_key`, `lesson_bookings.pickup_address`, `lesson_bookings.cancel_reason`, `learner_users.setmore_customer_key`, `learner_users.welcome_email_sent_at`, `instructors.setmore_staff_key`, `instructors.setmore_last_synced_at`, `instructors.setmore_sync_error`
+**DB columns:** `lesson_bookings.setmore_key`, `lesson_bookings.pickup_address`, `lesson_bookings.cancel_reason`, `lesson_bookings.edited_at` (set when manually edited — sync skips these), `learner_users.setmore_customer_key`, `learner_users.welcome_email_sent_at`, `instructors.setmore_staff_key`, `instructors.setmore_last_synced_at`, `instructors.setmore_sync_error`
 
 ### API — `api/setmore-welcome.js`
 
@@ -586,8 +586,9 @@ The instructor login page (`/instructor/login.html`) presents a choice: "I'm a C
 | `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages, ical_feed_url |
 | `ical-test` | POST | JWT | Test-fetch an iCal feed URL, returns event count |
 | `ical-status` | GET | JWT | Returns iCal sync status (url, last_synced, error, event_count) |
-| `cancel-booking` | POST | JWT | Cancel a confirmed booking (always refunds learner credit) |
+| `cancel-booking` | POST | JWT | Cancel a confirmed booking (always refunds learner credit). Body: `{ booking_id, reason?, notify? }` — `notify: false` skips learner email |
 | `reschedule-booking` | POST | JWT | Move a booking to a new slot (no time restriction, no count limit) |
+| `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type. Body: `{ booking_id, scheduled_date?, start_time?, lesson_type_id?, force?, notify? }`. Adjusts learner balance if duration changes. Returns conflict details if overlapping (with `can_force: true`). Sets `edited_at`, Setmore sync skips edited bookings |
 | `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/free payment) |
 | `blackout-dates` | GET | JWT | Returns active/future blackout date ranges. Response: `{ blackout_dates: [{ id, start_date, end_date, reason }] }` |
 | `set-blackout-dates` | POST | JWT | Replace all future blackout ranges. Body: `{ ranges: [{ start_date, end_date, reason? }] }`. Validates no overlaps, max 365-day span |
@@ -655,6 +656,7 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 | `process-payouts` | POST | JWT | Manual trigger for payout processing (same logic as cron) |
 | `instructor-payout-history` | GET | JWT | Payout history with line items for a specific instructor |
 | `invite-learner` | POST | JWT | Create learner account and send 7-day magic link invite email |
+| `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type (same as instructor version but admin-scoped). Audit-logged |
 | `instructor-blackouts` | GET | JWT | Get future blackout dates for an instructor (`?instructor_id=X`) |
 | `set-instructor-blackouts` | POST | JWT | Replace all future blackout dates for an instructor. Body: `{ instructor_id, ranges }` |
 
