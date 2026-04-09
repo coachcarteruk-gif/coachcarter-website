@@ -268,7 +268,7 @@ The site is designed as an app experience. Do NOT re-add any of the removed item
 
 **Fixed bottom tabs (instructor)**: Dashboard | Calendar | Learners | Earnings | Profile
 - Dashboard (`/instructor/dashboard.html`) — compact no-scroll view of today's lessons + "Book Lesson" action
-- Calendar (`/instructor/`) — full calendar with monthly/weekly/daily/agenda views. Daily view is a compact lesson list (not a time-grid) — do NOT re-add hour-slot grids
+- Calendar (`/instructor/`) — full calendar with monthly/weekly/agenda views. Agenda is the default view on load. Do NOT re-add daily view or hour-slot grids
 - Q&A is accessible from the sidebar only (not in bottom tabs)
 
 **Sidebar items (instructor)**:
@@ -292,6 +292,7 @@ The site is designed as an app experience. Do NOT re-add any of the removed item
 - Menu/hamburger as a bottom tab (sidebar opened via top header hamburger instead)
 - Videos in Learn section navigation (page still exists at `/learner/videos.html`, just not in nav — April 2026)
 - Hour-slot time grid on instructor daily calendar (replaced with compact lesson list — April 2026)
+- Daily view tab on instructor calendar (removed April 2026 — agenda absorbs its function, with today-anchor scroll and "Today" button; daily was redundant)
 
 ## Migration awareness (React Native app planned)
 

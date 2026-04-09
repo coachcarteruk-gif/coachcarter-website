@@ -916,6 +916,23 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 ---
 
+### 2.62 — Remove Daily View, Agenda as Default ✅ Complete (9 April 2026)
+
+**What was built:**
+- Removed the Daily tab from the instructor calendar toolbar — it was functionally redundant with agenda (both showed a compact lesson list)
+- Agenda is now the default view on calendar load
+- Agenda renders from today by default; scrolls today's date header into view automatically as a "today anchor"
+- Weekly view day-label click now jumps to agenda (was daily) — clicking a day in weekly shows agenda from that date
+- Monthly drill-down (`drillToDay`) also routes to agenda
+- Agenda date-header onclick removed (was drilling to daily)
+- Swipe gesture restricted to weekly only (was daily+weekly)
+- `navPrev`/`navNext` else branch simplified to agenda (14-day steps)
+- Availability re-render after save now calls `renderCurrentView()` instead of `renderDaily()`
+
+**Files changed:** `public/instructor/index.html`, `CLAUDE.md`
+
+---
+
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
 - ~~**T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.~~ ✅ Done (2.54)
