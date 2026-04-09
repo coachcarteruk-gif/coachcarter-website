@@ -1957,15 +1957,9 @@ async function confirmCancel() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
-    // Update cache
-    for (const ds in bookingCache) {
-      const bk = bookingCache[ds].find(b => b.id === cancelBookingId);
-      if (bk) { bk.status = 'cancelled'; break; }
-    }
-
     closeCancelModal();
     showToast('Lesson cancelled — learner notified and credit refunded', 'success');
-    renderCurrentView();
+    await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to cancel', 'error');
   } finally {
@@ -2021,20 +2015,9 @@ async function confirmInstrReschedule() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
-    // Update cache — mark old as rescheduled (don't delete, just update status)
-    for (const ds in bookingCache) {
-      const bk = bookingCache[ds].find(b => b.id === rescheduleBookingId);
-      if (bk) { bk.status = 'rescheduled'; break; }
-    }
-
     closeInstrRescheduleModal();
     showToast('Lesson rescheduled — learner notified', 'success');
-    // Re-render immediately from updated cache, then refresh from API in background
-    if (currentView === 'monthly') renderMonthly();
-    else if (currentView === 'weekly') renderWeekly();
-    else if (currentView === 'agenda') renderAgenda();
-    else renderDaily();
-    refreshSchedule(true);
+    await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to reschedule', 'error');
   } finally {
@@ -2168,47 +2151,10 @@ async function confirmEditBooking(forceOverride) {
 
     if (!res.ok) throw new Error(data.error || data.message);
 
-    // Update the booking in cache in-place so the calendar doesn't flash empty
-    const oldDate = (() => {
-      for (const ds in bookingCache) {
-        const idx = bookingCache[ds].findIndex(b => b.id === editBookingId);
-        if (idx !== -1) {
-          const bk = bookingCache[ds][idx];
-          // If date changed, remove from old date's cache
-          if (ds !== newDate) {
-            bookingCache[ds].splice(idx, 1);
-            if (!bookingCache[newDate]) bookingCache[newDate] = [];
-            bk.scheduled_date = newDate;
-            bookingCache[newDate].push(bk);
-          }
-          // Update cached fields
-          bk.start_time = newTime.slice(0, 5) + ':00';
-          bk.end_time = data.newEndTime + ':00';
-          if (data.newLessonTypeId) bk.lesson_type_id = data.newLessonTypeId;
-          // Update lesson type name from the dropdown
-          const selOpt = document.getElementById('editBookingType');
-          if (selOpt) {
-            const opt = selOpt.options[selOpt.selectedIndex];
-            if (opt) {
-              bk.lesson_type_name = opt.textContent.split(' (')[0];
-              bk.duration_minutes = parseInt(opt.dataset.duration) || bk.duration_minutes;
-            }
-          }
-          return ds;
-        }
-      }
-      return null;
-    })();
-
     closeEditBookingModal();
     showToast('Lesson updated' + (data.balanceAdjusted ? ' — balance adjusted' : ''), 'success');
-    // Re-render immediately from updated cache (no flash), then refresh from API in background
-    if (currentView === 'monthly') renderMonthly();
-    else if (currentView === 'weekly') renderWeekly();
-    else if (currentView === 'agenda') renderAgenda();
-    else renderDaily();
-    // Background refresh to sync fully with server
-    refreshSchedule(true);
+    // Full refresh from server — renderCurrentView awaits fetch before rendering
+    await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to edit booking', 'error');
   } finally {
@@ -2377,8 +2323,7 @@ async function confirmCreateBooking() {
 
     closeAddLessonModal();
     showToast(`Lesson booked for ${data.learner_name || 'learner'} — they've been notified`, 'success');
-    // Background refresh — don't delete cache (causes empty flash)
-    refreshSchedule(true);
+    await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to create booking', 'error');
   } finally {
