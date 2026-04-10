@@ -273,8 +273,7 @@ async function handleVerify(req, res) {
     const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
     const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '30d' });
 
-    // Set httpOnly session cookie + CSRF double-submit cookie. Token is
-    // still returned in the body for the grace window — removed in commit 9.
+    // Set httpOnly session cookie + CSRF double-submit cookie.
     appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
     appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
 
@@ -292,7 +291,6 @@ async function handleVerify(req, res) {
 
     return res.json({
       success: true,
-      token: jwtToken,
       user: {
         id: user.id,
         name: user.name || null,
@@ -387,7 +385,6 @@ async function handleVerifyCode(req, res) {
 
     return res.json({
       success: true,
-      token: jwtToken,
       user: {
         id: user.id,
         name: user.name || null,

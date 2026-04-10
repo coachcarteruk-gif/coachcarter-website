@@ -156,14 +156,11 @@ async function handleLogin(req, res) {
       { expiresIn: '7d' }
     );
 
-    // Set httpOnly session cookie + CSRF double-submit cookie. Token is
-    // still returned in the body for the grace window — frontend will
-    // stop reading it in commit 5. Remove from body in commit 9.
+    // Set httpOnly session cookie + CSRF double-submit cookie.
     appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.admin, token, SESSION_MAX_AGE_SEC.admin));
     appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
 
     return res.json({
-      token,
       admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role, school_id: admin.school_id || null }
     });
   } catch (err) {
