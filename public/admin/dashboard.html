@@ -17,6 +17,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
   <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/admin-auth.js"></script>
 <style>
 :root {
   --primary:    #262626;
@@ -540,7 +541,7 @@ async function loadInstructors() {
   const listEl = document.getElementById('instructors-list');
   listEl.innerHTML = '<div class="empty-state">Loading...</div>';
   try {
-    const res = await fetch('/api/admin?action=all-instructors', { headers: ADMIN_HEADERS });
+    const res = await fetchAdmin('/api/admin?action=all-instructors', { headers: ADMIN_HEADERS });
     if (!res.ok) throw new Error('API error ' + res.status);
     const data = await res.json();
     renderInstructors(data.instructors || []);
@@ -615,7 +616,7 @@ async function saveInstructor() {
   if (id) body.id = parseInt(id);
 
   try {
-    const res = await fetch('/api/admin?action=' + action, {
+    const res = await fetchAdmin('/api/admin?action=' + action, {
       method: 'POST',
       headers: ADMIN_HEADERS,
       body: JSON.stringify(body)
@@ -641,7 +642,7 @@ async function toggleInstructor(id, active) {
   const label = active ? 'activate' : 'deactivate';
   if (!confirm(`Are you sure you want to ${label} this instructor?`)) return;
   try {
-    const res = await fetch('/api/admin?action=toggle-instructor', {
+    const res = await fetchAdmin('/api/admin?action=toggle-instructor', {
       method: 'POST',
       headers: ADMIN_HEADERS,
       body: JSON.stringify({ id, active })
@@ -667,15 +668,18 @@ document.querySelectorAll('.filters .filter-btn').forEach(btn => {
   });
 });
 
-// Admin auth headers for API calls
+// Admin auth now lives in the httpOnly cc_admin cookie — browser
+// attaches it automatically. fetchAdmin (from shared/admin-auth.js)
+// handles credentials + CSRF header. ADMIN_HEADERS kept as a
+// Content-Type-only object so existing fetchAdmin({ headers: ... })
+// call sites keep working unchanged.
 const adminAuth = JSON.parse(localStorage.getItem('cc_admin') || 'null');
-const ADMIN_HEADERS = adminAuth?.token
-  ? { 'Authorization': 'Bearer ' + adminAuth.token, 'Content-Type': 'application/json' }
-  : { 'Content-Type': 'application/json' };
+const ADMIN_HEADERS = { 'Content-Type': 'application/json' };
+const fetchAdmin = window.ccAdminAuth.fetchAuthed;
 
 async function loadEnquiries() {
   try {
-    const res = await fetch('/api/enquiries?action=list', { headers: ADMIN_HEADERS });
+    const res = await fetchAdmin('/api/enquiries?action=list', { headers: ADMIN_HEADERS });
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
     
@@ -746,7 +750,7 @@ function refreshEnquiries() {
 }
 
 function viewEnquiry(id) {
-  fetch('/api/enquiries?action=get&id=' + id, { headers: ADMIN_HEADERS })
+  fetchAdmin('/api/enquiries?action=get&id=' + id, { headers: ADMIN_HEADERS })
     .then(res => res.json())
     .then(data => {
       const e = data.enquiry;
@@ -786,7 +790,7 @@ function viewEnquiry(id) {
 
 async function updateEnquiryStatus(id, status) {
   try {
-    const res = await fetch('/api/enquiries?action=update-status', {
+    const res = await fetchAdmin('/api/enquiries?action=update-status', {
       method: 'POST',
       headers: ADMIN_HEADERS,
       body: JSON.stringify({ id: id, status: status })
