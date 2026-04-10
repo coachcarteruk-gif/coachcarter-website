@@ -87,10 +87,16 @@ function createTransporter() {
   });
 }
 
-// verifyAuth delegates to centralised _auth.js
+// verifyAuth delegates to centralised _auth.js.
+// All handlers in slots.js (handleBook, handleCheckoutSlot, handleCancel,
+// handleReschedule, handleMyBookings, handleSeriesInfo) treat `user.id` as
+// a learner ID and filter by `learner_id = ${user.id}`. Accepting
+// instructor/admin tokens here would either silently return no rows or
+// INSERT a booking with a bogus learner FK — restrict to learners.
+// Guest checkout uses its own separate handler (handleCheckoutSlotGuest).
 function verifyAuth(req) {
   const { requireAuth } = require('./_auth');
-  return requireAuth(req);
+  return requireAuth(req, { roles: ['learner'] });
 }
 
 module.exports = async (req, res) => {
