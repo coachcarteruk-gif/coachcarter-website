@@ -14,7 +14,7 @@
 
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { parseCookies } = require('./_csrf');
+const { parseCookies, verifyCsrf } = require('./_csrf');
 
 const DEFAULT_SCHOOL_ID = 1; // CoachCarter — backwards compat for old tokens
 
@@ -165,6 +165,13 @@ function requireAuth(req, opts = {}) {
   // matching the allowed roles.
   const payload = decodeToken(req, { preferredCookies: cookiesForRoles(roles) });
   if (!payload) return null;
+
+  // CSRF double-submit check on mutating requests. verifyCsrf is a no-op
+  // for GET/HEAD/OPTIONS. In log-only mode (CSRF_ENFORCE !== 'true') it
+  // always returns true but emits a console.warn for mismatches so we can
+  // see which pages still need migrating. In enforce mode, a mismatch
+  // fails the request the same way a bad token does.
+  if (!verifyCsrf(req)) return null;
 
   if (roles && roles.length > 0) {
     const role = payload.role || 'learner'; // legacy learner tokens have no role
