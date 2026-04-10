@@ -85,15 +85,12 @@
     return auth;
   }
 
-  /** After login, fetch school branding if available */
+  /** After login, fetch school branding if available. Reads school_id
+   *  from the display blob returned by the login endpoint — no JWT
+   *  decode needed. */
   function onLogin(authData) {
-    if (window.ccBranding && authData && authData.token) {
-      try {
-        var payload = JSON.parse(atob(authData.token.split('.')[1]));
-        if (payload.school_id) {
-          window.ccBranding.fetchAndCacheBranding(payload.school_id);
-        }
-      } catch (e) { /* ignore decode errors */ }
+    if (window.ccBranding && authData && authData.user && authData.user.school_id) {
+      window.ccBranding.fetchAndCacheBranding(authData.user.school_id);
     }
   }
 

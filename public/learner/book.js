@@ -189,13 +189,12 @@ function updateCreditBadge() {
 async function loadLessonTypes() {
   try {
     let url = '/api/lesson-types?action=list';
-    // Pass learner + instructor context for per-learner custom rate
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const instrId = document.getElementById('instructorFilter')?.value;
-        if (payload.id && instrId) url += '&learner_id=' + payload.id + '&instructor_id=' + instrId;
-      } catch (e) { /* ignore JWT parse errors */ }
+    // Pass learner + instructor context for per-learner custom rate.
+    // Learner id is in the display blob; no JWT decode needed.
+    const auth = ccAuth.getAuth();
+    if (auth && auth.user && auth.user.id) {
+      const instrId = document.getElementById('instructorFilter')?.value;
+      if (instrId) url += '&learner_id=' + auth.user.id + '&instructor_id=' + instrId;
     }
     const res = await fetch(url);
     const data = await res.json();

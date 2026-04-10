@@ -35,13 +35,14 @@
         visitorId = 'v_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
         localStorage.setItem('cc_consent_visitor', visitorId);
       }
+      // Read learner id from the display blob mirrored in localStorage
+      // at login time. (The previous version tried atob(tok.split('.')[1])
+      // against the JSON blob, which silently failed — this is also a
+      // drive-by fix.)
       var learnerId = null;
       try {
-        var tok = localStorage.getItem('cc_learner');
-        if (tok) {
-          var payload = JSON.parse(atob(tok.split('.')[1]));
-          learnerId = payload.id || null;
-        }
+        var blob = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+        if (blob && blob.user && blob.user.id) learnerId = blob.user.id;
       } catch (e) { /* not logged in */ }
 
       fetch('/api/config?action=record-consent', {
