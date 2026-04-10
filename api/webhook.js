@@ -46,7 +46,9 @@ module.exports = async (req, res) => {
     const rawBody = await getRawBody(req);
     event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
   } catch (err) {
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    console.error('Stripe webhook signature verification failed:', err);
+    reportError('/api/webhook (signature)', err);
+    return res.status(400).send('Webhook signature verification failed');
   }
 
   if (event.type === 'checkout.session.completed') {

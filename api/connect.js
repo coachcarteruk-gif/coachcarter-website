@@ -127,7 +127,7 @@ async function handleCreateAccount(req, res) {
   } catch (err) {
     console.error('create-account error:', err);
     reportError('/api/connect?action=create-account', err);
-    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: err.message || 'Failed to create Connect account' });
+    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to create Connect account' });
   }
 }
 
@@ -381,8 +381,9 @@ async function handleSchoolCreateAccount(req, res) {
 
     return res.json({ ok: true, account_id: account.id });
   } catch (err) {
+    console.error('school-create-account error:', err);
     reportError('/api/connect?action=school-create-account', err);
-    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: err.message || 'Failed to create school Connect account' });
+    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to create school Connect account' });
   }
 }
 

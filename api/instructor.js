@@ -543,7 +543,7 @@ async function handleComplete(req, res) {
   } catch (err) {
     console.error('instructor complete error:', err);
     reportError('/api/instructor', err);
-    return res.status(500).json({ error: 'Failed to mark booking as complete', message: err.message });
+    return res.status(500).json({ error: 'Failed to mark booking as complete' });
   }
 }
 
