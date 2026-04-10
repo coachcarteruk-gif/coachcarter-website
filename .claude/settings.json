@@ -12,17 +12,6 @@
         ]
       }
     ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "Before finishing, check if any significant changes were made this session (new features, removed features, design decisions, navigation changes, new pages, API changes). If so, update these files:\n\n1. CLAUDE.md — Update the 'Navigation design' section if nav changed. Add any new design decisions or conventions that future sessions need to know about.\n2. DEVELOPMENT-ROADMAP.md — Add a dated entry for any features added, changed, or removed.\n\nOnly update if meaningful changes were made. Do NOT update for minor bug fixes, typos, or config changes. If you update files, commit them with message 'Update project docs with session changes'.",
-            "statusMessage": "Checking if docs need updating..."
-          }
-        ]
-      }
-    ],
     "PostCompact": [
       {
         "hooks": [
