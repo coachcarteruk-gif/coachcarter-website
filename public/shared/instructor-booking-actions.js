@@ -41,7 +41,7 @@
     const container = document.createElement('div');
     container.innerHTML = `
       <!-- Cancel Lesson Modal -->
-      <div class="modal-overlay" id="ba-cancel-modal" onclick="if(event.target===this)BookingActions.closeCancel()">
+      <div class="modal-overlay" id="ba-cancel-modal">
         <div class="modal">
           <div class="modal-title">Cancel Lesson</div>
           <div class="modal-sub" id="ba-cancel-sub">This will cancel the lesson and notify the learner.</div>
@@ -50,14 +50,14 @@
             <textarea id="ba-cancel-reason" placeholder="e.g. Car in for service, feeling unwell…" style="width:100%;min-height:70px;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:16px;font-family:var(--font-body);resize:vertical;background:var(--white);color:var(--primary)"></textarea>
           </div>
           <div class="modal-actions">
-            <button class="btn-modal-cancel" onclick="BookingActions.closeCancel()">Go back</button>
-            <button class="btn-cancel-danger" id="ba-cancel-btn" onclick="BookingActions.confirmCancel()" style="background:var(--red);color:white">Cancel this lesson</button>
+            <button class="btn-modal-cancel" id="ba-cancel-goback">Go back</button>
+            <button class="btn-cancel-danger" id="ba-cancel-btn" style="background:var(--red);color:white">Cancel this lesson</button>
           </div>
         </div>
       </div>
 
       <!-- Reschedule Lesson Modal -->
-      <div class="modal-overlay" id="ba-reschedule-modal" onclick="if(event.target===this)BookingActions.closeReschedule()">
+      <div class="modal-overlay" id="ba-reschedule-modal">
         <div class="modal">
           <div class="modal-title">Reschedule Lesson</div>
           <div class="modal-sub">Move this lesson to a new date and time.</div>
@@ -74,14 +74,14 @@
             </div>
           </div>
           <div class="modal-actions">
-            <button class="btn-modal-cancel" onclick="BookingActions.closeReschedule()">Cancel</button>
-            <button class="btn-modal-save" id="ba-reschedule-btn" onclick="BookingActions.confirmReschedule()">Move lesson</button>
+            <button class="btn-modal-cancel" id="ba-resch-cancel">Cancel</button>
+            <button class="btn-modal-save" id="ba-reschedule-btn">Move lesson</button>
           </div>
         </div>
       </div>
 
       <!-- Add/Book Lesson Modal -->
-      <div class="modal-overlay" id="ba-add-modal" onclick="if(event.target===this)BookingActions.closeAdd()">
+      <div class="modal-overlay" id="ba-add-modal">
         <div class="modal" style="max-width:420px">
           <div class="modal-title">Book Lesson</div>
           <div class="modal-sub">Book a lesson on behalf of a learner.</div>
@@ -89,12 +89,12 @@
             <div>
               <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Learner</div>
               <div style="position:relative">
-                <input type="text" id="ba-add-search" placeholder="Search by name, email or phone…" oninput="BookingActions._filterLearners()" onfocus="document.getElementById('ba-add-dropdown').classList.add('open')" autocomplete="off" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:16px;font-family:var(--font-body);background:var(--white);color:var(--primary)">
+                <input type="text" id="ba-add-search" placeholder="Search by name, email or phone…" autocomplete="off" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:16px;font-family:var(--font-body);background:var(--white);color:var(--primary)">
                 <div id="ba-add-dropdown" style="position:absolute;top:100%;left:0;right:0;background:var(--white);border:1px solid var(--border);border-radius:8px;max-height:200px;overflow-y:auto;z-index:10;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.1)"></div>
               </div>
               <div id="ba-add-selected" style="display:none;margin-top:8px;padding:8px 12px;background:var(--surface);border-radius:8px;display:none;align-items:center;justify-content:space-between">
                 <div><span id="ba-add-sel-name" style="font-weight:600"></span> <span id="ba-add-sel-detail" style="color:var(--muted);font-size:0.82rem;margin-left:4px"></span></div>
-                <button onclick="BookingActions._clearLearner()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:0.9rem">&#x2715;</button>
+                <button id="ba-add-clear-sel" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:0.9rem">&#x2715;</button>
               </div>
             </div>
             <div>
@@ -128,13 +128,40 @@
             </div>
           </div>
           <div class="modal-actions">
-            <button class="btn-modal-cancel" onclick="BookingActions.closeAdd()">Cancel</button>
-            <button class="btn-modal-save" id="ba-add-btn" onclick="BookingActions.confirmAdd()">Book lesson</button>
+            <button class="btn-modal-cancel" id="ba-add-cancel">Cancel</button>
+            <button class="btn-modal-save" id="ba-add-btn">Book lesson</button>
           </div>
         </div>
       </div>
     `;
     document.body.appendChild(container);
+
+    // Wire up modal-overlay click-to-close (previously inline onclick)
+    var cancelModal = document.getElementById('ba-cancel-modal');
+    if (cancelModal) cancelModal.addEventListener('click', function (e) { if (e.target === cancelModal) closeCancel(); });
+    var reschModal = document.getElementById('ba-reschedule-modal');
+    if (reschModal) reschModal.addEventListener('click', function (e) { if (e.target === reschModal) closeReschedule(); });
+    var addModal = document.getElementById('ba-add-modal');
+    if (addModal) addModal.addEventListener('click', function (e) { if (e.target === addModal) closeAdd(); });
+
+    // Wire up action buttons (previously inline onclick → BookingActions.X)
+    var bind = function (id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+    bind('ba-cancel-goback', closeCancel);
+    bind('ba-cancel-btn', confirmCancel);
+    bind('ba-resch-cancel', closeReschedule);
+    bind('ba-reschedule-btn', confirmReschedule);
+    bind('ba-add-cancel', closeAdd);
+    bind('ba-add-btn', confirmAdd);
+    bind('ba-add-clear-sel', _clearLearner);
+
+    // Learner search input: oninput → filterLearners, onfocus → show dropdown
+    var searchInput = document.getElementById('ba-add-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', _filterLearners);
+      searchInput.addEventListener('focus', function () {
+        document.getElementById('ba-add-dropdown').classList.add('open');
+      });
+    }
 
     // Close dropdown when clicking outside
     document.addEventListener('click', function (e) {
@@ -368,10 +395,27 @@
       var name = (l.first_name || '') + ' ' + (l.last_name || '');
       var detail = l.email || l.phone || '';
       var credits = l.credit_balance_pence || 0;
-      return '<div style="padding:8px 12px;cursor:pointer;font-size:0.85rem;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--surface)\'" onmouseout="this.style.background=\'\'" onclick="BookingActions._selectLearner(' + l.id + ',\'' + _esc(name).replace(/'/g, "\\'") + '\',\'' + _esc(detail).replace(/'/g, "\\'") + '\',' + credits + ')">' +
+      return '<div class="ba-learner-row" data-id="' + l.id + '" data-name="' + _esc(name) + '" data-detail="' + _esc(detail) + '" data-credits="' + credits + '" style="padding:8px 12px;cursor:pointer;font-size:0.85rem;border-bottom:1px solid var(--border)">' +
         '<div style="font-weight:600">' + _esc(name) + '</div>' +
         '<div style="font-size:0.78rem;color:var(--muted)">' + _esc(detail) + '</div></div>';
     }).join('');
+
+    // Wire up per-row click + hover (previously inline onclick / onmouseover / onmouseout)
+    var rows = dd.querySelectorAll('.ba-learner-row');
+    for (var i = 0; i < rows.length; i++) {
+      (function (row) {
+        row.addEventListener('click', function () {
+          _selectLearner(
+            parseInt(row.dataset.id, 10),
+            row.dataset.name,
+            row.dataset.detail,
+            parseInt(row.dataset.credits, 10)
+          );
+        });
+        row.addEventListener('mouseover', function () { row.style.background = 'var(--surface)'; });
+        row.addEventListener('mouseout', function () { row.style.background = ''; });
+      })(rows[i]);
+    }
   }
 
   function _selectLearner(id, name, detail, credits) {

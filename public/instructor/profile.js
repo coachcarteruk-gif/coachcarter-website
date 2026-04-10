@@ -39,7 +39,7 @@
   function renderProfile(p) {
     const initials = p.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
     const avatarHtml = p.photo_url
-      ? `<img src="${esc(p.photo_url)}" alt="${esc(p.name)}" onerror="this.style.display='none';this.parentNode.textContent='${initials}'">`
+      ? `<img src="${esc(p.photo_url)}" alt="${esc(p.name)}" data-fallback-initials="${initials}">`
       : initials;
 
     document.getElementById('profileContent').innerHTML = `
@@ -337,7 +337,7 @@
     if (!url) return;
     const avatarEl = document.getElementById('avatarEl');
     if (!avatarEl) return;
-    avatarEl.innerHTML = `<img src="${url}" alt="preview" onerror="this.style.display='none'">`;
+    avatarEl.innerHTML = `<img src="${url}" alt="preview" data-hide-on-error>`;
   }
 
   async function handlePhotoUpload(input) {
@@ -515,4 +515,21 @@ document.addEventListener('click', function (e) {
 document.addEventListener('change', function (e) {
   if (e.target && e.target.id === 'inputPhotoFile') handlePhotoUpload(e.target);
 });
+
+// Delegated image error handler — replaces inline onerror. Capture because
+// the 'error' event doesn't bubble. Two cases:
+//  - data-hide-on-error → hide the img
+//  - data-fallback-initials="XY" → hide img and replace parent textContent
+//    with the initials (used on the avatar row).
+document.addEventListener('error', function (e) {
+  var t = e.target;
+  if (!t || t.tagName !== 'IMG') return;
+  if (t.hasAttribute('data-fallback-initials')) {
+    var initials = t.dataset.fallbackInitials;
+    t.style.display = 'none';
+    if (t.parentNode) t.parentNode.textContent = initials;
+  } else if (t.hasAttribute('data-hide-on-error')) {
+    t.style.display = 'none';
+  }
+}, true);
 })();

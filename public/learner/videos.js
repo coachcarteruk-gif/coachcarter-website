@@ -1,6 +1,13 @@
 (function () {
   'use strict';
 
+// Delegated image error handler — replaces inline onerror. Capture because
+// the 'error' event does not bubble.
+document.addEventListener('error', function (e) {
+  var t = e.target;
+  if (t && t.tagName === 'IMG' && t.hasAttribute('data-hide-on-error')) t.style.display = 'none';
+}, true);
+
 // ── Hamburger menu toggle ──
 document.querySelector('.nav-menu-toggle')?.addEventListener('click', function() {
   const dd = document.querySelector('.nav-dropdown');
@@ -73,7 +80,7 @@ function renderGrid() {
   c.innerHTML = '<div class="video-grid">' + f.map(v => {
     const thumb = v.thumbnail_url || `${CF_BASE}/${v.cloudflare_uid}/thumbnails/thumbnail.jpg?time=2s&width=480`;
     return `<div class="video-card" data-action="open-player" data-uid="${v.cloudflare_uid}" data-title="${esc(v.title)}" data-desc="${esc(v.description||'')}">
-      <div class="video-thumb"><img src="${thumb}" alt="${esc(v.title)}" loading="lazy" onerror="this.style.display='none'"><div class="video-thumb-play"><div class="video-thumb-play-icon">▶</div></div>${v.duration_seconds ? `<span class="video-duration">${formatDuration(v.duration_seconds)}</span>` : ''}</div>
+      <div class="video-thumb"><img src="${thumb}" alt="${esc(v.title)}" loading="lazy" data-hide-on-error><div class="video-thumb-play"><div class="video-thumb-play-icon">▶</div></div>${v.duration_seconds ? `<span class="video-duration">${formatDuration(v.duration_seconds)}</span>` : ''}</div>
       <div class="video-card-body"><span class="video-card-tag" style="background:${v.category_color||'rgba(245,131,33,0.2)'};color:rgba(255,255,255,0.95)">${esc(v.category_label||v.category_slug)}</span>
       <div class="video-card-title">${esc(v.title)}</div>${v.description ? `<div class="video-card-desc">${esc(v.description)}</div>` : ''}</div></div>`;
   }).join('') + '</div>';
