@@ -1,5 +1,7 @@
 const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
+const { neon } = require('@neondatabase/serverless');
+const { checkRateLimit } = require('./_rate-limit');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -10,6 +12,19 @@ module.exports = async (req, res) => {
   const postcode = (req.query.postcode || '').trim().replace(/\s+/g, '');
   if (!/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/i.test(postcode)) {
     return res.status(400).json({ error: 'Invalid postcode format' });
+  }
+
+  // Rate limit: 60/hour per authenticated user. Postcodes.io is free but we
+  // proxy it, so a runaway client could generate meaningful outbound traffic.
+  // Keyed per user.id (not IP) to survive NAT and bill the right identity.
+  const sql = neon(process.env.POSTGRES_URL);
+  const rl = await checkRateLimit(sql, {
+    key: `address_lookup:${user.id}`,
+    max: 60,
+    windowSeconds: 3600,
+  });
+  if (!rl.allowed) {
+    return res.status(429).json({ error: 'Too many address lookups. Please try again later.' });
   }
 
   try {

@@ -2,6 +2,7 @@ const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
 const { resolveConfirmations } = require('./_confirmation-resolver');
+const { checkRateLimit } = require('./_rate-limit');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 function verifyAuth(req) {
@@ -1130,6 +1131,18 @@ async function handleExportData(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
+    // Rate limit: max 3 exports per learner per hour. GDPR portability
+    // exports iterate 10+ tables and serialise them to JSON — legitimate
+    // users export once at most; 3/hr blocks scraping loops.
+    const rl = await checkRateLimit(sql, {
+      key: `learner_export:${user.id}`,
+      max: 3,
+      windowSeconds: 3600,
+    });
+    if (!rl.allowed) {
+      return res.status(429).json({ error: 'Too many export requests. Please try again later.' });
+    }
+
     const [profile] = await sql`
       SELECT name, email, phone, pickup_address, test_date, test_time, prefer_contact_before, terms_accepted_at, created_at, last_activity_at
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
@@ -1228,20 +1241,16 @@ async function handleRequestDeletion(req, res) {
     const { generateToken } = require('./_auth-helpers');
     const { createTransporter } = require('./_auth-helpers');
 
-    // Rate limit: max 3 deletion requests per user per hour
-    const rateLimitKey = `deletion:${user.id}`;
-    try {
-      await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
-      const [existing] = await sql`SELECT request_count FROM rate_limits WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
-      if (existing && existing.request_count >= 3) {
-        return res.status(429).json({ error: 'Too many deletion requests. Please try again later.' });
-      }
-      if (existing) {
-        await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
-      } else {
-        await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${rateLimitKey}, 1, NOW())`;
-      }
-    } catch (e) { /* rate limit check failed — allow through */ }
+    // Rate limit: max 3 deletion requests per learner per hour. Each request
+    // sends an email — prevents mailbox spam via a compromised token.
+    const rl = await checkRateLimit(sql, {
+      key: `learner_deletion:${user.id}`,
+      max: 3,
+      windowSeconds: 3600,
+    });
+    if (!rl.allowed) {
+      return res.status(429).json({ error: 'Too many deletion requests. Please try again later.' });
+    }
 
     const [learner] = await sql`SELECT id, name, email FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
     if (!learner || !learner.email) return res.status(400).json({ error: 'Account not found or no email on file' });
