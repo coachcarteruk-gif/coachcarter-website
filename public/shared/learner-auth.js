@@ -6,12 +6,10 @@
  *     it to outgoing requests on this origin.
  *   - CSRF token lives in a non-httpOnly cookie (cc_csrf) that this
  *     module reads and echoes in X-CSRF-Token on mutating fetches.
- *   - A lightweight display-only blob (id, name, email, school_id) is
- *     still mirrored in localStorage under STORAGE_KEY so sidebar
+ *   - A lightweight display-only blob (id, name, email, school_id,
+ *     tier) is mirrored in localStorage under STORAGE_KEY so sidebar
  *     greetings and gate redirects work without an extra API call.
- *     It contains no auth material. The token field is kept here for
- *     the Bearer-fallback grace window and is removed in a later
- *     commit once the cookie rollout is complete.
+ *     It contains no auth material.
  */
 (function () {
   'use strict';
@@ -24,13 +22,6 @@
   function getAuth() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); }
     catch (e) { return null; }
-  }
-
-  /** Get the JWT bearer token from the stored session (legacy — kept
-   *  for grace window. New code should use fetchAuthed()). */
-  function getToken() {
-    var auth = getAuth();
-    return auth && auth.token ? auth.token : null;
   }
 
   /** Read a cookie by name from document.cookie. Returns '' if absent. */
@@ -74,7 +65,7 @@
   /** Redirect to login if not authenticated. Returns the auth object if valid. */
   function requireAuth(redirectBack) {
     var auth = getAuth();
-    if (!auth || !auth.token) {
+    if (!auth) {
       var url = LOGIN_URL;
       if (redirectBack !== false) {
         url += '?redirect=' + encodeURIComponent(window.location.pathname + window.location.search);
@@ -109,7 +100,6 @@
   // Expose globally
   window.ccAuth = {
     getAuth: getAuth,
-    getToken: getToken,
     getCsrfToken: getCsrfToken,
     fetchAuthed: fetchAuthed,
     requireAuth: requireAuth,

@@ -1,7 +1,6 @@
 (function () {
   'use strict';
 
-  var token = null;
   var upcomingBookings = [];
   var pastBookings = [];
   var hasMorePast = false;
@@ -11,9 +10,7 @@
   var pendingCancel = null;
 
   function init() {
-    var session = ccAuth.getAuth();
-    token = session && session.token;
-    if (!token) { window.location.href = '/learner/login.html'; return; }
+    if (!ccAuth.getAuth()) { window.location.href = '/learner/login.html'; return; }
 
     // Static handlers previously inline
     document.getElementById('tabUpcoming').addEventListener('click', function () { switchTab('upcoming'); });

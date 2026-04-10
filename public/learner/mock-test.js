@@ -39,7 +39,7 @@ const MOCK_TEST = CC_COMPETENCY.MOCK_TEST;
 /* ── Auth ── */
 window.addEventListener('DOMContentLoaded', () => {
   AUTH = ccAuth.getAuth();
-  if (!AUTH || !AUTH.token) {
+  if (!AUTH) {
     window.location.href = '/learner/login.html?redirect=/learner/mock-test.html';
     return;
   }

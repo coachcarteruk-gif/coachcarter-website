@@ -13,7 +13,7 @@ let skillScores = {}; // skillKey -> readiness 0-100
 // ── Auth ──
 window.addEventListener('DOMContentLoaded', function() {
   AUTH = ccAuth.getAuth();
-  if (!AUTH || !AUTH.token) {
+  if (!AUTH) {
     window.location.href = '/learner/login.html?redirect=/learner/progress.html';
     return;
   }

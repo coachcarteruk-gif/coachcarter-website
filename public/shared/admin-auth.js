@@ -6,10 +6,8 @@
  * via cc_instructor when that token has isAdmin=true — the backend
  * requireAuth({ roles: ['admin'] }) accepts both.
  *
- * The display blob in localStorage under STORAGE_KEY is kept during the
- * grace window for sidebar greetings and the in-page redirect check. It
- * contains no auth material (the token field is removed with the Bearer
- * fallback in a later commit).
+ * The display blob in localStorage under STORAGE_KEY is used for sidebar
+ * greetings and the in-page redirect check. It contains no auth material.
  */
 (function () {
   'use strict';
@@ -21,11 +19,6 @@
   function getAuth() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); }
     catch (e) { return null; }
-  }
-
-  function getToken() {
-    var auth = getAuth();
-    return auth && auth.token ? auth.token : null;
   }
 
   function readCookie(name) {
@@ -72,7 +65,6 @@
 
   window.ccAdminAuth = {
     getAuth: getAuth,
-    getToken: getToken,
     getCsrfToken: getCsrfToken,
     fetchAuthed: fetchAuthed,
     logout: logout,

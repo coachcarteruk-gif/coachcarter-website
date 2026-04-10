@@ -24,13 +24,12 @@
     return pence >= 100000 ? '\u00A3' + Number(pounds).toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '\u00A3' + pounds;
   }
 
-  var token = null;
+  var isAuthed = false;
   var qty = 12;
 
   function initAuth() {
-    var session = ccAuth.getAuth();
-    token = (session && session.token) || null;
-    if (!token) {
+    isAuthed = !!ccAuth.getAuth();
+    if (!isAuthed) {
       if (window.ccAuth && window.ccAuth.requireAuth) window.ccAuth.requireAuth();
       return false;
     }
@@ -264,5 +263,5 @@
   selectPkg(12);
   loadProgrammePrice();
   loadLessonTypes();
-  if (token) loadBalance();
+  if (isAuthed) loadBalance();
 })();

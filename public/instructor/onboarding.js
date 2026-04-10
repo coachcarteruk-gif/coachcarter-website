@@ -1,17 +1,14 @@
 (function () {
   'use strict';
 
-  let token = null;
-
   function init() {
     const session = ccAuth.getAuth();
-    token = session?.token || null;
-    if (!token) {
+    if (!session) {
       window.location.href = '/instructor/login.html';
       return;
     }
     // Pre-fill name if available from session
-    if (session?.instructor?.name) {
+    if (session.instructor && session.instructor.name) {
       document.getElementById('inputName').value = session.instructor.name;
     }
   }

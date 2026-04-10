@@ -2,12 +2,12 @@
   'use strict';
 
   const urlParams = new URLSearchParams(window.location.search);
-  const token     = urlParams.get('token');
+  const token     = urlParams.get('token'); // magic-link token from URL
   const redirectTo = urlParams.get('redirect') || '/learner/';
 
   // Redirect if already logged in (and not verifying a new token)
   const existing = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (existing?.token && !token) { window.location.href = redirectTo; }
+  if (existing && !token) { window.location.href = redirectTo; }
 
   let currentMethod = 'email';
   let lastPayload = null;
@@ -237,9 +237,8 @@
         return;
       }
 
-      // Store the session
+      // Store the session (display-only blob — JWT is in the httpOnly cookie)
       localStorage.setItem('cc_learner', JSON.stringify({
-        token: data.token,
         user: data.user
       }));
 
@@ -303,10 +302,9 @@
         return;
       }
 
-      // Store the session
+      // Store the session (display-only blob — JWT is in the httpOnly cookie)
       sessionData = data;
       localStorage.setItem('cc_learner', JSON.stringify({
-        token: data.token,
         user: data.user
       }));
 

@@ -11,7 +11,6 @@
     { label: 'Sunday',    value: 0 },
   ];
 
-  let token         = null;
   let windows       = []; // [{ day_of_week, start_time, end_time }]
   let isDirty       = false;
   let blackoutRanges = []; // [{ start_date, end_date, reason }]
@@ -19,9 +18,7 @@
   let blackoutsDirty = false;
 
   function init() {
-    const session = ccAuth.getAuth();
-    token = session?.token || null;
-    if (!token) { window.location.href = '/instructor/login.html'; return; }
+    if (!ccAuth.getAuth()) { window.location.href = '/instructor/login.html'; return; }
     // Set min date on blackout date inputs to today
     const today = new Date().toISOString().slice(0, 10);
     const startInput = document.getElementById('blackoutStartInput');

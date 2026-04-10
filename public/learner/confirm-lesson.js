@@ -3,7 +3,6 @@
 
   var params = new URLSearchParams(window.location.search);
   var bookingId = params.get('booking_id');
-  var token = null;
 
   function formatDate(dateStr) {
     var d = new Date(dateStr + 'T00:00:00');
@@ -22,13 +21,10 @@
   async function init() {
     if (window.ccAuth && !window.ccAuth.requireAuth()) return;
 
-    var stored = localStorage.getItem('cc_learner');
-    if (!stored) {
+    if (!localStorage.getItem('cc_learner')) {
       window.location.href = '/learner/login.html?redirect=' + encodeURIComponent(window.location.pathname + window.location.search);
       return;
     }
-    var parsed = JSON.parse(stored);
-    token = parsed.token;
 
     if (!bookingId) {
       // No booking_id — show list of pending confirmations

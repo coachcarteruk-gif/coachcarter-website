@@ -20,18 +20,16 @@ function esc(str) {
 // endpoints (via requireAuth({ roles: ['admin'] }) — which includes
 // instructors with isAdmin=true).
 //
-// localStorage display blobs are still read for sidebar greetings
-// because they're the fastest way to populate name/email on page load
-// without an extra API round-trip. They contain NO auth material.
+// localStorage display blobs are read for sidebar greetings because
+// they're the fastest way to populate name/email on page load without
+// an extra API round-trip. They contain NO auth material — session JWTs
+// live in the httpOnly cc_admin / cc_instructor cookies.
 const adminData = JSON.parse(localStorage.getItem('cc_admin') || 'null');
 const instrData = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
-const isInstructorAdmin = !adminData?.token && instrData?.token && instrData.instructor?.is_admin;
+const isInstructorAdmin = !adminData && instrData && instrData.instructor && instrData.instructor.is_admin;
 
-if (!adminData?.token && !isInstructorAdmin) window.location.href = '/admin/login.html';
+if (!adminData && !isInstructorAdmin) window.location.href = '/admin/login.html';
 
-// Kept for the grace window — pages that still rely on Bearer auth.
-// Removed alongside the backend Bearer fallback in a later commit.
-const TOKEN = isInstructorAdmin ? instrData.token : adminData.token;
 const HEADERS = { 'Content-Type': 'application/json' };
 
 // fetchAdmin: cookie-based wrapper. Use instead of fetch() for all

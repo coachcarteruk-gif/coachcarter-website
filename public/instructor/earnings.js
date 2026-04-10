@@ -1,7 +1,6 @@
 (function () {
   'use strict';
 
-  let token = null;
   let currentWeekStart = null; // ISO date string of current week's Monday
   let historyOffset = 0;
   const HISTORY_LIMIT = 12;
@@ -394,7 +393,6 @@
   async function init() {
     const auth = ccAuth.requireAuth();
     if (!auth) return;
-    token = auth.token;
 
     currentWeekStart = getMondayISO(0);
 

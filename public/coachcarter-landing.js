@@ -34,7 +34,7 @@ function go(url) { window.location.href = url; }
 
 function goLearner(dest) {
   const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  go(session?.token ? dest : '/learner/login.html?redirect=' + encodeURIComponent(dest));
+  go(session ? dest : '/learner/login.html?redirect=' + encodeURIComponent(dest));
 }
 
 function quizNext(answer) {

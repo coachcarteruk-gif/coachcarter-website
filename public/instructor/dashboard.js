@@ -4,7 +4,6 @@
 const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-let token = null;
 let instructor = null;
 let todayBookings = [];
 let allLearners = [];
@@ -13,9 +12,8 @@ let selectedLearnerCredits = 0;
 
 function init() {
   const session = ccAuth.getAuth();
-  token = session?.token;
-  instructor = session?.instructor;
-  if (!token) { window.location.href = '/instructor/login.html'; return; }
+  if (!session) { window.location.href = '/instructor/login.html'; return; }
+  instructor = session.instructor;
 
   // Greeting
   document.getElementById('greeting').textContent = 'Hi, ' + (instructor?.name?.split(' ')[0] || 'there');
@@ -28,7 +26,7 @@ function init() {
   document.getElementById('dashDate').textContent = 'TODAY \u2014 ' + dayName + ' ' + date + ' ' + month;
 
   // Init shared booking actions (cancel with reason, reschedule, add lesson)
-  BookingActions.init({ token, showToast, onRefresh: loadDashboard });
+  BookingActions.init({ showToast, onRefresh: loadDashboard });
 
   loadDashboard();
 }

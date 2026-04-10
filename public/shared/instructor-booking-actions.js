@@ -6,15 +6,17 @@
  *           add/book lesson (with learner search).
  *
  * Usage:
- *   BookingActions.init({ token, showToast, onRefresh })
+ *   BookingActions.init({ showToast, onRefresh, onCacheUpdate })
  *   BookingActions.openCancel(booking)
  *   BookingActions.openReschedule(booking)
- *   BookingActions.openAddLesson({ defaultDate, token })
+ *   BookingActions.openAddLesson({ defaultDate })
+ *
+ * All API calls ride on the cc_instructor httpOnly cookie via
+ * ccAuth.fetchAuthed() — no token needs to be passed in.
  */
 (function () {
   'use strict';
 
-  let _token = null;
   let _showToast = null;
   let _onRefresh = null;
   let _onCacheUpdate = null; // optional: (bookingId, field, value) for in-memory cache
@@ -28,7 +30,7 @@
 
   // ─── Init ───────────────────────────────────────────────────────────────────
   function init(opts) {
-    _token = opts.token;
+    opts = opts || {};
     _showToast = opts.showToast || function () {};
     _onRefresh = opts.onRefresh || function () {};
     _onCacheUpdate = opts.onCacheUpdate || null;

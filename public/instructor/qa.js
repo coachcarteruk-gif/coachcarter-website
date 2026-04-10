@@ -1,16 +1,15 @@
 (function () {
   'use strict';
 
-let token, instructor;
+let instructor;
 let allQuestions = [];
 let currentFilter = 'all';
 
 // ── Init ──
 function init() {
   const session = ccAuth.getAuth();
-  token = session?.token || null;
-  instructor = session?.instructor || null;
-  if (!token) { window.location.href = '/instructor/login.html'; return; }
+  if (!session) { window.location.href = '/instructor/login.html'; return; }
+  instructor = session.instructor || null;
   if (instructor?.is_admin) {
     const adminTab = document.getElementById('admin-tab');
     if (adminTab) adminTab.style.display = '';

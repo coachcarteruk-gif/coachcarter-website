@@ -18,13 +18,6 @@
     catch (e) { return null; }
   }
 
-  /** Get the JWT bearer token from the stored session (legacy — kept
-   *  for grace window). */
-  function getToken() {
-    var auth = getAuth();
-    return auth && auth.token ? auth.token : null;
-  }
-
   /** Read a cookie by name from document.cookie. Returns '' if absent. */
   function readCookie(name) {
     var match = ('; ' + (document.cookie || '')).match(
@@ -63,7 +56,7 @@
   /** Redirect to login if not authenticated. Returns the auth object if valid. */
   function requireAuth() {
     var auth = getAuth();
-    if (!auth || !auth.token) {
+    if (!auth) {
       window.location.href = LOGIN_URL;
       return null;
     }
@@ -92,7 +85,6 @@
   // Expose globally
   window.ccAuth = {
     getAuth: getAuth,
-    getToken: getToken,
     getCsrfToken: getCsrfToken,
     fetchAuthed: fetchAuthed,
     requireAuth: requireAuth,
