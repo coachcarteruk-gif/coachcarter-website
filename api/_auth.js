@@ -17,6 +17,49 @@ const crypto = require('crypto');
 
 const DEFAULT_SCHOOL_ID = 1; // CoachCarter — backwards compat for old tokens
 
+// ── Session cookie helpers ──────────────────────────────────────────────────
+//
+// Three session cookies, one per role, so a browser can be logged in as
+// multiple roles at once (matching the old localStorage behaviour):
+//
+//   cc_learner     — 30d  (matches magic-link JWT expiry)
+//   cc_instructor  —  7d
+//   cc_admin       —  7d
+//
+// Attributes: HttpOnly; Secure; SameSite=Lax; Path=/; no Domain.
+// Host-only by design — each hostname gets its own jar, so coachcarter.uk /
+// coachcarter.co.uk / per-school custom domains / *.vercel.app / localhost
+// don't leak into each other. See project_security_hardening memory.
+
+const SESSION_COOKIE_NAMES = {
+  learner:    'cc_learner',
+  instructor: 'cc_instructor',
+  admin:      'cc_admin',
+};
+
+const SESSION_MAX_AGE_SEC = {
+  learner:    60 * 60 * 24 * 30, // 30 days
+  instructor: 60 * 60 * 24 * 7,  //  7 days
+  admin:      60 * 60 * 24 * 7,  //  7 days
+};
+
+/**
+ * Build a Set-Cookie string for a session JWT.
+ *
+ *   HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=<expiry>
+ *
+ * No Domain attribute. Logout MUST clear with the same attributes or the
+ * browser will not match the cookie to remove.
+ */
+function buildSessionCookie(name, token, maxAgeSeconds) {
+  return `${name}=${token}; Max-Age=${maxAgeSeconds}; Path=/; HttpOnly; Secure; SameSite=Lax`;
+}
+
+/** Clear-cookie variant — Max-Age=0 with identical attributes. */
+function buildSessionClearCookie(name) {
+  return `${name}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`;
+}
+
 // ── Low-level decode ────────────────────────────────────────────────────────
 
 /**
@@ -198,5 +241,9 @@ module.exports = {
   verifyAdminSecret,
   verifyCronAuth,
   isSuperAdmin,
-  DEFAULT_SCHOOL_ID
+  DEFAULT_SCHOOL_ID,
+  SESSION_COOKIE_NAMES,
+  SESSION_MAX_AGE_SEC,
+  buildSessionCookie,
+  buildSessionClearCookie,
 };

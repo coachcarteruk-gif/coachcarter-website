@@ -45,7 +45,10 @@ const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
 const { processAllPayouts, getEligibleBookings } = require('./_payout-helpers');
-const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin } = require('./_auth');
+const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin,
+        SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
+        buildSessionCookie, buildSessionClearCookie } = require('./_auth');
+const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { logAudit } = require('./_audit');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
@@ -78,6 +81,7 @@ module.exports = async (req, res) => {
   setCors(res);
   const action = req.query.action;
   if (action === 'login')           return handleLogin(req, res);
+  if (action === 'logout')          return handleLogout(req, res);
   if (action === 'create-admin')    return handleCreateAdmin(req, res);
   if (action === 'verify')          return handleVerify(req, res);
   if (action === 'dashboard-stats') return handleDashboardStats(req, res);
@@ -159,6 +163,12 @@ async function handleLogin(req, res) {
       { expiresIn: '7d' }
     );
 
+    // Set httpOnly session cookie + CSRF double-submit cookie. Token is
+    // still returned in the body for the grace window — frontend will
+    // stop reading it in commit 5. Remove from body in commit 9.
+    appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.admin, token, SESSION_MAX_AGE_SEC.admin));
+    appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+
     return res.json({
       token,
       admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role, school_id: admin.school_id || null }
@@ -168,6 +178,17 @@ async function handleLogin(req, res) {
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Login failed', details: 'Internal server error' });
   }
+}
+
+// ── POST /api/admin?action=logout ─────────────────────────────────────────────
+// Clear the cc_admin + cc_csrf cookies. No auth required — if you can hit
+// the endpoint at all, clearing your own cookies is always safe. Attributes
+// must match the Set-Cookie used at login or the browser won't match.
+async function handleLogout(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  appendSetCookie(res, buildSessionClearCookie(SESSION_COOKIE_NAMES.admin));
+  appendSetCookie(res, buildCsrfClearCookie());
+  return res.json({ ok: true });
 }
 
 // ── POST /api/admin?action=create-admin ───────────────────────────────────────
