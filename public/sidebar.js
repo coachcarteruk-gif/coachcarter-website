@@ -202,7 +202,7 @@
         '<div class="cc-sb-credits" id="cc-sb-credits"></div>' +
         '<div class="cc-sb-theme" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;border-radius:6px;background:var(--surface, #f5f5f5);border:1px solid var(--border, #e5e5e5)">' +
           '<span style="font-size:0.8rem;color:var(--muted, #6b7280);font-weight:500">Theme</span>' +
-          '<select id="cc-sb-theme-select" onchange="ccDarkMode.set(this.value)" style="background:var(--white, #fff);border:1px solid var(--border, #e5e5e5);border-radius:5px;color:var(--primary, #1a1a1a);font-family:inherit;font-size:0.78rem;padding:4px 8px;outline:none;cursor:pointer">' +
+          '<select id="cc-sb-theme-select" style="background:var(--white, #fff);border:1px solid var(--border, #e5e5e5);border-radius:5px;color:var(--primary, #1a1a1a);font-family:inherit;font-size:0.78rem;padding:4px 8px;outline:none;cursor:pointer">' +
             '<option value="auto"' + (currentTheme === 'auto' ? ' selected' : '') + '>Auto</option>' +
             '<option value="light"' + (currentTheme === 'light' ? ' selected' : '') + '>Light</option>' +
             '<option value="dark"' + (currentTheme === 'dark' ? ' selected' : '') + '>Dark</option>' +
@@ -212,7 +212,7 @@
           '<span class="cc-sb-icon">' + icons.logOut + '</span>' +
           '<span>Sign Out</span>' +
         '</button>' +
-        '<button class="cc-sb-cookie-settings" onclick="window.ccCookieConsent&&ccCookieConsent.show()" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;margin-top:4px;border:none;background:transparent;color:var(--muted, #797879);font-size:12px;cursor:pointer;font-family:inherit">' +
+        '<button class="cc-sb-cookie-settings" id="cc-sb-cookie-settings" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;margin-top:4px;border:none;background:transparent;color:var(--muted, #797879);font-size:12px;cursor:pointer;font-family:inherit">' +
           '<span>Cookie Settings</span>' +
         '</button></div>';
     } else {
@@ -220,7 +220,7 @@
       return '<div class="cc-sb-footer" id="cc-sb-footer">' +
         '<div class="cc-sb-theme" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;border-radius:6px;background:var(--surface, #f5f5f5);border:1px solid var(--border, #e5e5e5)">' +
           '<span style="font-size:0.8rem;color:var(--muted, #6b7280);font-weight:500">Theme</span>' +
-          '<select id="cc-sb-theme-select" onchange="ccDarkMode.set(this.value)" style="background:var(--white, #fff);border:1px solid var(--border, #e5e5e5);border-radius:5px;color:var(--primary, #1a1a1a);font-family:inherit;font-size:0.78rem;padding:4px 8px;outline:none;cursor:pointer">' +
+          '<select id="cc-sb-theme-select" style="background:var(--white, #fff);border:1px solid var(--border, #e5e5e5);border-radius:5px;color:var(--primary, #1a1a1a);font-family:inherit;font-size:0.78rem;padding:4px 8px;outline:none;cursor:pointer">' +
             '<option value="auto"' + (currentTheme2 === 'auto' ? ' selected' : '') + '>Auto</option>' +
             '<option value="light"' + (currentTheme2 === 'light' ? ' selected' : '') + '>Light</option>' +
             '<option value="dark"' + (currentTheme2 === 'dark' ? ' selected' : '') + '>Dark</option>' +
@@ -644,6 +644,22 @@
     if (hamburger) hamburger.addEventListener('click', openSidebar);
     overlay.addEventListener('click', closeSidebar);
     closeBtn.addEventListener('click', closeSidebar);
+
+    // Theme select (previously inline onchange)
+    var themeSelect = document.getElementById('cc-sb-theme-select');
+    if (themeSelect) {
+      themeSelect.addEventListener('change', function () {
+        if (window.ccDarkMode) window.ccDarkMode.set(themeSelect.value);
+      });
+    }
+
+    // Cookie settings button (previously inline onclick)
+    var cookieBtn = document.getElementById('cc-sb-cookie-settings');
+    if (cookieBtn) {
+      cookieBtn.addEventListener('click', function () {
+        if (window.ccCookieConsent) window.ccCookieConsent.show();
+      });
+    }
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') closeSidebar();
     });
