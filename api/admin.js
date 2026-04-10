@@ -123,12 +123,43 @@ async function handleLogin(req, res) {
   const secret = process.env.JWT_SECRET;
   if (!secret) return res.status(500).json({ error: 'JWT_SECRET not configured' });
 
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
+  const sql = neon(process.env.POSTGRES_URL);
+  const normalisedEmail = email.toLowerCase().trim();
 
+  // Rate limiting: max 5 attempts per email per hour, 10 per IP per hour.
+  // Uses the shared `rate_limits` table (same pattern as enquiries.js).
+  // Counts ALL attempts (success + failure) so brute-forcing a known email is blocked.
+  const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  const emailKey = `admin_login_email:${normalisedEmail}`;
+  const ipKey    = `admin_login_ip:${clientIp}`;
+  try {
+    await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
+
+    const [emailRow] = await sql`SELECT request_count FROM rate_limits WHERE key = ${emailKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+    if (emailRow && emailRow.request_count >= 5) {
+      return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+    }
+    const [ipRow] = await sql`SELECT request_count FROM rate_limits WHERE key = ${ipKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+    if (ipRow && ipRow.request_count >= 10) {
+      return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+    }
+
+    if (emailRow) {
+      await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${emailKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+    } else {
+      await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${emailKey}, 1, NOW())`;
+    }
+    if (ipRow) {
+      await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${ipKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+    } else {
+      await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${ipKey}, 1, NOW())`;
+    }
+  } catch (e) { /* rate limit check failed — allow request through rather than lock everyone out */ }
+
+  try {
     const rows = await sql`
       SELECT * FROM admin_users
-      WHERE email = ${email.toLowerCase().trim()} AND active = true
+      WHERE email = ${normalisedEmail} AND active = true
     `;
     if (rows.length === 0)
       return res.status(401).json({ error: 'Invalid email or password' });
