@@ -1321,6 +1321,36 @@ Key features:
 
 ---
 
+## 2.76 — Post-Audit Tenant Isolation Hardening (10 April 2026)
+
+**What changed:**
+
+Re-ran the launch-readiness audit against the current `main` branch after commits `079959b` and `6f2f51a` landed. The previous 2026-04-07 audit report was stale — 4 of its 4 LB-7 launch blockers were already fixed in those commits. Generated a fresh `LAUNCH-AUDIT-REPORT.md`. Overall score moved from 72% to 76%, and the verdict changed from "BLOCKED — 4 launch blockers" to "Launch with Known Issues (conditional)." Data Isolation category score: 43% → 63%. SEO: 60% → 75%. Accessibility: 35% → 42%.
+
+Then applied four targeted low-effort hardening fixes flagged by the fresh audit:
+
+- **`api/address-lookup.js`** — added missing `reportError()` call in the catch block so postcode lookup failures surface in the error alert pipeline. (Only `api/status.js` now lacks one, and that is intentional — it is a sync env-var read with no failure path.)
+- **`api/waitlist.js` `handleLeave`** — now verifies `school_id` alongside `learner_id` on the UPDATE, closing a theoretical ID-guess hole where a learner could cancel another school's waitlist entry if they knew the ID. Uses `getSchoolId()` from `_auth.js`.
+- **`api/calendar.js` `handleDownload`** — enforces `AND lb.school_id = ${user.school_id || 1}` from the JWT on the single-booking `.ics` download query (defence-in-depth).
+- **`api/calendar.js` `handleInstructorFeed`** — now fetches `i.school_id` from the `calendar_token` lookup and enforces it on the bookings query.
+- **`api/reminders.js` `handleDailySchedule`** — added explicit `AND lb.school_id = ${inst.school_id}` to the per-instructor tomorrow-bookings query, matching the CLAUDE.md "every query filters by school_id" convention.
+- **`api/reminders.js` `handleSendDue` and `handlePromptConfirmations`** — documented in comments why JOIN-based tenant fencing (`lu.school_id = lb.school_id`, `i.school_id = lb.school_id`) is the correct pattern for these cross-school crons rather than a top-level `WHERE` clause. Also projected `lb.school_id` into the SELECT list so downstream handlers have explicit tenant context.
+
+**One conditional launch blocker remains (not fixed in this session):**
+
+The `availability_submissions` table (`db/migration.sql:385`) has no `school_id` column at all, and the admin GET in `api/availability.js:19-31` returns all submissions without a tenant filter. For **CoachCarter-only launch** this is not a blocker (shared lead pool is by design). For **InstructorBook multi-school launch** this is a launch blocker — must be fixed before any second school goes live: add `school_id INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id)`, populate on POST from subdomain/query param, filter on the admin GET.
+
+**Recommended follow-up (not yet done):**
+
+1. Accessibility FAILs before public launch — add `<label>` elements to unlabelled form inputs, replace `outline: none` with visible focus styles, add `role="button"` to interactive divs. EAA 2025 legal requirement.
+2. CI lint — 20-line script that greps every SQL tagged template in `api/` for `school_id` presence, fails the build otherwise. Prevents LB-7-class regressions permanently.
+3. Smoke test the hardening in production — download a calendar `.ics`, join and leave a waitlist entry.
+4. Review GitHub Dependabot moderate vulnerability flagged on push (one dependency bump).
+
+**Files changed:** `api/address-lookup.js`, `api/waitlist.js`, `api/calendar.js`, `api/reminders.js`, `LAUNCH-AUDIT-REPORT.md`, `.launch-audit-config.json`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
