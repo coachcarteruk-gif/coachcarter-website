@@ -135,6 +135,10 @@ async function handleCreateCheckout(toolInput, user, origin) {
     return { error: `Quantity must be between 1 and ${MAX_LESSONS}` };
   }
 
+  // SMS-only learners can have no email. Only pre-fill Stripe's customer_email
+  // when we have a valid value — otherwise Stripe collects it at checkout.
+  const emailValid = user.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(user.email).trim());
+
   const price = calcPrice(qty);
 
   const hours = qty * 1.5;
@@ -161,12 +165,12 @@ async function handleCreateCheckout(toolInput, user, origin) {
     metadata: {
       payment_type:      'credit_purchase',
       learner_id:        String(user.id),
-      learner_email:     user.email,
+      learner_email:     emailValid ? user.email : '',
       credits_purchased: String(qty),
       discount_pct:      String(price.discountPct),
       amount_pence:      String(price.totalPence)
     },
-    customer_email: user.email,
+    ...(emailValid ? { customer_email: user.email } : {}),
     billing_address_collection: 'required',
     allow_promotion_codes: true,
     success_url: `${origin}/learner/?lessons_added=${qty}`,

@@ -1351,6 +1351,26 @@ The `availability_submissions` table (`db/migration.sql:385`) has no `school_id`
 
 ---
 
+## 2.77 — Fix Stripe Checkout for SMS-Only Learners (10 April 2026)
+
+**What changed:**
+
+Three checkout endpoints (`api/credits.js`, `api/advisor.js`, `api/slots.js`) were passing `user.email` (or `learner.email`) directly to Stripe's `customer_email` field without validation. Because magic-link login supports both email and SMS, SMS-only learners have no email on their account. Stripe rejects blank/invalid emails with an opaque HTTP 500 "Invalid email address:" error, which was showing up in production as failed credit purchases and failed pay-per-slot bookings. Error alert emails at 2026-04-10 08:19 confirmed one learner hit this three times in a row.
+
+**Fix applied:**
+
+Each endpoint now checks the email with a simple regex before building the Stripe session. If valid, it's included as `customer_email` (fast pre-fill UX). If missing or invalid, the `customer_email` field is omitted and Stripe's hosted checkout collects the email from the learner on the payment page. The `metadata.learner_email` field is similarly blanked when the source email is invalid, which the webhook already handles via its `metadata.learner_email || session.customer_email` fallback (`api/webhook.js:107`).
+
+No frontend or profile-page changes required — SMS-only learners can now complete checkout without needing to add an email to their account first, and email learners still get the pre-filled checkout UX.
+
+**Also noted during investigation:**
+
+The learner profile page (`public/learner/profile.html`) has no email-edit field at all. If a future feature needs learners to add/change their email, that would need to be built. For the immediate Stripe bug this is not required.
+
+**Files changed:** `api/credits.js`, `api/advisor.js`, `api/slots.js`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

@@ -95,6 +95,13 @@ async function handleCheckout(req, res) {
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = user.school_id || 1;
 
+  // SMS-only learners can have no email on their account. Stripe rejects
+  // blank/invalid values passed to customer_email with an opaque 500, so we
+  // only pre-fill the field when we have a valid email. Otherwise Stripe's
+  // hosted checkout page will prompt for it. The webhook already falls back
+  // to session.customer_email (see webhook.js:107).
+  const emailValid = user.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(user.email).trim());
+
   let hours;
   if (req.body.hours) {
     hours = parseFloat(req.body.hours);
@@ -141,7 +148,7 @@ async function handleCheckout(req, res) {
       metadata: {
         payment_type:      'credit_purchase',
         learner_id:        String(user.id),
-        learner_email:     user.email,
+        learner_email:     emailValid ? user.email : '',
         credits_purchased: String(lessonEquiv),
         minutes_purchased: String(minutes),
         hours_purchased:   String(hours),
@@ -149,7 +156,7 @@ async function handleCheckout(req, res) {
         amount_pence:      String(totalPence),
         school_id:         String(schoolId)
       },
-      customer_email: user.email,
+      ...(emailValid ? { customer_email: user.email } : {}),
       billing_address_collection: 'required',
       allow_promotion_codes: true,
       success_url: `${origin}/learner/?hours_added=${hours}`,

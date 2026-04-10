@@ -1075,6 +1075,11 @@ async function handleCheckoutSlot(req, res) {
     if (!learner)
       return res.status(404).json({ error: 'Learner not found' });
 
+    // SMS-only learners can have no email. Only pre-fill Stripe's
+    // customer_email when we have a valid value — otherwise Stripe collects
+    // it at checkout. The webhook already falls back to session.customer_email.
+    const emailValid = learner.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(learner.email).trim());
+
     // Create Stripe Checkout session
     const origin = req.headers.origin || 'https://coachcarter.uk';
     const lessonDate = new Date(date + 'T00:00:00Z')
@@ -1097,7 +1102,7 @@ async function handleCheckoutSlot(req, res) {
       metadata: {
         payment_type:    'slot_booking',
         learner_id:      String(user.id),
-        learner_email:   learner.email,
+        learner_email:   emailValid ? learner.email : '',
         instructor_id:   String(instructor_id),
         instructor_name: instructor.name,
         scheduled_date:  date,
@@ -1107,7 +1112,7 @@ async function handleCheckoutSlot(req, res) {
         duration_minutes: String(durationMins),
         amount_pence:    String(pricePence)
       },
-      customer_email: learner.email,
+      ...(emailValid ? { customer_email: learner.email } : {}),
       billing_address_collection: 'required',
       allow_promotion_codes: true,
       success_url: `${origin}/learner/book.html?paid=1`,
