@@ -66,17 +66,15 @@ function buildSessionClearCookie(name) {
 /**
  * Decode + verify a JWT from the request.
  *
- * Cookie-first: tries the session cookies in `preferredCookies` order,
- * falls back to any session cookie, and only then falls back to the legacy
- * `Authorization: Bearer` header. The header path emits a console.warn
- * ([auth] Bearer header fallback ...) so we can see which frontend pages
- * still need migrating. The header branch will be removed in commit 9
- * once the frontend is fully on cookies.
+ * Reads session cookies only. A browser can be logged in as multiple
+ * roles at once (cc_learner + cc_instructor), so the caller (requireAuth)
+ * passes the role-matching cookie name first via `preferredCookies`.
+ * Cookies that don't match the preferred role are still tried as a
+ * fallback so direct callers (decodeToken with no opts) still work.
  *
- * Why cookie-first: a browser can be logged in as multiple roles at once
- * (cc_learner + cc_instructor). The caller (requireAuth) knows which role
- * it wants, so it passes the role-matching cookie name first to avoid
- * picking up the wrong session.
+ * The `Authorization: Bearer` header used to be a fallback here during
+ * the cookie migration. Removed once the frontend rollout was complete —
+ * see the commit history for `fix/security-M1-cookies`.
  *
  * @param {object} req
  * @param {object} [opts]
@@ -101,20 +99,6 @@ function decodeToken(req, opts = {}) {
       return jwt.verify(token, secret);
     } catch {
       // Bad cookie — keep trying the rest
-    }
-  }
-
-  // Legacy Authorization: Bearer fallback. Log it so the frontend rollout
-  // has visibility into which pages haven't been migrated yet. Removed in
-  // commit 9.
-  const auth = req.headers.authorization;
-  if (auth && auth.startsWith('Bearer ')) {
-    try {
-      const payload = jwt.verify(auth.slice(7), secret);
-      console.warn(`[auth] Bearer header fallback: ${req.method || '?'} ${req.url || '?'}`);
-      return payload;
-    } catch {
-      return null;
     }
   }
 
