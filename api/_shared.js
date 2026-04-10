@@ -5,14 +5,14 @@
 
 const jwt = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
+const { requireAuth } = require('./_auth');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
+// Delegates to shared requireAuth for cookie-first reads. No role filter
+// (matches pre-consolidation behaviour). Used by ask-examiner.js and
+// advisor.js which are learner-facing.
 function verifyAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try { return jwt.verify(auth.slice(7), secret); } catch { return null; }
+  return requireAuth(req);
 }
 
 // ── Skill labels for readable AI context ─────────────────────────────────────

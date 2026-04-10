@@ -18,22 +18,14 @@
 
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
+const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
 
 function setCors(res) {
 }
 
 function verifyAdminJWT(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try {
-    const payload = jwt.verify(auth.slice(7), secret);
-    if (payload.role === 'admin' || payload.role === 'superadmin') return payload;
-    if (payload.role === 'instructor' && payload.isAdmin === true) return payload;
-    return null;
-  } catch { return null; }
+  return requireAuth(req, { roles: ['admin'] });
 }
 
 module.exports = async (req, res) => {

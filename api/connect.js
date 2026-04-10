@@ -34,6 +34,7 @@
 const stripe   = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
+const { requireAuth }       = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 
@@ -42,29 +43,13 @@ const BASE_URL = process.env.BASE_URL || 'https://coachcarter.co.uk';
 function setCors(res) {
 }
 
+// Delegate to shared requireAuth for cookie-first reads.
 function verifyInstructorAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try {
-    const payload = jwt.verify(auth.slice(7), secret);
-    if (payload.role !== 'instructor') return null;
-    return payload;
-  } catch { return null; }
+  return requireAuth(req, { roles: ['instructor'] });
 }
 
 function verifyAdminJWT(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try {
-    const payload = jwt.verify(auth.slice(7), secret);
-    if (payload.role === 'admin' || payload.role === 'superadmin') return payload;
-    if (payload.role === 'instructor' && payload.isAdmin === true) return payload;
-    return null;
-  } catch { return null; }
+  return requireAuth(req, { roles: ['admin'] });
 }
 
 module.exports = async (req, res) => {

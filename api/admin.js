@@ -63,18 +63,11 @@ function getAdminSchoolId(admin, req) {
 function setCors(res) {
 }
 
-// Verify admin JWT token (accepts admin/superadmin roles OR instructors with isAdmin flag)
+// Verify admin JWT token (accepts admin/superadmin roles OR instructors with isAdmin flag).
+// Delegates to shared requireAuth so cookie-first + CSRF + school_id checks
+// are applied consistently with the rest of the codebase.
 function verifyAdminJWT(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try {
-    const payload = jwt.verify(auth.slice(7), secret);
-    if (payload.role === 'admin' || payload.role === 'superadmin') return payload;
-    if (payload.role === 'instructor' && payload.isAdmin === true) return payload;
-    return null;
-  } catch { return null; }
+  return requireAuth(req, { roles: ['admin'] });
 }
 
 module.exports = async (req, res) => {

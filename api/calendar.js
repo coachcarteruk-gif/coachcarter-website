@@ -14,6 +14,7 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
 const crypto   = require('crypto');
+const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
 
 const SLOT_MINUTES = 90;
@@ -21,12 +22,10 @@ const SLOT_MINUTES = 90;
 function setCors(res) {
 }
 
+// Delegates to shared requireAuth for cookie-first reads. No role filter
+// is applied (matches pre-consolidation behaviour).
 function verifyAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try { return jwt.verify(auth.slice(7), secret); } catch { return null; }
+  return requireAuth(req);
 }
 
 module.exports = async (req, res) => {
@@ -188,15 +187,7 @@ async function handleFeedUrl(req, res) {
 // ── Instructor auth helper ────────────────────────────────────────────────────
 
 function verifyInstructorAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try {
-    const payload = jwt.verify(auth.slice(7), secret);
-    if (payload.role !== 'instructor') return null;
-    return payload;
-  } catch { return null; }
+  return requireAuth(req, { roles: ['instructor'] });
 }
 
 // ── GET /api/calendar?action=instructor-feed&token=X ────────────────────────
