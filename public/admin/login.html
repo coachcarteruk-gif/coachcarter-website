@@ -127,13 +127,13 @@
   <a href="/" class="back-link">Back to website</a>
 
 <script>
-  // Redirect if already logged in
+  // Redirect if already logged in. The session JWT lives in the httpOnly
+  // cc_admin cookie — we just hit /verify with credentials included to
+  // check validity. localStorage is only used as a quick hint to skip
+  // the verify round-trip if there's no display blob at all.
   const existing = JSON.parse(localStorage.getItem('cc_admin') || 'null');
-  if (existing?.token) {
-    // Verify token is still valid
-    fetch('/api/admin?action=verify', {
-      headers: { 'Authorization': 'Bearer ' + existing.token }
-    }).then(r => {
+  if (existing) {
+    fetch('/api/admin?action=verify', { credentials: 'include' }).then(r => {
       if (r.ok) window.location.href = '/admin/portal.html';
       else localStorage.removeItem('cc_admin');
     }).catch(() => {});
@@ -156,6 +156,7 @@
     try {
       const res = await fetch('/api/admin?action=login', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: document.getElementById('login-email').value,

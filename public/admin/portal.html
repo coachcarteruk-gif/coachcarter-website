@@ -17,6 +17,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
   <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/admin-auth.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -954,15 +955,29 @@ function esc(str) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────
-// Accept either a direct admin login OR an instructor with is_admin flag
+// Authentication now lives in the httpOnly cc_admin / cc_instructor
+// cookies. Session JWTs are attached automatically by the browser on
+// same-origin fetches; the backend accepts either cookie for admin
+// endpoints (via requireAuth({ roles: ['admin'] }) — which includes
+// instructors with isAdmin=true).
+//
+// localStorage display blobs are still read for sidebar greetings
+// because they're the fastest way to populate name/email on page load
+// without an extra API round-trip. They contain NO auth material.
 const adminData = JSON.parse(localStorage.getItem('cc_admin') || 'null');
 const instrData = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
 const isInstructorAdmin = !adminData?.token && instrData?.token && instrData.instructor?.is_admin;
 
 if (!adminData?.token && !isInstructorAdmin) window.location.href = '/admin/login.html';
 
+// Kept for the grace window — pages that still rely on Bearer auth.
+// Removed alongside the backend Bearer fallback in a later commit.
 const TOKEN = isInstructorAdmin ? instrData.token : adminData.token;
-const HEADERS = { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' };
+const HEADERS = { 'Content-Type': 'application/json' };
+
+// fetchAdmin: cookie-based wrapper. Use instead of fetch() for all
+// admin API calls. Imports from shared/admin-auth.js.
+const fetchAdmin = window.ccAdminAuth.fetchAuthed;
 
 // Set admin info in sidebar
 if (isInstructorAdmin) {
@@ -975,16 +990,21 @@ if (isInstructorAdmin) {
 
 function logout() {
   if (isInstructorAdmin) {
-    // Instructor-admins go back to their portal, not the admin login
+    // Instructor-admins: clear the instructor session on the server
+    // (not the admin one — they authenticated via cc_instructor).
+    try {
+      fetchAdmin('/api/instructor?action=logout', { method: 'POST', keepalive: true })
+        .catch(function () {});
+    } catch (e) { /* ignore */ }
+    localStorage.removeItem('cc_instructor');
     window.location.href = '/instructor/';
   } else {
-    localStorage.removeItem('cc_admin');
-    window.location.href = '/admin/login.html';
+    window.ccAdminAuth.logout();
   }
 }
 
-// Verify token on load
-fetch('/api/admin?action=verify', { headers: HEADERS })
+// Verify session on load (cookie rides automatically)
+fetchAdmin('/api/admin?action=verify')
   .then(r => { if (!r.ok) logout(); })
   .catch(() => logout());
 
@@ -1057,7 +1077,7 @@ function statusBadge(status) {
 // ══════════════════════════════════════════════════════════════════
 async function loadDashboard() {
   try {
-    const res = await fetch('/api/admin?action=dashboard-stats', { headers: HEADERS });
+    const res = await fetchAdmin('/api/admin?action=dashboard-stats', { headers: HEADERS });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
 
@@ -1076,7 +1096,7 @@ async function loadDashboard() {
 
   // Load upcoming bookings
   try {
-    const res = await fetch('/api/admin?action=all-bookings&status=confirmed', { headers: HEADERS });
+    const res = await fetchAdmin('/api/admin?action=all-bookings&status=confirmed', { headers: HEADERS });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
 
@@ -1109,7 +1129,7 @@ let instructorsCache = [];
 
 async function loadInstructors() {
   try {
-    const res = await fetch('/api/admin?action=all-instructors', { headers: HEADERS });
+    const res = await fetchAdmin('/api/admin?action=all-instructors', { headers: HEADERS });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
     instructorsCache = data.instructors;
@@ -1253,7 +1273,7 @@ async function saveInstructor() {
 
 async function toggleInstructor(id, active) {
   try {
-    const res = await fetch('/api/instructors?action=update', {
+    const res = await fetchAdmin('/api/instructors?action=update', {
       method: 'POST', headers: HEADERS,
       body: JSON.stringify({ id, active })
     });
@@ -1272,7 +1292,7 @@ let availWindows = []; // current working set
 
 async function loadInstructorSelect() {
   try {
-    const res = await fetch('/api/admin?action=all-instructors', { headers: HEADERS });
+    const res = await fetchAdmin('/api/admin?action=all-instructors', { headers: HEADERS });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
     instructorsCache = data.instructors;
@@ -1363,7 +1383,7 @@ async function saveAvailability() {
   if (!instructorId) return;
 
   try {
-    const res = await fetch('/api/instructors?action=set-availability', {
+    const res = await fetchAdmin('/api/instructors?action=set-availability', {
       method: 'POST', headers: HEADERS,
       body: JSON.stringify({
         instructor_id: instructorId,
@@ -1391,7 +1411,7 @@ async function loadBlackouts(instructorId) {
   const list = document.getElementById('blackout-list');
   if (!instructorId) { list.innerHTML = ''; return; }
   try {
-    const res = await fetch('/api/admin?action=instructor-blackouts&instructor_id=' + instructorId, { headers: HEADERS });
+    const res = await fetchAdmin('/api/admin?action=instructor-blackouts&instructor_id=' + instructorId, { headers: HEADERS });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
     blackoutRanges = (data.blackout_dates || []).map(d => ({
@@ -1466,7 +1486,7 @@ async function saveBlackouts() {
   if (!instructorId) { toast('Select an instructor first', 'error'); return; }
 
   try {
-    var res = await fetch('/api/admin?action=set-instructor-blackouts', {
+    var res = await fetchAdmin('/api/admin?action=set-instructor-blackouts', {
       method: 'POST', headers: HEADERS,
       body: JSON.stringify({ instructor_id: parseInt(instructorId), ranges: blackoutRanges })
     });
@@ -1491,7 +1511,7 @@ let currentBookingFilter = '';
 
 async function loadBookings() {
   try {
-    const res = await fetch('/api/admin?action=all-bookings', { headers: HEADERS });
+    const res = await fetchAdmin('/api/admin?action=all-bookings', { headers: HEADERS });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
     allBookings = data.bookings;
@@ -1541,7 +1561,7 @@ function renderBookings() {
 
 async function markComplete(bookingId) {
   try {
-    const res = await fetch('/api/admin?action=mark-complete', {
+    const res = await fetchAdmin('/api/admin?action=mark-complete', {
       method: 'POST', headers: HEADERS,
       body: JSON.stringify({ booking_id: bookingId })
     });
@@ -1569,7 +1589,7 @@ async function openAdminEditBooking(bookingId) {
 
   // Load lesson types (include inactive for legacy corrections)
   try {
-    const res = await fetch('/api/lesson-types?action=list&include_inactive=true', { headers: HEADERS });
+    const res = await fetchAdmin('/api/lesson-types?action=list&include_inactive=true', { headers: HEADERS });
     const data = await res.json();
     adminEditLessonTypes = data.lesson_types || [];
   } catch { adminEditLessonTypes = []; }
@@ -1627,7 +1647,7 @@ async function confirmAdminEditBooking(forceOverride) {
   var btn = document.getElementById('adminEditSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    var res = await fetch('/api/admin?action=edit-booking', {
+    var res = await fetchAdmin('/api/admin?action=edit-booking', {
       method: 'POST', headers: HEADERS,
       body: JSON.stringify({
         booking_id: adminEditBookingId,
@@ -1668,7 +1688,7 @@ let currentLearnerTierFilter = 0;
 
 async function loadLearners() {
   try {
-    const res = await fetch('/api/admin?action=all-learners', { headers: HEADERS });
+    const res = await fetchAdmin('/api/admin?action=all-learners', { headers: HEADERS });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
     allLearners = data.learners;
@@ -1737,7 +1757,7 @@ async function showLearnerDetail(id) {
   panel.scrollIntoView({ behavior: 'smooth' });
 
   try {
-    const res = await fetch('/api/admin?action=learner-detail&learner_id=' + id, { headers: HEADERS });
+    const res = await fetchAdmin('/api/admin?action=learner-detail&learner_id=' + id, { headers: HEADERS });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
 
@@ -1818,7 +1838,7 @@ function confirmDeleteLearner(id, name) {
 
 async function deleteLearner(id) {
   try {
-    const res = await fetch('/api/admin?action=delete-learner', {
+    const res = await fetchAdmin('/api/admin?action=delete-learner', {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ learner_id: id })
@@ -1907,7 +1927,7 @@ async function submitAdjustCredits() {
   const hours = window._adjustType === 'add' ? hoursInput : -hoursInput;
 
   try {
-    const res = await fetch('/api/admin?action=adjust-credits', {
+    const res = await fetchAdmin('/api/admin?action=adjust-credits', {
       method: 'POST',
       headers: HEADERS,
       body: JSON.stringify({ learner_id: _adjustLearnerId, hours, reason: reason || undefined })
@@ -1950,8 +1970,8 @@ function formatDuration(sec) {
 async function loadVideos() {
   try {
     const [catRes, vidRes] = await Promise.all([
-      fetch('/api/videos?action=categories', { headers: HEADERS }),
-      fetch('/api/videos?action=list&learner_only=true', { headers: HEADERS })
+      fetchAdmin('/api/videos?action=categories', { headers: HEADERS }),
+      fetchAdmin('/api/videos?action=list&learner_only=true', { headers: HEADERS })
     ]);
     videoCategoriesCache = (await catRes.json()).categories || [];
     videosCache = (await vidRes.json()).videos || [];
@@ -2061,7 +2081,7 @@ async function bulkAction(type) {
   if (type === 'delete') {
     if (!confirm(`Delete ${ids.length} video(s)? This cannot be undone.`)) return;
     try {
-      const res = await fetch('/api/videos?action=bulk-delete', { method: 'POST', headers: HEADERS, body: JSON.stringify({ ids }) });
+      const res = await fetchAdmin('/api/videos?action=bulk-delete', { method: 'POST', headers: HEADERS, body: JSON.stringify({ ids }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       toast(`${ids.length} video(s) deleted`, 'success');
@@ -2069,7 +2089,7 @@ async function bulkAction(type) {
   } else {
     const updates = type === 'publish' ? { published: true } : { published: false };
     try {
-      const res = await fetch('/api/videos?action=bulk-update', { method: 'POST', headers: HEADERS, body: JSON.stringify({ ids, updates }) });
+      const res = await fetchAdmin('/api/videos?action=bulk-update', { method: 'POST', headers: HEADERS, body: JSON.stringify({ ids, updates }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       toast(`${ids.length} video(s) ${type === 'publish' ? 'published' : 'unpublished'}`, 'success');
@@ -2125,7 +2145,7 @@ async function handleVideoFileSelect(e) {
 
   try {
     // Get upload URL from our API
-    const urlRes = await fetch('/api/videos?action=upload-url', {
+    const urlRes = await fetchAdmin('/api/videos?action=upload-url', {
       method: 'POST', headers: HEADERS,
       body: JSON.stringify({ maxDurationSeconds: 3600 })
     });
@@ -2184,7 +2204,7 @@ async function pollVideoMeta(uid) {
   for (let i = 0; i < 30; i++) {
     await new Promise(r => setTimeout(r, 3000));
     try {
-      const res = await fetch(`/api/videos?action=fetch-meta&uid=${uid}`, { headers: HEADERS });
+      const res = await fetchAdmin(`/api/videos?action=fetch-meta&uid=${uid}`, { headers: HEADERS });
       const data = await res.json();
       if (data.ready && data.duration) {
         document.getElementById('vid-upload-status').textContent = 'Ready · Duration: ' + formatDuration(data.duration);
@@ -2320,7 +2340,7 @@ async function saveVideo() {
 async function deleteVideo(id) {
   if (!confirm('Delete this video? This will also remove it from Cloudflare.')) return;
   try {
-    const res = await fetch('/api/videos?action=delete', {
+    const res = await fetchAdmin('/api/videos?action=delete', {
       method: 'POST', headers: HEADERS, body: JSON.stringify({ id })
     });
     if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
@@ -2360,7 +2380,7 @@ async function addCategory() {
   if (!slug || !label) { toast('Slug and label are required', 'error'); return; }
 
   try {
-    const res = await fetch('/api/videos?action=create-category', {
+    const res = await fetchAdmin('/api/videos?action=create-category', {
       method: 'POST', headers: HEADERS, body: JSON.stringify({ slug, label })
     });
     const data = await res.json();
@@ -2376,7 +2396,7 @@ async function addCategory() {
 async function deleteCategory(slug) {
   if (!confirm('Delete this category? Only works if no videos use it.')) return;
   try {
-    const res = await fetch('/api/videos?action=delete-category', {
+    const res = await fetchAdmin('/api/videos?action=delete-category', {
       method: 'POST', headers: HEADERS, body: JSON.stringify({ slug })
     });
     const data = await res.json();
@@ -2395,7 +2415,7 @@ async function loadLessonTypes() {
   const body = document.getElementById('lesson-types-body');
   body.innerHTML = '<tr><td colspan="8">Loading...</td></tr>';
   try {
-    const res = await fetch('/api/lesson-types?action=all', { headers: HEADERS });
+    const res = await fetchAdmin('/api/lesson-types?action=all', { headers: HEADERS });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || data.error);
     lessonTypesCache = data.lesson_types || [];
@@ -2473,7 +2493,7 @@ async function saveLessonType() {
   const action = editId ? 'update' : 'create';
   if (editId) payload.id = parseInt(editId);
   try {
-    const res = await fetch(`/api/lesson-types?action=${action}`, {
+    const res = await fetchAdmin(`/api/lesson-types?action=${action}`, {
       method: 'POST',
       headers: HEADERS,
       body: JSON.stringify(payload)
@@ -2490,7 +2510,7 @@ async function saveLessonType() {
 
 async function toggleLessonType(id, active) {
   try {
-    const res = await fetch('/api/lesson-types?action=toggle', {
+    const res = await fetchAdmin('/api/lesson-types?action=toggle', {
       method: 'POST',
       headers: HEADERS,
       body: JSON.stringify({ id, active })
@@ -2514,9 +2534,7 @@ function fmtDateShort(d) {
 
 async function loadPayouts() {
   try {
-    const res = await fetch('/api/admin?action=payout-overview', {
-      headers: { 'Authorization': 'Bearer ' + adminToken }
-    });
+    const res = await fetchAdmin('/api/admin?action=payout-overview');
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
 
@@ -2587,9 +2605,8 @@ async function loadPayouts() {
 
 async function togglePayoutPause(instructorId, paused) {
   try {
-    const res = await fetch('/api/admin?action=toggle-payout-pause', {
+    const res = await fetchAdmin('/api/admin?action=toggle-payout-pause', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({ instructor_id: instructorId, paused })
     });
     const data = await res.json();
@@ -2604,9 +2621,8 @@ async function togglePayoutPause(instructorId, paused) {
 async function sendConnectInvite(instructorId) {
   if (!confirm('Send a Stripe Connect onboarding email to this instructor?')) return;
   try {
-    const res = await fetch('/api/connect?action=admin-send-invite', {
+    const res = await fetchAdmin('/api/connect?action=admin-send-invite', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({ instructor_id: instructorId })
     });
     const data = await res.json();
@@ -2624,9 +2640,8 @@ async function processPayoutsNow() {
   btn.textContent = 'Processing...';
   btn.disabled = true;
   try {
-    const res = await fetch('/api/admin?action=process-payouts', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' }
+    const res = await fetchAdmin('/api/admin?action=process-payouts', {
+      method: 'POST'
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);

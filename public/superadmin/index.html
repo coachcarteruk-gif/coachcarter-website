@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
   <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/admin-auth.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -250,9 +251,9 @@ body {
     return;
   }
 
-  // API helpers
+  // API helpers — session cookie rides automatically via fetchAuthed
   async function apiFetch(url) {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await window.ccAdminAuth.fetchAuthed(url);
     return res.json();
   }
 
@@ -279,10 +280,9 @@ body {
 
   loadStats();
 
-  // Logout
+  // Logout — clears the cc_admin + cc_csrf cookies on the server.
   window.logout = function() {
-    localStorage.removeItem('cc_admin');
-    window.location.href = '/admin/login.html';
+    window.ccAdminAuth.logout();
   };
 })();
 </script>
