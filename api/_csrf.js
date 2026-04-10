@@ -130,16 +130,16 @@ function safeEqual(a, b) {
  *   - GET / HEAD / OPTIONS always pass (reads are not state-changing).
  *   - Non-GET must have both the `cc_csrf` cookie and an `X-CSRF-Token`
  *     header, and the two must be equal (constant time).
- *   - Missing cookie OR missing header OR mismatch = fail.
- *
- * Enforcement is gated by CSRF_ENFORCE. When not in enforce mode,
- * a failed check logs `[csrf] <reason>` via console.warn and returns
- * true (request proceeds). Flip CSRF_ENFORCE=true once the frontend
- * migration is done and logs are clean.
+ *   - Missing cookie OR missing header OR mismatch = fail (false).
  *
  * Callers (requireAuth and friends) treat a false return the same way
  * they treat a bad JWT — return null to the handler, which produces
  * a 401. Individual endpoints can also call this directly.
+ *
+ * History: this was rolled out in log-only mode (CSRF_ENFORCE env var
+ * check) alongside the frontend migration. Once the preview logs
+ * showed zero `[csrf] LOG-ONLY` warnings across real-user traffic,
+ * this commit flips enforcement on unconditionally.
  */
 function verifyCsrf(req) {
   const method = (req.method || 'GET').toUpperCase();
@@ -147,7 +147,6 @@ function verifyCsrf(req) {
     return true;
   }
 
-  const enforce = process.env.CSRF_ENFORCE === 'true';
   const cookieVal = parseCookies(req)[CSRF_COOKIE];
   const headerVal = req.headers?.[CSRF_HEADER];
 
@@ -159,8 +158,8 @@ function verifyCsrf(req) {
 
   if (reason) {
     const path = req.url || '?';
-    console.warn(`[csrf] ${enforce ? 'REJECT' : 'LOG-ONLY'} ${method} ${path} — ${reason}`);
-    return !enforce;
+    console.warn(`[csrf] REJECT ${method} ${path} — ${reason}`);
+    return false;
   }
 
   return true;
