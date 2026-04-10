@@ -6,8 +6,7 @@
 
    API:
      window.ccAuth.isLoggedIn   — boolean
-     window.ccAuth.token        — JWT string or null
-     window.ccAuth.user         — { id, name, email, tier } or null
+     window.ccAuth.user         — { id, name, email, tier, school_id } or null
      window.ccAuth.requireAuth() — shows sign-in modal if not logged in, returns boolean
      window.ccAuth.onAuth(fn)   — calls fn when user signs in (for deferred actions)
 ─────────────────────────────────────────────────────────────────────────────── */
@@ -19,14 +18,13 @@
     session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
   } catch (e) {}
 
-  var isLoggedIn = !!(session && session.token);
+  var isLoggedIn = !!session;
   var pendingCallbacks = [];
 
   // ── Public API (extend existing ccAuth from learner-auth.js) ────
   var existing = window.ccAuth || {};
   window.ccAuth = Object.assign({}, existing, {
     isLoggedIn: isLoggedIn,
-    token: isLoggedIn ? session.token : null,
     user: isLoggedIn ? (session.user || session) : null,
 
     /** Show sign-in modal if not logged in. Returns true if already authed. */

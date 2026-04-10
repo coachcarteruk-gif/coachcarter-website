@@ -21,7 +21,7 @@ const ANSWER_LABELS = {
 // ── Auth ──
 window.addEventListener('DOMContentLoaded', () => {
   AUTH = ccAuth.getAuth();
-  if (!AUTH?.token) {
+  if (!AUTH) {
     window.location.href = '/learner/login.html?redirect=/learner/examiner-quiz.html';
     return;
   }
@@ -226,7 +226,7 @@ function showResults() {
   }
 
   // Persist quiz results to competency record
-  if (AUTH?.token && typeof CC_COMPETENCY !== 'undefined') {
+  if (AUTH && typeof CC_COMPETENCY !== 'undefined') {
     try {
       const quizResults = answers.map(a => {
         const scenario = quizScenarios.find(s => s.id === a.id);

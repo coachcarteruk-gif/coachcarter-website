@@ -11,7 +11,7 @@ const MON_FULL  = ['January','February','March','April','May','June','July','Aug
 const DEFAULT_PRICE_PENCE = 8250; // fallback if lesson-types API fails
 
 // ─── State ───────────────────────────────────────────────────────────────────
-let token         = null;
+let auth          = null; // null when browsing as guest; { user, ... } when logged in
 let creditBalance = 0;
 let balanceMinutes = 0;
 let instructors   = [];
@@ -34,8 +34,7 @@ let learnerProfile = { phone: '', pickup_address: '' };
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
-  const session = ccAuth.getAuth();
-  token = session?.token || null;
+  auth = ccAuth.getAuth();
 
   if (localStorage.getItem('cc_welcome') === '1') {
     document.getElementById('welcomeBanner').style.display = 'flex';
@@ -47,7 +46,7 @@ function init() {
   preselectedTypeId = params.get('type_id'); // ?type_id=3 (from reschedule)
   const rescheduleBookingId = params.get('reschedule'); // ?reschedule=BOOKING_ID
   if (params.get('paid') === '1') {
-    const paidMsg = token
+    const paidMsg = auth
       ? 'Payment successful — your lesson is booked! Check your email for details.'
       : 'Booking confirmed! Check your email for details and a link to manage your bookings.';
     showToast(paidMsg, 'success');
@@ -92,7 +91,7 @@ function init() {
     else if (document.getElementById('rescheduleModal').classList.contains('open')) closeRescheduleModal();
   });
 
-  const isGuest = !token;
+  const isGuest = !auth;
 
   function preselectInstructor() {
     const sel = document.getElementById('instructorFilter');
@@ -106,7 +105,7 @@ function init() {
     }
   }
 
-  if (!token) {
+  if (!auth) {
     Promise.all([loadInstructors(), loadLessonTypes()])
       .then(() => {
         preselectInstructor();
@@ -123,7 +122,7 @@ function init() {
       showPostcodePromptIfNeeded();
 
       // Activate reschedule mode if ?reschedule=BOOKING_ID is in the URL
-      if (rescheduleBookingId && token) {
+      if (rescheduleBookingId && auth) {
         try {
           const res = await ccAuth.fetchAuthed('/api/slots?action=my-bookings');
           const data = await res.json();
@@ -191,7 +190,6 @@ async function loadLessonTypes() {
     let url = '/api/lesson-types?action=list';
     // Pass learner + instructor context for per-learner custom rate.
     // Learner id is in the display blob; no JWT decode needed.
-    const auth = ccAuth.getAuth();
     if (auth && auth.user && auth.user.id) {
       const instrId = document.getElementById('instructorFilter')?.value;
       if (instrId) url += '&learner_id=' + auth.user.id + '&instructor_id=' + instrId;
@@ -306,7 +304,7 @@ async function loadLearnerProfile() {
 function showPostcodePromptIfNeeded() {
   const prompt = document.getElementById('postcodePrompt');
   if (!prompt) return;
-  if (token && !learnerProfile.pickup_address?.trim()) {
+  if (auth && !learnerProfile.pickup_address?.trim()) {
     prompt.style.display = 'block';
   } else {
     prompt.style.display = 'none';
@@ -607,7 +605,7 @@ function showError(msg) { document.getElementById('calContent').innerHTML = `<di
 
 // ─── Book modal ──────────────────────────────────────────────────────────────
 function openBookModal(el) {
-  const isGuest = !token;
+  const isGuest = !auth;
 
   // Authenticated users with incomplete profile see inline fields (same as guest) instead of being blocked
   const needsProfileFields = !isGuest && !isProfileComplete();
@@ -879,13 +877,13 @@ async function confirmBookWithCredit() {
 async function confirmPayAndBook() {
   if (!pendingSlot) return;
   // Save profile fields first if shown (phone/pickup for incomplete profiles)
-  if (!(!token) && !(await saveProfileFieldsFromModal())) return;
+  if (auth && !(await saveProfileFieldsFromModal())) return;
 
   const btn = document.getElementById('btnPayAndBook');
   const label = document.getElementById('payBtnLabel');
   const spinner = document.getElementById('paySpinner');
   const ltPrice = selectedLessonType ? selectedLessonType.price_pence : DEFAULT_PRICE_PENCE;
-  const isGuest = !token;
+  const isGuest = !auth;
 
   // Guest validation — inline per-field errors
   if (isGuest) {

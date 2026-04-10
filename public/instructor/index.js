@@ -9,7 +9,6 @@ const MON_FULL   = ['January','February','March','April','May','June','July','Au
 const DAY_INDEX  = [1,2,3,4,5,6,0]; // Mon–Sun display order
 
 // ─── State ───────────────────────────────────────────────────────────────────
-let token      = null;
 let instructor = null;
 let currentView = 'agenda'; // 'monthly' | 'weekly' | 'agenda'
 let cursor     = new Date(); // current date driving the view
@@ -25,9 +24,8 @@ let selectedBooking = null;
 // ─── Init ────────────────────────────────────────────────────────────────────
 async function init() {
   const session = ccAuth.getAuth();
-  token      = session?.token || null;
-  instructor = session?.instructor || null;
-  if (!token) { window.location.href = '/instructor/login.html'; return; }
+  if (!session) { window.location.href = '/instructor/login.html'; return; }
+  instructor = session.instructor || null;
 
   // Default to today
   cursor = new Date(); cursor.setHours(0,0,0,0);
@@ -870,7 +868,7 @@ async function refreshSchedule(silent) {
 
 // Auto-refresh every 60s when page is visible (skip if user is typing)
 setInterval(() => {
-  if (document.visibilityState === 'visible' && token) {
+  if (document.visibilityState === 'visible' && ccAuth.getAuth()) {
     const active = document.activeElement;
     const calEl = document.getElementById('calContent');
     if (active && calEl && calEl.contains(active) && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName)) return;

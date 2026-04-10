@@ -7,7 +7,7 @@
   // ── Auth ──────────────────────────────────────────────────────────
   var AUTH;
   AUTH = ccAuth.getAuth();
-  if (!AUTH || !AUTH.token) { window.location.href = '/learner/login.html'; return; }
+  if (!AUTH) { window.location.href = '/learner/login.html'; return; }
 
   // ── State ─────────────────────────────────────────────────────────
   var CC = window.CC_COMPETENCY;

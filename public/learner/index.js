@@ -6,7 +6,7 @@ let AUTH, BOOKINGS_DATA, UNLOGGED_DATA;
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = ccAuth.getAuth();
 
-  if (!AUTH?.token) {
+  if (!AUTH) {
     document.getElementById('welcome-msg').textContent = 'Welcome!';
     document.getElementById('next-lesson-empty').classList.add('show');
     removeSkeleton();
@@ -25,7 +25,7 @@ function removeSkeleton() {
 
 // ── Profile Completion Card ──
 async function loadProfileCompleteness() {
-  if (!AUTH?.token) return;
+  if (!AUTH) return;
   if (localStorage.getItem('cc_profile_dismissed') === 'true') return;
   try {
     const res = await ccAuth.fetchAuthed('/api/learner?action=profile-completeness');

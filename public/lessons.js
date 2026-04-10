@@ -221,7 +221,7 @@ function scrollToPackages() {
 // Primary booking flow — sends users to the learner portal
 function bookFreeTrial() {
   const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (session?.token) {
+  if (session) {
     window.location.href = '/learner/book.html';
   } else {
     window.location.href = '/learner/login.html?redirect=/learner/book.html';

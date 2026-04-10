@@ -8,7 +8,7 @@ let isSending = false;
 // ── Auth ──
 window.addEventListener('DOMContentLoaded', () => {
   AUTH = ccAuth.getAuth();
-  if (!AUTH?.token) {
+  if (!AUTH) {
     window.location.href = '/learner/login.html?redirect=/learner/ask-examiner.html';
     return;
   }

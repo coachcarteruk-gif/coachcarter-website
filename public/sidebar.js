@@ -139,7 +139,7 @@
     var items = navItems[context] || navItems.public;
     var html = '';
     var _s; try { _s = JSON.parse(localStorage.getItem('cc_learner') || 'null'); } catch(e) {}
-    var isLoggedIn = !!(_s && _s.token);
+    var isLoggedIn = !!_s;
     for (var i = 0; i < items.length; i++) {
       if (items[i] === 'divider') {
         html += '<div class="cc-sb-divider"></div>';
@@ -191,7 +191,7 @@
     var isLoggedIn = false;
     try {
       var session = JSON.parse(localStorage.getItem(storageKey) || 'null');
-      isLoggedIn = !!(session && session.token);
+      isLoggedIn = !!session;
     } catch(e) {}
 
     if (isLoggedIn) {

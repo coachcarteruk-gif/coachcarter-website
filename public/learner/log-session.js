@@ -120,7 +120,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
   updateStep2Button();
 
-  if (!AUTH?.token) return; // form visible, submit gated
+  if (!AUTH) return; // form visible, submit gated
 
   loadSessions();
 

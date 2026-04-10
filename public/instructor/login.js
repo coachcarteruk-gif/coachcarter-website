@@ -2,11 +2,11 @@
   'use strict';
 
   const urlParams = new URLSearchParams(window.location.search);
-  const token     = urlParams.get('token');
+  const token     = urlParams.get('token'); // magic-link token from URL
 
   // If already logged in, redirect
   const existing = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
-  if (existing?.token && !token) window.location.href = '/instructor/';
+  if (existing && !token) window.location.href = '/instructor/';
 
   let lastLoginEmail = null;
 

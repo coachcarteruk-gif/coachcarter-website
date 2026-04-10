@@ -1,14 +1,11 @@
 (function () {
   'use strict';
 
-  let token = null;
   let currentProfileId = null;
   let currentProfileSlug = null;
 
   function init() {
-    const session = ccAuth.getAuth();
-    token = session?.token || null;
-    if (!token) { window.location.href = '/instructor/login.html'; return; }
+    if (!ccAuth.getAuth()) { window.location.href = '/instructor/login.html'; return; }
     loadProfile();
   }
 

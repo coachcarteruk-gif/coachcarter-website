@@ -12,7 +12,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Show auth status hint
   const hint = document.getElementById('auth-hint');
-  if (AUTH?.token) {
+  if (AUTH) {
     hint.style.display = 'inline-block';
     hint.textContent = 'Signed in as ' + (AUTH.user?.name || 'learner') + ' — personalised recommendations active';
   } else {
@@ -156,7 +156,7 @@ async function sendMessage(text) {
       posthog.capture('advisor_message_sent', {
         message_length: text.length,
         conversation_length: conversationHistory.length,
-        is_authenticated: !!AUTH?.token
+        is_authenticated: !!AUTH
       });
     }
   } catch (err) {

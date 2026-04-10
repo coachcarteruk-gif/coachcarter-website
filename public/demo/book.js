@@ -10,7 +10,6 @@ const MON_FULL  = ['January','February','March','April','May','June','July','Aug
 const DEMO_INSTRUCTOR_ID = '5';
 
 // ─── State ───────────────────────────────────────────────────────────────────
-let token         = null;
 let currentView   = 'weekly';
 let cursor        = new Date(); cursor.setHours(0,0,0,0);
 let slotCache     = {}; // dateStr -> [slot, ...]
@@ -21,9 +20,7 @@ let lastBookingId = null;
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
-  const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  token = session?.token || null;
-  if (!token) { window.location.href = '/learner/login.html?redirect=/demo/book.html'; return; }
+  if (!ccAuth.getAuth()) { window.location.href = '/learner/login.html?redirect=/demo/book.html'; return; }
 
   Promise.all([loadUpcoming()])
     .then(() => {
@@ -48,7 +45,7 @@ function init() {
 // ─── Upcoming bookings ───────────────────────────────────────────────────────
 async function loadUpcoming() {
   try {
-    const res = await fetch('/api/slots?action=my-bookings', { headers: { Authorization: 'Bearer ' + token } });
+    const res = await ccAuth.fetchAuthed('/api/slots?action=my-bookings');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     // Filter to only demo instructor bookings
@@ -410,9 +407,9 @@ async function confirmBookWithCredit() {
   btn.disabled = true; label.textContent = 'Booking\u2026'; spinner.style.display = 'block';
 
   try {
-    const res = await fetch('/api/slots?action=book', {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=book', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(pendingSlot)
     });
     const data = await res.json();
@@ -449,7 +446,7 @@ async function handleCalendarDownload(e) {
   e.preventDefault();
   if (!lastBookingId) return;
   try {
-    const res = await fetch(`/api/calendar?action=download&booking_id=${lastBookingId}`, { headers: { Authorization: 'Bearer ' + token } });
+    const res = await ccAuth.fetchAuthed(`/api/calendar?action=download&booking_id=${lastBookingId}`);
     if (!res.ok) throw new Error('Failed');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -462,7 +459,7 @@ async function handleCalendarDownload(e) {
 
 async function handleCalendarSubscribe() {
   try {
-    const res = await fetch('/api/calendar?action=feed-url', { headers: { Authorization: 'Bearer ' + token } });
+    const res = await ccAuth.fetchAuthed('/api/calendar?action=feed-url');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     window.location.href = data.webcal_url;
@@ -471,7 +468,7 @@ async function handleCalendarSubscribe() {
 
 async function downloadCalendar(bookingId) {
   try {
-    const res = await fetch(`/api/calendar?action=download&booking_id=${bookingId}`, { headers: { Authorization: 'Bearer ' + token } });
+    const res = await ccAuth.fetchAuthed(`/api/calendar?action=download&booking_id=${bookingId}`);
     if (!res.ok) throw new Error('Failed');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -505,9 +502,9 @@ async function confirmCancel() {
   document.getElementById('cancelBtnLabel').textContent = 'Cancelling\u2026';
 
   try {
-    const res = await fetch('/api/slots?action=cancel', {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=cancel', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ booking_id: pendingCancel.bookingId })
     });
     const data = await res.json();

@@ -42,7 +42,7 @@ function apiCall(method, action, body) {
 /* ── Init ── */
 window.addEventListener('DOMContentLoaded', async function() {
   AUTH = ccAuth.getAuth();
-  if (!AUTH || !AUTH.token) {
+  if (!AUTH) {
     window.location.href = '/learner/login.html?redirect=/learner/focused-practice.html';
     return;
   }

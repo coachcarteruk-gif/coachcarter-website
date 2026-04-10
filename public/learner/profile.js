@@ -6,7 +6,7 @@ let AUTH, PROGRESS;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = ccAuth.getAuth();
-  if (!AUTH?.token) return; // form visible, save gated
+  if (!AUTH) return; // form visible, save gated
   await loadProgress();
   render();
 });

@@ -2,7 +2,7 @@
   'use strict';
 
   var auth = window.ccAuth && ccAuth.getAuth();
-  if (!auth || !auth.token) {
+  if (!auth) {
     document.getElementById('content').innerHTML =
       '<div class="error-msg">Please <a href="/learner/login.html?redirect=/learner/my-data.html">log in</a> to view your data.</div>';
     return;
