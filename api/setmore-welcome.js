@@ -11,17 +11,11 @@
 const { neon } = require('@neondatabase/serverless');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { reportError } = require('./_error-alert');
+const { verifyCronAuth } = require('./_auth');
 
 const BATCH_SIZE = 10;
 const TOKEN_EXPIRY_MINUTES = 60 * 24 * 7; // 7-day magic link for welcome emails
 const BASE_URL = process.env.BASE_URL || 'https://coachcarter.uk';
-
-function verifyCronAuth(req) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
-  const provided = req.query.key || req.headers['authorization']?.replace('Bearer ', '');
-  return provided === secret;
-}
 
 function setCors(res) {
 }

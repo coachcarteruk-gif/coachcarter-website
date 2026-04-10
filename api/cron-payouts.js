@@ -1,8 +1,9 @@
 // Instructor payout cron — runs every Friday at 09:00 UTC
 //
-// GET /api/cron-payouts?key=CRON_SECRET
-//   or via Vercel Cron with x-vercel-cron header
-//   or via admin JWT (manual trigger from admin portal)
+// Authentication (any one of):
+//   - Authorization: Bearer ${CRON_SECRET}  (Vercel Cron sends this)
+//   - ?key=${CRON_SECRET}                    (manual trigger)
+//   - Admin JWT                              (manual trigger from admin portal)
 //
 // Calculates earnings for each onboarded instructor, creates Stripe
 // transfers, and sends email notifications.
@@ -12,34 +13,18 @@ const { neon } = require('@neondatabase/serverless');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 const { processAllPayouts, processSchoolPayouts } = require('./_payout-helpers');
-const jwt = require('jsonwebtoken');
+const { verifyCronAuth, requireAuth } = require('./_auth');
 
-function setCors(res) {
-}
-
-function verifyCronAuth(req) {
-  // Vercel Cron header
-  if (req.headers['x-vercel-cron'] === '1') return true;
-  // CRON_SECRET via query or bearer
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
-  const provided = req.query.key || req.headers['authorization']?.replace('Bearer ', '');
-  if (provided === secret) return true;
-  // Admin JWT fallback (for manual trigger)
-  try {
-    const auth = req.headers.authorization;
-    if (auth?.startsWith('Bearer ')) {
-      const payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
-      if (payload.role === 'admin' || payload.role === 'superadmin') return true;
-      if (payload.role === 'instructor' && payload.isAdmin === true) return true;
-    }
-  } catch {}
-  return false;
+function isAuthorized(req) {
+  // Cron secret (Bearer or ?key=) — fail-closed, timing-safe
+  if (verifyCronAuth(req)) return true;
+  // Admin JWT fallback for manual trigger from admin portal
+  const admin = requireAuth(req, { roles: ['admin'] });
+  return !!admin;
 }
 
 module.exports = async (req, res) => {
-  setCors(res);
-  if (!verifyCronAuth(req)) {
+  if (!isAuthorized(req)) {
     return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Invalid cron secret' });
   }
 

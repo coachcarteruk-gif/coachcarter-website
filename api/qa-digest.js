@@ -6,12 +6,10 @@
 const { neon } = require('@neondatabase/serverless');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError } = require('./_error-alert');
+const { verifyCronAuth } = require('./_auth');
 
 module.exports = async (req, res) => {
-  // Protect with a secret key
-  const secret = process.env.CRON_SECRET;
-  const provided = req.query.key || req.headers['authorization']?.replace('Bearer ', '');
-  if (secret && provided !== secret) {
+  if (!verifyCronAuth(req)) {
     return res.status(401).json({ error: 'Unauthorised' });
   }
 

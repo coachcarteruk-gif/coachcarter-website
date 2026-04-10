@@ -13,6 +13,7 @@
  */
 
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const DEFAULT_SCHOOL_ID = 1; // CoachCarter — backwards compat for old tokens
 
@@ -107,6 +108,41 @@ function getSchoolId(payload, req) {
 }
 
 /**
+ * Verify cron endpoint authentication using CRON_SECRET.
+ *
+ * Accepts the secret via:
+ *   - Authorization: Bearer <secret>   (Vercel Cron sends this when CRON_SECRET is set)
+ *   - ?key=<secret>                    (manual trigger)
+ *
+ * FAIL-CLOSED: if CRON_SECRET is not configured, ALL requests are rejected.
+ * Uses timingSafeEqual to prevent timing attacks.
+ *
+ * NOTE: The `x-vercel-cron` header is deliberately NOT accepted — it is
+ * spoofable by external callers (Vercel does not strip it from inbound
+ * requests). Use Authorization: Bearer instead.
+ *
+ * @returns {boolean}
+ */
+function verifyCronAuth(req) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false; // fail closed
+
+  const auth = req.headers.authorization;
+  const bearer = auth && auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  const provided = bearer || req.query?.key || req.query?.secret;
+  if (!provided || typeof provided !== 'string') return false;
+
+  // Lengths must match before timingSafeEqual, otherwise it throws.
+  if (provided.length !== secret.length) return false;
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(secret));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Verify the legacy ADMIN_SECRET header/body.
  * Used for bootstrapping the first admin account.
  */
@@ -129,6 +165,7 @@ module.exports = {
   requireAuth,
   getSchoolId,
   verifyAdminSecret,
+  verifyCronAuth,
   isSuperAdmin,
   DEFAULT_SCHOOL_ID
 };

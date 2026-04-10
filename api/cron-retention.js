@@ -1,7 +1,8 @@
 // GDPR Data Retention Cron — runs weekly (Sunday 03:00 UTC)
 //
 // GET /api/cron-retention
-//   Vercel Cron with x-vercel-cron header, or ?key=CRON_SECRET
+//   Authorization: Bearer ${CRON_SECRET}  (Vercel Cron sends this automatically)
+//   or ?key=${CRON_SECRET} for manual trigger
 //
 // 1. Soft-deletes learners inactive >3 years
 // 2. Hard-deletes learners archived >90 days (with cascading data removal)
@@ -11,13 +12,7 @@
 
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
-
-function verifyCronAuth(req) {
-  if (req.headers['x-vercel-cron'] === '1') return true;
-  const key = req.query.key || req.query.secret;
-  if (key && key === process.env.CRON_SECRET) return true;
-  return false;
-}
+const { verifyCronAuth } = require('./_auth');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });

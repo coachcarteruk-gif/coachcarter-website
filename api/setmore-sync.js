@@ -8,6 +8,7 @@
 
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
+const { verifyCronAuth } = require('./_auth');
 
 // ── Setmore service → real lesson duration (minus built-in buffer) ───────────
 
@@ -19,15 +20,6 @@ const SERVICE_MAP = {
   '3bc98ee4-5efa-4935-b8c5-7be4496e2225': { realMinutes: 60,  slug: '1hr' },      // Reading Test + 1hr
   'f92268da-e2cc-4661-8cdd-82afa1b767a0': { realMinutes: 60,  slug: 'trial' },    // Free Trial
 };
-
-// ── Auth ─────────────────────────────────────────────────────────────────────
-
-function verifyCronAuth(req) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
-  const provided = req.query.key || req.headers['authorization']?.replace('Bearer ', '');
-  return provided === secret;
-}
 
 function setCors(res) {
 }

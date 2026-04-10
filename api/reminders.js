@@ -14,6 +14,7 @@ const twilio   = require('twilio');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 const { resolveConfirmations } = require('./_confirmation-resolver');
+const { verifyCronAuth }    = require('./_auth');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,13 +44,6 @@ function verifyInstructorAuth(req) {
     if (payload.role !== 'instructor') return null;
     return payload;
   } catch { return null; }
-}
-
-function verifyCronAuth(req) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true; // no secret configured = allow (dev)
-  const provided = req.query.key || req.headers['authorization']?.replace('Bearer ', '');
-  return provided === secret;
 }
 
 function escHtml(str) {
