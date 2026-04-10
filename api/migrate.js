@@ -2,6 +2,7 @@ const { neon } = require('@neondatabase/serverless');
 const fs = require('fs');
 const path = require('path');
 const { reportError } = require('./_error-alert');
+const { safeEqual } = require('./_auth');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -10,7 +11,7 @@ module.exports = async function handler(req, res) {
 
   // Protect with a secret
   const secret = req.query.secret || req.headers['x-migration-secret'];
-  if (!secret || secret !== process.env.MIGRATION_SECRET) {
+  if (!safeEqual(secret, process.env.MIGRATION_SECRET)) {
     return res.status(401).json({ error: 'Invalid or missing migration secret' });
   }
 

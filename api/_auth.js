@@ -156,14 +156,31 @@ function verifyCronAuth(req) {
 }
 
 /**
+ * Constant-time string comparison for secrets.
+ * Returns false on non-string inputs and length mismatch. Callers should use
+ * this wherever a client-supplied value is compared against a server-side
+ * secret (env vars, tokens, etc.) instead of `===` / `!==`.
+ */
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length === 0 || b.length === 0) return false;
+  if (a.length !== b.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Verify the legacy ADMIN_SECRET header/body.
  * Used for bootstrapping the first admin account.
  */
 function verifyAdminSecret(req) {
   const secret = process.env.ADMIN_SECRET;
   if (!secret) return false;
-  return (req.body?.admin_secret === secret) ||
-         (req.headers['x-admin-secret'] === secret);
+  return safeEqual(req.body?.admin_secret, secret) ||
+         safeEqual(req.headers['x-admin-secret'], secret);
 }
 
 /**
@@ -177,6 +194,7 @@ module.exports = {
   decodeToken,
   requireAuth,
   getSchoolId,
+  safeEqual,
   verifyAdminSecret,
   verifyCronAuth,
   isSuperAdmin,

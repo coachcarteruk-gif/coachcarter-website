@@ -1,5 +1,6 @@
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
+const { safeEqual } = require('./_auth');
 
 /**
  * GET  /api/guarantee-price  → returns current guarantee pricing state
@@ -54,7 +55,7 @@ module.exports = async (req, res) => {
       // Authenticate — only the webhook or admin should call this
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
       const adminSecret   = process.env.ADMIN_SECRET;
-      if (secret !== webhookSecret && secret !== adminSecret) {
+      if (!safeEqual(secret, webhookSecret) && !safeEqual(secret, adminSecret)) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 

@@ -12,6 +12,7 @@
 // Without action, it resets test accounts to a known state (clean + re-seed).
 
 const { neon } = require('@neondatabase/serverless');
+const { safeEqual } = require('./_auth');
 
 const TEST_ACCOUNTS = [
   { email: 'coachcarteruk+testlearner@gmail.com', name: 'Test Learner', phone: '07900100001' },
@@ -26,7 +27,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const secret = req.query.secret || req.headers['x-migration-secret'];
-  if (!secret || secret !== process.env.MIGRATION_SECRET) {
+  if (!safeEqual(secret, process.env.MIGRATION_SECRET)) {
     return res.status(401).json({ error: 'Invalid or missing secret' });
   }
 

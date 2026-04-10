@@ -45,7 +45,7 @@ const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
 const { processAllPayouts, getEligibleBookings } = require('./_payout-helpers');
-const { requireAuth, getSchoolId, verifyAdminSecret: verifyAdminSecretNew, isSuperAdmin } = require('./_auth');
+const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin } = require('./_auth');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { logAudit } = require('./_audit');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
@@ -72,14 +72,6 @@ function verifyAdminJWT(req) {
     if (payload.role === 'instructor' && payload.isAdmin === true) return payload;
     return null;
   } catch { return null; }
-}
-
-// Verify legacy ADMIN_SECRET
-function verifyAdminSecret(req) {
-  const secret = process.env.ADMIN_SECRET;
-  if (!secret) return false;
-  return (req.body?.admin_secret === secret) ||
-         (req.headers['x-admin-secret'] === secret);
 }
 
 module.exports = async (req, res) => {

@@ -1,5 +1,6 @@
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
+const { safeEqual } = require('./_auth');
 
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -124,7 +125,7 @@ module.exports = async (req, res) => {
       if (!adminSecret) {
         return res.status(500).json({ error: 'ADMIN_SECRET environment variable not set' });
       }
-      if (password !== adminSecret) {
+      if (!safeEqual(password, adminSecret)) {
         return res.status(401).json({ error: 'Incorrect password' });
       }
 

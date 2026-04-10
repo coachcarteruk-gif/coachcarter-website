@@ -13,6 +13,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
+const { safeEqual } = require('./_auth');
 
 function setCors(res) {
 }
@@ -358,9 +359,12 @@ async function handleExpireOffers(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // Simple cron auth — same pattern as reminders.js
+  // NOTE: the `x-vercel-cron` header branch is a known spoofable-header issue
+  // (a C2-style gap from the earlier audit). Tracked as a separate item —
+  // only the secret comparison is hardened here.
   const secret = req.query.secret || req.headers['x-cron-secret'];
   const cronSecret = process.env.CRON_SECRET || process.env.MIGRATION_SECRET;
-  if (secret !== cronSecret && req.headers['x-vercel-cron'] !== '1') {
+  if (!safeEqual(secret, cronSecret) && req.headers['x-vercel-cron'] !== '1') {
     return res.status(401).json({ error: 'Unauthorised' });
   }
 
