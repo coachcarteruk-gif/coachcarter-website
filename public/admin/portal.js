@@ -1086,7 +1086,7 @@ function renderVideosList() {
       '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">' +
         '<input type="checkbox" data-action="toggle-bulk-select" data-id="' + v.id + '" ' + (bulkSelected.has(v.id) ? 'checked' : '') + ' style="flex-shrink:0;">' +
         '<div style="position:relative;width:120px;height:68px;border-radius:8px;overflow:hidden;background:#111;flex-shrink:0;">' +
-          '<img src="' + thumb + '" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display=\'none\'">' +
+          '<img src="' + thumb + '" alt="" style="width:100%;height:100%;object-fit:cover;" data-hide-on-error>' +
           (dur ? '<span style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.75);color:#fff;font-size:0.68rem;padding:1px 5px;border-radius:4px;">' + formatDuration(v.duration_seconds) + '</span>' : '') +
         '</div>' +
         '<div style="flex:1;min-width:180px;">' +
@@ -1717,6 +1717,13 @@ async function processPayoutsNow() {
 
 // ── Initial load ──────────────────────────────────────────────────
 loadDashboard();
+
+// ── Delegated error listener — replaces inline onerror on dynamically
+//    inserted <img data-hide-on-error>. Capture because 'error' doesn't bubble.
+document.addEventListener('error', function (e) {
+  var t = e.target;
+  if (t && t.tagName === 'IMG' && t.hasAttribute('data-hide-on-error')) t.style.display = 'none';
+}, true);
 
 // ── Event delegation (dynamically rendered handlers) ──
 document.addEventListener('click', function (e) {

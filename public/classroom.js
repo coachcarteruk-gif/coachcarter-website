@@ -99,7 +99,7 @@ function renderGrid() {
     return `
       <div class="video-card" data-action="open-player" data-uid="${v.cloudflare_uid}" data-title="${esc(v.title)}" data-desc="${esc(v.description || '')}">
         <div class="video-thumb">
-          <img src="${thumbUrl}" alt="${esc(v.title)}" loading="lazy" onerror="this.style.display='none'">
+          <img src="${thumbUrl}" alt="${esc(v.title)}" loading="lazy" data-hide-on-error>
           <div class="video-thumb-play"><div class="video-thumb-play-icon">▶</div></div>
           ${v.duration_seconds ? `<span class="video-duration">${formatDuration(v.duration_seconds)}</span>` : ''}
         </div>
@@ -272,6 +272,13 @@ document.addEventListener('click', function (e) {
   else if (a === 'open-player') openPlayer(t.dataset.uid, t.dataset.title, t.dataset.desc);
   else if (a === 'toggle-mute') toggleMute(t.dataset.uid);
 });
+// Delegated error listener — replaces inline onerror="this.style.display='none'"
+// on dynamically inserted <img data-hide-on-error>. Must use capture: true
+// because the 'error' event does not bubble.
+document.addEventListener('error', function (e) {
+  var t = e.target;
+  if (t && t.matches && t.matches('[data-hide-on-error]')) t.style.display = 'none';
+}, true);
 (function wire() {
   document.querySelectorAll('[data-mode]').forEach(function (btn) {
     btn.addEventListener('click', function () { setMode(btn.dataset.mode); });
