@@ -44,19 +44,24 @@ export default async function middleware(request) {
       const corsHeaders = new Headers();
       if (isAllowedOrigin(origin)) {
         corsHeaders.set('Access-Control-Allow-Origin', origin);
+        corsHeaders.set('Access-Control-Allow-Credentials', 'true');
       }
       corsHeaders.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-      corsHeaders.set('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+      corsHeaders.set('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-CSRF-Token');
       corsHeaders.set('Access-Control-Max-Age', '86400');
       return addSecurityHeaders(new Response(null, { status: 204, headers: corsHeaders }));
     }
 
-    // For actual requests, set CORS origin header
+    // For actual requests, set CORS origin header.
+    // Access-Control-Allow-Credentials + exact-origin echo is required for
+    // the browser to accept cookies on credentialed fetches from a different
+    // origin (Vercel preview URLs, etc.). Same-origin calls work regardless.
     const response = new Response(null, { headers: { 'x-middleware-next': '1' } });
     if (isAllowedOrigin(origin)) {
       response.headers.set('Access-Control-Allow-Origin', origin);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
       response.headers.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-      response.headers.set('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+      response.headers.set('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-CSRF-Token');
     }
     return addSecurityHeaders(response);
   }

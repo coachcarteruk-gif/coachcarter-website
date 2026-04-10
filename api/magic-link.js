@@ -3,6 +3,9 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const twilio = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
+const { SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
+        buildSessionCookie, buildSessionClearCookie } = require('./_auth');
+const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { reportError } = require('./_error-alert');
 
 const FREE_TRIAL_CREDITS = 0;
@@ -30,6 +33,7 @@ module.exports = async (req, res) => {
   if (action === 'validate')    return handleValidate(req, res);
   if (action === 'verify')      return handleVerify(req, res);
   if (action === 'verify-code') return handleVerifyCode(req, res);
+  if (action === 'logout')      return handleLogout(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -269,6 +273,11 @@ async function handleVerify(req, res) {
     const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
     const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '30d' });
 
+    // Set httpOnly session cookie + CSRF double-submit cookie. Token is
+    // still returned in the body for the grace window — removed in commit 9.
+    appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
+    appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+
     // GDPR: update last activity timestamp
     try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`; } catch (e) {}
 
@@ -299,6 +308,15 @@ async function handleVerify(req, res) {
     reportError('/api/magic-link', err);
     return res.status(500).json({ error: 'Verification failed' });
   }
+}
+
+// ── POST /api/magic-link?action=logout ───────────────────────────────────────
+// Clear the cc_learner + cc_csrf cookies. No auth required.
+async function handleLogout(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  appendSetCookie(res, buildSessionClearCookie(SESSION_COOKIE_NAMES.learner));
+  appendSetCookie(res, buildCsrfClearCookie());
+  return res.json({ ok: true });
 }
 
 // ── Verify SMS code and issue JWT ─────────────────────────────────────────────
@@ -358,6 +376,10 @@ async function handleVerifyCode(req, res) {
     // Issue JWT
     const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
     const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '30d' });
+
+    // Set httpOnly session cookie + CSRF double-submit cookie. See handleVerify.
+    appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
+    appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
 
     // GDPR: update last activity timestamp
     try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`; } catch (e) {}

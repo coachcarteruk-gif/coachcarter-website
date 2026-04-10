@@ -41,6 +41,9 @@ const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
 const twilio     = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
+const { SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
+        buildSessionCookie, buildSessionClearCookie } = require('./_auth');
+const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { reportError } = require('./_error-alert');
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
 const { resolveConfirmations } = require('./_confirmation-resolver');
@@ -86,6 +89,7 @@ module.exports = async (req, res) => {
   if (action === 'request-login')    return handleRequestLogin(req, res);
   if (action === 'validate-token')   return handleValidateToken(req, res);
   if (action === 'verify-token')     return handleVerifyToken(req, res);
+  if (action === 'logout')           return handleLogout(req, res);
   if (action === 'schedule')         return handleSchedule(req, res);
   if (action === 'schedule-range')   return handleScheduleRange(req, res);
   if (action === 'complete')         return handleComplete(req, res);
@@ -268,6 +272,11 @@ async function handleVerifyToken(req, res) {
     if (row.is_admin) jwtPayload.isAdmin = true;
     const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: JWT_EXPIRY });
 
+    // Set httpOnly session cookie + CSRF double-submit cookie. Token is
+    // still returned in the body for the grace window — removed in commit 9.
+    appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.instructor, jwtToken, SESSION_MAX_AGE_SEC.instructor));
+    appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+
     return res.json({
       token: jwtToken,
       instructor: { id: row.instructor_id, name: row.name, email: row.email, photo_url: row.photo_url, is_admin: !!row.is_admin, school_id: row.school_id, onboarding_complete: row.onboarding_complete }
@@ -278,6 +287,15 @@ async function handleVerifyToken(req, res) {
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Verification failed' });
   }
+}
+
+// ── POST /api/instructor?action=logout ───────────────────────────────────────
+// Clear the cc_instructor + cc_csrf cookies. No auth required.
+async function handleLogout(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  appendSetCookie(res, buildSessionClearCookie(SESSION_COOKIE_NAMES.instructor));
+  appendSetCookie(res, buildCsrfClearCookie());
+  return res.json({ ok: true });
 }
 
 // ── GET /api/instructor?action=schedule ──────────────────────────────────────
