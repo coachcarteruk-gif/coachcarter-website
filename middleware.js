@@ -79,11 +79,13 @@ function addSecurityHeaders(response) {
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   response.headers.set('X-XSS-Protection', '0');
 
-  // CSP — report-only mode to catch violations without breaking anything.
-  // Once verified clean, change to Content-Security-Policy to enforce.
-  response.headers.set('Content-Security-Policy-Report-Only', [
+  // CSP — enforcing. script-src has no 'unsafe-inline': every page's JS
+  // lives in an external file under /public or /public/shared. style-src
+  // still allows 'unsafe-inline' for the inline <style> blocks on most
+  // pages; a future pass can move those to external .css files and drop it.
+  response.headers.set('Content-Security-Policy', [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://esm.sh https://js.stripe.com https://eu.i.posthog.com",
+    "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://esm.sh https://js.stripe.com https://eu.i.posthog.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://unpkg.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https: blob:",
