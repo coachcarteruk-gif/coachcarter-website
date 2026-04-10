@@ -9,6 +9,7 @@ const { Resend } = require('resend');
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { requireAuth, getSchoolId } = require('./_auth');
+const { checkRateLimit, getClientIp } = require('./_rate-limit');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -83,27 +84,15 @@ module.exports = async (req, res) => {
 
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Rate limiting: max 5 submissions per IP per hour (same pattern as enquiries.js)
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-    const rateLimitKey = `availability_submit:${clientIp}`;
-    try {
-      await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
-      const [existing] = await sql`
-        SELECT request_count FROM rate_limits
-        WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
-      if (existing && existing.request_count >= 5) {
-        return res.status(429).json({ error: 'Too many submissions. Please try again later.' });
-      }
-      if (existing) {
-        await sql`
-          UPDATE rate_limits SET request_count = request_count + 1
-          WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
-      } else {
-        await sql`
-          INSERT INTO rate_limits (key, request_count, window_start)
-          VALUES (${rateLimitKey}, 1, NOW())`;
-      }
-    } catch (e) { /* rate limit check failed — allow request through */ }
+    // Rate limiting: max 5 submissions per IP per hour (see api/_rate-limit.js)
+    const rl = await checkRateLimit(sql, {
+      key: `availability_submit:${getClientIp(req)}`,
+      max: 5,
+      windowSeconds: 3600,
+    });
+    if (!rl.allowed) {
+      return res.status(429).json({ error: 'Too many submissions. Please try again later.' });
+    }
 
     const schoolId = parseInt(req.body.school_id) || 1;
 

@@ -48,6 +48,7 @@ const { processAllPayouts, getEligibleBookings } = require('./_payout-helpers');
 const { requireAuth, getSchoolId, verifyAdminSecret: verifyAdminSecretNew, isSuperAdmin } = require('./_auth');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { logAudit } = require('./_audit');
+const { checkRateLimit, getClientIp } = require('./_rate-limit');
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
@@ -127,34 +128,24 @@ async function handleLogin(req, res) {
   const normalisedEmail = email.toLowerCase().trim();
 
   // Rate limiting: max 5 attempts per email per hour, 10 per IP per hour.
-  // Uses the shared `rate_limits` table (same pattern as enquiries.js).
-  // Counts ALL attempts (success + failure) so brute-forcing a known email is blocked.
-  const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-  const emailKey = `admin_login_email:${normalisedEmail}`;
-  const ipKey    = `admin_login_ip:${clientIp}`;
-  try {
-    await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
-
-    const [emailRow] = await sql`SELECT request_count FROM rate_limits WHERE key = ${emailKey} AND window_start > NOW() - INTERVAL '1 hour'`;
-    if (emailRow && emailRow.request_count >= 5) {
-      return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
-    }
-    const [ipRow] = await sql`SELECT request_count FROM rate_limits WHERE key = ${ipKey} AND window_start > NOW() - INTERVAL '1 hour'`;
-    if (ipRow && ipRow.request_count >= 10) {
-      return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
-    }
-
-    if (emailRow) {
-      await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${emailKey} AND window_start > NOW() - INTERVAL '1 hour'`;
-    } else {
-      await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${emailKey}, 1, NOW())`;
-    }
-    if (ipRow) {
-      await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${ipKey} AND window_start > NOW() - INTERVAL '1 hour'`;
-    } else {
-      await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${ipKey}, 1, NOW())`;
-    }
-  } catch (e) { /* rate limit check failed — allow request through rather than lock everyone out */ }
+  // Counts ALL attempts (success + failure) so brute-forcing a known email is
+  // blocked. See api/_rate-limit.js for the shared helper.
+  const emailRl = await checkRateLimit(sql, {
+    key: `admin_login_email:${normalisedEmail}`,
+    max: 5,
+    windowSeconds: 3600,
+  });
+  if (!emailRl.allowed) {
+    return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+  }
+  const ipRl = await checkRateLimit(sql, {
+    key: `admin_login_ip:${getClientIp(req)}`,
+    max: 10,
+    windowSeconds: 3600,
+  });
+  if (!ipRl.allowed) {
+    return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+  }
 
   try {
     const rows = await sql`
