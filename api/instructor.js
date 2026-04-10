@@ -266,13 +266,11 @@ async function handleVerifyToken(req, res) {
     if (row.is_admin) jwtPayload.isAdmin = true;
     const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: JWT_EXPIRY });
 
-    // Set httpOnly session cookie + CSRF double-submit cookie. Token is
-    // still returned in the body for the grace window — removed in commit 9.
+    // Set httpOnly session cookie + CSRF double-submit cookie.
     appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.instructor, jwtToken, SESSION_MAX_AGE_SEC.instructor));
     appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
 
     return res.json({
-      token: jwtToken,
       instructor: { id: row.instructor_id, name: row.name, email: row.email, photo_url: row.photo_url, is_admin: !!row.is_admin, school_id: row.school_id, onboarding_complete: row.onboarding_complete }
     });
 
