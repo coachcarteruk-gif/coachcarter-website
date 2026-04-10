@@ -392,6 +392,17 @@ header nav a:hover, header nav a.active {
 </div>  <!-- ← container closes here -->
 
 <script>
+// HTML-escape helper — user data from the API is never trusted.
+// Every ${field} interpolation into innerHTML MUST be wrapped in esc().
+function esc(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const demoBookings = [
   {
     ref: 'CC-2847',
@@ -455,17 +466,17 @@ function renderBookings(filter = 'all') {
 
   list.innerHTML = filtered.map(booking => `
     <div class="booking-row">
-      <div class="ref">${booking.ref}</div>
+      <div class="ref">${esc(booking.ref)}</div>
       <div class="customer">
-        <span class="customer-name">${booking.name}</span>
-        <span class="customer-email">${booking.email}</span>
+        <span class="customer-name">${esc(booking.name)}</span>
+        <span class="customer-email">${esc(booking.email)}</span>
       </div>
-      <div class="package ${booking.package === 'pass_guarantee' ? 'pass' : ''}">${booking.packageDisplay}</div>
-      <div><span class="status ${booking.status === 'PAID_PENDING_VERIFICATION' ? 'verification' : 'pending'}">${booking.statusDisplay}</span></div>
-      <div class="amount">£${booking.amount}</div>
+      <div class="package ${booking.package === 'pass_guarantee' ? 'pass' : ''}">${esc(booking.packageDisplay)}</div>
+      <div><span class="status ${booking.status === 'PAID_PENDING_VERIFICATION' ? 'verification' : 'pending'}">${esc(booking.statusDisplay)}</span></div>
+      <div class="amount">£${esc(booking.amount)}</div>
       <div class="actions">
-        <button class="action-btn" onclick="viewBooking('${booking.ref}')">View</button>
-        ${booking.testStatus === 'has_test' ? `<button class="action-btn" onclick="verifyDVSA('${booking.ref}')">Verify DVSA</button>` : ''}
+        <button class="action-btn" onclick="viewBooking('${esc(booking.ref)}')">View</button>
+        ${booking.testStatus === 'has_test' ? `<button class="action-btn" onclick="verifyDVSA('${esc(booking.ref)}')">Verify DVSA</button>` : ''}
       </div>
     </div>
   `).join('');
@@ -548,15 +559,15 @@ function renderInstructors(instructors) {
   listEl.innerHTML = instructors.map(i => `
     <div class="booking-row" style="grid-template-columns: 1fr 200px 160px 100px 100px; opacity:${i.active ? 1 : 0.5};">
       <div class="customer">
-        <span class="customer-name">${i.name}${!i.active ? ' <span style="font-size:0.75rem;color:var(--muted)">(inactive)</span>' : ''}</span>
-        ${i.bio ? `<span class="customer-email" style="font-size:0.8rem;">${i.bio.slice(0,60)}${i.bio.length>60?'…':''}</span>` : ''}
+        <span class="customer-name">${esc(i.name)}${!i.active ? ' <span style="font-size:0.75rem;color:var(--muted)">(inactive)</span>' : ''}</span>
+        ${i.bio ? `<span class="customer-email" style="font-size:0.8rem;">${esc(i.bio.slice(0,60))}${i.bio.length>60?'…':''}</span>` : ''}
       </div>
-      <div class="customer-email" style="font-size:0.9rem;">${i.email}</div>
-      <div style="font-size:0.9rem;">${i.phone || '—'}</div>
-      <div style="font-size:0.9rem; color:var(--muted);">${i.upcoming_bookings} upcoming<br><span style="font-size:0.8rem;">${i.completed_lessons} done</span></div>
+      <div class="customer-email" style="font-size:0.9rem;">${esc(i.email)}</div>
+      <div style="font-size:0.9rem;">${esc(i.phone || '—')}</div>
+      <div style="font-size:0.9rem; color:var(--muted);">${esc(i.upcoming_bookings)} upcoming<br><span style="font-size:0.8rem;">${esc(i.completed_lessons)} done</span></div>
       <div class="actions">
-        <button class="action-btn" onclick='openInstructorModal(${JSON.stringify(i)})'>Edit</button>
-        <button class="action-btn" onclick="toggleInstructor(${i.id}, ${!i.active})" style="${i.active ? 'color:var(--red)' : 'color:var(--green)'}">${i.active ? 'Deactivate' : 'Activate'}</button>
+        <button class="action-btn" onclick='openInstructorModal(${esc(JSON.stringify(i))})'>Edit</button>
+        <button class="action-btn" onclick="toggleInstructor(${parseInt(i.id)||0}, ${!i.active})" style="${i.active ? 'color:var(--red)' : 'color:var(--green)'}">${i.active ? 'Deactivate' : 'Activate'}</button>
       </div>
     </div>
   `).join('');
@@ -694,26 +705,28 @@ async function loadEnquiries() {
       const dateStr = date.toLocaleDateString('en-GB');
       const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       const isPass = e.enquiry_type === 'pass-guarantee';
-      
+      const typeLabel = enquiryTypeLabels[e.enquiry_type] || e.enquiry_type;
+      const enquiryId = parseInt(e.id) || 0;
+
       return '<div class="booking-row">' +
-        '<div class="package ' + (isPass ? 'pass' : '') + '" style="min-width: 120px;">' + (enquiryTypeLabels[e.enquiry_type] || e.enquiry_type) + '</div>' +
+        '<div class="package ' + (isPass ? 'pass' : '') + '" style="min-width: 120px;">' + esc(typeLabel) + '</div>' +
         '<div class="customer">' +
-          '<span class="customer-name">' + e.name + '</span>' +
-          '<span class="customer-email">' + e.email + '</span>' +
+          '<span class="customer-name">' + esc(e.name) + '</span>' +
+          '<span class="customer-email">' + esc(e.email) + '</span>' +
         '</div>' +
         '<div style="min-width: 140px; font-size: 0.9rem;">' +
-          '<a href="tel:' + e.phone + '" style="color: var(--primary); text-decoration: none;">' + e.phone + '</a>' +
+          '<a href="tel:' + esc(e.phone) + '" style="color: var(--primary); text-decoration: none;">' + esc(e.phone) + '</a>' +
         '</div>' +
         '<div style="min-width: 180px; font-size: 0.85rem; color: var(--muted);">' +
           dateStr + ' at ' + timeStr +
         '</div>' +
         '<div style="min-width: 100px;">' +
           '<span class="status ' + (e.status === 'new' ? 'pending' : e.status === 'contacted' ? 'scheduled' : 'verification') + '">' +
-            e.status +
+            esc(e.status) +
           '</span>' +
         '</div>' +
         '<div class="actions" style="min-width: 80px;">' +
-          '<button class="action-btn" onclick="viewEnquiry(' + e.id + ')">View</button>' +
+          '<button class="action-btn" onclick="viewEnquiry(' + enquiryId + ')">View</button>' +
         '</div>' +
       '</div>';
     }).join('');

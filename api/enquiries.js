@@ -13,6 +13,29 @@ const { neon }       = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { requireAuth, getSchoolId } = require('./_auth');
 
+// HTML-escape helper for email templates — user input is never trusted.
+function esc(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Normalise an email to a safe mailto/href value: reject anything that isn't
+// a plausible email address to prevent attribute-context injection.
+function safeEmail(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  return /^[^\s<>"']+@[^\s<>"']+$/.test(s) ? s : '';
+}
+
+// Normalise a phone to a safe tel: href value: strip everything except digits
+// and the leading +.
+function safePhone(raw) {
+  return String(raw == null ? '' : raw).replace(/[^\d+]/g, '');
+}
+
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const transporter = nodemailer.createTransport({
@@ -155,6 +178,10 @@ async function handleSubmit(req, res) {
   const formattedType = enquiryTypeLabels[enquiryType] || enquiryType;
   const toEmail       = process.env.STAFF_EMAIL || 'fraser@coachcarter.uk';
 
+  const safeMailTo = safeEmail(email);
+  const safeTel    = safePhone(phone);
+  const messageHtml = message ? esc(message).replace(/\n/g, '<br>') : '';
+
   const emailHtml = `
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:40px 20px;color:#272727">
       <div style="text-align:center;margin-bottom:32px">
@@ -164,40 +191,40 @@ async function handleSubmit(req, res) {
       <div style="background:#f9f9f9;border-radius:16px;padding:32px;border:1px solid #e0e0e0">
         <div style="margin-bottom:24px">
           <label style="display:block;font-size:12px;text-transform:uppercase;color:#797879;font-weight:700;margin-bottom:4px">Enquiry Type</label>
-          <div style="font-size:18px;font-weight:700;color:#f58321">${formattedType}</div>
+          <div style="font-size:18px;font-weight:700;color:#f58321">${esc(formattedType)}</div>
         </div>
         <div style="margin-bottom:20px">
           <label style="display:block;font-size:12px;text-transform:uppercase;color:#797879;font-weight:700;margin-bottom:4px">Name</label>
-          <div>${name}</div>
+          <div>${esc(name)}</div>
         </div>
         <div style="margin-bottom:20px">
           <label style="display:block;font-size:12px;text-transform:uppercase;color:#797879;font-weight:700;margin-bottom:4px">Email</label>
-          <div><a href="mailto:${email}" style="color:#272727">${email}</a></div>
+          <div>${safeMailTo ? `<a href="mailto:${esc(safeMailTo)}" style="color:#272727">${esc(safeMailTo)}</a>` : esc(email)}</div>
         </div>
         <div style="margin-bottom:20px">
           <label style="display:block;font-size:12px;text-transform:uppercase;color:#797879;font-weight:700;margin-bottom:4px">Phone</label>
-          <div><a href="tel:${phone}" style="color:#272727">${phone}</a></div>
+          <div>${safeTel ? `<a href="tel:${esc(safeTel)}" style="color:#272727">${esc(safeTel)}</a>` : esc(phone)}</div>
         </div>
         ${message ? `
         <div style="margin-bottom:20px">
           <label style="display:block;font-size:12px;text-transform:uppercase;color:#797879;font-weight:700;margin-bottom:4px">Message</label>
-          <div style="line-height:1.6;white-space:pre-wrap">${message.replace(/\n/g, '<br>')}</div>
+          <div style="line-height:1.6;white-space:pre-wrap">${messageHtml}</div>
         </div>` : ''}
         <div style="margin-top:24px;padding-top:24px;border-top:1px solid #e0e0e0;font-size:12px;color:#797879">
           <strong>Marketing Consent:</strong> ${marketing ? 'Yes' : 'No'}<br>
-          <strong>Submitted:</strong> ${new Date(submittedAt || Date.now()).toLocaleString('en-GB')}
+          <strong>Submitted:</strong> ${esc(new Date(submittedAt || Date.now()).toLocaleString('en-GB'))}
         </div>
       </div>
       <div style="text-align:center;margin-top:32px;font-size:12px;color:#797879">
         <p>
-          <a href="mailto:${email}?subject=Re: Your enquiry to CoachCarter"
+          ${safeMailTo ? `<a href="mailto:${esc(safeMailTo)}?subject=Re: Your enquiry to CoachCarter"
              style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:700;margin-right:8px">
-            Reply to ${name}
-          </a>
-          <a href="tel:${phone}"
+            Reply to ${esc(name)}
+          </a>` : ''}
+          ${safeTel ? `<a href="tel:${esc(safeTel)}"
              style="background:#272727;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:700">
-            Call ${phone}
-          </a>
+            Call ${esc(safeTel)}
+          </a>` : ''}
         </p>
       </div>
     </div>

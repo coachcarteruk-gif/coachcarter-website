@@ -941,6 +941,18 @@ body {
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
 <script>
+// ── HTML-escape helper ─────────────────────────────────────────────
+// User data from the API is NEVER trusted. Every ${field} interpolation
+// into innerHTML MUST be wrapped in esc(). Covers element + attribute contexts.
+function esc(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Auth ──────────────────────────────────────────────────────────
 // Accept either a direct admin login OR an instructor with is_admin flag
 const adminData = JSON.parse(localStorage.getItem('cc_admin') || 'null');
@@ -2376,13 +2388,6 @@ async function deleteCategory(slug) {
 }
 
 // ── Escape HTML ───────────────────────────────────────────────────
-function esc(str) {
-  if (!str) return '';
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
-}
-
 // ── Lesson Types ─────────────────────────────────────────────────
 let lessonTypesCache = [];
 
@@ -2542,9 +2547,9 @@ async function loadPayouts() {
           ? `\u00A3${(i.weekly_franchise_fee_pence / 100).toFixed(0)}/wk`
           : `${Math.round((i.commission_rate || 0.85) * 100)}%`;
         return `<tr>
-          <td>${i.name}</td>
+          <td>${esc(i.name)}</td>
           <td>${statusBadge}</td>
-          <td>${feeLabel}</td>
+          <td>${esc(feeLabel)}</td>
           <td>${i.payouts_paused ? '<span style="color:#b45309;font-weight:600;">Paused</span>' : (i.connect_status === 'active' ? 'Active' : '\u2014')}</td>
           <td>${inviteBtn}${pauseBtn}</td>
         </tr>`;
@@ -2553,8 +2558,8 @@ async function loadPayouts() {
     // Upcoming estimates
     document.getElementById('payout-estimates-body').innerHTML = data.estimates.length > 0
       ? data.estimates.map(e => `<tr>
-          <td>${e.name}</td>
-          <td>${e.eligible_lessons}</td>
+          <td>${esc(e.name)}</td>
+          <td>${parseInt(e.eligible_lessons) || 0}</td>
           <td style="font-weight:700;">${fmtPence(e.estimated_pence)}</td>
           <td>${e.paused ? '<span style="color:#b45309;">Paused</span>' : 'Ready'}</td>
         </tr>`).join('')
@@ -2566,10 +2571,10 @@ async function loadPayouts() {
           const statusClass = p.status === 'completed' ? 'color:#166534' : p.status === 'failed' ? 'color:#991b1b' : 'color:#1e40af';
           return `<tr>
             <td>${fmtDateShort(p.created_at)}</td>
-            <td>${p.instructor_name}</td>
-            <td>${p.lesson_count}</td>
+            <td>${esc(p.instructor_name)}</td>
+            <td>${parseInt(p.lesson_count) || 0}</td>
             <td style="font-weight:700;">${fmtPence(p.amount_pence)}</td>
-            <td><span style="${statusClass};font-weight:600;text-transform:uppercase;font-size:0.75rem;">${p.status}</span></td>
+            <td><span style="${statusClass};font-weight:600;text-transform:uppercase;font-size:0.75rem;">${esc(p.status)}</span></td>
           </tr>`;
         }).join('')
       : '<tr><td colspan="5" style="color:var(--muted);">No payouts yet</td></tr>';
