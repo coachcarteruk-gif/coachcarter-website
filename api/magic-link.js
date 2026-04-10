@@ -297,7 +297,8 @@ async function handleVerify(req, res) {
         id: user.id,
         name: user.name || null,
         email: user.email || null,
-        tier: user.current_tier
+        tier: user.current_tier,
+        school_id: user.school_id || 1
       },
       is_new_user: isNewUser,
       needs_name: !user.name,
@@ -391,7 +392,8 @@ async function handleVerifyCode(req, res) {
         id: user.id,
         name: user.name || null,
         email: user.email || null,
-        tier: user.current_tier
+        tier: user.current_tier,
+        school_id: user.school_id || 1
       },
       is_new_user: isNewUser,
       needs_name: !user.name,
