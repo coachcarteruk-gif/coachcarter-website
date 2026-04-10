@@ -90,17 +90,7 @@
 </head>
 <body>
 
-<script>
-  // Auto-redirect logged-in users to their portal
-  (function() {
-    try {
-      var l = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-      if (l && l.token) { window.location.replace('/learner/'); return; }
-      var i = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
-      if (i && i.token) { window.location.replace('/instructor/'); return; }
-    } catch(e) {}
-  })();
-</script>
+<script src="/index.js"></script>
 
 <div class="card">
   <img src="/Logo.png" alt="CoachCarter" class="start-logo">
@@ -133,7 +123,7 @@
     <span class="sep">|</span>
     <a href="/terms.html">Terms</a>
     <span class="sep">|</span>
-    <a href="#" onclick="event.preventDefault();window.ccCookieConsent&&ccCookieConsent.show()">Cookie Settings</a>
+    <a href="#" id="cookie-settings-link">Cookie Settings</a>
   </div>
 </div>
 
