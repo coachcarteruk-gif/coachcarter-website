@@ -41,7 +41,7 @@ const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
 const twilio     = require('twilio');
 const { createTransporter, generateToken } = require('./_auth-helpers');
-const { SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
+const { requireAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { reportError } = require('./_error-alert');
@@ -71,16 +71,10 @@ const JWT_EXPIRY           = '7d';
 function setCors(res) {
 }
 
+// Delegates to shared requireAuth so cookie-first + CSRF + school_id
+// checks are applied consistently with the rest of the codebase.
 function verifyInstructorAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try {
-    const payload = jwt.verify(auth.slice(7), secret);
-    if (payload.role !== 'instructor') return null;
-    return payload;
-  } catch { return null; }
+  return requireAuth(req, { roles: ['instructor'] });
 }
 
 module.exports = async (req, res) => {

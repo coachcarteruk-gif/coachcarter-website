@@ -14,7 +14,7 @@ const twilio   = require('twilio');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 const { resolveConfirmations } = require('./_confirmation-resolver');
-const { verifyCronAuth }    = require('./_auth');
+const { verifyCronAuth, requireAuth } = require('./_auth');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -35,15 +35,7 @@ function sendWhatsApp(to, message) {
 }
 
 function verifyInstructorAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try {
-    const payload = jwt.verify(auth.slice(7), secret);
-    if (payload.role !== 'instructor') return null;
-    return payload;
-  } catch { return null; }
+  return requireAuth(req, { roles: ['instructor'] });
 }
 
 function escHtml(str) {

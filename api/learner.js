@@ -1,16 +1,17 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
+const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
 const { resolveConfirmations } = require('./_confirmation-resolver');
 const { checkRateLimit } = require('./_rate-limit');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
+// Delegates to shared requireAuth for cookie-first reads. No role filter is
+// applied (matches the pre-consolidation behaviour — any valid JWT). All
+// learner.js handlers are learner-targeted so in practice only cc_learner
+// will authenticate.
 function verifyAuth(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  try { return jwt.verify(auth.slice(7), secret); } catch { return null; }
+  return requireAuth(req);
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────

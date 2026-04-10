@@ -14,6 +14,7 @@
 
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { parseCookies } = require('./_csrf');
 
 const DEFAULT_SCHOOL_ID = 1; // CoachCarter — backwards compat for old tokens
 
@@ -63,19 +64,84 @@ function buildSessionClearCookie(name) {
 // ── Low-level decode ────────────────────────────────────────────────────────
 
 /**
- * Decode + verify a JWT from the Authorization: Bearer header.
- * Returns the payload or null if invalid/missing.
+ * Decode + verify a JWT from the request.
+ *
+ * Cookie-first: tries the session cookies in `preferredCookies` order,
+ * falls back to any session cookie, and only then falls back to the legacy
+ * `Authorization: Bearer` header. The header path emits a console.warn
+ * ([auth] Bearer header fallback ...) so we can see which frontend pages
+ * still need migrating. The header branch will be removed in commit 9
+ * once the frontend is fully on cookies.
+ *
+ * Why cookie-first: a browser can be logged in as multiple roles at once
+ * (cc_learner + cc_instructor). The caller (requireAuth) knows which role
+ * it wants, so it passes the role-matching cookie name first to avoid
+ * picking up the wrong session.
+ *
+ * @param {object} req
+ * @param {object} [opts]
+ * @param {string[]} [opts.preferredCookies] - session cookie names to try
+ *   first, in order. Others are tried after. Omit to try all in default
+ *   order.
+ * @returns {object|null} verified JWT payload or null
  */
-function decodeToken(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
+function decodeToken(req, opts = {}) {
   const secret = process.env.JWT_SECRET;
   if (!secret) return null;
-  try {
-    return jwt.verify(auth.slice(7), secret);
-  } catch {
-    return null;
+
+  const cookies = parseCookies(req);
+  const allCookies = Object.values(SESSION_COOKIE_NAMES);
+  const preferred = Array.isArray(opts.preferredCookies) ? opts.preferredCookies : [];
+  const order = [...new Set([...preferred, ...allCookies])];
+
+  for (const name of order) {
+    const token = cookies[name];
+    if (!token) continue;
+    try {
+      return jwt.verify(token, secret);
+    } catch {
+      // Bad cookie — keep trying the rest
+    }
   }
+
+  // Legacy Authorization: Bearer fallback. Log it so the frontend rollout
+  // has visibility into which pages haven't been migrated yet. Removed in
+  // commit 9.
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(auth.slice(7), secret);
+      console.warn(`[auth] Bearer header fallback: ${req.method || '?'} ${req.url || '?'}`);
+      return payload;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Map a list of allowed roles to the session cookies that could hold a
+ * matching token. Used by requireAuth to tell decodeToken which cookie to
+ * prefer.
+ *
+ *   roles: ['learner']    -> ['cc_learner']
+ *   roles: ['instructor'] -> ['cc_instructor']
+ *   roles: ['admin']      -> ['cc_admin', 'cc_instructor']  (instructor+isAdmin is valid)
+ *   roles: ['superadmin'] -> ['cc_admin']
+ *   roles: []             -> []  (any)
+ */
+function cookiesForRoles(roles) {
+  if (!roles || roles.length === 0) return [];
+  const out = [];
+  for (const r of roles) {
+    if (r === 'learner')                    out.push(SESSION_COOKIE_NAMES.learner);
+    else if (r === 'instructor')            out.push(SESSION_COOKIE_NAMES.instructor);
+    else if (r === 'admin')                 { out.push(SESSION_COOKIE_NAMES.admin); out.push(SESSION_COOKIE_NAMES.instructor); }
+    else if (r === 'superadmin')            out.push(SESSION_COOKIE_NAMES.admin);
+  }
+  return [...new Set(out)];
 }
 
 // ── Role-based auth ─────────────────────────────────────────────────────────
@@ -93,10 +159,12 @@ function decodeToken(req) {
  * @returns {object|null} The JWT payload (with school_id normalised) or null
  */
 function requireAuth(req, opts = {}) {
-  const payload = decodeToken(req);
-  if (!payload) return null;
-
   const { roles, requireSchool } = opts;
+
+  // Cookie-first decode, preferring cookies that could hold a token
+  // matching the allowed roles.
+  const payload = decodeToken(req, { preferredCookies: cookiesForRoles(roles) });
+  if (!payload) return null;
 
   if (roles && roles.length > 0) {
     const role = payload.role || 'learner'; // legacy learner tokens have no role
@@ -113,6 +181,11 @@ function requireAuth(req, opts = {}) {
 
     if (!allowed) return null;
   }
+  // Note: when roles is empty/undefined, no role check is applied. This
+  // matches the pre-consolidation behaviour of several local wrappers
+  // (learner.js verifyAuth, _shared.js verifyAuth, calendar.js verifyAuth)
+  // which accepted any valid JWT. Those wrappers now call requireAuth(req)
+  // with no roles option and get the same semantics.
 
   // Normalise school_id.
   // Grace period: legacy learner tokens (pre-multi-tenancy, no `role` field)
