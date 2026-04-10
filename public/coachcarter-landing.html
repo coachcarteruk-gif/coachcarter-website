@@ -1341,11 +1341,11 @@ a:focus-visible, button:focus-visible {
           <p class="quiz-label">Step 1 of 2</p>
           <p class="quiz-q">Are you a learner or an instructor?</p>
           <div class="quiz-options">
-            <button class="quiz-opt" onclick="quizNext('learner')">
+            <button class="quiz-opt" data-quiz-next="learner">
               <span class="opt-icon">🚗</span>
               I'm a learner
             </button>
-            <button class="quiz-opt" onclick="quizNext('instructor')">
+            <button class="quiz-opt" data-quiz-next="instructor">
               <span class="opt-icon">🎓</span>
               I'm an instructor
             </button>
@@ -1356,7 +1356,7 @@ a:focus-visible, button:focus-visible {
           <p class="quiz-label">Step 2 of 2</p>
           <p class="quiz-q">What would you like to do?</p>
           <div class="quiz-options" id="step2Options"></div>
-          <button class="quiz-back" onclick="quizBack()">&larr; Back</button>
+          <button class="quiz-back" id="btn-quiz-back">&larr; Back</button>
         </div>
       </div>
     </div>
@@ -1542,84 +1542,7 @@ a:focus-visible, button:focus-visible {
   <a href="/learner/login.html?redirect=/learner/book.html" class="cta"><span class="mobile-tab-icon">📅</span>Book</a>
 </nav>
 
-<script>
-// ── SCROLL ANIMATIONS ──────────────────────────────────────
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      entry.target.classList.add('visible');
-    }
-  });
-}, {
-  threshold: 0.1,
-  rootMargin: '0px 0px -40px 0px'
-});
-
-document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
-
-// ── QUIZ ─────────────────────────────────────────────────
-let quizAnswer1 = null;
-
-const step2Options = {
-  learner: [
-    { icon: '📊', label: 'Go to the Learner Hub',    action: () => goLearner('/learner/') },
-    { icon: '📅', label: 'Book a free trial lesson',  action: () => goLearner('/learner/book.html') },
-    { icon: '💰', label: 'Explore our prices',        action: () => go('/learner-journey.html') },
-  ],
-  instructor: [
-    { icon: '🔑', label: 'Log in to my portal',      action: () => go('/instructor/login.html') },
-    { icon: '🗓️', label: 'View my schedule',         action: () => go('/instructor/') },
-  ],
-};
-
-function go(url) { window.location.href = url; }
-
-function goLearner(dest) {
-  const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  go(session?.token ? dest : '/learner/login.html?redirect=' + encodeURIComponent(dest));
-}
-
-function quizNext(answer) {
-  quizAnswer1 = answer;
-  const opts = step2Options[answer] || [];
-  document.getElementById('step2Options').innerHTML = opts.map((o, i) =>
-    `<button class="quiz-opt" onclick="quizFinish(${i})">
-      <span class="opt-icon">${o.icon}</span>${o.label}
-    </button>`
-  ).join('');
-
-  document.getElementById('step1').classList.remove('active');
-  document.getElementById('step2').classList.add('active');
-  document.getElementById('dot1').classList.remove('active');
-  document.getElementById('dot2').classList.add('active');
-}
-
-function quizBack() {
-  document.getElementById('step2').classList.remove('active');
-  document.getElementById('step1').classList.add('active');
-  document.getElementById('dot2').classList.remove('active');
-  document.getElementById('dot1').classList.add('active');
-}
-
-function quizFinish(index) {
-  const opts = step2Options[quizAnswer1];
-  if (opts && opts[index]) opts[index].action();
-}
-
-// ── NAV SCROLL EFFECT ──────────────────────────────────────
-let lastScroll = 0;
-const nav = document.querySelector('.nav');
-
-window.addEventListener('scroll', () => {
-  const scrollY = window.scrollY;
-  if (scrollY > 100) {
-    nav.style.background = 'rgba(38, 38, 38, 0.97)';
-  } else {
-    nav.style.background = 'rgba(38, 38, 38, 0.92)';
-  }
-  lastScroll = scrollY;
-}, { passive: true });
-</script>
+<script src="/coachcarter-landing.js"></script>
 
 </body>
 </html>
