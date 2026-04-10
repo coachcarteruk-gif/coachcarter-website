@@ -699,6 +699,13 @@
 
       var logoutBtn = document.getElementById('cc-sb-logout');
       if (logoutBtn) logoutBtn.addEventListener('click', function() {
+        // Prefer window.ccAuth.logout (learner-auth.js) — it clears the
+        // httpOnly session cookie on the server before redirecting.
+        // Fall back to local-only clear if learner-auth.js wasn't loaded.
+        if (window.ccAuth && typeof window.ccAuth.logout === 'function') {
+          window.ccAuth.logout();
+          return;
+        }
         localStorage.removeItem('cc_learner');
         window.location.href = '/';
       });
@@ -725,6 +732,10 @@
 
       var logoutBtn2 = document.getElementById('cc-sb-logout');
       if (logoutBtn2) logoutBtn2.addEventListener('click', function() {
+        if (window.ccAuth && typeof window.ccAuth.logout === 'function') {
+          window.ccAuth.logout();
+          return;
+        }
         localStorage.removeItem('cc_instructor');
         window.location.href = '/';
       });
