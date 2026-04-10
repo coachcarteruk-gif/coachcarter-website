@@ -141,7 +141,8 @@ async function handleLogin(req, res) {
 
   try {
     const rows = await sql`
-      SELECT * FROM admin_users
+      SELECT id, name, email, password_hash, role, active, school_id
+      FROM admin_users
       WHERE email = ${normalisedEmail} AND active = true
     `;
     if (rows.length === 0)

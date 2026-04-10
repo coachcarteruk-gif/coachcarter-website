@@ -208,7 +208,9 @@ async function handleVerify(req, res) {
     let isNewUser = false;
 
     if (linkRecord.email) {
-      const existing = await sql`SELECT * FROM learner_users WHERE email = ${linkRecord.email}`;
+      const existing = await sql`
+        SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at
+        FROM learner_users WHERE email = ${linkRecord.email}`;
       if (existing.length > 0) {
         user = existing[0];
       } else {
@@ -241,7 +243,9 @@ async function handleVerify(req, res) {
             (${user.id}, 'purchase', ${FREE_TRIAL_CREDITS}, 0, 'free_trial')`;
       }
     } else if (linkRecord.phone) {
-      const existing = await sql`SELECT * FROM learner_users WHERE phone = ${linkRecord.phone}`;
+      const existing = await sql`
+        SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at
+        FROM learner_users WHERE phone = ${linkRecord.phone}`;
       if (existing.length > 0) {
         user = existing[0];
       } else {
@@ -330,7 +334,9 @@ async function handleVerifyCode(req, res) {
     let user;
     let isNewUser = false;
 
-    const existing = await sql`SELECT * FROM learner_users WHERE phone = ${linkRecord.phone}`;
+    const existing = await sql`
+      SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at
+      FROM learner_users WHERE phone = ${linkRecord.phone}`;
     if (existing.length > 0) {
       user = existing[0];
     } else {
