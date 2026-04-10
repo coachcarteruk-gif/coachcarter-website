@@ -155,9 +155,7 @@
 
   async function loadPendingList() {
     try {
-      const res = await fetch('/api/learner?action=pending-confirmations', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
+      const res = await ccAuth.fetchAuthed('/api/learner?action=pending-confirmations');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
@@ -202,9 +200,7 @@
     // We need to fetch this booking's details via pending-confirmations
     // and show the confirm form
     try {
-      const res = await fetch('/api/learner?action=pending-confirmations', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
+      const res = await ccAuth.fetchAuthed('/api/learner?action=pending-confirmations');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
@@ -293,9 +289,9 @@
     const notes = document.getElementById('cf-notes').value.trim() || null;
 
     try {
-      const res = await fetch('/api/learner?action=confirm-lesson', {
+      const res = await ccAuth.fetchAuthed('/api/learner?action=confirm-lesson', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           booking_id: parseInt(bookingId),
           lesson_happened: happened,

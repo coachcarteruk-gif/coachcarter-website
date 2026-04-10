@@ -227,9 +227,9 @@
     hideError();
 
     try {
-      const res = await fetch('/api/instructor?action=complete-onboarding', {
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=complete-onboarding', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name, phone, bio, vehicle_make, vehicle_model, transmission_type,
           adi_grade, years_experience,

@@ -898,9 +898,7 @@ async function init() {
 
 async function loadCalendarPrefs() {
   try {
-    const res = await fetch('/api/instructor?action=profile', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=profile');
     const data = await res.json();
     if (res.ok && data.instructor) {
       calendarStartHour = data.instructor.calendar_start_hour || 7;
@@ -1039,9 +1037,7 @@ async function fetchNeededData() {
   showLoading();
 
   try {
-    const res  = await fetch(`/api/instructor?action=schedule-range&from=${from}&to=${to}`, {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    const res  = await ccAuth.fetchAuthed(`/api/instructor?action=schedule-range&from=${from}&to=${to}`);
     if (res.status === 401) { signOut(); return; }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
@@ -1077,9 +1073,7 @@ function showError(msg) {
 // ─── Availability fetching ───────────────────────────────────────────────────
 async function loadAvailability() {
   try {
-    const res  = await fetch('/api/instructor?action=availability', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    const res  = await ccAuth.fetchAuthed('/api/instructor?action=availability');
     if (!res.ok) return;
     const data = await res.json();
     availCache = (data.windows || []).map(w => ({
@@ -1438,9 +1432,9 @@ async function submitConfirmation(bookingId) {
   const notes = document.getElementById('cf-notes-' + bookingId).value.trim() || null;
 
   try {
-    const res = await fetch('/api/instructor?action=confirm-lesson', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=confirm-lesson', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ booking_id: bookingId, lesson_happened: happened, late_party: lateParty, late_minutes: lateMinutes, notes })
     });
     const data = await res.json();
@@ -1515,9 +1509,9 @@ async function saveNewAvailability() {
   updated.push({ day_of_week: dow, start_time: start, end_time: end });
 
   try {
-    const res  = await fetch('/api/instructor?action=set-availability', {
+    const res  = await ccAuth.fetchAuthed('/api/instructor?action=set-availability', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ windows: updated })
     });
     const data = await res.json();
@@ -1630,9 +1624,9 @@ async function saveInlineNotes(bookingId) {
   btn.disabled = true; btn.textContent = 'Saving…';
 
   try {
-    const res = await fetch('/api/instructor?action=update-notes', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=update-notes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ booking_id: bookingId, instructor_notes: notes || null })
     });
     const data = await res.json();
@@ -1839,9 +1833,9 @@ async function markCompleteFromModal(bookingId) {
 
 async function markCompleteWithNotes(bookingId, instructorNotes) {
   try {
-    const res = await fetch('/api/instructor?action=complete', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=complete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ booking_id: bookingId, instructor_notes: instructorNotes || null })
     });
     const data = await res.json();
@@ -1864,9 +1858,7 @@ async function openLearnerHistory(learnerId) {
   document.getElementById('historyContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading…</p></div>';
 
   try {
-    const res = await fetch(`/api/instructor?action=learner-history&learner_id=${learnerId}`, {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    const res = await ccAuth.fetchAuthed(`/api/instructor?action=learner-history&learner_id=${learnerId}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
@@ -1954,9 +1946,9 @@ async function confirmCancel() {
   const reason = document.getElementById('cancelReason').value.trim();
 
   try {
-    const res = await fetch('/api/instructor?action=cancel-booking', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=cancel-booking', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ booking_id: cancelBookingId, reason: reason || null, notify: !!document.getElementById('cancelNotify').checked })
     });
     const data = await res.json();
@@ -2008,9 +2000,9 @@ async function confirmInstrReschedule() {
   btn.disabled = true; btn.textContent = 'Moving…';
 
   try {
-    const res = await fetch('/api/instructor?action=reschedule-booking', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=reschedule-booking', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         booking_id: rescheduleBookingId,
         new_date: newDate,
@@ -2054,7 +2046,7 @@ async function openEditBookingModal(bookingId) {
 
   // Load lesson types for dropdown (include inactive for legacy corrections)
   try {
-    const res = await fetch('/api/lesson-types?action=list&include_inactive=true');
+    const res = await ccAuth.fetchAuthed('/api/lesson-types?action=list&include_inactive=true');
     const data = await res.json();
     editBookingLessonTypes = data.lesson_types || [];
   } catch { editBookingLessonTypes = []; }
@@ -2123,9 +2115,9 @@ async function confirmEditBooking(forceOverride) {
   btn.disabled = true; btn.textContent = 'Saving…';
 
   try {
-    const res = await fetch('/api/instructor?action=edit-booking', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=edit-booking', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         booking_id: editBookingId,
         scheduled_date: newDate,
@@ -2203,8 +2195,8 @@ async function openAddLessonModal() {
   // Fetch learners + lesson types in parallel
   try {
     const [learnersRes, typesRes] = await Promise.all([
-      fetch('/api/instructor?action=my-learners', { headers: { Authorization: 'Bearer ' + token } }),
-      fetch('/api/lesson-types?action=list')
+      ccAuth.fetchAuthed('/api/instructor?action=my-learners'),
+      ccAuth.fetchAuthed('/api/lesson-types?action=list')
     ]);
     const learnersData = await learnersRes.json();
     addLessonLearners = Array.isArray(learnersData) ? learnersData : (learnersData.learners || []);
@@ -2311,9 +2303,9 @@ async function confirmCreateBooking() {
   btn.disabled = true; btn.textContent = 'Booking…';
 
   try {
-    const res = await fetch('/api/instructor?action=create-booking', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=create-booking', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         learner_id: selectedLearnerId,
         scheduled_date: newDate,
@@ -2354,7 +2346,7 @@ async function openOfferModal(prefillEmail) {
 
   // Fetch lesson types
   try {
-    const typesRes = await fetch('/api/lesson-types?action=list');
+    const typesRes = await ccAuth.fetchAuthed('/api/lesson-types?action=list');
     const typesData = await typesRes.json();
     const types = typesData.lesson_types || [];
     const sel = document.getElementById('offerLessonType');
@@ -2421,9 +2413,9 @@ async function sendOffer() {
   btn.textContent = 'Sending…';
 
   try {
-    const res = await fetch('/api/instructor?action=create-offer', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=create-offer', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         learner_email: email,
         scheduled_date: date,

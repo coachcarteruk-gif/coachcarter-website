@@ -538,13 +538,11 @@
     }
 
     try {
+      // Session cookie was set by /api/magic-link?action=verify above,
+      // so ccAuth.fetchAuthed can hit the authed endpoint immediately.
       const stored = JSON.parse(localStorage.getItem('cc_learner') || '{}');
-      await fetch('/api/learner?action=update-name', {
+      await ccAuth.fetchAuthed('/api/learner?action=update-name', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + stored.token
-        },
         body: JSON.stringify({ name })
       });
 
@@ -571,13 +569,8 @@
     btn.textContent = 'Saving…';
 
     try {
-      const stored = JSON.parse(localStorage.getItem('cc_learner') || '{}');
-      const res = await fetch('/api/learner?action=accept-terms', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + stored.token
-        }
+      const res = await ccAuth.fetchAuthed('/api/learner?action=accept-terms', {
+        method: 'POST'
       });
       if (!res.ok) throw new Error('Failed');
 

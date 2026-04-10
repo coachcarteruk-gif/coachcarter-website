@@ -341,9 +341,7 @@ function init() {
 async function loadBookings() {
   try {
     pastOffset = 0;
-    var res = await fetch('/api/slots?action=my-bookings&past_limit=' + PAST_PAGE_SIZE + '&past_offset=0', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    var res = await ccAuth.fetchAuthed('/api/slots?action=my-bookings&past_limit=' + PAST_PAGE_SIZE + '&past_offset=0');
     var data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
@@ -368,9 +366,7 @@ async function loadMorePast() {
   if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
   try {
     pastOffset += PAST_PAGE_SIZE;
-    var res = await fetch('/api/slots?action=my-bookings&past_limit=' + PAST_PAGE_SIZE + '&past_offset=' + pastOffset, {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    var res = await ccAuth.fetchAuthed('/api/slots?action=my-bookings&past_limit=' + PAST_PAGE_SIZE + '&past_offset=' + pastOffset);
     var data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
@@ -575,9 +571,7 @@ function renderLessonCard(b, isPast) {
 // ── Calendar download ──
 async function downloadCalendar(bookingId) {
   try {
-    var res = await fetch('/api/calendar?action=download&booking_id=' + bookingId, {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    var res = await ccAuth.fetchAuthed('/api/calendar?action=download&booking_id=' + bookingId);
     if (!res.ok) throw new Error('Failed');
     var blob = await res.blob();
     var url = URL.createObjectURL(blob);
@@ -660,9 +654,9 @@ async function confirmCancel() {
   try {
     var body = { booking_id: pendingCancel.bookingId };
     if (cancelSeries) body.cancel_series = true;
-    var res = await fetch('/api/slots?action=cancel', {
+    var res = await ccAuth.fetchAuthed('/api/slots?action=cancel', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     var data = await res.json();

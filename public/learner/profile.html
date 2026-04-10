@@ -499,9 +499,7 @@ function logout() { ccAuth.logout(); }
 
 async function loadProgress() {
   try {
-    const res = await fetch('/api/learner?action=progress', {
-      headers: { 'Authorization': `Bearer ${AUTH.token}` }
-    });
+    const res = await ccAuth.fetchAuthed('/api/learner?action=progress');
     if (res.status === 401) { logout(); return; }
     PROGRESS = await res.json();
   } catch (e) { console.error(e); }
@@ -561,9 +559,7 @@ async function lookupPostcode() {
 
   btn.disabled = true; btn.textContent = 'Looking up\u2026';
   try {
-    const res = await fetch('/api/address-lookup?postcode=' + encodeURIComponent(postcode), {
-      headers: { Authorization: 'Bearer ' + AUTH.token }
-    });
+    const res = await ccAuth.fetchAuthed('/api/address-lookup?postcode=' + encodeURIComponent(postcode));
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Lookup failed');
 
@@ -633,9 +629,9 @@ async function saveProfile() {
   btn.disabled = true; btn.textContent = 'Saving\u2026';
 
   try {
-    const res = await fetch('/api/learner?action=update-profile', {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=update-profile', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, pickup_address: address })
     });
     const data = await res.json();
@@ -706,9 +702,9 @@ async function saveTest() {
   btn.disabled = true; btn.textContent = 'Saving\u2026';
 
   try {
-    const res = await fetch('/api/learner?action=update-profile', {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=update-profile', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ test_date: testDate, test_time: testTime })
     });
     const data = await res.json();
@@ -738,9 +734,9 @@ async function toggleContactPref() {
   updatePrefSub(val);
 
   try {
-    const res = await fetch('/api/learner?action=set-contact-pref', {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=set-contact-pref', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prefer_contact_before: val })
     });
     const data = await res.json();
@@ -760,9 +756,7 @@ const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 async function loadAvailability() {
   try {
-    const res = await fetch('/api/learner?action=my-availability', {
-      headers: { Authorization: 'Bearer ' + AUTH.token }
-    });
+    const res = await ccAuth.fetchAuthed('/api/learner?action=my-availability');
     if (!res.ok) return;
     const data = await res.json();
     AVAIL_WINDOWS = (data.availability || []).map(w => ({
@@ -888,9 +882,9 @@ async function saveAvailability() {
   note.style.color = '';
 
   try {
-    const res = await fetch('/api/learner?action=set-availability', {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=set-availability', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ windows: AVAIL_WINDOWS })
     });
     const data = await res.json();
@@ -913,9 +907,7 @@ async function loadWaitlist() {
   if (!container) return;
 
   try {
-    const res = await fetch('/api/waitlist?action=my-waitlist', {
-      headers: { Authorization: 'Bearer ' + AUTH.token }
-    });
+    const res = await ccAuth.fetchAuthed('/api/waitlist?action=my-waitlist');
     if (!res.ok) { container.innerHTML = '<div class="wl-empty">Could not load waitlist.</div>'; return; }
     const data = await res.json();
     const entries = data.entries || [];
@@ -975,9 +967,9 @@ async function requestDeletion(btn) {
   if (!confirm('This is your final confirmation. Proceed with account deletion?')) return;
   btn.disabled = true; btn.style.opacity = '.6';
   try {
-    const res = await fetch('/api/learner?action=request-deletion', {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=request-deletion', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token }
+      headers: { 'Content-Type': 'application/json' }
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Request failed');
@@ -991,9 +983,9 @@ async function requestDeletion(btn) {
 async function leaveWaitlist(waitlistId, btn) {
   btn.disabled = true; btn.textContent = 'Leaving…';
   try {
-    const res = await fetch('/api/waitlist?action=leave', {
+    const res = await ccAuth.fetchAuthed('/api/waitlist?action=leave', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ waitlist_id: waitlistId })
     });
     const data = await res.json();

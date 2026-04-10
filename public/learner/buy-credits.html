@@ -639,9 +639,7 @@
   // ── Load balance ────────────────────────────────────────────────────────────
   async function loadBalance() {
     try {
-      const res  = await fetch('/api/credits?action=balance', {
-        headers: { Authorization: 'Bearer ' + token }
-      });
+      const res  = await ccAuth.fetchAuthed('/api/credits?action=balance');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load balance');
 
@@ -661,7 +659,7 @@
 
   async function loadLessonTypes() {
     try {
-      const res = await fetch('/api/lesson-types?action=list');
+      const res = await ccAuth.fetchAuthed('/api/lesson-types?action=list');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       lessonTypes = (data.lesson_types || []).filter(lt => lt.active !== false);
@@ -740,9 +738,9 @@
 
     try {
       const hours = lt.duration_minutes / 60;
-      const res = await fetch('/api/credits?action=checkout', {
+      const res = await ccAuth.fetchAuthed('/api/credits?action=checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hours })
       });
       const data = await res.json();
@@ -798,9 +796,9 @@
     window.posthog && posthog.capture('credits_checkout_initiated', { hours: qty, total_pence: total });
 
     try {
-      const res  = await fetch('/api/credits?action=checkout', {
+      const res  = await ccAuth.fetchAuthed('/api/credits?action=checkout', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ hours: qty })
       });
       const data = await res.json();
@@ -837,7 +835,7 @@
   // Load Test Ready Guarantee price
   async function loadProgrammePrice() {
     try {
-      const res = await fetch('/api/guarantee-price?t=' + Date.now());
+      const res = await ccAuth.fetchAuthed('/api/guarantee-price?t=' + Date.now());
       const data = await res.json();
 
       const price = data.current_price || 1500;

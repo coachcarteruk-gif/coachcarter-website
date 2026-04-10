@@ -195,9 +195,7 @@ function signOut() {
 // ── Load questions ──
 async function loadQuestions() {
   try {
-    const res = await fetch('/api/instructor?action=qa-list', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=qa-list');
     const data = await res.json();
     if (res.status === 401) { signOut(); return; }
     if (!res.ok) throw new Error(data.error);
@@ -268,9 +266,7 @@ async function openQuestion(id) {
   dv.querySelector('#detail-content').innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading...</div>';
 
   try {
-    const res = await fetch(`/api/instructor?action=qa-detail&question_id=${id}`, {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    const res = await ccAuth.fetchAuthed(`/api/instructor?action=qa-detail&question_id=${id}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     renderDetail(data.question, data.answers);
@@ -327,9 +323,9 @@ async function submitReply(questionId) {
   btn.textContent = 'Posting...';
 
   try {
-    const res = await fetch('/api/instructor?action=qa-reply', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=qa-reply', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question_id: questionId, body })
     });
     const data = await res.json();

@@ -259,9 +259,7 @@
 
   async function loadAvailability() {
     try {
-      const res  = await fetch('/api/instructor?action=availability', {
-        headers: { Authorization: 'Bearer ' + token }
-      });
+      const res  = await ccAuth.fetchAuthed('/api/instructor?action=availability');
       if (res.status === 401) { signOut(); return; }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -349,9 +347,9 @@
     try {
       // Save availability windows if changed
       if (isDirty) {
-        const res  = await fetch('/api/instructor?action=set-availability', {
+        const res  = await ccAuth.fetchAuthed('/api/instructor?action=set-availability', {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ windows })
         });
         const data = await res.json();
@@ -396,9 +394,7 @@
   // ─── Blackout date ranges ──────────────────────────────────────────────────
   async function loadBlackoutDates() {
     try {
-      const res = await fetch('/api/instructor?action=blackout-dates', {
-        headers: { Authorization: 'Bearer ' + token }
-      });
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=blackout-dates');
       if (res.status === 401) return;
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -492,9 +488,9 @@
 
   async function saveBlackoutDates() {
     try {
-      const res = await fetch('/api/instructor?action=set-blackout-dates', {
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=set-blackout-dates', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ranges: blackoutRanges })
       });
       const data = await res.json();

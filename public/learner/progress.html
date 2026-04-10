@@ -310,9 +310,7 @@ window.addEventListener('DOMContentLoaded', function() {
 // ── Load competency data ──
 async function loadData() {
   try {
-    var res = await fetch('/api/learner?action=competency', {
-      headers: { 'Authorization': 'Bearer ' + AUTH.token }
-    });
+    var res = await ccAuth.fetchAuthed('/api/learner?action=competency');
     if (!res.ok) throw new Error('API error: ' + res.status);
     DATA = await res.json();
     processData();

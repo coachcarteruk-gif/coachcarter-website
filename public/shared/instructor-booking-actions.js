@@ -177,9 +177,9 @@
     try {
       const body = { booking_id: cancelBookingId };
       if (reason) body.reason = reason;
-      const res = await fetch('/api/instructor?action=cancel-booking', {
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=cancel-booking', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
       const data = await res.json();
@@ -241,9 +241,7 @@
 
     // Check conflicts
     try {
-      const res = await fetch('/api/instructor?action=schedule&start=' + newDate + '&end=' + newDate, {
-        headers: { Authorization: 'Bearer ' + _token }
-      });
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=schedule&start=' + newDate + '&end=' + newDate);
       const data = await res.json();
       const bookings = data.bookings || [];
       const conflict = bookings.find(function (b) {
@@ -278,9 +276,9 @@
     btn.disabled = true;
     btn.textContent = 'Moving…';
     try {
-      const res = await fetch('/api/instructor?action=reschedule-booking', {
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=reschedule-booking', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ booking_id: rescheduleBooking.id, new_date: newDate, new_start_time: newTime })
       });
       const data = await res.json();
@@ -326,8 +324,8 @@
     // Fetch learners + lesson types
     try {
       const [lRes, tRes] = await Promise.all([
-        fetch('/api/instructor?action=my-learners', { headers: { Authorization: 'Bearer ' + _token } }),
-        fetch('/api/lesson-types?action=list')
+        ccAuth.fetchAuthed('/api/instructor?action=my-learners'),
+        ccAuth.fetchAuthed('/api/lesson-types?action=list')
       ]);
       const lData = await lRes.json();
       const tData = await tRes.json();
@@ -433,9 +431,9 @@
       if (notes) body.notes = notes;
       if (dropoff) body.dropoff_address = dropoff;
 
-      const res = await fetch('/api/instructor?action=create-booking', {
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=create-booking', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
       const data = await res.json();

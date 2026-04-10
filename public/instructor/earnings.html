@@ -314,9 +314,7 @@
   }
 
   async function apiFetch(action, params = '') {
-    const res = await fetch(`/api/instructor?action=${action}${params}`, {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
+    const res = await ccAuth.fetchAuthed(`/api/instructor?action=${action}${params}`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
   }
@@ -556,9 +554,9 @@
 
   async function startConnectOnboarding() {
     try {
-      const res = await fetch('/api/connect?action=create-account', {
+      const res = await ccAuth.fetchAuthed('/api/connect?action=create-account', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' }
       });
       const data = await res.json();
       if (data.ok && data.onboarding_url) {
@@ -573,9 +571,7 @@
 
   async function continueConnectOnboarding() {
     try {
-      const res = await fetch('/api/connect?action=onboarding-link', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
+      const res = await ccAuth.fetchAuthed('/api/connect?action=onboarding-link');
       const data = await res.json();
       if (data.ok && data.onboarding_url) {
         window.location.href = data.onboarding_url;
@@ -596,9 +592,9 @@
     });
     if (!confirmed) return;
     try {
-      const res = await fetch('/api/connect?action=dismiss-connect', {
+      const res = await ccAuth.fetchAuthed('/api/connect?action=dismiss-connect', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' }
       });
       const data = await res.json();
       if (data.ok) {
@@ -617,9 +613,7 @@
 
   async function openStripeDashboard() {
     try {
-      const res = await fetch('/api/connect?action=dashboard-link', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
+      const res = await ccAuth.fetchAuthed('/api/connect?action=dashboard-link');
       const data = await res.json();
       if (data.ok && data.dashboard_url) {
         window.open(data.dashboard_url, '_blank');
@@ -682,7 +676,7 @@
         apiFetch('earnings-summary'),
         apiFetch('earnings-week', `&week_start=${currentWeekStart}`),
         apiFetch('earnings-history', `&limit=${HISTORY_LIMIT}&offset=0`),
-        fetch('/api/connect?action=connect-status', { headers: { 'Authorization': 'Bearer ' + token } }).then(r => r.json()).catch(() => ({ has_account: false, onboarding_complete: false })),
+        ccAuth.fetchAuthed('/api/connect?action=connect-status').then(r => r.json()).catch(() => ({ has_account: false, onboarding_complete: false })),
         apiFetch('next-payout-preview').catch(() => null),
         apiFetch('payout-history', '&limit=10').catch(() => ({ payouts: [] }))
       ]);
