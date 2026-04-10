@@ -4,5 +4,7 @@
   "stores_pii": true,
   "multi_tenant": true,
   "rollback_capable": false,
-  "configured_at": "2026-04-07T00:00:00Z"
+  "configured_at": "2026-04-07T00:00:00Z",
+  "last_audit_at": "2026-04-10T00:00:00Z",
+  "last_audit_commit": "0d279b2"
 }
