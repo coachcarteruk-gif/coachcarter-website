@@ -71,9 +71,19 @@ function requireAuth(req, opts = {}) {
     if (!allowed) return null;
   }
 
-  // Normalise school_id — old tokens default to 1
+  // Normalise school_id.
+  // Grace period: legacy learner tokens (pre-multi-tenancy, no `role` field)
+  // still default to CoachCarter. Admin/instructor tokens without school_id
+  // are rejected outright — they must re-auth.
   if (!payload.school_id && payload.school_id !== 0) {
-    payload.school_id = DEFAULT_SCHOOL_ID;
+    const role = payload.role || 'learner';
+    if (role === 'learner') {
+      payload.school_id = DEFAULT_SCHOOL_ID;
+    } else if (role !== 'superadmin') {
+      console.warn('[auth] rejecting token with no school_id, role=' + role);
+      return null;
+    }
+    // Superadmin with no school_id is valid (platform-level operator).
   }
 
   if (requireSchool && !getSchoolId(payload, req)) return null;
@@ -104,7 +114,10 @@ function getSchoolId(payload, req) {
     return payload.school_id || null;
   }
 
-  return payload.school_id || DEFAULT_SCHOOL_ID;
+  // Non-superadmin: return their school_id, or null if missing.
+  // After requireAuth, this will only be null for non-learner tokens that
+  // somehow bypassed the fallback logic — callers must handle that case.
+  return payload.school_id || null;
 }
 
 /**
