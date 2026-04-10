@@ -149,63 +149,6 @@
     <a href="/learner/" class="btn-primary" style="margin-top: 16px;">Go to my account →</a>
   </div>
 
-<script>
-async function loadConfirmation() {
-  const params = new URLSearchParams(location.search);
-  const token = params.get('token');
-
-  if (!token) {
-    showSuccess();
-    return;
-  }
-
-  try {
-    const res = await fetch(`/api/offers?action=get-offer&token=${encodeURIComponent(token)}`);
-    const data = await res.json();
-
-    if (data.code === 'ALREADY_ACCEPTED' || (data.ok && data.offer)) {
-      // Offer was accepted — show the details we have
-      if (data.ok && data.offer) {
-        renderDetails(data.offer);
-      } else {
-        showSuccess();
-      }
-    } else {
-      // The offer is accepted (webhook processed) — show generic success
-      showSuccess();
-    }
-  } catch (err) {
-    // Show generic success — the webhook may still be processing
-    showSuccess();
-  }
-}
-
-function renderDetails(offer) {
-  const dateObj = new Date(offer.scheduled_date + 'T00:00:00Z');
-  const dateStr = dateObj.toLocaleDateString('en-GB', {
-    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
-  });
-  const mins = offer.duration_minutes;
-  const durStr = mins >= 60
-    ? (mins % 60 === 0 ? `${mins / 60} hour${mins / 60 !== 1 ? 's' : ''}` : `${(mins / 60).toFixed(1)} hours`)
-    : `${mins} mins`;
-
-  document.getElementById('s-date').textContent = dateStr;
-  document.getElementById('s-time').textContent = `${offer.start_time.slice(0,5)} – ${offer.end_time.slice(0,5)}`;
-  document.getElementById('s-instructor').textContent = offer.instructor_name;
-  document.getElementById('s-duration').textContent = durStr;
-
-  document.getElementById('loading').classList.add('hidden');
-  document.getElementById('success-content').classList.remove('hidden');
-}
-
-function showSuccess() {
-  document.getElementById('loading').classList.add('hidden');
-  // Can't get details — show a generic message
-  document.getElementById('error-content').classList.remove('hidden');
-}
-
-loadConfirmation();
-</script>
+<script src="/offer-success.js"></script>
 </body>
 </html>
