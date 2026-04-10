@@ -1,29 +1,25 @@
 (function () {
   'use strict';
 
-  // Auth check
-  var stored = localStorage.getItem('cc_admin');
-  if (!stored) { window.location.href = '/admin/login.html'; return; }
-  var token;
+  // Auth check — read role/name/email from the display blob mirrored in
+  // localStorage at login time. The session JWT rides in the httpOnly
+  // cc_admin cookie; nothing on this page needs to decode it.
+  var adminData;
   try {
-    token = JSON.parse(stored).token;
-  } catch (e) {
+    adminData = JSON.parse(localStorage.getItem('cc_admin') || 'null');
+  } catch (e) { adminData = null; }
+  if (!adminData || !adminData.admin) {
     window.location.href = '/admin/login.html';
     return;
   }
-  try {
-    var payload = JSON.parse(atob(token.split('.')[1]));
-    if (payload.role !== 'superadmin') {
-      alert('Access denied. Superadmin role required.');
-      window.location.href = '/admin/portal.html';
-      return;
-    }
-    document.getElementById('adminName').textContent = payload.name || 'Super Admin';
-    document.getElementById('adminEmail').textContent = payload.email || '';
-  } catch (e) {
-    window.location.href = '/admin/login.html';
+  var admin = adminData.admin;
+  if (admin.role !== 'superadmin') {
+    alert('Access denied. Superadmin role required.');
+    window.location.href = '/admin/portal.html';
     return;
   }
+  document.getElementById('adminName').textContent = admin.name || 'Super Admin';
+  document.getElementById('adminEmail').textContent = admin.email || '';
 
   // API helpers — session cookie rides automatically via fetchAuthed
   async function apiFetch(url) {
