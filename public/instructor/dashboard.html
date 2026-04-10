@@ -550,9 +550,9 @@ async function loadDashboard() {
     const ds = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
 
     const [schedRes, statsRes, profileRes] = await Promise.all([
-      fetch('/api/instructor?action=schedule-range&from=' + ds + '&to=' + ds, { headers: { Authorization: 'Bearer ' + token } }),
-      fetch('/api/instructor?action=stats', { headers: { Authorization: 'Bearer ' + token } }),
-      fetch('/api/instructor?action=profile', { headers: { Authorization: 'Bearer ' + token } })
+      ccAuth.fetchAuthed('/api/instructor?action=schedule-range&from=' + ds + '&to=' + ds),
+      ccAuth.fetchAuthed('/api/instructor?action=stats'),
+      ccAuth.fetchAuthed('/api/instructor?action=profile')
     ]);
 
     const schedData = await schedRes.json();
@@ -682,8 +682,8 @@ async function openBookModal() {
   // Load learners and lesson types
   try {
     var [lRes, tRes] = await Promise.all([
-      fetch('/api/instructor?action=my-learners', { headers: { Authorization: 'Bearer ' + token } }),
-      fetch('/api/lesson-types?action=list')
+      ccAuth.fetchAuthed('/api/instructor?action=my-learners'),
+      ccAuth.fetchAuthed('/api/lesson-types?action=list')
     ]);
     var lData = await lRes.json();
     var tData = await tRes.json();
@@ -775,9 +775,9 @@ async function confirmBook() {
       dropoff_address: document.getElementById('bookDropoff').value.trim() || null
     };
 
-    var res = await fetch('/api/instructor?action=create-booking', {
+    var res = await ccAuth.fetchAuthed('/api/instructor?action=create-booking', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     var data = await res.json();
@@ -898,9 +898,9 @@ async function completeLesson() {
     var notes = document.getElementById('detailNotes').value.trim();
     if (notes) body.instructor_notes = notes;
 
-    var res = await fetch('/api/instructor?action=complete', {
+    var res = await ccAuth.fetchAuthed('/api/instructor?action=complete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     var data = await res.json();
@@ -992,9 +992,9 @@ async function sendRunningLate() {
   btn.textContent = 'Sending...';
 
   try {
-    var res = await fetch('/api/instructor?action=running-late', {
+    var res = await ccAuth.fetchAuthed('/api/instructor?action=running-late', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ delay_minutes: selectedDelay })
     });
     var data = await res.json();

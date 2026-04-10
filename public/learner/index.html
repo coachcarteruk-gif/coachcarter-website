@@ -268,9 +268,7 @@ async function loadProfileCompleteness() {
   if (!AUTH?.token) return;
   if (localStorage.getItem('cc_profile_dismissed') === 'true') return;
   try {
-    const res = await fetch('/api/learner?action=profile-completeness', {
-      headers: { 'Authorization': 'Bearer ' + AUTH.token }
-    });
+    const res = await ccAuth.fetchAuthed('/api/learner?action=profile-completeness');
     if (!res.ok) return;
     const data = await res.json();
 
@@ -309,21 +307,21 @@ function logout() { ccAuth.logout(); }
 
 async function loadBookings() {
   try {
-    const res = await fetch('/api/slots?action=my-bookings', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
+    const res = await ccAuth.fetchAuthed('/api/slots?action=my-bookings');
     if (res.ok) BOOKINGS_DATA = await res.json();
   } catch (e) { console.error(e); }
 }
 
 async function loadUnlogged() {
   try {
-    const res = await fetch('/api/learner?action=unlogged-bookings', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
+    const res = await ccAuth.fetchAuthed('/api/learner?action=unlogged-bookings');
     if (res.ok) UNLOGGED_DATA = await res.json();
   } catch (e) { console.error(e); }
 }
 
 async function loadReadiness() {
   try {
-    const res = await fetch('/api/learner?action=competency', { headers: { 'Authorization': `Bearer ${AUTH.token}` } });
+    const res = await ccAuth.fetchAuthed('/api/learner?action=competency');
     if (!res.ok) return;
     const data = await res.json();
     const CC = window.CC_COMPETENCY;

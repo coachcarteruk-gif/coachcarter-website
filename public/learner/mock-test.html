@@ -782,12 +782,10 @@ function apiCall(method, action, body) {
   var opts = {
     method: method,
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + AUTH.token
-    }
+      'Content-Type': 'application/json'}
   };
   if (body) opts.body = JSON.stringify(body);
-  return fetch('/api/learner?action=' + action, opts);
+  return ccAuth.fetchAuthed('/api/learner?action=' + action, opts);
 }
 
 /* ── Screen 0: Mode Selection ── */

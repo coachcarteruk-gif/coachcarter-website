@@ -297,9 +297,7 @@ function logout() { ccAuth.logout(); }
 // ── Load questions ──
 async function loadQuestions() {
   try {
-    const res = await fetch('/api/learner?action=qa-list', {
-      headers: { Authorization: 'Bearer ' + AUTH.token }
-    });
+    const res = await ccAuth.fetchAuthed('/api/learner?action=qa-list');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     allQuestions = data.questions || [];
@@ -358,9 +356,7 @@ async function openQuestion(id) {
   dv.querySelector('#detail-content').innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading...</div>';
 
   try {
-    const res = await fetch(`/api/learner?action=qa-detail&question_id=${id}`, {
-      headers: { Authorization: 'Bearer ' + AUTH.token }
-    });
+    const res = await ccAuth.fetchAuthed(`/api/learner?action=qa-detail&question_id=${id}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     renderDetail(data.question, data.answers);
@@ -435,9 +431,9 @@ async function submitQuestion() {
     if (askSessionId) payload.session_id = parseInt(askSessionId);
     if (askBookingId) payload.booking_id = parseInt(askBookingId);
 
-    const res = await fetch('/api/learner?action=qa-ask', {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=qa-ask', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     const data = await res.json();
@@ -462,9 +458,9 @@ async function submitReply(questionId) {
   if (!body) { showToast('Please enter a reply', 'error'); return; }
 
   try {
-    const res = await fetch('/api/learner?action=qa-reply', {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=qa-reply', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AUTH.token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question_id: questionId, body })
     });
     const data = await res.json();

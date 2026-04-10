@@ -244,12 +244,10 @@ async function sendMessage(text) {
   scrollToBottom();
 
   try {
-    const res = await fetch('/api/ask-examiner', {
+    const res = await ccAuth.fetchAuthed('/api/ask-examiner', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + AUTH.token
-      },
+        'Content-Type': 'application/json'},
       body: JSON.stringify({ messages: conversationHistory })
     });
 

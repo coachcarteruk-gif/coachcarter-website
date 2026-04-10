@@ -148,9 +148,7 @@
 
   async function loadProfile() {
     try {
-      const res  = await fetch('/api/instructor?action=profile', {
-        headers: { Authorization: 'Bearer ' + token }
-      });
+      const res  = await ccAuth.fetchAuthed('/api/instructor?action=profile');
       if (res.status === 401) { signOut(); return; }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -402,7 +400,7 @@
 
   async function loadBookingLinks() {
     try {
-      const res = await fetch('/api/lesson-types?action=list');
+      const res = await ccAuth.fetchAuthed('/api/lesson-types?action=list');
       const data = await res.json();
       const types = data.lesson_types || [];
       const container = document.getElementById('bookingLinksContainer');
@@ -488,9 +486,9 @@
     const reader = new FileReader();
     reader.onload = async function(e) {
       try {
-        const res = await fetch('/api/instructor?action=upload-photo', {
+        const res = await ccAuth.fetchAuthed('/api/instructor?action=upload-photo', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: e.target.result })
         });
         const data = await res.json();
@@ -548,9 +546,9 @@
     btn.textContent = 'Saving…';
 
     try {
-      const res  = await fetch('/api/instructor?action=update-profile', {
+      const res  = await ccAuth.fetchAuthed('/api/instructor?action=update-profile', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           name, phone: phone || null, bio: bio || null, photo_url: photo_url || null,
           buffer_minutes, reminder_hours, daily_schedule_email,
@@ -607,9 +605,9 @@
     resultEl.innerHTML = '<span style="color:var(--muted)">Fetching feed…</span>';
 
     try {
-      const res = await fetch('/api/instructor?action=ical-test', {
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=ical-test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })
       });
       const data = await res.json();

@@ -70,9 +70,9 @@
     return;
   }
 
-  fetch('/api/learner?action=export-data', {
+  ccAuth.fetchAuthed('/api/learner?action=export-data', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + auth.token }
+    headers: { 'Content-Type': 'application/json' }
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {

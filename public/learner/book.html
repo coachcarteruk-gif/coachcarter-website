@@ -791,7 +791,7 @@ function init() {
       // Activate reschedule mode if ?reschedule=BOOKING_ID is in the URL
       if (rescheduleBookingId && token) {
         try {
-          const res = await fetch('/api/slots?action=my-bookings', { headers: { Authorization: 'Bearer ' + token } });
+          const res = await ccAuth.fetchAuthed('/api/slots?action=my-bookings');
           const data = await res.json();
           if (res.ok) {
             const booking = (data.upcoming || []).find(b => String(b.id) === rescheduleBookingId);
@@ -833,7 +833,7 @@ window.dismissWelcome = dismissWelcome;
 // ─── Balance ─────────────────────────────────────────────────────────────────
 async function loadBalance() {
   try {
-    const res = await fetch('/api/credits?action=balance', { headers: { Authorization: 'Bearer ' + token } });
+    const res = await ccAuth.fetchAuthed('/api/credits?action=balance');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     creditBalance = data.credit_balance;
@@ -930,7 +930,7 @@ window.selectLessonType = selectLessonType;
 // ─── Instructors ─────────────────────────────────────────────────────────────
 async function loadInstructors() {
   try {
-    const res = await fetch('/api/instructors?action=list');
+    const res = await ccAuth.fetchAuthed('/api/instructors?action=list');
     const data = await res.json();
     instructors = data.instructors || [];
     const sel = document.getElementById('instructorFilter');
@@ -945,7 +945,7 @@ async function loadInstructors() {
 // ─── Upcoming bookings (compact next-lesson card) ───────────────────────────
 async function loadUpcoming() {
   try {
-    const res = await fetch('/api/slots?action=my-bookings', { headers: { Authorization: 'Bearer ' + token } });
+    const res = await ccAuth.fetchAuthed('/api/slots?action=my-bookings');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     const upcoming = data.upcoming || [];
@@ -963,7 +963,7 @@ async function loadUpcoming() {
 // ─── Learner profile ─────────────────────────────────────────────────────────
 async function loadLearnerProfile() {
   try {
-    const res = await fetch('/api/learner?action=profile', { headers: { Authorization: 'Bearer ' + token } });
+    const res = await ccAuth.fetchAuthed('/api/learner?action=profile');
     if (!res.ok) return;
     const data = await res.json();
     learnerProfile = data.profile || {};
@@ -998,9 +998,9 @@ async function savePickupPostcode() {
   btn.textContent = 'Saving…';
 
   try {
-    const res = await fetch('/api/learner?action=update-profile', {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=update-profile', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pickup_address: postcode })
     });
     const data = await res.json();
@@ -1052,9 +1052,9 @@ async function saveProfileFieldsFromModal() {
     const body = {};
     if (needsPhone && phone) body.phone = phone.replace(/\s+/g, '');
     if (needsPickup && pickup) body.pickup_address = pickup;
-    const res = await fetch('/api/learner?action=update-profile', {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=update-profile', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     if (!res.ok) {
@@ -1419,7 +1419,7 @@ async function updateRepeatDates() {
     const ltId = selectedLessonType ? selectedLessonType.id : '';
     const instId = pendingSlot.instructor_id;
     const pc = getLearnerPostcode();
-    const res = await fetch(`/api/slots?action=available&from=${from}&to=${to}&instructor_id=${instId}${ltId ? '&lesson_type_id=' + ltId : ''}${pc ? '&pickup_postcode=' + pc : ''}`);
+    const res = await ccAuth.fetchAuthed(`/api/slots?action=available&from=${from}&to=${to}&instructor_id=${instId}${ltId ? '&lesson_type_id=' + ltId : ''}${pc ? '&pickup_postcode=' + pc : ''}`);
     const data = await res.json();
     // Check which dates have the slot available
     for (let i = 1; i < dates.length; i++) {
@@ -1509,9 +1509,9 @@ async function confirmBookWithCredit() {
     const bookBody = { ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined };
     if (selectedLessonType && selectedLessonType.id) bookBody.lesson_type_id = selectedLessonType.id;
     if (weeks > 1) bookBody.repeat_weeks = weeks;
-    const res = await fetch('/api/slots?action=book', {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=book', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bookBody)
     });
     const data = await res.json();
@@ -1589,7 +1589,7 @@ async function confirmPayAndBook() {
         guest_phone:          document.getElementById('mdGuestPhone').value.replace(/\s+/g, '').trim(),
         guest_pickup_address: document.getElementById('mdGuestPickup').value.trim()
       };
-      const res = await fetch('/api/slots?action=checkout-slot-guest', {
+      const res = await ccAuth.fetchAuthed('/api/slots?action=checkout-slot-guest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payBody)
@@ -1601,9 +1601,9 @@ async function confirmPayAndBook() {
       // Authenticated checkout
       const payBody = { ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined };
       if (selectedLessonType && selectedLessonType.id) payBody.lesson_type_id = selectedLessonType.id;
-      const res = await fetch('/api/slots?action=checkout-slot', {
+      const res = await ccAuth.fetchAuthed('/api/slots?action=checkout-slot', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payBody)
       });
       const data = await res.json();
@@ -1656,7 +1656,7 @@ async function handleCalendarDownload(e) {
   e.preventDefault();
   if (!lastBookingId) return;
   try {
-    const res = await fetch(`/api/calendar?action=download&booking_id=${lastBookingId}`, { headers: { Authorization: 'Bearer ' + token } });
+    const res = await ccAuth.fetchAuthed(`/api/calendar?action=download&booking_id=${lastBookingId}`);
     if (!res.ok) throw new Error('Failed');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -1679,7 +1679,7 @@ function shouldShowCalSync() {
 async function handleCalendarSubscribe(e) {
   if (e) e.preventDefault();
   try {
-    const res = await fetch('/api/calendar?action=feed-url', { headers: { Authorization: 'Bearer ' + token } });
+    const res = await ccAuth.fetchAuthed('/api/calendar?action=feed-url');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     localStorage.setItem('cc_cal_subscribed', String(Date.now()));
@@ -1695,7 +1695,7 @@ async function handleCalendarSubscribe(e) {
 
 async function downloadCalendar(bookingId) {
   try {
-    const res = await fetch(`/api/calendar?action=download&booking_id=${bookingId}`, { headers: { Authorization: 'Bearer ' + token } });
+    const res = await ccAuth.fetchAuthed(`/api/calendar?action=download&booking_id=${bookingId}`);
     if (!res.ok) throw new Error('Failed');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -1781,9 +1781,9 @@ async function confirmCancel() {
   try {
     const body = { booking_id: pendingCancel.bookingId };
     if (cancelSeries) body.cancel_series = true;
-    const res = await fetch('/api/slots?action=cancel', {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=cancel', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     const data = await res.json();
@@ -1849,9 +1849,9 @@ async function confirmReschedule(newSlot) {
   document.getElementById('rescheduleSpinner').style.display = 'block';
 
   try {
-    const res = await fetch('/api/slots?action=reschedule', {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=reschedule', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         booking_id: pendingReschedule.bookingId,
         new_date: newSlot.date,
@@ -2041,9 +2041,9 @@ async function submitWaitlistJoin() {
   if (selectedLessonType) body.lesson_type_id = selectedLessonType.id;
 
   try {
-    const res = await fetch('/api/waitlist?action=join', {
+    const res = await ccAuth.fetchAuthed('/api/waitlist?action=join', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     const data = await res.json();

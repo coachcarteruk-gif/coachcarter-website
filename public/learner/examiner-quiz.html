@@ -495,9 +495,9 @@ function showResults() {
           correct_answer: a.correct_answer
         };
       });
-      fetch('/api/learner?action=quiz-results', {
+      ccAuth.fetchAuthed('/api/learner?action=quiz-results', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AUTH.token },
+        headers: { 'Content-Type': 'application/json'},
         body: JSON.stringify({ results: quizResults })
       }).catch(e => console.warn('Failed to persist quiz results:', e));
     } catch (e) { console.warn('Quiz persistence error:', e); }

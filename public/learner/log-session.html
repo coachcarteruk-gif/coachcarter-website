@@ -882,9 +882,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 // ── Load booking details for pre-fill ──
 async function loadBookingDetails(id) {
   try {
-    const res = await fetch('/api/learner?action=unlogged-bookings', {
-      headers: { 'Authorization': `Bearer ${AUTH.token}` }
-    });
+    const res = await ccAuth.fetchAuthed('/api/learner?action=unlogged-bookings');
     if (!res.ok) return fallbackManual();
     const data = await res.json();
     const booking = (data.bookings || []).find(b => String(b.id) === String(id));
@@ -1067,9 +1065,9 @@ async function saveSession() {
   btn.textContent = 'Saving...';
 
   try {
-    const res = await fetch('/api/learner?action=sessions', {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=sessions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AUTH.token}` },
+      headers: { 'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
     });
     if (res.status === 401) { window.location.href = '/learner/login.html'; return; }
@@ -1129,9 +1127,7 @@ const LEGACY_LABELS = {
 
 async function loadSessions() {
   try {
-    const res = await fetch('/api/learner?action=sessions', {
-      headers: { 'Authorization': `Bearer ${AUTH.token}` }
-    });
+    const res = await ccAuth.fetchAuthed('/api/learner?action=sessions');
     if (res.ok) {
       const data = await res.json();
       renderSessions(data.sessions || []);

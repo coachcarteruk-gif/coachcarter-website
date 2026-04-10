@@ -276,9 +276,7 @@ function sortLearners(list) {
 // ── Load learners ──
 async function loadLearners() {
   try {
-    const res = await fetch('/api/instructor?action=my-learners', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=my-learners');
     const data = await res.json();
     if (res.status === 401) { signOut(); return; }
     if (!res.ok) throw new Error(data.error);
@@ -383,15 +381,9 @@ async function openLearner(id) {
   try {
     // Fetch history, notes, and mock tests in parallel
     const [historyRes, notesRes, mockRes] = await Promise.all([
-      fetch('/api/instructor?action=learner-history&learner_id=' + id, {
-        headers: { Authorization: 'Bearer ' + token }
-      }),
-      fetch('/api/instructor?action=learner-notes&learner_id=' + id, {
-        headers: { Authorization: 'Bearer ' + token }
-      }),
-      fetch('/api/instructor?action=learner-mock-tests&learner_id=' + id, {
-        headers: { Authorization: 'Bearer ' + token }
-      })
+      ccAuth.fetchAuthed('/api/instructor?action=learner-history&learner_id=' + id),
+      ccAuth.fetchAuthed('/api/instructor?action=learner-notes&learner_id=' + id),
+      ccAuth.fetchAuthed('/api/instructor?action=learner-mock-tests&learner_id=' + id)
     ]);
     const historyData = await historyRes.json();
     if (historyRes.status === 401) { signOut(); return; }
@@ -565,9 +557,9 @@ async function saveLearnerNotes() {
   btn.disabled = true; btn.textContent = 'Saving…';
 
   try {
-    const res = await fetch('/api/instructor?action=update-learner-notes', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=update-learner-notes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ learner_id: currentDetailLearnerId, notes: notes || null, test_date: testDate, custom_hourly_rate_pence: customHourlyRatePence })
     });
     const data = await res.json();

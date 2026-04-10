@@ -333,14 +333,9 @@ async function sendMessage(text) {
   scrollToBottom();
 
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (AUTH?.token) {
-      headers['Authorization'] = 'Bearer ' + AUTH.token;
-    }
-
-    const res = await fetch('/api/advisor', {
+    // Session cookie + CSRF header attached by ccAuth.fetchAuthed.
+    const res = await ccAuth.fetchAuthed('/api/advisor', {
       method: 'POST',
-      headers,
       body: JSON.stringify({ messages: conversationHistory })
     });
 

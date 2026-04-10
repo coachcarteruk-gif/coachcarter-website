@@ -717,12 +717,10 @@
     var fd = getFormData();
     fd.initial_ratings = buildInitialRatings();
 
-    fetch('/api/learner?action=onboarding', {
+    ccAuth.fetchAuthed('/api/learner?action=onboarding', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + AUTH.token
-      },
+        'Content-Type': 'application/json'},
       body: JSON.stringify(fd)
     })
     .then(function(res) {
@@ -762,9 +760,7 @@
     var overlay = document.getElementById('loadingOverlay');
     overlay.classList.remove('hidden');
 
-    fetch('/api/learner?action=onboarding', {
-      headers: { 'Authorization': 'Bearer ' + AUTH.token }
-    })
+    ccAuth.fetchAuthed('/api/learner?action=onboarding')
     .then(function(res) {
       if (!res.ok) throw new Error('Not found');
       return res.json();
