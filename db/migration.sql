@@ -1122,6 +1122,10 @@ ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
 ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS school_id INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id);
 CREATE INDEX IF NOT EXISTS idx_enquiries_school_id ON enquiries(school_id);
 
+-- Multi-tenancy backfill for availability_submissions (added 2026-04-10)
+ALTER TABLE availability_submissions ADD COLUMN IF NOT EXISTS school_id INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id);
+CREATE INDEX IF NOT EXISTS idx_availability_submissions_school_id ON availability_submissions(school_id);
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- GDPR: CREDIT TRANSACTIONS — allow learner_id NULL for anonymization
 -- ══════════════════════════════════════════════════════════════════════════════

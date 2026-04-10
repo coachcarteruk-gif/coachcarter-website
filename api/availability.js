@@ -1,38 +1,61 @@
+// Availability Submissions endpoint
+//
+//   GET  /api/availability?status=pending   → list (admin only, scoped to school)
+//   POST /api/availability                   → submit (public, rate-limited)
+//
+// Tenant-scoped by school_id. All admin queries MUST filter by school_id.
+
 const { Resend } = require('resend');
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
-const { requireAuth } = require('./_auth');
+const { requireAuth, getSchoolId } = require('./_auth');
 
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+// HTML-escape helper for email templates — user data is never trusted.
+function esc(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 module.exports = async (req, res) => {
   // CORS handled centrally by middleware.js
-  // GET — fetch submissions (admin use)
+
+  // ── GET — admin list (tenant-scoped) ────────────────────────────────────────
   if (req.method === 'GET') {
     const admin = requireAuth(req, { roles: ['admin'] });
     if (!admin) return res.status(401).json({ error: 'Unauthorised — admin access required' });
+    const schoolId = getSchoolId(admin, req);
 
     try {
       const sql = neon(process.env.POSTGRES_URL);
-      const { status, limit = 50, offset = 0 } = req.query;
-      let query = 'SELECT * FROM availability_submissions';
-      let params = [];
-      let countQuery = 'SELECT COUNT(*) as total FROM availability_submissions';
-      let countParams = [];
-      if (status) {
-        query += ' WHERE status = $1';
-        countQuery += ' WHERE status = $1';
-        params.push(status);
-        countParams.push(status);
-      }
-      query += ` ORDER BY submitted_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-      params.push(parseInt(limit), parseInt(offset));
-      const submissions = await sql(query, params);
-      const countResult = await sql(countQuery, countParams);
+      const { status } = req.query;
+      const limit  = Math.min(parseInt(req.query.limit)  || 50, 200);
+      const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+
+      const submissions = status
+        ? await sql`
+            SELECT * FROM availability_submissions
+            WHERE school_id = ${schoolId} AND status = ${status}
+            ORDER BY submitted_at DESC
+            LIMIT ${limit} OFFSET ${offset}`
+        : await sql`
+            SELECT * FROM availability_submissions
+            WHERE school_id = ${schoolId}
+            ORDER BY submitted_at DESC
+            LIMIT ${limit} OFFSET ${offset}`;
+
+      const [countRow] = status
+        ? await sql`SELECT COUNT(*)::int AS total FROM availability_submissions WHERE school_id = ${schoolId} AND status = ${status}`
+        : await sql`SELECT COUNT(*)::int AS total FROM availability_submissions WHERE school_id = ${schoolId}`;
+
       return res.status(200).json({
         submissions,
-        pagination: { total: parseInt(countResult[0].total), limit: parseInt(limit), offset: parseInt(offset) }
+        pagination: { total: countRow.total, limit, offset }
       });
     } catch (err) {
       reportError('/api/availability', err);
@@ -41,94 +64,130 @@ module.exports = async (req, res) => {
   }
 
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // ── POST — public submission (rate-limited, validated) ──────────────────────
   try {
-    const { booking_reference, email, availability, frequency_preference, notes } = req.body;
+    const { booking_reference, email, availability, frequency_preference, notes } = req.body || {};
 
-    // Connect to database
+    // Validate inputs
+    if (!email || typeof email !== 'string') return res.status(400).json({ error: 'Email is required' });
+    if (!availability || typeof availability !== 'object' || Array.isArray(availability)) {
+      return res.status(400).json({ error: 'Availability is required' });
+    }
+    if (email.length > 254) return res.status(400).json({ error: 'Email too long' });
+    if (notes && typeof notes === 'string' && notes.length > 2000) {
+      return res.status(400).json({ error: 'Notes too long' });
+    }
+
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Count slots
-    const availableSlots = Object.values(availability).filter(v => v === 'available').length;
-    const preferredSlots = Object.values(availability).filter(v => v === 'preferred').length;
+    // Rate limiting: max 5 submissions per IP per hour (same pattern as enquiries.js)
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    const rateLimitKey = `availability_submit:${clientIp}`;
+    try {
+      await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
+      const [existing] = await sql`
+        SELECT request_count FROM rate_limits
+        WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      if (existing && existing.request_count >= 5) {
+        return res.status(429).json({ error: 'Too many submissions. Please try again later.' });
+      }
+      if (existing) {
+        await sql`
+          UPDATE rate_limits SET request_count = request_count + 1
+          WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      } else {
+        await sql`
+          INSERT INTO rate_limits (key, request_count, window_start)
+          VALUES (${rateLimitKey}, 1, NOW())`;
+      }
+    } catch (e) { /* rate limit check failed — allow request through */ }
 
-    // Convert availability object to arrays for database
+    const schoolId = parseInt(req.body.school_id) || 1;
+
+    // Count and group slots
+    const values = Object.values(availability);
+    const availableSlots = values.filter(v => v === 'available').length;
+    const preferredSlots = values.filter(v => v === 'preferred').length;
+
     const preferredDays = Object.entries(availability)
-      .filter(([key, value]) => value === 'preferred')
-      .map(([key]) => key);
-
+      .filter(([, v]) => v === 'preferred')
+      .map(([k]) => k);
     const availableDays = Object.entries(availability)
-      .filter(([key, value]) => value === 'available')
-      .map(([key]) => key);
+      .filter(([, v]) => v === 'available')
+      .map(([k]) => k);
 
-    // Save to database
-    const result = await sql(
-      `INSERT INTO availability_submissions (
+    // Save to database (tenant-scoped)
+    const [submission] = await sql`
+      INSERT INTO availability_submissions (
         customer_email,
         booking_reference,
         preferred_days,
         available_days,
         frequency_preference,
         additional_notes,
-        status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *`,
-      [
-        email,
-        booking_reference,
-        preferredDays,
-        availableDays,
-        frequency_preference || null,
-        notes || null,
-        'pending'
-      ]
-    );
+        status,
+        school_id
+      ) VALUES (
+        ${email},
+        ${booking_reference || null},
+        ${preferredDays},
+        ${availableDays},
+        ${frequency_preference || null},
+        ${notes || null},
+        'pending',
+        ${schoolId}
+      )
+      RETURNING id`;
 
-    const submission = result[0];
+    // Send staff notification (escape ALL interpolations)
+    if (resend && process.env.STAFF_EMAIL) {
+      try {
+        await resend.emails.send({
+          from: 'CoachCarter <system@coachcarter.uk>',
+          to: process.env.STAFF_EMAIL,
+          subject: `📅 Availability received — ${esc(booking_reference || 'no ref')}`,
+          html: `
+            <h2>Availability Submitted</h2>
+            <p><strong>Reference:</strong> ${esc(booking_reference || 'N/A')}</p>
+            <p><strong>Email:</strong> ${esc(email)}</p>
+            <p><strong>Slots selected:</strong> ${availableSlots + preferredSlots} total (${preferredSlots} preferred)</p>
+            <p><strong>Frequency:</strong> ${esc(frequency_preference || 'N/A')}</p>
+            <p><strong>Notes:</strong> ${esc(notes || 'None')}</p>
+            <p><a href="https://coachcarter.uk/admin.html">View in dashboard →</a></p>
+          `
+        });
 
-    // Send staff notification
-    await resend.emails.send({
-      from: 'CoachCarter <system@coachcarter.uk>',
-      to: process.env.STAFF_EMAIL,
-      subject: `📅 Availability received — ${booking_reference}`,
-      html: `
-        <h2>Availability Submitted</h2>
-        <p><strong>Reference:</strong> ${booking_reference}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Slots selected:</strong> ${availableSlots + preferredSlots} total (${preferredSlots} preferred)</p>
-        <p><strong>Frequency:</strong> ${frequency_preference}</p>
-        <p><strong>Notes:</strong> ${notes || 'None'}</p>
-        <p><a href="https://coachcarter.uk/admin.html">View in dashboard →</a></p>
-      `
-    });
+        // Send customer confirmation
+        await resend.emails.send({
+          from: 'CoachCarter <bookings@coachcarter.uk>',
+          to: email,
+          subject: "Availability received — We'll propose slots within 24 hours",
+          html: `
+            <h1>Got it.</h1>
+            <p>We've captured your availability preferences.</p>
+            <h2>What happens next:</h2>
+            <ol>
+              <li>We review your slots against instructor schedules</li>
+              <li>We propose specific lesson times (within 24 hours)</li>
+              <li>You confirm or request adjustments</li>
+              <li>First lesson locked in, instructor introduced</li>
+            </ol>
+            <p>Reference: ${esc(booking_reference || 'N/A')}</p>
+          `
+        });
+      } catch (emailErr) {
+        console.error('availability email send failed:', emailErr.message);
+      }
+    }
 
-    // Send customer confirmation
-    await resend.emails.send({
-      from: 'CoachCarter <bookings@coachcarter.uk>',
-      to: email,
-      subject: "Availability received — We'll propose slots within 24 hours",
-      html: `
-        <h1>Got it.</h1>
-        <p>We've captured your availability preferences.</p>
-        <h2>What happens next:</h2>
-        <ol>
-          <li>We review your slots against instructor schedules</li>
-          <li>We propose specific lesson times (within 24 hours)</li>
-          <li>You confirm or request adjustments</li>
-          <li>First lesson locked in, instructor introduced</li>
-        </ol>
-        <p>Reference: ${booking_reference}</p>
-      `
-    });
-
-    res.json({ success: true, submissionId: submission.id });
+    return res.json({ success: true, submissionId: submission.id });
 
   } catch (err) {
-    console.error('Error processing availability:', err);
+    console.error('availability POST error:', err.message);
     reportError('/api/availability', err);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
