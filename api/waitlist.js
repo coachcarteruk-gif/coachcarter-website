@@ -211,6 +211,7 @@ async function handleLeave(req, res) {
 
   const user = requireAuth(req, { roles: ['learner'] });
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getSchoolId(user, req);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -219,7 +220,10 @@ async function handleLeave(req, res) {
 
     const result = await sql`
       UPDATE waitlist SET status = 'expired'
-      WHERE id = ${waitlist_id} AND learner_id = ${user.id} AND status IN ('active', 'notified')
+      WHERE id = ${waitlist_id}
+        AND learner_id = ${user.id}
+        AND school_id = ${schoolId}
+        AND status IN ('active', 'notified')
       RETURNING id`;
 
     if (result.length === 0)

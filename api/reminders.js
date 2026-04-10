@@ -96,12 +96,22 @@ async function handleSendDue(req, res) {
 
     // Find confirmed bookings whose lesson time is within the instructor's
     // reminder_hours from now AND haven't already been reminded.
+    //
+    // NOTE on tenant isolation: this is a cross-school cron that processes
+    // every school's bookings in one pass. Tenant isolation is enforced by
+    // the JOIN conditions (lu.school_id = lb.school_id, i.school_id = lb.school_id)
+    // which guarantee each booking is joined only to its own school's learner
+    // and instructor. A learner from school A can never be emailed about a
+    // school B booking because the join would drop the row. This satisfies
+    // the intent of the CLAUDE.md "every query filters by school_id" rule
+    // even though it isn't a top-level WHERE clause.
     const dueBookings = await sql`
       SELECT
         lb.id AS booking_id,
         lb.scheduled_date,
         lb.start_time,
         lb.end_time,
+        lb.school_id,
         lu.name  AS learner_name,
         lu.email AS learner_email,
         lu.phone AS learner_phone,
@@ -236,7 +246,10 @@ async function handleDailySchedule(req, res) {
     let sentCount = 0;
 
     for (const inst of instructors) {
-      // Get tomorrow's bookings for this instructor
+      // Get tomorrow's bookings for this instructor.
+      // Explicit school_id filter enforces tenant scope per CLAUDE.md convention
+      // (defence-in-depth — instructor.id is globally unique so a leak is
+      // already structurally impossible, but the explicit WHERE matches the rule).
       const bookings = await sql`
         SELECT
           lb.start_time,
@@ -251,8 +264,10 @@ async function handleDailySchedule(req, res) {
           COALESCE(lt.colour, '#3b82f6') AS lesson_colour
         FROM lesson_bookings lb
         JOIN learner_users lu ON lu.id = lb.learner_id
+          AND lu.school_id = lb.school_id
         LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
         WHERE lb.instructor_id = ${inst.id}
+          AND lb.school_id = ${inst.school_id}
           AND lb.scheduled_date = ${tomorrowStr}
           AND lb.status = 'confirmed'
         ORDER BY lb.start_time
@@ -433,9 +448,13 @@ async function handlePromptConfirmations(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
     const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
 
-    // Find past confirmed bookings not yet prompted
+    // Find past confirmed bookings not yet prompted.
+    // Cross-school cron — tenant isolation enforced by JOIN fences
+    // (lu.school_id = lb.school_id, i.school_id = lb.school_id) rather than
+    // a top-level WHERE. See handleSendDue comment for rationale.
     const bookings = await sql`
       SELECT lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
+             lb.school_id,
              lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
              i.name AS instructor_name, i.email AS instructor_email, i.phone AS instructor_phone
       FROM lesson_bookings lb

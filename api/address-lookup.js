@@ -1,4 +1,5 @@
 const { requireAuth } = require('./_auth');
+const { reportError } = require('./_error-alert');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -35,6 +36,7 @@ module.exports = async (req, res) => {
     });
   } catch (err) {
     console.error('address-lookup error:', err);
+    reportError('/api/address-lookup', err);
     return res.status(502).json({ error: 'Postcode lookup temporarily unavailable' });
   }
 };

@@ -55,6 +55,8 @@ async function handleDownload(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
+    // Defence-in-depth: also enforce school_id from the JWT
+    const userSchoolId = user.school_id || 1;
     const [booking] = await sql`
       SELECT
         lb.id,
@@ -68,7 +70,9 @@ async function handleDownload(req, res) {
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
-      WHERE lb.id = ${booking_id} AND lb.learner_id = ${user.id}
+      WHERE lb.id = ${booking_id}
+        AND lb.learner_id = ${user.id}
+        AND lb.school_id = ${userSchoolId}
     `;
 
     if (!booking)
@@ -207,11 +211,13 @@ async function handleInstructorFeed(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [instructor] = await sql`
-      SELECT id, name FROM instructors WHERE calendar_token = ${calToken}
+      SELECT id, name, school_id FROM instructors WHERE calendar_token = ${calToken}
     `;
     if (!instructor)
       return res.status(404).send('Invalid calendar token');
 
+    // Defence-in-depth: also enforce school_id from the instructor record
+    const instSchoolId = instructor.school_id || 1;
     const bookings = await sql`
       SELECT
         lb.id,
@@ -226,6 +232,7 @@ async function handleInstructorFeed(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
+        AND lb.school_id = ${instSchoolId}
         AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '7 days')
       ORDER BY lb.scheduled_date, lb.start_time
