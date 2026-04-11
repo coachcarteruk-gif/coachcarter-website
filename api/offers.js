@@ -46,7 +46,8 @@ async function handleGetOffer(req, res) {
     `;
 
     const [offer] = await sql`
-      SELECT o.id, o.learner_email, o.learner_id, o.scheduled_date::text,
+      SELECT o.id, o.learner_email, o.learner_id, o.learner_name AS offer_learner_name,
+             o.scheduled_date::text,
              o.start_time::text, o.end_time::text, o.status, o.expires_at,
              o.discount_pct, o.offer_price_pence,
              lt.name AS lesson_type_name, lt.duration_minutes, lt.price_pence,
@@ -73,7 +74,9 @@ async function handleGetOffer(req, res) {
       return res.status(410).json({ error: true, code: 'CANCELLED', message: 'This offer has been cancelled' });
 
     // Determine what details the learner still needs to provide
-    const needsDetails = !offer.learner_name || !offer.learner_phone || !offer.learner_pickup_address;
+    // Prefer offer's own learner_name, fall back to joined learner_users name
+    const resolvedName = offer.offer_learner_name || offer.learner_name || '';
+    const needsDetails = !resolvedName || !offer.learner_phone || !offer.learner_pickup_address;
     const isFlexible = !offer.scheduled_date && !offer.start_time;
     const originalPricePence = offer.price_pence || 8250;
 
@@ -101,7 +104,7 @@ async function handleGetOffer(req, res) {
         original_price_pence: originalPricePence,
         is_flexible: isFlexible,
         learner_email: offer.learner_email,
-        learner_name: offer.learner_name || '',
+        learner_name: resolvedName,
         learner_phone: offer.learner_phone || '',
         learner_pickup_address: offer.learner_pickup_address || '',
         needs_details: needsDetails
@@ -120,7 +123,7 @@ async function handleGetOffer(req, res) {
 async function handleAcceptOffer(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { token, name, phone, pickup_address } = req.body;
+  const { token, name, phone, pickup_address, email } = req.body;
   if (!token) return res.status(400).json({ error: 'Token is required' });
 
   try {
@@ -148,6 +151,13 @@ async function handleAcceptOffer(req, res) {
     // Validate required details
     if (!name || !name.trim())
       return res.status(400).json({ error: 'Name is required' });
+
+    // Resolve learner email: offer's email takes priority, fall back to form input
+    const resolvedEmail = offer.learner_email || (email ? email.trim().toLowerCase() : null);
+    if (!resolvedEmail)
+      return res.status(400).json({ error: 'Email address is required' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resolvedEmail))
+      return res.status(400).json({ error: 'Invalid email address' });
 
     // Derive school_id from instructor
     const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
@@ -179,7 +189,7 @@ async function handleAcceptOffer(req, res) {
 
     // Free offer → skip Stripe, confirm directly (only for slot-pinned offers)
     if (pricePence === 0 && !isFlexible) {
-      return await handleFreeOffer(sql, offer, { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() }, baseUrl, token, res);
+      return await handleFreeOffer(sql, offer, { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() }, baseUrl, token, res, resolvedEmail);
     }
 
     // Flexible + free → create/find learner, add credit, redirect to success
@@ -190,7 +200,7 @@ async function handleAcceptOffer(req, res) {
       // 1. Find or create learner
       let learnerId;
       const [existingLearner] = await sql`
-        SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${offer.learner_email})
+        SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${resolvedEmail})
       `;
       if (existingLearner) {
         learnerId = existingLearner.id;
@@ -205,7 +215,7 @@ async function handleAcceptOffer(req, res) {
         try {
           const [newLearner] = await sql`
             INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance, school_id)
-            VALUES (${learnerDetails.name}, ${offer.learner_email.toLowerCase()}, ${learnerDetails.phone || null},
+            VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.phone || null},
                     ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
             RETURNING id
           `;
@@ -214,7 +224,7 @@ async function handleAcceptOffer(req, res) {
           if (insertErr.message?.includes('learner_users_phone_key') || insertErr.message?.includes('unique')) {
             const [newLearner] = await sql`
               INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
-              VALUES (${learnerDetails.name}, ${offer.learner_email.toLowerCase()}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
+              VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
               RETURNING id
             `;
             learnerId = newLearner.id;
@@ -244,7 +254,7 @@ async function handleAcceptOffer(req, res) {
         const firstName = (learnerDetails.name || '').split(' ')[0] || 'there';
         await transporter.sendMail({
           from: 'CoachCarter <bookings@coachcarter.uk>',
-          to: offer.learner_email,
+          to: resolvedEmail,
           subject: `Free lesson credit added — book your ${durationStr} lesson`,
           html: `
             <h1>Free lesson credit added!</h1>
@@ -288,7 +298,7 @@ async function handleAcceptOffer(req, res) {
         offer_id:          String(offer.id),
         instructor_id:     String(offer.instructor_id),
         instructor_name:   offer.instructor_name,
-        learner_email:     offer.learner_email,
+        learner_email:     resolvedEmail,
         learner_name:      name.trim(),
         learner_phone:     (phone || '').trim(),
         pickup_address:    (pickup_address || '').trim(),
@@ -301,7 +311,7 @@ async function handleAcceptOffer(req, res) {
         school_id:         String(schoolId),
         is_flexible:       isFlexible ? '1' : '0'
       },
-      customer_email: offer.learner_email,
+      customer_email: resolvedEmail,
       billing_address_collection: 'required',
       allow_promotion_codes: true,
       success_url: isFlexible
@@ -326,7 +336,7 @@ async function handleAcceptOffer(req, res) {
 
 // ── Free offer handler (100% discount — no Stripe) ───────────────────────────
 // Creates learner + booking directly without payment.
-async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res) {
+async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, resolvedEmail) {
   const { createTransporter } = require('./_auth-helpers');
   const durationMins = offer.duration_minutes || 90;
 
@@ -337,7 +347,7 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res) 
   // 1. Find or create learner
   let learnerId;
   const [existingLearner] = await sql`
-    SELECT id, name, phone, pickup_address FROM learner_users WHERE LOWER(email) = LOWER(${offer.learner_email})
+    SELECT id, name, phone, pickup_address FROM learner_users WHERE LOWER(email) = LOWER(${resolvedEmail})
   `;
 
   if (existingLearner) {
@@ -353,7 +363,7 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res) 
     try {
       const [newLearner] = await sql`
         INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance, school_id)
-        VALUES (${learnerDetails.name}, ${offer.learner_email.toLowerCase()}, ${learnerDetails.phone || null},
+        VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.phone || null},
                 ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
         RETURNING id
       `;
@@ -362,7 +372,7 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res) 
       if (insertErr.message?.includes('learner_users_phone_key') || insertErr.message?.includes('unique')) {
         const [newLearner] = await sql`
           INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
-          VALUES (${learnerDetails.name}, ${offer.learner_email.toLowerCase()}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
+          VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
           RETURNING id
         `;
         learnerId = newLearner.id;
@@ -415,7 +425,7 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res) 
 
     await transporter.sendMail({
       from: 'CoachCarter <bookings@coachcarter.uk>',
-      to: offer.learner_email,
+      to: resolvedEmail,
       subject: `Free lesson confirmed — ${lessonDate} at ${offer.start_time}`,
       html: `
         <h1>Lesson confirmed!</h1>

@@ -114,6 +114,11 @@
     if (o.learner_phone) document.getElementById('phone').value = o.learner_phone;
     if (o.learner_pickup_address) document.getElementById('pickup').value = o.learner_pickup_address;
 
+    // Show email field when offer has no email (link-only offers)
+    if (!o.learner_email) {
+      document.getElementById('email-field').style.display = '';
+    }
+
     // Update button text for free lessons
     if (o.price_pence === 0) {
       document.getElementById('accept-btn').textContent = 'Accept free lesson →';
@@ -161,6 +166,8 @@
     var name = document.getElementById('name').value.trim();
     var phone = document.getElementById('phone').value.trim();
     var pickup = document.getElementById('pickup').value.trim();
+    var emailEl = document.getElementById('email');
+    var email = emailEl ? emailEl.value.trim() : '';
     var errorEl = document.getElementById('form-error');
 
     if (!name) {
@@ -170,16 +177,27 @@
       return;
     }
 
+    // Email required for link-only offers (no email on the offer)
+    if (!offerData.learner_email && !email) {
+      errorEl.textContent = 'Please enter your email address.';
+      errorEl.style.display = 'block';
+      emailEl.focus();
+      return;
+    }
+
     errorEl.style.display = 'none';
     var btn = document.getElementById('accept-btn');
     btn.disabled = true;
     btn.textContent = 'Processing...';
 
+    var payload = { token: token, name: name, phone: phone, pickup_address: pickup };
+    if (email) payload.email = email;
+
     try {
       var res = await fetch(API + '?action=accept-offer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token, name: name, phone: phone, pickup_address: pickup })
+        body: JSON.stringify(payload)
       });
       var data = await res.json();
 

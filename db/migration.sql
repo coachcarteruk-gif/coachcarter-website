@@ -1282,3 +1282,7 @@ DROP INDEX IF EXISTS uq_offer_slot;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_offer_slot
   ON lesson_offers(instructor_id, scheduled_date, start_time)
   WHERE status = 'pending' AND scheduled_date IS NOT NULL;
+
+-- Allow link-only offers (no email required) and store learner name on offer
+ALTER TABLE lesson_offers ADD COLUMN IF NOT EXISTS learner_name TEXT;
+ALTER TABLE lesson_offers ALTER COLUMN learner_email DROP NOT NULL;

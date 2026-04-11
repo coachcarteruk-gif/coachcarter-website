@@ -818,9 +818,19 @@
 <div class="modal-overlay" id="offerLessonModal">
   <div class="modal" style="max-width:420px">
     <div class="modal-title">Offer Lesson</div>
-    <div class="modal-sub">Send a lesson offer to a learner. They'll receive an email to accept &amp; pay.</div>
+    <div class="modal-sub">Create a lesson offer — send by email or share a link directly.</div>
     <div style="margin:16px 0; display:flex; flex-direction:column; gap:12px;">
       <div>
+        <div class="notes-label">Learner name *</div>
+        <input type="text" id="offerName" placeholder="e.g. John Smith" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="offerSendEmail" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
+          <span style="font-size:0.88rem;font-weight:600;color:var(--primary);">Send by email</span>
+        </label>
+      </div>
+      <div id="offerEmailRow" style="display:none">
         <div class="notes-label">Learner email *</div>
         <input type="email" id="offerEmail" placeholder="e.g. john@example.com" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
       </div>
@@ -860,7 +870,7 @@
     <div id="offerSuccess" style="display:none; background:var(--green-lt); color:var(--green); border-radius:8px; padding:10px 14px; font-size:0.85rem; font-weight:600; margin-top:8px;"></div>
     <div class="modal-actions">
       <button class="btn-modal-cancel" id="btn-close-offer">Cancel</button>
-      <button class="btn-modal-save" id="offerSendBtn">Send offer</button>
+      <button class="btn-modal-save" id="offerSendBtn">Create link</button>
     </div>
   </div>
 </div>

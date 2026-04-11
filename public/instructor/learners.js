@@ -193,9 +193,7 @@ function renderDetail(data, notesData, mockData) {
   html += '<div class="detail-header">';
   html += '<div class="detail-name">' + esc(l.name || 'Unnamed') + ' <span class="tier-badge tier-' + tier + '">' + (tierLabels[tier] || 'Tier ' + tier) + '</span></div>';
   if (info.length) html += '<div class="detail-info">' + info.join(' &middot; ') + '</div>';
-  if (l.email) {
-    html += '<div style="margin-top:10px"><button data-action="offer-lesson" data-email="' + esc(l.email) + '" style="padding:8px 16px;border:1.5px solid var(--accent);background:var(--accent-lt);color:var(--accent);border-radius:8px;font-weight:700;font-size:0.82rem;cursor:pointer;transition:all 0.15s">📧 Offer a lesson</button></div>';
-  }
+  html += '<div style="margin-top:10px"><button data-action="offer-lesson" data-email="' + esc(l.email || '') + '" data-name="' + esc(l.name || '') + '" style="padding:8px 16px;border:1.5px solid var(--accent);background:var(--accent-lt);color:var(--accent);border-radius:8px;font-weight:700;font-size:0.82rem;cursor:pointer;transition:all 0.15s">Offer a lesson</button></div>';
   html += '</div>';
 
   // Stats cards
@@ -380,9 +378,11 @@ function showToast(msg, type = '') {
 }
 
 // ── Offer Lesson (redirect to schedule page with offer modal open) ──
-function offerLessonToLearner(email) {
-  // Navigate to the schedule page with a query param to open the offer modal
-  window.location.href = '/instructor/?offer=' + encodeURIComponent(email);
+function offerLessonToLearner(email, name) {
+  // Navigate to the schedule page with query params to open the offer modal
+  let url = '/instructor/?offer=' + encodeURIComponent(email || '');
+  if (name) url += '&offer_name=' + encodeURIComponent(name);
+  window.location.href = url;
 }
 
 window.addEventListener('DOMContentLoaded', init);
@@ -393,7 +393,7 @@ document.addEventListener('click', function (e) {
   var a = t.dataset.action;
   if (a === 'load-learners') loadLearners();
   else if (a === 'open-learner') openLearner(parseInt(t.dataset.learnerId, 10));
-  else if (a === 'offer-lesson') offerLessonToLearner(t.dataset.email);
+  else if (a === 'offer-lesson') offerLessonToLearner(t.dataset.email, t.dataset.name);
 });
 (function wire() {
   document.querySelectorAll('[data-sort]').forEach(function (btn) {

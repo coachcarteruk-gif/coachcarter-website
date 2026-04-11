@@ -1473,12 +1473,30 @@ async function confirmCreateBooking() {
 }
 
 // ── Offer Lesson Modal ────────────────────────────────────────────────────────
-async function openOfferModal(prefillEmail) {
+async function openOfferModal(prefillEmail, prefillName) {
+  document.getElementById('offerName').value = prefillName || '';
   document.getElementById('offerEmail').value = prefillEmail || '';
   document.getElementById('offerError').style.display = 'none';
   document.getElementById('offerSuccess').style.display = 'none';
   document.getElementById('offerSendBtn').disabled = false;
-  document.getElementById('offerSendBtn').textContent = 'Send offer';
+
+  // Reset send-by-email toggle
+  const emailCb = document.getElementById('offerSendEmail');
+  const emailRow = document.getElementById('offerEmailRow');
+  const sendBtn = document.getElementById('offerSendBtn');
+  if (prefillEmail) {
+    emailCb.checked = true;
+    emailRow.style.display = '';
+    sendBtn.textContent = 'Send offer';
+  } else {
+    emailCb.checked = false;
+    emailRow.style.display = 'none';
+    sendBtn.textContent = 'Create link';
+  }
+  emailCb.onchange = () => {
+    emailRow.style.display = emailCb.checked ? '' : 'none';
+    sendBtn.textContent = emailCb.checked ? 'Send offer' : 'Create link';
+  };
 
   // Default date to current calendar date
   const d = cursor || new Date();
@@ -1554,6 +1572,8 @@ function closeOfferModal() {
 }
 
 async function sendOffer() {
+  const offerName = document.getElementById('offerName').value.trim();
+  const sendEmail = document.getElementById('offerSendEmail').checked;
   const email = document.getElementById('offerEmail').value.trim();
   const flexible = document.getElementById('offerFlexible').checked;
   const date = document.getElementById('offerDate').value;
@@ -1567,7 +1587,8 @@ async function sendOffer() {
   errorEl.style.display = 'none';
   successEl.style.display = 'none';
 
-  if (!email) { errorEl.textContent = 'Please enter the learner\'s email address.'; errorEl.style.display = 'block'; return; }
+  if (!offerName) { errorEl.textContent = 'Please enter the learner\'s name.'; errorEl.style.display = 'block'; return; }
+  if (sendEmail && !email) { errorEl.textContent = 'Please enter the learner\'s email address.'; errorEl.style.display = 'block'; return; }
   if (!flexible && !date) { errorEl.textContent = 'Please select a date, or tick "Flexible".'; errorEl.style.display = 'block'; return; }
   if (!flexible && !time) { errorEl.textContent = 'Please select a start time, or tick "Flexible".'; errorEl.style.display = 'block'; return; }
 
@@ -1580,13 +1601,14 @@ async function sendOffer() {
   }
 
   btn.disabled = true;
-  btn.textContent = 'Sending…';
+  btn.textContent = sendEmail ? 'Sending…' : 'Creating…';
 
   try {
     const payload = {
-      learner_email: email,
+      learner_name: offerName,
       lesson_type_id: lessonTypeId ? parseInt(lessonTypeId) : undefined
     };
+    if (sendEmail) payload.learner_email = email;
     if (!flexible) {
       payload.scheduled_date = date;
       payload.start_time = time;
@@ -1606,28 +1628,29 @@ async function sendOffer() {
     const priceMsg = offerPricePence === 0 ? ' (free lesson)' : offerPricePence != null ? ` (£${(offerPricePence / 100).toFixed(2)})` : '';
     const flexMsg = flexible ? ' (flexible time)' : '';
 
-    // Build shareable booking link
-    const bookingParams = new URLSearchParams();
-    if (lessonTypeId) bookingParams.set('type_id', lessonTypeId);
-    if (data.learner_name) bookingParams.set('name', data.learner_name);
-    const qs = bookingParams.toString();
-    const bookingPath = instructorSlug
-      ? `/book/${encodeURIComponent(instructorSlug)}`
-      : `/learner/book.html?instructor=${instructor.id}`;
-    const bookingUrl = window.location.origin + bookingPath + (qs ? (bookingPath.includes('?') ? '&' : '?') + qs : '');
+    // Use the accept URL (token-based) — carries the offer price
+    const shareUrl = data.accept_url;
+    const safeName = offerName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-    const safeEmail = email.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let statusLine;
+    if (sendEmail) {
+      const safeEmail = email.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      statusLine = `Offer sent to ${safeEmail}${priceMsg}${flexMsg}! They have 24 hours to accept.`;
+    } else {
+      statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg} — share the link below.`;
+    }
+
     successEl.innerHTML = `
-      <div>Offer sent to ${safeEmail}${priceMsg}${flexMsg}! They have 24 hours to accept.</div>
+      <div>${statusLine}</div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <input type="text" value="${bookingUrl.replace(/"/g, '&quot;')}" readonly
+        <input type="text" value="${shareUrl.replace(/"/g, '&quot;')}" readonly
           style="flex:1;min-width:0;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.78rem;background:var(--white);color:var(--primary)">
-        <button onclick="navigator.clipboard.writeText('${bookingUrl.replace(/'/g, "\\'")}').then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy link'},2000)})"
+        <button onclick="navigator.clipboard.writeText('${shareUrl.replace(/'/g, "\\'")}').then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy link'},2000)})"
           style="padding:6px 14px;border:1.5px solid var(--accent);background:var(--accent-lt);color:var(--accent);border-radius:6px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap">Copy link</button>
       </div>
     `;
     successEl.style.display = 'block';
-    btn.textContent = 'Sent ✓';
+    btn.textContent = sendEmail ? 'Sent ✓' : 'Created ✓';
 
     // Refresh schedule to show blocked slot (if slot-pinned)
     if (!flexible) renderCurrentView();
@@ -1635,7 +1658,7 @@ async function sendOffer() {
     errorEl.textContent = err.message;
     errorEl.style.display = 'block';
     btn.disabled = false;
-    btn.textContent = 'Send offer';
+    btn.textContent = sendEmail ? 'Send offer' : 'Create link';
   }
 }
 
@@ -1646,9 +1669,10 @@ init();
 (function() {
   const p = new URLSearchParams(location.search);
   const offerEmail = p.get('offer');
-  if (offerEmail) {
+  const offerName = p.get('offer_name');
+  if (offerEmail || offerName) {
     // Wait for DOM to be ready then open the modal
-    setTimeout(() => openOfferModal(offerEmail), 500);
+    setTimeout(() => openOfferModal(offerEmail || '', offerName || ''), 500);
     // Clean URL
     history.replaceState(null, '', location.pathname);
   }

@@ -2482,8 +2482,9 @@ async function handleIcalStatus(req, res) {
 }
 
 // ── POST /api/instructor?action=create-offer ──────────────────────────────────
-// Body: { learner_email, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence? }
-// Creates a lesson offer and emails the learner an accept link.
+// Body: { learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence? }
+// Creates a lesson offer. If learner_email is provided, emails the learner an accept link.
+// If only learner_name is provided, creates a link-only offer (no email sent).
 // Slot fields are optional — omit for "flexible" offers where learner picks their own time.
 // offer_price_pence overrides the lesson-type price; omit to use lesson-type default.
 async function handleCreateOffer(req, res) {
@@ -2492,9 +2493,9 @@ async function handleCreateOffer(req, res) {
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { learner_email, scheduled_date, start_time, lesson_type_id, offer_price_pence } = req.body;
-  if (!learner_email)
-    return res.status(400).json({ error: 'learner_email is required' });
+  const { learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence } = req.body;
+  if (!learner_email && !learner_name)
+    return res.status(400).json({ error: 'Either learner_email or learner_name is required' });
 
   const isFlexible = !scheduled_date && !start_time;
 
@@ -2504,8 +2505,8 @@ async function handleCreateOffer(req, res) {
     if (isNaN(p) || p < 0) return res.status(400).json({ error: 'offer_price_pence must be a non-negative integer' });
   }
 
-  // Validate email format
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(learner_email))
+  // Validate email format (only when email is provided)
+  if (learner_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(learner_email))
     return res.status(400).json({ error: 'Invalid email address' });
 
   // Validate date (only for slot-pinned offers)
@@ -2589,10 +2590,14 @@ async function handleCreateOffer(req, res) {
         return res.status(409).json({ error: 'Someone is currently booking that slot. Try again shortly.' });
     }
 
-    // Check if learner already exists
-    const [existingLearner] = await sql`
-      SELECT id, name, email FROM learner_users WHERE LOWER(email) = LOWER(${learner_email})
-    `;
+    // Check if learner already exists (only when email provided)
+    let existingLearner = null;
+    if (learner_email) {
+      const [found] = await sql`
+        SELECT id, name, email FROM learner_users WHERE LOWER(email) = LOWER(${learner_email})
+      `;
+      existingLearner = found || null;
+    }
 
     // Generate offer token
     const token = generateToken();
@@ -2601,12 +2606,13 @@ async function handleCreateOffer(req, res) {
     const customPricePence = offer_price_pence != null ? parseInt(offer_price_pence) : null;
 
     // Insert offer
+    const offerName = learner_name || existingLearner?.name || null;
     const [offer] = await sql`
       INSERT INTO lesson_offers
-        (token, instructor_id, learner_email, learner_id, scheduled_date, start_time, end_time,
+        (token, instructor_id, learner_email, learner_name, learner_id, scheduled_date, start_time, end_time,
          lesson_type_id, discount_pct, offer_price_pence, status, expires_at)
       VALUES
-        (${token}, ${instructor.id}, ${learner_email.toLowerCase()}, ${existingLearner?.id || null},
+        (${token}, ${instructor.id}, ${learner_email ? learner_email.toLowerCase() : null}, ${offerName}, ${existingLearner?.id || null},
          ${scheduled_date || null}, ${start_time || null}, ${end_time},
          ${lessonType.id}, ${0}, ${customPricePence}, 'pending', NOW() + INTERVAL '24 hours')
       RETURNING id, expires_at
@@ -2643,36 +2649,40 @@ async function handleCreateOffer(req, res) {
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceStr}</td></tr>`;
     }
 
-    // Send offer email
-    try {
-      const mailer = createTransporter();
-      await mailer.sendMail({
-        from: 'CoachCarter <bookings@coachcarter.uk>',
-        to: learner_email,
-        subject: emailSubject,
-        html: `
-          <div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto">
-            <h2 style="color:#262626">Hi ${firstName},</h2>
-            <p>${instrDetails.name} has offered you a driving lesson:</p>
-            <table style="border-collapse:collapse;margin:16px 0">
-              ${emailSlotRows}
-            </table>
-            <p style="margin:24px 0">
-              <a href="${acceptUrl}"
-                 style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
-                        border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem">
-                ${pricePence === 0 ? 'Accept free lesson →' : 'Accept &amp; pay →'}
-              </a>
-            </p>
-            <p style="font-size:0.85rem;color:#797879">
-              This offer expires in 24 hours.${!isFlexible ? ' If you don\'t accept by then, the slot will become available again.' : ''}
-            </p>
-          </div>
-        `
-      });
-    } catch (emailErr) {
-      console.error('Failed to send offer email:', emailErr);
-      // Still return success — offer was created, email just failed
+    // Send offer email (only when email is provided)
+    let emailSent = false;
+    if (learner_email) {
+      try {
+        const mailer = createTransporter();
+        await mailer.sendMail({
+          from: 'CoachCarter <bookings@coachcarter.uk>',
+          to: learner_email,
+          subject: emailSubject,
+          html: `
+            <div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto">
+              <h2 style="color:#262626">Hi ${firstName},</h2>
+              <p>${instrDetails.name} has offered you a driving lesson:</p>
+              <table style="border-collapse:collapse;margin:16px 0">
+                ${emailSlotRows}
+              </table>
+              <p style="margin:24px 0">
+                <a href="${acceptUrl}"
+                   style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                          border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem">
+                  ${pricePence === 0 ? 'Accept free lesson →' : 'Accept &amp; pay →'}
+                </a>
+              </p>
+              <p style="font-size:0.85rem;color:#797879">
+                This offer expires in 24 hours.${!isFlexible ? ' If you don\'t accept by then, the slot will become available again.' : ''}
+              </p>
+            </div>
+          `
+        });
+        emailSent = true;
+      } catch (emailErr) {
+        console.error('Failed to send offer email:', emailErr);
+        // Still return success — offer was created, email just failed
+      }
     }
 
     return res.json({
@@ -2680,7 +2690,8 @@ async function handleCreateOffer(req, res) {
       offer_id: offer.id,
       expires_at: offer.expires_at,
       learner_exists: !!existingLearner,
-      learner_name: existingLearner?.name || null,
+      learner_name: offerName,
+      email_sent: emailSent,
       accept_url: acceptUrl
     });
   } catch (err) {
