@@ -311,7 +311,12 @@ async function handleAcceptOffer(req, res) {
         console.error('Free flexible offer email failed:', emailErr);
       }
 
-      return res.json({ ok: true, url: `${baseUrl}/offer-success.html?token=${token}&flexible=1&free=1`, flexible_accepted: true });
+      return res.json({
+        ok: true,
+        url: `${baseUrl}/offer-success.html?token=${token}&flexible=1&free=1`,
+        flexible_accepted: true,
+        learner_session: { id: learnerId, name: learnerDetails.name, email: resolvedEmail, school_id: schoolId }
+      });
     }
 
     // Build Stripe Checkout label
@@ -483,7 +488,11 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   }
 
   // Redirect to success page
-  return res.json({ ok: true, url: `${baseUrl}/offer-success.html?token=${token}` });
+  return res.json({
+    ok: true,
+    url: `${baseUrl}/offer-success.html?token=${token}`,
+    learner_session: { id: learnerId, name: learnerDetails.name, email: resolvedEmail, school_id: schoolId }
+  });
 }
 
 // ── POST /api/offers?action=expire-offers ─────────────────────────────────────

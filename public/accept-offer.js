@@ -197,6 +197,7 @@
       var res = await fetch(API + '?action=accept-offer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payload)
       });
       var data = await res.json();
@@ -209,7 +210,12 @@
         return;
       }
 
-      // Redirect to Stripe checkout
+      // Store learner session in localStorage so booking page recognises them
+      if (data.learner_session) {
+        try { localStorage.setItem('cc_learner', JSON.stringify(data.learner_session)); } catch (e) {}
+      }
+
+      // Redirect to Stripe checkout or success page
       window.location.href = data.url;
     } catch (err) {
       console.error('Accept error:', err);
