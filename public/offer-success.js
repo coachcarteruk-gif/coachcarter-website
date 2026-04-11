@@ -7,7 +7,7 @@
 
   // Slot picker state (populated from URL params for flexible offers)
   var instructorId = params.get('iid');
-  var lessonTypeId = params.get('ltid');
+  var lessonTypeId = params.get('ltid') || null;
   var durationMins = parseInt(params.get('dur')) || 90;
   var instructorName = params.get('iname') ? decodeURIComponent(params.get('iname')) : '';
 
