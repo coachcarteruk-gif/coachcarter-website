@@ -172,10 +172,12 @@
       var res = await fetch(url);
       var data = await res.json();
       if (data.slots) {
-        for (var i = 0; i < data.slots.length; i++) {
-          var s = data.slots[i];
-          if (!slotCache[s.date]) slotCache[s.date] = [];
-          slotCache[s.date].push(s);
+        // slots is an object keyed by date: { "2026-04-13": [{...}, ...], ... }
+        for (var ds in data.slots) {
+          if (!slotCache[ds]) slotCache[ds] = [];
+          for (var i = 0; i < data.slots[ds].length; i++) {
+            slotCache[ds].push(data.slots[ds][i]);
+          }
         }
       }
     } catch (err) {
