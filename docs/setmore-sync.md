@@ -23,7 +23,7 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 
 ## Timezone handling
 
-Setmore returns appointment times in the account's configured timezone (Europe/London) without a `Z` suffix or UTC offset — e.g. `2026-04-11T09:00:00`. The sync's `parseSetmoreTime()` function treats bare timestamps as already-local and only converts via `Intl` if the string has an explicit timezone indicator. This prevents double-conversion during BST (UTC+1).
+Setmore returns appointment times in the account's configured timezone (Europe/London). The sync's `parseSetmoreTime()` function always extracts the date and time directly from the ISO string via regex, ignoring any `Z` suffix or timezone offset Setmore may include. This prevents double-conversion during BST (UTC+1). Never parse Setmore timestamps through `new Date()` or `Intl` — the times are already local.
 
 ## Cancellation sync
 

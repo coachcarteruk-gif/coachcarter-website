@@ -59,31 +59,21 @@ function toSetmoreDate(d) {
   return `${dd}-${mm}-${d.getFullYear()}`;
 }
 
-/** Parse a Setmore timestamp into { date, time } in Europe/London.
- *  Setmore returns times in the account's local timezone (Europe/London)
- *  WITHOUT a Z suffix or offset — e.g. "2026-04-11T09:00:00".
- *  If the string has a Z or offset we still convert properly via Intl. */
+/** Parse a Setmore timestamp into { date, time }.
+ *  Setmore returns times in the account's configured timezone (Europe/London).
+ *  Always extract date+time directly — never convert via Date/Intl, because
+ *  the times are already local regardless of any Z suffix Setmore may add. */
 function parseSetmoreTime(isoStr) {
-  // If the string has no timezone indicator, treat it as already-local
-  // (Setmore sends times in the account's configured timezone)
-  const hasTimezone = /Z|[+-]\d{2}:\d{2}$/.test(isoStr);
-  if (!hasTimezone) {
-    // Parse directly — e.g. "2026-04-11T09:00:00" → date=2026-04-11, time=09:00:00
-    const [datePart, timePart] = isoStr.split('T');
-    const time = timePart ? timePart.substring(0, 8).padEnd(8, ':00') : '00:00:00';
-    return { date: datePart, time };
+  // Extract the ISO date and time parts directly, ignoring any timezone suffix.
+  // Handles: "2026-04-11T09:00:00", "2026-04-11T09:00:00Z", "2026-04-11T09:00:00+01:00"
+  const match = isoStr.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})/);
+  if (match) {
+    return { date: match[1], time: match[2] };
   }
-  // Has explicit timezone — convert to London
-  const d = new Date(isoStr);
-  const s = d.toLocaleString('en-GB', {
-    timeZone: 'Europe/London',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false
-  });
-  const [dp, tp] = s.split(', ');
-  const [dd, mm, yyyy] = dp.split('/');
-  return { date: `${yyyy}-${mm}-${dd}`, time: tp };
+  // Fallback: split on T
+  const [datePart, timePart] = isoStr.split('T');
+  const time = timePart ? timePart.substring(0, 8).padEnd(8, ':00') : '00:00:00';
+  return { date: datePart, time };
 }
 
 /** Add minutes to a time string (HH:MM:SS) and return HH:MM:SS */
@@ -270,6 +260,10 @@ module.exports = async (req, res) => {
 
       // Parse Setmore time (already in account's local timezone)
       const start = parseSetmoreTime(appt.start_time);
+      // Log raw vs parsed for first 3 appointments to diagnose timezone issues
+      if (imported + skipped < 3) {
+        console.log(`[setmore-sync] raw start_time=${appt.start_time} → parsed date=${start.date} time=${start.time}`);
+      }
       const realEndTime = addMinutesToTime(start.time, realMinutes);
 
       // Skip past appointments
