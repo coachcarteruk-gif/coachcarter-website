@@ -1371,6 +1371,23 @@ The learner profile page (`public/learner/profile.html`) has no email-edit field
 
 ---
 
+## 2.78 — Flexible Offers Schema (11 April 2026)
+
+**What:** Database schema changes to support flexible lesson offers where the learner picks their own slot, instead of the instructor pinning a specific date/time. Also adds custom pricing — instructor sets an exact price in pence rather than choosing from rigid discount tiers.
+
+**Schema changes:**
+- `lesson_offers.scheduled_date` — made nullable (NULL for flexible offers, set for slot-pinned offers)
+- `lesson_offers.start_time` — made nullable
+- `lesson_offers.end_time` — made nullable
+- `lesson_offers.offer_price_pence` — new INTEGER column, nullable. When set, this is the exact price the learner pays. When NULL, falls back to `discount_pct` calculation (backward compat).
+- `uq_offer_slot` unique index — replaced with partial index that only applies when `scheduled_date IS NOT NULL`, so flexible offers (no date) don't conflict.
+
+**Backward compatible:** Existing slot-pinned offers continue to work unchanged. The app doesn't use the new nullable/price fields yet — this is the schema foundation for the flexible offers feature.
+
+**Files changed:** `db/migration.sql`, `PROJECT.md`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

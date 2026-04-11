@@ -1264,3 +1264,21 @@ CREATE TABLE IF NOT EXISTS focused_practice_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_focused_practice_learner ON focused_practice_sessions(learner_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_focused_practice_session ON focused_practice_sessions(session_id);
+
+-- ── Flexible offers: nullable slot fields + custom price (April 2026) ──
+-- Allow offers without a pinned slot (learner picks their own time).
+-- Existing slot-pinned offers keep working — these columns simply become optional.
+ALTER TABLE lesson_offers ALTER COLUMN scheduled_date DROP NOT NULL;
+ALTER TABLE lesson_offers ALTER COLUMN start_time DROP NOT NULL;
+ALTER TABLE lesson_offers ALTER COLUMN end_time DROP NOT NULL;
+
+-- Custom price in pence: instructor sets exact amount instead of rigid discount tiers.
+-- NULL means use the discount_pct calculation (backward compat with existing offers).
+ALTER TABLE lesson_offers ADD COLUMN IF NOT EXISTS offer_price_pence INTEGER;
+
+-- Replace uq_offer_slot: only enforce slot uniqueness on slot-pinned offers.
+-- (Flexible offers have no date/time so cannot conflict on a slot.)
+DROP INDEX IF EXISTS uq_offer_slot;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_offer_slot
+  ON lesson_offers(instructor_id, scheduled_date, start_time)
+  WHERE status = 'pending' AND scheduled_date IS NOT NULL;
