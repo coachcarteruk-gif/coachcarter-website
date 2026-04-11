@@ -21,9 +21,13 @@ Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in
 - Simon: DB has `simon.edw@outlook.com` (Setmore has `simon@coachcarter.uk`)
 - Always use instructor `id` (Fraser=4, Simon=6) when updating, not email
 
+## Timezone handling
+
+Setmore returns appointment times in the account's configured timezone (Europe/London) without a `Z` suffix or UTC offset — e.g. `2026-04-11T09:00:00`. The sync's `parseSetmoreTime()` function treats bare timestamps as already-local and only converts via `Intl` if the string has an explicit timezone indicator. This prevents double-conversion during BST (UTC+1).
+
 ## Cancellation sync
 
-The sync also detects cancelled/removed Setmore appointments and marks the corresponding `lesson_bookings` entry as cancelled. Checks both the appointment `status` field and missing appointments (removed from Setmore entirely).
+The sync also detects cancelled/removed Setmore appointments and marks the corresponding `lesson_bookings` entry as cancelled. Checks both the appointment `status` field and missing appointments (removed from Setmore entirely). **Guard**: cancellation detection is skipped when the API returns zero active appointments — this prevents transient API failures from mass-cancelling all existing bookings.
 
 ## Welcome emails
 

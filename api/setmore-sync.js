@@ -59,8 +59,21 @@ function toSetmoreDate(d) {
   return `${dd}-${mm}-${d.getFullYear()}`;
 }
 
-/** Convert a UTC ISO timestamp to Europe/London local date + time */
-function toLondon(isoStr) {
+/** Parse a Setmore timestamp into { date, time } in Europe/London.
+ *  Setmore returns times in the account's local timezone (Europe/London)
+ *  WITHOUT a Z suffix or offset — e.g. "2026-04-11T09:00:00".
+ *  If the string has a Z or offset we still convert properly via Intl. */
+function parseSetmoreTime(isoStr) {
+  // If the string has no timezone indicator, treat it as already-local
+  // (Setmore sends times in the account's configured timezone)
+  const hasTimezone = /Z|[+-]\d{2}:\d{2}$/.test(isoStr);
+  if (!hasTimezone) {
+    // Parse directly — e.g. "2026-04-11T09:00:00" → date=2026-04-11, time=09:00:00
+    const [datePart, timePart] = isoStr.split('T');
+    const time = timePart ? timePart.substring(0, 8).padEnd(8, ':00') : '00:00:00';
+    return { date: datePart, time };
+  }
+  // Has explicit timezone — convert to London
   const d = new Date(isoStr);
   const s = d.toLocaleString('en-GB', {
     timeZone: 'Europe/London',
@@ -68,9 +81,9 @@ function toLondon(isoStr) {
     hour: '2-digit', minute: '2-digit', second: '2-digit',
     hour12: false
   });
-  const [datePart, timePart] = s.split(', ');
-  const [dd, mm, yyyy] = datePart.split('/');
-  return { date: `${yyyy}-${mm}-${dd}`, time: timePart };
+  const [dp, tp] = s.split(', ');
+  const [dd, mm, yyyy] = dp.split('/');
+  return { date: `${yyyy}-${mm}-${dd}`, time: tp };
 }
 
 /** Add minutes to a time string (HH:MM:SS) and return HH:MM:SS */
@@ -255,8 +268,8 @@ module.exports = async (req, res) => {
       }
       const lessonTypeId = typeBySlug[slug] || typeBySlug['standard'];
 
-      // Convert UTC times to London
-      const start = toLondon(appt.start_time);
+      // Parse Setmore time (already in account's local timezone)
+      const start = parseSetmoreTime(appt.start_time);
       const realEndTime = addMinutesToTime(start.time, realMinutes);
 
       // Skip past appointments
@@ -294,23 +307,27 @@ module.exports = async (req, res) => {
     }
 
     // 5c. Detect bookings removed from Setmore (no longer in API response)
-    // Only check future bookings for the instructor we just synced
-    const confirmedSetmoreBookings = await sql`
-      SELECT id, setmore_key FROM lesson_bookings
-      WHERE instructor_id = ${instructor.id}
-        AND setmore_key IS NOT NULL
-        AND status = 'confirmed'
-        AND scheduled_date >= CURRENT_DATE
-    `;
+    // Only check future bookings for the instructor we just synced.
+    // GUARD: skip if Setmore returned no appointments — a transient API failure
+    // would otherwise cancel every existing booking then re-import them all.
+    if (activeSetmoreKeys.size > 0) {
+      const confirmedSetmoreBookings = await sql`
+        SELECT id, setmore_key FROM lesson_bookings
+        WHERE instructor_id = ${instructor.id}
+          AND setmore_key IS NOT NULL
+          AND status = 'confirmed'
+          AND scheduled_date >= CURRENT_DATE
+      `;
 
-    for (const booking of confirmedSetmoreBookings) {
-      if (!activeSetmoreKeys.has(booking.setmore_key)) {
-        await sql`
-          UPDATE lesson_bookings
-          SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Removed from Setmore'
-          WHERE id = ${booking.id}
-        `;
-        cancelled++;
+      for (const booking of confirmedSetmoreBookings) {
+        if (!activeSetmoreKeys.has(booking.setmore_key)) {
+          await sql`
+            UPDATE lesson_bookings
+            SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Removed from Setmore'
+            WHERE id = ${booking.id}
+          `;
+          cancelled++;
+        }
       }
     }
 
@@ -347,6 +364,17 @@ module.exports = async (req, res) => {
     });
 
   } catch (err) {
+    // Retry once on transient Neon errors (cold start at 3am, control plane blips)
+    if (err.name === 'NeonDbError' && !req._setmoreSyncRetried) {
+      req._setmoreSyncRetried = true;
+      console.warn('[setmore-sync] Neon transient error, retrying once…', err.message);
+      try {
+        return await module.exports(req, res);
+      } catch (retryErr) {
+        reportError('/api/setmore-sync', retryErr);
+        return res.status(500).json({ error: 'Sync failed after retry' });
+      }
+    }
     reportError('/api/setmore-sync', err);
     return res.status(500).json({ error: 'Sync failed' });
   }
