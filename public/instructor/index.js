@@ -1720,7 +1720,7 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
     btn.addEventListener('click', function () { setView(btn.dataset.view); });
   });
   bind('btn-open-add-lesson', openAddLessonModal);
-  bind('btn-open-offer', openOfferModal);
+  bind('btn-open-offer', function () { openOfferModal(); });
   bind('btnHideWeekends', toggleHideWeekends);
   bind('btnShowCancelled', toggleShowCancelled);
   bind('btn-toolbar-overflow', toggleToolbarOverflow);
@@ -1759,7 +1759,11 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
   bind('btn-close-add-lesson', closeAddLessonModal);
   bind('addLessonBtn', confirmCreateBooking);
   var offerModal = document.getElementById('offerLessonModal');
-  if (offerModal) offerModal.addEventListener('click', function (e) { if (e.target === offerModal) closeOfferModal(); });
+  var offerMouseDownTarget = null;
+  if (offerModal) {
+    offerModal.addEventListener('mousedown', function (e) { offerMouseDownTarget = e.target; });
+    offerModal.addEventListener('click', function (e) { if (e.target === offerModal && offerMouseDownTarget === offerModal) closeOfferModal(); });
+  }
   var offerType = document.getElementById('offerLessonType');
   if (offerType) offerType.addEventListener('change', updateOfferPrice);
   bind('btn-close-offer', closeOfferModal);
