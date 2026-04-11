@@ -313,7 +313,7 @@ async function handleAcceptOffer(req, res) {
 
       return res.json({
         ok: true,
-        url: `${baseUrl}/offer-success.html?token=${token}&flexible=1&free=1`,
+        url: `${baseUrl}/offer-success.html?token=${token}&flexible=1&free=1&iid=${offer.instructor_id}&ltid=${offer.lesson_type_id || ''}&dur=${durationMins}&iname=${encodeURIComponent(offer.instructor_name)}`,
         flexible_accepted: true,
         learner_session: { id: learnerId, name: learnerDetails.name, email: resolvedEmail, school_id: schoolId }
       });
@@ -364,7 +364,7 @@ async function handleAcceptOffer(req, res) {
       billing_address_collection: 'required',
       allow_promotion_codes: true,
       success_url: isFlexible
-        ? `${baseUrl}/offer-success.html?token=${token}&flexible=1`
+        ? `${baseUrl}/offer-success.html?token=${token}&flexible=1&iid=${offer.instructor_id}&ltid=${offer.lesson_type_id || ''}&dur=${durationMins}&iname=${encodeURIComponent(offer.instructor_name)}`
         : `${baseUrl}/offer-success.html?token=${token}`,
       cancel_url:  `${baseUrl}/accept-offer.html?token=${token}&cancelled=1`
     });

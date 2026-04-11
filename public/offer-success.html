@@ -18,7 +18,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --primary: #262626; --accent: #f58321; --accent-dk: #e07518;
-      --accent-lt: #fff4ec; --muted: #797879; --border: var(--border);
+      --accent-lt: #fff4ec; --muted: #797879; --border: #e5e5e5;
       --bg: #ffffff; --surface: #f9f9f9; --white: #ffffff;
       --green: #22c55e; --green-lt: #f0fdf4;
       --font-head: 'Bricolage Grotesque', sans-serif;
@@ -94,6 +94,84 @@
       animation: spin 0.6s linear infinite; margin: 0 auto 16px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Slot Picker ──────────────────────────────────────────────────────── */
+    .sp-section { margin-top: 32px; text-align: left; }
+    .sp-heading {
+      font-family: var(--font-head); font-size: 1.15rem; font-weight: 800;
+      margin-bottom: 16px; text-align: center; letter-spacing: -0.02em;
+    }
+    .slot-feed { display: flex; flex-direction: column; gap: 6px; }
+    .feed-date-header {
+      font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+      padding: 18px 0 6px;
+    }
+    .feed-date-header:first-child { padding-top: 4px; }
+    .feed-card {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--white); border: 1.5px solid var(--border);
+      border-radius: var(--radius); padding: 14px 16px;
+      cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .feed-card:hover { border-color: var(--muted); background: var(--surface); transform: translateY(-1px); }
+    .feed-card:active { transform: scale(0.99); }
+    .feed-card.selected { border-color: var(--accent); background: var(--accent-lt); }
+    .feed-card-accent {
+      width: 4px; align-self: stretch; border-radius: 2px; flex-shrink: 0;
+      background: var(--accent);
+    }
+    .feed-card-body { flex: 1; min-width: 0; }
+    .feed-card-time {
+      font-family: var(--font-head); font-size: 1.05rem; font-weight: 800;
+      color: var(--primary); margin-bottom: 3px;
+    }
+    .feed-card-sub {
+      font-size: 0.8rem; color: var(--muted);
+    }
+    .feed-card-chevron {
+      flex-shrink: 0; width: 20px; height: 20px; color: var(--border);
+      transition: color 0.15s;
+    }
+    .feed-card:hover .feed-card-chevron { color: var(--primary); }
+
+    .sp-confirm {
+      margin-top: 16px; padding: 16px 20px;
+      background: var(--accent-lt); border: 1.5px solid var(--accent);
+      border-radius: var(--radius); text-align: center;
+    }
+    .sp-confirm-text {
+      font-size: 0.95rem; font-weight: 600; margin-bottom: 12px;
+    }
+    .sp-confirm-actions { display: flex; gap: 10px; justify-content: center; align-items: center; }
+    .sp-confirm-cancel {
+      background: none; border: none; color: var(--muted); font-size: 0.85rem;
+      cursor: pointer; text-decoration: underline; font-family: var(--font-body);
+    }
+
+    .sp-footer { text-align: center; padding: 20px 0 8px; }
+    .sp-status { font-size: 0.82rem; color: var(--muted); margin-bottom: 12px; }
+    .btn-load-more {
+      display: inline-block; padding: 12px 32px; border-radius: 10px;
+      border: 1.5px solid var(--border); background: transparent;
+      color: var(--primary); font-family: var(--font-head);
+      font-size: 0.88rem; font-weight: 700; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-load-more:hover { background: var(--surface); }
+    .btn-load-more:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .sp-error {
+      color: #dc2626; font-size: 0.85rem; margin-top: 8px; text-align: center;
+    }
+
+    .sp-booked { text-align: center; margin-top: 32px; }
+    .sp-booked h2 {
+      font-family: var(--font-head); font-size: 1.2rem; font-weight: 800;
+      color: var(--green); margin-bottom: 8px;
+    }
+    .sp-booked p { color: var(--muted); font-size: 0.9rem; margin-bottom: 20px; }
   </style>
 </head>
 <body>
@@ -140,6 +218,29 @@
     </div>
 
     <a href="/learner/" class="btn-primary" id="s-cta">Log in to my account →</a>
+
+    <!-- Embedded slot picker for flexible offers -->
+    <div id="sp-section" class="sp-section hidden">
+      <h2 class="sp-heading">Pick a time for your lesson</h2>
+      <div id="sp-loading">
+        <div class="spinner"></div>
+        <p style="text-align:center;color:var(--muted);font-size:0.9rem;">Loading available slots...</p>
+      </div>
+      <div id="sp-feed"></div>
+      <div id="sp-confirm" class="sp-confirm hidden"></div>
+      <div id="sp-error" class="sp-error hidden"></div>
+      <div id="sp-footer" class="sp-footer hidden">
+        <div class="sp-status" id="sp-status"></div>
+        <button class="btn-load-more" id="sp-more">Show more slots</button>
+      </div>
+    </div>
+
+    <!-- Shown after booking via slot picker -->
+    <div id="sp-booked" class="sp-booked hidden">
+      <h2>Lesson booked!</h2>
+      <p id="sp-booked-text"></p>
+      <a href="/learner/" class="btn-primary">Go to my account →</a>
+    </div>
   </div>
 
   <div id="error-content" class="page hidden">
@@ -149,6 +250,7 @@
     <a href="/learner/" class="btn-primary" style="margin-top: 16px;">Go to my account →</a>
   </div>
 
+<script src="/shared/learner-auth.js"></script>
 <script src="/offer-success.js"></script>
 </body>
 </html>
