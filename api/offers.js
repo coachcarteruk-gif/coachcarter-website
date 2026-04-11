@@ -197,11 +197,17 @@ async function handleAcceptOffer(req, res) {
       const { createTransporter } = require('./_auth-helpers');
       const learnerDetails = { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() };
 
-      // 1. Find or create learner
+      // 1. Find or create learner (by email first, then by phone)
       let learnerId;
-      const [existingLearner] = await sql`
+      let [existingLearner] = await sql`
         SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${resolvedEmail})
       `;
+      if (!existingLearner && learnerDetails.phone) {
+        const [byPhone] = await sql`
+          SELECT id FROM learner_users WHERE phone = ${learnerDetails.phone}
+        `;
+        existingLearner = byPhone || null;
+      }
       if (existingLearner) {
         learnerId = existingLearner.id;
         await sql`
@@ -221,13 +227,22 @@ async function handleAcceptOffer(req, res) {
           `;
           learnerId = newLearner.id;
         } catch (insertErr) {
-          if (insertErr.message?.includes('learner_users_phone_key') || insertErr.message?.includes('unique')) {
-            const [newLearner] = await sql`
-              INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
-              VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
-              RETURNING id
+          if (insertErr.message?.includes('unique') || insertErr.message?.includes('duplicate')) {
+            // Phone or email conflict — find the existing learner
+            const [found] = await sql`
+              SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${resolvedEmail})
             `;
-            learnerId = newLearner.id;
+            if (found) {
+              learnerId = found.id;
+            } else {
+              // Try without phone
+              const [newLearner] = await sql`
+                INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
+                VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
+                RETURNING id
+              `;
+              learnerId = newLearner.id;
+            }
           } else {
             throw insertErr;
           }
@@ -344,11 +359,17 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
   const schoolId = instrRow?.school_id || 1;
 
-  // 1. Find or create learner
+  // 1. Find or create learner (by email first, then by phone)
   let learnerId;
-  const [existingLearner] = await sql`
+  let [existingLearner] = await sql`
     SELECT id, name, phone, pickup_address FROM learner_users WHERE LOWER(email) = LOWER(${resolvedEmail})
   `;
+  if (!existingLearner && learnerDetails.phone) {
+    const [byPhone] = await sql`
+      SELECT id, name, phone, pickup_address FROM learner_users WHERE phone = ${learnerDetails.phone}
+    `;
+    existingLearner = byPhone || null;
+  }
 
   if (existingLearner) {
     learnerId = existingLearner.id;
@@ -369,13 +390,20 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
       `;
       learnerId = newLearner.id;
     } catch (insertErr) {
-      if (insertErr.message?.includes('learner_users_phone_key') || insertErr.message?.includes('unique')) {
-        const [newLearner] = await sql`
-          INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
-          VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
-          RETURNING id
+      if (insertErr.message?.includes('unique') || insertErr.message?.includes('duplicate')) {
+        const [found] = await sql`
+          SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${resolvedEmail})
         `;
-        learnerId = newLearner.id;
+        if (found) {
+          learnerId = found.id;
+        } else {
+          const [newLearner] = await sql`
+            INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
+            VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
+            RETURNING id
+          `;
+          learnerId = newLearner.id;
+        }
       } else {
         throw insertErr;
       }
