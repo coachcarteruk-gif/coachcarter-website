@@ -48,12 +48,6 @@
   function renderOffer() {
     var o = offerData;
 
-    // Format date
-    var dateObj = new Date(o.scheduled_date + 'T00:00:00Z');
-    var dateStr = dateObj.toLocaleDateString('en-GB', {
-      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
-    });
-
     // Format duration
     var mins = o.duration_minutes;
     var durStr;
@@ -70,22 +64,35 @@
 
     // Fill card
     document.getElementById('instructor-name').textContent = o.instructor_name;
-    document.getElementById('offer-date').textContent = dateStr;
-    document.getElementById('offer-time').textContent =
-      o.start_time.slice(0, 5) + ' – ' + o.end_time.slice(0, 5);
+
+    // Handle flexible vs slot-pinned offers
+    var dateEl = document.getElementById('offer-date');
+    var timeEl = document.getElementById('offer-time');
+    if (o.is_flexible) {
+      dateEl.textContent = 'Flexible — you choose';
+      timeEl.textContent = 'Book a time that works for you';
+    } else {
+      var dateObj = new Date(o.scheduled_date + 'T00:00:00Z');
+      var dateStr = dateObj.toLocaleDateString('en-GB', {
+        weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+      });
+      dateEl.textContent = dateStr;
+      timeEl.textContent = o.start_time.slice(0, 5) + ' – ' + o.end_time.slice(0, 5);
+    }
+
     document.getElementById('offer-duration').textContent = durStr;
     document.getElementById('offer-instructor').textContent = o.instructor_name;
 
     // Price display — build with DOM to avoid injecting HTML via innerHTML
     var priceEl = document.getElementById('offer-price');
     priceEl.textContent = '';
-    if (o.discount_pct === 100) {
+    if (o.price_pence === 0) {
       var free = document.createElement('span');
       free.style.color = '#22c55e';
       free.style.fontWeight = '800';
       free.textContent = 'FREE';
       priceEl.appendChild(free);
-    } else if (o.discount_pct > 0) {
+    } else if (o.price_pence < o.original_price_pence) {
       var strike = document.createElement('span');
       strike.style.textDecoration = 'line-through';
       strike.style.color = '#999';
@@ -93,11 +100,11 @@
       strike.textContent = '\u00A3' + (o.original_price_pence / 100).toFixed(2);
       priceEl.appendChild(strike);
       priceEl.appendChild(document.createTextNode(' \u00A3' + (o.price_pence / 100).toFixed(2) + ' '));
-      var pct = document.createElement('span');
-      pct.style.color = '#22c55e';
-      pct.style.fontSize = '0.8rem';
-      pct.textContent = '(' + o.discount_pct + '% off)';
-      priceEl.appendChild(pct);
+      var saving = document.createElement('span');
+      saving.style.color = '#22c55e';
+      saving.style.fontSize = '0.8rem';
+      saving.textContent = '(\u00A3' + ((o.original_price_pence - o.price_pence) / 100).toFixed(2) + ' off)';
+      priceEl.appendChild(saving);
     } else {
       priceEl.textContent = '\u00A3' + (o.price_pence / 100).toFixed(2);
     }
@@ -108,7 +115,7 @@
     if (o.learner_pickup_address) document.getElementById('pickup').value = o.learner_pickup_address;
 
     // Update button text for free lessons
-    if (o.discount_pct === 100) {
+    if (o.price_pence === 0) {
       document.getElementById('accept-btn').textContent = 'Accept free lesson →';
     }
 

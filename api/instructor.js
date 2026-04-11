@@ -2482,35 +2482,44 @@ async function handleIcalStatus(req, res) {
 }
 
 // ── POST /api/instructor?action=create-offer ──────────────────────────────────
-// Body: { learner_email, scheduled_date, start_time, lesson_type_id? }
+// Body: { learner_email, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence? }
 // Creates a lesson offer and emails the learner an accept link.
+// Slot fields are optional — omit for "flexible" offers where learner picks their own time.
+// offer_price_pence overrides the lesson-type price; omit to use lesson-type default.
 async function handleCreateOffer(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { learner_email, scheduled_date, start_time, lesson_type_id, discount_pct } = req.body;
-  if (!learner_email || !scheduled_date || !start_time)
-    return res.status(400).json({ error: 'learner_email, scheduled_date and start_time are required' });
+  const { learner_email, scheduled_date, start_time, lesson_type_id, offer_price_pence } = req.body;
+  if (!learner_email)
+    return res.status(400).json({ error: 'learner_email is required' });
 
-  // Validate discount
-  const discount = parseInt(discount_pct) || 0;
-  if (![0, 25, 50, 75, 100].includes(discount))
-    return res.status(400).json({ error: 'discount_pct must be 0, 25, 50, 75 or 100' });
+  const isFlexible = !scheduled_date && !start_time;
+
+  // Validate custom price if provided
+  if (offer_price_pence != null) {
+    const p = parseInt(offer_price_pence);
+    if (isNaN(p) || p < 0) return res.status(400).json({ error: 'offer_price_pence must be a non-negative integer' });
+  }
 
   // Validate email format
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(learner_email))
     return res.status(400).json({ error: 'Invalid email address' });
 
-  // Validate date
-  const bookingDate = new Date(scheduled_date + 'T00:00:00Z');
-  if (isNaN(bookingDate.getTime()))
-    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  if (bookingDate < today)
-    return res.status(400).json({ error: 'Cannot offer a lesson in the past' });
+  // Validate date (only for slot-pinned offers)
+  if (scheduled_date) {
+    const bookingDate = new Date(scheduled_date + 'T00:00:00Z');
+    if (isNaN(bookingDate.getTime()))
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    if (bookingDate < today)
+      return res.status(400).json({ error: 'Cannot offer a lesson in the past' });
+    if (!start_time)
+      return res.status(400).json({ error: 'start_time is required when scheduled_date is provided' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -2527,11 +2536,14 @@ async function handleCreateOffer(req, res) {
     }
     const durationMins = lessonType.duration_minutes;
 
-    // Calculate end time
-    const startParts = start_time.split(':').map(Number);
-    const startMins  = startParts[0] * 60 + startParts[1];
-    const endMins    = startMins + durationMins;
-    const end_time   = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+    // Calculate end time (only for slot-pinned offers)
+    let end_time = null;
+    if (start_time) {
+      const startParts = start_time.split(':').map(Number);
+      const startMins  = startParts[0] * 60 + startParts[1];
+      const endMins    = startMins + durationMins;
+      end_time = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+    }
 
     // Get instructor details
     const [instrDetails] = await sql`
@@ -2539,43 +2551,43 @@ async function handleCreateOffer(req, res) {
     `;
     if (!instrDetails) return res.status(404).json({ error: 'Instructor not found' });
 
-    // Check for conflicts — bookings
-    const [existingBooking] = await sql`
-      SELECT id FROM lesson_bookings
-      WHERE instructor_id = ${instructor.id}
-        AND scheduled_date = ${scheduled_date}
-        AND start_time = ${start_time}::time
-        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
-    `;
-    if (existingBooking)
-      return res.status(409).json({ error: 'That slot is already booked.' });
-
-    // Check for conflicts — pending offers
-    const [existingOffer] = await sql`
-      SELECT id FROM lesson_offers
-      WHERE instructor_id = ${instructor.id}
-        AND scheduled_date = ${scheduled_date}
-        AND start_time = ${start_time}::time
-        AND status = 'pending'
-        AND expires_at > NOW()
-    `;
-    if (existingOffer)
-      return res.status(409).json({ error: 'There is already a pending offer for that slot.' });
-
-    // Check for conflicts — active reservations
-    let hasReservation = false;
-    try {
-      const [existingRes] = await sql`
-        SELECT id FROM slot_reservations
+    // Slot conflict checks (only for slot-pinned offers)
+    if (!isFlexible) {
+      const [existingBooking] = await sql`
+        SELECT id FROM lesson_bookings
         WHERE instructor_id = ${instructor.id}
           AND scheduled_date = ${scheduled_date}
           AND start_time = ${start_time}::time
+          AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+      `;
+      if (existingBooking)
+        return res.status(409).json({ error: 'That slot is already booked.' });
+
+      const [existingOffer] = await sql`
+        SELECT id FROM lesson_offers
+        WHERE instructor_id = ${instructor.id}
+          AND scheduled_date = ${scheduled_date}
+          AND start_time = ${start_time}::time
+          AND status = 'pending'
           AND expires_at > NOW()
       `;
-      hasReservation = !!existingRes;
-    } catch (e) { /* table may not exist */ }
-    if (hasReservation)
-      return res.status(409).json({ error: 'Someone is currently booking that slot. Try again shortly.' });
+      if (existingOffer)
+        return res.status(409).json({ error: 'There is already a pending offer for that slot.' });
+
+      let hasReservation = false;
+      try {
+        const [existingRes] = await sql`
+          SELECT id FROM slot_reservations
+          WHERE instructor_id = ${instructor.id}
+            AND scheduled_date = ${scheduled_date}
+            AND start_time = ${start_time}::time
+            AND expires_at > NOW()
+        `;
+        hasReservation = !!existingRes;
+      } catch (e) { /* table may not exist */ }
+      if (hasReservation)
+        return res.status(409).json({ error: 'Someone is currently booking that slot. Try again shortly.' });
+    }
 
     // Check if learner already exists
     const [existingLearner] = await sql`
@@ -2585,33 +2597,51 @@ async function handleCreateOffer(req, res) {
     // Generate offer token
     const token = generateToken();
 
+    // Determine price to store
+    const customPricePence = offer_price_pence != null ? parseInt(offer_price_pence) : null;
+
     // Insert offer
     const [offer] = await sql`
       INSERT INTO lesson_offers
         (token, instructor_id, learner_email, learner_id, scheduled_date, start_time, end_time,
-         lesson_type_id, discount_pct, status, expires_at)
+         lesson_type_id, discount_pct, offer_price_pence, status, expires_at)
       VALUES
         (${token}, ${instructor.id}, ${learner_email.toLowerCase()}, ${existingLearner?.id || null},
-         ${scheduled_date}, ${start_time}, ${end_time},
-         ${lessonType.id}, ${discount}, 'pending', NOW() + INTERVAL '24 hours')
+         ${scheduled_date || null}, ${start_time || null}, ${end_time},
+         ${lessonType.id}, ${0}, ${customPricePence}, 'pending', NOW() + INTERVAL '24 hours')
       RETURNING id, expires_at
     `;
 
-    // Format for email
-    const dateObj = new Date(scheduled_date + 'T00:00:00Z');
-    const dateStr = dateObj.toLocaleDateString('en-GB', {
-      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
-    });
+    // Determine final price for email
+    const pricePence = customPricePence != null ? customPricePence : lessonType.price_pence;
+    const priceStr = pricePence === 0 ? 'FREE' : `£${(pricePence / 100).toFixed(2)}`;
     const durationStr = durationMins >= 60
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
       : `${durationMins} mins`;
-    const discountedPence = Math.round(lessonType.price_pence * (100 - discount) / 100);
-    const priceStr = discount > 0
-      ? (discount === 100 ? 'FREE' : `<s>£${(lessonType.price_pence / 100).toFixed(2)}</s> £${(discountedPence / 100).toFixed(2)} (${discount}% off)`)
-      : `£${(lessonType.price_pence / 100).toFixed(2)}`;
     const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
     const acceptUrl = `${baseUrl}/accept-offer.html?token=${token}`;
     const firstName = existingLearner ? (existingLearner.name || '').split(' ')[0] || 'there' : 'there';
+
+    // Build email content — slot-pinned vs flexible
+    let emailSubject, emailSlotRows;
+    if (isFlexible) {
+      emailSubject = `Driving lesson offer from ${instrDetails.name}`;
+      emailSlotRows = `
+        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">When</td><td style="padding:6px 0">Pick a time that suits you</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Duration</td><td style="padding:6px 0">${durationStr}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceStr}</td></tr>`;
+    } else {
+      const dateObj = new Date(scheduled_date + 'T00:00:00Z');
+      const dateStr = dateObj.toLocaleDateString('en-GB', {
+        weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+      });
+      emailSubject = `Driving lesson offer from ${instrDetails.name} — ${dateStr}`;
+      emailSlotRows = `
+        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Date</td><td style="padding:6px 0">${dateStr}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Time</td><td style="padding:6px 0">${start_time} – ${end_time}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Duration</td><td style="padding:6px 0">${durationStr}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceStr}</td></tr>`;
+    }
 
     // Send offer email
     try {
@@ -2619,26 +2649,23 @@ async function handleCreateOffer(req, res) {
       await mailer.sendMail({
         from: 'CoachCarter <bookings@coachcarter.uk>',
         to: learner_email,
-        subject: `Driving lesson offer from ${instrDetails.name} — ${dateStr}`,
+        subject: emailSubject,
         html: `
           <div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto">
             <h2 style="color:#262626">Hi ${firstName},</h2>
             <p>${instrDetails.name} has offered you a driving lesson:</p>
             <table style="border-collapse:collapse;margin:16px 0">
-              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Date</td><td style="padding:6px 0">${dateStr}</td></tr>
-              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Time</td><td style="padding:6px 0">${start_time} – ${end_time}</td></tr>
-              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Duration</td><td style="padding:6px 0">${durationStr}</td></tr>
-              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceStr}</td></tr>
+              ${emailSlotRows}
             </table>
             <p style="margin:24px 0">
               <a href="${acceptUrl}"
                  style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
                         border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem">
-                Accept &amp; pay →
+                ${pricePence === 0 ? 'Accept free lesson →' : 'Accept &amp; pay →'}
               </a>
             </p>
             <p style="font-size:0.85rem;color:#797879">
-              This offer expires in 24 hours. If you don't accept by then, the slot will become available again.
+              This offer expires in 24 hours.${!isFlexible ? ' If you don\'t accept by then, the slot will become available again.' : ''}
             </p>
           </div>
         `

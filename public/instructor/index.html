@@ -825,25 +825,33 @@
         <input type="email" id="offerEmail" placeholder="e.g. john@example.com" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
       </div>
       <div>
-        <div class="notes-label">Date *</div>
-        <input type="date" id="offerDate" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
-      </div>
-      <div>
-        <div class="notes-label">Start time *</div>
-        <input type="time" id="offerTime" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;" step="1800" value="09:00">
-      </div>
-      <div>
         <div class="notes-label">Lesson type</div>
         <select id="offerLessonType" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;"></select>
       </div>
       <div>
-        <div class="notes-label">Discount</div>
-        <div class="payment-radios" style="flex-wrap:wrap;">
-          <label><input type="radio" name="offerDiscount" value="0" checked><span>Full price</span></label>
-          <label><input type="radio" name="offerDiscount" value="25"><span>25% off</span></label>
-          <label><input type="radio" name="offerDiscount" value="50"><span>50% off</span></label>
-          <label><input type="radio" name="offerDiscount" value="75"><span>75% off</span></label>
-          <label><input type="radio" name="offerDiscount" value="100"><span>Free</span></label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="offerFlexible" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
+          <span style="font-size:0.88rem;font-weight:600;color:var(--primary);">Flexible — learner picks their own time</span>
+        </label>
+      </div>
+      <div id="offerSlotFields">
+        <div style="display:flex;gap:10px;">
+          <div style="flex:1;">
+            <div class="notes-label">Date</div>
+            <input type="date" id="offerDate" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div style="flex:1;">
+            <div class="notes-label">Start time</div>
+            <input type="time" id="offerTime" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;" step="1800" value="09:00">
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="notes-label">Price</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:1.1rem;font-weight:700;color:var(--primary);">£</span>
+          <input type="number" id="offerCustomPrice" min="0" step="0.01" placeholder="e.g. 82.50"
+            style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
         </div>
         <div id="offerPriceNote" style="font-size:0.82rem; color:var(--muted); margin-top:6px;"></div>
       </div>

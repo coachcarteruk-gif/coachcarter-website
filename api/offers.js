@@ -48,7 +48,7 @@ async function handleGetOffer(req, res) {
     const [offer] = await sql`
       SELECT o.id, o.learner_email, o.learner_id, o.scheduled_date::text,
              o.start_time::text, o.end_time::text, o.status, o.expires_at,
-             o.discount_pct,
+             o.discount_pct, o.offer_price_pence,
              lt.name AS lesson_type_name, lt.duration_minutes, lt.price_pence,
              i.name AS instructor_name, i.school_id AS instructor_school_id,
              lu.name AS learner_name, lu.phone AS learner_phone,
@@ -74,24 +74,32 @@ async function handleGetOffer(req, res) {
 
     // Determine what details the learner still needs to provide
     const needsDetails = !offer.learner_name || !offer.learner_phone || !offer.learner_pickup_address;
+    const isFlexible = !offer.scheduled_date && !offer.start_time;
     const originalPricePence = offer.price_pence || 8250;
-    const discountPct = offer.discount_pct || 0;
-    const finalPricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
+
+    // offer_price_pence (custom price) takes precedence over discount_pct
+    let finalPricePence;
+    if (offer.offer_price_pence != null) {
+      finalPricePence = offer.offer_price_pence;
+    } else {
+      const discountPct = offer.discount_pct || 0;
+      finalPricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
+    }
 
     return res.json({
       ok: true,
       offer: {
         id: offer.id,
-        scheduled_date: offer.scheduled_date,
-        start_time: offer.start_time,
-        end_time: offer.end_time,
+        scheduled_date: offer.scheduled_date || null,
+        start_time: offer.start_time || null,
+        end_time: offer.end_time || null,
         expires_at: offer.expires_at,
         instructor_name: offer.instructor_name,
         lesson_type_name: offer.lesson_type_name || 'Standard Lesson',
         duration_minutes: offer.duration_minutes || 90,
         price_pence: finalPricePence,
         original_price_pence: originalPricePence,
-        discount_pct: discountPct,
+        is_flexible: isFlexible,
         learner_email: offer.learner_email,
         learner_name: offer.learner_name || '',
         learner_phone: offer.learner_phone || '',
@@ -145,28 +153,51 @@ async function handleAcceptOffer(req, res) {
     const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
     const schoolId = instrRow?.school_id || 1;
 
+    const isFlexible = !offer.scheduled_date && !offer.start_time;
     const originalPricePence = offer.price_pence || 8250;
-    const discountPct = offer.discount_pct || 0;
-    const pricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
+
+    // offer_price_pence (custom price) takes precedence over discount_pct
+    let pricePence;
+    if (offer.offer_price_pence != null) {
+      pricePence = offer.offer_price_pence;
+    } else {
+      const discountPct = offer.discount_pct || 0;
+      pricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
+    }
+
     const durationMins = offer.duration_minutes || 90;
     const durationStr = durationMins >= 60
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
       : `${durationMins} mins`;
 
-    const lessonDate = new Date(offer.scheduled_date + 'T00:00:00Z')
-      .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    const lessonDate = offer.scheduled_date
+      ? new Date(offer.scheduled_date + 'T00:00:00Z')
+          .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+      : null;
 
     const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
 
-    // 100% discount → skip Stripe, confirm directly
-    if (pricePence === 0) {
+    // Free offer → skip Stripe, confirm directly (only for slot-pinned offers)
+    if (pricePence === 0 && !isFlexible) {
       return await handleFreeOffer(sql, offer, { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() }, baseUrl, token, res);
     }
 
-    // Create Stripe Checkout session
-    const priceLabel = discountPct > 0
-      ? `${offer.lesson_type_name || 'Standard Lesson'} — ${lessonDate} ${offer.start_time}–${offer.end_time} (${discountPct}% off)`
-      : `${offer.lesson_type_name || 'Standard Lesson'} — ${lessonDate} ${offer.start_time}–${offer.end_time}`;
+    // Flexible + free → mark accepted, redirect to booking page (learner picks slot later)
+    if (pricePence === 0 && isFlexible) {
+      await sql`
+        UPDATE lesson_offers SET status = 'accepted', accepted_at = NOW()
+        WHERE id = ${offer.id}
+      `;
+      return res.json({ ok: true, url: `${baseUrl}/learner/book.html`, flexible_accepted: true });
+    }
+
+    // Build Stripe Checkout label
+    let priceLabel;
+    if (isFlexible) {
+      priceLabel = `${offer.lesson_type_name || 'Standard Lesson'} — flexible time`;
+    } else {
+      priceLabel = `${offer.lesson_type_name || 'Standard Lesson'} — ${lessonDate} ${offer.start_time}–${offer.end_time}`;
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -192,18 +223,21 @@ async function handleAcceptOffer(req, res) {
         learner_name:      name.trim(),
         learner_phone:     (phone || '').trim(),
         pickup_address:    (pickup_address || '').trim(),
-        scheduled_date:    offer.scheduled_date,
-        start_time:        offer.start_time,
-        end_time:          offer.end_time,
+        scheduled_date:    offer.scheduled_date || '',
+        start_time:        offer.start_time || '',
+        end_time:          offer.end_time || '',
         lesson_type_id:    String(offer.lesson_type_id || ''),
         duration_minutes:  String(durationMins),
         amount_pence:      String(pricePence),
-        school_id:         String(schoolId)
+        school_id:         String(schoolId),
+        is_flexible:       isFlexible ? '1' : '0'
       },
       customer_email: offer.learner_email,
       billing_address_collection: 'required',
       allow_promotion_codes: true,
-      success_url: `${baseUrl}/offer-success.html?token=${token}`,
+      success_url: isFlexible
+        ? `${baseUrl}/offer-success.html?token=${token}&flexible=1`
+        : `${baseUrl}/offer-success.html?token=${token}`,
       cancel_url:  `${baseUrl}/accept-offer.html?token=${token}&cancelled=1`
     });
 

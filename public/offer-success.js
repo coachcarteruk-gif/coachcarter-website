@@ -32,10 +32,6 @@
   }
 
   function renderDetails(offer) {
-    var dateObj = new Date(offer.scheduled_date + 'T00:00:00Z');
-    var dateStr = dateObj.toLocaleDateString('en-GB', {
-      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
-    });
     var mins = offer.duration_minutes;
     var durStr;
     if (mins >= 60) {
@@ -49,9 +45,18 @@
       durStr = mins + ' mins';
     }
 
-    document.getElementById('s-date').textContent = dateStr;
-    document.getElementById('s-time').textContent =
-      offer.start_time.slice(0, 5) + ' – ' + offer.end_time.slice(0, 5);
+    if (offer.is_flexible) {
+      document.getElementById('s-date').textContent = 'Flexible — you choose';
+      document.getElementById('s-time').textContent = 'Book from the slot feed';
+    } else {
+      var dateObj = new Date(offer.scheduled_date + 'T00:00:00Z');
+      var dateStr = dateObj.toLocaleDateString('en-GB', {
+        weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+      });
+      document.getElementById('s-date').textContent = dateStr;
+      document.getElementById('s-time').textContent =
+        offer.start_time.slice(0, 5) + ' – ' + offer.end_time.slice(0, 5);
+    }
     document.getElementById('s-instructor').textContent = offer.instructor_name;
     document.getElementById('s-duration').textContent = durStr;
 

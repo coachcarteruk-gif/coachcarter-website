@@ -679,7 +679,8 @@ async function handleOfferBooking(session) {
   const durationMins   = parseInt(metadata.duration_minutes, 10) || 90;
   const schoolId       = parseInt(metadata.school_id, 10) || 1;
 
-  if (!offerToken || !instructorId || !scheduledDate || !startTime || !endTime) {
+  const isFlexible = metadata.is_flexible === '1';
+  if (!offerToken || !instructorId || (!isFlexible && (!scheduledDate || !startTime || !endTime))) {
     console.error('❌ lesson_offer webhook missing required metadata', metadata);
     return;
   }
@@ -763,6 +764,62 @@ async function handleOfferBooking(session) {
       WHERE id = ${learnerId}
     `;
 
+    // ── Flexible offers: credit the learner, skip booking (they pick their own slot) ──
+    if (isFlexible) {
+      // Leave credit on learner's balance — no deduct, no booking
+      await sql`
+        UPDATE lesson_offers
+        SET status = 'accepted', learner_id = ${learnerId}, accepted_at = NOW()
+        WHERE id = ${offerId}
+      `;
+
+      const [instructor] = await sql`SELECT name, email FROM instructors WHERE id = ${instructorId}`;
+      const [learner] = await sql`SELECT name FROM learner_users WHERE id = ${learnerId}`;
+      const transporter = createTransporter();
+      const firstName = (learner?.name || '').split(' ')[0] || 'there';
+      const durationStr = durationMins >= 60
+        ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
+        : `${durationMins} mins`;
+
+      await transporter.sendMail({
+        from:    'CoachCarter <bookings@coachcarter.uk>',
+        to:      learnerEmail,
+        subject: `Payment received — book your ${durationStr} lesson`,
+        html: `
+          <h1>Payment received!</h1>
+          <p>Hi ${firstName}, your payment of <strong>£${(amountPence / 100).toFixed(2)}</strong> was successful.</p>
+          <p>You now have <strong>${durationStr}</strong> of lesson credit. Book a time that works for you:</p>
+          <p style="margin:24px 0">
+            <a href="https://coachcarter.uk/learner/book.html"
+               style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem">
+              Book a lesson →
+            </a>
+          </p>
+        `
+      });
+
+      if (instructor?.email) {
+        await transporter.sendMail({
+          from:    'CoachCarter <system@coachcarter.uk>',
+          to:      instructor.email,
+          subject: `Flexible offer accepted — ${learner?.name || learnerEmail} has paid`,
+          html: `
+            <h2>Flexible offer accepted!</h2>
+            <p>${learner?.name || learnerEmail} has paid for a ${durationStr} lesson. They'll book a time from the slot feed.</p>
+            <p style="margin-top:16px">
+              <a href="https://coachcarter.uk/instructor/"
+                 style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
+                        border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
+                View my schedule →
+              </a>
+            </p>
+          `
+        });
+      }
+      return;
+    }
+
+    // ── Slot-pinned offers: deduct credit and create booking ──
     const [deducted] = await sql`
       UPDATE learner_users
       SET credit_balance = credit_balance - 1,

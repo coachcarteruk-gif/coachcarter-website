@@ -1485,6 +1485,14 @@ async function openOfferModal(prefillEmail) {
   document.getElementById('offerDate').min = new Date().toISOString().slice(0, 10);
   document.getElementById('offerTime').value = '09:00';
 
+  // Reset flexible toggle
+  const flexCb = document.getElementById('offerFlexible');
+  flexCb.checked = false;
+  document.getElementById('offerSlotFields').style.display = '';
+  flexCb.onchange = () => {
+    document.getElementById('offerSlotFields').style.display = flexCb.checked ? 'none' : '';
+  };
+
   // Fetch lesson types
   try {
     const typesRes = await ccAuth.fetchAuthed('/api/lesson-types?action=list');
@@ -1495,13 +1503,13 @@ async function openOfferModal(prefillEmail) {
       const hrs = lt.duration_minutes / 60;
       const hrsStr = hrs % 1 === 0 ? `${hrs}hr` : `${hrs.toFixed(1)}hrs`;
       const price = (lt.price_pence / 100).toFixed(2);
-      return `<option value="${lt.id}">${lt.name} (${hrsStr}) — £${price}</option>`;
+      return `<option value="${lt.id}" data-price="${lt.price_pence}">${lt.name} (${hrsStr}) — £${price}</option>`;
     }).join('');
   } catch { /* fallback — select will be empty */ }
 
   document.getElementById('offerLessonModal').classList.add('open');
-  // Reset discount to full price
-  document.querySelector('input[name="offerDiscount"][value="0"]').checked = true;
+  // Reset custom price
+  document.getElementById('offerCustomPrice').value = '';
   updateOfferPrice();
 }
 
@@ -1509,23 +1517,33 @@ function updateOfferPrice() {
   const sel = document.getElementById('offerLessonType');
   const opt = sel.options[sel.selectedIndex];
   const noteEl = document.getElementById('offerPriceNote');
-  const discount = parseInt(document.querySelector('input[name="offerDiscount"]:checked')?.value || 0);
+  const customInput = document.getElementById('offerCustomPrice');
 
   if (!opt) { noteEl.textContent = ''; return; }
 
-  // Parse price from the option text (format: "Name (Xhr) — £XX.XX")
-  const priceMatch = opt.textContent.match(/£([\d.]+)/);
-  if (!priceMatch) { noteEl.textContent = ''; return; }
+  const defaultPence = parseInt(opt.dataset.price) || 0;
+  const defaultPrice = (defaultPence / 100).toFixed(2);
 
-  const fullPrice = parseFloat(priceMatch[1]);
-  const finalPrice = (fullPrice * (100 - discount) / 100).toFixed(2);
+  // If custom price is empty, show lesson type default as placeholder
+  if (!customInput.value) {
+    customInput.placeholder = defaultPrice;
+    noteEl.innerHTML = `Learner will pay <strong>£${defaultPrice}</strong> (lesson type default)`;
+    return;
+  }
 
-  if (discount === 100) {
+  const customPrice = parseFloat(customInput.value);
+  if (isNaN(customPrice) || customPrice < 0) {
+    noteEl.innerHTML = '<span style="color:var(--red)">Enter a valid price</span>';
+    return;
+  }
+
+  if (customPrice === 0) {
     noteEl.innerHTML = 'Learner will receive a <strong style="color:var(--green)">free lesson</strong> — no payment required';
-  } else if (discount > 0) {
-    noteEl.innerHTML = `Learner will pay <strong>£${finalPrice}</strong> <span style="text-decoration:line-through;color:#999">£${fullPrice.toFixed(2)}</span>`;
+  } else if (customPrice < parseFloat(defaultPrice)) {
+    const saving = (parseFloat(defaultPrice) - customPrice).toFixed(2);
+    noteEl.innerHTML = `Learner will pay <strong>£${customPrice.toFixed(2)}</strong> <span style="text-decoration:line-through;color:#999">£${defaultPrice}</span> (£${saving} off)`;
   } else {
-    noteEl.innerHTML = `Learner will pay <strong>£${fullPrice.toFixed(2)}</strong>`;
+    noteEl.innerHTML = `Learner will pay <strong>£${customPrice.toFixed(2)}</strong>`;
   }
 }
 
@@ -1535,10 +1553,11 @@ function closeOfferModal() {
 
 async function sendOffer() {
   const email = document.getElementById('offerEmail').value.trim();
+  const flexible = document.getElementById('offerFlexible').checked;
   const date = document.getElementById('offerDate').value;
   const time = document.getElementById('offerTime').value;
   const lessonTypeId = document.getElementById('offerLessonType').value;
-  const discountPct = parseInt(document.querySelector('input[name="offerDiscount"]:checked')?.value || 0);
+  const customPriceStr = document.getElementById('offerCustomPrice').value.trim();
   const errorEl = document.getElementById('offerError');
   const successEl = document.getElementById('offerSuccess');
   const btn = document.getElementById('offerSendBtn');
@@ -1547,34 +1566,49 @@ async function sendOffer() {
   successEl.style.display = 'none';
 
   if (!email) { errorEl.textContent = 'Please enter the learner\'s email address.'; errorEl.style.display = 'block'; return; }
-  if (!date) { errorEl.textContent = 'Please select a date.'; errorEl.style.display = 'block'; return; }
-  if (!time) { errorEl.textContent = 'Please select a start time.'; errorEl.style.display = 'block'; return; }
+  if (!flexible && !date) { errorEl.textContent = 'Please select a date, or tick "Flexible".'; errorEl.style.display = 'block'; return; }
+  if (!flexible && !time) { errorEl.textContent = 'Please select a start time, or tick "Flexible".'; errorEl.style.display = 'block'; return; }
+
+  // Build price: custom input → pence, or omit to use lesson type default
+  let offerPricePence;
+  if (customPriceStr !== '') {
+    const parsed = parseFloat(customPriceStr);
+    if (isNaN(parsed) || parsed < 0) { errorEl.textContent = 'Please enter a valid price.'; errorEl.style.display = 'block'; return; }
+    offerPricePence = Math.round(parsed * 100);
+  }
 
   btn.disabled = true;
   btn.textContent = 'Sending…';
 
   try {
+    const payload = {
+      learner_email: email,
+      lesson_type_id: lessonTypeId ? parseInt(lessonTypeId) : undefined
+    };
+    if (!flexible) {
+      payload.scheduled_date = date;
+      payload.start_time = time;
+    }
+    if (offerPricePence !== undefined) {
+      payload.offer_price_pence = offerPricePence;
+    }
+
     const res = await ccAuth.fetchAuthed('/api/instructor?action=create-offer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        learner_email: email,
-        scheduled_date: date,
-        start_time: time,
-        lesson_type_id: lessonTypeId ? parseInt(lessonTypeId) : undefined,
-        discount_pct: discountPct
-      })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to send offer');
 
-    const discountMsg = discountPct === 100 ? ' (free lesson)' : discountPct > 0 ? ` (${discountPct}% off)` : '';
-    successEl.textContent = `Offer sent to ${email}${discountMsg}! They have 24 hours to accept.`;
+    const priceMsg = offerPricePence === 0 ? ' (free lesson)' : offerPricePence != null ? ` (£${(offerPricePence / 100).toFixed(2)})` : '';
+    const flexMsg = flexible ? ' (flexible time)' : '';
+    successEl.textContent = `Offer sent to ${email}${priceMsg}${flexMsg}! They have 24 hours to accept.`;
     successEl.style.display = 'block';
     btn.textContent = 'Sent ✓';
 
-    // Refresh schedule to show blocked slot
-    renderCurrentView();
+    // Refresh schedule to show blocked slot (if slot-pinned)
+    if (!flexible) renderCurrentView();
 
     // Auto-close after 3 seconds
     setTimeout(() => closeOfferModal(), 3000);
@@ -1649,10 +1683,11 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
     else if (op === 'show-cancelled') { toggleShowCancelled(); toggleToolbarOverflow(); }
   });
 });
-// ── Offer modal radio changes ──
-document.querySelectorAll('input[name="offerDiscount"]').forEach(function (r) {
-  r.addEventListener('change', updateOfferPrice);
-});
+// ── Offer modal price/type changes ──
+(function () {
+  var cp = document.getElementById('offerCustomPrice');
+  if (cp) cp.addEventListener('input', updateOfferPrice);
+})();
 // ── Static wires ──
 (function wire() {
   var bind = function (id, fn, ev) {
