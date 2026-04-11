@@ -1404,6 +1404,22 @@ The learner profile page (`public/learner/profile.html`) has no email-edit field
 
 ---
 
+## 2.79 — Fix Setmore Sync Timezone Duplication & Neon Retry (11 April 2026)
+
+**What changed:**
+
+Three bugs in `api/setmore-sync.js` caused lessons to be duplicated 1 hour ahead after BST started (29 March 2026), and a 3am Neon cold-start error went unrecovered:
+
+1. **Timezone double-conversion (root cause of duplicates):** `toLondon()` treated all Setmore timestamps as UTC and converted to Europe/London. Setmore actually returns times in the account's local timezone (already BST) without a `Z` suffix. During GMT this was invisible (UTC=London), but during BST it added +1 hour. Replaced `toLondon()` with `parseSetmoreTime()` that treats bare timestamps as already-local, only converting via `Intl` when an explicit timezone indicator is present.
+
+2. **Cancellation detection guard (amplified duplicates):** When the Setmore API returned 0 appointments (transient error), `activeSetmoreKeys` was empty, causing **every** existing confirmed setmore booking to be cancelled as "Removed from Setmore". The next successful sync re-imported them all with the +1h timezone shift. Added a guard: cancellation detection is skipped when `activeSetmoreKeys.size === 0`.
+
+3. **Neon transient retry:** The 500 error at 3am was `NeonDbError` with `"neon:retryable": true` — a cold-start control plane blip. Added a single retry for `NeonDbError` to prevent these from failing the entire sync.
+
+**Files changed:** `api/setmore-sync.js`, `docs/setmore-sync.md`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
