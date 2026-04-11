@@ -1,8 +1,10 @@
 (function () {
   'use strict';
 
+  var params = new URLSearchParams(location.search);
+  var isFlexible = params.get('flexible') === '1';
+
   async function loadConfirmation() {
-    var params = new URLSearchParams(location.search);
     var token = params.get('token');
 
     if (!token) {
@@ -15,18 +17,15 @@
       var data = await res.json();
 
       if (data.code === 'ALREADY_ACCEPTED' || (data.ok && data.offer)) {
-        // Offer was accepted — show the details we have
         if (data.ok && data.offer) {
           renderDetails(data.offer);
         } else {
           showSuccess();
         }
       } else {
-        // The offer is accepted (webhook processed) — show generic success
         showSuccess();
       }
     } catch (err) {
-      // Show generic success — the webhook may still be processing
       showSuccess();
     }
   }
@@ -45,9 +44,20 @@
       durStr = mins + ' mins';
     }
 
-    if (offer.is_flexible) {
-      document.getElementById('s-date').textContent = 'Flexible — you choose';
-      document.getElementById('s-time').textContent = 'Book from the slot feed';
+    var flexible = offer.is_flexible || isFlexible;
+
+    if (flexible) {
+      // Flexible offer: credits added, no booking yet — direct to slot feed
+      document.getElementById('s-title').textContent = 'Payment received!';
+      document.getElementById('s-subtitle').textContent =
+        'Your lesson credit has been added to your account. Now pick a time that suits you.';
+      document.getElementById('s-date-row').classList.add('hidden');
+      document.getElementById('s-time-row').classList.add('hidden');
+      document.getElementById('s-info').innerHTML =
+        '<strong>What\u2019s next?</strong> Browse available slots and book your ' +
+        durStr + ' lesson at a time that works for you.';
+      document.getElementById('s-cta').href = '/learner/book.html';
+      document.getElementById('s-cta').textContent = 'Book your lesson \u2192';
     } else {
       var dateObj = new Date(offer.scheduled_date + 'T00:00:00Z');
       var dateStr = dateObj.toLocaleDateString('en-GB', {
@@ -55,8 +65,9 @@
       });
       document.getElementById('s-date').textContent = dateStr;
       document.getElementById('s-time').textContent =
-        offer.start_time.slice(0, 5) + ' – ' + offer.end_time.slice(0, 5);
+        offer.start_time.slice(0, 5) + ' \u2013 ' + offer.end_time.slice(0, 5);
     }
+
     document.getElementById('s-instructor').textContent = offer.instructor_name;
     document.getElementById('s-duration').textContent = durStr;
 
@@ -66,8 +77,21 @@
 
   function showSuccess() {
     document.getElementById('loading').classList.add('hidden');
-    // Can't get details — show a generic message
-    document.getElementById('error-content').classList.remove('hidden');
+
+    if (isFlexible) {
+      // Flexible offer but can't fetch details — show flexible-specific generic message
+      document.getElementById('s-title').textContent = 'Payment received!';
+      document.getElementById('s-subtitle').textContent =
+        'Your lesson credit has been added. Now pick a time that suits you.';
+      document.getElementById('s-details').classList.add('hidden');
+      document.getElementById('s-info').innerHTML =
+        '<strong>What\u2019s next?</strong> Browse available slots and book your lesson at a time that works for you.';
+      document.getElementById('s-cta').href = '/learner/book.html';
+      document.getElementById('s-cta').textContent = 'Book your lesson \u2192';
+      document.getElementById('success-content').classList.remove('hidden');
+    } else {
+      document.getElementById('error-content').classList.remove('hidden');
+    }
   }
 
   loadConfirmation();

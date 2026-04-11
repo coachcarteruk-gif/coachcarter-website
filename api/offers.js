@@ -182,13 +182,82 @@ async function handleAcceptOffer(req, res) {
       return await handleFreeOffer(sql, offer, { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() }, baseUrl, token, res);
     }
 
-    // Flexible + free → mark accepted, redirect to booking page (learner picks slot later)
+    // Flexible + free → create/find learner, add credit, redirect to success
     if (pricePence === 0 && isFlexible) {
+      const { createTransporter } = require('./_auth-helpers');
+      const learnerDetails = { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() };
+
+      // 1. Find or create learner
+      let learnerId;
+      const [existingLearner] = await sql`
+        SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${offer.learner_email})
+      `;
+      if (existingLearner) {
+        learnerId = existingLearner.id;
+        await sql`
+          UPDATE learner_users SET
+            name = COALESCE(NULLIF(name, ''), ${learnerDetails.name || null}),
+            phone = COALESCE(phone, ${learnerDetails.phone || null}),
+            pickup_address = COALESCE(NULLIF(pickup_address, ''), ${learnerDetails.pickup_address || null})
+          WHERE id = ${learnerId}
+        `;
+      } else {
+        try {
+          const [newLearner] = await sql`
+            INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance, school_id)
+            VALUES (${learnerDetails.name}, ${offer.learner_email.toLowerCase()}, ${learnerDetails.phone || null},
+                    ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
+            RETURNING id
+          `;
+          learnerId = newLearner.id;
+        } catch (insertErr) {
+          if (insertErr.message?.includes('learner_users_phone_key') || insertErr.message?.includes('unique')) {
+            const [newLearner] = await sql`
+              INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
+              VALUES (${learnerDetails.name}, ${offer.learner_email.toLowerCase()}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
+              RETURNING id
+            `;
+            learnerId = newLearner.id;
+          } else {
+            throw insertErr;
+          }
+        }
+      }
+
+      // 2. Add credit to learner balance
       await sql`
-        UPDATE lesson_offers SET status = 'accepted', accepted_at = NOW()
+        UPDATE learner_users
+        SET credit_balance = credit_balance + 1,
+            balance_minutes = balance_minutes + ${durationMins}
+        WHERE id = ${learnerId}
+      `;
+
+      // 3. Mark offer accepted
+      await sql`
+        UPDATE lesson_offers SET status = 'accepted', learner_id = ${learnerId}, accepted_at = NOW()
         WHERE id = ${offer.id}
       `;
-      return res.json({ ok: true, url: `${baseUrl}/learner/book.html`, flexible_accepted: true });
+
+      // 4. Send confirmation email
+      try {
+        const transporter = createTransporter();
+        const firstName = (learnerDetails.name || '').split(' ')[0] || 'there';
+        await transporter.sendMail({
+          from: 'CoachCarter <bookings@coachcarter.uk>',
+          to: offer.learner_email,
+          subject: `Free lesson credit added — book your ${durationStr} lesson`,
+          html: `
+            <h1>Free lesson credit added!</h1>
+            <p>Hi ${firstName}, your free ${durationStr} lesson credit from ${offer.instructor_name} is ready.</p>
+            <p><strong>Next step:</strong> Log in and pick a time that works for you.</p>
+            <p><a href="${baseUrl}/learner/book.html" style="display:inline-block;padding:12px 24px;background:#f58321;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;">Book your lesson</a></p>
+          `
+        });
+      } catch (emailErr) {
+        console.error('Free flexible offer email failed:', emailErr);
+      }
+
+      return res.json({ ok: true, url: `${baseUrl}/offer-success.html?token=${token}&flexible=1&free=1`, flexible_accepted: true });
     }
 
     // Build Stripe Checkout label

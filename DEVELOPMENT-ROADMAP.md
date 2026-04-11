@@ -1321,6 +1321,22 @@ Key features:
 
 ---
 
+## 2.76 — Flexible Offers End-to-End (11 April 2026)
+
+**What changed:**
+
+Flexible lesson offers (where the instructor doesn't pin a date/time) now work end-to-end across all three acceptance paths:
+
+- **Paid flexible**: Stripe checkout → `offer-success.html?flexible=1` now shows "Payment received!" with a "Book your lesson →" button linking to the slot feed, instead of the misleading "Lesson confirmed!" message. Date/time rows are hidden since the learner hasn't picked a slot yet.
+- **Free flexible**: Previously just marked the offer as accepted and redirected to `/learner/book.html` without creating a learner account or adding credits. Now properly creates/finds the learner, adds 1 credit + balance_minutes, sends a confirmation email, and redirects to the success page.
+- **Free slot-pinned**: Unchanged (already worked — creates booking directly).
+
+The `offer-success.js` page now reads the `?flexible=1` URL param and adapts its title, subtitle, detail card, info box, and CTA accordingly. If the offer details can't be fetched (webhook still processing), it falls back to a generic flexible success message.
+
+**Files changed:** `api/offers.js`, `public/offer-success.html`, `public/offer-success.js`, `PROJECT.md`
+
+---
+
 ## 2.76 — Post-Audit Tenant Isolation Hardening (10 April 2026)
 
 **What changed:**

@@ -112,15 +112,15 @@
 
   <div id="success-content" class="page hidden">
     <div class="success-icon">✅</div>
-    <h1>Lesson confirmed!</h1>
-    <p class="subtitle">Your payment was successful and your lesson is booked.</p>
+    <h1 id="s-title">Lesson confirmed!</h1>
+    <p class="subtitle" id="s-subtitle">Your payment was successful and your lesson is booked.</p>
 
-    <div class="details-card">
-      <div class="details-row">
+    <div class="details-card" id="s-details">
+      <div class="details-row" id="s-date-row">
         <span class="details-label">Date</span>
         <span class="details-value" id="s-date"></span>
       </div>
-      <div class="details-row">
+      <div class="details-row" id="s-time-row">
         <span class="details-label">Time</span>
         <span class="details-value" id="s-time"></span>
       </div>
@@ -134,12 +134,12 @@
       </div>
     </div>
 
-    <div class="info-box">
+    <div class="info-box" id="s-info">
       <strong>What's next?</strong>
       Log in to your CoachCarter account to manage your bookings, view upcoming lessons, and track your progress.
     </div>
 
-    <a href="/learner/" class="btn-primary">Log in to my account →</a>
+    <a href="/learner/" class="btn-primary" id="s-cta">Log in to my account →</a>
   </div>
 
   <div id="error-content" class="page hidden">

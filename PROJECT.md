@@ -409,7 +409,7 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `get-offer` | GET | None (token) | Returns offer details for public accept page |
-| `accept-offer` | POST | None (token) | Collects learner details, creates Stripe checkout |
+| `accept-offer` | POST | None (token) | Collects learner details. Paid offers → Stripe checkout. Free slot-pinned → creates booking directly. Free flexible → creates/finds learner, adds credit, redirects to success page. |
 | `expire-offers` | POST | CRON_SECRET | Bulk-expires stale pending offers (hourly cron) |
 
 ### API — `api/instructor.js` (offer actions)
