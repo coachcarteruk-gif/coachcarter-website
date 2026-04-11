@@ -343,9 +343,9 @@ async function handleAcceptOffer(req, res) {
 
     return res.json({ ok: true, url: session.url });
   } catch (err) {
-    console.error('accept-offer error:', err);
+    console.error('accept-offer error:', err.message, err.stack);
     reportError('/api/offers', err);
-    return res.status(500).json({ error: 'Failed to create checkout', details: 'Internal server error' });
+    return res.status(500).json({ error: 'Failed to create checkout', details: err.message || 'Internal server error' });
   }
 }
 
