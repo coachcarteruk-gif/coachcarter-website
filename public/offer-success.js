@@ -285,32 +285,39 @@
     if (prev) prev.classList.remove('selected');
     cardEl.classList.add('selected');
 
-    // Show confirm strip
+    // Remove any existing inline confirm strip
+    var existing = document.querySelector('.sp-confirm-inline');
+    if (existing) existing.remove();
+
+    // Build confirm strip
     var d = new Date(slot.date + 'T00:00:00');
     var dayLabel = DAY_SHORT[d.getDay()] + ' ' + d.getDate() + ' ' + MON_SHORT[d.getMonth()];
     var timeStr = slot.start_time.slice(0, 5) + ' \u2013 ' + slot.end_time.slice(0, 5);
 
-    var confirmEl = document.getElementById('sp-confirm');
-    confirmEl.innerHTML =
+    var strip = document.createElement('div');
+    strip.className = 'sp-confirm sp-confirm-inline';
+    strip.innerHTML =
       '<div class="sp-confirm-text">Book <strong>' + esc(dayLabel) + '</strong> at <strong>' + esc(timeStr) + '</strong>?</div>' +
       '<div class="sp-confirm-actions">' +
         '<button class="sp-confirm-cancel" id="sp-cancel">Pick a different time</button>' +
         '<button class="btn-primary" id="sp-book" style="padding:10px 24px;font-size:0.9rem;">Confirm booking</button>' +
       '</div>';
-    confirmEl.classList.remove('hidden');
+
+    // Insert directly after the selected card
+    cardEl.parentNode.insertBefore(strip, cardEl.nextSibling);
 
     document.getElementById('sp-cancel').addEventListener('click', cancelSelection);
     document.getElementById('sp-book').addEventListener('click', confirmBooking);
 
-    // Scroll into view
-    confirmEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    strip.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function cancelSelection() {
     selectedSlot = null;
     var prev = document.querySelector('.feed-card.selected');
     if (prev) prev.classList.remove('selected');
-    document.getElementById('sp-confirm').classList.add('hidden');
+    var strip = document.querySelector('.sp-confirm-inline');
+    if (strip) strip.remove();
     document.getElementById('sp-error').classList.add('hidden');
   }
 
