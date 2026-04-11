@@ -1643,12 +1643,35 @@ async function sendOffer() {
     successEl.innerHTML = `
       <div>${statusLine}</div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <input type="text" value="${shareUrl.replace(/"/g, '&quot;')}" readonly
+        <input type="text" id="offerShareUrl" readonly
           style="flex:1;min-width:0;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.78rem;background:var(--white);color:var(--primary)">
-        <button onclick="navigator.clipboard.writeText('${shareUrl.replace(/'/g, "\\'")}').then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy link'},2000)})"
+        <button id="offerCopyBtn"
           style="padding:6px 14px;border:1.5px solid var(--accent);background:var(--accent-lt);color:var(--accent);border-radius:6px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap">Copy link</button>
       </div>
     `;
+    // Set URL value via DOM (avoids escaping issues in template literals)
+    document.getElementById('offerShareUrl').value = shareUrl;
+    document.getElementById('offerCopyBtn').addEventListener('click', function () {
+      var copyBtn = this;
+      var urlInput = document.getElementById('offerShareUrl');
+      // Try modern clipboard API, fall back to select+copy
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareUrl).then(function () {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(function () { copyBtn.textContent = 'Copy link'; }, 2000);
+        }).catch(function () {
+          urlInput.select();
+          document.execCommand('copy');
+          copyBtn.textContent = 'Copied!';
+          setTimeout(function () { copyBtn.textContent = 'Copy link'; }, 2000);
+        });
+      } else {
+        urlInput.select();
+        document.execCommand('copy');
+        copyBtn.textContent = 'Copied!';
+        setTimeout(function () { copyBtn.textContent = 'Copy link'; }, 2000);
+      }
+    });
     successEl.style.display = 'block';
     btn.textContent = sendEmail ? 'Sent ✓' : 'Created ✓';
 
