@@ -127,6 +127,25 @@ When suggesting a fresh session, walk Fraser through this so nothing tangles:
 
 **Never** start a new session with uncommitted changes from the old one — they'll follow you and get mixed into the next commit.
 
+**Suggested opening prompt for the new session** (adapt the bracketed bits):
+
+```
+/coach /[template-name] [one-line task description]
+
+Context from last session: just shipped [what] (commit [hash]).
+Now starting fresh for [new task].
+Confirm clean main, then show the plan before any code.
+```
+
+Example:
+```
+/coach /schema-migration add offer_price_pence to lesson_offers
+
+Context from last session: just shipped coaching playbook (commit d3f7e16).
+Now starting fresh for flexible offers schema work.
+Confirm clean main, then show the plan before any code.
+```
+
 ---
 
 ## Debrief checklist
