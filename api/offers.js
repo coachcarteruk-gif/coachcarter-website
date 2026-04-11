@@ -28,6 +28,71 @@ module.exports = async (req, res) => {
   return res.status(400).json({ error: 'Unknown action' });
 };
 
+// ── Shared: find or create a learner by email/phone ─────────────────────────
+// Handles phone format mismatches and unique constraint races gracefully.
+async function findOrCreateLearner(sql, email, details, schoolId) {
+  // Normalize phone: strip spaces/dashes, convert 07→+447
+  let cleanPhone = (details.phone || '').replace(/[\s\-()]/g, '');
+  if (cleanPhone.startsWith('07') && cleanPhone.length === 11) cleanPhone = '+44' + cleanPhone.slice(1);
+  else if (cleanPhone.startsWith('7') && cleanPhone.length === 10) cleanPhone = '+44' + cleanPhone;
+  else if (cleanPhone.startsWith('44') && cleanPhone.length >= 12 && !cleanPhone.startsWith('+')) cleanPhone = '+' + cleanPhone;
+  if (!cleanPhone) cleanPhone = null;
+
+  // 1. Try email match
+  let [existing] = await sql`
+    SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${email})
+  `;
+
+  // 2. Try phone match (both raw and normalized)
+  if (!existing && cleanPhone) {
+    [existing] = await sql`
+      SELECT id FROM learner_users WHERE phone = ${cleanPhone} OR phone = ${details.phone}
+    `;
+  }
+
+  // 3. Found → update missing fields, return
+  if (existing) {
+    await sql`
+      UPDATE learner_users SET
+        name = COALESCE(NULLIF(name, ''), ${details.name || null}),
+        phone = COALESCE(phone, ${cleanPhone}),
+        email = COALESCE(email, ${email}),
+        pickup_address = COALESCE(NULLIF(pickup_address, ''), ${details.pickup_address || null})
+      WHERE id = ${existing.id}
+    `;
+    return existing.id;
+  }
+
+  // 4. Insert new learner
+  try {
+    const [row] = await sql`
+      INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance, school_id)
+      VALUES (${details.name}, ${email}, ${cleanPhone}, ${details.pickup_address || null}, 0, 0, ${schoolId})
+      RETURNING id
+    `;
+    return row.id;
+  } catch (err) {
+    if (!err.message?.includes('unique') && !err.message?.includes('duplicate')) throw err;
+
+    // Race condition or format mismatch — find whichever account conflicted
+    const [byEmail] = await sql`SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${email})`;
+    if (byEmail) return byEmail.id;
+
+    if (cleanPhone) {
+      const [byPhone] = await sql`SELECT id FROM learner_users WHERE phone = ${cleanPhone} OR phone = ${details.phone}`;
+      if (byPhone) return byPhone.id;
+    }
+
+    // Phone conflict but different email — insert without phone
+    const [row] = await sql`
+      INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
+      VALUES (${details.name}, ${email}, ${details.pickup_address || null}, 0, 0, ${schoolId})
+      RETURNING id
+    `;
+    return row.id;
+  }
+}
+
 // ── GET /api/offers?action=get-offer&token=TOKEN ──────────────────────────────
 // Public — returns offer details for the accept page.
 async function handleGetOffer(req, res) {
@@ -197,57 +262,7 @@ async function handleAcceptOffer(req, res) {
       const { createTransporter } = require('./_auth-helpers');
       const learnerDetails = { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() };
 
-      // 1. Find or create learner (by email first, then by phone)
-      let learnerId;
-      let [existingLearner] = await sql`
-        SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${resolvedEmail})
-      `;
-      if (!existingLearner && learnerDetails.phone) {
-        const [byPhone] = await sql`
-          SELECT id FROM learner_users WHERE phone = ${learnerDetails.phone}
-        `;
-        existingLearner = byPhone || null;
-      }
-      if (existingLearner) {
-        learnerId = existingLearner.id;
-        await sql`
-          UPDATE learner_users SET
-            name = COALESCE(NULLIF(name, ''), ${learnerDetails.name || null}),
-            phone = COALESCE(phone, ${learnerDetails.phone || null}),
-            pickup_address = COALESCE(NULLIF(pickup_address, ''), ${learnerDetails.pickup_address || null})
-          WHERE id = ${learnerId}
-        `;
-      } else {
-        try {
-          const [newLearner] = await sql`
-            INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance, school_id)
-            VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.phone || null},
-                    ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
-            RETURNING id
-          `;
-          learnerId = newLearner.id;
-        } catch (insertErr) {
-          if (insertErr.message?.includes('unique') || insertErr.message?.includes('duplicate')) {
-            // Phone or email conflict — find the existing learner
-            const [found] = await sql`
-              SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${resolvedEmail})
-            `;
-            if (found) {
-              learnerId = found.id;
-            } else {
-              // Try without phone
-              const [newLearner] = await sql`
-                INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
-                VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
-                RETURNING id
-              `;
-              learnerId = newLearner.id;
-            }
-          } else {
-            throw insertErr;
-          }
-        }
-      }
+      const learnerId = await findOrCreateLearner(sql, resolvedEmail, learnerDetails, schoolId);
 
       // 2. Add credit to learner balance
       await sql`
@@ -359,56 +374,7 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
   const schoolId = instrRow?.school_id || 1;
 
-  // 1. Find or create learner (by email first, then by phone)
-  let learnerId;
-  let [existingLearner] = await sql`
-    SELECT id, name, phone, pickup_address FROM learner_users WHERE LOWER(email) = LOWER(${resolvedEmail})
-  `;
-  if (!existingLearner && learnerDetails.phone) {
-    const [byPhone] = await sql`
-      SELECT id, name, phone, pickup_address FROM learner_users WHERE phone = ${learnerDetails.phone}
-    `;
-    existingLearner = byPhone || null;
-  }
-
-  if (existingLearner) {
-    learnerId = existingLearner.id;
-    await sql`
-      UPDATE learner_users SET
-        name = COALESCE(NULLIF(name, ''), ${learnerDetails.name || null}),
-        phone = COALESCE(phone, ${learnerDetails.phone || null}),
-        pickup_address = COALESCE(NULLIF(pickup_address, ''), ${learnerDetails.pickup_address || null})
-      WHERE id = ${learnerId}
-    `;
-  } else {
-    try {
-      const [newLearner] = await sql`
-        INSERT INTO learner_users (name, email, phone, pickup_address, balance_minutes, credit_balance, school_id)
-        VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.phone || null},
-                ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
-        RETURNING id
-      `;
-      learnerId = newLearner.id;
-    } catch (insertErr) {
-      if (insertErr.message?.includes('unique') || insertErr.message?.includes('duplicate')) {
-        const [found] = await sql`
-          SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${resolvedEmail})
-        `;
-        if (found) {
-          learnerId = found.id;
-        } else {
-          const [newLearner] = await sql`
-            INSERT INTO learner_users (name, email, pickup_address, balance_minutes, credit_balance, school_id)
-            VALUES (${learnerDetails.name}, ${resolvedEmail}, ${learnerDetails.pickup_address || null}, 0, 0, ${schoolId})
-            RETURNING id
-          `;
-          learnerId = newLearner.id;
-        }
-      } else {
-        throw insertErr;
-      }
-    }
-  }
+  const learnerId = await findOrCreateLearner(sql, resolvedEmail, learnerDetails, schoolId);
 
   // 2. Create booking directly (free — no credit transaction)
   let booking;
