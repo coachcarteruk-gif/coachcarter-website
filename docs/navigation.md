@@ -34,7 +34,7 @@ Top header bar with hamburger to open sidebar. Fixed bottom bar with 5 tabs that
 **Dashboard | Calendar | Learners | Earnings | Profile**
 
 - Dashboard (`/instructor/dashboard.html`) — compact no-scroll view of today's lessons + "Book Lesson" action
-- Calendar (`/instructor/`) — full calendar with monthly/weekly/agenda views. Agenda is the default view on load. Do NOT re-add daily view or hour-slot grids
+- Calendar (`/instructor/`) — full calendar with monthly/weekly/agenda views. Agenda is the default view on load. Do NOT re-add daily view, hour-slot grids, "Weekdays" filter, or "Cancelled" filter
 - Q&A is accessible from the sidebar only (not in bottom tabs)
 
 ## Instructor — sidebar items

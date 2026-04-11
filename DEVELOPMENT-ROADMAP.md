@@ -767,6 +767,14 @@ Alternative billing model: instead of taking a percentage commission per lesson,
 
 ---
 
+### 2.54 — Instructor Calendar Tidy ✅ Complete (11 April 2026)
+
+Removed "Weekdays" and "Cancelled" filter buttons from the instructor calendar toolbar (both inline and overflow menu). Weekends are always shown (was the default), cancelled lessons are always hidden (was the default). No behaviour change — just fewer buttons.
+
+- **Modified**: `public/instructor/index.html`, `public/instructor/index.js`
+
+---
+
 ### 3.1 — Push Notifications
 
 PWA push notifications for lesson reminders, quiz nudges, and new message alerts.

@@ -75,7 +75,7 @@
       color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap;
     }
     .btn-today:hover { border-color: var(--muted); color: var(--primary); }
-    .cal-filter-btn.active { border-color: var(--primary); color: var(--primary); background: var(--surface); }
+
     .daily-booking-card.cancelled { opacity: 0.5; border-left: 3px solid var(--red); }
     .week-event.cancelled { background: var(--red-lt) !important; border-left-color: var(--red) !important; opacity: 0.6; }
     .month-booking-pill.cancelled { background: var(--red-lt); color: var(--red); opacity: 0.7; }
@@ -619,15 +619,11 @@
     <button class="btn-add-lesson" id="btn-open-add-lesson">+ Add Lesson</button>
     <span class="toolbar-secondary">
       <button class="btn-today" id="btn-open-offer" title="Send a lesson offer">Offer</button>
-      <button class="btn-today cal-filter-btn" id="btnHideWeekends" title="Hide weekends">Weekdays</button>
-      <button class="btn-today cal-filter-btn" id="btnShowCancelled" title="Show cancelled">Cancelled</button>
     </span>
     <div class="toolbar-overflow-wrap">
       <button class="btn-today toolbar-overflow-btn" id="btn-toolbar-overflow" title="More options">&#x22EF;</button>
       <div class="toolbar-overflow-menu" id="toolbarOverflow">
         <button class="toolbar-overflow-item" data-toolbar-of="offer">Offer Lesson</button>
-        <button class="toolbar-overflow-item" id="btnHideWeekendsOF" data-toolbar-of="hide-weekends">Weekdays only</button>
-        <button class="toolbar-overflow-item" id="btnShowCancelledOF" data-toolbar-of="show-cancelled">Show cancelled</button>
       </div>
     </div>
   </div>

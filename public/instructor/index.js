@@ -17,8 +17,6 @@ let bookingCache = {}; // dateStr -> [booking, ...]
 let availCache   = []; // availability windows [{day_of_week, start_time, end_time}]
 let calendarStartHour = 7; // from instructor profile
 let instructorSlug = null; // from profile, used for shareable booking links
-let hideWeekends = false;
-let showCancelled = false;
 let loadedRanges = []; // [{from, to}] already fetched
 let selectedBooking = null;
 
@@ -55,22 +53,6 @@ function setView(view) {
   document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
   document.getElementById('btnWeekly').classList.toggle('active',  view === 'weekly');
   document.getElementById('btnAgenda').classList.toggle('active',  view === 'agenda');
-  renderCurrentView();
-}
-
-function toggleHideWeekends() {
-  hideWeekends = !hideWeekends;
-  document.getElementById('btnHideWeekends').classList.toggle('active', hideWeekends);
-  const ofBtn = document.getElementById('btnHideWeekendsOF');
-  if (ofBtn) ofBtn.textContent = hideWeekends ? 'Show weekends' : 'Weekdays only';
-  renderCurrentView();
-}
-
-function toggleShowCancelled() {
-  showCancelled = !showCancelled;
-  document.getElementById('btnShowCancelled').classList.toggle('active', showCancelled);
-  const ofBtn = document.getElementById('btnShowCancelledOF');
-  if (ofBtn) ofBtn.textContent = showCancelled ? 'Hide cancelled' : 'Show cancelled';
   renderCurrentView();
 }
 
@@ -240,8 +222,8 @@ function renderMonthly() {
   const cells = [];
   for (let i = 0; i < 42; i++) cells.push(addDays(gridStart, i));
 
-  const dowLabels = hideWeekends ? ['Mon','Tue','Wed','Thu','Fri'] : ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const filteredCells = hideWeekends ? cells.filter(d => d.getDay() !== 0 && d.getDay() !== 6) : cells;
+  const dowLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const filteredCells = cells;
 
   let html = `<div class="month-grid" style="--month-cols:${dowLabels.length}">`;
   // Day-of-week headers
@@ -254,7 +236,7 @@ function renderMonthly() {
   for (const day of filteredCells) {
     const ds        = dateStr(day);
     const allBookings = bookingCache[ds] || [];
-    const bookings  = allBookings.filter(b => showCancelled || b.status !== 'cancelled');
+    const bookings  = allBookings.filter(b => b.status !== 'cancelled');
     const inMonth   = day.getMonth() === cursor.getMonth();
     const isToday   = ds === dateStr(today);
     const hasBook   = bookings.length > 0;
@@ -292,14 +274,14 @@ function renderWeekly() {
   const today     = new Date(); today.setHours(0,0,0,0);
   const weekStart = getWeekStart(cursor);
   const allDays   = Array.from({length:7}, (_,i) => addDays(weekStart, i));
-  const days      = hideWeekends ? allDays.filter(d => d.getDay() !== 0 && d.getDay() !== 6) : allDays;
+  const days      = allDays;
 
   let html = '<div class="tp-week">';
 
   for (const day of days) {
     const ds        = dateStr(day);
     const allBk     = bookingCache[ds] || [];
-    const bookings  = allBk.filter(b => showCancelled || (b.status !== 'cancelled' && b.status !== 'rescheduled'));
+    const bookings  = allBk.filter(b => b.status !== 'cancelled' && b.status !== 'rescheduled');
     const isToday   = ds === dateStr(today);
 
     html += `<div class="tp-day${isToday ? ' is-today' : ''}">`;
@@ -347,7 +329,7 @@ function renderDaily() {
   const today    = new Date(); today.setHours(0,0,0,0);
   const ds       = dateStr(cursor);
   const allBookings = bookingCache[ds] || [];
-  const bookings = allBookings.filter(b => showCancelled || b.status !== 'cancelled');
+  const bookings = allBookings.filter(b => b.status !== 'cancelled');
   const isToday  = ds === dateStr(today);
 
   // Get availability windows for this day of week
@@ -429,7 +411,7 @@ function renderAgenda() {
     const ds = dateStr(d);
     const dayBookings = bookingCache[ds] || [];
     for (const b of dayBookings) {
-      if (!showCancelled && (b.status === 'cancelled' || b.status === 'rescheduled')) continue;
+      if (b.status === 'cancelled' || b.status === 'rescheduled') continue;
       allBookings.push(b);
     }
     d = addDays(d, 1);
@@ -1745,8 +1727,6 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
   btn.addEventListener('click', function () {
     var op = btn.dataset.toolbarOf;
     if (op === 'offer') { openOfferModal(); toggleToolbarOverflow(); }
-    else if (op === 'hide-weekends') { toggleHideWeekends(); toggleToolbarOverflow(); }
-    else if (op === 'show-cancelled') { toggleShowCancelled(); toggleToolbarOverflow(); }
   });
 });
 // ── Offer modal price/type changes ──
@@ -1768,8 +1748,6 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
   });
   bind('btn-open-add-lesson', openAddLessonModal);
   bind('btn-open-offer', function () { openOfferModal(); });
-  bind('btnHideWeekends', toggleHideWeekends);
-  bind('btnShowCancelled', toggleShowCancelled);
   bind('btn-toolbar-overflow', toggleToolbarOverflow);
   var availModal = document.getElementById('availModal');
   if (availModal) availModal.addEventListener('click', handleModalOverlayClick);

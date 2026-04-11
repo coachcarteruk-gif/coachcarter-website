@@ -105,6 +105,7 @@ Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel wi
 - Videos in Learn section navigation (page still exists at `/learner/videos.html`, just not in nav — April 2026)
 - Hour-slot time grid on instructor daily calendar (replaced with compact lesson list — April 2026)
 - Daily view tab on instructor calendar (removed April 2026 — agenda absorbs its function)
+- "Weekdays" and "Cancelled" filter buttons on instructor calendar (removed April 2026 — weekends always shown, cancelled always hidden)
 
 ## React Native migration principles
 
