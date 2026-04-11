@@ -11,9 +11,11 @@
 //     → cron-triggered: bulk-expire stale pending offers
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const jwt    = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
-const { safeEqual, verifyCronAuth } = require('./_auth');
+const { safeEqual, verifyCronAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, buildSessionCookie } = require('./_auth');
+const { buildCsrfCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 
 function setCors(res) {
 }
@@ -264,6 +266,18 @@ async function handleAcceptOffer(req, res) {
 
       const learnerId = await findOrCreateLearner(sql, resolvedEmail, learnerDetails, schoolId);
 
+      // Auto-login: set learner session cookie so they can use credits on the booking page
+      const secret = process.env.JWT_SECRET;
+      if (secret) {
+        const jwtToken = jwt.sign(
+          { id: learnerId, email: resolvedEmail, role: 'learner', school_id: schoolId },
+          secret,
+          { expiresIn: '30d' }
+        );
+        appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
+        appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+      }
+
       // 2. Add credit to learner balance
       await sql`
         UPDATE learner_users
@@ -375,6 +389,18 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   const schoolId = instrRow?.school_id || 1;
 
   const learnerId = await findOrCreateLearner(sql, resolvedEmail, learnerDetails, schoolId);
+
+  // Auto-login: set learner session cookie
+  const secret = process.env.JWT_SECRET;
+  if (secret) {
+    const jwtToken = jwt.sign(
+      { id: learnerId, email: resolvedEmail, role: 'learner', school_id: schoolId },
+      secret,
+      { expiresIn: '30d' }
+    );
+    appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
+    appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+  }
 
   // 2. Create booking directly (free — no credit transaction)
   let booking;
