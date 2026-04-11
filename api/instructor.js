@@ -2680,6 +2680,7 @@ async function handleCreateOffer(req, res) {
       offer_id: offer.id,
       expires_at: offer.expires_at,
       learner_exists: !!existingLearner,
+      learner_name: existingLearner?.name || null,
       accept_url: acceptUrl
     });
   } catch (err) {

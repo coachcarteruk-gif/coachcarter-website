@@ -28,6 +28,7 @@ let pendingCancel = null;
 let preselectedTypeSlug = null;
 let preselectedInstructorSlug = null;
 let preselectedTypeId = null;
+let prefilledName = null; // from ?name= URL param (shareable booking link)
 let pendingReschedule = null; // { bookingId, date, start, end, instructorName, instructorId }
 let lastBookingId = null;
 let learnerProfile = { phone: '', pickup_address: '' };
@@ -44,6 +45,7 @@ function init() {
   const params = new URLSearchParams(window.location.search);
   preselectedTypeSlug = params.get('type'); // ?type=standard or ?type=2hr
   preselectedTypeId = params.get('type_id'); // ?type_id=3 (from reschedule)
+  prefilledName = params.get('name'); // ?name=Joe (shareable booking link from instructor)
   const rescheduleBookingId = params.get('reschedule'); // ?reschedule=BOOKING_ID
   if (params.get('paid') === '1') {
     const paidMsg = auth
@@ -662,8 +664,8 @@ function openBookModal(el) {
     document.getElementById('repeatSection').style.display = 'none';
     document.getElementById('modalCreditPath').style.display = 'none';
     document.getElementById('modalPayPath').style.display = 'block';
-    // Clear previous guest field values
-    document.getElementById('mdGuestName').value = '';
+    // Clear previous guest field values (pre-fill name if from shareable link)
+    document.getElementById('mdGuestName').value = prefilledName || '';
     document.getElementById('mdGuestEmail').value = '';
     document.getElementById('mdGuestPhone').value = '';
     document.getElementById('mdGuestPickup').value = '';

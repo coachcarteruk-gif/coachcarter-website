@@ -16,6 +16,7 @@ cursor.setHours(0,0,0,0);
 let bookingCache = {}; // dateStr -> [booking, ...]
 let availCache   = []; // availability windows [{day_of_week, start_time, end_time}]
 let calendarStartHour = 7; // from instructor profile
+let instructorSlug = null; // from profile, used for shareable booking links
 let hideWeekends = false;
 let showCancelled = false;
 let loadedRanges = []; // [{from, to}] already fetched
@@ -43,6 +44,7 @@ async function loadCalendarPrefs() {
     const data = await res.json();
     if (res.ok && data.instructor) {
       calendarStartHour = data.instructor.calendar_start_hour || 7;
+      instructorSlug = data.instructor.slug || null;
     }
   } catch {}
 }
@@ -1603,15 +1605,32 @@ async function sendOffer() {
 
     const priceMsg = offerPricePence === 0 ? ' (free lesson)' : offerPricePence != null ? ` (£${(offerPricePence / 100).toFixed(2)})` : '';
     const flexMsg = flexible ? ' (flexible time)' : '';
-    successEl.textContent = `Offer sent to ${email}${priceMsg}${flexMsg}! They have 24 hours to accept.`;
+
+    // Build shareable booking link
+    const bookingParams = new URLSearchParams();
+    if (lessonTypeId) bookingParams.set('type_id', lessonTypeId);
+    if (data.learner_name) bookingParams.set('name', data.learner_name);
+    const qs = bookingParams.toString();
+    const bookingPath = instructorSlug
+      ? `/book/${encodeURIComponent(instructorSlug)}`
+      : `/learner/book.html?instructor=${instructor.id}`;
+    const bookingUrl = window.location.origin + bookingPath + (qs ? (bookingPath.includes('?') ? '&' : '?') + qs : '');
+
+    const safeEmail = email.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    successEl.innerHTML = `
+      <div>Offer sent to ${safeEmail}${priceMsg}${flexMsg}! They have 24 hours to accept.</div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <input type="text" value="${bookingUrl.replace(/"/g, '&quot;')}" readonly
+          style="flex:1;min-width:0;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.78rem;background:var(--white);color:var(--primary)">
+        <button onclick="navigator.clipboard.writeText('${bookingUrl.replace(/'/g, "\\'")}').then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy link'},2000)})"
+          style="padding:6px 14px;border:1.5px solid var(--accent);background:var(--accent-lt);color:var(--accent);border-radius:6px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap">Copy link</button>
+      </div>
+    `;
     successEl.style.display = 'block';
     btn.textContent = 'Sent ✓';
 
     // Refresh schedule to show blocked slot (if slot-pinned)
     if (!flexible) renderCurrentView();
-
-    // Auto-close after 3 seconds
-    setTimeout(() => closeOfferModal(), 3000);
   } catch (err) {
     errorEl.textContent = err.message;
     errorEl.style.display = 'block';
