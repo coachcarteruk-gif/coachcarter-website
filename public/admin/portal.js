@@ -802,7 +802,10 @@ function renderLearners() {
   }).join('');
 }
 
+let _detailLearnerId = null;
+
 async function showLearnerDetail(id) {
+  _detailLearnerId = id;
   const panel = document.getElementById('learner-detail-panel');
   const content = document.getElementById('learner-detail-content');
   const nameEl = document.getElementById('learner-detail-name');
@@ -912,6 +915,52 @@ async function deleteLearner(id) {
 
 function closeLearnerDetail() {
   document.getElementById('learner-detail-panel').style.display = 'none';
+}
+
+// ── Edit learner details ──
+
+function openEditLearner() {
+  if (!_detailLearnerId) return;
+  const learner = allLearners.find(l => l.id === _detailLearnerId);
+  if (!learner) return;
+  document.getElementById('learner-edit-id').value = learner.id;
+  document.getElementById('learner-edit-name').value = learner.name || '';
+  document.getElementById('learner-edit-email').value = learner.email || '';
+  document.getElementById('learner-edit-phone').value = learner.phone || '';
+  document.getElementById('learner-edit-pickup').value = learner.pickup_address || '';
+  document.getElementById('modal-edit-learner').classList.add('open');
+}
+
+async function saveEditLearner() {
+  const id = parseInt(document.getElementById('learner-edit-id').value);
+  if (!id) return;
+  const body = {
+    id,
+    name: document.getElementById('learner-edit-name').value.trim(),
+    email: document.getElementById('learner-edit-email').value.trim(),
+    phone: document.getElementById('learner-edit-phone').value.trim(),
+    pickup_address: document.getElementById('learner-edit-pickup').value.trim()
+  };
+  if (!body.name && !body.email) return alert('Name or email is required');
+  try {
+    const res = await fetchAdmin('/api/admin?action=update-learner', {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    closeModal('modal-edit-learner');
+    // Update local cache and refresh views
+    const idx = allLearners.findIndex(l => l.id === id);
+    if (idx !== -1) {
+      Object.assign(allLearners[idx], data.learner);
+    }
+    showLearnerDetail(id);
+    renderLearners();
+  } catch (err) {
+    alert('Failed to save: ' + err.message);
+  }
 }
 
 // ── Credit adjustment ──
@@ -1788,6 +1837,8 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-open-add-video', openAddVideo);
   bind('btn-refresh-learners', loadLearners);
   bind('btn-close-learner-detail', closeLearnerDetail);
+  bind('btn-edit-learner', openEditLearner);
+  bind('btn-save-learner', saveEditLearner);
   bind('btn-open-add-lesson-type', openAddLessonType);
   bind('btn-process-payouts', processPayoutsNow);
   bind('btn-close-lt-modal', closeLTModal);

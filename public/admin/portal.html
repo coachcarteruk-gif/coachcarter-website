@@ -595,7 +595,10 @@ body {
       <div class="panel-card">
         <div class="panel-card-header">
           <span class="panel-card-title" id="learner-detail-name">Learner Details</span>
-          <button class="btn" id="btn-close-learner-detail">Close</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" id="btn-edit-learner">Edit</button>
+            <button class="btn" id="btn-close-learner-detail">Close</button>
+          </div>
         </div>
         <div style="padding: 20px;" id="learner-detail-content">
           Loading...
@@ -871,6 +874,34 @@ body {
     <div class="modal-actions">
       <button class="btn" data-action="close-modal" data-modal="modal-instructor">Cancel</button>
       <button class="btn btn-primary" id="btn-save-instructor">Save Instructor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Learner Modal -->
+<div class="modal-overlay" id="modal-edit-learner">
+  <div class="modal">
+    <div class="modal-title">Edit Learner</div>
+    <input type="hidden" id="learner-edit-id">
+    <div class="form-group">
+      <label>Full Name</label>
+      <input type="text" id="learner-edit-name" placeholder="e.g. Jane Smith">
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="learner-edit-email" placeholder="jane@example.com">
+    </div>
+    <div class="form-group">
+      <label>Phone</label>
+      <input type="tel" id="learner-edit-phone" placeholder="07700 900000">
+    </div>
+    <div class="form-group">
+      <label>Pickup Address</label>
+      <input type="text" id="learner-edit-pickup" placeholder="e.g. 12 High Street, AB1 2CD">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-action="close-modal" data-modal="modal-edit-learner">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-learner">Save</button>
     </div>
   </div>
 </div>
