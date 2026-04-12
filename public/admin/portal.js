@@ -1764,8 +1764,8 @@ document.addEventListener('input', function (e) {
   if (!t) return;
   if (t.dataset.action === 'render-learners') renderLearners();
 });
-// ── Sidebar nav (class='sidebar-link' data-section) ──
-document.querySelectorAll('.sidebar-link[data-section]').forEach(function (a) {
+// ── Sidebar nav ──
+document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   a.addEventListener('click', function (e) { e.preventDefault(); showSection(a.dataset.section); });
 });
 // ── Static id-based buttons ──
