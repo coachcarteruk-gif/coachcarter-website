@@ -953,6 +953,18 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 **Files changed:** `api/credits.js`, `public/learner/index.html`
 
+### 2.64 — Admin Edit Learner Details ✅ Complete (12 April 2026)
+
+**What:** Admins can now edit a learner's name, email, phone, and pickup address from the admin portal. Follows the `update-instructor` pattern with full audit logging (before/after values).
+
+**Key details:**
+- Email and phone uniqueness enforced per school
+- Audit log captures before/after values for every field
+- Existing learner JWT sessions unaffected (auth is ID-based, not email-based)
+- No rate limiting needed (no emails/SMS sent)
+
+**Files changed:** `api/admin.js`
+
 ---
 
 ## Phase 4: Future Considerations (Not Yet Scoped)

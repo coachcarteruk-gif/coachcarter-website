@@ -37,6 +37,9 @@
 //   GET  /api/admin?action=learner-detail
 //     → booking history, credit transactions, progress for one learner (admin JWT required)
 //
+//   POST /api/admin?action=update-learner
+//     → update learner name/email/phone/pickup_address (admin JWT required)
+//
 //   POST /api/admin?action=adjust-credits
 //     → add or remove lesson credits for a learner (admin JWT required)
 
@@ -87,6 +90,7 @@ module.exports = async (req, res) => {
   if (action === 'toggle-instructor') return handleToggleInstructor(req, res);
   if (action === 'all-learners')      return handleAllLearners(req, res);
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
+  if (action === 'update-learner')    return handleUpdateLearner(req, res);
   if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
   if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
@@ -903,6 +907,80 @@ async function handleLearnerDetail(req, res) {
     console.error('admin learner-detail error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load learner details', details: 'Internal server error' });
+  }
+}
+
+// ── POST /api/admin?action=update-learner ─────────────────────────────────────
+// Body: { id, name?, email?, phone?, pickup_address? }
+// Updates editable learner fields. Audit-logs before/after values.
+async function handleUpdateLearner(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const { id, name, email, phone, pickup_address } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'Learner ID is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Fetch current values for audit before/after
+    const [existing] = await sql`
+      SELECT id, name, email, phone, pickup_address
+      FROM learner_users WHERE id = ${id} AND school_id = ${schoolId}
+    `;
+    if (!existing) return res.status(404).json({ error: 'Learner not found' });
+
+    // Build update values — keep current if not provided
+    const newName    = name !== undefined ? name.trim() : existing.name;
+    const newEmail   = email !== undefined ? email.trim().toLowerCase() : existing.email;
+    const newPhone   = phone !== undefined ? phone.trim() || null : existing.phone;
+    const newPickup  = pickup_address !== undefined ? pickup_address.trim() || null : existing.pickup_address;
+
+    // Check email uniqueness within school (if changed)
+    if (newEmail !== existing.email) {
+      const conflict = await sql`
+        SELECT id FROM learner_users WHERE email = ${newEmail} AND id != ${id} AND school_id = ${schoolId}
+      `;
+      if (conflict.length > 0) return res.status(409).json({ error: 'That email is already used by another learner' });
+    }
+
+    // Check phone uniqueness within school (if changed)
+    if (newPhone && newPhone !== existing.phone) {
+      const phoneConflict = await sql`
+        SELECT id FROM learner_users WHERE phone = ${newPhone} AND id != ${id} AND school_id = ${schoolId}
+      `;
+      if (phoneConflict.length > 0) return res.status(409).json({ error: 'That phone number is already used by another learner' });
+    }
+
+    const rows = await sql`
+      UPDATE learner_users
+      SET name           = ${newName},
+          email          = ${newEmail},
+          phone          = ${newPhone},
+          pickup_address = ${newPickup}
+      WHERE id = ${id} AND school_id = ${schoolId}
+      RETURNING id, name, email, phone, pickup_address
+    `;
+
+    const after = rows[0];
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: 'update-learner', targetType: 'learner', targetId: id,
+      details: {
+        before: { name: existing.name, email: existing.email, phone: existing.phone, pickup_address: existing.pickup_address },
+        after:  { name: after.name, email: after.email, phone: after.phone, pickup_address: after.pickup_address }
+      },
+      schoolId, req
+    });
+
+    return res.json({ ok: true, learner: after });
+  } catch (err) {
+    console.error('admin update-learner error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to update learner', details: 'Internal server error' });
   }
 }
 

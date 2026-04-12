@@ -660,6 +660,7 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 | `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type (same as instructor version but admin-scoped). Audit-logged |
 | `instructor-blackouts` | GET | JWT | Get future blackout dates for an instructor (`?instructor_id=X`) |
 | `set-instructor-blackouts` | POST | JWT | Replace all future blackout dates for an instructor. Body: `{ instructor_id, ranges }` |
+| `update-learner` | POST | JWT | Edit learner name/email/phone/pickup_address. Audit-logged with before/after values |
 
 **`admin_users`** table: email, bcrypt password_hash, role (`admin` / `superadmin`).
 
