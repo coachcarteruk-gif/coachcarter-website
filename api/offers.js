@@ -272,7 +272,7 @@ async function handleAcceptOffer(req, res) {
         const jwtToken = jwt.sign(
           { id: learnerId, email: resolvedEmail, role: 'learner', school_id: schoolId },
           secret,
-          { expiresIn: '30d' }
+          { expiresIn: '180d' }
         );
         appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
         appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
@@ -401,7 +401,7 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
     const jwtToken = jwt.sign(
       { id: learnerId, email: resolvedEmail, role: 'learner', school_id: schoolId },
       secret,
-      { expiresIn: '30d' }
+      { expiresIn: '180d' }
     );
     appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
     appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));

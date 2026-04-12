@@ -39,8 +39,8 @@ const SESSION_COOKIE_NAMES = {
 };
 
 const SESSION_MAX_AGE_SEC = {
-  learner:    60 * 60 * 24 * 30, // 30 days
-  instructor: 60 * 60 * 24 * 7,  //  7 days
+  learner:    60 * 60 * 24 * 180, // 180 days
+  instructor: 60 * 60 * 24 * 180, // 180 days
   admin:      60 * 60 * 24 * 7,  //  7 days
 };
 

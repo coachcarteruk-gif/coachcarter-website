@@ -34,7 +34,7 @@ const crypto = require('crypto');
 
 const CSRF_COOKIE   = 'cc_csrf';
 const CSRF_HEADER   = 'x-csrf-token';
-const CSRF_MAX_AGE  = 60 * 60 * 24 * 30; // 30 days, matches longest session
+const CSRF_MAX_AGE  = 60 * 60 * 24 * 180; // 180 days, matches longest session
 
 /**
  * Parse a `Cookie:` request header into a plain object. Returns {}

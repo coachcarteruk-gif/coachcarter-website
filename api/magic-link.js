@@ -271,7 +271,7 @@ async function handleVerify(req, res) {
 
     // Issue JWT
     const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
-    const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '30d' });
+    const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '180d' });
 
     // Set httpOnly session cookie + CSRF double-submit cookie.
     appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
@@ -374,7 +374,7 @@ async function handleVerifyCode(req, res) {
 
     // Issue JWT
     const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
-    const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '30d' });
+    const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '180d' });
 
     // Set httpOnly session cookie + CSRF double-submit cookie. See handleVerify.
     appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));

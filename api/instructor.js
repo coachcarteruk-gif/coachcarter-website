@@ -66,7 +66,7 @@ function sendWhatsApp(to, message) {
 }
 
 const TOKEN_EXPIRY_MINUTES = 30;
-const JWT_EXPIRY           = '7d';
+const JWT_EXPIRY           = '180d';
 
 function setCors(res) {
 }
