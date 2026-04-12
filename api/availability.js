@@ -9,6 +9,7 @@ const { Resend } = require('resend');
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { requireAuth, getSchoolId } = require('./_auth');
+const { sanitizeEmail } = require('./_auth-helpers');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -78,6 +79,8 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Availability is required' });
     }
     if (email.length > 254) return res.status(400).json({ error: 'Email too long' });
+    const cleanEmail = sanitizeEmail(email);
+    if (!cleanEmail) return res.status(400).json({ error: 'Please enter a valid email address.' });
     if (notes && typeof notes === 'string' && notes.length > 2000) {
       return res.status(400).json({ error: 'Notes too long' });
     }
@@ -120,7 +123,7 @@ module.exports = async (req, res) => {
         status,
         school_id
       ) VALUES (
-        ${email},
+        ${cleanEmail},
         ${booking_reference || null},
         ${preferredDays},
         ${availableDays},
@@ -141,7 +144,7 @@ module.exports = async (req, res) => {
           html: `
             <h2>Availability Submitted</h2>
             <p><strong>Reference:</strong> ${esc(booking_reference || 'N/A')}</p>
-            <p><strong>Email:</strong> ${esc(email)}</p>
+            <p><strong>Email:</strong> ${esc(cleanEmail)}</p>
             <p><strong>Slots selected:</strong> ${availableSlots + preferredSlots} total (${preferredSlots} preferred)</p>
             <p><strong>Frequency:</strong> ${esc(frequency_preference || 'N/A')}</p>
             <p><strong>Notes:</strong> ${esc(notes || 'None')}</p>
@@ -152,7 +155,7 @@ module.exports = async (req, res) => {
         // Send customer confirmation
         await resend.emails.send({
           from: 'CoachCarter <bookings@coachcarter.uk>',
-          to: email,
+          to: cleanEmail,
           subject: "Availability received — We'll propose slots within 24 hours",
           html: `
             <h1>Got it.</h1>

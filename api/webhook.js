@@ -1,9 +1,9 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const nodemailer = require('nodemailer');
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const twilio = require('twilio');
 const { reportError } = require('./_error-alert');
+const { createTransporter } = require('./_auth-helpers');
 
 // ── WhatsApp helper ──────────────────────────────────────────────────────────
 function sendWhatsApp(to, message) {
@@ -954,18 +954,6 @@ async function handleOfferBooking(session) {
   } catch (err) {
     console.error('❌ handleOfferBooking error:', err);
   }
-}
-
-function createTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT),
-    secure: process.env.SMTP_PORT === '465',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
 }
 
 // ── Increment guarantee price after a purchase ──────────────────────────────

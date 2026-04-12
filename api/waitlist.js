@@ -14,10 +14,10 @@
 //   checkWaitlistOnCancel(slot) — called from slots.js after cancellation
 
 const { neon }   = require('@neondatabase/serverless');
-const nodemailer = require('nodemailer');
 const jwt        = require('jsonwebtoken');
 const twilio     = require('twilio');
 const { reportError } = require('./_error-alert');
+const { createTransporter } = require('./_auth-helpers');
 const { requireAuth, getSchoolId } = require('./_auth');
 
 // ── Helpers (duplicated from slots.js per project convention) ────────────────
@@ -38,15 +38,6 @@ function sendWhatsApp(to, message) {
     to:   `whatsapp:${phone}`,
     body: message
   }).catch(err => { console.warn('WhatsApp failed:', err.message); });
-}
-
-function createTransporter() {
-  return nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT),
-    secure: process.env.SMTP_PORT === '465',
-    auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
 }
 
 function formatDateDisplay(str) {

@@ -25,12 +25,12 @@
 //   - 48-hour cancellation policy for hours return
 
 const { neon }    = require('@neondatabase/serverless');
-const nodemailer  = require('nodemailer');
 const jwt         = require('jsonwebtoken');
 const crypto      = require('crypto');
 const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const twilio      = require('twilio');
 const { reportError } = require('./_error-alert');
+const { createTransporter } = require('./_auth-helpers');
 const { checkWaitlistOnCancel } = require('./waitlist');
 const { checkAdjacentTravelTime, extractPostcode, bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES } = require('./_travel-time');
 
@@ -78,14 +78,6 @@ function formatHours(minutes) {
   return hrs % 1 === 0 ? `${hrs} hour${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hours`;
 }
 
-function createTransporter() {
-  return nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT),
-    secure: process.env.SMTP_PORT === '465',
-    auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
-}
 
 // verifyAuth delegates to centralised _auth.js.
 // All handlers in slots.js (handleBook, handleCheckoutSlot, handleCancel,

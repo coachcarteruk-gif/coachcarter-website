@@ -408,13 +408,8 @@ async function handleQAAsk(req, res) {
     try {
       const instructors = await sql`SELECT name, email FROM instructors WHERE active = TRUE AND school_id = ${schoolId}`;
       if (instructors.length > 0) {
-        const nodemailer = require('nodemailer');
-        const mailer = nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: parseInt(process.env.SMTP_PORT),
-          secure: process.env.SMTP_PORT === '465',
-          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-        });
+        const { createTransporter: createMailer } = require('./_auth-helpers');
+        const mailer = createMailer();
 
         const [learner] = await sql`SELECT name FROM learner_users WHERE id = ${user.id}`;
         const learnerName = learner?.name || 'A learner';

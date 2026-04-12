@@ -8,9 +8,9 @@
 //   POST /api/enquiries?action=update-status       → update enquiry status
 
 const { Resend }     = require('resend');
-const nodemailer     = require('nodemailer');
 const { neon }       = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
+const { createTransporter } = require('./_auth-helpers');
 const { requireAuth, getSchoolId } = require('./_auth');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
 
@@ -39,12 +39,7 @@ function safePhone(raw) {
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-const transporter = nodemailer.createTransport({
-  host:   process.env.SMTP_HOST || 'smtp.ionos.co.uk',
-  port:   parseInt(process.env.SMTP_PORT) || 587,
-  secure: false,
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-});
+const transporter = createTransporter();
 
 module.exports = async (req, res) => {
   const action = req.query.action;

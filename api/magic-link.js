@@ -2,7 +2,7 @@ const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const twilio = require('twilio');
-const { createTransporter, generateToken } = require('./_auth-helpers');
+const { createTransporter, generateToken, sanitizeEmail } = require('./_auth-helpers');
 const { SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
@@ -53,8 +53,12 @@ async function handleSendLink(req, res) {
 
     const sql = neon(process.env.POSTGRES_URL);
 
-    const cleanEmail = email ? email.toLowerCase().trim() : null;
+    const cleanEmail = email ? sanitizeEmail(email) : null;
     const cleanPhone = phone ? phone.replace(/\s+/g, '').trim() : null;
+
+    if (method !== 'sms' && !cleanEmail) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
 
     // Rate limiting: max 5 magic link sends per email/phone per hour
     const rateLimitKey = method === 'sms' ? `magic_sms:${cleanPhone}` : `magic_email:${cleanEmail}`;
