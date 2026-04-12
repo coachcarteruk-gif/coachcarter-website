@@ -353,6 +353,7 @@ Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancell
 |---|---|---|---|
 | `balance` | GET | Yes | Returns `balance_minutes`, `balance_hours`, `credit_balance` + recent transactions |
 | `checkout` | POST | Yes | Creates Stripe checkout for hours purchase. Body: `{ hours }` (or legacy `{ quantity }` for lesson count). Discount tiers: 6h=5%, 12h=10%, 18h=15%, 24h=20%, 30h=25% |
+| `verify` | GET | Yes | Post-checkout safety net. Params: `session_id` (Stripe checkout session ID). Checks Stripe payment status and grants credits idempotently if webhook missed them. Returns `{ ok, already_processed }` or `{ ok, granted, hours, minutes }` |
 
 ### API — `api/slots.js`
 

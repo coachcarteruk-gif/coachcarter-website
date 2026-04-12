@@ -24,6 +24,16 @@
   <style>
     main { max-width: 640px; margin: 0 auto; padding: 24px 16px 100px; margin-top: 64px; }
 
+    /* CREDIT VERIFICATION TOAST */
+    .credit-toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: var(--green, #22c55e); color: #fff; padding: 14px 24px; border-radius: 12px;
+      font-weight: 600; font-size: 0.95rem; z-index: 1000; opacity: 0;
+      transition: opacity 0.3s, transform 0.3s; pointer-events: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,.15); text-align: center; max-width: 90vw;
+    }
+    .credit-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+
     /* GREETING */
     .greeting { font-size: 1.3rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); letter-spacing: -0.02em; margin-bottom: 16px; }
 
@@ -241,7 +251,40 @@
   </div>
 </main>
 
+<div class="credit-toast" id="credit-toast"></div>
+
 <script src="/learner/index.js"></script>
+
+<script>
+// Post-checkout credit verification fallback
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var hoursAdded = params.get('hours_added');
+  var sessionId = params.get('session_id');
+  if (!hoursAdded || !sessionId) return;
+
+  // Clean URL immediately
+  var clean = window.location.pathname;
+  window.history.replaceState({}, '', clean);
+
+  // Wait for auth to be ready, then verify
+  window.addEventListener('DOMContentLoaded', function () {
+    if (!window.ccAuth || !ccAuth.getAuth()) return;
+
+    ccAuth.fetchAuthed('/api/credits?action=verify&session_id=' + encodeURIComponent(sessionId))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          var toast = document.getElementById('credit-toast');
+          toast.textContent = hoursAdded + ' hours added to your account!';
+          toast.classList.add('show');
+          setTimeout(function () { toast.classList.remove('show'); }, 5000);
+        }
+      })
+      .catch(function () { /* silent — webhook likely handled it */ });
+  });
+})();
+</script>
 
 <script src="/shared/branding.js"></script>
 </body>

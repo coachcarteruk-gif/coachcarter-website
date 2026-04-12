@@ -941,6 +941,20 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 ---
 
+### 2.63 — Post-Checkout Credit Verification Fallback ✅ Complete (11 April 2026)
+
+**What:** Safety net for when Stripe webhooks fail silently. After checkout redirect, the frontend calls `GET /api/credits?action=verify&session_id=X`. The endpoint retrieves the Stripe session, confirms payment succeeded, and grants credits idempotently (using `stripe_session_id` uniqueness). The learner dashboard now shows a success toast on return from checkout.
+
+**Key details:**
+- Idempotent via `stripe_session_id` — safe to call even if webhook already processed
+- Double-checks: payment_status, payment_type metadata, learner_id match, school_id match
+- Success URL now includes `{CHECKOUT_SESSION_ID}` Stripe template variable
+- Frontend cleans URL params immediately, fires verify call in background
+
+**Files changed:** `api/credits.js`, `public/learner/index.html`
+
+---
+
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
 - ~~**T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.~~ ✅ Done (2.54)
