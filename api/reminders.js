@@ -194,6 +194,18 @@ async function handleSendDue(req, res) {
     return res.json({ ok: true, sent: sentCount });
 
   } catch (err) {
+    // Retry once on transient Neon errors (cold start at 3am, control plane blips)
+    if (err.name === 'NeonDbError' && !req._remindersSendRetried) {
+      req._remindersSendRetried = true;
+      console.warn('[reminders] Neon transient error, retrying once…', err.message);
+      await new Promise(r => setTimeout(r, 1000));
+      try {
+        return await handleSendDue(req, res);
+      } catch (retryErr) {
+        reportError('/api/reminders?action=send-due', retryErr);
+        return res.status(500).json({ error: 'Failed to send reminders after retry' });
+      }
+    }
     console.error('reminders send-due error:', err);
     reportError('/api/reminders?action=send-due', err);
     return res.status(500).json({ error: 'Failed to send reminders' });

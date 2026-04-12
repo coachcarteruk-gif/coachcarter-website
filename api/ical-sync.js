@@ -252,6 +252,18 @@ module.exports = async (req, res) => {
     return res.json({ ok: true, instructor_id: instructor.id, events_synced: rows.length });
 
   } catch (err) {
+    // Retry once on transient Neon errors (cold start at 3am, control plane blips)
+    if (err.name === 'NeonDbError' && !req._icalSyncRetried) {
+      req._icalSyncRetried = true;
+      console.warn('[ical-sync] Neon transient error, retrying once…', err.message);
+      await new Promise(r => setTimeout(r, 1000));
+      try {
+        return await module.exports(req, res);
+      } catch (retryErr) {
+        reportError('/api/ical-sync', retryErr);
+        return res.status(500).json({ error: 'Sync failed after retry' });
+      }
+    }
     console.error('ical-sync error:', err);
     reportError('/api/ical-sync', err);
     return res.status(500).json({ error: 'Sync failed' });

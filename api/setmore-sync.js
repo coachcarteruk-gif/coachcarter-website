@@ -362,6 +362,7 @@ module.exports = async (req, res) => {
     if (err.name === 'NeonDbError' && !req._setmoreSyncRetried) {
       req._setmoreSyncRetried = true;
       console.warn('[setmore-sync] Neon transient error, retrying once…', err.message);
+      await new Promise(r => setTimeout(r, 1000));
       try {
         return await module.exports(req, res);
       } catch (retryErr) {
