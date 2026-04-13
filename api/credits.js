@@ -5,16 +5,13 @@ const { requireAuth } = require('./_auth');
 
 const PRICE_PER_STANDARD_LESSON_PENCE = 8250; // £82.50 per 1.5 hrs
 const STANDARD_LESSON_MINUTES = 90;
-const MAX_HOURS_PER_PURCHASE = 30;
+const MAX_HOURS_PER_PURCHASE = 36;
 
 // Bulk discount tiers — buy more hours, save more
-// Mapped from old lesson-based tiers: 4 lessons = 6hrs, 8 = 12hrs, etc.
 const DISCOUNT_TIERS = [
-  { minHours: 30, discountPct: 25 },
-  { minHours: 24, discountPct: 20 },
-  { minHours: 18, discountPct: 15 },
-  { minHours: 12, discountPct: 10 },
-  { minHours:  6, discountPct:  5 },
+  { minHours: 36, discountPct: 15 },
+  { minHours: 24, discountPct: 10 },
+  { minHours: 12, discountPct:  5 },
 ];
 
 function getDiscount(hours) {

@@ -5,11 +5,9 @@
 
   var PACKAGES = [
     { hrs: 1.5, pct: 0 },
-    { hrs: 6, pct: 5 },
-    { hrs: 12, pct: 10 },
-    { hrs: 18, pct: 15 },
-    { hrs: 24, pct: 20 },
-    { hrs: 30, pct: 25 }
+    { hrs: 12, pct: 5 },
+    { hrs: 24, pct: 10 },
+    { hrs: 36, pct: 15 }
   ];
 
   function calcTotal(hours) {
