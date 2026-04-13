@@ -1286,3 +1286,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_offer_slot
 -- Allow link-only offers (no email required) and store learner name on offer
 ALTER TABLE lesson_offers ADD COLUMN IF NOT EXISTS learner_name TEXT;
 ALTER TABLE lesson_offers ALTER COLUMN learner_email DROP NOT NULL;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- REFERRAL SYSTEM (April 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- Referral codes — one per learner, unique per school
+CREATE TABLE IF NOT EXISTS referrals (
+  id          SERIAL PRIMARY KEY,
+  learner_id  INTEGER NOT NULL REFERENCES learner_users(id) ON DELETE CASCADE,
+  school_id   INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  code        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(code, school_id)
+);
+CREATE INDEX IF NOT EXISTS idx_referrals_learner_id ON referrals(learner_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_school_id ON referrals(school_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code);
+
+-- Permanent referrer link on learner_users
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES learner_users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_learner_users_referred_by ON learner_users(referred_by);
+
+-- Carry referral code through magic link signup flow
+ALTER TABLE magic_link_tokens ADD COLUMN IF NOT EXISTS referral_code TEXT;

@@ -4,6 +4,7 @@
   const urlParams = new URLSearchParams(window.location.search);
   const token     = urlParams.get('token'); // magic-link token from URL
   const redirectTo = urlParams.get('redirect') || '/learner/';
+  const referralCode = urlParams.get('ref') || '';
 
   // Redirect if already logged in (and not verifying a new token)
   const existing = JSON.parse(localStorage.getItem('cc_learner') || 'null');
@@ -50,10 +51,14 @@
     document.getElementById('error-msg').classList.remove('show');
   }
 
+  // ── Referral validation state ──────────────────────────────────
+  let skipReferral = false;  // user chose to continue without referral
+
   // ── Send magic link ────────────────────────────────────────────
   async function handleSendLink(e) {
     e.preventDefault();
     clearError();
+    hideReferralError();
 
     const email = document.getElementById('input-email').value.trim();
     const phone = document.getElementById('input-phone').value.trim();
@@ -69,12 +74,35 @@
 
     const btn = document.getElementById('send-btn');
     btn.disabled = true;
+    btn.textContent = 'Checking…';
+
+    // Include referral code from URL param or manual input
+    const refCode = referralCode || (document.getElementById('input-referral')?.value.trim() || '');
+    const effectiveRef = skipReferral ? '' : refCode;
+
+    // Validate referral code before sending magic link (unless skipped)
+    if (effectiveRef) {
+      try {
+        const valRes = await fetch('/api/learner?action=validate-referral&code=' + encodeURIComponent(effectiveRef) + '&school_id=1');
+        const valData = await valRes.json();
+        if (!valData.valid) {
+          btn.disabled = false;
+          btn.textContent = currentMethod === 'sms' ? 'Send code' : 'Send login link';
+          showReferralError(effectiveRef);
+          return;
+        }
+      } catch {
+        // Validation endpoint failed — proceed anyway (don't block signup)
+      }
+    }
+
     btn.textContent = 'Sending…';
 
     const payload = {
       method: currentMethod,
       email: currentMethod === 'email' ? email : undefined,
-      phone: currentMethod === 'sms' ? phone : undefined
+      phone: currentMethod === 'sms' ? phone : undefined,
+      referral_code: effectiveRef || undefined
     };
     lastPayload = payload;
 
@@ -397,6 +425,51 @@
     if (e.key === 'Enter') { e.preventDefault(); handleSetName(); }
   });
 
+// ── Referral validation error UI ──────────────────────────────────
+function showReferralError(badCode) {
+  var el = document.getElementById('referral-error');
+  if (!el) return;
+  el.querySelector('.ref-error-code').textContent = badCode;
+  el.style.display = 'block';
+  // Focus the referral input so they can fix the typo
+  var input = document.getElementById('input-referral');
+  var group = document.getElementById('referral-group');
+  if (group) group.style.display = 'block';
+  if (input) { input.value = badCode; input.focus(); input.select(); }
+}
+function hideReferralError() {
+  var el = document.getElementById('referral-error');
+  if (el) el.style.display = 'none';
+}
+function handleSkipReferral() {
+  skipReferral = true;
+  hideReferralError();
+  // Hide the referral input and banner since they're skipping
+  var group = document.getElementById('referral-group');
+  var banner = document.getElementById('referral-banner');
+  if (group) group.style.display = 'none';
+  if (banner) banner.style.display = 'none';
+  // Re-submit the form
+  var form = document.getElementById('send-link-form');
+  if (form) form.requestSubmit();
+}
+
+// ── Referral code UI ──────────────────────────────────────────────
+(function setupReferral() {
+  var banner = document.getElementById('referral-banner');
+  var group = document.getElementById('referral-group');
+  var input = document.getElementById('input-referral');
+  if (referralCode) {
+    // URL has ?ref=CODE — show banner, auto-fill the hidden input
+    if (banner) banner.style.display = 'block';
+    if (input) input.value = referralCode;
+    // Keep the input hidden — code already captured from URL
+  } else {
+    // No URL param — show optional manual input field
+    if (group) group.style.display = 'block';
+  }
+})();
+
 (function wire() {
   document.querySelectorAll('[data-method]').forEach(function (btn) {
     btn.addEventListener('click', function () { switchMethod(btn.dataset.method); });
@@ -410,5 +483,6 @@
   bind('btn-set-name', handleSetName);
   bind('accept-terms-btn', handleAcceptTerms);
   bind('btn-request-new-link', function () { showScreen('form'); });
+  bind('btn-skip-referral', handleSkipReferral);
 })();
 })();

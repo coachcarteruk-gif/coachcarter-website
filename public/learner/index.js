@@ -16,6 +16,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   await Promise.all([loadBookings(), loadUnlogged(), loadReadiness()]);
   render();
   loadProfileCompleteness();
+  loadReferralCard();
 });
 
 function removeSkeleton() {
@@ -208,8 +209,46 @@ function renderUnlogged() {
   banner.classList.add('show');
 }
 
+// ── Referral Card ──
+let referralShareUrl = '';
+async function loadReferralCard() {
+  if (!AUTH) return;
+  try {
+    const [codeRes, statsRes] = await Promise.all([
+      ccAuth.fetchAuthed('/api/learner?action=referral-code'),
+      ccAuth.fetchAuthed('/api/learner?action=referral-stats')
+    ]);
+    if (!codeRes.ok || !statsRes.ok) return;
+    const codeData = await codeRes.json();
+    const statsData = await statsRes.json();
+
+    if (!codeData.enabled) return;
+
+    document.getElementById('referral-code-display').textContent = codeData.code;
+    referralShareUrl = codeData.share_url;
+    document.getElementById('ref-count').textContent = statsData.total_referred;
+    var hrs = (statsData.total_reward_minutes / 60);
+    document.getElementById('ref-earned').textContent = hrs >= 1 ? hrs.toFixed(1) + ' hrs' : statsData.total_reward_minutes + ' min';
+    document.getElementById('referral-card').classList.add('show');
+  } catch (e) { console.warn('Referral card load failed:', e); }
+}
+
+function copyReferralLink() {
+  if (!referralShareUrl) return;
+  var btn = document.getElementById('ref-copy-btn');
+  navigator.clipboard.writeText(referralShareUrl).then(function () {
+    btn.textContent = 'Copied!';
+    setTimeout(function () { btn.textContent = 'Copy link'; }, 2000);
+  }).catch(function () {
+    btn.textContent = 'Failed';
+    setTimeout(function () { btn.textContent = 'Copy link'; }, 2000);
+  });
+}
+
 (function wire() {
   var btn = document.getElementById('btn-dismiss-profile');
   if (btn) btn.addEventListener('click', dismissProfile);
+  var copyBtn = document.getElementById('ref-copy-btn');
+  if (copyBtn) copyBtn.addEventListener('click', copyReferralLink);
 })();
 })();

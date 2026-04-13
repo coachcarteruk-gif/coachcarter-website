@@ -84,9 +84,26 @@
         <label>Phone number</label>
         <input type="tel" id="input-phone" placeholder="07700 900000" autocomplete="tel">
       </div>
+      <div class="form-group" id="referral-group" style="display:none;">
+        <label>Referral code <span style="color:#888;font-weight:400">(optional)</span></label>
+        <input type="text" id="input-referral" placeholder="e.g. FRASER-A1B2" autocomplete="off" style="text-transform:uppercase;">
+      </div>
       <button type="submit" class="btn-primary" id="send-btn">Send login link</button>
     </form>
 
+    <div class="referral-error" id="referral-error" style="display:none;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:14px 16px;margin-bottom:12px;text-align:center;">
+      <p style="font-size:0.88rem;color:#991b1b;margin:0 0 6px;line-height:1.4;">
+        We couldn't find the referral code "<strong class="ref-error-code"></strong>". Check for typos and try again.
+      </p>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;">
+        <button type="button" class="btn-primary" style="padding:8px 18px;font-size:0.82rem;background:#f58321;" onclick="document.getElementById('input-referral').focus()">Fix code</button>
+        <button type="button" id="btn-skip-referral" style="padding:8px 18px;font-size:0.82rem;background:none;border:1px solid #ccc;border-radius:8px;color:#666;cursor:pointer;font-family:var(--font-head,inherit);font-weight:600;">Continue without bonus</button>
+      </div>
+    </div>
+
+    <div class="referral-banner" id="referral-banner" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;margin-bottom:12px;font-size:0.85rem;color:#166534;text-align:center;">
+      You were referred! Sign up to get <strong>free lesson time</strong>.
+    </div>
     <p class="hint" id="method-hint">We'll send a one-time link that expires in 15 minutes.<br>Click it to sign in — no password to remember.</p>
   </div>
 

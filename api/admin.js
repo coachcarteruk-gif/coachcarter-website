@@ -102,6 +102,9 @@ module.exports = async (req, res) => {
   if (action === 'invite-learner')           return handleInviteLearner(req, res);
   if (action === 'instructor-blackouts')     return handleInstructorBlackouts(req, res);
   if (action === 'set-instructor-blackouts') return handleSetInstructorBlackouts(req, res);
+  if (action === 'referral-activity')        return handleReferralActivity(req, res);
+  if (action === 'referral-config')          return handleReferralConfig(req, res);
+  if (action === 'update-referral-config')   return handleUpdateReferralConfig(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -1536,5 +1539,112 @@ async function handleSetInstructorBlackouts(req, res) {
     console.error('set-instructor-blackouts error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to save blackout dates' });
+  }
+}
+
+// ── GET /api/admin?action=referral-activity ──────────────────────────────────
+async function handleReferralActivity(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const referrals = await sql`
+      SELECT r.code, r.created_at AS code_created,
+             lu_referrer.id AS referrer_id, lu_referrer.name AS referrer_name, lu_referrer.email AS referrer_email,
+             (SELECT COUNT(*)::int FROM learner_users WHERE referred_by = r.learner_id AND school_id = ${schoolId}) AS total_referred,
+             (SELECT COALESCE(SUM(minutes), 0)::int FROM credit_transactions WHERE learner_id = r.learner_id AND type = 'referral_reward' AND school_id = ${schoolId}) AS total_rewards_minutes
+      FROM referrals r
+      JOIN learner_users lu_referrer ON r.learner_id = lu_referrer.id
+      WHERE r.school_id = ${schoolId}
+      ORDER BY total_referred DESC
+    `;
+
+    return res.json({ ok: true, referrals });
+  } catch (err) {
+    console.error('referral-activity error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to load referral activity' });
+  }
+}
+
+// ── GET /api/admin?action=referral-config ────────────────────────────────────
+async function handleReferralConfig(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [school] = await sql`SELECT config FROM schools WHERE id = ${schoolId}`;
+    const config = school?.config || {};
+
+    return res.json({
+      ok: true,
+      referral_enabled: config.referral_enabled || false,
+      referral_welcome_bonus_minutes: config.referral_welcome_bonus_minutes ?? 90,
+      referral_reward_minutes: config.referral_reward_minutes ?? 30
+    });
+  } catch (err) {
+    console.error('referral-config error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to load referral config' });
+  }
+}
+
+// ── POST /api/admin?action=update-referral-config ────────────────────────────
+async function handleUpdateReferralConfig(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const { referral_enabled, referral_welcome_bonus_minutes, referral_reward_minutes } = req.body;
+
+    // Read current config, merge referral keys
+    const [school] = await sql`SELECT config FROM schools WHERE id = ${schoolId}`;
+    const config = school?.config || {};
+
+    if (referral_enabled !== undefined) config.referral_enabled = !!referral_enabled;
+    if (referral_welcome_bonus_minutes !== undefined) {
+      const mins = parseInt(referral_welcome_bonus_minutes, 10);
+      if (isNaN(mins) || mins < 0) return res.status(400).json({ error: 'Welcome bonus must be 0 or more minutes' });
+      config.referral_welcome_bonus_minutes = mins;
+    }
+    if (referral_reward_minutes !== undefined) {
+      const mins = parseInt(referral_reward_minutes, 10);
+      if (isNaN(mins) || mins < 0) return res.status(400).json({ error: 'Reward must be 0 or more minutes' });
+      config.referral_reward_minutes = mins;
+    }
+
+    await sql`UPDATE schools SET config = ${JSON.stringify(config)}, updated_at = NOW() WHERE id = ${schoolId}`;
+
+    await logAudit(sql, {
+      adminId: admin.id,
+      adminEmail: admin.email,
+      action: 'update-referral-config',
+      targetType: 'school',
+      targetId: schoolId,
+      details: { referral_enabled: config.referral_enabled, referral_welcome_bonus_minutes: config.referral_welcome_bonus_minutes, referral_reward_minutes: config.referral_reward_minutes },
+      schoolId
+    });
+
+    return res.json({
+      ok: true,
+      referral_enabled: config.referral_enabled,
+      referral_welcome_bonus_minutes: config.referral_welcome_bonus_minutes,
+      referral_reward_minutes: config.referral_reward_minutes
+    });
+  } catch (err) {
+    console.error('update-referral-config error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to update referral config' });
   }
 }

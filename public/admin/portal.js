@@ -86,6 +86,7 @@ function showSection(name) {
   if (name === 'learners')      loadLearners();
   if (name === 'lesson-types')  loadLessonTypes();
   if (name === 'payouts')       loadPayouts();
+  if (name === 'referrals')     loadReferrals();
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('open');
@@ -1813,6 +1814,111 @@ document.addEventListener('input', function (e) {
   if (!t) return;
   if (t.dataset.action === 'render-learners') renderLearners();
 });
+// ── Referrals section ──
+async function loadReferrals() {
+  loadReferralConfig();
+  loadReferralActivity();
+}
+
+async function loadReferralConfig() {
+  var form = document.getElementById('referral-settings-form');
+  var loading = document.getElementById('referral-settings-loading');
+  try {
+    var res = await fetchAdmin('/api/admin?action=referral-config', { headers: HEADERS });
+    var data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    document.getElementById('ref-enabled').checked = data.referral_enabled;
+    document.getElementById('ref-welcome-bonus').value = data.referral_welcome_bonus_minutes;
+    document.getElementById('ref-reward').value = data.referral_reward_minutes;
+    updateRefStatusBadge(data.referral_enabled);
+    updateRefFieldsVisibility(data.referral_enabled);
+
+    if (loading) loading.style.display = 'none';
+    if (form) form.style.display = 'block';
+  } catch (e) {
+    if (loading) loading.textContent = 'Failed to load referral settings.';
+    console.error('loadReferralConfig:', e);
+  }
+}
+
+function updateRefStatusBadge(enabled) {
+  var badge = document.getElementById('ref-status-badge');
+  if (!badge) return;
+  badge.textContent = enabled ? 'Active' : 'Inactive';
+  badge.style.background = enabled ? 'rgba(34,197,94,0.12)' : 'rgba(156,163,175,0.15)';
+  badge.style.color = enabled ? '#16a34a' : '#6b7280';
+}
+
+function updateRefFieldsVisibility(enabled) {
+  var fields = document.getElementById('ref-config-fields');
+  if (fields) fields.style.opacity = enabled ? '1' : '0.5';
+}
+
+async function saveReferralConfig() {
+  var btn = document.getElementById('btn-save-referral-config');
+  var status = document.getElementById('ref-save-status');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  var body = {
+    referral_enabled: document.getElementById('ref-enabled').checked,
+    referral_welcome_bonus_minutes: parseInt(document.getElementById('ref-welcome-bonus').value, 10) || 0,
+    referral_reward_minutes: parseInt(document.getElementById('ref-reward').value, 10) || 0
+  };
+
+  try {
+    var res = await fetchAdmin('/api/admin?action=update-referral-config', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    updateRefStatusBadge(data.referral_enabled);
+    updateRefFieldsVisibility(data.referral_enabled);
+    if (status) { status.textContent = 'Saved!'; status.style.display = 'inline'; setTimeout(function () { status.style.display = 'none'; }, 2500); }
+  } catch (e) {
+    if (status) { status.textContent = 'Failed to save'; status.style.color = '#ef4444'; status.style.display = 'inline'; setTimeout(function () { status.style.display = 'none'; status.style.color = 'var(--accent)'; }, 3000); }
+    console.error('saveReferralConfig:', e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Settings';
+  }
+}
+
+async function loadReferralActivity() {
+  var tbody = document.getElementById('referral-activity-body');
+  var empty = document.getElementById('referral-empty');
+  try {
+    var res = await fetchAdmin('/api/admin?action=referral-activity', { headers: HEADERS });
+    var data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    var rows = data.referrals || [];
+    if (rows.length === 0) {
+      tbody.innerHTML = '';
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    tbody.innerHTML = rows.map(function (r) {
+      var hrs = (r.total_rewards_minutes / 60).toFixed(1);
+      return '<tr>' +
+        '<td><strong>' + (r.referrer_name || 'Unknown') + '</strong><br><span style="font-size:0.78rem;color:#888;">' + (r.referrer_email || '') + '</span></td>' +
+        '<td><code style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:0.85rem;">' + r.code + '</code></td>' +
+        '<td>' + r.total_referred + '</td>' +
+        '<td>' + hrs + ' hrs (' + r.total_rewards_minutes + ' min)</td>' +
+        '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:#ef4444;">Failed to load activity</td></tr>';
+    console.error('loadReferralActivity:', e);
+  }
+}
+
 // ── Sidebar nav ──
 document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   a.addEventListener('click', function (e) { e.preventDefault(); showSection(a.dataset.section); });
@@ -1841,6 +1947,9 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-save-learner', saveEditLearner);
   bind('btn-open-add-lesson-type', openAddLessonType);
   bind('btn-process-payouts', processPayoutsNow);
+  bind('btn-save-referral-config', saveReferralConfig);
+  var refEnabled = document.getElementById('ref-enabled');
+  if (refEnabled) refEnabled.addEventListener('change', function () { updateRefFieldsVisibility(this.checked); });
   bind('btn-close-lt-modal', closeLTModal);
   bind('btn-save-lesson-type', saveLessonType);
   var vidManual = document.getElementById('vid-manual-toggle');

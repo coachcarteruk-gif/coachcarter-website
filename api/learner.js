@@ -1,5 +1,6 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
 const { resolveConfirmations } = require('./_confirmation-resolver');
@@ -41,6 +42,9 @@ module.exports = async (req, res) => {
   if (action === 'my-availability')       return handleMyAvailability(req, res);
   if (action === 'set-availability')      return handleSetAvailability(req, res);
   if (action === 'accept-terms')          return handleAcceptTerms(req, res);
+  if (action === 'validate-referral')      return handleValidateReferral(req, res);
+  if (action === 'referral-code')         return handleReferralCode(req, res);
+  if (action === 'referral-stats')        return handleReferralStats(req, res);
   if (action === 'export-data')           return handleExportData(req, res);
   if (action === 'request-deletion')      return handleRequestDeletion(req, res);
   if (action === 'confirm-deletion')      return handleConfirmDeletion(req, res);
@@ -1118,6 +1122,140 @@ async function handleAcceptTerms(req, res) {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// REFERRAL SYSTEM
+// ══════════════════════════════════════════════════════════════════════════════
+
+function generateReferralCode(learnerName) {
+  const firstName = (learnerName || 'FRIEND').split(/\s+/)[0].toUpperCase().replace(/[^A-Z]/g, '') || 'FRIEND';
+  const suffix = crypto.randomBytes(2).toString('hex').toUpperCase();
+  return `${firstName}-${suffix}`;
+}
+
+// GET /api/learner?action=validate-referral&code=X&school_id=Y — public, no auth, validates a referral code
+async function handleValidateReferral(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const code = (req.query.code || '').trim().toUpperCase();
+  if (!code) return res.json({ ok: true, valid: false });
+
+  const schoolId = parseInt(req.query.school_id) || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Rate limit: 10 validations per IP per minute (prevents code enumeration)
+    const { getClientIp } = require('./_rate-limit');
+    const ip = getClientIp(req);
+    const rl = await checkRateLimit(sql, {
+      key: `validate_referral:${ip}`,
+      max: 10,
+      windowSeconds: 60,
+    });
+    if (!rl.allowed) {
+      return res.status(429).json({ error: 'Too many requests. Please try again shortly.' });
+    }
+
+    const [ref] = await sql`
+      SELECT r.learner_id, lu.name AS referrer_name
+      FROM referrals r
+      JOIN learner_users lu ON lu.id = r.learner_id
+      WHERE r.code = ${code} AND r.school_id = ${schoolId}`;
+
+    if (!ref) return res.json({ ok: true, valid: false });
+
+    // Only return first name for privacy
+    const firstName = (ref.referrer_name || '').split(/\s+/)[0] || null;
+    return res.json({ ok: true, valid: true, referrer_first_name: firstName });
+  } catch (err) {
+    console.error('validate-referral error:', err);
+    reportError('/api/learner', err);
+    return res.status(500).json({ error: 'Failed to validate referral code' });
+  }
+}
+
+// GET /api/learner?action=referral-code — returns the learner's referral code (auto-creates if needed)
+async function handleReferralCode(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Check if school has referrals enabled
+    const [school] = await sql`SELECT config FROM schools WHERE id = ${schoolId}`;
+    const config = school?.config || {};
+    if (!config.referral_enabled) {
+      return res.json({ ok: true, enabled: false });
+    }
+
+    // Look up existing code
+    const [existing] = await sql`SELECT code FROM referrals WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
+    if (existing) {
+      const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+      return res.json({ ok: true, enabled: true, code: existing.code, share_url: `${baseUrl}/learner/login.html?ref=${existing.code}` });
+    }
+
+    // Generate a new code with collision retry
+    const [learner] = await sql`SELECT name FROM learner_users WHERE id = ${user.id}`;
+    let code;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      code = generateReferralCode(learner?.name);
+      try {
+        await sql`INSERT INTO referrals (learner_id, school_id, code) VALUES (${user.id}, ${schoolId}, ${code})`;
+        break; // success
+      } catch (e) {
+        if (attempt === 2) throw e; // final attempt failed
+        // likely unique violation — retry with different suffix
+      }
+    }
+
+    const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+    return res.json({ ok: true, enabled: true, code, share_url: `${baseUrl}/learner/login.html?ref=${code}` });
+  } catch (err) {
+    console.error('referral-code error:', err);
+    reportError('/api/learner', err);
+    return res.status(500).json({ error: 'Failed to get referral code' });
+  }
+}
+
+// GET /api/learner?action=referral-stats — referral dashboard data
+async function handleReferralStats(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [countRow] = await sql`
+      SELECT COUNT(*)::int AS total FROM learner_users WHERE referred_by = ${user.id} AND school_id = ${schoolId}`;
+
+    const [rewardRow] = await sql`
+      SELECT COALESCE(SUM(minutes), 0)::int AS total FROM credit_transactions
+      WHERE learner_id = ${user.id} AND type = 'referral_reward' AND school_id = ${schoolId}`;
+
+    const recentReferrals = await sql`
+      SELECT name, created_at FROM learner_users
+      WHERE referred_by = ${user.id} AND school_id = ${schoolId}
+      ORDER BY created_at DESC LIMIT 10`;
+
+    return res.json({
+      ok: true,
+      total_referred: countRow?.total || 0,
+      total_reward_minutes: rewardRow?.total || 0,
+      recent_referrals: recentReferrals
+    });
+  } catch (err) {
+    console.error('referral-stats error:', err);
+    reportError('/api/learner', err);
+    return res.status(500).json({ error: 'Failed to load referral stats' });
+  }
+}
+
 async function handleExportData(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyAuth(req);
@@ -1194,11 +1332,21 @@ async function handleExportData(req, res) {
       FROM qa_questions WHERE learner_id = ${user.id} AND school_id = ${schoolId}
       ORDER BY created_at DESC`;
 
+    const referralCode = await sql`
+      SELECT code, created_at FROM referrals
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
+
+    const referralsMade = await sql`
+      SELECT lu.name, lu.created_at AS referred_at
+      FROM learner_users lu
+      WHERE lu.referred_by = ${user.id} AND lu.school_id = ${schoolId}
+      ORDER BY lu.created_at DESC`;
+
     const exportData = {
       _metadata: {
         exported_at: new Date().toISOString(),
         format: 'json',
-        data_categories: ['profile', 'onboarding', 'bookings', 'transactions', 'driving_sessions', 'skill_ratings', 'quiz_results', 'mock_tests', 'focused_practice', 'qa_questions']
+        data_categories: ['profile', 'onboarding', 'bookings', 'transactions', 'driving_sessions', 'skill_ratings', 'quiz_results', 'mock_tests', 'focused_practice', 'qa_questions', 'referral_code', 'referrals_made']
       },
       profile: profile || {},
       onboarding: onboarding[0] || null,
@@ -1209,7 +1357,9 @@ async function handleExportData(req, res) {
       quiz_results: quizzes,
       mock_tests: mockTests,
       focused_practice: focusedPractice,
-      qa_questions: questions
+      qa_questions: questions,
+      referral_code: referralCode[0] || null,
+      referrals_made: referralsMade
     };
 
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -1347,6 +1497,8 @@ async function handleConfirmDeletion(req, res) {
     try { await sql`DELETE FROM instructor_learner_notes WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete instructor_learner_notes skipped:', e.message); }
     try { await sql`DELETE FROM learner_availability WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete learner_availability skipped:', e.message); }
     if (learner?.email) { try { await sql`DELETE FROM magic_link_tokens WHERE email = ${learner.email}`; } catch (e) { console.warn('gdpr delete magic_link_tokens skipped:', e.message); } }
+    try { await sql`UPDATE learner_users SET referred_by = NULL WHERE referred_by = ${learnerId}`; } catch (e) { console.warn('gdpr nullify referred_by skipped:', e.message); }
+    try { await sql`DELETE FROM referrals WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete referrals skipped:', e.message); }
 
     // 3. Nullify cookie consent references
     try { await sql`UPDATE cookie_consents SET learner_id = NULL WHERE learner_id = ${learnerId}`; } catch (e) {}

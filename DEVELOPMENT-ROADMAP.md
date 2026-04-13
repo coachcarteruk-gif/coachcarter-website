@@ -1454,6 +1454,31 @@ Three bugs in `api/setmore-sync.js` caused lessons to be duplicated 1 hour ahead
 
 ---
 
+## 2.80 — Learner Referral System (13 April 2026)
+
+**What:** Each learner gets a unique referral code (format: FIRSTNAME-XXXX). New learners can enter a code at signup via URL param (`?ref=CODE`) or manual text input. The referred learner gets configurable welcome bonus minutes, and every future credit purchase by a referred learner earns the referrer a flat reward. Feature is gated behind `schools.config.referral_enabled`.
+
+**Schema changes:**
+- New `referrals` table (learner_id, school_id, code, unique per school)
+- New `learner_users.referred_by` column (FK to learner_users, ON DELETE SET NULL)
+- New `magic_link_tokens.referral_code` column (carries code through signup flow)
+- New `credit_transactions` types: `referral_bonus` (welcome credit), `referral_reward` (referrer reward)
+
+**schools.config keys:** `referral_enabled` (boolean), `referral_welcome_bonus_minutes` (int, default 90), `referral_reward_minutes` (int, default 30)
+
+**API actions added:**
+- `GET /api/learner?action=referral-code` — returns code + share URL (auto-generates on first call)
+- `GET /api/learner?action=referral-stats` — total referred, reward minutes, recent referrals
+- `GET /api/admin?action=referral-activity` — aggregated referral stats per school
+
+**GDPR:** Referral data included in data export. Deletion cascade nullifies `referred_by`, deletes `referrals` row. Credit transactions with referral types anonymized (7-year retention). Cron retention updated.
+
+**Email notifications:** Referrer notified when their code is used and when they earn rewards.
+
+**Files changed:** `db/migration.sql`, `api/magic-link.js`, `api/credits.js`, `api/learner.js`, `api/admin.js`, `api/cron-retention.js`, `public/learner/login.html`, `public/learner/login.js`, `public/learner/index.html`, `public/learner/index.js`, `PROJECT.md`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

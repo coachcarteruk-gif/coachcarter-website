@@ -319,6 +319,9 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | `competency` | GET | Yes | Full competency dashboard data (lesson ratings, quiz accuracy, mock summary, faults) |
 | `onboarding` | GET/POST | Yes | Get/save onboarding profile (prior experience + initial self-assessment) |
 | `profile-completeness` | GET | Yes | Returns profile completion steps; dashboard uses prior_experience + initial_assessment (2 steps) |
+| `validate-referral` | GET | No | Public. Validates a referral code before signup. Params: `code`, `school_id`. Returns `{ ok, valid, referrer_first_name }`. Rate-limited (10/min per IP) |
+| `referral-code` | GET | Yes | Returns learner's referral code (auto-generates on first call). Format: FIRSTNAME-XXXX. Returns `{ ok, enabled, code, share_url }` |
+| `referral-stats` | GET | Yes | Referral dashboard data: `{ ok, total_referred, total_reward_minutes, recent_referrals[] }` |
 | `qa-list` | GET | Yes | List Q&A questions |
 | `qa-detail` | GET | Yes | Get single Q&A thread |
 | `qa-ask` | POST | Yes | Submit a question |
@@ -661,6 +664,9 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 | `instructor-blackouts` | GET | JWT | Get future blackout dates for an instructor (`?instructor_id=X`) |
 | `set-instructor-blackouts` | POST | JWT | Replace all future blackout dates for an instructor. Body: `{ instructor_id, ranges }` |
 | `update-learner` | POST | JWT | Edit learner name/email/phone/pickup_address. Audit-logged with before/after values |
+| `referral-activity` | GET | JWT | Aggregated referral stats per school (referrer names, codes, counts, total rewards) |
+| `referral-config` | GET | JWT | Current referral config for the school (enabled, welcome bonus, reward minutes) |
+| `update-referral-config` | POST | JWT | Update referral config. Body: `{ referral_enabled, referral_welcome_bonus_minutes, referral_reward_minutes }`. Audit-logged |
 
 **`admin_users`** table: email, bcrypt password_hash, role (`admin` / `superadmin`).
 
@@ -818,6 +824,7 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 | `cookie_consents` | Stores consent decisions (visitor_id, analytics boolean, ip_hash, timestamp) |
 | `audit_log` | Admin action audit trail (who did what to whom, when) |
 | `deletion_requests` | Tracks self-service deletion flow (pending → confirmed → completed) |
+| `referrals` | Learner referral codes (learner_id, school_id, code, unique per school) |
 
 ### Key columns added to existing tables
 
@@ -827,13 +834,15 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 | `learner_users` | `archived_at` | Soft-delete timestamp (set by retention cron) |
 | `enquiries` | `archived_at` | Soft-delete timestamp (set by retention cron) |
 | `credit_transactions` | `anonymized` | Boolean, set when learner is deleted (records kept for tax) |
+| `learner_users` | `referred_by` | FK to learner_users(id) — permanent link to referrer |
+| `magic_link_tokens` | `referral_code` | Carries referral code through the signup flow |
 
 ### Deletion cascade (user-initiated or retention cron)
 
 When a learner is deleted, data is handled as follows:
 - **Anonymized** (kept for tax): `credit_transactions` — `learner_id` set to NULL, `anonymized = true`
-- **Deleted**: skill_ratings, driving_sessions, quiz_results, mock_tests, qa_questions/answers, lesson_bookings, learner_onboarding, waitlist, instructor_learner_notes, learner_availability, magic_link_tokens, sent_reminders, slot_reservations, lesson_confirmations
-- **Nullified**: cookie_consents.learner_id set to NULL
+- **Deleted**: skill_ratings, driving_sessions, quiz_results, mock_tests, qa_questions/answers, lesson_bookings, learner_onboarding, waitlist, instructor_learner_notes, learner_availability, magic_link_tokens, sent_reminders, slot_reservations, lesson_confirmations, referrals
+- **Nullified**: cookie_consents.learner_id set to NULL, learner_users.referred_by set to NULL (for referred learners)
 - **Confirmation email** sent after successful deletion
 
 ### Retention policy (enforced by `cron-retention.js`)

@@ -379,6 +379,9 @@ body {
     <a href="#" data-section="payouts">
       <span class="nav-icon">&#x1f4b8;</span> Payouts
     </a>
+    <a href="#" data-section="referrals">
+      <span class="nav-icon">&#x1f517;</span> Referrals
+    </a>
     <a href="/" target="_blank" style="opacity: 0.5; font-size: 0.82rem;">
       <span class="nav-icon">&#x1f310;</span> View Site
     </a>
@@ -669,6 +672,69 @@ body {
         </tr></thead>
         <tbody id="payout-recent-body"><tr><td colspan="5">Loading...</td></tr></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- ═══════════ REFERRALS ═══════════ -->
+  <div class="section" id="section-referrals">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Referrals</div>
+        <div class="page-subtitle">Configure the learner referral programme and view activity</div>
+      </div>
+    </div>
+
+    <!-- Settings card -->
+    <div class="card" style="margin-bottom:24px;">
+      <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:16px;">Settings</h3>
+      <div id="referral-settings-loading" style="color:#888;font-size:0.9rem;">Loading...</div>
+      <div id="referral-settings-form" style="display:none;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.92rem;font-weight:600;">
+            <input type="checkbox" id="ref-enabled" style="width:18px;height:18px;accent-color:var(--accent);">
+            Enable referral programme
+          </label>
+          <span class="badge" id="ref-status-badge" style="font-size:0.75rem;"></span>
+        </div>
+
+        <div id="ref-config-fields">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <div class="form-group">
+              <label>Welcome bonus for new referred learner</label>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <input type="number" id="ref-welcome-bonus" min="0" max="600" step="15" style="width:90px;">
+                <span style="color:#888;font-size:0.85rem;">minutes</span>
+              </div>
+              <div style="color:#888;font-size:0.78rem;margin-top:4px;">Free lesson time credited on signup. 90 min = 1 standard lesson.</div>
+            </div>
+            <div class="form-group">
+              <label>Referrer reward per purchase</label>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <input type="number" id="ref-reward" min="0" max="300" step="15" style="width:90px;">
+                <span style="color:#888;font-size:0.85rem;">minutes</span>
+              </div>
+              <div style="color:#888;font-size:0.78rem;margin-top:4px;">Free time earned by the referrer each time their referral buys credits.</div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="btn-save-referral-config" style="min-width:140px;">Save Settings</button>
+          <span id="ref-save-status" style="margin-left:12px;font-size:0.85rem;color:var(--accent);display:none;"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity card -->
+    <div class="card">
+      <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:16px;">Referral Activity</h3>
+      <table class="data-table">
+        <thead><tr>
+          <th>Referrer</th><th>Code</th><th>Friends Referred</th><th>Rewards Earned</th>
+        </tr></thead>
+        <tbody id="referral-activity-body"><tr><td colspan="4" style="color:#888;">Loading...</td></tr></tbody>
+      </table>
+      <div id="referral-empty" style="display:none;text-align:center;padding:24px;color:#888;font-size:0.9rem;">
+        No referral activity yet. Once referrals are enabled and learners start sharing codes, activity will appear here.
+      </div>
     </div>
   </div>
 

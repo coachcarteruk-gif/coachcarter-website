@@ -96,11 +96,12 @@ async function handleSendLink(req, res) {
 
     // Derive school_id from request (login pages pass it as a query/body param)
     const schoolId = parseInt(req.body.school_id || req.query.school_id) || 1;
+    const referralCode = req.body.referral_code || null;
 
     // Store the token
     await sql`
-      INSERT INTO magic_link_tokens (token, email, phone, method, expires_at, school_id)
-      VALUES (${token}, ${cleanEmail}, ${cleanPhone}, ${method || 'email'}, ${expiresAt}, ${schoolId})`;
+      INSERT INTO magic_link_tokens (token, email, phone, method, expires_at, school_id, referral_code)
+      VALUES (${token}, ${cleanEmail}, ${cleanPhone}, ${method || 'email'}, ${expiresAt}, ${schoolId}, ${referralCode})`;
 
     // Clean up expired tokens periodically
     await sql`DELETE FROM magic_link_tokens WHERE expires_at < NOW() OR used = true`;
@@ -237,9 +238,19 @@ async function handleVerify(req, res) {
         // Auto-create new learner account
         isNewUser = true;
         const newSchoolId = linkRecord.school_id || 1;
+
+        // Resolve referral code if present
+        let referrerId = null;
+        if (linkRecord.referral_code) {
+          const [ref] = await sql`
+            SELECT r.learner_id FROM referrals r
+            WHERE r.code = ${linkRecord.referral_code} AND r.school_id = ${newSchoolId}`;
+          if (ref) referrerId = ref.learner_id;
+        }
+
         const newRows = await sql`
-          INSERT INTO learner_users (email, credit_balance, school_id)
-          VALUES (${linkRecord.email}, ${FREE_TRIAL_CREDITS}, ${newSchoolId})
+          INSERT INTO learner_users (email, credit_balance, school_id, referred_by)
+          VALUES (${linkRecord.email}, ${FREE_TRIAL_CREDITS}, ${newSchoolId}, ${referrerId})
           RETURNING *`;
         user = newRows[0];
 
@@ -249,6 +260,13 @@ async function handleVerify(req, res) {
             (learner_id, type, credits, amount_pence, payment_method)
           VALUES
             (${user.id}, 'purchase', ${FREE_TRIAL_CREDITS}, 0, 'free_trial')`;
+
+        // Apply referral welcome bonus
+        if (referrerId) {
+          try {
+            await applyReferralWelcomeBonus(sql, user.id, referrerId, newSchoolId);
+          } catch (e) { console.warn('referral welcome bonus failed:', e.message); }
+        }
       }
     } else if (linkRecord.phone) {
       const existing = await sql`
@@ -259,9 +277,19 @@ async function handleVerify(req, res) {
       } else {
         isNewUser = true;
         const newSchoolId2 = linkRecord.school_id || 1;
+
+        // Resolve referral code if present
+        let referrerId2 = null;
+        if (linkRecord.referral_code) {
+          const [ref] = await sql`
+            SELECT r.learner_id FROM referrals r
+            WHERE r.code = ${linkRecord.referral_code} AND r.school_id = ${newSchoolId2}`;
+          if (ref) referrerId2 = ref.learner_id;
+        }
+
         const newRows = await sql`
-          INSERT INTO learner_users (phone, credit_balance, school_id)
-          VALUES (${linkRecord.phone}, ${FREE_TRIAL_CREDITS}, ${newSchoolId2})
+          INSERT INTO learner_users (phone, credit_balance, school_id, referred_by)
+          VALUES (${linkRecord.phone}, ${FREE_TRIAL_CREDITS}, ${newSchoolId2}, ${referrerId2})
           RETURNING *`;
         user = newRows[0];
 
@@ -270,6 +298,13 @@ async function handleVerify(req, res) {
             (learner_id, type, credits, amount_pence, payment_method)
           VALUES
             (${user.id}, 'purchase', ${FREE_TRIAL_CREDITS}, 0, 'free_trial')`;
+
+        // Apply referral welcome bonus
+        if (referrerId2) {
+          try {
+            await applyReferralWelcomeBonus(sql, user.id, referrerId2, newSchoolId2);
+          } catch (e) { console.warn('referral welcome bonus failed:', e.message); }
+        }
       }
     }
 
@@ -363,9 +398,19 @@ async function handleVerifyCode(req, res) {
     } else {
       isNewUser = true;
       const smsSchoolId = linkRecord.school_id || 1;
+
+      // Resolve referral code if present
+      let smsReferrerId = null;
+      if (linkRecord.referral_code) {
+        const [ref] = await sql`
+          SELECT r.learner_id FROM referrals r
+          WHERE r.code = ${linkRecord.referral_code} AND r.school_id = ${smsSchoolId}`;
+        if (ref) smsReferrerId = ref.learner_id;
+      }
+
       const newRows = await sql`
-        INSERT INTO learner_users (phone, email, credit_balance, school_id)
-        VALUES (${linkRecord.phone}, ${linkRecord.email || null}, ${FREE_TRIAL_CREDITS}, ${smsSchoolId})
+        INSERT INTO learner_users (phone, email, credit_balance, school_id, referred_by)
+        VALUES (${linkRecord.phone}, ${linkRecord.email || null}, ${FREE_TRIAL_CREDITS}, ${smsSchoolId}, ${smsReferrerId})
         RETURNING *`;
       user = newRows[0];
 
@@ -374,6 +419,13 @@ async function handleVerifyCode(req, res) {
           (learner_id, type, credits, amount_pence, payment_method)
         VALUES
           (${user.id}, 'purchase', ${FREE_TRIAL_CREDITS}, 0, 'free_trial')`;
+
+      // Apply referral welcome bonus
+      if (smsReferrerId) {
+        try {
+          await applyReferralWelcomeBonus(sql, user.id, smsReferrerId, smsSchoolId);
+        } catch (e) { console.warn('referral welcome bonus failed:', e.message); }
+      }
     }
 
     // Issue JWT
@@ -432,6 +484,57 @@ async function sendMagicLinkEmail(email, magicUrl) {
         <p style="color: #999; font-size: 0.8rem; line-height: 1.5;">
           If you didn't request this, you can safely ignore this email.<br>
           This link can only be used once.
+        </p>
+      </div>
+    `
+  });
+}
+
+// ── Referral helpers ──────────────────────────────────────────────────────
+async function applyReferralWelcomeBonus(sql, newLearnerId, referrerId, schoolId) {
+  // Load school config to check if referrals are enabled
+  const [school] = await sql`SELECT config FROM schools WHERE id = ${schoolId}`;
+  const config = school?.config || {};
+  if (!config.referral_enabled) return;
+
+  const bonusMinutes = config.referral_welcome_bonus_minutes ?? 90;
+  if (bonusMinutes <= 0) return;
+
+  // Credit the new learner with welcome bonus
+  await sql`UPDATE learner_users SET balance_minutes = balance_minutes + ${bonusMinutes} WHERE id = ${newLearnerId} AND school_id = ${schoolId}`;
+  await sql`
+    INSERT INTO credit_transactions (learner_id, type, credits, minutes, amount_pence, payment_method, school_id)
+    VALUES (${newLearnerId}, 'referral_bonus', 0, ${bonusMinutes}, 0, 'referral', ${schoolId})`;
+
+  // Notify the referrer
+  try {
+    const [referrer] = await sql`SELECT name, email FROM learner_users WHERE id = ${referrerId} AND school_id = ${schoolId}`;
+    const [newLearner] = await sql`SELECT name FROM learner_users WHERE id = ${newLearnerId} AND school_id = ${schoolId}`;
+    if (referrer?.email) {
+      await sendReferralUsedEmail(referrer.email, referrer.name, newLearner?.name);
+    }
+  } catch (e) { console.warn('referral notification email failed:', e.message); }
+}
+
+async function sendReferralUsedEmail(referrerEmail, referrerName, newLearnerName) {
+  const mailer = createTransporter();
+  const firstName = (referrerName || 'there').split(' ')[0];
+  const referred = newLearnerName || 'Someone';
+  await mailer.sendMail({
+    from:    'CoachCarter <bookings@coachcarter.uk>',
+    to:      referrerEmail,
+    subject: 'Someone used your referral code!',
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+        <h1 style="font-size: 1.3rem; color: #262626;">Hi ${firstName}!</h1>
+        <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
+          ${referred} just signed up using your referral code. Thanks for spreading the word!
+        </p>
+        <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
+          Keep sharing your code — you'll earn free lesson time every time they buy credits.
+        </p>
+        <p style="color: #999; font-size: 0.8rem; margin-top: 20px;">
+          Check your dashboard to see your referral stats.
         </p>
       </div>
     `

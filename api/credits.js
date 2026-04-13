@@ -2,6 +2,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { requireAuth } = require('./_auth');
+const { createTransporter } = require('./_auth-helpers');
 
 const PRICE_PER_STANDARD_LESSON_PENCE = 8250; // £82.50 per 1.5 hrs
 const STANDARD_LESSON_MINUTES = 90;
@@ -252,6 +253,54 @@ async function handleVerify(req, res) {
           balance_minutes = balance_minutes + ${minutes}
       WHERE id = ${learnerId} AND school_id = ${schoolId}
     `;
+
+    // 8. Referrer reward — credit the referrer if this learner was referred
+    try {
+      const [learnerRow] = await sql`SELECT referred_by FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}`;
+      if (learnerRow?.referred_by) {
+        const [school] = await sql`SELECT config FROM schools WHERE id = ${schoolId}`;
+        const config = school?.config || {};
+        if (config.referral_enabled) {
+          const rewardMinutes = config.referral_reward_minutes ?? 30;
+          if (rewardMinutes > 0) {
+            const referrerId = learnerRow.referred_by;
+            await sql`UPDATE learner_users SET balance_minutes = balance_minutes + ${rewardMinutes} WHERE id = ${referrerId} AND school_id = ${schoolId}`;
+            await sql`
+              INSERT INTO credit_transactions (learner_id, type, credits, minutes, amount_pence, payment_method, school_id)
+              VALUES (${referrerId}, 'referral_reward', 0, ${rewardMinutes}, 0, 'referral', ${schoolId})`;
+
+            // Notify referrer
+            try {
+              const [referrer] = await sql`SELECT name, email FROM learner_users WHERE id = ${referrerId} AND school_id = ${schoolId}`;
+              if (referrer?.email) {
+                const mailer = createTransporter();
+                const firstName = (referrer.name || 'there').split(' ')[0];
+                const hrs = (rewardMinutes / 60).toFixed(1);
+                mailer.sendMail({
+                  from: 'CoachCarter <bookings@coachcarter.uk>',
+                  to: referrer.email,
+                  subject: `You earned ${hrs} hours of free lessons!`,
+                  html: `
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+                      <h1 style="font-size: 1.3rem; color: #262626;">Hi ${firstName}!</h1>
+                      <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
+                        Your referral just bought credits — you've earned <strong>${rewardMinutes} minutes</strong> of free lesson time!
+                      </p>
+                      <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
+                        The free time has been added to your balance automatically.
+                      </p>
+                      <p style="color: #999; font-size: 0.8rem; margin-top: 20px;">
+                        Keep sharing your referral code to earn more free lessons.
+                      </p>
+                    </div>
+                  `
+                }).catch(() => {}); // fire and forget
+              }
+            } catch (e) { /* email notification is best-effort */ }
+          }
+        }
+      }
+    } catch (e) { console.warn('referral reward failed:', e.message); }
 
     return res.json({ ok: true, granted: true, hours, minutes });
   } catch (err) {

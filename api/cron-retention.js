@@ -71,6 +71,8 @@ module.exports = async (req, res) => {
         try { await sql`DELETE FROM instructor_learner_notes WHERE learner_id = ${lid}`; } catch (e) {}
         try { await sql`DELETE FROM learner_availability WHERE learner_id = ${lid}`; } catch (e) {}
         try { await sql`DELETE FROM deletion_requests WHERE learner_id = ${lid}`; } catch (e) {}
+        try { await sql`UPDATE learner_users SET referred_by = NULL WHERE referred_by = ${lid}`; } catch (e) {}
+        try { await sql`DELETE FROM referrals WHERE learner_id = ${lid}`; } catch (e) {}
         await sql`UPDATE cookie_consents SET learner_id = NULL WHERE learner_id = ${learner.id}`;
         if (learner.email) {
           try { await sql`DELETE FROM magic_link_tokens WHERE email = ${learner.email}`; } catch (e) {}

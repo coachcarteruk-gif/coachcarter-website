@@ -120,6 +120,31 @@
     }
     .btn-log-now:hover { background: var(--accent-dk); }
 
+    /* REFERRAL CARD */
+    .referral-card {
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      border-radius: var(--radius); padding: 20px;
+      display: none; color: #fff; margin-bottom: 20px;
+    }
+    .referral-card.show { display: block; }
+    .referral-card h3 { font-family: var(--font-head); font-size: 1rem; font-weight: 700; margin: 0 0 6px; }
+    .referral-card .ref-sub { font-size: 0.85rem; opacity: 0.9; margin-bottom: 16px; line-height: 1.4; }
+    .referral-code-row {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.18); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
+    }
+    .referral-code-row code { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em; flex: 1; }
+    .ref-copy-btn {
+      background: rgba(255,255,255,0.25); border: none; color: #fff; border-radius: 8px;
+      padding: 6px 14px; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+      transition: background 0.15s; font-family: var(--font-head);
+    }
+    .ref-copy-btn:hover { background: rgba(255,255,255,0.4); }
+    .referral-stats-row { display: flex; gap: 20px; }
+    .referral-stat { text-align: center; flex: 1; }
+    .referral-stat strong { display: block; font-size: 1.3rem; font-family: var(--font-head); }
+    .referral-stat span { font-size: 0.72rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.04em; }
+
     /* SECTION TITLE */
     .section-title {
       font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
@@ -206,6 +231,26 @@
     <div class="profile-pct" id="profile-pct">0% complete</div>
     <div class="profile-steps" id="profile-steps"></div>
     <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete Next Step</a>
+  </div>
+
+  <!-- REFERRAL CARD -->
+  <div class="referral-card" id="referral-card">
+    <h3>Refer a Friend</h3>
+    <div class="ref-sub">Share your code — you both earn free lesson time!</div>
+    <div class="referral-code-row">
+      <code id="referral-code-display"></code>
+      <button class="ref-copy-btn" id="ref-copy-btn">Copy link</button>
+    </div>
+    <div class="referral-stats-row">
+      <div class="referral-stat">
+        <strong id="ref-count">0</strong>
+        <span>Friends referred</span>
+      </div>
+      <div class="referral-stat">
+        <strong id="ref-earned">0 hrs</strong>
+        <span>Free time earned</span>
+      </div>
+    </div>
   </div>
 
   <!-- UNLOGGED BOOKING BANNER -->
