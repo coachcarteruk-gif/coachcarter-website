@@ -14,6 +14,7 @@ const DEFAULT_PRICE_PENCE = 8250; // fallback if lesson-types API fails
 let auth          = null; // null when browsing as guest; { user, ... } when logged in
 let creditBalance = 0;
 let balanceMinutes = 0;
+let paymentsEnabled = true; // assume true until balance API tells us otherwise
 let instructors   = [];
 let lessonTypes   = [];
 let selectedLessonType = null; // current lesson type object
@@ -173,6 +174,7 @@ async function loadBalance() {
     if (!res.ok) throw new Error(data.error);
     creditBalance = data.credit_balance;
     balanceMinutes = data.balance_minutes || 0;
+    if (data.payments_enabled !== undefined) paymentsEnabled = !!data.payments_enabled;
     updateCreditBadge();
   } catch {}
 }
@@ -183,7 +185,8 @@ function formatBalanceHours(mins) {
 }
 
 function updateCreditBadge() {
-  document.getElementById('noCreditsBanner').style.display = balanceMinutes === 0 ? 'flex' : 'none';
+  // Hide credits banner entirely when payments are disabled
+  document.getElementById('noCreditsBanner').style.display = (paymentsEnabled && balanceMinutes === 0) ? 'flex' : 'none';
 }
 
 // ─── Lesson Types ───────────────────────────────────────────────────────────
@@ -685,15 +688,23 @@ function openBookModal(el) {
     } else {
       document.getElementById('profileFields').style.display = 'none';
     }
-    const hasCreds = balanceMinutes >= ltDuration;
-    document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
-    document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
-    if (hasCreds) {
+    if (!paymentsEnabled) {
+      // Free booking mode — always show credit path, hide pay path
+      document.getElementById('modalCreditPath').style.display = 'block';
+      document.getElementById('modalPayPath').style.display = 'none';
+      document.getElementById('mdDeductHours').textContent = 'free — no credits required';
       document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
       document.getElementById('bookSpinner').style.display = 'none';
       document.getElementById('btnConfirmBook').disabled = false;
     } else {
-      // pay path — price already populated above
+      const hasCreds = balanceMinutes >= ltDuration;
+      document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
+      document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
+      if (hasCreds) {
+        document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
+        document.getElementById('bookSpinner').style.display = 'none';
+        document.getElementById('btnConfirmBook').disabled = false;
+      }
     }
   }
 
@@ -806,9 +817,17 @@ function updateDeductDisplay() {
   }
 
   // Update balance check for credit path visibility
-  const hasCreds = balanceMinutes >= totalMins;
-  document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
-  document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
+  if (!paymentsEnabled) {
+    // Free booking mode — always show credit path, hide pay path
+    document.getElementById('modalCreditPath').style.display = 'block';
+    document.getElementById('modalPayPath').style.display = 'none';
+    // Update deduction text to indicate free booking
+    document.getElementById('mdDeductHours').textContent = 'free — no credits required';
+  } else {
+    const hasCreds = balanceMinutes >= totalMins;
+    document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
+    document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
+  }
 }
 
 function updateBookButtonState() {
