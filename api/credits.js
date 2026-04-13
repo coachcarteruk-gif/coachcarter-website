@@ -261,13 +261,16 @@ async function handleVerify(req, res) {
         const [school] = await sql`SELECT config FROM schools WHERE id = ${schoolId}`;
         const config = school?.config || {};
         if (config.referral_enabled) {
-          const rewardMinutes = config.referral_reward_minutes ?? 30;
-          if (rewardMinutes > 0) {
+          const rewardPerLesson = config.referral_reward_minutes ?? 30;
+          // Scale reward by number of standard lessons (1.5hr blocks) purchased
+          const lessonCount = Math.floor(hours / 1.5);
+          const totalRewardMinutes = lessonCount * rewardPerLesson;
+          if (totalRewardMinutes > 0) {
             const referrerId = learnerRow.referred_by;
-            await sql`UPDATE learner_users SET balance_minutes = balance_minutes + ${rewardMinutes} WHERE id = ${referrerId} AND school_id = ${schoolId}`;
+            await sql`UPDATE learner_users SET balance_minutes = balance_minutes + ${totalRewardMinutes} WHERE id = ${referrerId} AND school_id = ${schoolId}`;
             await sql`
               INSERT INTO credit_transactions (learner_id, type, credits, minutes, amount_pence, payment_method, school_id)
-              VALUES (${referrerId}, 'referral_reward', 0, ${rewardMinutes}, 0, 'referral', ${schoolId})`;
+              VALUES (${referrerId}, 'referral_reward', 0, ${totalRewardMinutes}, 0, 'referral', ${schoolId})`;
 
             // Notify referrer
             try {
@@ -275,7 +278,7 @@ async function handleVerify(req, res) {
               if (referrer?.email) {
                 const mailer = createTransporter();
                 const firstName = (referrer.name || 'there').split(' ')[0];
-                const hrs = (rewardMinutes / 60).toFixed(1);
+                const hrs = (totalRewardMinutes / 60).toFixed(1);
                 mailer.sendMail({
                   from: 'CoachCarter <bookings@coachcarter.uk>',
                   to: referrer.email,
@@ -284,7 +287,7 @@ async function handleVerify(req, res) {
                     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
                       <h1 style="font-size: 1.3rem; color: #262626;">Hi ${firstName}!</h1>
                       <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
-                        Your referral just bought credits — you've earned <strong>${rewardMinutes} minutes</strong> of free lesson time!
+                        Your referral just bought ${hours} hours of lessons — you've earned <strong>${totalRewardMinutes} minutes</strong> of free lesson time!
                       </p>
                       <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
                         The free time has been added to your balance automatically.
