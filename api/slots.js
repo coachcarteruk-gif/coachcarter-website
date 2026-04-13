@@ -638,6 +638,11 @@ async function handleBook(req, res) {
     // Demo instructor bookings are free (no deduction)
     const isDemoInstructor = instructor.email === 'demo@coachcarter.uk';
 
+    // Check if payments are enabled for this school
+    const [schoolRow] = await sql`SELECT config FROM schools WHERE id = ${schoolId}`;
+    const schoolConfig = schoolRow?.config || {};
+    const skipPayments = isDemoInstructor || !schoolConfig.payments_enabled;
+
     // 2b. Travel time check between pickup postcodes (warning only, not blocking)
     let travelWarnings = null;
     const bookingPickupAddr = pickup_address || learner.pickup_address || null;
@@ -653,7 +658,7 @@ async function handleBook(req, res) {
     }
 
     const totalMins = durationMins * weeks;
-    if (!isDemoInstructor) {
+    if (!skipPayments) {
       const balance = learner.balance_minutes || 0;
       if (balance < totalMins)
         return res.status(402).json({
@@ -710,8 +715,8 @@ async function handleBook(req, res) {
       }
     }
 
-    // 4. Deduct hours FIRST (skip for demo instructor)
-    if (!isDemoInstructor) {
+    // 4. Deduct hours FIRST (skip for demo instructor or payments-disabled schools)
+    if (!skipPayments) {
       const creditsToDeduct = Math.ceil(totalMins / 60);
       const [deducted] = await sql`
         UPDATE learner_users
@@ -728,7 +733,7 @@ async function handleBook(req, res) {
     const seriesId = isRecurring ? crypto.randomUUID() : null;
     const bookingPickup  = pickup_address || learner.pickup_address || null;
     const bookingDropoff = dropoff_address || null;
-    const minsPerBooking = isDemoInstructor ? 0 : durationMins;
+    const minsPerBooking = skipPayments ? 0 : durationMins;
     const createdBookings = [];
 
     try {
@@ -745,8 +750,8 @@ async function handleBook(req, res) {
         createdBookings.push(b);
       }
     } catch (insertErr) {
-      // Refund the hours since booking failed (not needed for demo)
-      if (!isDemoInstructor) {
+      // Refund the hours since booking failed (not needed for demo/free schools)
+      if (!skipPayments) {
         const creditsToRefund = Math.ceil(totalMins / 60);
         await sql`
           UPDATE learner_users
@@ -949,7 +954,8 @@ async function handleBook(req, res) {
       booking_id:      createdBookings[0].id,
       balance_minutes: updated.balance_minutes || 0,
       balance_hours:   ((updated.balance_minutes || 0) / 60).toFixed(1),
-      credit_balance:  updated.credit_balance
+      credit_balance:  updated.credit_balance,
+      payments_enabled: !!schoolConfig.payments_enabled
     };
     if (isRecurring) {
       response.series_id   = seriesId;
@@ -1420,7 +1426,7 @@ async function handleCancel(req, res) {
       let totalMinsRefunded = 0;
 
       for (const sb of seriesBookings) {
-        const lessonDT = new Date(`${sb.scheduled_date}T${sb.start_time}:00Z`);
+        const lessonDT = new Date(`${sb.scheduled_date}T${sb.start_time}Z`);
         const hoursUntil = (lessonDT - Date.now()) / 3600000;
         const eligible = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF;
         const mins = sb.minutes_deducted || DEFAULT_SLOT_MINUTES;
@@ -1536,7 +1542,7 @@ async function handleCancel(req, res) {
     // ── Single booking cancellation (existing logic) ────────────────────────
 
     // Calculate hours until lesson
-    const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}:00Z`);
+    const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
     const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
     // Demo bookings are free, so no hours to return
     const creditReturned = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF;
@@ -1721,7 +1727,7 @@ async function handleReschedule(req, res) {
       return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
 
     // Check 48-hour reschedule window (same as cancellation policy)
-    const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}:00Z`);
+    const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
     const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
     if (hoursUntil < CANCEL_HOURS_CUTOFF)
       return res.status(400).json({
@@ -2023,7 +2029,7 @@ async function handleSeriesInfo(req, res) {
     `;
 
     const confirmed = bookings.filter(b => b.status === 'confirmed');
-    const future = confirmed.filter(b => new Date(`${b.scheduled_date}T${b.start_time}:00Z`) > new Date());
+    const future = confirmed.filter(b => new Date(`${b.scheduled_date}T${b.start_time}Z`) > new Date());
 
     return res.json({
       ok: true,
