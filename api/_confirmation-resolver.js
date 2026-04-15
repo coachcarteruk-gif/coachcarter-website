@@ -80,7 +80,8 @@ function sendDisputeAlert(booking, instructorConf, learnerConf) {
   const to = STAFF_EMAIL();
   if (!to) return;
 
-  const dateStr = new Date(booking.scheduled_date + 'T00:00:00Z')
+  const isoDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
+  const dateStr = new Date(isoDate + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
   const adminUrl = `${BASE_URL()}/admin/portal.html`;
 
@@ -122,7 +123,8 @@ function sendLatenessAlert(booking, latenessReports) {
   const to = STAFF_EMAIL();
   if (!to) return;
 
-  const dateStr = new Date(booking.scheduled_date + 'T00:00:00Z')
+  const isoDate2 = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
+  const dateStr = new Date(isoDate2 + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
   const rows = latenessReports.map(r => {

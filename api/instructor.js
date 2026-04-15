@@ -518,7 +518,8 @@ async function handleComplete(req, res) {
       try {
         const mailer = createTransporter();
         const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
-        const dateStr = new Date(booking.scheduled_date + 'T00:00:00Z')
+        const isoDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
+        const dateStr = new Date(isoDate + 'T00:00:00Z')
           .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
         const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
         const confirmUrl = `${baseUrl}/learner/confirm-lesson.html?booking_id=${booking_id}`;
@@ -616,7 +617,8 @@ async function handleConfirmLesson(req, res) {
         try {
           const mailer = createTransporter();
           const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
-          const dateStr = new Date(booking.scheduled_date + 'T00:00:00Z')
+          const isoDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
+          const dateStr = new Date(isoDate + 'T00:00:00Z')
             .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
           const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
           const confirmUrl = `${baseUrl}/learner/confirm-lesson.html?booking_id=${booking_id}`;
@@ -1281,7 +1283,8 @@ async function handleCancelBooking(req, res) {
     if (notify !== false) try {
       const mailer = createTransporter();
       const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
-      const dateObj = new Date(booking.scheduled_date + 'T00:00:00Z');
+      const isoDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
+      const dateObj = new Date(isoDate + 'T00:00:00Z');
       const dateStr = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
       const timeStr = booking.start_time.slice(0, 5);
 
@@ -1409,7 +1412,8 @@ async function handleRescheduleBooking(req, res) {
     // Email the learner
     try {
       const mailer = createTransporter();
-      const oldDate = new Date(booking.scheduled_date + 'T00:00:00Z')
+      const isoOldDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
+      const oldDate = new Date(isoOldDate + 'T00:00:00Z')
         .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
       const newDateStr = new Date(new_date + 'T00:00:00Z')
         .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
@@ -1614,7 +1618,8 @@ async function handleEditBooking(req, res) {
     if (timeChanged && shouldNotify && booking.learner_email) {
       try {
         const mailer = createTransporter();
-        const oldDate = new Date(booking.scheduled_date + 'T00:00:00Z')
+        const isoOldDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
+        const oldDate = new Date(isoOldDate + 'T00:00:00Z')
           .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
         const newDateStr = new Date(newDate + 'T00:00:00Z')
           .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });

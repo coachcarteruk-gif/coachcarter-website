@@ -50,7 +50,8 @@ function formatTime12h(timeStr) {
 }
 
 function formatDateDisplay(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00Z');
+  const iso = dateStr instanceof Date ? dateStr.toISOString().slice(0, 10) : String(dateStr).slice(0, 10);
+  const d = new Date(iso + 'T00:00:00Z');
   return d.toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'
   });

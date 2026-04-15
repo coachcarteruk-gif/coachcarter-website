@@ -41,7 +41,8 @@ function sendWhatsApp(to, message) {
 }
 
 function formatDateDisplay(str) {
-  const d = new Date(str + 'T00:00:00Z');
+  const iso = str instanceof Date ? str.toISOString().slice(0, 10) : String(str).slice(0, 10);
+  const d = new Date(iso + 'T00:00:00Z');
   return d.toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'
   });
@@ -241,7 +242,8 @@ async function checkWaitlistOnCancel({ instructor_id, instructor_name, scheduled
     WHERE school_id = ${schoolId} AND status = 'active' AND expires_at < NOW()`;
 
   // 2. Compute day of week for the cancelled slot
-  const cancelledDay = new Date(scheduled_date + 'T00:00:00Z').getUTCDay();
+  const isoSchedDate = scheduled_date instanceof Date ? scheduled_date.toISOString().slice(0, 10) : String(scheduled_date).slice(0, 10);
+  const cancelledDay = new Date(isoSchedDate + 'T00:00:00Z').getUTCDay();
   const slotStart = String(start_time).slice(0, 5);
   const slotEnd   = String(end_time).slice(0, 5);
 

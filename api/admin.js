@@ -508,7 +508,8 @@ async function handleEditBooking(req, res) {
     if (timeChanged && booking.learner_email) {
       try {
         const mailer = createTransporter();
-        const oldDateFmt = new Date(booking.scheduled_date + 'T00:00:00Z')
+        const isoOldDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
+        const oldDateFmt = new Date(isoOldDate + 'T00:00:00Z')
           .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
         const newDateFmt = new Date(newDate + 'T00:00:00Z')
           .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });

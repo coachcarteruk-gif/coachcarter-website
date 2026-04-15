@@ -247,8 +247,9 @@ async function handleAcceptOffer(req, res) {
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
       : `${durationMins} mins`;
 
+    const isoOfferDate = offer.scheduled_date instanceof Date ? offer.scheduled_date.toISOString().slice(0, 10) : String(offer.scheduled_date || '').slice(0, 10);
     const lessonDate = offer.scheduled_date
-      ? new Date(offer.scheduled_date + 'T00:00:00Z')
+      ? new Date(isoOfferDate + 'T00:00:00Z')
           .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
       : null;
 
@@ -441,7 +442,8 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   const durationStr = durationMins >= 60
     ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
     : `${durationMins} mins`;
-  const lessonDate = new Date(offer.scheduled_date + 'T00:00:00Z')
+  const isoDate = offer.scheduled_date instanceof Date ? offer.scheduled_date.toISOString().slice(0, 10) : String(offer.scheduled_date).slice(0, 10);
+  const lessonDate = new Date(isoDate + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
   try {

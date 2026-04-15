@@ -344,8 +344,10 @@ async function handleAvailable(req, res) {
     // Expand blackout ranges into individual "instructorId|date" entries for fast lookup
     const blackoutIndex = new Set();
     for (const b of blackouts) {
-      const start = new Date(b.start_date + 'T00:00:00');
-      const end = new Date(b.end_date + 'T00:00:00');
+      const startIso = b.start_date instanceof Date ? b.start_date.toISOString().slice(0, 10) : String(b.start_date).slice(0, 10);
+      const endIso = b.end_date instanceof Date ? b.end_date.toISOString().slice(0, 10) : String(b.end_date).slice(0, 10);
+      const start = new Date(startIso + 'T00:00:00');
+      const end = new Date(endIso + 'T00:00:00');
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const ds = d.toISOString().slice(0, 10);
         blackoutIndex.add(`${b.instructor_id}|${ds}`);
@@ -2136,9 +2138,10 @@ function daysBetween(a, b) {
   return Math.round((b - a) / 86400000);
 }
 
-// "2026-03-15" → "Saturday 15 March 2026"
+// "2026-03-15" or Date → "Saturday 15 March 2026"
 function formatDateDisplay(str) {
-  const d = new Date(str + 'T00:00:00Z');
+  const iso = str instanceof Date ? str.toISOString().slice(0, 10) : String(str).slice(0, 10);
+  const d = new Date(iso + 'T00:00:00Z');
   return d.toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'
   });

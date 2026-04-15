@@ -288,7 +288,8 @@ async function handleSlotBooking(session) {
 
     // 7. Send confirmation emails
     const transporter = createTransporter();
-    const lessonDate = new Date(scheduledDate + 'T00:00:00Z')
+    const isoDate1 = scheduledDate instanceof Date ? scheduledDate.toISOString().slice(0, 10) : String(scheduledDate).slice(0, 10);
+    const lessonDate = new Date(isoDate1 + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const lessonTime = `${startTime} – ${endTime}`;
 
@@ -877,7 +878,8 @@ async function handleOfferBooking(session) {
     const durationStr = durationMins >= 60
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
       : `${durationMins} mins`;
-    const lessonDate = new Date(scheduledDate + 'T00:00:00Z')
+    const isoDate2 = scheduledDate instanceof Date ? scheduledDate.toISOString().slice(0, 10) : String(scheduledDate).slice(0, 10);
+    const lessonDate = new Date(isoDate2 + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const lessonTime = `${startTime} – ${endTime}`;
 
