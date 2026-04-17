@@ -65,7 +65,7 @@ function updateStepIndicator(activeStep) {
   var labelEl = document.getElementById('step-label');
   var endItem = document.querySelector('.step-item[data-step="end"]');
   if (numEl) numEl.textContent = activeStep;
-  if (labelEl) labelEl.textContent = 'Part ' + activeStep;
+  if (labelEl) labelEl.textContent = 'Round ' + activeStep;
   if (endItem) {
     endItem.classList.remove('active');
     if (activeStep === 'done') endItem.classList.add('active');
@@ -137,8 +137,7 @@ function showPartScreen() {
 
   updateStepIndicator(currentPart + 1);
 
-  document.getElementById('part-label').textContent = 'PART ' + (currentPart + 1);
-  document.getElementById('part-title').textContent = partDef.label;
+  document.getElementById('part-label').textContent = 'ROUND ' + (currentPart + 1);
   document.getElementById('part-desc').textContent = partDef.description;
   document.getElementById('timer-display').textContent = '00:00';
   document.getElementById('timer-label').textContent = 'Tap "Start Driving" to begin';
@@ -211,7 +210,7 @@ function showFaultScreen() {
   document.getElementById('fault-time').textContent = formatTime(partTimes[currentPart]) + ' driven';
 
   if (testMode === 'supervisor') {
-    document.getElementById('fault-title').textContent = 'Rate Performance \u2014 Part ' + (currentPart + 1);
+    document.getElementById('fault-title').textContent = 'Rate Performance \u2014 Round ' + (currentPart + 1);
     document.querySelector('.fault-subtitle').textContent = 'Rate each area based on what you observed. Tap a category to expand it.';
     // Initialize supervisor ratings for this part if empty
     if (!supervisorRatings[currentPart] || Object.keys(supervisorRatings[currentPart]).length === 0) {
@@ -220,7 +219,7 @@ function showFaultScreen() {
     renderSupervisorFaults();
     updateSupervisorTotals();
   } else {
-    document.getElementById('fault-title').textContent = 'Record Faults \u2014 Part ' + (currentPart + 1);
+    document.getElementById('fault-title').textContent = 'Record Faults \u2014 Round ' + (currentPart + 1);
     document.querySelector('.fault-subtitle').textContent = 'Tap a counter to add a fault. Long-press to reset to 0.';
     // Initialize fault data for this part if empty
     if (Object.keys(partFaults[currentPart]).length === 0) {
@@ -794,7 +793,7 @@ function showSupervisorResults() {
       else if (pr[k] === 'concern') pc++;
     }
     pbHtml += '<div class="part-breakdown-row">';
-    pbHtml += '<span class="part-breakdown-label">Part ' + (p + 1) + '</span>';
+    pbHtml += '<span class="part-breakdown-label">Round ' + (p + 1) + '</span>';
     pbHtml += '<span class="part-breakdown-faults">';
     pbHtml += '<span style="color:#166534;">' + pg + ' \u2713</span>';
     pbHtml += '<span style="color:#b45309;">' + pn + ' \u26A0</span>';
@@ -940,7 +939,7 @@ function showInstructorResults() {
         });
       }
     });
-    var partLabel = 'Part ' + (p + 1);
+    var partLabel = 'Round ' + (p + 1);
     pbHtml += '<div class="part-breakdown-row">';
     pbHtml += '<span class="part-breakdown-label">' + partLabel + '</span>';
     pbHtml += '<span class="part-breakdown-faults">';
