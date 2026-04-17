@@ -254,9 +254,7 @@ window.CC_COMPETENCY = (function () {
     maxSeriousFaults: 0,
     maxDangerousFaults: 0,
     parts: [
-      { number: 1, label: 'Part 1 — Urban & Residential', description: 'Moving off, junctions, mirrors, signals, speed in built-up areas', durationMinutes: 10 },
-      { number: 2, label: 'Part 2 — Open Roads & Dual Carriageways', description: 'Speed management, following distance, positioning, overtaking', durationMinutes: 10 },
-      { number: 3, label: 'Part 3 — Manoeuvres & Independent Driving', description: 'Reverse park, forward bay, awareness and planning under test conditions', durationMinutes: 10 }
+      { description: 'Drive as you would on your test. Your assessor will note any faults.', durationMinutes: 10 }
     ]
   };
 

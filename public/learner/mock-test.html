@@ -484,6 +484,16 @@
     .sup-result-pill.good { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
     .sup-result-pill.needs_work { background: #fffbeb; color: #b45309; border-color: #fde68a; }
     .sup-result-pill.concern { background: var(--red-lt); color: #dc2626; border-color: #fecaca; }
+    .sup-hints-check { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .sup-hint-label { display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; color: var(--text); cursor: pointer; line-height: 1.4; }
+    .sup-hint-label input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
+    .sup-note-area { width: 100%; box-sizing: border-box; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; font-family: inherit; color: var(--text); background: var(--bg); resize: none; min-height: 60px; }
+    .sup-note-area:focus { outline: none; border-color: var(--primary); }
+    .sup-result-detail { margin-bottom: 10px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .sup-result-detail-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; font-weight: 600; }
+    .sup-result-hints { margin: 0; padding: 8px 14px 10px 30px; border-top: 1px solid var(--border); background: var(--bg); font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+    .sup-result-hints li { margin-bottom: 2px; }
+    .sup-result-note { margin: 0; padding: 6px 14px 10px; font-size: 0.82rem; color: var(--muted); font-style: italic; border-top: 1px solid var(--border); background: var(--bg); }
 
     /* ── FAULT MAP ── */
     .map-screen { padding: 20px 0; }
@@ -577,10 +587,10 @@
         Mobile phones must not be used by the driver or supervising driver during this test. Pull over safely at each 10-minute interval to record faults.
       </div>
 
-      <p class="start-desc">This mock test mirrors the real DVSA practical test. Drive in 10-minute sections, stopping briefly between each to record any faults. You can end the test at any point or continue for as many sections as you need.</p>
+      <p class="start-desc">This mock test mirrors the real DVSA practical test. Drive in 10-minute rounds, stopping briefly between each to record any faults. You can end the test at any point or continue for as many rounds as you need.</p>
 
       <div class="step-indicator" id="step-indicator">
-        <div class="step-item active"><span class="step-num" id="step-current">1</span> <span id="step-label">Part 1</span></div>
+        <div class="step-item active"><span class="step-num" id="step-current">1</span> <span id="step-label">Round 1</span></div>
         <span class="step-arrow">&rsaquo;</span>
         <div class="step-item" data-step="end"><span class="step-num">&#10003;</span> Results</div>
       </div>
@@ -607,7 +617,6 @@
   <section id="screen-part" class="screen hidden">
     <div class="part-screen">
       <div class="part-label" id="part-label"></div>
-      <h2 id="part-title"></h2>
       <p class="part-desc" id="part-desc"></p>
 
       <div class="part-instruction">
@@ -642,7 +651,7 @@
 
       <div id="post-save-choice" class="hidden post-save-choice">
         <p style="text-align: center; font-weight: 600; margin: 0;">Faults saved. What next?</p>
-        <button class="btn-primary" id="btn-continue-next">Continue to Next Section</button>
+        <button class="btn-primary" id="btn-continue-next">Do Another Round</button>
         <button class="btn-dark" id="btn-end-mock">End Mock Test &amp; View Results</button>
       </div>
     </div>
