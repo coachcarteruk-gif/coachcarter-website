@@ -12,6 +12,7 @@ let isDriving = false;
 let partTimes = [0]; // elapsed seconds per part (grows dynamically)
 let partFaults = [{}]; // per-part: { skill_key: { driving, serious, dangerous } } (instructor) or { catKey: rating } (supervisor)
 let supervisorRatings = [{}]; // per-part: { catKey: 'good'|'needs_work'|'concern' }
+let supervisorNotes = [{}];  // per-part: { catKey: { hints: [indices], note: string } }
 let longPressTimer = null;
 
 // Route selection
@@ -128,6 +129,7 @@ async function beginMockTest() {
   partTimes = [0];
   partFaults = [{}];
   supervisorRatings = [{}];
+  supervisorNotes = [{}];
   showPartScreen();
 }
 
@@ -321,14 +323,23 @@ function renderFaultAreas() {
 
 function toggleArea(btn) {
   var group = btn.parentElement;
+  var opening = !group.classList.contains('open');
   group.classList.toggle('open');
+  if (opening) {
+    var subsContainers = group.querySelectorAll('.subs-container');
+    if (subsContainers.length === 1) {
+      subsContainers[0].classList.add('expanded');
+      var row = subsContainers[0].previousElementSibling;
+      if (row) row.classList.add('subs-open');
+    }
+  }
 }
 
 /* ── Supervisor Fault Recording ── */
 var SUP_CATS = CC_COMPETENCY.SUPERVISOR_CATEGORIES;
 var SUP_RATINGS = CC_COMPETENCY.SUPERVISOR_RATINGS;
 
-function renderSupervisorFaults() {
+function renderSupervisorFaults(keepOpenKey) {
   var container = document.getElementById('fault-areas');
   var html = '';
   var ratings = supervisorRatings[currentPart];
@@ -339,7 +350,8 @@ function renderSupervisorFaults() {
     var badgeClass = currentRating ? 'rated-' + currentRating : '';
     var badgeText = currentRating ? SUP_RATINGS.find(function(r){ return r.key === currentRating; }).label : 'Not rated';
 
-    html += '<div class="sup-category' + (currentRating ? '' : ' open') + '" data-cat="' + cat.key + '">';
+    var isOpen = (!currentRating || cat.key === keepOpenKey) ? ' open' : '';
+    html += '<div class="sup-category' + isOpen + '" data-cat="' + cat.key + '">';
     html += '<div class="sup-category-card">';
     html += '<div class="sup-category-header" data-action="toggle-sup-category">';
     html += '<span class="area-icon">' + cat.icon + '</span>';
@@ -347,13 +359,17 @@ function renderSupervisorFaults() {
     html += '<span class="sup-category-badge ' + badgeClass + '">' + badgeText + '</span>';
     html += '</div>';
 
+    var catNotes = (supervisorNotes[currentPart] && supervisorNotes[currentPart][cat.key]) || { hints: [], note: '' };
+
     html += '<div class="sup-category-body"><div class="sup-category-body-inner">';
     html += '<p class="sup-desc">' + cat.description + '</p>';
-    html += '<ul class="sup-hints">';
+
+    html += '<div class="sup-hints-check">';
     for (var h = 0; h < cat.faultHints.length; h++) {
-      html += '<li>' + cat.faultHints[h] + '</li>';
+      var checked = catNotes.hints.indexOf(h) !== -1 ? ' checked' : '';
+      html += '<label class="sup-hint-label"><input type="checkbox" class="sup-hint-cb" data-cat="' + cat.key + '" data-hint="' + h + '"' + checked + '> ' + cat.faultHints[h] + '</label>';
     }
-    html += '</ul>';
+    html += '</div>';
 
     html += '<div class="sup-rating-btns">';
     for (var r = 0; r < SUP_RATINGS.length; r++) {
@@ -362,6 +378,8 @@ function renderSupervisorFaults() {
       html += '<button class="sup-rating-btn' + selected + '" data-action="rate-sup-cat" data-cat="' + cat.key + '" data-rating="' + rt.key + '">' + rt.label + '</button>';
     }
     html += '</div>';
+
+    html += '<textarea class="sup-note-area" data-cat="' + cat.key + '" placeholder="Add a note not listed above…" maxlength="200">' + (catNotes.note || '') + '</textarea>';
 
     html += '</div></div>';
     html += '</div></div>';
@@ -377,7 +395,20 @@ function toggleSupCategory(header) {
 
 function rateSupervisorCategory(catKey, rating) {
   supervisorRatings[currentPart][catKey] = rating;
-  renderSupervisorFaults();
+
+  // Update badge in-place (no full re-render so card stays open)
+  var card = document.querySelector('.sup-category[data-cat="' + catKey + '"]');
+  if (card) {
+    var rObj = SUP_RATINGS.find(function(r) { return r.key === rating; });
+    var badge = card.querySelector('.sup-category-badge');
+    badge.className = 'sup-category-badge rated-' + rating;
+    badge.textContent = rObj ? rObj.label : rating;
+
+    card.querySelectorAll('.sup-rating-btn').forEach(function(b) {
+      b.className = 'sup-rating-btn' + (b.dataset.rating === rating ? ' selected-' + rating : '');
+    });
+  }
+
   updateSupervisorTotals();
 }
 
@@ -629,6 +660,7 @@ function continueToNextPart() {
   currentPart++;
   partFaults.push({});
   supervisorRatings.push({});
+  supervisorNotes.push({});
   partTimes.push(0);
   showPartScreen();
 }
@@ -736,6 +768,19 @@ function showSupervisorResults() {
   }
 
   // Show concerns first, then needs_work, then good
+  // Aggregate notes across all parts per category
+  var allNotes = {};
+  for (var np = 0; np < supervisorNotes.length; np++) {
+    var pn = supervisorNotes[np];
+    for (var nk in pn) {
+      if (!allNotes[nk]) allNotes[nk] = { hints: [], note: '' };
+      pn[nk].hints.forEach(function(hi) {
+        if (allNotes[nk].hints.indexOf(hi) === -1) allNotes[nk].hints.push(hi);
+      });
+      if (pn[nk].note && !allNotes[nk].note) allNotes[nk].note = pn[nk].note;
+    }
+  }
+
   var sSection = document.getElementById('result-serious-section');
   var concerns = [], needsWorkList = [];
   for (var c = 0; c < SUP_CATS.length; c++) {
@@ -744,24 +789,34 @@ function showSupervisorResults() {
     else if (allRatings[ct.key] === 'needs_work') needsWorkList.push(ct);
   }
 
+  function buildCatDetail(ct, badgeClass, badgeLabel) {
+    var n = allNotes[ct.key] || { hints: [], note: '' };
+    var selectedHints = n.hints.map(function(i) { return ct.faultHints[i]; }).filter(Boolean);
+    var out = '<div class="sup-result-detail"><div class="sup-result-detail-header"><span>' + ct.icon + ' ' + ct.label + '</span><span class="fault-badge ' + badgeClass + '">' + badgeLabel + '</span></div>';
+    if (selectedHints.length) {
+      out += '<ul class="sup-result-hints">';
+      selectedHints.forEach(function(h) { out += '<li>' + h + '</li>'; });
+      out += '</ul>';
+    }
+    if (n.note) out += '<p class="sup-result-note">\u201C' + n.note + '\u201D</p>';
+    out += '</div>';
+    return out;
+  }
+
   var sHtml = '';
   if (concerns.length > 0) {
-    sHtml += '<div class="result-section"><h3>\uD83D\uDD34 Areas of Concern</h3><ul>';
-    concerns.forEach(function(ct) {
-      sHtml += '<li><span>' + ct.icon + ' ' + ct.label + '</span><span class="fault-badge serious-badge">Concern</span></li>';
-    });
-    sHtml += '</ul></div>';
+    sHtml += '<div class="result-section"><h3>\uD83D\uDD34 Areas of Concern</h3>';
+    concerns.forEach(function(ct) { sHtml += buildCatDetail(ct, 'serious-badge', 'Concern'); });
+    sHtml += '</div>';
   }
   sSection.innerHTML = sHtml;
 
   var dSection = document.getElementById('result-driving-section');
   var dHtml = '';
   if (needsWorkList.length > 0) {
-    dHtml += '<div class="result-section"><h3>\uD83D\uDFE1 Needs More Practice</h3><ul>';
-    needsWorkList.forEach(function(ct) {
-      dHtml += '<li><span>' + ct.icon + ' ' + ct.label + '</span><span class="fault-badge driving-badge">Needs work</span></li>';
-    });
-    dHtml += '</ul></div>';
+    dHtml += '<div class="result-section"><h3>\uD83D\uDFE1 Needs More Practice</h3>';
+    needsWorkList.forEach(function(ct) { dHtml += buildCatDetail(ct, 'driving-badge', 'Needs work'); });
+    dHtml += '</div>';
   }
   dSection.innerHTML = dHtml;
 
@@ -1265,6 +1320,30 @@ document.addEventListener('pointerleave', function (e) {
   var t = e.target.closest && e.target.closest('[data-action="fault-counter"]');
   if (t) fcCancel(t);
 }, true);
+// ── Supervisor hint checkboxes ──
+document.addEventListener('change', function(e) {
+  var cb = e.target.closest('.sup-hint-cb');
+  if (!cb) return;
+  var catKey = cb.dataset.cat;
+  var hintIdx = parseInt(cb.dataset.hint, 10);
+  if (!supervisorNotes[currentPart]) supervisorNotes[currentPart] = {};
+  if (!supervisorNotes[currentPart][catKey]) supervisorNotes[currentPart][catKey] = { hints: [], note: '' };
+  var hints = supervisorNotes[currentPart][catKey].hints;
+  var pos = hints.indexOf(hintIdx);
+  if (cb.checked && pos === -1) hints.push(hintIdx);
+  else if (!cb.checked && pos !== -1) hints.splice(pos, 1);
+});
+
+// ── Supervisor note textarea ──
+document.addEventListener('input', function(e) {
+  var ta = e.target.closest('.sup-note-area');
+  if (!ta) return;
+  var catKey = ta.dataset.cat;
+  if (!supervisorNotes[currentPart]) supervisorNotes[currentPart] = {};
+  if (!supervisorNotes[currentPart][catKey]) supervisorNotes[currentPart][catKey] = { hints: [], note: '' };
+  supervisorNotes[currentPart][catKey].note = ta.value;
+});
+
 // ── Static handlers previously inline in HTML ──
 (function wire() {
   document.querySelectorAll('.mode-card[data-mode]').forEach(function (btn) {
