@@ -978,13 +978,13 @@ function showBookSuccess(weeks, dates) {
     }).join(', ');
     document.getElementById('successDate').textContent = dateList;
     successStep.querySelector('h2').textContent = `${weeks} lessons booked!`;
-    successStep.querySelector('p').innerHTML = `Your <strong>${weeks} weekly lessons</strong> at <strong>${pendingSlot.start_time}</strong> with <strong>${pendingSlot.instructor_name}</strong> are confirmed. Check your email for details.`;
+    successStep.querySelector('p').innerHTML = `Your <strong>${weeks} weekly lessons</strong> at <strong id="successTime">${pendingSlot.start_time}</strong> with <strong id="successInstructor">${pendingSlot.instructor_name}</strong> are confirmed. Check your email for details.`;
   } else {
     const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', timeZone:'UTC' });
     document.getElementById('successDate').textContent = dateDisplay;
     successStep.querySelector('h2').textContent = 'Lesson booked!';
-    successStep.querySelector('p').innerHTML = `Your lesson on <strong>${dateDisplay}</strong> at <strong>${pendingSlot.start_time}</strong> with <strong>${pendingSlot.instructor_name}</strong> is confirmed. Check your email for details.`;
+    successStep.querySelector('p').innerHTML = `Your lesson on <strong id="successDate">${dateDisplay}</strong> at <strong id="successTime">${pendingSlot.start_time}</strong> with <strong id="successInstructor">${pendingSlot.instructor_name}</strong> is confirmed. Check your email for details.`;
   }
   document.getElementById('successTime').textContent = pendingSlot.start_time;
   document.getElementById('successInstructor').textContent = pendingSlot.instructor_name;
