@@ -1273,7 +1273,7 @@ async function handleCancelBooking(req, res) {
     await sql`
       UPDATE learner_users
       SET balance_minutes = balance_minutes + ${minsToReturn},
-          credit_balance = credit_balance + 1
+          credit_balance = credit_balance + ${Math.ceil(minsToReturn / 60)}
       WHERE id = ${booking.learner_id}
     `;
 

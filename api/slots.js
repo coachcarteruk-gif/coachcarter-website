@@ -1428,8 +1428,8 @@ async function handleCancel(req, res) {
       for (const sb of seriesBookings) {
         const lessonDT = new Date(`${sb.scheduled_date}T${sb.start_time}Z`);
         const hoursUntil = (lessonDT - Date.now()) / 3600000;
-        const eligible = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF;
-        const mins = sb.minutes_deducted || DEFAULT_SLOT_MINUTES;
+        const mins = sb.minutes_deducted != null ? sb.minutes_deducted : DEFAULT_SLOT_MINUTES;
+        const eligible = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF && mins > 0;
 
         await sql`
           UPDATE lesson_bookings
@@ -1545,8 +1545,8 @@ async function handleCancel(req, res) {
     const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
     const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
     // Demo bookings are free, so no hours to return
-    const creditReturned = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF;
-    const minsToReturn   = booking.minutes_deducted || DEFAULT_SLOT_MINUTES;
+    const minsToReturn   = booking.minutes_deducted != null ? booking.minutes_deducted : DEFAULT_SLOT_MINUTES;
+    const creditReturned = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF && minsToReturn > 0;
 
     // Cancel the booking
     await sql`
@@ -1571,50 +1571,54 @@ async function handleCancel(req, res) {
 
     // Notify learner
     const lessonDateStr = formatDateDisplay(String(booking.scheduled_date).slice(0, 10));
-    const mailer        = createTransporter();
-
-    await mailer.sendMail({
-      from:    'CoachCarter <bookings@coachcarter.uk>',
-      to:      booking.learner_email,
-      subject: `Lesson cancelled — ${lessonDateStr}`,
-      html: creditReturned ? `
-        <h1>Lesson cancelled.</h1>
-        <p>Your lesson on <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
-           with ${booking.instructor_name} has been cancelled.</p>
-        <p><strong>${returnedStr} returned to your balance.</strong>
-           You now have ${balanceStr} remaining.</p>
-        <p><a href="https://coachcarter.uk/learner/"
-              style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;
-                     border-radius:8px;display:inline-block;font-weight:bold">
-          Book another lesson →
-        </a></p>
-      ` : `
-        <h1>Lesson cancelled.</h1>
-        <p>Your lesson on <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
-           with ${booking.instructor_name} has been cancelled.</p>
-        <p><strong>As this was cancelled with less than 48 hours' notice, your hours have been forfeited
-           in line with our cancellation policy.</strong></p>
-        <p>If you believe this is an error, please reply to this email.</p>
-      `
-    });
-
-    // Notify instructor (skip for demo instructor)
-    if (!isDemoBooking) {
+    const cancelTime    = String(booking.start_time).slice(0, 5);
+    try {
+      const mailer = createTransporter();
       await mailer.sendMail({
-        from:    'CoachCarter <system@coachcarter.uk>',
-        to:      booking.instructor_email,
-        subject: `Lesson cancelled — ${lessonDateStr} at ${String(booking.start_time).slice(0,5)}`,
-        html: `
-          <h2>Lesson cancelled</h2>
-          <p>The lesson with <strong>${booking.learner_name}</strong> on
-             <strong>${lessonDateStr} at ${String(booking.start_time).slice(0,5)}</strong>
-             has been cancelled by the learner.</p>
+        from:    'CoachCarter <bookings@coachcarter.uk>',
+        to:      booking.learner_email,
+        subject: `Lesson cancelled — ${lessonDateStr}`,
+        html: creditReturned ? `
+          <h1>Lesson cancelled.</h1>
+          <p>Your lesson on <strong>${lessonDateStr} at ${cancelTime}</strong>
+             with ${booking.instructor_name} has been cancelled.</p>
+          <p><strong>${returnedStr} returned to your balance.</strong>
+             You now have ${balanceStr} remaining.</p>
+          <p><a href="https://coachcarter.uk/learner/"
+                style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;
+                       border-radius:8px;display:inline-block;font-weight:bold">
+            Book another lesson →
+          </a></p>
+        ` : `
+          <h1>Lesson cancelled.</h1>
+          <p>Your lesson on <strong>${lessonDateStr} at ${cancelTime}</strong>
+             with ${booking.instructor_name} has been cancelled.</p>
+          <p><strong>As this was cancelled with less than 48 hours' notice, your hours have been forfeited
+             in line with our cancellation policy.</strong></p>
+          <p>If you believe this is an error, please reply to this email.</p>
         `
       });
+
+      // Notify instructor (skip for demo instructor)
+      if (!isDemoBooking) {
+        await mailer.sendMail({
+          from:    'CoachCarter <system@coachcarter.uk>',
+          to:      booking.instructor_email,
+          subject: `Lesson cancelled — ${lessonDateStr} at ${cancelTime}`,
+          html: `
+            <h2>Lesson cancelled</h2>
+            <p>The lesson with <strong>${booking.learner_name}</strong> on
+               <strong>${lessonDateStr} at ${cancelTime}</strong>
+               has been cancelled by the learner.</p>
+          `
+        });
+      }
+    } catch (emailErr) {
+      console.error('cancel email error (non-fatal):', emailErr.message);
+      reportError('/api/slots:cancel-email', emailErr);
     }
 
     // WhatsApp cancellation notifications
-    const cancelTime = String(booking.start_time).slice(0, 5);
     await sendWhatsApp(booking.learner_phone,
       creditReturned
         ? `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\n${returnedStr} returned to your balance. You now have ${balanceStr} remaining.\n\nRebook: https://coachcarter.uk/learner/book.html`
