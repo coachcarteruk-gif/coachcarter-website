@@ -355,14 +355,6 @@ function hideError() {
   document.getElementById('error-msg').classList.remove('show');
 }
 
-// ── Ask Q&A after session ──
-function askSessionQuestion() {
-  let url = '/learner/qa.html?ask=1';
-  if (window._savedSessionId) url += '&session_id=' + window._savedSessionId;
-  if (window._savedBookingId) url += '&booking_id=' + window._savedBookingId;
-  window.location.href = url;
-}
-
 // ── Session History ──
 const SKILL_LABELS = {};
 SKILLS.forEach(s => { SKILL_LABELS[s.key] = s.label; });
@@ -449,7 +441,5 @@ document.addEventListener('contextmenu', function (e) {
   });
   var saveBtn = document.getElementById('save-btn');
   if (saveBtn) saveBtn.addEventListener('click', saveSession);
-  var askBtn = document.getElementById('btn-ask-session-question');
-  if (askBtn) askBtn.addEventListener('click', askSessionQuestion);
 })();
 })();
