@@ -1144,11 +1144,6 @@ async function handleExportData(req, res) {
       WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}
       ORDER BY fp.created_at DESC`;
 
-    const questions = await sql`
-      SELECT title, body, status, created_at
-      FROM qa_questions WHERE learner_id = ${user.id} AND school_id = ${schoolId}
-      ORDER BY created_at DESC`;
-
     const referralCode = await sql`
       SELECT code, created_at FROM referrals
       WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
@@ -1163,7 +1158,7 @@ async function handleExportData(req, res) {
       _metadata: {
         exported_at: new Date().toISOString(),
         format: 'json',
-        data_categories: ['profile', 'onboarding', 'bookings', 'transactions', 'driving_sessions', 'skill_ratings', 'quiz_results', 'mock_tests', 'focused_practice', 'qa_questions', 'referral_code', 'referrals_made']
+        data_categories: ['profile', 'onboarding', 'bookings', 'transactions', 'driving_sessions', 'skill_ratings', 'quiz_results', 'mock_tests', 'focused_practice', 'referral_code', 'referrals_made']
       },
       profile: profile || {},
       onboarding: onboarding[0] || null,
@@ -1174,7 +1169,6 @@ async function handleExportData(req, res) {
       quiz_results: quizzes,
       mock_tests: mockTests,
       focused_practice: focusedPractice,
-      qa_questions: questions,
       referral_code: referralCode[0] || null,
       referrals_made: referralsMade
     };
@@ -1303,8 +1297,6 @@ async function handleConfirmDeletion(req, res) {
     try { await sql`DELETE FROM mock_test_faults WHERE mock_test_id IN (SELECT id FROM mock_tests WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete mock_test_faults skipped:', e.message); }
     try { await sql`DELETE FROM mock_tests WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete mock_tests skipped:', e.message); }
     try { await sql`DELETE FROM focused_practice_sessions WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete focused_practice_sessions skipped:', e.message); }
-    try { await sql`DELETE FROM qa_answers WHERE question_id IN (SELECT id FROM qa_questions WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete qa_answers skipped:', e.message); }
-    try { await sql`DELETE FROM qa_questions WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete qa_questions skipped:', e.message); }
     try { await sql`DELETE FROM sent_reminders WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete sent_reminders skipped:', e.message); }
     try { await sql`DELETE FROM slot_reservations WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete slot_reservations skipped:', e.message); }
     try { await sql`DELETE FROM lesson_confirmations WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete lesson_confirmations skipped:', e.message); }

@@ -115,16 +115,6 @@
       html += '</tbody></table></div>';
     } else { html += '<div class="data-empty">No mock tests</div>'; }
 
-    // Q&A
-    html += '<h2>Questions (' + (d.qa_questions || []).length + ')</h2>';
-    if (d.qa_questions && d.qa_questions.length) {
-      html += '<div class="data-section"><table class="data-table"><thead><tr><th>Title</th><th>Status</th><th>Date</th></tr></thead><tbody>';
-      d.qa_questions.forEach(function (q) {
-        html += '<tr><td>' + (q.title || '') + '</td><td>' + (q.status || '') + '</td><td>' + formatDateTime(q.created_at) + '</td></tr>';
-      });
-      html += '</tbody></table></div>';
-    } else { html += '<div class="data-empty">No questions asked</div>'; }
-
     // Metadata
     html += '<h2>Export Information</h2><div class="data-section">';
     html += row('Exported at', formatDateTime(d._metadata.exported_at));
