@@ -159,6 +159,11 @@
         <label for="joinMessage">Tell us about yourself</label>
         <textarea id="joinMessage" placeholder="e.g. your experience, ADI badge number, areas you cover…"></textarea>
       </div>
+      <!-- Honeypot: hidden from humans, bots auto-fill every field. Do not remove. -->
+      <div style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+        <label for="joinWebsite">Website (leave blank)</label>
+        <input type="text" id="joinWebsite" name="website" tabindex="-1" autocomplete="off">
+      </div>
       <button type="submit" class="btn-primary" id="joinBtn">Send enquiry</button>
     </form>
   </div>

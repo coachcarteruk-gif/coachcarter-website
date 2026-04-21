@@ -1820,6 +1820,12 @@ footer a:hover { color: var(--accent); }
           </label>
         </div>
 
+        <!-- Honeypot: hidden from humans, bots auto-fill every field. Do not remove. -->
+        <div style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+          <label for="enq-website">Website (leave blank)</label>
+          <input type="text" id="enq-website" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
         <button type="submit" class="enquiry-submit" id="enq-submit">
           <span>Send Enquiry</span>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

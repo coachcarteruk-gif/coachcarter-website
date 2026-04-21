@@ -401,6 +401,7 @@ document.getElementById('enquiry-form').addEventListener('submit', async functio
     enquiryType: document.getElementById('enq-type').value,
     message: document.getElementById('enq-message').value.trim(),
     marketing: document.getElementById('enq-marketing').checked,
+    website: document.getElementById('enq-website')?.value || '',
     submittedAt: new Date().toISOString()
   };
 

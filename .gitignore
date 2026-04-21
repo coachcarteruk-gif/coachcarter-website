@@ -30,5 +30,9 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
 .vercel
 .env*.local
+
+# Nimbalyst editor local state (per-machine, not shared)
+nimbalyst-local/

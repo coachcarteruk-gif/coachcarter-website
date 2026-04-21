@@ -127,6 +127,7 @@
     const email   = document.getElementById('joinEmail').value.trim();
     const phone   = document.getElementById('joinPhone').value.trim();
     const message = document.getElementById('joinMessage').value.trim();
+    const website = document.getElementById('joinWebsite')?.value || '';
 
     if (!name || !email || !phone) {
       const err = document.getElementById('joinError');
@@ -152,6 +153,7 @@
           enquiryType: 'join-team',
           message: message || null,
           marketing: false,
+          website,
           submittedAt: new Date().toISOString()
         })
       });

@@ -37,6 +37,28 @@ function safePhone(raw) {
   return String(raw == null ? '' : raw).replace(/[^\d+]/g, '');
 }
 
+// Cheap, high-signal spam heuristics for the public submit endpoint. We
+// deliberately return silent success for matches so bots can't probe the rules.
+//   - honeypot `website` field: invisible to humans, auto-filled by bots
+//   - phone: must contain at least 7 digits in a plausible UK format
+//   - name: random alphanumeric blobs (no spaces + no vowels) are a very
+//           strong bot fingerprint (e.g. "piCAacgAsQlWmOAbdOqMU")
+function isLikelySpam({ name, phone, website }) {
+  if (website && String(website).trim() !== '') return true;
+
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return true;
+
+  const n = String(name || '').trim();
+  const hasSpace  = /\s/.test(n);
+  const hasVowel  = /[aeiouAEIOU]/.test(n);
+  const isAlnum   = /^[A-Za-z0-9]+$/.test(n);
+  // Long alphanumeric blob with no vowels and no spaces = random garbage.
+  if (n.length >= 8 && isAlnum && !hasSpace && !hasVowel) return true;
+
+  return false;
+}
+
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const transporter = createTransporter();
@@ -96,15 +118,23 @@ async function handleGet(req, res, schoolId) {
 async function handleSubmit(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { name, email, phone, enquiryType, message, marketing, submittedAt } = req.body;
+  const { name, email, phone, enquiryType, message, marketing, submittedAt, website } = req.body;
   if (!name || !email || !phone || !enquiryType)
     return res.status(400).json({ error: 'Missing required fields' });
 
-  // Rate limiting: max 5 submissions per IP per hour (see api/_rate-limit.js)
+  // ── Anti-spam: silent drop ──────────────────────────────────────────────────
+  // Bots auto-fill every field they see, including our hidden honeypot, and
+  // they submit obvious junk in the name/phone. We return 200 success without
+  // saving or emailing so bots don't learn which rule tripped them.
+  if (isLikelySpam({ name, phone, website })) {
+    return res.status(200).json({ success: true, dbSaved: false, sheetsSaved: false });
+  }
+
+  // Rate limiting: max 3 submissions per IP per hour (see api/_rate-limit.js)
   const sql = neon(process.env.POSTGRES_URL);
   const rl = await checkRateLimit(sql, {
     key: `enquiry_submit:${getClientIp(req)}`,
-    max: 5,
+    max: 3,
     windowSeconds: 3600,
   });
   if (!rl.allowed) {
