@@ -328,7 +328,6 @@ async function saveSession() {
     const data = await res.json();
     if (!res.ok) { showError(data.error || 'Failed to save. Please try again.'); btn.disabled = false; btn.textContent = 'Save Session'; return; }
 
-    // Store saved session info for Q&A link
     window._savedSessionId = data.session_id;
     window._savedBookingId = bookingId ? parseInt(bookingId) : null;
 

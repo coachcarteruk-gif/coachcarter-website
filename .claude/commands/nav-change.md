@@ -11,7 +11,7 @@ Before writing any code, read `CLAUDE.md` (the "Intentionally removed" list) and
 2. Lesson Advisor
 3. Privacy Policy tab (page exists, not in nav)
 4. Terms tab (page exists, not in nav)
-5. Q&A as a bottom tab (sidebar only)
+5. Q&A feature (entirely removed April 2026 — pages, API, tables all deleted)
 6. Old `.site-nav` dark top bar
 7. Old `.bottom-nav` inline bottom bar
 8. Old `.sub-tabs` on learner pages

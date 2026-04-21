@@ -95,7 +95,7 @@ Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel wi
 - Lesson Advisor
 - Privacy Policy tab (page still exists, just not in nav)
 - Terms tab (page still exists, just not in nav)
-- Q&A as a bottom tab (moved to sidebar only — April 2026)
+- Q&A feature entirely (removed April 2026 — learner/instructor Q&A pages, API handlers, `qa_questions`/`qa_answers` tables, and daily digest cron all deleted. Feature saw zero real-world use. Do not re-add.)
 - Old `.site-nav` dark top bar on any page (sidebar.js handles all nav)
 - Old `.bottom-nav` inline bottom bar on any page (sidebar.js handles all nav)
 - Old `.sub-tabs` on learner booking/buy-credits pages (sidebar handles navigation)
