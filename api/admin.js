@@ -1082,7 +1082,6 @@ async function handleDeleteLearner(req, res) {
     try { await sql`DELETE FROM skill_ratings WHERE user_id = ${learner_id}`; } catch (e) { console.warn('delete skill_ratings skipped:', e.message); }
     try { await sql`DELETE FROM driving_sessions WHERE user_id = ${learner_id}`; } catch (e) { console.warn('delete driving_sessions skipped:', e.message); }
     try { await sql`DELETE FROM lesson_bookings WHERE learner_id = ${learner_id}`; } catch (e) { console.warn('delete lesson_bookings skipped:', e.message); }
-    try { await sql`DELETE FROM qa_questions WHERE learner_id = ${learner_id}`; } catch (e) { console.warn('delete qa_questions skipped:', e.message); }
 
     // Delete the learner
     await sql`DELETE FROM learner_users WHERE id = ${learner_id}`;

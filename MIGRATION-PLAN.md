@@ -51,7 +51,7 @@
 | connect.js | 7 | Stripe Connect onboarding, status, dashboard, admin invite, dismiss |
 | cron-payouts.js | 1 | Weekly Friday payout processing (Vercel cron) |
 | reminders.js | 4 | send-due (hourly cron), daily-schedule (7pm cron), settings, update-settings |
-| Others (15) | 1 each | address-lookup, config, status, reviews, qa-digest (cron), migrate, verify-session, etc. |
+| Others (14) | 1 each | address-lookup, config, status, reviews, migrate, verify-session, etc. |
 
 **Shared server modules (prefixed with `_`):**
 - `_auth-helpers.js` — SMTP transporter, token generation
@@ -80,7 +80,7 @@
 **Notifications:** sent_reminders
 **Payments:** credit_transactions
 **Learning:** driving_sessions, skill_ratings, learner_onboarding, quiz_results, mock_tests, mock_test_faults
-**Community:** qa_questions, qa_answers, enquiries, availability_submissions
+**Community:** enquiries, availability_submissions
 **Config:** site_config, google_reviews, google_reviews_meta
 **Notes:** instructor_learner_notes
 
@@ -126,7 +126,7 @@
 - Pricing page/tab
 - Lesson Advisor (hidden)
 - Privacy/Terms as nav tabs (pages exist, just not in nav)
-- Q&A (hidden for now)
+- Q&A — removed entirely April 2026 (pages, API, tables all gone)
 - Dashboard as permanent bottom tab
 
 **Competency framework (just restructured March 2026):**
@@ -438,7 +438,6 @@ This must stay in sync with the web version. Consider making the web version aut
 
 **Screens intentionally skipped for v1 (hidden on web too):**
 - Advisor (hidden)
-- Q&A (hidden)
 
 ### Per-screen migration template:
 
@@ -496,7 +495,6 @@ The web version streams responses from Anthropic. In React Native:
 | Availability | Medium | Weekly time slot grid editor |
 | Learners | Medium | Learner list with notes, phone/WhatsApp links |
 | Profile | Low | Bio, photo upload (uses presigned URL), contact details |
-| Q&A | Low | Learner questions, reply interface |
 | Login | Low | Separate magic link flow via `instructor_login_tokens` table |
 
 **Important nuance:** Instructor auth is completely separate from learner auth. Uses `instructor_login_tokens` table and different JWT payload. The API client needs to handle both token types.

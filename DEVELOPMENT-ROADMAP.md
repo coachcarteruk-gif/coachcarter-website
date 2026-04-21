@@ -378,16 +378,20 @@ Complete rewrite of the session logging system: consolidated from 8 steps to 3, 
 
 Addressed issues discovered after the v2 launch.
 
-### 2.22 — Q&A System ✅ Complete (March 2026)
+### 2.22 — Q&A System ❌ Removed (April 2026 — originally shipped March 2026)
 
-Learner and instructor Q&A forum.
+Learner/instructor Q&A forum was built in March 2026 but saw zero real-world use
+(only a single test question ever submitted). Entire feature stripped in April 2026:
 
-**What was built:**
-- ✅ Learners can ask questions, instructors can reply
-- ✅ Thread-based with status tracking
-- ✅ Accessible from both learner and instructor portals
-- ✅ API endpoints in `api/learner.js` (`qa-list`, `qa-detail`, `qa-ask`, `qa-reply`)
-- ✅ `db/migrations/014_qa_system.sql`
+- Deleted pages: `public/learner/qa.html`, `public/learner/qa.js`, `public/instructor/qa.html`, `public/instructor/qa.js`
+- Deleted API handlers: `qa-list`, `qa-detail`, `qa-ask`, `qa-reply` in both `learner.js` and `instructor.js`
+- Deleted standalone file: `api/qa-digest.js` + its vercel.json cron entry
+- Dropped tables: `qa_questions`, `qa_answers` (via `DROP TABLE IF EXISTS` in `db/migration.sql`)
+- Removed Q&A from GDPR export, deletion cascade, retention cron, and seed-test-data
+- Nav references stripped from `sidebar.js`, `log-session.html`, `videos.html`
+- Historical schema preserved in `db/migrations/014_qa_system.sql` for reference
+
+Do not re-add — if a learner Q&A feature is wanted later, spec it fresh rather than reviving this.
 
 ### 2.23 — Google Reviews ✅ Complete (March 2026)
 

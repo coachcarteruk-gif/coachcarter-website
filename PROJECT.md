@@ -11,11 +11,11 @@ A complete reference for the CoachCarter driving instructor website. Use this wh
 A driving instructor website for CoachCarter (Fraser). It has seven distinct areas:
 
 - **Public marketing site** — homepage, pricing, availability, about, contact, Google Reviews
-- **Learner portal** — dashboard, lesson booking, session logging, progress tracking, examiner quiz, AI examiner chat, AI lesson advisor, mock driving tests, onboarding, Q&A, videos, profile
-- **Instructor portal** — schedule, availability, profile, Q&A management
+- **Learner portal** — dashboard, lesson booking, session logging, progress tracking, examiner quiz, AI examiner chat, AI lesson advisor, mock driving tests, onboarding, videos, profile
+- **Instructor portal** — schedule, availability, profile
 - **Admin portal** — instructors, bookings, availability, videos, dashboard
 - **Classroom** — public video library with grid + reels UI
-- **Examiner Knowledge Base** — interactive quiz + AI Q&A based on DVSA DL25 marking sheet
+- **Examiner Knowledge Base** — interactive quiz + AI chat based on DVSA DL25 marking sheet
 - **AI Lesson Advisor** — conversational AI sales assistant with Stripe checkout integration
 
 ---
@@ -60,7 +60,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── _shared.js                  # Shared utilities (learner context builder etc.)
 │   ├── _error-alert.js             # Fire-and-forget email error alerting (500 errors)
 │   ├── migrate.js                  # DB migration runner (protected by MIGRATION_SECRET)
-│   ├── learner.js                  # Learner sessions, progress, profile, competency, onboarding, Q&A
+│   ├── learner.js                  # Learner sessions, progress, profile, competency, onboarding
 │   ├── magic-link.js               # Learner magic-link login: send, validate, verify
 │   ├── credits.js                  # Credit balance, Stripe checkout, bulk discounts
 │   ├── slots.js                    # Slot generation, booking, cancellation, my-bookings, pay-per-slot checkout
@@ -77,9 +77,8 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── verify-session.js           # Stripe payment verification
 │   ├── update-status.js            # Booking status update
 │   ├── advisor.js                  # AI Lesson Advisor with Stripe tool_use checkout
-│   ├── ask-examiner.js             # AI examiner Q&A with personalised learner context
+│   ├── ask-examiner.js             # AI examiner chat with personalised learner context
 │   ├── address-lookup.js           # Address autocomplete API
-│   ├── qa-digest.js                # Q&A weekly digest emails
 │   ├── cron-retention.js           # GDPR data retention cron (weekly, archives/purges inactive data)
 │   ├── _audit.js                   # GDPR audit logging utility (logAudit)
 │   ├── seed-test-data.js           # Test data seed/reset (3 test learner accounts, protected by MIGRATION_SECRET)
@@ -137,8 +136,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   │   ├── profile.html            # Learner profile page (includes Privacy & Data links)
 │   │   ├── my-data.html            # GDPR "My Data" page — readable view of all personal data
 │   │   ├── confirm-deletion.html   # GDPR account deletion confirmation (token-based)
-│   │   ├── lessons.html            # My Lessons — tabbed upcoming/past view with cancel, reschedule, calendar actions
-│   │   └── qa.html                 # Q&A forum
+│   │   └── lessons.html            # My Lessons — tabbed upcoming/past view with cancel, reschedule, calendar actions
 │   ├── instructor/
 │   │   ├── login.html              # Magic-link login for instructors
 │   │   ├── dashboard.html          # Compact dashboard — today's lessons + Book Lesson + lesson detail modal
@@ -146,8 +144,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   │   ├── availability.html       # Instructor sets their own weekly availability
 │   │   ├── earnings.html           # Weekly earnings and payout history
 │   │   ├── learners.html           # Learner management and skill tracking
-│   │   ├── profile.html            # Instructor updates bio, contact details, and buffer time
-│   │   └── qa.html                 # Instructor Q&A management
+│   │   └── profile.html            # Instructor updates bio, contact details, and buffer time
 │   ├── demo/
 │   │   └── book.html               # Demo booking calendar — real flow with free demo instructor
 │   ├── videos.json                 # Legacy video data (fallback — videos now managed in DB via admin portal)
@@ -201,7 +198,7 @@ The site uses a **sidebar navigation** system (`public/sidebar.js`) that replace
 - Auth-aware (hides profile link when logged out, shows admin link for admin instructors)
 - Mobile responsive with hamburger toggle at 960px breakpoint
 - Shows user name, credit balance, and logout in footer
-- **Mobile bottom bar:** floating pill style (border-radius 26px, 10px side margins, frosted glass blur, layered shadow) — 5 fixed tabs for learner (Home/Lessons/Practice/Learn/Profile), 5 for instructor (Calendar/Learners/Earnings/Q&A/Profile)
+- **Mobile bottom bar:** floating pill style (border-radius 26px, 10px side margins, frosted glass blur, layered shadow) — 5 fixed tabs for learner (Home/Lessons/Practice/Learn/Profile), 4 for instructor (Calendar/Learners/Earnings/Profile)
 - **Card styling:** injects CSS overrides removing borders from cards site-wide, replacing with ambient shadows. Orange left-border retained on upcoming lesson cards only.
 - **Instructor weekly view:** Timepage-style agenda layout (day label left, lesson cards with coloured left-bar right)
 - **Dashboard top section (learner + instructor):** hero card (orange gradient) showing next lesson with countdown + readiness ring/today count, horizontal pill shortcuts (5 circular icons), 3 colourful action cards (gradient backgrounds). Replaces old emoji quick-action grid (learner) and plain next-lesson card (instructor).
@@ -322,10 +319,6 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | `validate-referral` | GET | No | Public. Validates a referral code before signup. Params: `code`, `school_id`. Returns `{ ok, valid, referrer_first_name }`. Rate-limited (10/min per IP) |
 | `referral-code` | GET | Yes | Returns learner's referral code (auto-generates on first call). Format: FIRSTNAME-XXXX. Returns `{ ok, enabled, code, share_url }` |
 | `referral-stats` | GET | Yes | Referral dashboard data: `{ ok, total_referred, total_reward_minutes, recent_referrals[] }` |
-| `qa-list` | GET | Yes | List Q&A questions |
-| `qa-detail` | GET | Yes | Get single Q&A thread |
-| `qa-ask` | POST | Yes | Submit a question |
-| `qa-reply` | POST | Yes | Reply to a question |
 | `my-availability` | GET | Yes | Returns learner's active weekly availability windows |
 | `set-availability` | POST | Yes | Replace all availability windows. Body: `{ windows: [{ day_of_week, start_time, end_time }] }` |
 | `accept-terms` | POST | Yes | Records T&C acceptance (`terms_accepted_at = NOW()`). Called from login flow gate. |
@@ -562,10 +555,6 @@ created_at TIMESTAMPTZ
 
 **`learner_onboarding`** — id, learner_id (unique), prior_hours_pro, prior_hours_private, previous_tests, transmission, test_booked, test_date, main_concerns, completed_at
 
-**`qa_questions`** — Q&A forum questions table
-
-**`qa_replies`** — Q&A forum replies table
-
 **`google_reviews`** — Cached Google Reviews
 
 ---
@@ -797,7 +786,6 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Learner hub logged-out experience** (#50) — improved landing for unauthenticated visitors
 - **Sidebar profile visibility** (#49) — hide My Profile link when not logged in
 - **Google Reviews** — embedded Google Reviews on public pages
-- **Q&A system** — learner/instructor Q&A forum with question threads and replies
 
 ---
 
@@ -841,7 +829,7 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 
 When a learner is deleted, data is handled as follows:
 - **Anonymized** (kept for tax): `credit_transactions` — `learner_id` set to NULL, `anonymized = true`
-- **Deleted**: skill_ratings, driving_sessions, quiz_results, mock_tests, qa_questions/answers, lesson_bookings, learner_onboarding, waitlist, instructor_learner_notes, learner_availability, magic_link_tokens, sent_reminders, slot_reservations, lesson_confirmations, referrals
+- **Deleted**: skill_ratings, driving_sessions, quiz_results, mock_tests, lesson_bookings, learner_onboarding, waitlist, instructor_learner_notes, learner_availability, magic_link_tokens, sent_reminders, slot_reservations, lesson_confirmations, referrals
 - **Nullified**: cookie_consents.learner_id set to NULL, learner_users.referred_by set to NULL (for referred learners)
 - **Confirmation email** sent after successful deletion
 
@@ -896,7 +884,6 @@ When a learner is deleted, data is handled as follows:
 | `credit_transactions(learner_id)` | Balance/transaction lookups |
 | `driving_sessions(user_id)`, `skill_ratings(user_id)` | Progress tracking |
 | `quiz_results(learner_id)`, `mock_tests(learner_id)` | Learner progress |
-| `qa_questions(user_id)`, `qa_answers(question_id)` | Q&A lookups |
 | `magic_link_tokens(email)`, `(phone)` | Partial indexes for login |
 | + 15 more FK indexes | See `db/migration.sql` |
 

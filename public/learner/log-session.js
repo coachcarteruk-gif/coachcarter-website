@@ -328,7 +328,6 @@ async function saveSession() {
     const data = await res.json();
     if (!res.ok) { showError(data.error || 'Failed to save. Please try again.'); btn.disabled = false; btn.textContent = 'Save Session'; return; }
 
-    // Store saved session info for Q&A link
     window._savedSessionId = data.session_id;
     window._savedBookingId = bookingId ? parseInt(bookingId) : null;
 
@@ -353,14 +352,6 @@ function showError(msg) {
 }
 function hideError() {
   document.getElementById('error-msg').classList.remove('show');
-}
-
-// ── Ask Q&A after session ──
-function askSessionQuestion() {
-  let url = '/learner/qa.html?ask=1';
-  if (window._savedSessionId) url += '&session_id=' + window._savedSessionId;
-  if (window._savedBookingId) url += '&booking_id=' + window._savedBookingId;
-  window.location.href = url;
 }
 
 // ── Session History ──
@@ -449,7 +440,5 @@ document.addEventListener('contextmenu', function (e) {
   });
   var saveBtn = document.getElementById('save-btn');
   if (saveBtn) saveBtn.addEventListener('click', saveSession);
-  var askBtn = document.getElementById('btn-ask-session-question');
-  if (askBtn) askBtn.addEventListener('click', askSessionQuestion);
 })();
 })();

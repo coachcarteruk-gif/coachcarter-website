@@ -4,7 +4,7 @@
 //   or GET /api/seed-test-data?secret=MIGRATION_SECRET&action=clean
 //
 // Creates 3 test learner accounts with realistic data:
-//   - coachcarteruk+testlearner@gmail.com  (full data: bookings, sessions, credits, progress, Q&A)
+//   - coachcarteruk+testlearner@gmail.com  (full data: bookings, sessions, credits, progress)
 //   - coachcarteruk+testdelete@gmail.com   (for testing account deletion flow)
 //   - coachcarteruk+testempty@gmail.com    (empty account for testing edge cases)
 //
@@ -50,8 +50,6 @@ module.exports = async (req, res) => {
         try { await sql`DELETE FROM quiz_results WHERE learner_id = ${id}`; } catch (e) {}
         try { await sql`DELETE FROM mock_test_faults WHERE mock_test_id IN (SELECT id FROM mock_tests WHERE learner_id = ${id})`; } catch (e) {}
         try { await sql`DELETE FROM mock_tests WHERE learner_id = ${id}`; } catch (e) {}
-        try { await sql`DELETE FROM qa_answers WHERE question_id IN (SELECT id FROM qa_questions WHERE learner_id = ${id})`; } catch (e) {}
-        try { await sql`DELETE FROM qa_questions WHERE learner_id = ${id}`; } catch (e) {}
         try { await sql`DELETE FROM sent_reminders WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${id})`; } catch (e) {}
         try { await sql`DELETE FROM slot_reservations WHERE learner_id = ${id}`; } catch (e) {}
         try { await sql`DELETE FROM lesson_confirmations WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${id})`; } catch (e) {}
@@ -149,11 +147,6 @@ module.exports = async (req, res) => {
         VALUES (${sessionId}, ${mainLearner.id}, 1, ${skill}, 'ok', 'Test rating', ${schoolId})`;
     }
 
-    // Q&A question
-    await sql`
-      INSERT INTO qa_questions (learner_id, title, body, status, school_id)
-      VALUES (${mainLearner.id}, 'When should I check mirrors?', 'I keep forgetting to check mirrors before signalling. Any tips?', 'open', ${schoolId})`;
-
     // Onboarding
     await sql`
       INSERT INTO learner_onboarding (learner_id, prior_hours_pro, prior_hours_private, previous_tests, transmission, test_date, main_concerns, school_id)
@@ -177,7 +170,7 @@ module.exports = async (req, res) => {
       results,
       how_to_login: 'Use magic link login with any test email. All emails go to your coachcarteruk@gmail.com inbox.',
       test_accounts: {
-        full_data: 'coachcarteruk+testlearner@gmail.com — has bookings, sessions, credits, skills, Q&A, onboarding',
+        full_data: 'coachcarteruk+testlearner@gmail.com — has bookings, sessions, credits, skills, onboarding',
         deletion_test: 'coachcarteruk+testdelete@gmail.com — has a booking + credits, use to test Delete My Account',
         empty: 'coachcarteruk+testempty@gmail.com — clean account, test edge cases with no data'
       }

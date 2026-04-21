@@ -26,10 +26,6 @@ module.exports = async (req, res) => {
   if (action === 'profile')           return handleProfile(req, res);
   if (action === 'update-profile')    return handleUpdateProfile(req, res);
   if (action === 'unlogged-bookings') return handleUnloggedBookings(req, res);
-  if (action === 'qa-list')          return handleQAList(req, res);
-  if (action === 'qa-detail')        return handleQADetail(req, res);
-  if (action === 'qa-ask')           return handleQAAsk(req, res);
-  if (action === 'qa-reply')         return handleQAReply(req, res);
   if (action === 'mock-tests')       return handleMockTests(req, res);
   if (action === 'mock-test-faults') return handleMockTestFaults(req, res);
   if (action === 'focused-practice') return handleFocusedPractice(req, res);
@@ -300,185 +296,6 @@ async function handleUpdateProfile(req, res) {
     }
     reportError('/api/learner', err);
     return res.status(500).json({ error: 'Failed to update profile', details: 'Internal server error' });
-  }
-}
-
-// ── Q&A: List questions (public) ────────────────────────────────────────────
-async function handleQAList(req, res) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  const user = verifyAuth(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorised' });
-  const schoolId = user.school_id || 1;
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-    const status = req.query.status;
-    const limit = Math.min(parseInt(req.query.limit) || 50, 50);
-
-    let questions;
-    if (status) {
-      questions = await sql`
-        SELECT q.id, q.learner_id, q.title, q.body, q.status, q.booking_id, q.session_id,
-               q.created_at, q.updated_at,
-               lu.name AS learner_name,
-               COUNT(a.id)::int AS answer_count
-        FROM qa_questions q
-        JOIN learner_users lu ON lu.id = q.learner_id
-        LEFT JOIN qa_answers a ON a.question_id = q.id
-        WHERE q.status = ${status} AND q.school_id = ${schoolId}
-        GROUP BY q.id, lu.name
-        ORDER BY q.created_at DESC
-        LIMIT ${limit}`;
-    } else {
-      questions = await sql`
-        SELECT q.id, q.learner_id, q.title, q.body, q.status, q.booking_id, q.session_id,
-               q.created_at, q.updated_at,
-               lu.name AS learner_name,
-               COUNT(a.id)::int AS answer_count
-        FROM qa_questions q
-        JOIN learner_users lu ON lu.id = q.learner_id
-        LEFT JOIN qa_answers a ON a.question_id = q.id
-        WHERE q.school_id = ${schoolId}
-        GROUP BY q.id, lu.name
-        ORDER BY q.created_at DESC
-        LIMIT ${limit}`;
-    }
-    return res.json({ questions });
-  } catch (err) {
-    console.error('qa-list error:', err);
-    reportError('/api/learner', err);
-    return res.status(500).json({ error: 'Failed to load questions' });
-  }
-}
-
-// ── Q&A: Question detail with answers ───────────────────────────────────────
-async function handleQADetail(req, res) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  const user = verifyAuth(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorised' });
-  const schoolId = user.school_id || 1;
-
-  const questionId = req.query.question_id;
-  if (!questionId) return res.status(400).json({ error: 'question_id required' });
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-
-    const [question] = await sql`
-      SELECT q.*, lu.name AS learner_name
-      FROM qa_questions q
-      JOIN learner_users lu ON lu.id = q.learner_id
-      WHERE q.id = ${questionId} AND q.school_id = ${schoolId}`;
-    if (!question) return res.status(404).json({ error: 'Question not found' });
-
-    const answers = await sql`
-      SELECT a.*,
-        CASE WHEN a.author_type = 'learner' THEN lu.name
-             WHEN a.author_type = 'instructor' THEN i.name
-             ELSE 'Unknown' END AS author_name
-      FROM qa_answers a
-      LEFT JOIN learner_users lu ON a.author_type = 'learner' AND lu.id = a.author_id
-      LEFT JOIN instructors i ON a.author_type = 'instructor' AND i.id = a.author_id
-      WHERE a.question_id = ${questionId}
-      ORDER BY a.created_at ASC`;
-
-    return res.json({ question, answers });
-  } catch (err) {
-    console.error('qa-detail error:', err);
-    reportError('/api/learner', err);
-    return res.status(500).json({ error: 'Failed to load question' });
-  }
-}
-
-// ── Q&A: Ask a question ─────────────────────────────────────────────────────
-async function handleQAAsk(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const user = verifyAuth(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorised' });
-
-  const { title, body, booking_id, session_id } = req.body;
-  if (!title || !title.trim()) return res.status(400).json({ error: 'Title is required' });
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-    const schoolId = user.school_id || 1;
-
-    const [question] = await sql`
-      INSERT INTO qa_questions (learner_id, booking_id, session_id, title, body, school_id)
-      VALUES (${user.id}, ${booking_id || null}, ${session_id || null}, ${title.trim()}, ${body || null}, ${schoolId})
-      RETURNING id, created_at`;
-
-    // Send email notification to all active instructors
-    try {
-      const instructors = await sql`SELECT name, email FROM instructors WHERE active = TRUE AND school_id = ${schoolId}`;
-      if (instructors.length > 0) {
-        const { createTransporter: createMailer } = require('./_auth-helpers');
-        const mailer = createMailer();
-
-        const [learner] = await sql`SELECT name FROM learner_users WHERE id = ${user.id}`;
-        const learnerName = learner?.name || 'A learner';
-
-        for (const inst of instructors) {
-          if (inst.email === 'demo@coachcarter.uk') continue;
-          await mailer.sendMail({
-            from: 'CoachCarter <system@coachcarter.uk>',
-            to: inst.email,
-            subject: `New Q&A question from ${learnerName}`,
-            html: `
-              <h2>New question from ${learnerName}</h2>
-              <p style="font-size:1.1rem;font-weight:bold;margin:16px 0 8px">${title.trim()}</p>
-              ${body ? `<p style="color:#555">${body}</p>` : ''}
-              <p style="margin:28px 0">
-                <a href="https://coachcarter.uk/instructor/qa.html"
-                   style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
-                          border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
-                  Answer this question
-                </a>
-              </p>
-            `
-          });
-        }
-      }
-    } catch (emailErr) {
-      console.error('Failed to send Q&A notification email:', emailErr);
-    }
-
-    return res.json({ success: true, question_id: question.id });
-  } catch (err) {
-    console.error('qa-ask error:', err);
-    reportError('/api/learner', err);
-    return res.status(500).json({ error: 'Failed to create question' });
-  }
-}
-
-// ── Q&A: Learner reply/follow-up ────────────────────────────────────────────
-async function handleQAReply(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const user = verifyAuth(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorised' });
-
-  const { question_id, body } = req.body;
-  if (!question_id) return res.status(400).json({ error: 'question_id required' });
-  if (!body || !body.trim()) return res.status(400).json({ error: 'Reply body is required' });
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-
-    const [question] = await sql`SELECT id FROM qa_questions WHERE id = ${question_id}`;
-    if (!question) return res.status(404).json({ error: 'Question not found' });
-
-    const [answer] = await sql`
-      INSERT INTO qa_answers (question_id, author_type, author_id, body)
-      VALUES (${question_id}, 'learner', ${user.id}, ${body.trim()})
-      RETURNING id, created_at`;
-
-    await sql`UPDATE qa_questions SET updated_at = NOW() WHERE id = ${question_id}`;
-
-    return res.json({ success: true, answer_id: answer.id });
-  } catch (err) {
-    console.error('qa-reply error:', err);
-    reportError('/api/learner', err);
-    return res.status(500).json({ error: 'Failed to post reply' });
   }
 }
 
@@ -1327,11 +1144,6 @@ async function handleExportData(req, res) {
       WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}
       ORDER BY fp.created_at DESC`;
 
-    const questions = await sql`
-      SELECT title, body, status, created_at
-      FROM qa_questions WHERE learner_id = ${user.id} AND school_id = ${schoolId}
-      ORDER BY created_at DESC`;
-
     const referralCode = await sql`
       SELECT code, created_at FROM referrals
       WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
@@ -1346,7 +1158,7 @@ async function handleExportData(req, res) {
       _metadata: {
         exported_at: new Date().toISOString(),
         format: 'json',
-        data_categories: ['profile', 'onboarding', 'bookings', 'transactions', 'driving_sessions', 'skill_ratings', 'quiz_results', 'mock_tests', 'focused_practice', 'qa_questions', 'referral_code', 'referrals_made']
+        data_categories: ['profile', 'onboarding', 'bookings', 'transactions', 'driving_sessions', 'skill_ratings', 'quiz_results', 'mock_tests', 'focused_practice', 'referral_code', 'referrals_made']
       },
       profile: profile || {},
       onboarding: onboarding[0] || null,
@@ -1357,7 +1169,6 @@ async function handleExportData(req, res) {
       quiz_results: quizzes,
       mock_tests: mockTests,
       focused_practice: focusedPractice,
-      qa_questions: questions,
       referral_code: referralCode[0] || null,
       referrals_made: referralsMade
     };
@@ -1486,8 +1297,6 @@ async function handleConfirmDeletion(req, res) {
     try { await sql`DELETE FROM mock_test_faults WHERE mock_test_id IN (SELECT id FROM mock_tests WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete mock_test_faults skipped:', e.message); }
     try { await sql`DELETE FROM mock_tests WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete mock_tests skipped:', e.message); }
     try { await sql`DELETE FROM focused_practice_sessions WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete focused_practice_sessions skipped:', e.message); }
-    try { await sql`DELETE FROM qa_answers WHERE question_id IN (SELECT id FROM qa_questions WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete qa_answers skipped:', e.message); }
-    try { await sql`DELETE FROM qa_questions WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete qa_questions skipped:', e.message); }
     try { await sql`DELETE FROM sent_reminders WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete sent_reminders skipped:', e.message); }
     try { await sql`DELETE FROM slot_reservations WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete slot_reservations skipped:', e.message); }
     try { await sql`DELETE FROM lesson_confirmations WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete lesson_confirmations skipped:', e.message); }

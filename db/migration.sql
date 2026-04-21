@@ -293,30 +293,6 @@ CREATE TABLE IF NOT EXISTS google_reviews_meta (
 );
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- Q&A
--- ══════════════════════════════════════════════════════════════════════════════
-CREATE TABLE IF NOT EXISTS qa_questions (
-  id         SERIAL PRIMARY KEY,
-  learner_id INTEGER NOT NULL,
-  booking_id INTEGER,
-  session_id INTEGER,
-  title      TEXT NOT NULL,
-  body       TEXT,
-  status     TEXT NOT NULL DEFAULT 'open',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS qa_answers (
-  id          SERIAL PRIMARY KEY,
-  question_id INTEGER NOT NULL,
-  author_type TEXT NOT NULL,
-  author_id   INTEGER NOT NULL,
-  body        TEXT NOT NULL,
-  created_at  TIMESTAMPTZ DEFAULT NOW()
-);
-
--- ══════════════════════════════════════════════════════════════════════════════
 -- LEARNER ONBOARDING
 -- ══════════════════════════════════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS learner_onboarding (
@@ -1016,18 +992,6 @@ UPDATE waitlist SET school_id = 1 WHERE school_id IS NULL;
 ALTER TABLE waitlist ALTER COLUMN school_id SET NOT NULL;
 ALTER TABLE waitlist ALTER COLUMN school_id SET DEFAULT 1;
 
--- 23. qa_questions
-ALTER TABLE qa_questions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
-UPDATE qa_questions SET school_id = 1 WHERE school_id IS NULL;
-ALTER TABLE qa_questions ALTER COLUMN school_id SET NOT NULL;
-ALTER TABLE qa_questions ALTER COLUMN school_id SET DEFAULT 1;
-
--- 24. qa_answers
-ALTER TABLE qa_answers ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
-UPDATE qa_answers SET school_id = 1 WHERE school_id IS NULL;
-ALTER TABLE qa_answers ALTER COLUMN school_id SET NOT NULL;
-ALTER TABLE qa_answers ALTER COLUMN school_id SET DEFAULT 1;
-
 -- 25. sent_reminders
 ALTER TABLE sent_reminders ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
 UPDATE sent_reminders SET school_id = 1 WHERE school_id IS NULL;
@@ -1186,10 +1150,6 @@ CREATE INDEX IF NOT EXISTS idx_skill_ratings_user_id ON skill_ratings(user_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_results_learner_id ON quiz_results(learner_id);
 CREATE INDEX IF NOT EXISTS idx_mock_tests_learner_id ON mock_tests(learner_id);
 
--- qa_questions — Q&A lookups by learner
-CREATE INDEX IF NOT EXISTS idx_qa_questions_learner_id ON qa_questions(learner_id);
-CREATE INDEX IF NOT EXISTS idx_qa_answers_question_id ON qa_answers(question_id);
-
 -- slot_reservations — booking flow
 CREATE INDEX IF NOT EXISTS idx_slot_reservations_learner_id ON slot_reservations(learner_id);
 CREATE INDEX IF NOT EXISTS idx_slot_reservations_instructor_id ON slot_reservations(instructor_id);
@@ -1310,3 +1270,11 @@ CREATE INDEX IF NOT EXISTS idx_learner_users_referred_by ON learner_users(referr
 
 -- Carry referral code through magic link signup flow
 ALTER TABLE magic_link_tokens ADD COLUMN IF NOT EXISTS referral_code TEXT;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- REMOVED: Q&A feature (April 2026)
+-- Tables dropped entirely; see db/migrations/014_qa_system.sql for history.
+-- Idempotent DROPs so repeated migrate runs are safe.
+-- ══════════════════════════════════════════════════════════════════════════════
+DROP TABLE IF EXISTS qa_answers;
+DROP TABLE IF EXISTS qa_questions;
