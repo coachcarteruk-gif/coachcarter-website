@@ -1483,6 +1483,20 @@ Three bugs in `api/setmore-sync.js` caused lessons to be duplicated 1 hour ahead
 
 ---
 
+## 2.81 — Instructor Offered Lesson Types (22 April 2026)
+
+Instructors can now control which lesson lengths appear on their public booking page.
+
+**What changed:**
+- New `offered_lesson_types` JSONB column on `instructors` (NULL = all types, array of slugs = explicit list)
+- Instructor profile page "Lesson Types & Booking Links" card: toggle each lesson length on/off, copy shareable link per type
+- Booking page lesson type pills filtered to only show what the instructor offers when arriving via `/book/:slug` or with instructor filter set
+- Guest learners also get filtered lesson types (previously only authed learners passed `instructor_id` to the lesson-types API)
+
+**Files changed:** `db/migration.sql`, `api/instructor.js`, `api/lesson-types.js`, `public/instructor/profile.js`, `public/learner/book.js`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

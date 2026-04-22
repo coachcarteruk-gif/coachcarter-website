@@ -1278,3 +1278,11 @@ ALTER TABLE magic_link_tokens ADD COLUMN IF NOT EXISTS referral_code TEXT;
 -- ══════════════════════════════════════════════════════════════════════════════
 DROP TABLE IF EXISTS qa_answers;
 DROP TABLE IF EXISTS qa_questions;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- INSTRUCTOR OFFERED LESSON TYPES (April 2026)
+-- NULL = instructor offers all active lesson types (backward compat default)
+-- Explicit array of slugs e.g. '["standard","2hr"]' restricts which types
+-- appear on the instructor's public booking page.
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS offered_lesson_types JSONB DEFAULT NULL;

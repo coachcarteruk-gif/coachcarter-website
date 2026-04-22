@@ -401,6 +401,8 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 
 **DB columns:** `instructors.max_travel_minutes` — per-instructor threshold (default 30 mins), editable from admin portal
 
+**DB columns:** `instructors.offered_lesson_types` JSONB — array of lesson type slugs the instructor offers (e.g. `["standard","2hr"]`). NULL means all active lesson types. Controls which pills appear on `/book/:slug` and filters `/api/lesson-types?action=list` when `instructor_id` is passed.
+
 ### API — `api/offers.js`
 
 | Action | Method | Auth | Description |

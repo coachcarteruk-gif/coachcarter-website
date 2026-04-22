@@ -3,6 +3,7 @@
 
   let currentProfileId = null;
   let currentProfileSlug = null;
+  let currentOfferedTypes = null; // null = all; array of slugs = explicit list
 
   function init() {
     if (!ccAuth.getAuth()) { window.location.href = '/instructor/login.html'; return; }
@@ -17,6 +18,7 @@
       if (!res.ok) throw new Error(data.error);
       currentProfileId = data.instructor.id;
       currentProfileSlug = data.instructor.slug;
+      currentOfferedTypes = data.instructor.offered_lesson_types || null;
       renderProfile(data.instructor);
     } catch (err) {
       document.getElementById('profileContent').innerHTML =
@@ -252,8 +254,8 @@
       <button class="btn-save" id="saveBtn">Save changes</button>
 
       <div class="form-card" id="bookingLinksCard" style="margin-top:20px">
-        <div class="form-card-title">Booking Links</div>
-        <p class="field-hint" style="margin-bottom:12px">Share these links with learners to let them book a specific lesson type directly.</p>
+        <div class="form-card-title">Lesson Types &amp; Booking Links</div>
+        <p class="field-hint" style="margin-bottom:12px">Toggle which lesson lengths you offer. Only enabled types appear on your booking page. Copy a link to share directly with a learner.</p>
         <div id="bookingLinksContainer"><span style="color:var(--muted);font-size:0.85rem">Loading…</span></div>
       </div>
 
@@ -263,49 +265,126 @@
 
   async function loadBookingLinks() {
     try {
+      // Fetch ALL active lesson types (not filtered) so instructor can toggle any
       const res = await ccAuth.fetchAuthed('/api/lesson-types?action=list');
       const data = await res.json();
       const types = data.lesson_types || [];
       const container = document.getElementById('bookingLinksContainer');
       if (!container) return;
 
-      // Instructor-specific link (shows only this instructor's slots)
+      if (types.length === 0) {
+        container.innerHTML = '<span style="color:var(--muted);font-size:0.85rem">No lesson types configured.</span>';
+        return;
+      }
+
       var slug = currentProfileSlug || currentProfileId;
+
+      // Build a toggle + copy-link row per lesson type
+      var rows = types.map(function(lt) {
+        var isEnabled = !currentOfferedTypes || currentOfferedTypes.includes(lt.slug);
+        var url = window.location.origin + '/book/' + slug + '?type=' + encodeURIComponent(lt.slug);
+        return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">'
+          + '<label style="display:flex;align-items:center;gap:0;cursor:pointer;position:relative;width:40px;height:22px;flex-shrink:0">'
+          + '<input type="checkbox" data-lt-slug="' + lt.slug + '" class="lt-toggle"'
+          + (isEnabled ? ' checked' : '')
+          + ' style="opacity:0;width:0;height:0;position:absolute">'
+          + '<span class="lt-toggle-track" style="'
+          + 'position:absolute;inset:0;border-radius:11px;transition:background 0.2s;'
+          + 'background:' + (isEnabled ? 'var(--accent)' : 'var(--border)') + '">'
+          + '<span style="position:absolute;top:3px;left:' + (isEnabled ? '21px' : '3px') + ';width:16px;height:16px;border-radius:50%;background:white;transition:left 0.2s"></span>'
+          + '</span>'
+          + '</label>'
+          + '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + lt.colour + ';flex-shrink:0"></span>'
+          + '<div style="flex:1;min-width:0">'
+          + '<div style="font-weight:600;font-size:0.9rem' + (!isEnabled ? ';color:var(--muted)' : '') + '">' + lt.name + '</div>'
+          + '<div style="font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + url + '</div>'
+          + '</div>'
+          + '<button data-action="copy-booking-link" data-url="' + url + '"'
+          + (!isEnabled ? ' disabled style="opacity:0.35;cursor:not-allowed;' : ' style="')
+          + 'background:var(--accent);color:white;border:none;border-radius:6px;padding:8px 14px;font-size:0.8rem;font-weight:600;white-space:nowrap;font-family:var(--font-body)">'
+          + 'Copy link'
+          + '</button>'
+          + '</div>';
+      }).join('');
+
+      // General booking page link at the bottom
       var myUrl = window.location.origin + '/book/' + slug;
-      var html = '<div style="margin-bottom:16px">'
-        + '<div style="font-weight:700;font-size:0.95rem;margin-bottom:6px">Your booking page</div>'
-        + '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'
+      var generalLink = '<div style="padding-top:14px;display:flex;align-items:center;gap:10px">'
         + '<div style="flex:1;min-width:0">'
+        + '<div style="font-weight:600;font-size:0.85rem;color:var(--muted)">All lesson types</div>'
         + '<div style="font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + myUrl + '</div>'
         + '</div>'
         + '<button data-action="copy-booking-link" data-url="' + myUrl + '" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:8px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font-body)">'
         + 'Copy link'
         + '</button>'
-        + '</div>'
         + '</div>';
 
-      if (types.length === 0) {
-        container.innerHTML = html + '<span style="color:var(--muted);font-size:0.85rem">No lesson types configured.</span>';
-        return;
-      }
+      container.innerHTML = rows
+        + generalLink
+        + '<button id="saveOfferedTypesBtn" style="margin-top:16px;background:var(--accent);color:white;border:none;border-radius:8px;padding:10px 20px;font-size:0.9rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Save lesson types</button>'
+        + '<span id="saveOfferedTypesMsg" style="margin-left:12px;font-size:0.85rem;display:none"></span>';
 
-      html += '<div style="font-weight:700;font-size:0.95rem;margin-bottom:6px">By lesson type</div>';
-      html += types.map(function(lt) {
-        var url = window.location.origin + '/book/' + slug + '?type=' + encodeURIComponent(lt.slug);
-        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'
-          + '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + lt.colour + ';flex-shrink:0"></span>'
-          + '<div style="flex:1;min-width:0">'
-          + '<div style="font-weight:600;font-size:0.9rem">' + lt.name + '</div>'
-          + '<div style="font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + url + '</div>'
-          + '</div>'
-          + '<button data-action="copy-booking-link" data-url="' + url + '" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:8px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font-body)">'
-          + 'Copy link'
-          + '</button>'
-          + '</div>';
-      }).join('');
-      container.innerHTML = html;
+      // Wire up toggle visuals and save button
+      container.querySelectorAll('.lt-toggle').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+          var track = cb.nextElementSibling;
+          var dot = track.querySelector('span');
+          var row = cb.closest('div[style*="border-bottom"]');
+          var label = row.querySelector('div[style*="font-weight:600"]');
+          var copyBtn = row.querySelector('button[data-action="copy-booking-link"]');
+          if (cb.checked) {
+            track.style.background = 'var(--accent)';
+            dot.style.left = '21px';
+            if (label) label.style.color = '';
+            if (copyBtn) { copyBtn.disabled = false; copyBtn.style.opacity = ''; copyBtn.style.cursor = 'pointer'; }
+          } else {
+            track.style.background = 'var(--border)';
+            dot.style.left = '3px';
+            if (label) label.style.color = 'var(--muted)';
+            if (copyBtn) { copyBtn.disabled = true; copyBtn.style.opacity = '0.35'; copyBtn.style.cursor = 'not-allowed'; }
+          }
+        });
+      });
+
+      document.getElementById('saveOfferedTypesBtn').addEventListener('click', saveOfferedTypes);
     } catch (err) {
       console.error('Failed to load booking links:', err);
+    }
+  }
+
+  async function saveOfferedTypes() {
+    var btn = document.getElementById('saveOfferedTypesBtn');
+    var msg = document.getElementById('saveOfferedTypesMsg');
+    var checkboxes = document.querySelectorAll('.lt-toggle');
+    var allSlugs = Array.from(checkboxes).map(function(cb) { return cb.dataset.ltSlug; });
+    var enabledSlugs = Array.from(checkboxes).filter(function(cb) { return cb.checked; }).map(function(cb) { return cb.dataset.ltSlug; });
+
+    // null means "all" — only send an explicit array if some are disabled
+    var offeredPayload = (enabledSlugs.length === allSlugs.length) ? null : enabledSlugs;
+
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    msg.style.display = 'none';
+    try {
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ offered_lesson_types: offeredPayload })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+      currentOfferedTypes = data.instructor.offered_lesson_types || null;
+      msg.textContent = 'Saved!';
+      msg.style.color = 'var(--green, #22c55e)';
+      msg.style.display = 'inline';
+      setTimeout(function() { msg.style.display = 'none'; }, 2500);
+    } catch (err) {
+      msg.textContent = err.message;
+      msg.style.color = 'var(--red, #ef4444)';
+      msg.style.display = 'inline';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save lesson types';
     }
   }
 
