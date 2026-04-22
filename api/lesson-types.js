@@ -47,16 +47,27 @@ async function handleList(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = parseInt(req.query.school_id) || 1;
     const includeInactive = req.query.include_inactive === 'true';
-    const rows = await sql`
+    const instructorId = parseInt(req.query.instructor_id);
+    let rows = await sql`
       SELECT id, name, slug, duration_minutes, price_pence, colour, active, sort_order
       FROM lesson_types
       WHERE (active = true OR ${includeInactive}) AND school_id = ${schoolId}
       ORDER BY sort_order, id
     `;
 
+    // Filter to only the lesson types this instructor offers (if they've configured it)
+    if (instructorId) {
+      const [instr] = await sql`
+        SELECT offered_lesson_types FROM instructors WHERE id = ${instructorId}
+      `;
+      if (instr?.offered_lesson_types) {
+        const offered = instr.offered_lesson_types;
+        rows = rows.filter(lt => offered.includes(lt.slug));
+      }
+    }
+
     // If learner + instructor provided, check for custom hourly rate override
     const learnerId = parseInt(req.query.learner_id);
-    const instructorId = parseInt(req.query.instructor_id);
     if (learnerId && instructorId) {
       const [custom] = await sql`
         SELECT custom_hourly_rate_pence FROM instructor_learner_notes

@@ -110,8 +110,10 @@ function init() {
 
   if (!auth) {
     Promise.all([loadInstructors(), loadLessonTypes()])
-      .then(() => {
+      .then(async () => {
         preselectInstructor();
+        // Re-load lesson types now that instructor filter is set, so offered_lesson_types filtering applies
+        if (preselectedInstructorSlug || preselectedInstructorId) await loadLessonTypes();
         initFeed();
         window.posthog && posthog.capture('booking_page_viewed', { is_guest: true, has_type_preselect: !!preselectedTypeSlug });
       });
@@ -121,6 +123,8 @@ function init() {
   Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile(), loadLessonTypes()])
     .then(async () => {
       preselectInstructor();
+      // Re-load lesson types now that instructor filter is set, so offered_lesson_types filtering applies
+      if (preselectedInstructorSlug || preselectedInstructorId) await loadLessonTypes();
       initFeed();
       showPostcodePromptIfNeeded();
 
@@ -193,11 +197,12 @@ function updateCreditBadge() {
 async function loadLessonTypes() {
   try {
     let url = '/api/lesson-types?action=list';
-    // Pass learner + instructor context for per-learner custom rate.
-    // Learner id is in the display blob; no JWT decode needed.
-    if (auth && auth.user && auth.user.id) {
-      const instrId = document.getElementById('instructorFilter')?.value;
-      if (instrId) url += '&learner_id=' + auth.user.id + '&instructor_id=' + instrId;
+    // Pass instructor_id so the API can filter to only that instructor's offered lesson types.
+    // Also pass learner_id when available for per-learner custom pricing.
+    const instrId = document.getElementById('instructorFilter')?.value;
+    if (instrId) {
+      url += '&instructor_id=' + instrId;
+      if (auth && auth.user && auth.user.id) url += '&learner_id=' + auth.user.id;
     }
     const res = await fetch(url);
     const data = await res.json();

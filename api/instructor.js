@@ -761,7 +761,8 @@ async function handleProfile(req, res) {
              COALESCE(dual_controls, true) AS dual_controls,
              COALESCE(service_areas, '[]'::jsonb) AS service_areas,
              COALESCE(languages, '["English"]'::jsonb) AS languages,
-             ical_feed_url, ical_last_synced_at, ical_sync_error
+             ical_feed_url, ical_last_synced_at, ical_sync_error,
+             offered_lesson_types
       FROM instructors WHERE id = ${instructor.id}
     `;
 
@@ -789,7 +790,7 @@ async function handleUpdateProfile(req, res) {
     name, phone, bio, photo_url, buffer_minutes, calendar_start_hour, reminder_hours, daily_schedule_email,
     adi_grade, pass_rate, years_experience, specialisms,
     vehicle_make, vehicle_model, transmission_type, dual_controls,
-    service_areas, languages, ical_feed_url
+    service_areas, languages, ical_feed_url, offered_lesson_types
   } = req.body;
 
   // Validate buffer_minutes if provided
@@ -850,6 +851,14 @@ async function handleUpdateProfile(req, res) {
     }
   }
 
+  // Validate offered_lesson_types: null (all types) or array of slug strings
+  const validSlugs = ['standard', '2hr', '3hr'];
+  if (offered_lesson_types !== undefined && offered_lesson_types !== null) {
+    if (!Array.isArray(offered_lesson_types) || !offered_lesson_types.every(s => validSlugs.includes(s))) {
+      return res.status(400).json({ error: 'offered_lesson_types must be null or an array of valid lesson type slugs' });
+    }
+  }
+
   // Validate iCal feed URL if provided
   let icalUrlClean = undefined; // undefined = don't touch column
   if (ical_feed_url !== undefined) {
@@ -899,6 +908,11 @@ async function handleUpdateProfile(req, res) {
     const icalChanged = icalUrlClean !== undefined;
     const icalVal = icalUrlClean === '' ? null : (icalUrlClean || null);
 
+    // offered_lesson_types: undefined = don't touch; null = offer all; array = explicit list
+    const offeredChanged = offered_lesson_types !== undefined;
+    const offeredVal = (offered_lesson_types !== undefined && offered_lesson_types !== null)
+      ? JSON.stringify(offered_lesson_types) : null;
+
     const [updated] = await sql`
       UPDATE instructors SET
         name                 = COALESCE(NULLIF(${name      || ''}, ''), name),
@@ -921,7 +935,8 @@ async function handleUpdateProfile(req, res) {
         languages            = COALESCE(${langsVal}::jsonb, languages),
         ical_feed_url        = CASE WHEN ${icalChanged} THEN ${icalVal} ELSE ical_feed_url END,
         ical_last_synced_at  = CASE WHEN ${icalChanged} THEN NULL ELSE ical_last_synced_at END,
-        ical_sync_error      = CASE WHEN ${icalChanged} THEN NULL ELSE ical_sync_error END
+        ical_sync_error      = CASE WHEN ${icalChanged} THEN NULL ELSE ical_sync_error END,
+        offered_lesson_types = CASE WHEN ${offeredChanged} THEN ${offeredVal}::jsonb ELSE offered_lesson_types END
       WHERE id = ${instructor.id}
       RETURNING id, name, email, phone, bio, photo_url,
                 COALESCE(buffer_minutes, 30) AS buffer_minutes,
@@ -935,7 +950,8 @@ async function handleUpdateProfile(req, res) {
                 COALESCE(dual_controls, true) AS dual_controls,
                 COALESCE(service_areas, '[]'::jsonb) AS service_areas,
                 COALESCE(languages, '["English"]'::jsonb) AS languages,
-                ical_feed_url, ical_last_synced_at, ical_sync_error
+                ical_feed_url, ical_last_synced_at, ical_sync_error,
+                offered_lesson_types
     `;
 
     return res.json({ success: true, instructor: updated });
