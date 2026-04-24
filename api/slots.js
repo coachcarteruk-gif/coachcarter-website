@@ -163,6 +163,7 @@ async function handleAvailable(req, res) {
             AND ia.active = true
             AND i.active  = true
             AND i.school_id = ${schoolId}
+            AND (i.offered_lesson_types IS NULL OR i.offered_lesson_types @> ${JSON.stringify([lessonType.slug])}::jsonb)
           ORDER BY ia.day_of_week, ia.start_time
         `
       : await sql`
@@ -180,6 +181,7 @@ async function handleAvailable(req, res) {
             AND i.active  = true
             AND i.email  != 'demo@coachcarter.uk'
             AND i.school_id = ${schoolId}
+            AND (i.offered_lesson_types IS NULL OR i.offered_lesson_types @> ${JSON.stringify([lessonType.slug])}::jsonb)
           ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
         `;
 
