@@ -215,7 +215,7 @@ async function loadLessonTypes() {
         selectedLessonType = lessonTypes.find(lt => lt.id === parseInt(preselectedTypeId)) || lessonTypes[0];
       } else if (preselectedTypeSlug) {
         selectedLessonType = lessonTypes.find(lt => lt.slug === preselectedTypeSlug) || lessonTypes[0];
-      } else if (!preselectedInstructorSlug) {
+      } else {
         selectedLessonType = lessonTypes[0];
       }
     }
