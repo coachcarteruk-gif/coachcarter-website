@@ -17,7 +17,7 @@
     {
       "source": "/(.*)",
       "has": [{ "type": "host", "value": "coachcarter-website.vercel.app" }],
-      "destination": "https://coachcarter.co.uk/$1",
+      "destination": "https://coachcarter.uk/$1",
       "permanent": true
     }
   ],

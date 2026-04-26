@@ -2,8 +2,6 @@
 const ALLOWED_ORIGINS = [
   'https://coachcarter.uk',
   'https://www.coachcarter.uk',
-  'https://coachcarter.co.uk',
-  'https://www.coachcarter.co.uk',
 ];
 
 function isAllowedOrigin(origin) {

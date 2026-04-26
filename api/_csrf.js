@@ -77,8 +77,8 @@ function mintCsrfToken() {
  *   Secure; SameSite=Lax; Path=/; Max-Age=<30d>
  *
  * No Domain attribute. Host-only by design — each hostname gets its
- * own jar, so coachcarter.uk / coachcarter.co.uk / *.vercel.app /
- * localhost don't leak into each other.
+ * own jar, so coachcarter.uk / *.vercel.app / localhost don't leak
+ * into each other.
  */
 function buildCsrfCookie(token) {
   return `${CSRF_COOKIE}=${token}; Max-Age=${CSRF_MAX_AGE}; Path=/; Secure; SameSite=Lax`;

@@ -29,8 +29,8 @@ const DEFAULT_SCHOOL_ID = 1; // CoachCarter — backwards compat for old tokens
 //
 // Attributes: HttpOnly; Secure; SameSite=Lax; Path=/; no Domain.
 // Host-only by design — each hostname gets its own jar, so coachcarter.uk /
-// coachcarter.co.uk / per-school custom domains / *.vercel.app / localhost
-// don't leak into each other. See project_security_hardening memory.
+// per-school custom domains / *.vercel.app / localhost don't leak into each
+// other. See project_security_hardening memory.
 
 const SESSION_COOKIE_NAMES = {
   learner:    'cc_learner',

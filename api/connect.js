@@ -38,7 +38,7 @@ const { requireAuth }       = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 
-const BASE_URL = process.env.BASE_URL || 'https://coachcarter.co.uk';
+const BASE_URL = process.env.BASE_URL || 'https://coachcarter.uk';
 
 function setCors(res) {
 }

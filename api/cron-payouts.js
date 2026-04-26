@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
                 <p>Hi ${payout.instructor_name},</p>
                 <p>Your weekly payout of <strong>${amountStr}</strong> for <strong>${payout.lesson_count} lesson${payout.lesson_count === 1 ? '' : 's'}</strong> has been sent to your bank account.</p>
                 <p>It should arrive within 1–2 working days.</p>
-                <p style="color:#6b7280;font-size:13px;">You can view your full payout history in your <a href="https://coachcarter.co.uk/instructor/earnings.html">earnings dashboard</a>.</p>
+                <p style="color:#6b7280;font-size:13px;">You can view your full payout history in your <a href="https://coachcarter.uk/instructor/earnings.html">earnings dashboard</a>.</p>
               </div>
             `
           }).catch(() => {}); // don't let email failure block response
