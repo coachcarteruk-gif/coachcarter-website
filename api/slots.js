@@ -1475,12 +1475,9 @@ async function handleBookFreeTrial(req, res) {
     // No status filter — cancelled bookings count too, preventing cancel/rebook loops.
     //
     // Phone match uses both 07xxx and +447xxx variants since learner_users
-    // stores either form. KNOWN LIMITATION: if a prior booking's resolved
-    // learner row had its phone set to null by the phone-collision fallback
-    // (insert without phone), the guard cannot see that booking via phone —
-    // only via email. Email is the primary defence; phone is supplementary.
-    // See DEVELOPMENT-ROADMAP.md TODO for closing this hole properly via a
-    // dedicated guest_phone column on lesson_bookings.
+    // stores either form. guest_phone catches the phone-collision case where
+    // the learner row ends up with phone=NULL — the raw submitted phone is
+    // always written to lesson_bookings.guest_phone for free-trial bookings.
     let normPhone = cleanPhone;
     if (normPhone.startsWith('07')) normPhone = '+44' + normPhone.slice(1);
     const phoneVariants = [cleanPhone, normPhone];
@@ -1489,7 +1486,11 @@ async function handleBookFreeTrial(req, res) {
       SELECT lb.id FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       WHERE lb.lesson_type_id = ${trialType.id}
-        AND (LOWER(lu.email) = ${cleanEmail} OR lu.phone = ANY(${phoneVariants}))
+        AND (
+          LOWER(lu.email) = ${cleanEmail}
+          OR lu.phone = ANY(${phoneVariants})
+          OR lb.guest_phone = ANY(${phoneVariants})
+        )
       LIMIT 1
     `;
     if (priorTrial) {
@@ -1619,11 +1620,11 @@ async function handleBookFreeTrial(req, res) {
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            created_by, payment_method, lesson_type_id, minutes_deducted,
-           pickup_address, school_id)
+           pickup_address, school_id, guest_phone)
         VALUES
           (${learnerId}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, 'confirmed',
            'free_trial_self_serve', 'free', ${trialType.id}, 0,
-           ${cleanAddr}, ${schoolId})
+           ${cleanAddr}, ${schoolId}, ${cleanPhone})
         RETURNING id, scheduled_date::text, start_time::text, end_time::text
       `;
       booking = b;

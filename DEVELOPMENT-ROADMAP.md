@@ -1497,6 +1497,16 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.87 — Close C1 phone-bypass with guest_phone column (26 April 2026)
+
+The free-trial one-trial guard could be bypassed by a second booking with the same phone but a different email, because the phone-collision fallback creates a learner row with `phone=NULL`, making the phone check invisible to the guard. Fix: added `guest_phone TEXT` to `lesson_bookings`, populated by `book-free-trial` with the raw submitted phone. The dedup query now checks `lb.guest_phone` in addition to `lu.phone`, closing the bypass. Column also added to GDPR data export.
+
+**Requires migration:** `GET /api/migrate?secret=MIGRATION_SECRET`
+
+**Files changed:** `db/migration.sql`, `api/slots.js`, `api/learner.js`
+
+---
+
 ## 2.86 — Fix PostHog CSP regression (26 April 2026)
 
 `posthog-loader.js` fetches `array.js` from `https://eu-assets.i.posthog.com` but only `https://eu.i.posthog.com` was whitelisted in `script-src`. Browser was silently blocking the script, breaking analytics on every page that loads `posthog-loader.js`. Added `eu-assets.i.posthog.com` to `script-src` in `middleware.js`.
