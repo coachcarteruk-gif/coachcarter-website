@@ -1497,6 +1497,40 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.84 — Free Trial Self-Serve Booking (26 April 2026)
+
+Public-access free 1-hour trial lesson booking, end-to-end. Anyone visiting `/free-trial.html` can pick a slot, submit name/email/phone/pickup, and get a confirmed booking + magic-link login email — no Stripe, no payment, no account creation step. The Free Trial lesson type already existed in `lesson_types` (id 37, slug `trial`, duration 60 min, price 0p) but was inactive and had no public surface.
+
+**What changed:**
+- New `book-free-trial` action on `/api/slots` — validates inputs, rate-limits, runs a one-trial-per-learner guard, creates a confirmed booking with `payment_method='free'`, `created_by='free_trial_self_serve'`, `minutes_deducted=0`
+- Magic-link token (32-byte hex, 7-day expiry) generated and emailed instead of setting a session cookie — closes the impersonation vector that would otherwise let any form submission auto-login as any email
+- Reused the existing `/api/slots?action=available` endpoint with `lesson_type_id=37` for the slot picker; the existing `offered_lesson_types` filter (slots.js:166) means instructors must explicitly include `"trial"` in their array OR have `NULL` (= all types) to surface
+- New `public/free-trial.html` + `public/free-trial.js` — public marketing page with slot picker, guest form, validation, PostHog events (`free_trial_page_viewed`, `_slot_selected`, `_submitted`, `_confirmed`, `_blocked_existing`). Captures `?ref=XXX` for forward-compat with future referrer-only mode
+- New `public/free-trial-success.html` — minimal post-booking confirmation page that points at `/learner/login.html` if the email doesn't arrive
+- `instructor.js` `validSlugs` extended to include `'trial'` so instructors can opt in/out via the existing profile lesson type toggle UI
+- DB: `lesson_types.active = true` for the trial type; Fraser's `offered_lesson_types` updated to `["standard","2hr","trial"]`. Simon Edwards stays `NULL` (already opted in by prior conversation)
+- Homepage hero now has a dual CTA: primary `Try a Free Lesson` → `/free-trial.html`, secondary outlined `Already with us? Book a lesson` → existing login → book path. Final CTA repointed at `/free-trial.html`
+
+**One-trial guard:** matches by email OR phone (both `07xxx` and `+447xxx` variants), no status filter — so cancelled bookings count, preventing cancel/rebook loops.
+
+**Known limitations (TODO for v2):**
+- Phone-side guard misses prior bookings whose resolved learner row had `phone=null` (set by the phone-collision fallback during initial insert). Email guard is the primary defence; phone is supplementary. Closing this hole properly needs a `guest_phone` column on `lesson_bookings` populated from form submission directly. End-to-end test on 2026-04-26 confirmed this edge case works as documented.
+- WhatsApp confirmation messages are best-effort via the shared `sendWhatsApp` helper. Tested locally on 2026-04-26 — message did not arrive at `07903081618`. Not a free-trial regression (same helper is shared with paid bookings); flagged for separate Twilio config investigation.
+- `validSlugs` in `instructor.js` is hardcoded and has drifted from `lesson_types` table (e.g. `1hr` is in the DB but not the validator). Should dynamicise from the table — TODO comment added.
+- Slot picker shows ALL of an opted-in instructor's available slots. No mechanism today to expose only specific times for free trials specifically.
+- `REQUIRE_REFERRAL` constant in `handleBookFreeTrial` is `false`; flip to `true` to gate behind referral codes once the referrer-reward feature is built.
+
+**Verified end-to-end:** Real booking via the preview at `2026-04-27 14:30` with throwaway email + Fraser's real phone. Booking row landed correctly with all expected fields, magic-link token generated with correct expiry, both confirmation emails delivered. C1 guard correctly blocks retries with the same email. Test booking + learner cleaned up post-test.
+
+**Rollback:**
+- Frontend: revert commit `30fa493` (deletes the three new public files) and revert commit `ef0d860` (restores prior homepage CTAs)
+- Backend: revert commit `b58faf6` (removes `book-free-trial` action) and `cea5a6c` (removes `'trial'` from `validSlugs`)
+- DB: `UPDATE lesson_types SET active = false WHERE slug = 'trial' AND school_id = 1;` and `UPDATE instructors SET offered_lesson_types = '["standard","2hr"]'::jsonb WHERE id = 4;`
+
+**Files changed:** `api/slots.js`, `api/instructor.js`, `public/index.html`, `public/free-trial.html` (new), `public/free-trial.js` (new), `public/free-trial-success.html` (new), `.claude/launch.json`
+
+---
+
 ## 2.83 — Marketing Homepage Launch (26 April 2026)
 
 Replaced the linktree-style `index.html` with a scrollable marketing homepage. Cold visitors can now learn about CoachCarter before being asked to log in; returning users keep their fast path via `/login.html` (PWA `start_url`) and a dismissible shortcut bar at the top of the homepage.
