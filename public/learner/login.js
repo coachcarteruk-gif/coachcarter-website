@@ -381,9 +381,21 @@
   }
 
   // ── Terms checkbox toggle ───────────────────────────────────────
-  document.getElementById('terms-checkbox')?.addEventListener('change', function() {
-    document.getElementById('accept-terms-btn').disabled = !this.checked;
-  });
+  // Use both 'change' and 'click' because mobile browsers don't always fire
+  // 'change' when the tap lands on the label rather than the checkbox itself.
+  function syncTermsBtn() {
+    const cb = document.getElementById('terms-checkbox');
+    document.getElementById('accept-terms-btn').disabled = !(cb && cb.checked);
+  }
+  const termsCheckbox = document.getElementById('terms-checkbox');
+  if (termsCheckbox) {
+    termsCheckbox.addEventListener('change', syncTermsBtn);
+    termsCheckbox.addEventListener('click', syncTermsBtn);
+    // Re-check after any click on the label (covers taps near the links)
+    document.getElementById('terms-label')?.addEventListener('click', function() {
+      setTimeout(syncTermsBtn, 0);
+    });
+  }
 
   // ── Accept terms & continue ────────────────────────────────────
   async function handleAcceptTerms() {
