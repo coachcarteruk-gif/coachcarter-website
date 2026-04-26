@@ -1473,11 +1473,23 @@ async function handleBookFreeTrial(req, res) {
 
     // ── One-trial guard (C1): block if email or phone has any prior trial ──
     // No status filter — cancelled bookings count too, preventing cancel/rebook loops.
+    //
+    // Phone match uses both 07xxx and +447xxx variants since learner_users
+    // stores either form. KNOWN LIMITATION: if a prior booking's resolved
+    // learner row had its phone set to null by the phone-collision fallback
+    // (insert without phone), the guard cannot see that booking via phone —
+    // only via email. Email is the primary defence; phone is supplementary.
+    // See DEVELOPMENT-ROADMAP.md TODO for closing this hole properly via a
+    // dedicated guest_phone column on lesson_bookings.
+    let normPhone = cleanPhone;
+    if (normPhone.startsWith('07')) normPhone = '+44' + normPhone.slice(1);
+    const phoneVariants = [cleanPhone, normPhone];
+
     const [priorTrial] = await sql`
       SELECT lb.id FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       WHERE lb.lesson_type_id = ${trialType.id}
-        AND (LOWER(lu.email) = ${cleanEmail} OR lu.phone = ${cleanPhone})
+        AND (LOWER(lu.email) = ${cleanEmail} OR lu.phone = ANY(${phoneVariants}))
       LIMIT 1
     `;
     if (priorTrial) {
