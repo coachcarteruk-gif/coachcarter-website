@@ -1497,6 +1497,26 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.83 — Marketing Homepage Launch (26 April 2026)
+
+Replaced the linktree-style `index.html` with a scrollable marketing homepage. Cold visitors can now learn about CoachCarter before being asked to log in; returning users keep their fast path via `/login.html` (PWA `start_url`) and a dismissible shortcut bar at the top of the homepage.
+
+**What changed:**
+- New `public/index.html` adapted from the existing `coachcarter-landing.html` draft (which was deleted along with `coachcarter-landing.js`)
+- Added an "About CoachCarter" section ("Hi, I'm Fraser") — the explicit gap the linktree had: nowhere to learn about the company without committing to a login
+- Added a dismissible shortcut bar above the nav for returning visitors ("Already a member? Learner login · Instructor login"), state stored in `localStorage` under `cc_shortcut_dismissed`
+- Replaced the draft's "where would you like to go?" quiz section (which duplicated the linktree's self-classify function) with a 4-tile pass-photo strip
+- Andrew's testimonial photo swapped to the newly processed `/images/home/testimonial-andrew.jpg`
+- New JS file `public/home.js` (renamed from `coachcarter-landing.js`) — strips the dead quiz code and adds shortcut-bar dismiss handling
+
+**Verified at 375 / 768 / 1280 px viewports:** no horizontal scroll, mobile tab bar shows/hides correctly, shortcut bar collapses label on mobile, About + hero + pass strip + features + testimonials all reflow cleanly. Console clean. GDPR scripts (`cookie-consent.js`, `posthog-loader.js`) and PWA scripts intact.
+
+**Rollback:** `/login.html` still serves the original linktree verbatim. To revert, point Vercel rewrites or rename files so `/` serves `login.html` again.
+
+**Files changed:** `public/index.html` (replaced), `public/home.js` (new), `public/coachcarter-landing.html` (deleted), `public/coachcarter-landing.js` (deleted)
+
+---
+
 ## 2.82 — Marketing Homepage Groundwork (26 April 2026)
 
 Preparing to replace the linktree-style landing page (`index.html`) with a scrollable marketing homepage that gives curious visitors a chance to learn about CoachCarter before being asked to log in. This commit is the routing-and-assets prep step; the new homepage ships in a follow-up commit.
