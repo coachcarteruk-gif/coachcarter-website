@@ -11,7 +11,8 @@
     { "path": "/api/setmore-sync", "schedule": "*/15 * * * *" },
     { "path": "/api/setmore-welcome", "schedule": "0 10 * * *" },
     { "path": "/api/cron-retention", "schedule": "0 3 * * 0" },
-    { "path": "/api/cron-auto-complete", "schedule": "15 * * * *" }
+    { "path": "/api/cron-auto-complete", "schedule": "15 * * * *" },
+    { "path": "/api/cron-reconcile-payments", "schedule": "30 * * * *" }
   ],
   "redirects": [
     {

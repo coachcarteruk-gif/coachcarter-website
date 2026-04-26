@@ -80,6 +80,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── ask-examiner.js             # AI examiner chat with personalised learner context
 │   ├── address-lookup.js           # Address autocomplete API
 │   ├── cron-retention.js           # GDPR data retention cron (weekly, archives/purges inactive data)
+│   ├── cron-reconcile-payments.js  # Hourly Stripe webhook reconciliation — alerts on paid sessions missing from credit_transactions
 │   ├── _audit.js                   # GDPR audit logging utility (logAudit)
 │   ├── seed-test-data.js           # Test data seed/reset (3 test learner accounts, protected by MIGRATION_SECRET)
 │   ├── reviews.js                  # Google Reviews API
@@ -812,6 +813,7 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 | `/api/learner?action=confirm-deletion` | POST | None (token) | Confirms and executes account deletion |
 | `/api/config?action=record-consent` | POST | None | Records cookie consent decision to DB |
 | `/api/cron-retention` | GET | Vercel cron / CRON_SECRET | Weekly data retention enforcement |
+| `/api/cron-reconcile-payments` | GET | Vercel cron / CRON_SECRET | Hourly check that completed Stripe sessions have matching `credit_transactions` rows; alerts on mismatches |
 
 ### Database tables
 

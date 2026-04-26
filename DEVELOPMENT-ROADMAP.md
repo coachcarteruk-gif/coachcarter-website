@@ -1497,6 +1497,14 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.89 — Hourly Stripe webhook reconciliation cron (26 April 2026)
+
+Safety net for silent webhook failures (entry 2.88 root-caused one). Runs every hour at :30 past, fetches all Stripe checkout sessions completed in the last 25 hours that are paid + have a tracked `payment_type` (`credit_purchase` / `slot_booking` / `lesson_offer`), and bulk-checks `credit_transactions.stripe_session_id`. Any paid session without a matching DB row is reported via email to `ERROR_ALERT_EMAIL` (or `STAFF_EMAIL` as fallback). Alert-only — no auto-replay — because re-running a partially-applied handler against a mutated DB is riskier than a manual "Resend" click in the Stripe dashboard. Legacy `pass_guarantee` / calculator-package payments use an in-memory store and are intentionally excluded. Window is 25h not 24h to guarantee no events slip through cron-schedule edges.
+
+**Files changed:** `api/cron-reconcile-payments.js` (new), `vercel.json` (cron schedule), `PROJECT.md` (file tree + endpoint table)
+
+---
+
 ## 2.88 — Fix coachcarter.co.uk references (26 April 2026)
 
 Stripe webhook URL was configured as `https://coachcarter.co.uk/api/webhook` — a domain we don't own. All `checkout.session.completed` deliveries had been silently failing with TLS errors for an unknown period: payments succeeded in Stripe, but no confirmation email or DB write fired. Discovered when a learner paid £82.50 and got no confirmation; Fraser compensated her with a free lesson out-of-band. Stripe webhook URL changed to `https://coachcarter.uk/api/webhook` in the Stripe dashboard. This commit cleans up every other `.co.uk` reference: `vercel.json` redirect, `api/connect.js` Stripe Connect base URL, `api/cron-payouts.js` payout email link, `middleware.js` CORS allow-list, and contact emails in `privacy.html` / `terms.html` (which were directing GDPR / data-rights requests to a domain we don't control). Code comments in `_auth.js` and `_csrf.js` also tidied. Remaining work: a reconciliation cron to detect future silent webhook failures.
