@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>CoachCarter — Book Your Free Trial Lesson</title>
+  <meta name="description" content="Book a free 1-hour driving lesson with CoachCarter. No card needed.">
+  <meta property="og:title" content="Book a free driving lesson — CoachCarter">
+  <meta property="og:description" content="Free 1-hour first lesson. Pick a time that works.">
+  <meta property="og:image" content="https://coachcarter.uk/Logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <script src="/shared/dark-mode.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary:    #262626;
+  --accent:     #f58321;
+  --accent-dk:  #e07518;
+  --accent-lt:  #fff4ec;
+  --muted:      #595959;
+  --bg:         #ffffff;
+  --surface:    #f9f9f9;
+  --border:     #e5e5e5;
+  --green:      #1a9e5c;
+  --red:        #c0392b;
+  --font-head:  'Bricolage Grotesque', sans-serif;
+  --font-body:  'Lato', sans-serif;
+  --radius:     14px;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--primary);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+a { color: var(--accent); }
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-bottom: 32px;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.brand img { height: 32px; }
+
+.hero {
+  margin-bottom: 32px;
+}
+
+.hero-eyebrow {
+  display: inline-block;
+  background: var(--accent-lt);
+  color: var(--accent-dk);
+  font-weight: 700;
+  font-size: 0.78rem;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.hero h1 {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  line-height: 1.1;
+  margin-bottom: 12px;
+}
+
+.hero p {
+  color: var(--muted);
+  font-size: 1.05rem;
+  max-width: 540px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.card h2 {
+  font-family: var(--font-head);
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.card .step-num {
+  display: inline-block;
+  background: var(--primary);
+  color: #fff;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-right: 8px;
+  line-height: 24px;
+}
+
+.card .helper {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+/* Slot picker */
+.slot-loading,
+.slot-empty,
+.slot-error {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.slot-error { color: var(--red); }
+
+.day-group {
+  margin-bottom: 16px;
+}
+
+.day-label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+  color: var(--primary);
+}
+
+.slot-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.slot-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 8px;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.12s ease;
+}
+.slot-btn .slot-instructor {
+  display: block;
+  font-weight: 400;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.slot-btn:hover:not(.selected):not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-lt);
+}
+.slot-btn.selected {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.slot-btn.selected .slot-instructor {
+  color: rgba(255,255,255,0.85);
+}
+.slot-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Form */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--primary);
+}
+
+.form-group input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+
+.form-group .field-help {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.form-error {
+  background: #fde8e6;
+  border: 1px solid var(--red);
+  color: var(--red);
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  font-size: 0.92rem;
+  display: none;
+}
+.form-error.visible { display: block; }
+
+.submit-btn {
+  width: 100%;
+  appearance: none;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  padding: 16px 24px;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.submit-btn:hover:not(:disabled) { background: var(--accent-dk); }
+.submit-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.summary-bar {
+  background: var(--accent-lt);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 0.92rem;
+  color: var(--primary);
+}
+.summary-bar strong { color: var(--accent-dk); }
+
+.fineprint {
+  margin-top: 24px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.6;
+}
+.fineprint a { color: var(--muted); }
+</style>
+</head>
+<body>
+  <main class="page">
+    <a class="brand" href="/">
+      <img src="/Logo.png" alt="CoachCarter">
+      <span>CoachCarter</span>
+    </a>
+
+    <div class="hero">
+      <span class="hero-eyebrow">Free first lesson</span>
+      <h1>Try a 1-hour driving lesson — on us.</h1>
+      <p>No card needed. Pick a time that works, give us a few details, and we'll see you at your front door.</p>
+    </div>
+
+    <section class="card" aria-labelledby="step-1-heading">
+      <h2 id="step-1-heading"><span class="step-num">1</span>Pick a time</h2>
+      <p class="helper">Showing free-trial slots for the next 14 days.</p>
+      <div id="slotPicker">
+        <div class="slot-loading">Loading available slots…</div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="step-2-heading">
+      <h2 id="step-2-heading"><span class="step-num">2</span>Your details</h2>
+      <p class="helper">We'll send a confirmation and a sign-in link to your email.</p>
+
+      <div id="summaryBar" class="summary-bar" style="display:none"></div>
+      <div id="formError" class="form-error" role="alert"></div>
+
+      <form id="trialForm" novalidate>
+        <div class="form-group">
+          <label for="guest_name">Full name</label>
+          <input type="text" id="guest_name" name="guest_name" autocomplete="name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="guest_email">Email</label>
+          <input type="email" id="guest_email" name="guest_email" autocomplete="email" required>
+          <div class="field-help">If you already have an account, we'll send a sign-in link instead.</div>
+        </div>
+
+        <div class="form-group">
+          <label for="guest_phone">UK mobile</label>
+          <input type="tel" id="guest_phone" name="guest_phone" autocomplete="tel" placeholder="07xxx xxx xxx" required>
+        </div>
+
+        <div class="form-group">
+          <label for="guest_pickup_address">Pickup address</label>
+          <input type="text" id="guest_pickup_address" name="guest_pickup_address" autocomplete="street-address" placeholder="House number and postcode" required>
+          <div class="field-help">We pick you up from here.</div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submitBtn" disabled>Pick a time first</button>
+      </form>
+
+      <div class="fineprint">
+        By booking, you agree to our <a href="/terms.html">terms</a> and <a href="/privacy.html">privacy notice</a>.<br>
+        Need to cancel? Please give 48 hours notice.
+      </div>
+    </section>
+  </main>
+
+  <script src="/free-trial.js"></script>
+</body>
+</html>
