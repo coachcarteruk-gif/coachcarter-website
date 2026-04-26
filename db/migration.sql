@@ -1286,3 +1286,13 @@ DROP TABLE IF EXISTS qa_questions;
 -- appear on the instructor's public booking page.
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS offered_lesson_types JSONB DEFAULT NULL;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- FREE TRIAL: guest_phone on lesson_bookings (April 2026)
+-- Stores the raw phone number submitted on the free-trial form so the
+-- one-trial guard can match it even when the learner_users row ends up
+-- with phone=NULL (phone-collision fallback during INSERT).
+-- NULL for all non-free-trial bookings.
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS guest_phone TEXT;
+CREATE INDEX IF NOT EXISTS idx_lesson_bookings_guest_phone ON lesson_bookings(guest_phone) WHERE guest_phone IS NOT NULL;
