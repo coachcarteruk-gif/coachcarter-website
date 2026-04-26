@@ -1497,6 +1497,14 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.88 — Fix coachcarter.co.uk references (26 April 2026)
+
+Stripe webhook URL was configured as `https://coachcarter.co.uk/api/webhook` — a domain we don't own. All `checkout.session.completed` deliveries had been silently failing with TLS errors for an unknown period: payments succeeded in Stripe, but no confirmation email or DB write fired. Discovered when a learner paid £82.50 and got no confirmation; Fraser compensated her with a free lesson out-of-band. Stripe webhook URL changed to `https://coachcarter.uk/api/webhook` in the Stripe dashboard. This commit cleans up every other `.co.uk` reference: `vercel.json` redirect, `api/connect.js` Stripe Connect base URL, `api/cron-payouts.js` payout email link, `middleware.js` CORS allow-list, and contact emails in `privacy.html` / `terms.html` (which were directing GDPR / data-rights requests to a domain we don't control). Code comments in `_auth.js` and `_csrf.js` also tidied. Remaining work: a reconciliation cron to detect future silent webhook failures.
+
+**Files changed:** `vercel.json`, `api/connect.js`, `api/cron-payouts.js`, `api/_auth.js`, `api/_csrf.js`, `middleware.js`, `public/privacy.html`, `public/terms.html`
+
+---
+
 ## 2.87 — Close C1 phone-bypass with guest_phone column (26 April 2026)
 
 The free-trial one-trial guard could be bypassed by a second booking with the same phone but a different email, because the phone-collision fallback creates a learner row with `phone=NULL`, making the phone check invisible to the guard. Fix: added `guest_phone TEXT` to `lesson_bookings`, populated by `book-free-trial` with the raw submitted phone. The dedup query now checks `lb.guest_phone` in addition to `lu.phone`, closing the bypass. Column also added to GDPR data export.
