@@ -852,7 +852,8 @@ async function handleUpdateProfile(req, res) {
   }
 
   // Validate offered_lesson_types: null (all types) or array of slug strings
-  const validSlugs = ['standard', '2hr', '3hr'];
+  // TODO: dynamicise from lesson_types table — this list drifts from DB.
+  const validSlugs = ['standard', '2hr', '3hr', 'trial'];
   if (offered_lesson_types !== undefined && offered_lesson_types !== null) {
     if (!Array.isArray(offered_lesson_types) || !offered_lesson_types.every(s => validSlugs.includes(s))) {
       return res.status(400).json({ error: 'offered_lesson_types must be null or an array of valid lesson type slugs' });

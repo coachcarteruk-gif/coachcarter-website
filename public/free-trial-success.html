@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>CoachCarter — Free Trial Booked</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <script src="/shared/dark-mode.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --primary:    #262626;
+  --accent:     #f58321;
+  --accent-lt:  #fff4ec;
+  --muted:      #595959;
+  --bg:         #ffffff;
+  --surface:    #f9f9f9;
+  --border:     #e5e5e5;
+  --green:      #1a9e5c;
+  --font-head:  'Bricolage Grotesque', sans-serif;
+  --font-body:  'Lato', sans-serif;
+}
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--primary);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  -webkit-font-smoothing: antialiased;
+}
+.card {
+  max-width: 460px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 36px 28px;
+  text-align: center;
+}
+.tick {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0 auto 20px;
+}
+h1 {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 1.6rem;
+  margin-bottom: 12px;
+}
+p {
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.note {
+  font-size: 0.85rem;
+  background: var(--accent-lt);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 20px;
+  color: var(--primary);
+  text-align: left;
+}
+.note strong { color: var(--primary); }
+.home-link {
+  display: inline-block;
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+</style>
+</head>
+<body>
+  <main class="card" role="main">
+    <div class="tick" aria-hidden="true">&#10003;</div>
+    <h1>Free trial booked.</h1>
+    <p>
+      We've sent a confirmation to your email along with a one-click sign-in link
+      so you can manage your booking.
+    </p>
+    <div class="note">
+      <strong>Email not arrived in 5 minutes?</strong> Check your spam folder, or
+      request a new sign-in link from <a href="/learner/login.html">the login page</a>.
+    </div>
+    <a class="home-link" href="/">Back to homepage</a>
+  </main>
+</body>
+</html>

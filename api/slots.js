@@ -97,6 +97,7 @@ module.exports = async (req, res) => {
   if (action === 'book')         return handleBook(req, res);
   if (action === 'checkout-slot') return handleCheckoutSlot(req, res);
   if (action === 'checkout-slot-guest') return handleCheckoutSlotGuest(req, res);
+  if (action === 'book-free-trial') return handleBookFreeTrial(req, res);
   if (action === 'cancel')       return handleCancel(req, res);
   if (action === 'reschedule')   return handleReschedule(req, res);
   if (action === 'my-bookings')  return handleMyBookings(req, res);
@@ -1371,6 +1372,370 @@ async function handleCheckoutSlotGuest(req, res) {
     console.error('checkout-slot-guest error:', err);
     reportError('/api/slots?action=checkout-slot-guest', err);
     return res.status(500).json({ error: 'Failed to create checkout', details: 'Internal server error' });
+  }
+}
+
+// ── POST /api/slots?action=book-free-trial ────────────────────────────────────
+// Self-serve free trial booking. No auth, no payment, no Stripe.
+// Body: { instructor_id, date, start_time, end_time, guest_name, guest_email,
+//         guest_phone, guest_pickup_address, school_id?, referral_code? }
+//
+// Flow:
+//   1. Validate inputs (same shape as checkout-slot-guest).
+//   2. Rate-limit by IP and phone.
+//   3. Resolve Free Trial lesson type from DB (slug = 'trial').
+//   4. One-trial guard: reject if email or phone has any prior free trial booking
+//      (any status — cancelled bookings count, to prevent cancel/rebook abuse).
+//   5. Slot conflict check.
+//   6. Find or create learner via shared findOrCreateLearner pattern.
+//   7. INSERT booking with payment_method='free', minutes_deducted=0.
+//   8. Generate magic-link token + send confirmation emails (no session cookie).
+//   9. Return redirect_url to /free-trial-success.html.
+//
+// Future-proofing: REQUIRE_REFERRAL constant lets us flip to referrer-only
+// (see DEVELOPMENT-ROADMAP.md). v1 ships open-access.
+const REQUIRE_REFERRAL = false;
+
+async function handleBookFreeTrial(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { instructor_id, date, start_time, end_time,
+          guest_name, guest_email, guest_phone, guest_pickup_address,
+          referral_code } = req.body;
+
+  if (!guest_name || !guest_name.trim())
+    return res.status(400).json({ error: 'Name is required' });
+  if (!guest_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guest_email.trim()))
+    return res.status(400).json({ error: 'A valid email address is required' });
+  if (!guest_phone || !/^(?:07\d{9}|\+447\d{9})$/.test(guest_phone.replace(/\s+/g, '')))
+    return res.status(400).json({ error: 'A valid UK phone number is required (07xxx xxx xxx)' });
+  if (!guest_pickup_address || !guest_pickup_address.trim())
+    return res.status(400).json({ error: 'Pickup address is required' });
+  if (!instructor_id || !date || !start_time || !end_time)
+    return res.status(400).json({ error: 'instructor_id, date, start_time, end_time required' });
+
+  const cleanEmail = guest_email.toLowerCase().trim();
+  const cleanPhone = guest_phone.replace(/\s+/g, '').trim();
+  const cleanName  = guest_name.trim();
+  const cleanAddr  = guest_pickup_address.trim();
+  const schoolId   = parseInt(req.body.school_id, 10) || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // ── Rate limiting: 10 per IP per hour, 3 per phone per hour ──
+    // Tighter than paid checkout (which is 5/phone) — free is more abusable.
+    const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+    const ipKey = `free_trial_ip:${ip}`;
+    const phoneKey = `free_trial_phone:${cleanPhone}`;
+    try {
+      await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
+      const [ipLimit] = await sql`SELECT request_count FROM rate_limits WHERE key = ${ipKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      if (ipLimit && ipLimit.request_count >= 10)
+        return res.status(429).json({ error: 'Too many booking attempts. Please try again later.' });
+      const [phoneLimit] = await sql`SELECT request_count FROM rate_limits WHERE key = ${phoneKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      if (phoneLimit && phoneLimit.request_count >= 3)
+        return res.status(429).json({ error: 'Too many booking attempts for this phone number. Please try again later.' });
+      for (const key of [ipKey, phoneKey]) {
+        const [ex] = await sql`SELECT request_count FROM rate_limits WHERE key = ${key} AND window_start > NOW() - INTERVAL '1 hour'`;
+        if (ex) {
+          await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${key} AND window_start > NOW() - INTERVAL '1 hour'`;
+        } else {
+          await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${key}, 1, NOW())`;
+        }
+      }
+    } catch (e) { /* rate limit check failed — allow request through */ }
+
+    // ── Resolve Free Trial lesson type ──
+    const [trialType] = await sql`
+      SELECT id, slug, name, duration_minutes
+      FROM lesson_types
+      WHERE slug = 'trial' AND active = true AND school_id = ${schoolId}
+    `;
+    if (!trialType)
+      return res.status(404).json({ error: 'Free trial is not currently available.' });
+
+    const durationMins = trialType.duration_minutes;
+
+    // ── Slot timing validation ──
+    const startMins = timeToMinutes(start_time);
+    const endMins   = timeToMinutes(end_time);
+    const checkoutDate = parseDate(date);
+    const todayStart   = startOfDay(new Date());
+    if (checkoutDate && checkoutDate.getTime() === todayStart.getTime()) {
+      const now = new Date();
+      const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+      if (startMins <= nowMins)
+        return res.status(400).json({ error: 'This slot has already started. Please choose a later time.' });
+    }
+    if (endMins - startMins !== durationMins)
+      return res.status(400).json({ error: `Slot must be exactly ${durationMins} minutes for a free trial.` });
+
+    // ── One-trial guard (C1): block if email or phone has any prior trial ──
+    // No status filter — cancelled bookings count too, preventing cancel/rebook loops.
+    //
+    // Phone match uses both 07xxx and +447xxx variants since learner_users
+    // stores either form. KNOWN LIMITATION: if a prior booking's resolved
+    // learner row had its phone set to null by the phone-collision fallback
+    // (insert without phone), the guard cannot see that booking via phone —
+    // only via email. Email is the primary defence; phone is supplementary.
+    // See DEVELOPMENT-ROADMAP.md TODO for closing this hole properly via a
+    // dedicated guest_phone column on lesson_bookings.
+    let normPhone = cleanPhone;
+    if (normPhone.startsWith('07')) normPhone = '+44' + normPhone.slice(1);
+    const phoneVariants = [cleanPhone, normPhone];
+
+    const [priorTrial] = await sql`
+      SELECT lb.id FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id
+      WHERE lb.lesson_type_id = ${trialType.id}
+        AND (LOWER(lu.email) = ${cleanEmail} OR lu.phone = ANY(${phoneVariants}))
+      LIMIT 1
+    `;
+    if (priorTrial) {
+      return res.status(409).json({
+        error: 'already_used',
+        message: "Looks like you've already booked a free trial. Check your email or log in to manage it."
+      });
+    }
+
+    // ── Referral lookup (optional in v1; may become required later) ──
+    let referrerId = null;
+    if (referral_code) {
+      const [ref] = await sql`
+        SELECT learner_id FROM referrals WHERE code = ${referral_code} AND school_id = ${schoolId}
+      `;
+      if (ref) referrerId = ref.learner_id;
+    }
+    if (REQUIRE_REFERRAL && !referrerId) {
+      return res.status(403).json({ error: 'Free trial available by referral only.' });
+    }
+
+    // ── Slot conflict checks ──
+    await sql`DELETE FROM slot_reservations WHERE expires_at < NOW()`;
+
+    const [existingBooking] = await sql`
+      SELECT id FROM lesson_bookings
+      WHERE instructor_id = ${instructor_id}
+        AND scheduled_date = ${date}
+        AND start_time = ${start_time}::time
+        AND status = 'confirmed'
+    `;
+    if (existingBooking)
+      return res.status(409).json({ error: 'Sorry, that slot is already booked.' });
+
+    const [existingReservation] = await sql`
+      SELECT id FROM slot_reservations
+      WHERE instructor_id = ${instructor_id}
+        AND scheduled_date = ${date}
+        AND start_time = ${start_time}::time
+        AND expires_at > NOW()
+    `;
+    if (existingReservation)
+      return res.status(409).json({ error: 'Someone else is currently booking this slot. Try another or wait a few minutes.' });
+
+    try {
+      const [existingOffer] = await sql`
+        SELECT id FROM lesson_offers
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ${date}
+          AND start_time = ${start_time}::time
+          AND status = 'pending'
+          AND expires_at > NOW()
+      `;
+      if (existingOffer)
+        return res.status(409).json({ error: 'This slot is currently held for a pending lesson offer.' });
+    } catch (e) { /* table may not exist yet */ }
+
+    const [instructor] = await sql`
+      SELECT id, name, email, phone FROM instructors
+      WHERE id = ${instructor_id} AND active = true AND school_id = ${schoolId}
+    `;
+    if (!instructor)
+      return res.status(404).json({ error: 'Instructor not found' });
+
+    // ── Verify the instructor offers free trials ──
+    const [instructorOffers] = await sql`
+      SELECT 1 FROM instructors
+      WHERE id = ${instructor_id}
+        AND (offered_lesson_types IS NULL OR offered_lesson_types @> '["trial"]'::jsonb)
+    `;
+    if (!instructorOffers)
+      return res.status(400).json({ error: 'This instructor does not offer free trials.' });
+
+    // ── Find or create learner (mirrors offers.js findOrCreateLearner) ──
+    let learnerId;
+    const [existingLearner] = await sql`
+      SELECT id, name, phone, pickup_address, email FROM learner_users
+      WHERE LOWER(email) = ${cleanEmail} AND school_id = ${schoolId}
+    `;
+
+    if (existingLearner) {
+      learnerId = existingLearner.id;
+      const needsUpdate = (!existingLearner.name && cleanName) ||
+                          (!existingLearner.phone && cleanPhone) ||
+                          (!existingLearner.pickup_address && cleanAddr);
+      if (needsUpdate) {
+        await sql`
+          UPDATE learner_users SET
+            name = COALESCE(NULLIF(name, ''), ${cleanName}),
+            phone = COALESCE(phone, ${cleanPhone}),
+            pickup_address = COALESCE(NULLIF(pickup_address, ''), ${cleanAddr}),
+            last_activity_at = NOW()
+          WHERE id = ${learnerId}
+        `;
+      }
+    } else {
+      try {
+        const [newLearner] = await sql`
+          INSERT INTO learner_users
+            (name, email, phone, pickup_address, balance_minutes, credit_balance, school_id, referred_by)
+          VALUES
+            (${cleanName}, ${cleanEmail}, ${cleanPhone}, ${cleanAddr}, 0, 0, ${schoolId}, ${referrerId})
+          RETURNING id
+        `;
+        learnerId = newLearner.id;
+      } catch (insertErr) {
+        if (insertErr.message?.includes('learner_users_phone_key') || insertErr.message?.includes('unique')) {
+          // Phone collision with a different account — insert without phone
+          const [newLearner] = await sql`
+            INSERT INTO learner_users
+              (name, email, pickup_address, balance_minutes, credit_balance, school_id, referred_by)
+            VALUES
+              (${cleanName}, ${cleanEmail}, ${cleanAddr}, 0, 0, ${schoolId}, ${referrerId})
+            RETURNING id
+          `;
+          learnerId = newLearner.id;
+        } else {
+          throw insertErr;
+        }
+      }
+    }
+
+    // ── Create the booking ──
+    let booking;
+    try {
+      const [b] = await sql`
+        INSERT INTO lesson_bookings
+          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+           created_by, payment_method, lesson_type_id, minutes_deducted,
+           pickup_address, school_id)
+        VALUES
+          (${learnerId}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, 'confirmed',
+           'free_trial_self_serve', 'free', ${trialType.id}, 0,
+           ${cleanAddr}, ${schoolId})
+        RETURNING id, scheduled_date::text, start_time::text, end_time::text
+      `;
+      booking = b;
+    } catch (insertErr) {
+      if (insertErr.message?.includes('uq_booking_slot')) {
+        return res.status(409).json({ error: 'Sorry, that slot was just taken.' });
+      }
+      throw insertErr;
+    }
+
+    // ── Generate magic-link token (login from confirmation email) ──
+    // 7-day expiry to match the admin invite flow; long enough that the email
+    // sitting unread for a few days still works.
+    let magicUrl = null;
+    try {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await sql`
+        INSERT INTO magic_link_tokens (token, email, method, expires_at, school_id)
+        VALUES (${token}, ${cleanEmail}, 'email', ${expiresAt}, ${schoolId})
+      `;
+      const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+      magicUrl = `${baseUrl}/learner/login.html?token=${token}`;
+    } catch (tokenErr) {
+      console.warn('Free trial magic-link token generation failed:', tokenErr.message);
+    }
+
+    // ── Send confirmation emails ──
+    const lessonDate = new Date(date + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const lessonTime = `${start_time} – ${end_time}`;
+
+    try {
+      const transporter = createTransporter();
+      const firstName = cleanName.split(' ')[0] || 'there';
+
+      const learnerCta = magicUrl
+        ? `<p style="margin-top:16px"><a href="${magicUrl}" style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">Sign in &amp; manage booking →</a></p>
+           <p style="font-size:0.85rem;color:#797879">This sign-in link expires in 7 days.</p>`
+        : `<p style="margin-top:16px"><a href="https://coachcarter.uk/learner/login.html" style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">Log in to manage booking →</a></p>`;
+
+      await transporter.sendMail({
+        from:    'CoachCarter <bookings@coachcarter.uk>',
+        to:      cleanEmail,
+        subject: `Free trial booked — ${lessonDate} at ${start_time}`,
+        html: `
+          <h1>Your free trial is booked.</h1>
+          <p>Hi ${firstName}, here are the details:</p>
+          <table>
+            <tr><td><strong>Date:</strong></td><td>${lessonDate}</td></tr>
+            <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+            <tr><td><strong>Instructor:</strong></td><td>${instructor.name}</td></tr>
+            <tr><td><strong>Duration:</strong></td><td>${durationMins} minutes</td></tr>
+            <tr><td><strong>Pickup:</strong></td><td>${cleanAddr}</td></tr>
+            <tr><td><strong>Price:</strong></td><td>FREE</td></tr>
+          </table>
+          <p style="margin-top:16px;font-size:0.875rem;color:#797879">
+            Need to cancel or reschedule? Sign in below — please give at least 48 hours notice.
+          </p>
+          ${learnerCta}
+        `
+      });
+
+      if (instructor.email) {
+        await transporter.sendMail({
+          from:    'CoachCarter <system@coachcarter.uk>',
+          to:      instructor.email,
+          subject: `New free trial booked — ${lessonDate} at ${start_time}`,
+          html: `
+            <h2>New free trial booking</h2>
+            <table>
+              <tr><td><strong>Learner:</strong></td><td>${cleanName}</td></tr>
+              <tr><td><strong>Email:</strong></td><td>${cleanEmail}</td></tr>
+              <tr><td><strong>Phone:</strong></td><td>${cleanPhone}</td></tr>
+              <tr><td><strong>Pickup:</strong></td><td>${cleanAddr}</td></tr>
+              <tr><td><strong>Date:</strong></td><td>${lessonDate}</td></tr>
+              <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
+              <tr><td><strong>Duration:</strong></td><td>${durationMins} minutes</td></tr>
+            </table>
+            <p style="margin-top:16px">
+              <a href="https://coachcarter.uk/instructor/"
+                 style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;
+                        border-radius:8px;display:inline-block;font-weight:bold;font-size:0.9rem">
+                View my schedule →
+              </a>
+            </p>
+          `
+        });
+      }
+    } catch (emailErr) {
+      console.error('Free trial email send failed:', emailErr);
+      // Booking already exists — don't fail the request on email failure.
+    }
+
+    // ── WhatsApp notifications (non-blocking) ──
+    sendWhatsApp(cleanPhone,
+      `✅ Free trial booked!\n\n📅 ${lessonDate}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n\nCheck your email for a sign-in link.`
+    );
+    sendWhatsApp(instructor.phone,
+      `📋 New free trial!\n\n👤 ${cleanName}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n📍 ${cleanAddr}\n\nView schedule: https://coachcarter.uk/instructor/`
+    );
+
+    return res.json({
+      ok: true,
+      redirect_url: '/free-trial-success.html',
+      booking_id: booking.id
+    });
+
+  } catch (err) {
+    console.error('book-free-trial error:', err);
+    reportError('/api/slots?action=book-free-trial', err);
+    return res.status(500).json({ error: 'Failed to book free trial', details: 'Internal server error' });
   }
 }
 
