@@ -1497,6 +1497,23 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.82 — Marketing Homepage Groundwork (26 April 2026)
+
+Preparing to replace the linktree-style landing page (`index.html`) with a scrollable marketing homepage that gives curious visitors a chance to learn about CoachCarter before being asked to log in. This commit is the routing-and-assets prep step; the new homepage ships in a follow-up commit.
+
+**What changed:**
+- Linktree preserved at `/login.html` (verbatim copy of previous `index.html`) — keeps the fast 2-button choice for returning users and PWA installs
+- `manifest.json` `start_url` switched from `/` to `/login.html` so installed PWAs continue to skip the marketing layer
+- 6 pass-photo testimonials added under `/public/images/home/` (consent confirmed by Fraser, EXIF stripped, resized to ≤1400px wide, ~230–500KB each)
+
+**Baseline metrics:** Captured as of 2026-04-26 = unknown (no historical PostHog snapshot pulled). Future homepage performance compared against post-launch traffic from this date.
+
+**Success criteria for the follow-up homepage commit:** combined click-through to `/learner/login.html` + `/instructor/login.html` ≥ 80% of post-launch baseline within 14 days. Below 60% → revert via `manifest.json` rollback (~5 min).
+
+**Files changed:** `public/manifest.json`, `public/login.html` (new), `public/images/home/*` (new)
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

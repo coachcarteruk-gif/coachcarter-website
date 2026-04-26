@@ -178,6 +178,10 @@ So `/classroom.html` serves `public/classroom.html`, `/api/learner?action=login`
 
 **API pattern:** All related endpoints are grouped into a single file using `?action=` routing (e.g. `/api/slots?action=available`, `/api/slots?action=book`).
 
+**Landing routes:**
+- `/` — marketing homepage (scrollable, for cold/curious traffic). Replacing the linktree as of April 2026 (groundwork in 2.82, homepage page ships in follow-up commit).
+- `/login.html` — linktree-style 2-button picker (Learner / Instructor). Primary entry for returning users and PWA installs (`manifest.json` `start_url` points here).
+
 ---
 
 ## Design system

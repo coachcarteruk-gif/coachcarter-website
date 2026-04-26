@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<script src="/cookie-consent.js"></script>
+<script src="/posthog-loader.js"></script>
+  <title>CoachCarter — Learn to Drive in Reading</title>
+  <meta name="description" content="CoachCarter Driving School — flexible lessons, a learner portal, and a free classroom packed with driving videos. Based in Reading.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared-auth.css">
+  <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/font-swap.js"></script>
+  <style>
+    /* Override shared-auth body to remove sidebar padding-top */
+    body {
+      padding-top: max(24px, env(safe-area-inset-top, 24px));
+      justify-content: center;
+      min-height: 100dvh;
+    }
+
+    .start-logo {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 16px;
+      display: block;
+      border-radius: 16px;
+    }
+
+    .start-title {
+      font-family: var(--font-head);
+      font-size: 1.6rem;
+      font-weight: 800;
+      text-align: center;
+      letter-spacing: -0.03em;
+      margin-bottom: 4px;
+    }
+
+    .start-title em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .start-sub {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 32px;
+    }
+
+    .card {
+      padding-top: 32px;
+    }
+
+    .choice-icon.learner { background: var(--accent-lt); color: var(--accent); }
+    .choice-icon.instructor { background: #f0f0f0; color: var(--primary); }
+
+    .start-footer {
+      margin-top: 32px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .start-footer a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .start-footer a:hover {
+      color: var(--accent);
+    }
+
+    .start-footer .sep {
+      margin: 0 8px;
+      opacity: 0.4;
+    }
+  </style>
+</head>
+<body>
+
+<script src="/index.js"></script>
+
+<div class="card">
+  <img src="/Logo.png" alt="CoachCarter" class="start-logo">
+  <div class="start-title">Coach<em>Carter</em></div>
+  <div class="start-sub">Learn to drive in Reading</div>
+
+  <div class="choice-grid">
+    <a class="choice-card" href="/learner/login.html">
+      <div class="choice-icon learner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div>
+        <div class="choice-label">I'm a Learner</div>
+        <div class="choice-desc">Book lessons, track your progress, and access your driving portal.</div>
+      </div>
+    </a>
+    <a class="choice-card" href="/instructor/login.html">
+      <div class="choice-icon instructor">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <div>
+        <div class="choice-label">I'm an Instructor</div>
+        <div class="choice-desc">View your schedule, manage availability, and update your profile.</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="start-footer">
+    <a href="/privacy.html">Privacy</a>
+    <span class="sep">|</span>
+    <a href="/terms.html">Terms</a>
+    <span class="sep">|</span>
+    <a href="#" id="cookie-settings-link">Cookie Settings</a>
+  </div>
+</div>
+
+</body>
+</html>
