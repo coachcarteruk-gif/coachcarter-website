@@ -1497,6 +1497,16 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.85 — Fix terms-acceptance Continue button on mobile (26 April 2026)
+
+The "One last step" terms-acceptance screen shown after a magic-link login had a Continue button that never enabled on mobile. Root cause: the `<label>` wrapping the checkbox also contains `<a>` links to T&C/Privacy pages; on mobile, tapping the label area (especially near those links) doesn't reliably fire a `change` event on the checkbox. Added `click` listeners on both the checkbox and the label (with a `setTimeout` tick so the checked state has settled) so the button syncs correctly regardless of tap position.
+
+**Affects every new learner** coming through the free-trial CTA.
+
+**Files changed:** `public/learner/login.js`
+
+---
+
 ## 2.84 — Free Trial Self-Serve Booking (26 April 2026)
 
 Public-access free 1-hour trial lesson booking, end-to-end. Anyone visiting `/free-trial.html` can pick a slot, submit name/email/phone/pickup, and get a confirmed booking + magic-link login email — no Stripe, no payment, no account creation step. The Free Trial lesson type already existed in `lesson_types` (id 37, slug `trial`, duration 60 min, price 0p) but was inactive and had no public surface.
