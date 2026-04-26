@@ -1497,6 +1497,14 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.86 — Fix PostHog CSP regression (26 April 2026)
+
+`posthog-loader.js` fetches `array.js` from `https://eu-assets.i.posthog.com` but only `https://eu.i.posthog.com` was whitelisted in `script-src`. Browser was silently blocking the script, breaking analytics on every page that loads `posthog-loader.js`. Added `eu-assets.i.posthog.com` to `script-src` in `middleware.js`.
+
+**Files changed:** `middleware.js`
+
+---
+
 ## 2.85 — Fix terms-acceptance Continue button on mobile (26 April 2026)
 
 The "One last step" terms-acceptance screen shown after a magic-link login had a Continue button that never enabled on mobile. Root cause: the `<label>` wrapping the checkbox also contains `<a>` links to T&C/Privacy pages; on mobile, tapping the label area (especially near those links) doesn't reliably fire a `change` event on the checkbox. Added `click` listeners on both the checkbox and the label (with a `setTimeout` tick so the checked state has settled) so the button syncs correctly regardless of tap position.

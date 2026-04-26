@@ -85,7 +85,7 @@ function addSecurityHeaders(response) {
   // pages; a future pass can move those to external .css files and drop it.
   response.headers.set('Content-Security-Policy', [
     "default-src 'self'",
-    "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://esm.sh https://js.stripe.com https://eu.i.posthog.com",
+    "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://esm.sh https://js.stripe.com https://eu.i.posthog.com https://eu-assets.i.posthog.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://unpkg.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https: blob:",
