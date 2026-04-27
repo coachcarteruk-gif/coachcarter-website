@@ -1736,8 +1736,14 @@ async function handleCancel(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // Load booking — must belong to this learner
+    // NOTE: cast scheduled_date and start_time to text — Neon returns a Date object
+    // for `date` columns, which breaks `${date}T${time}Z` template-string parsing.
     const [booking] = await sql`
-      SELECT lb.*, i.name AS instructor_name, i.email AS instructor_email, i.phone AS instructor_phone,
+      SELECT lb.*,
+             lb.scheduled_date::text AS scheduled_date,
+             lb.start_time::text     AS start_time,
+             lb.end_time::text       AS end_time,
+             i.name AS instructor_name, i.email AS instructor_email, i.phone AS instructor_phone,
              lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone
       FROM lesson_bookings lb
       JOIN instructors i    ON i.id  = lb.instructor_id
@@ -2054,8 +2060,13 @@ async function handleReschedule(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // Load booking — must belong to this learner
+    // Cast date/time to text — Neon returns Date objects which break `${date}T${time}Z` parsing.
     const [booking] = await sql`
-      SELECT lb.*, i.name AS instructor_name, i.email AS instructor_email,
+      SELECT lb.*,
+             lb.scheduled_date::text AS scheduled_date,
+             lb.start_time::text     AS start_time,
+             lb.end_time::text       AS end_time,
+             i.name AS instructor_name, i.email AS instructor_email,
              i.phone AS instructor_phone,
              lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
              COALESCE(lb.reschedule_count, 0) AS reschedule_count,

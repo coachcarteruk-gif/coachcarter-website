@@ -556,6 +556,7 @@
           This will use <strong id="mdDeductHours">1.5 hours</strong> from your balance.
           Cancel 48+ hours before and it returns automatically.
         </p>
+        <p class="modal-credit-note" id="mdBalanceLine" style="background:transparent;border:none;padding:4px 0;font-size:0.85rem;color:var(--muted);text-align:center;margin-top:-4px"></p>
         <div class="modal-actions">
           <button class="btn-modal-cancel" id="bookModalClose">Cancel</button>
           <button class="btn-confirm" id="btnConfirmBook">
@@ -588,6 +589,7 @@
       <div class="modal-success-icon">✓</div>
       <h2>Lesson booked!</h2>
       <p>Your lesson on <strong id="successDate">—</strong> at <strong id="successTime">—</strong> with <strong id="successInstructor">—</strong> is confirmed. Check your email for details.</p>
+      <p id="successBalance" style="display:none;font-size:0.875rem;color:var(--muted);margin-top:-8px"></p>
       <!-- First-time: prompt to sync calendar -->
       <div id="calSyncPrompt" style="display:none">
         <a class="btn-add-calendar" id="btnSyncCalendar" href="#">
