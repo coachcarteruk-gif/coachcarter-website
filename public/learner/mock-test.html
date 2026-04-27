@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <link rel="manifest" href="/manifest.json">
@@ -25,16 +25,17 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/brand-tokens.css">
   <link rel="stylesheet" href="/shared/learner.css">
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
     main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; }
 
-    /* ── SCREEN TRANSITIONS ── */
+    /* â”€â”€ SCREEN TRANSITIONS â”€â”€ */
     .screen { animation: fadeIn 0.3s ease; }
 
-    /* ── BUTTONS ── */
+    /* â”€â”€ BUTTONS â”€â”€ */
     .btn-primary {
       display: block; width: 100%; padding: 16px; border-radius: 12px; border: none;
       background: var(--accent); color: #fff; font-family: var(--font-body);
@@ -61,7 +62,7 @@
     .btn-dark:hover { background: #333; transform: translateY(-1px); }
     .btn-dark:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; }
 
-    /* ── SCREEN 1: START ── */
+    /* â”€â”€ SCREEN 1: START â”€â”€ */
     .start-screen { text-align: center; padding: 40px 0 20px; }
     .start-screen h1 {
       font-family: var(--font-head); font-size: 1.8rem; font-weight: 800;
@@ -104,7 +105,7 @@
     .step-item.done { background: var(--green-lt); border-color: var(--green); color: #166534; }
     .step-item.done .step-num { background: var(--green); }
 
-    /* ── SCREEN 2: PART START ── */
+    /* â”€â”€ SCREEN 2: PART START â”€â”€ */
     .part-screen { text-align: center; padding: 30px 0 20px; }
     .part-label {
       display: inline-block; padding: 6px 16px; border-radius: 100px;
@@ -135,7 +136,7 @@
 
     .btn-group { display: flex; flex-direction: column; gap: 10px; }
 
-    /* ── SCREEN 3: FAULT RECORDING ── */
+    /* â”€â”€ SCREEN 3: FAULT RECORDING â”€â”€ */
     .fault-screen { padding: 10px 0 20px; }
     .fault-header {
       display: flex; justify-content: space-between; align-items: center;
@@ -194,7 +195,7 @@
     /* Expandable subcategory chevron */
     .skill-row.has-subs { cursor: pointer; }
     .skill-row.has-subs .skill-name::before {
-      content: '▸'; display: inline-block; margin-right: 4px;
+      content: 'â–¸'; display: inline-block; margin-right: 4px;
       transition: transform 0.2s; font-size: 0.7rem; color: var(--muted);
     }
     .skill-row.has-subs.subs-open .skill-name::before { transform: rotate(90deg); }
@@ -269,7 +270,7 @@
     .ft-pill.serious { background: var(--red-lt); color: #dc2626; }
     .ft-pill.dangerous { background: var(--red-lt); color: #991b1b; }
 
-    /* ── SCREEN 4: RESULTS ── */
+    /* â”€â”€ SCREEN 4: RESULTS â”€â”€ */
     .results-screen { text-align: center; padding: 30px 0 20px; }
     .result-badge {
       display: inline-flex; align-items: center; justify-content: center;
@@ -365,7 +366,7 @@
       .result-total-item { min-width: 80px; padding: 10px 14px; }
     }
 
-    /* ── ROUTE SELECTION ── */
+    /* â”€â”€ ROUTE SELECTION â”€â”€ */
     .route-screen { padding: 30px 0 20px; }
     .route-screen h2 {
       font-family: var(--font-head); font-size: 1.4rem; font-weight: 700;
@@ -400,7 +401,7 @@
     .btn-skip { color: var(--muted); font-size: 0.85rem; text-align: center; margin-top: 8px; background: none; border: none; cursor: pointer; text-decoration: underline; font-family: var(--font-body); }
     .btn-skip:hover { color: var(--primary); }
 
-    /* ── MODE SELECTION ── */
+    /* â”€â”€ MODE SELECTION â”€â”€ */
     .mode-screen { text-align: center; padding: 40px 0 20px; }
     .mode-screen h1 {
       font-family: var(--font-head); font-size: 1.8rem; font-weight: 800;
@@ -418,7 +419,7 @@
     .mode-card-title { font-family: var(--font-head); font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
     .mode-card-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
 
-    /* ── SUPERVISOR FAULT RECORDING ── */
+    /* â”€â”€ SUPERVISOR FAULT RECORDING â”€â”€ */
     .sup-category { margin-bottom: 12px; }
     .sup-category-card {
       border: 1px solid var(--border); border-radius: var(--radius);
@@ -466,7 +467,7 @@
     .sup-rating-btn.selected-needs_work { border-color: #f59e0b; background: #fffbeb; color: #b45309; }
     .sup-rating-btn.selected-concern { border-color: #ef4444; background: var(--red-lt); color: #dc2626; }
 
-    /* ── SUPERVISOR RESULTS ── */
+    /* â”€â”€ SUPERVISOR RESULTS â”€â”€ */
     .sup-result-summary {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 20px; margin-bottom: 24px; text-align: center;
@@ -495,7 +496,7 @@
     .sup-result-hints li { margin-bottom: 2px; }
     .sup-result-note { margin: 0; padding: 6px 14px 10px; font-size: 0.82rem; color: var(--muted); font-style: italic; border-top: 1px solid var(--border); background: var(--bg); }
 
-    /* ── FAULT MAP ── */
+    /* â”€â”€ FAULT MAP â”€â”€ */
     .map-screen { padding: 20px 0; }
     .map-screen h2 {
       font-family: var(--font-head); font-size: 1.3rem; font-weight: 700;
@@ -557,7 +558,7 @@
 <body>
 
 <main>
-  <!-- ── SCREEN 0: MODE SELECTION ── -->
+  <!-- â”€â”€ SCREEN 0: MODE SELECTION â”€â”€ -->
   <section id="screen-mode" class="screen">
     <div class="mode-screen">
       <h1>Mock Driving Test</h1>
@@ -577,7 +578,7 @@
     </div>
   </section>
 
-  <!-- ── SCREEN 1: START ── -->
+  <!-- â”€â”€ SCREEN 1: START â”€â”€ -->
   <section id="screen-start" class="screen hidden">
     <div class="start-screen">
       <h1>Mock Driving Test</h1>
@@ -599,7 +600,7 @@
     </div>
   </section>
 
-  <!-- ── SCREEN 1b: ROUTE SELECTION ── -->
+  <!-- â”€â”€ SCREEN 1b: ROUTE SELECTION â”€â”€ -->
   <section id="screen-route" class="screen hidden">
     <div class="route-screen">
       <h2>Choose Your Test Route</h2>
@@ -613,7 +614,7 @@
     </div>
   </section>
 
-  <!-- ── SCREEN 2: PART START ── -->
+  <!-- â”€â”€ SCREEN 2: PART START â”€â”€ -->
   <section id="screen-part" class="screen hidden">
     <div class="part-screen">
       <div class="part-label" id="part-label"></div>
@@ -633,7 +634,7 @@
     </div>
   </section>
 
-  <!-- ── SCREEN 3: FAULT RECORDING ── -->
+  <!-- â”€â”€ SCREEN 3: FAULT RECORDING â”€â”€ -->
   <section id="screen-faults" class="screen hidden">
     <div class="fault-screen">
       <div class="fault-header">
@@ -657,7 +658,7 @@
     </div>
   </section>
 
-  <!-- ── SCREEN 4: RESULTS ── -->
+  <!-- â”€â”€ SCREEN 4: RESULTS â”€â”€ -->
   <section id="screen-results" class="screen hidden">
     <div class="results-screen">
       <div class="result-badge" id="result-badge"></div>
@@ -687,7 +688,7 @@
     </div>
   </section>
 
-  <!-- ── SCREEN 5: FAULT MAP ── -->
+  <!-- â”€â”€ SCREEN 5: FAULT MAP â”€â”€ -->
   <section id="screen-map" class="screen hidden">
     <div class="map-screen">
       <h2>Place Faults on Your Route</h2>

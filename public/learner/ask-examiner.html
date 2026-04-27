@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <link rel="manifest" href="/manifest.json">
@@ -10,7 +10,7 @@
   <script src="/pwa.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-  <title>Ask the Examiner — AI Driving Test Help | Coach Carter Reading</title>
+  <title>Ask the Examiner â€” AI Driving Test Help | Coach Carter Reading</title>
   <meta name="description" content="Ask any question about the UK driving test marking scheme and get instant, accurate answers powered by AI. Grounded in real DVSA examiner guidance. Free from Coach Carter Driving School.">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
@@ -21,13 +21,14 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/brand-tokens.css">
   <link rel="stylesheet" href="/shared/learner.css">
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
     body { display: flex; flex-direction: column; }
 
-    /* ── CHAT LAYOUT ── */
+    /* â”€â”€ CHAT LAYOUT â”€â”€ */
     .chat-container {
       flex: 1; display: flex; flex-direction: column;
       max-width: 720px; width: 100%; margin: 0 auto;
@@ -42,7 +43,7 @@
     .chat-header h1 em { font-style: normal; color: var(--accent); }
     .chat-header p { color: var(--muted); font-size: 0.82rem; line-height: 1.5; }
 
-    /* ── MESSAGES ── */
+    /* â”€â”€ MESSAGES â”€â”€ */
     .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 
     .msg { display: flex; gap: 10px; max-width: 90%; animation: fadeIn 0.3s ease; }
@@ -61,7 +62,7 @@
       padding: 12px 16px; border-radius: 16px; font-size: 0.9rem; line-height: 1.6;
       word-wrap: break-word;
     }
-    /* ── MARKDOWN IN CHAT BUBBLES ── */
+    /* â”€â”€ MARKDOWN IN CHAT BUBBLES â”€â”€ */
     .msg-bubble h4 { font-family: var(--font-head); font-size: 1rem; font-weight: 700; margin: 8px 0 4px; }
     .msg-bubble h4:first-child { margin-top: 0; }
     .msg-bubble h5 { font-family: var(--font-head); font-size: 0.92rem; font-weight: 700; margin: 6px 0 3px; }
@@ -79,7 +80,7 @@
       border-left: 3px solid var(--accent); border-bottom-left-radius: 4px;
     }
 
-    /* ── TYPING INDICATOR ── */
+    /* â”€â”€ TYPING INDICATOR â”€â”€ */
     .typing-indicator { display: none; align-self: flex-start; padding: 0 16px; }
     .typing-indicator.show { display: flex; }
     .typing-indicator .msg-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-lt); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
@@ -90,7 +91,7 @@
     @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* ── STARTER CHIPS ── */
+    /* â”€â”€ STARTER CHIPS â”€â”€ */
     .starter-chips {
       display: flex; flex-wrap: wrap; gap: 8px; padding: 16px;
       justify-content: center;
@@ -103,7 +104,7 @@
     }
     .starter-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-lt); }
 
-    /* ── INPUT AREA ── */
+    /* â”€â”€ INPUT AREA â”€â”€ */
     .chat-input-area {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: var(--white); border-top: 1px solid var(--border);
