@@ -246,11 +246,11 @@ function renderUnlogged() {
   banner.classList.add('show');
 }
 
-// ── Referral Card ──
-let referralShareUrl = '';
+// ── Referral teaser — links through to /learner/refer.html for the full page ──
 async function loadReferralCard() {
   if (!AUTH) return;
   try {
+    // We only need stats here. The dedicated page handles code generation and sharing.
     const [codeRes, statsRes] = await Promise.all([
       ccAuth.fetchAuthed('/api/learner?action=referral-code'),
       ccAuth.fetchAuthed('/api/learner?action=referral-stats')
@@ -258,34 +258,23 @@ async function loadReferralCard() {
     if (!codeRes.ok || !statsRes.ok) return;
     const codeData = await codeRes.json();
     const statsData = await statsRes.json();
-
     if (!codeData.enabled) return;
 
-    document.getElementById('referral-code-display').textContent = codeData.code;
-    referralShareUrl = codeData.share_url;
     document.getElementById('ref-count').textContent = statsData.total_referred;
-    var hrs = (statsData.total_reward_minutes / 60);
-    document.getElementById('ref-earned').textContent = hrs >= 1 ? hrs.toFixed(1) + ' hrs' : statsData.total_reward_minutes + ' min';
+    var mins = statsData.total_reward_minutes || 0;
+    var earnedEl = document.getElementById('ref-earned');
+    if (mins >= 60) {
+      var hrs = mins / 60;
+      earnedEl.textContent = (hrs % 1 === 0 ? hrs.toFixed(0) : hrs.toFixed(1)) + ' hr';
+    } else {
+      earnedEl.textContent = mins + ' min';
+    }
     document.getElementById('referral-card').classList.add('show');
-  } catch (e) { console.warn('Referral card load failed:', e); }
-}
-
-function copyReferralLink() {
-  if (!referralShareUrl) return;
-  var btn = document.getElementById('ref-copy-btn');
-  navigator.clipboard.writeText(referralShareUrl).then(function () {
-    btn.textContent = 'Copied!';
-    setTimeout(function () { btn.textContent = 'Copy link'; }, 2000);
-  }).catch(function () {
-    btn.textContent = 'Failed';
-    setTimeout(function () { btn.textContent = 'Copy link'; }, 2000);
-  });
+  } catch (e) { console.warn('Referral teaser load failed:', e); }
 }
 
 (function wire() {
   var btn = document.getElementById('btn-dismiss-profile');
   if (btn) btn.addEventListener('click', dismissProfile);
-  var copyBtn = document.getElementById('ref-copy-btn');
-  if (copyBtn) copyBtn.addEventListener('click', copyReferralLink);
 })();
 })();

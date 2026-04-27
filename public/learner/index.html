@@ -146,30 +146,25 @@
     }
     .btn-log-now:hover { background: var(--accent-dk); }
 
-    /* REFERRAL CARD */
+    /* REFERRAL TEASER — links to /learner/refer.html for the full page */
     .referral-card {
-      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      background: linear-gradient(135deg, var(--accent), var(--accent-dk));
       border-radius: var(--radius); padding: 20px;
       display: none; color: #fff; margin-bottom: 20px;
+      text-decoration: none; transition: transform 0.15s, box-shadow 0.15s;
     }
     .referral-card.show { display: block; }
-    .referral-card h3 { font-family: var(--font-head); font-size: 1rem; font-weight: 700; margin: 0 0 6px; }
+    .referral-card:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+    .referral-card h3 { font-family: var(--font-head); font-size: 1rem; font-weight: 700; margin: 0 0 6px; color: #fff; }
     .referral-card .ref-sub { font-size: 0.85rem; opacity: 0.9; margin-bottom: 16px; line-height: 1.4; }
-    .referral-code-row {
-      display: flex; align-items: center; gap: 10px;
-      background: rgba(255,255,255,0.18); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
-    }
-    .referral-code-row code { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em; flex: 1; }
-    .ref-copy-btn {
-      background: rgba(255,255,255,0.25); border: none; color: #fff; border-radius: 8px;
-      padding: 6px 14px; font-size: 0.78rem; font-weight: 700; cursor: pointer;
-      transition: background 0.15s; font-family: var(--font-head);
-    }
-    .ref-copy-btn:hover { background: rgba(255,255,255,0.4); }
-    .referral-stats-row { display: flex; gap: 20px; }
+    .referral-stats-row { display: flex; gap: 20px; margin-bottom: 14px; }
     .referral-stat { text-align: center; flex: 1; }
-    .referral-stat strong { display: block; font-size: 1.3rem; font-family: var(--font-head); }
+    .referral-stat strong { display: block; font-size: 1.3rem; font-family: var(--font-head); font-variant-numeric: tabular-nums; }
     .referral-stat span { font-size: 0.72rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ref-cta {
+      font-size: 0.82rem; font-weight: 700; opacity: 0.95;
+      text-align: right; font-family: var(--font-head);
+    }
 
     /* ACTION STRIP */
     .action-strip {
@@ -261,25 +256,22 @@
     <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete Next Step</a>
   </div>
 
-  <!-- REFERRAL CARD -->
-  <div class="referral-card" id="referral-card">
-    <h3>Refer a Friend</h3>
-    <div class="ref-sub">Share your code — you both earn free lesson time!</div>
-    <div class="referral-code-row">
-      <code id="referral-code-display"></code>
-      <button class="ref-copy-btn" id="ref-copy-btn">Copy link</button>
-    </div>
+  <!-- REFERRAL TEASER — full details live at /learner/refer.html -->
+  <a class="referral-card referral-teaser" id="referral-card" href="/learner/refer.html">
+    <h3>Refer a friend</h3>
+    <div class="ref-sub">Free lesson for them. Driving time for you on every lesson they take.</div>
     <div class="referral-stats-row">
       <div class="referral-stat">
         <strong id="ref-count">0</strong>
         <span>Friends referred</span>
       </div>
       <div class="referral-stat">
-        <strong id="ref-earned">0 hrs</strong>
-        <span>Free time earned</span>
+        <strong id="ref-earned">0 min</strong>
+        <span>Time earned</span>
       </div>
     </div>
-  </div>
+    <div class="ref-cta">View &amp; share &rsaquo;</div>
+  </a>
 
   <!-- UNLOGGED BOOKING BANNER -->
   <div class="unlogged-banner" id="unlogged-banner">
