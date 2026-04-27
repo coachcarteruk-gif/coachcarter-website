@@ -1301,3 +1301,50 @@ ALTER TABLE instructors ADD COLUMN IF NOT EXISTS offered_lesson_types JSONB DEFA
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS guest_phone TEXT;
 CREATE INDEX IF NOT EXISTS idx_lesson_bookings_guest_phone ON lesson_bookings(guest_phone) WHERE guest_phone IS NOT NULL;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- REFERRAL REWARDS — per-booking idempotency (April 2026)
+-- Reward model: recurring. Every completed paid lesson by a referred learner
+-- generates floor(duration/3) minutes of credit for the referrer.
+-- Issued by api/cron-referral-rewards.js after a 7-day grace window.
+-- The column is the idempotency key — once stamped, the booking will never
+-- be rewarded again, even if the cron re-runs.
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS referral_rewarded_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_lesson_bookings_referral_pending
+  ON lesson_bookings(scheduled_date, status)
+  WHERE referral_rewarded_at IS NULL AND status = 'completed';
+
+-- Backfill: any referee whose referrer already received a referral_reward credit
+-- transaction under the old purchase-time logic — mark their EARLIEST completed
+-- non-free-trial booking as already-rewarded, so the new cron does not double-pay.
+-- Idempotent: only stamps bookings where referral_rewarded_at IS NULL.
+UPDATE lesson_bookings lb
+   SET referral_rewarded_at = NOW()
+  FROM (
+    SELECT DISTINCT lu.id AS referee_id
+      FROM learner_users lu
+      JOIN credit_transactions ct ON ct.learner_id = lu.referred_by
+     WHERE lu.referred_by IS NOT NULL
+       AND ct.type = 'referral_reward'
+  ) referees
+ WHERE lb.learner_id = referees.referee_id
+   AND lb.status = 'completed'
+   AND lb.payment_method <> 'free'
+   AND lb.referral_rewarded_at IS NULL
+   AND lb.id = (
+     SELECT MIN(lb2.id) FROM lesson_bookings lb2
+      WHERE lb2.learner_id = referees.referee_id
+        AND lb2.status = 'completed'
+        AND lb2.payment_method <> 'free'
+   );
+
+-- Seed CoachCarter referral config (school 1). Idempotent: only sets keys
+-- that are missing, so admin overrides via update-referral-config persist.
+UPDATE schools
+   SET config = config || jsonb_build_object(
+     'referral_enabled', COALESCE(config->'referral_enabled', 'true'::jsonb),
+     'referral_reward_minutes', COALESCE(config->'referral_reward_minutes', '30'::jsonb),
+     'referral_welcome_bonus_minutes', COALESCE(config->'referral_welcome_bonus_minutes', '90'::jsonb)
+   )
+ WHERE id = 1;
