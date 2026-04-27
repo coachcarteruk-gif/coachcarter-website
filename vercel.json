@@ -20,6 +20,16 @@
       "has": [{ "type": "host", "value": "coachcarter-website.vercel.app" }],
       "destination": "https://coachcarter.uk/$1",
       "permanent": true
+    },
+    {
+      "source": "/classroom.html",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/classroom",
+      "destination": "/",
+      "permanent": false
     }
   ],
   "rewrites": [

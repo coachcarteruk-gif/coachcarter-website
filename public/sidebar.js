@@ -44,7 +44,6 @@
   var navItems = {
     public: [
       { icon: 'home', label: 'Home', href: '/' },
-      { icon: 'play', label: 'Free Videos', href: '/classroom.html' },
       'divider',
       { icon: 'calendar', label: 'Book a Lesson', href: '/learner/login.html?redirect=/learner/book.html' },
       { icon: 'logIn', label: 'Login', href: '/learner/login.html' }
