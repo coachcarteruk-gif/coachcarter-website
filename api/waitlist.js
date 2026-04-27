@@ -15,30 +15,11 @@
 
 const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
-const twilio     = require('twilio');
+const { sendWhatsApp } = require('./_whatsapp');
 const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
 const { requireAuth, getSchoolId } = require('./_auth');
 
-// ── Helpers (duplicated from slots.js per project convention) ────────────────
-
-function sendWhatsApp(to, message) {
-  const sid  = process.env.TWILIO_SID;
-  const auth = process.env.TWILIO_AUTH;
-  const from = process.env.TWILIO_WHATSAPP_FROM;
-  if (!sid || !auth || !from || !to) return Promise.resolve();
-
-  let phone = to.replace(/\s+/g, '');
-  if (phone.startsWith('0')) phone = '+44' + phone.slice(1);
-  else if (!phone.startsWith('+')) phone = '+' + phone;
-
-  const client = twilio(sid, auth);
-  return client.messages.create({
-    from: `whatsapp:${from}`,
-    to:   `whatsapp:${phone}`,
-    body: message
-  }).catch(err => { console.warn('WhatsApp failed:', err.message); });
-}
 
 function formatDateDisplay(str) {
   const iso = str instanceof Date ? str.toISOString().slice(0, 10) : String(str).slice(0, 10);

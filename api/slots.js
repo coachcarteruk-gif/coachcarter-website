@@ -28,33 +28,12 @@ const { neon }    = require('@neondatabase/serverless');
 const jwt         = require('jsonwebtoken');
 const crypto      = require('crypto');
 const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const twilio      = require('twilio');
+const { sendWhatsApp } = require('./_whatsapp');
 const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
 const { checkWaitlistOnCancel } = require('./waitlist');
 const { checkAdjacentTravelTime, extractPostcode, bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES } = require('./_travel-time');
 
-// ── WhatsApp helper ──────────────────────────────────────────────────────────
-function sendWhatsApp(to, message) {
-  const sid  = process.env.TWILIO_SID;
-  const auth = process.env.TWILIO_AUTH;
-  const from = process.env.TWILIO_WHATSAPP_FROM;
-  if (!sid || !auth || !from || !to) return Promise.resolve();
-
-  // Normalise phone to E.164: UK numbers starting with 0 → +44
-  let phone = to.replace(/\s+/g, '');
-  if (phone.startsWith('0')) phone = '+44' + phone.slice(1);
-  else if (!phone.startsWith('+')) phone = '+' + phone;
-
-  const client = twilio(sid, auth);
-  return client.messages.create({
-    from: `whatsapp:${from}`,
-    to:   `whatsapp:${phone}`,
-    body: message
-  }).catch(err => {
-    console.warn('WhatsApp failed:', err.message);
-  });
-}
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
 const MAX_DAYS_AHEAD      = 90;   // booking window

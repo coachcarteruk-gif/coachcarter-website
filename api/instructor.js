@@ -39,7 +39,7 @@
 
 const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
-const twilio     = require('twilio');
+const { sendWhatsApp } = require('./_whatsapp');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { requireAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
@@ -49,21 +49,6 @@ const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_tra
 const { resolveConfirmations } = require('./_confirmation-resolver');
 const { getEligibleBookings }  = require('./_payout-helpers');
 
-function sendWhatsApp(to, message) {
-  const sid  = process.env.TWILIO_SID;
-  const auth = process.env.TWILIO_AUTH;
-  const from = process.env.TWILIO_WHATSAPP_FROM;
-  if (!sid || !auth || !from || !to) return Promise.resolve();
-  let phone = to.replace(/\s+/g, '');
-  if (phone.startsWith('0')) phone = '+44' + phone.slice(1);
-  else if (!phone.startsWith('+')) phone = '+' + phone;
-  const client = twilio(sid, auth);
-  return client.messages.create({
-    from: `whatsapp:${from}`,
-    to:   `whatsapp:${phone}`,
-    body: message
-  }).catch(err => { console.warn('WhatsApp failed:', err.message); });
-}
 
 const TOKEN_EXPIRY_MINUTES = 30;
 const JWT_EXPIRY           = '180d';
