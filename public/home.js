@@ -34,7 +34,7 @@
   }
 
   // ── NAV SCROLL EFFECT ────────────────────────────────────
-  const nav = document.querySelector('.nav');
+  const nav = document.querySelector('.site-nav');
   if (nav) {
     window.addEventListener('scroll', () => {
       const scrollY = window.scrollY;

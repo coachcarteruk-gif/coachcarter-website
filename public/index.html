@@ -13,7 +13,7 @@
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
   <title>CoachCarter — Learn to Drive in Reading</title>
-<meta name="description" content="CoachCarter Driving School — flexible lessons, a learner portal, and a free classroom packed with driving videos. Based in Reading.">
+<meta name="description" content="CoachCarter Driving School — flexible driving lessons with a Test Ready Guarantee and a full learner portal. DVSA-approved instructors based in Reading.">
 <meta property="og:title" content="CoachCarter — Learn to Drive">
 <meta property="og:description" content="Flexible driving lessons with a Test Ready Guarantee. DVSA-approved instructors in Reading.">
 <meta property="og:image" content="https://coachcarter.uk/Logo.png">
@@ -27,27 +27,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.css">
+<link rel="stylesheet" href="/shared/brand-tokens.css">
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
 
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-:root {
-  --primary:    #262626;
-  --accent:     #f58321;
-  --accent-dk:  #e07518;
-  --accent-lt:  #fff4ec;
-  --accent-mid: rgba(245,131,33,0.12);
-  --muted:      #595959;
-  --border:     var(--border);
-  --bg:         #ffffff;
-  --surface:    #f9f9f9;
-  --white:      #ffffff;
-  --font-head:  'Bricolage Grotesque', sans-serif;
-  --font-body:  'Lato', sans-serif;
-  --radius:     14px;
-}
 
 html { scroll-behavior: smooth; }
 
@@ -149,12 +134,12 @@ a { color: inherit; }
   z-index: 101;
   background: var(--accent-lt);
   border-bottom: 1px solid rgba(245,131,33,0.18);
-  padding: 6px 16px;
+  padding: 7px 20px;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 12px;
-  font-size: 0.78rem;
+  gap: 14px;
+  font-size: 0.9rem;
   color: var(--primary);
 }
 .shortcut-bar[hidden] { display: none; }
@@ -166,7 +151,7 @@ a { color: inherit; }
   color: var(--accent-dk);
   font-weight: 700;
   text-decoration: none;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 100px;
   transition: background 0.15s;
 }
@@ -177,7 +162,7 @@ a { color: inherit; }
   background: transparent;
   border: none;
   color: var(--muted);
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
   padding: 4px 6px;
@@ -185,18 +170,18 @@ a { color: inherit; }
 }
 .shortcut-bar .shortcut-dismiss:hover { background: rgba(0,0,0,0.05); color: var(--primary); }
 
-body.has-shortcut .nav { top: 32px; }
-body.has-shortcut .hero { padding-top: 132px; }
+body.has-shortcut .site-nav { top: 36px; }
+body.has-shortcut .hero { padding-top: 136px; }
 
 @media (max-width: 600px) {
-  .shortcut-bar { font-size: 0.72rem; gap: 6px; padding: 5px 10px; }
+  .shortcut-bar { font-size: 0.78rem; gap: 8px; padding: 6px 12px; }
   .shortcut-bar .shortcut-label { display: none; }
 }
 
 /* ═══════════════════════════════════════
-   NAV
+   SITE NAV (top bar — markup rendered by sidebar.js / window.ccNav)
 ═══════════════════════════════════════ */
-.nav {
+.site-nav {
   position: fixed;
   top: 0; left: 0; right: 0;
   z-index: 100;
@@ -212,14 +197,14 @@ body.has-shortcut .hero { padding-top: 132px; }
   transition: background 0.3s;
 }
 
-.nav-logo {
+.site-nav-logo {
   display: flex;
   align-items: center;
   gap: 10px;
   text-decoration: none;
 }
 
-.nav-logo img {
+.site-nav-logo img {
   width: 34px; height: 34px;
   object-fit: contain;
   border-radius: 8px;
@@ -227,7 +212,7 @@ body.has-shortcut .hero { padding-top: 132px; }
   padding: 4px;
 }
 
-.nav-logo span {
+.site-nav-logo span {
   font-family: var(--font-head);
   font-size: 1.1rem;
   font-weight: 800;
@@ -235,24 +220,24 @@ body.has-shortcut .hero { padding-top: 132px; }
   letter-spacing: -0.02em;
 }
 
-.nav-logo span em {
+.site-nav-logo span em {
   font-style: normal;
   color: var(--accent);
 }
 
-.nav-links {
+.site-nav-links {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
 }
 
-.nav-cta {
+.site-nav-cta {
   display: flex;
   justify-content: flex-end;
 }
 
-.nav-link {
+.site-nav-link {
   color: rgba(255,255,255,0.6);
   font-family: var(--font-body);
   font-weight: 500;
@@ -265,20 +250,20 @@ body.has-shortcut .hero { padding-top: 132px; }
   white-space: nowrap;
 }
 
-.nav-link:hover {
+.site-nav-link:hover {
   color: #fff;
   border-color: rgba(255,255,255,0.15);
   background: rgba(255,255,255,0.05);
 }
 
-.nav-link.primary {
+.site-nav-link.primary {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
   font-weight: 600;
 }
 
-.nav-link.primary:hover {
+.site-nav-link.primary:hover {
   background: var(--accent-dk);
   border-color: var(--accent-dk);
   transform: translateY(-1px);
@@ -1177,8 +1162,30 @@ body.has-shortcut .hero { padding-top: 132px; }
   margin-bottom: 48px;
 }
 
-.footer-brand .nav-logo {
+.footer-brand .footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
   margin-bottom: 12px;
+}
+.footer-brand .footer-logo img {
+  width: 34px; height: 34px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  padding: 4px;
+}
+.footer-brand .footer-logo span {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+.footer-brand .footer-logo span em {
+  font-style: normal;
+  color: var(--accent);
 }
 
 .footer-brand p {
@@ -1272,8 +1279,8 @@ body.has-shortcut .hero { padding-top: 132px; }
   .steps { grid-template-columns: repeat(2, 1fr); gap: 32px; }
   .steps::before { display: none; }
   .footer-top { grid-template-columns: 1fr 1fr; gap: 32px; }
-  .nav { padding: 0 16px; }
-  .nav-links, .nav-cta { display: none; }
+  .site-nav { padding: 0 16px; }
+  .site-nav-links, .site-nav-cta { display: none; }
   .mobile-tab-bar { display: flex; }
 }
 
@@ -1320,21 +1327,8 @@ a:focus-visible, button:focus-visible {
 <!-- ──────────────────────────────────────
      NAV
 ────────────────────────────────────── -->
-<nav class="nav" role="navigation" aria-label="Main navigation">
-  <a class="nav-logo" href="/">
-    <img src="/Logo.png" alt="CoachCarter logo">
-    <span>Coach<em>Carter</em></span>
-  </a>
-  <div class="nav-links">
-    <a class="nav-link" href="/">Home</a>
-    <a class="nav-link" href="/learner-journey.html">Pricing</a>
-    <a class="nav-link" href="/classroom.html">Videos</a>
-    <a class="nav-link" href="/learner/login.html?redirect=/learner/book.html">Book</a>
-  </div>
-  <div class="nav-cta">
-    <a class="nav-link primary" href="/learner/login.html">Login</a>
-  </div>
-</nav>
+<!-- Markup rendered by window.ccNav.renderMarketing() — see /sidebar.js -->
+<nav class="site-nav" id="cc-site-nav"></nav>
 
 <!-- ──────────────────────────────────────
      HERO
@@ -1365,7 +1359,6 @@ a:focus-visible, button:focus-visible {
         </a>
       </div>
 
-      <a class="hero-secondary" href="/classroom.html">Or explore our free video classroom &rarr;</a>
     </div>
 
     <div class="hero-image">
@@ -1398,11 +1391,6 @@ a:focus-visible, button:focus-visible {
       <span class="trust-icon">📍</span>
       Based in Reading &amp; surrounding areas
     </div>
-    <div class="trust-divider" aria-hidden="true"></div>
-    <div class="trust-item">
-      <span class="trust-icon">🎬</span>
-      50+ free driving videos
-    </div>
   </div>
 </div>
 
@@ -1419,7 +1407,7 @@ a:focus-visible, button:focus-visible {
         <div class="section-label">About CoachCarter</div>
         <h2 class="section-title" id="about-title">Hi, I'm Fraser.</h2>
         <p>CoachCarter started because learning to drive shouldn't feel like joining a faceless franchise. I'm a DVSA-approved instructor based in Reading, and I built this driving school around the kind of experience I'd want my own family to have — calm, structured, and genuinely supportive.</p>
-        <p>Beyond the lessons themselves, every learner gets access to a full progress portal, a free video classroom, and a clear plan to get test-ready. No upselling, no surprises — just honest help getting your licence this year.</p>
+        <p>Beyond the lessons themselves, every learner gets a full progress portal and a clear plan to get test-ready. No upselling, no surprises — just honest help getting your licence this year.</p>
         <p class="about-sig">— Fraser</p>
       </div>
     </div>
@@ -1434,7 +1422,7 @@ a:focus-visible, button:focus-visible {
     <div class="features-header fade-up">
       <div class="section-label">Why CoachCarter</div>
       <h2 class="section-title" id="features-title">Everything you need to pass</h2>
-      <p class="section-subtitle">More than just lessons — a complete learner experience with tools, videos, and support built around you.</p>
+      <p class="section-subtitle">More than just lessons — a complete learner experience with tools and support built around you.</p>
     </div>
 
     <div class="features-grid">
@@ -1444,31 +1432,25 @@ a:focus-visible, button:focus-visible {
         <p>Track your progress, book lessons, and buy credits — all in one place. Your driving journey, organised.</p>
       </a>
 
-      <a href="/classroom.html" class="feature-card fade-up" style="transition-delay: 0.1s">
-        <div class="feature-icon">🎬</div>
-        <h3>Free Video Classroom</h3>
-        <p>50+ driving videos to watch anytime. Reinforce what you learn in lessons and study at your own pace.</p>
-      </a>
-
-      <a href="/learner-journey.html" class="feature-card fade-up" style="transition-delay: 0.15s">
+      <a href="/learner-journey.html" class="feature-card fade-up" style="transition-delay: 0.1s">
         <div class="feature-icon">🎯</div>
         <h3>Test Ready Guarantee</h3>
         <p>Our structured programme gets you test-ready with a clear plan, dynamic pricing, and guaranteed progress.</p>
       </a>
 
-      <div class="feature-card fade-up" style="transition-delay: 0.2s">
+      <div class="feature-card fade-up" style="transition-delay: 0.15s">
         <div class="feature-icon">📅</div>
         <h3>Flexible Scheduling</h3>
         <p>Book lessons that fit around your life. Morning, evening, weekends — you choose when you learn.</p>
       </div>
 
-      <div class="feature-card fade-up" style="transition-delay: 0.25s">
+      <div class="feature-card fade-up" style="transition-delay: 0.2s">
         <div class="feature-icon">🎓</div>
         <h3>Expert Instructors</h3>
         <p>DVSA approved, patient, and friendly. Our instructors are passionate about helping you succeed.</p>
       </div>
 
-      <a href="/learner-journey.html" class="feature-card fade-up" style="transition-delay: 0.3s">
+      <a href="/learner-journey.html" class="feature-card fade-up" style="transition-delay: 0.25s">
         <div class="feature-icon">💳</div>
         <h3>Pay As You Go</h3>
         <p>No long-term commitment required. Pay per lesson or save with credit bundles — the choice is yours.</p>
@@ -1569,7 +1551,7 @@ a:focus-visible, button:focus-visible {
     <div class="testimonial-grid">
       <div class="testimonial-card fade-up" style="transition-delay: 0.05s">
         <div class="testimonial-stars">★★★★★</div>
-        <blockquote>"Fraser made me feel so comfortable from day one. The video classroom was a game-changer — I could practise theory any time. Passed first time!"</blockquote>
+        <blockquote>"Fraser made me feel so comfortable from day one. Calm, patient, and never made me feel rushed. Passed first time!"</blockquote>
         <div class="testimonial-author">
           <div class="testimonial-avatar"><img src="/tasha pass.png" alt="Tasha after passing her driving test" loading="lazy"></div>
           <div>
@@ -1626,7 +1608,6 @@ a:focus-visible, button:focus-visible {
           <li>No commitment</li>
           <li>Book when it suits you</li>
           <li>Full portal access</li>
-          <li>Free video classroom</li>
         </ul>
       </div>
 
@@ -1674,7 +1655,6 @@ a:focus-visible, button:focus-visible {
       Book Your Free Lesson
     </a>
 
-    <a class="final-cta-secondary" href="/classroom.html">Or explore our free videos &rarr;</a>
   </div>
 </section>
 
@@ -1685,17 +1665,16 @@ a:focus-visible, button:focus-visible {
   <div class="footer-inner">
     <div class="footer-top">
       <div class="footer-brand">
-        <a class="nav-logo" href="/">
+        <a class="footer-logo" href="/">
           <img src="/Logo.png" alt="CoachCarter logo">
           <span>Coach<em>Carter</em></span>
         </a>
-        <p>Modern driving lessons in Reading. Flexible scheduling, a full learner portal, and a free video classroom to help you pass.</p>
+        <p>Modern driving lessons in Reading. Flexible scheduling and a full learner portal to help you pass.</p>
       </div>
 
       <div class="footer-col">
         <h4>Learners</h4>
         <a href="/learner-journey.html">Pricing</a>
-        <a href="/classroom.html">Free Videos</a>
         <a href="/learner/login.html">Learner Login</a>
         <a href="/learner/login.html?redirect=/learner/book.html">Book a Lesson</a>
       </div>
@@ -1726,14 +1705,11 @@ a:focus-visible, button:focus-visible {
 </footer>
 
 <!-- Mobile tab bar -->
-<nav class="mobile-tab-bar" aria-label="Mobile navigation">
-  <a href="/" class="active"><span class="mobile-tab-icon">🏠</span>Home</a>
-  <a href="/learner-journey.html"><span class="mobile-tab-icon">💰</span>Pricing</a>
-  <a href="/classroom.html"><span class="mobile-tab-icon">🎬</span>Videos</a>
-  <a href="/learner/login.html"><span class="mobile-tab-icon">👤</span>Log in</a>
-  <a href="/learner/login.html?redirect=/learner/book.html" class="cta"><span class="mobile-tab-icon">📅</span>Book</a>
-</nav>
+<!-- Markup rendered by window.ccNav.renderMarketing() — see /sidebar.js -->
+<nav class="mobile-tab-bar" id="cc-mobile-tab-bar"></nav>
 
+<script src="/sidebar.js"></script>
+<script>window.ccNav && ccNav.renderMarketing('#cc-site-nav', '#cc-mobile-tab-bar');</script>
 <script src="/home.js"></script>
 
 </body>

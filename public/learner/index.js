@@ -144,13 +144,50 @@ function render() {
 
   // Try to get name from auth
   if (AUTH?.user?.name) {
-    nameEl.textContent = 'Hi, ' + AUTH.user.name;
+    nameEl.textContent = 'Hi, ' + AUTH.user.name.split(' ')[0] + '.';
   } else {
     nameEl.textContent = 'Welcome!';
   }
 
+  // Credit balance sub-line
+  const greetingSub = document.getElementById('greeting-sub');
+  const creditLine = document.getElementById('credit-balance-line');
+  if (greetingSub && creditLine) {
+    const bal = AUTH?.user?.balance_minutes ?? AUTH?.user?.credits;
+    if (typeof bal !== 'undefined' && bal !== null) {
+      let display;
+      if (AUTH?.user?.balance_minutes != null) {
+        const hrs = AUTH.user.balance_minutes / 60;
+        display = (hrs % 1 === 0 ? hrs : hrs.toFixed(1)) + ' hr' + (hrs !== 1 ? 's' : '') + ' remaining';
+      } else {
+        display = (bal * 1.5) + ' hrs remaining';
+      }
+      creditLine.innerHTML = '<span class="credit-badge">' + display + '</span>';
+      greetingSub.style.display = 'flex';
+    }
+  }
+
   renderNextLesson();
   renderUnlogged();
+  maybeShowArrivalToast();
+}
+
+// One-time toast confirming the learner has arrived in their dashboard
+// after login. Reuses the .credit-toast styles already in the page.
+function maybeShowArrivalToast() {
+  let flag;
+  try { flag = sessionStorage.getItem('cc_just_logged_in'); } catch (e) { return; }
+  if (flag !== '1') return;
+  try { sessionStorage.removeItem('cc_just_logged_in'); } catch (e) {}
+
+  const toast = document.getElementById('credit-toast');
+  if (!toast) return;
+  const firstName = AUTH?.user?.name ? AUTH.user.name.split(' ')[0] : null;
+  toast.textContent = firstName
+    ? `Welcome back, ${firstName}. You're in your dashboard.`
+    : "You're in your dashboard.";
+  toast.classList.add('show');
+  setTimeout(() => { toast.classList.remove('show'); }, 3500);
 }
 
 function renderNextLesson() {

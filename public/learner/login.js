@@ -410,6 +410,7 @@
       if (!res.ok) throw new Error('Failed');
 
       showScreen('success');
+      try { sessionStorage.setItem('cc_just_logged_in', '1'); } catch (e) {}
       setTimeout(() => { window.location.href = redirectTo; }, 800);
     } catch {
       btn.disabled = false;
@@ -424,6 +425,10 @@
       return;
     }
     showScreen('success');
+    // Arrival flag: signals the dashboard to show a one-time "you're in"
+    // toast on this session. Cleared after display. Distinct from
+    // cc_welcome (first-time signup, persistent).
+    try { sessionStorage.setItem('cc_just_logged_in', '1'); } catch (e) {}
     if (data.is_new_user) {
       localStorage.setItem('cc_welcome', '1');
       setTimeout(() => { window.location.href = '/learner/book.html'; }, 800);

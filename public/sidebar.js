@@ -10,6 +10,119 @@
   if (path.startsWith('/learner/') || path === '/learner') context = 'learner';
   else if (path.startsWith('/instructor/') || path === '/instructor') context = 'instructor';
 
+  // ── Marketing nav config + renderer ────────────────────────────
+  // Marketing pages (index.html, lessons.html, learner-journey.html,
+  // instructor/login.html) keep their own .site-nav + .mobile-tab-bar
+  // styling. To remove duplicated <nav> markup across those files,
+  // they call window.ccNav.renderMarketing(topSelector, mobileSelector)
+  // and we render the same config into both placeholders.
+  //
+  // Single source of truth: change a marketing nav link here, not in
+  // four HTML files. Per-page CSS is preserved so visual variation
+  // remains possible per page if ever needed.
+  // Desktop top bar: Home / Pricing / Book / Login (CTA)
+  // Mobile bottom bar: Home / Pricing / Log in / Book (CTA, last)
+  // Order intentionally differs — mobile puts the strongest action last, by thumb.
+  var marketingNavConfig = {
+    desktopLinks: [
+      { label: 'Home', href: '/' },
+      { label: 'Pricing', href: '/learner-journey.html' },
+      { label: 'Book', href: '/learner/login.html?redirect=/learner/book.html' }
+    ],
+    desktopCta: { label: 'Login', href: '/learner/login.html' },
+    mobileTabs: [
+      { label: 'Home', href: '/', icon: '🏠' },
+      { label: 'Pricing', href: '/learner-journey.html', icon: '💰' },
+      { label: 'Log in', href: '/learner/login.html', icon: '👤' },
+      { label: 'Book', href: '/learner/login.html?redirect=/learner/book.html', icon: '📅', cta: true }
+    ]
+  };
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
+  function isMarketingActive(href) {
+    var hrefPath = href.split('?')[0].replace(/\/index\.html$/, '/').replace(/\.html$/, '');
+    var current = path.replace(/\/index\.html$/, '/').replace(/\.html$/, '');
+    if (current === hrefPath) return true;
+    if (path === '/' && href === '/') return true;
+    return false;
+  }
+
+  function renderMarketingTopBar(target) {
+    var el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+    var html = '<a class="site-nav-logo" href="/">' +
+      '<img src="/Logo.png" alt="CoachCarter" data-brand-logo>' +
+      '<span data-brand-name>Coach<em>Carter</em></span>' +
+      '</a>' +
+      '<div class="site-nav-links">';
+    for (var i = 0; i < marketingNavConfig.desktopLinks.length; i++) {
+      var l = marketingNavConfig.desktopLinks[i];
+      var active = isMarketingActive(l.href) ? ' active' : '';
+      html += '<a class="site-nav-link' + active + '" href="' + escapeHtml(l.href) + '">' +
+        escapeHtml(l.label) + '</a>';
+    }
+    html += '</div><div class="site-nav-cta">' +
+      '<a class="site-nav-link primary" href="' + escapeHtml(marketingNavConfig.desktopCta.href) + '">' +
+      escapeHtml(marketingNavConfig.desktopCta.label) + '</a></div>';
+    el.innerHTML = html;
+    el.setAttribute('role', 'navigation');
+    el.setAttribute('aria-label', 'Main navigation');
+
+    // Apply cached school branding if available
+    if (window.ccBranding) {
+      var cached = window.ccBranding.loadCachedBranding();
+      if (cached && cached.name) {
+        el.querySelectorAll('[data-brand-name]').forEach(function(n) { n.innerHTML = escapeHtml(cached.name); });
+      }
+      if (cached && cached.logo_url) {
+        el.querySelectorAll('[data-brand-logo]').forEach(function(n) { n.src = cached.logo_url; });
+      }
+    }
+  }
+
+  function renderMarketingMobileBar(target) {
+    var el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+    var html = '';
+    for (var i = 0; i < marketingNavConfig.mobileTabs.length; i++) {
+      var t = marketingNavConfig.mobileTabs[i];
+      var classes = [];
+      if (isMarketingActive(t.href)) classes.push('active');
+      if (t.cta) classes.push('cta');
+      var clsAttr = classes.length ? ' class="' + classes.join(' ') + '"' : '';
+      html += '<a href="' + escapeHtml(t.href) + '"' + clsAttr + '>' +
+        '<span class="mobile-tab-icon">' + escapeHtml(t.icon || '') + '</span>' +
+        escapeHtml(t.label) + '</a>';
+    }
+    el.innerHTML = html;
+    el.setAttribute('aria-label', 'Mobile navigation');
+  }
+
+  window.ccNav = {
+    marketingConfig: marketingNavConfig,
+    renderMarketing: function(topSelector, mobileSelector) {
+      function go() {
+        if (topSelector) renderMarketingTopBar(topSelector);
+        if (mobileSelector) renderMarketingMobileBar(mobileSelector);
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', go);
+      } else {
+        go();
+      }
+    }
+  };
+
+  // Skip marketing/public pages — they keep their own .site-nav and
+  // .mobile-tab-bar styling, but render contents via window.ccNav above.
+  // Marketing and hub remain intentionally separate shells (see CLAUDE.md).
+  if (context === 'public') return;
+
   // ── SVG icons (24x24 viewBox, stroke-based) ────────────────────
   var icons = {
     home: '<svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
@@ -38,15 +151,13 @@
   var navItems = {
     public: [
       { icon: 'home', label: 'Home', href: '/' },
-      { icon: 'play', label: 'Free Videos', href: '/classroom.html' },
       'divider',
       { icon: 'calendar', label: 'Book a Lesson', href: '/learner/login.html?redirect=/learner/book.html' },
       { icon: 'logIn', label: 'Login', href: '/learner/login.html' }
     ],
     learner: [
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
-      { icon: 'calendar', label: 'Lessons', href: '/learner/lessons-hub.html', children: [
-        { icon: 'home', label: 'Overview', href: '/learner/lessons-hub.html' },
+      { icon: 'calendar', label: 'Lessons', href: '/learner/book.html', children: [
         { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
         { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html' },
         { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' }
@@ -58,8 +169,7 @@
         { icon: 'play', label: 'Focused Practice', href: '/learner/focused-practice.html' },
         { icon: 'dashboard', label: 'My Progress', href: '/learner/progress.html' }
       ]},
-      { icon: 'play', label: 'Learn', href: '/learner/learn.html', children: [
-        { icon: 'home', label: 'Overview', href: '/learner/learn.html' },
+      { icon: 'play', label: 'Learn', href: '/learner/ask-examiner.html', children: [
         { icon: 'message', label: 'Examiner AI', href: '/learner/ask-examiner.html' },
         { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
       ]},
@@ -81,14 +191,14 @@
   var bottomSections = {
     learner: {
       tabs: [
-        { icon: 'home', label: 'Home', href: '/learner/',
+        { icon: 'home', label: 'Dashboard', href: '/learner/',
           activeOn: [] },
-        { icon: 'calendar', label: 'Lessons', href: '/learner/lessons-hub.html',
-          activeOn: ['/learner/book', '/learner/buy-credits', '/learner/lessons'] },
+        { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
+          activeOn: ['/learner/lessons-hub', '/learner/buy-credits', '/learner/lessons'] },
         { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html',
           activeOn: ['/learner/log-session', '/learner/mock-test', '/learner/focused-practice', '/learner/progress'] },
-        { icon: 'play', label: 'Learn', href: '/learner/learn.html',
-          activeOn: ['/learner/ask-examiner', '/learner/examiner-quiz'] },
+        { icon: 'play', label: 'Learn', href: '/learner/ask-examiner.html',
+          activeOn: ['/learner/learn', '/learner/examiner-quiz'] },
         { icon: 'user', label: 'Profile', href: '/learner/profile.html',
           activeOn: [] }
       ]
@@ -146,21 +256,13 @@
         var item = items[i];
         if (item.authOnly && !isLoggedIn) continue;
 
-        // Collapsible group with children
+        // Section with children — flattened (no accordion, all visible)
         if (item.children) {
-          var childActive = false;
-          for (var c = 0; c < item.children.length; c++) {
-            if (isActive(item.children[c].href)) { childActive = true; break; }
-          }
-          var openClass = childActive ? ' open' : '';
-          var groupHref = item.href || '#';
-          html += '<div class="cc-sb-group' + openClass + '">' +
-            '<a href="' + groupHref + '" class="cc-sb-link cc-sb-group-toggle">' +
+          html += '<div class="cc-sb-section">' +
+            '<div class="cc-sb-section-header">' +
               '<span class="cc-sb-icon">' + icons[item.icon] + '</span>' +
               '<span>' + item.label + '</span>' +
-              '<span class="cc-sb-chevron">' + icons.chevron + '</span>' +
-            '</a>' +
-            '<div class="cc-sb-group-children">';
+            '</div>';
           for (var j = 0; j < item.children.length; j++) {
             var child = item.children[j];
             if (child.authOnly && !isLoggedIn) continue;
@@ -169,7 +271,7 @@
               '<span class="cc-sb-icon">' + icons[child.icon] + '</span>' +
               '<span>' + child.label + '</span></a>';
           }
-          html += '</div></div>';
+          html += '</div>';
         } else {
           var active = isActive(item.href, item.activeOn) ? ' active' : '';
           html += '<a href="' + item.href + '" class="cc-sb-link' + active + '">' +
@@ -213,7 +315,10 @@
         '</button>' +
         '<button class="cc-sb-cookie-settings" id="cc-sb-cookie-settings" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;margin-top:4px;border:none;background:transparent;color:var(--muted, #797879);font-size:12px;cursor:pointer;font-family:inherit">' +
           '<span>Cookie Settings</span>' +
-        '</button></div>';
+        '</button>' +
+        '<a href="/" class="cc-sb-back-site" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border:none;background:transparent;color:var(--muted, #797879);font-size:12px;text-decoration:none;font-family:inherit">' +
+          '<span>← Back to website</span>' +
+        '</a></div>';
     } else {
       var currentTheme2 = (window.ccDarkMode ? ccDarkMode.get() : 'auto');
       return '<div class="cc-sb-footer" id="cc-sb-footer">' +
@@ -225,7 +330,7 @@
             '<option value="dark"' + (currentTheme2 === 'dark' ? ' selected' : '') + '>Dark</option>' +
           '</select>' +
         '</div>' +
-        '<a href="/" class="cc-sb-login">' +
+        '<a href="/learner/login.html?redirect=' + encodeURIComponent(window.location.pathname + window.location.search) + '" class="cc-sb-login">' +
           '<span class="cc-sb-icon">' + icons.logIn + '</span>' +
           '<span>Login</span>' +
         '</a></div>';
@@ -320,20 +425,16 @@
     '  stroke-linecap: round; stroke-linejoin: round; }',
     '.cc-sb-divider { height: 1px; background: var(--border, #e5e5e5); margin: 8px 20px; }',
 
-    /* Collapsible group */
-    '.cc-sb-group-toggle { width: 100%; background: none; border: none; cursor: pointer; position: relative; text-decoration: none; display: flex; }',
-    '.cc-sb-chevron { margin-left: auto; width: 16px; height: 16px; display: flex; align-items: center;',
-    '  justify-content: center; transition: transform 0.25s ease; }',
-    '.cc-sb-chevron svg { width: 14px; height: 14px; stroke: currentColor; fill: none;',
-    '  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }',
-    '.cc-sb-group.open .cc-sb-chevron { transform: rotate(90deg); }',
-    '.cc-sb-group-children { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }',
-    '.cc-sb-group.open .cc-sb-group-children { max-height: 200px; }',
-    '.cc-sb-child { padding-left: 36px !important; font-size: 0.82rem !important; }',
+    /* Flattened section (no accordion) */
+    '.cc-sb-section { margin: 4px 0 8px; }',
+    '.cc-sb-section-header { display: flex; align-items: center; gap: 12px; padding: 8px 20px 4px;',
+    '  font-family: "Lato", sans-serif; font-size: 0.7rem; font-weight: 700;',
+    '  letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted, #9ca3af); }',
+    '.cc-sb-section-header .cc-sb-icon { width: 16px; height: 16px; }',
+    '.cc-sb-section-header .cc-sb-icon svg { width: 14px; height: 14px; stroke-width: 2; }',
+    '.cc-sb-child { padding-left: 36px !important; font-size: 0.85rem !important; }',
     '.cc-sb-child .cc-sb-icon { width: 16px; height: 16px; }',
     '.cc-sb-child .cc-sb-icon svg { width: 14px; height: 14px; }',
-    '.cc-sb-group-toggle.cc-sb-link { color: var(--muted, #6b7280); }',
-    '.cc-sb-group.open .cc-sb-group-toggle { color: var(--primary, #1a1a1a); }',
 
     /* Footer */
     '.cc-sb-footer { padding: 16px 20px; border-top: 1px solid var(--border, #e5e5e5); }',
@@ -667,31 +768,6 @@
     window.addEventListener('resize', function() {
       if (window.innerWidth >= 960) closeSidebar();
     });
-
-    // ── Collapsible group toggles (accordion: one open at a time) ─
-    var toggles = document.querySelectorAll('.cc-sb-group-toggle');
-    for (var t = 0; t < toggles.length; t++) {
-      toggles[t].addEventListener('click', function(e) {
-        var parent = this.parentElement;
-        var wasOpen = parent.classList.contains('open');
-        var isDesktop = window.innerWidth >= 960;
-
-        if (isDesktop && this.href && this.getAttribute('href') !== '#') {
-          // Desktop: toggle open AND navigate to the hub page
-          var allGroups = document.querySelectorAll('.cc-sb-group');
-          for (var g = 0; g < allGroups.length; g++) allGroups[g].classList.remove('open');
-          if (!wasOpen) parent.classList.add('open');
-          // Let the <a> navigate naturally
-          return;
-        }
-
-        // Mobile: just toggle the accordion, don't navigate
-        e.preventDefault();
-        var allGroups = document.querySelectorAll('.cc-sb-group');
-        for (var g = 0; g < allGroups.length; g++) allGroups[g].classList.remove('open');
-        if (!wasOpen) parent.classList.add('open');
-      });
-    }
 
     // ── Auth-aware footer ──────────────────────────────────────
     if (context === 'learner') {

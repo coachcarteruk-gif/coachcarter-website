@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <link rel="manifest" href="/manifest.json">
@@ -13,12 +13,13 @@
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
 <script src="/competency-config.js"></script>
-  <title>Session Log — CoachCarter</title>
+  <title>Session Log â€” CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/brand-tokens.css">
   <link rel="stylesheet" href="/shared/learner.css">
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
@@ -30,7 +31,7 @@
       color: #fff;
     }
 
-    /* ── PROGRESS BAR ── */
+    /* â”€â”€ PROGRESS BAR â”€â”€ */
     .progress-wrap {
       padding: 16px 20px 0;
       margin-top: 64px;
@@ -57,14 +58,14 @@
       text-align: center;
     }
 
-    /* ── MAIN ── */
+    /* â”€â”€ MAIN â”€â”€ */
     main {
       max-width: 600px;
       margin: 0 auto;
       padding: 20px 16px 24px;
     }
 
-    /* ── SESSION HISTORY ── */
+    /* â”€â”€ SESSION HISTORY â”€â”€ */
     .history-section {
       max-width: 600px;
       margin: 0 auto;
@@ -153,7 +154,7 @@
     .empty-state .emoji { font-size: 2rem; margin-bottom: 12px; }
     .empty-state p { font-size: 0.88rem; line-height: 1.5; }
 
-    /* ── STEP CONTAINER ── */
+    /* â”€â”€ STEP CONTAINER â”€â”€ */
     .step {
       display: none;
       animation: fadeIn 0.3s ease;
@@ -164,7 +165,7 @@
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* ── STEP HEADER ── */
+    /* â”€â”€ STEP HEADER â”€â”€ */
     .step-header {
       text-align: center;
       margin-bottom: 28px;
@@ -186,7 +187,7 @@
       line-height: 1.4;
     }
 
-    /* ── FORM CARD ── */
+    /* â”€â”€ FORM CARD â”€â”€ */
     .card {
       background: var(--white);
       border: 1px solid var(--border);
@@ -195,7 +196,7 @@
       margin-bottom: 14px;
     }
 
-    /* ── FORM ELEMENTS ── */
+    /* â”€â”€ FORM ELEMENTS â”€â”€ */
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -260,7 +261,7 @@
       font-weight: 600;
     }
 
-    /* ── PRE-FILLED BOOKING INFO ── */
+    /* â”€â”€ PRE-FILLED BOOKING INFO â”€â”€ */
     .booking-info {
       background: var(--accent-lt);
       border: 1px solid rgba(245,131,33,0.2);
@@ -275,7 +276,7 @@
     .booking-info-text { font-size: 0.85rem; color: var(--primary); line-height: 1.4; }
     .booking-info-text strong { color: var(--accent-dk); }
 
-    /* ── COMPETENCY AREA GROUPS ── */
+    /* â”€â”€ COMPETENCY AREA GROUPS â”€â”€ */
     .area-group { margin-bottom: 12px; }
     .area-header {
       display: flex; align-items: center; gap: 10px;
@@ -297,7 +298,7 @@
     .area-skills { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
     .area-group.open .area-skills { max-height: 2000px; }
 
-    /* ── TRAFFIC LIGHT SKILL CARDS ── */
+    /* â”€â”€ TRAFFIC LIGHT SKILL CARDS â”€â”€ */
     .skill-card {
       background: var(--white);
       border: 1px solid var(--border);
@@ -310,7 +311,7 @@
     .skill-card:first-child { margin-top: 10px; }
     .skill-card.rated { border-color: rgba(245,131,33,0.3); }
 
-    /* ── FAULT COUNTERS ── */
+    /* â”€â”€ FAULT COUNTERS â”€â”€ */
     .fault-row {
       display: flex; gap: 8px; margin-top: 10px; padding-top: 10px;
       border-top: 1px solid var(--border); align-items: center;
@@ -405,14 +406,14 @@
     .tl-btn.sel-nailed .tl-dot { background: var(--green); border-color: var(--green); }
     .tl-btn.sel-nailed .tl-label { color: #15803d; }
 
-    /* ── NOTES STEP ── */
+    /* â”€â”€ NOTES STEP â”€â”€ */
     .notes-textarea {
       min-height: 120px;
       font-size: 0.95rem;
       line-height: 1.5;
     }
 
-    /* ── SUMMARY ── */
+    /* â”€â”€ SUMMARY â”€â”€ */
     .summary-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -470,7 +471,7 @@
       font-style: italic;
     }
 
-    /* ── SUCCESS STATE ── */
+    /* â”€â”€ SUCCESS STATE â”€â”€ */
     .success-wrap {
       text-align: center;
       padding: 40px 20px;
@@ -516,7 +517,7 @@
     }
     .btn-dashboard:hover { background: var(--accent-dk); }
 
-    /* ── BUTTONS ── */
+    /* â”€â”€ BUTTONS â”€â”€ */
     .btn-row {
       display: flex;
       gap: 10px;
@@ -553,7 +554,7 @@
     .btn-next:hover { background: var(--accent-dk); transform: translateY(-1px); }
     .btn-next:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-    /* ── ERROR ── */
+    /* â”€â”€ ERROR â”€â”€ */
     .error-msg {
       background: rgba(239,68,68,0.08);
       border: 1px solid rgba(239,68,68,0.2);
@@ -566,7 +567,7 @@
     }
     .error-msg.show { display: block; }
 
-    /* ── BOTTOM NAV ── */
+    /* â”€â”€ BOTTOM NAV â”€â”€ */
     .bottom-nav {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: rgba(255,255,255,0.95); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
@@ -605,7 +606,7 @@
   </a>
   <span class="page-title">Session Log</span>
   <div class="site-nav-links">
-    <button class="site-nav-link logout" id="btn-back-dashboard">← Dashboard</button>
+    <button class="site-nav-link logout" id="btn-back-dashboard">â† Dashboard</button>
     <button class="nav-menu-toggle" aria-label="Menu" aria-expanded="false">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
@@ -630,7 +631,7 @@
 <main>
   <div class="error-msg" id="error-msg"></div>
 
-  <!-- ═══ STEP 1: Lesson details ═══ -->
+  <!-- â•â•â• STEP 1: Lesson details â•â•â• -->
   <div class="step active" id="step-1">
     <div class="step-header">
       <div class="step-title">Lesson details</div>
@@ -664,7 +665,7 @@
     </div>
   </div>
 
-  <!-- ═══ STEP 2: Rate all skills ═══ -->
+  <!-- â•â•â• STEP 2: Rate all skills â•â•â• -->
   <div class="step" id="step-2">
     <div class="step-header">
       <div class="step-title">Rate your skills</div>
@@ -687,7 +688,7 @@
     </div>
   </div>
 
-  <!-- ═══ STEP 3: Notes + save ═══ -->
+  <!-- â•â•â• STEP 3: Notes + save â•â•â• -->
   <div class="step" id="step-3">
     <div class="step-header">
       <div class="step-title">Anything else?</div>
@@ -715,7 +716,7 @@
     </div>
   </div>
 
-  <!-- ═══ SUCCESS ═══ -->
+  <!-- â•â•â• SUCCESS â•â•â• -->
   <div class="step" id="step-success">
     <div class="success-wrap">
       <div class="success-check">
@@ -731,7 +732,7 @@
 
 </main>
 
-<!-- ═══ SESSION HISTORY ═══ -->
+<!-- â•â•â• SESSION HISTORY â•â•â• -->
 <div class="history-section" id="history-section">
   <div class="history-title">Past Sessions</div>
   <div class="rating-legend">

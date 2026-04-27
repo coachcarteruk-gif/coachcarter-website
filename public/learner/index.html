@@ -18,11 +18,13 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/brand-tokens.css">
   <link rel="stylesheet" href="/shared/learner.css">
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    main { max-width: 640px; margin: 0 auto; padding: 24px 16px 100px; margin-top: 64px; }
+    main { max-width: 640px; margin: 0 auto; padding: 28px 16px 100px; margin-top: 64px; }
+    @media (min-width: 960px) { main { margin-top: 0; padding-top: 32px; } }
 
     /* CREDIT VERIFICATION TOAST */
     .credit-toast {
@@ -35,60 +37,83 @@
     .credit-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
 
     /* GREETING */
-    .greeting { font-size: 1.3rem; font-weight: 700; font-family: var(--font-head); color: var(--primary); letter-spacing: -0.02em; margin-bottom: 16px; }
+    .greeting-block { margin-bottom: 24px; }
+    .greeting {
+      font-size: clamp(1.7rem, 5vw, 2.1rem); font-weight: 800;
+      font-family: var(--font-head); color: var(--primary);
+      letter-spacing: -0.03em; line-height: 1.15; margin: 0 0 6px;
+    }
+    .greeting-sub {
+      font-size: 0.88rem; color: var(--muted); font-family: var(--font-body);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .credit-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--accent-mid); color: var(--accent);
+      border-radius: 100px; padding: 2px 10px;
+      font-size: 0.8rem; font-weight: 700; font-family: var(--font-head);
+    }
 
     /* NEXT LESSON HERO CARD */
     .next-lesson-card {
-      background: linear-gradient(135deg, #f58321, #ff9a3c);
-      border-radius: var(--radius); padding: 20px;
+      background: linear-gradient(135deg, #f58321 0%, #ff9a3c 100%);
+      border-radius: var(--radius); padding: 22px 20px;
       display: none; align-items: center; justify-content: space-between; gap: 16px;
       margin-bottom: 20px; color: #fff;
+      box-shadow: 0 4px 20px rgba(245,131,33,0.3);
     }
     .next-lesson-card.show { display: flex; }
     .nl-info { flex: 1; min-width: 0; }
-    .nl-when { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; margin-bottom: 4px; }
-    .nl-time { font-family: var(--font-head); font-size: 1.25rem; font-weight: 700; line-height: 1.2; }
-    .nl-instructor { font-size: 0.85rem; opacity: 0.9; margin-top: 3px; }
-    .nl-actions { margin-top: 10px; display: flex; gap: 8px; }
-    .nl-btn { display: inline-block; background: rgba(255,255,255,0.22); color: #fff; border-radius: 100px; padding: 6px 16px; font-size: 0.78rem; font-weight: 700; text-decoration: none; transition: background 0.15s; backdrop-filter: blur(4px); }
-    .nl-btn:hover { background: rgba(255,255,255,0.35); }
+    .nl-when { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.85; margin-bottom: 5px; }
+    .nl-time { font-family: var(--font-head); font-size: 1.35rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
+    .nl-instructor { font-size: 0.85rem; opacity: 0.9; margin-top: 4px; }
+    .nl-actions { margin-top: 12px; display: flex; gap: 8px; }
+    .nl-btn { display: inline-block; background: rgba(255,255,255,0.22); color: #fff; border-radius: 100px; padding: 7px 18px; font-size: 0.78rem; font-weight: 700; text-decoration: none; transition: background 0.15s; backdrop-filter: blur(4px); }
+    .nl-btn:hover { background: rgba(255,255,255,0.38); }
 
     /* Readiness ring */
-    .readiness-ring { position: relative; width: 52px; height: 52px; flex-shrink: 0; cursor: pointer; text-decoration: none; }
-    .readiness-ring svg { width: 52px; height: 52px; transform: rotate(-90deg); }
+    .readiness-ring { position: relative; width: 60px; height: 60px; flex-shrink: 0; cursor: pointer; text-decoration: none; }
+    .readiness-ring svg { width: 60px; height: 60px; transform: rotate(-90deg); }
     .readiness-ring .ring-bg { fill: none; stroke: rgba(255,255,255,0.25); stroke-width: 4.5; }
     .readiness-ring .ring-fill { fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; transition: stroke-dashoffset 1s ease, stroke 0.3s; }
     .readiness-pct {
       position: absolute; inset: 0; display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      font-family: var(--font-head); font-weight: 700; font-size: 0.82rem;
+      font-family: var(--font-head); font-weight: 800; font-size: 0.88rem;
       color: #fff; line-height: 1;
     }
-    .readiness-label { font-size: 0.42rem; font-weight: 600; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+    .readiness-label { font-size: 0.4rem; font-weight: 700; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
 
     /* Next lesson empty state */
     .next-lesson-empty {
-      border: 2px dashed var(--border); border-radius: var(--radius);
-      padding: 24px; text-align: center; margin-bottom: 20px; display: none;
+      background: var(--surface); border-radius: var(--radius);
+      padding: 28px 24px; text-align: center; margin-bottom: 20px; display: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     .next-lesson-empty.show { display: block; }
-    .next-lesson-empty p { font-size: 0.9rem; color: var(--muted); margin-bottom: 12px; }
-    .nle-btn { display: inline-block; background: var(--accent); color: #fff; border-radius: 100px; padding: 10px 24px; font-size: 0.85rem; font-weight: 700; text-decoration: none; font-family: var(--font-head); transition: all 0.18s; }
-    .nle-btn:hover { background: var(--accent-dk); transform: translateY(-1px); }
+    .nle-icon { font-size: 2rem; margin-bottom: 10px; }
+    .next-lesson-empty p { font-size: 0.92rem; color: var(--muted); margin-bottom: 16px; font-weight: 500; }
+    .nle-btn {
+      display: inline-block; background: var(--accent); color: #fff; border-radius: 100px;
+      padding: 11px 28px; font-size: 0.88rem; font-weight: 700; text-decoration: none;
+      font-family: var(--font-head); transition: all 0.18s;
+      box-shadow: 0 2px 12px rgba(245,131,33,0.3);
+    }
+    .nle-btn:hover { background: var(--accent-dk); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.4); }
 
     /* PROFILE COMPLETION CARD */
     .profile-card {
-      background: var(--accent-lt); border: 1px solid rgba(245,131,33,0.2);
+      background: var(--surface); border: 1px solid rgba(245,131,33,0.2);
       border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
-      display: none;
+      display: none; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     .profile-card.show { display: block; }
     .profile-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .profile-card-title { font-family: var(--font-head); font-weight: 700; font-size: 0.95rem; }
     .profile-card-dismiss { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.8rem; padding: 4px 8px; }
-    .profile-bar-bg { height: 8px; background: rgba(245,131,33,0.15); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+    .profile-bar-bg { height: 6px; background: var(--accent-mid); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
     .profile-bar-fill { height: 100%; background: var(--accent); border-radius: 8px; transition: width 0.6s ease; }
-    .profile-pct { font-size: 0.78rem; font-weight: 600; color: var(--accent-dk); margin-bottom: 12px; }
+    .profile-pct { font-size: 0.78rem; font-weight: 600; color: var(--accent); margin-bottom: 12px; }
     .profile-steps { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
     .profile-step { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--muted); }
     .profile-step.done { color: var(--primary); }
@@ -103,9 +128,10 @@
 
     /* UNLOGGED BANNER */
     .unlogged-banner {
-      background: var(--accent-lt); border: 1px solid rgba(245,131,33,0.25);
+      background: var(--surface); border: 1px solid rgba(245,131,33,0.25);
       border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;
       display: none; align-items: center; gap: 14px; flex-wrap: wrap;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     .unlogged-banner.show { display: flex; }
     .unlogged-banner-icon { font-size: 1.4rem; flex-shrink: 0; }
@@ -145,35 +171,31 @@
     .referral-stat strong { display: block; font-size: 1.3rem; font-family: var(--font-head); }
     .referral-stat span { font-size: 0.72rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.04em; }
 
-    /* SECTION TITLE */
-    .section-title {
-      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px;
-      font-family: var(--font-body);
+    /* ACTION STRIP */
+    .action-strip {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+      margin-bottom: 0;
     }
-
-    /* HUB CARDS */
-    .hub-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-    @media (min-width: 480px) { .hub-grid { grid-template-columns: 1fr 1fr; } }
-    .hub-card {
-      display: flex; align-items: flex-start; gap: 14px; padding: 18px;
-      border: 1.5px solid var(--border); border-radius: var(--radius);
-      background: var(--white); text-decoration: none; color: inherit;
-      transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+    .action-btn {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; padding: 16px 8px;
+      background: var(--surface); border-radius: var(--radius);
+      text-decoration: none; color: var(--primary);
+      transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+      text-align: center;
     }
-    .hub-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,0.06); transform: translateY(-2px); }
-    .hub-card:active { transform: translateY(0); }
-    .hub-icon {
-      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
+    .action-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+    .action-btn:active { transform: translateY(0); }
+    .action-btn-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
-    .hub-icon svg { width: 22px; height: 22px; }
-    .hub-icon-lessons { background: rgba(245,131,33,0.12); color: #f58321; }
-    .hub-icon-practice { background: rgba(59,130,246,0.12); color: #3b82f6; }
-    .hub-icon-learn { background: rgba(34,197,94,0.12); color: #22c55e; }
-    .hub-card-body { flex: 1; min-width: 0; }
-    .hub-card-title { font-family: var(--font-head); font-size: 0.95rem; font-weight: 700; color: var(--primary); margin: 0 0 3px; }
-    .hub-card-desc { font-family: var(--font-body); font-size: 0.82rem; color: var(--muted); margin: 0; line-height: 1.4; }
+    .action-btn-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .action-btn-icon.lessons { background: rgba(245,131,33,0.12); color: #f58321; }
+    .action-btn-icon.practice { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .action-btn-icon.learn { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .action-btn-label { font-family: var(--font-head); font-size: 0.82rem; font-weight: 700; color: var(--primary); line-height: 1.2; }
   </style>
 <script src="/sidebar.js"></script>
 <script src="/competency-config.js"></script>
@@ -184,7 +206,12 @@
 
 <main>
   <!-- GREETING -->
-  <h1 class="greeting" id="welcome-msg"><span class="skeleton skeleton-text w-40" style="display:inline-block;height:1.2em">&nbsp;</span></h1>
+  <div class="greeting-block">
+    <h1 class="greeting" id="welcome-msg"><span class="skeleton skeleton-text w-40" style="display:inline-block;height:1.1em">&nbsp;</span></h1>
+    <div class="greeting-sub" id="greeting-sub" style="display:none">
+      <span id="credit-balance-line"></span>
+    </div>
+  </div>
 
   <!-- SKELETON -->
   <div id="dashboard-skeleton">
@@ -199,7 +226,7 @@
       <div class="nl-time" id="nl-time"></div>
       <div class="nl-instructor" id="nl-instructor"></div>
       <div class="nl-actions">
-        <a href="/learner/lessons-hub.html" class="nl-btn">View Lessons</a>
+        <a href="/learner/lessons.html" class="nl-btn">View Lessons</a>
       </div>
     </div>
     <a href="/learner/progress.html" class="readiness-ring" id="readiness-ring" style="display:none" title="View full progress">
@@ -217,7 +244,8 @@
 
   <!-- NEXT LESSON EMPTY STATE -->
   <div class="next-lesson-empty" id="next-lesson-empty">
-    <p>No upcoming lessons</p>
+    <div class="nle-icon">🗓</div>
+    <p>No upcoming lessons yet</p>
     <a href="/learner/book.html" class="nle-btn">Book a Lesson</a>
   </div>
 
@@ -263,35 +291,25 @@
     <a class="btn-log-now" id="unlogged-btn" href="#">Log now</a>
   </div>
 
-  <!-- EXPLORE SECTIONS -->
-  <div class="section-title">Explore</div>
-  <div class="hub-grid">
-    <a href="/learner/lessons-hub.html" class="hub-card">
-      <div class="hub-icon hub-icon-lessons">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+  <!-- ACTION STRIP -->
+  <div class="action-strip">
+    <a href="/learner/book.html" class="action-btn">
+      <div class="action-btn-icon lessons">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
       </div>
-      <div class="hub-card-body">
-        <div class="hub-card-title">Lessons</div>
-        <p class="hub-card-desc">Book, manage, and track your driving lessons</p>
-      </div>
+      <span class="action-btn-label">Book</span>
     </a>
-    <a href="/learner/practice.html" class="hub-card">
-      <div class="hub-icon hub-icon-practice">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+    <a href="/learner/practice.html" class="action-btn">
+      <div class="action-btn-icon practice">
+        <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
       </div>
-      <div class="hub-card-body">
-        <div class="hub-card-title">Practice</div>
-        <p class="hub-card-desc">Log sessions, mock tests, and track your progress</p>
-      </div>
+      <span class="action-btn-label">Practice</span>
     </a>
-    <a href="/learner/learn.html" class="hub-card">
-      <div class="hub-icon hub-icon-learn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+    <a href="/learner/ask-examiner.html" class="action-btn">
+      <div class="action-btn-icon learn">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </div>
-      <div class="hub-card-body">
-        <div class="hub-card-title">Learn</div>
-        <p class="hub-card-desc">Examiner AI and quizzes to prepare for your test</p>
-      </div>
+      <span class="action-btn-label">Learn</span>
     </a>
   </div>
 </main>

@@ -4,35 +4,15 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* CSS Variables */
-:root {
-  /* Brand colours (overridden by branding.js if school branding is set) */
-  --brand-primary: #f97316;
-  --brand-secondary: #1e3a5f;
-  --brand-accent: #3b82f6;
-
-  --primary:    #262626;
-  --accent:     #c96a00;
-  --accent-dk:  #a85800;
-  --accent-lt:  #fff7f0;
-  --accent-mid: rgba(201,106,0,0.12);
-  --accent-glow: rgba(201,106,0,0.25);
-  --muted:      #797879;
-  --border:     #e0e0e0;
-  --bg:         #ffffff;
-  --surface:    #f9f9f9;
-  --white:      #ffffff;
-  --green:      #22c55e;
-  --green-lt:   #f0fdf4;
-  --amber:      #f59e0b;
-  --red:        #ef4444;
-  --red-lt:     #fef2f2;
-  --blue:       #3b82f6;
-  --blue-lt:    #eff6ff;
-  --font-head:  'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
-  --font-body:  'Lato', system-ui, -apple-system, sans-serif;
-  --radius:     14px;
+/* Desktop sidebar layout: strip the legacy top-nav margin */
+@media (min-width: 960px) {
+  body.cc-has-sidebar main,
+  body.cc-has-sidebar #main,
+  body.cc-has-sidebar .page { margin-top: 0 !important; padding-top: 32px !important; }
 }
+
+/* Brand tokens are loaded from /shared/brand-tokens.css — must be linked
+   in <head> before this stylesheet. */
 
 /* Base */
 body {
@@ -152,59 +132,63 @@ body {
   .site-nav-link:not(.primary):not(.back) { display: none; }
 }
 
-/* ── Dark Mode ────────────────────────────────────────────────────────────── */
+/* ── Dark mode (hub-only — scoped to .cc-has-sidebar) ─────────────────
+   Marketing pages do NOT opt into dark mode (hero sections, top nav,
+   and photo overlays weren't designed for it). Tokens override here
+   so descendants of the hub body see them. */
 @media (prefers-color-scheme: dark) {
-  :root:not(.light-mode) {
-    --primary:    #e8e8e8;
-    --accent:     #f58321;
-    --accent-dk:  #e07518;
-    --accent-lt:  #2e2014;
-    --accent-mid: rgba(245,131,33,0.18);
+  :root:not(.light-mode) body.cc-has-sidebar {
+    --primary:     #e8e8e8;
+    --accent:      #f58321;
+    --accent-dk:   #e07518;
+    --accent-lt:   #2e2014;
+    --accent-mid:  rgba(245,131,33,0.18);
     --accent-glow: rgba(245,131,33,0.30);
-    --muted:      #9e9e9e;
-    --border:     #3a3a3a;
-    --bg:         #1a1a1a;
-    --surface:    #242424;
-    --white:      #2e2e2e;
-    --green:      #4ade80;
-    --green-lt:   #14261a;
-    --amber:      #fbbf24;
-    --red:        #f87171;
-    --red-lt:     #2a1515;
-    --blue:       #60a5fa;
-    --blue-lt:    #1a2332;
+    --muted:       #9e9e9e;
+    --border:      #3a3a3a;
+    --bg:          #1a1a1a;
+    --surface:     #242424;
+    --white:       #2e2e2e;
+    --green:       #4ade80;
+    --green-lt:    #14261a;
+    --amber:       #fbbf24;
+    --red:         #f87171;
+    --red-lt:      #2a1515;
+    --blue:        #60a5fa;
+    --blue-lt:     #1a2332;
     color-scheme: dark;
   }
 }
-:root.dark-mode {
-  --primary:    #e8e8e8;
-  --accent:     #f58321;
-  --accent-dk:  #e07518;
-  --accent-lt:  #2e2014;
-  --accent-mid: rgba(245,131,33,0.18);
+
+:root.dark-mode body.cc-has-sidebar {
+  --primary:     #e8e8e8;
+  --accent:      #f58321;
+  --accent-dk:   #e07518;
+  --accent-lt:   #2e2014;
+  --accent-mid:  rgba(245,131,33,0.18);
   --accent-glow: rgba(245,131,33,0.30);
-  --muted:      #9e9e9e;
-  --border:     #3a3a3a;
-  --bg:         #1a1a1a;
-  --surface:    #242424;
-  --white:      #2e2e2e;
-  --green:      #4ade80;
-  --green-lt:   #14261a;
-  --amber:      #fbbf24;
-  --red:        #f87171;
-  --red-lt:     #2a1515;
-  --blue:       #60a5fa;
-  --blue-lt:    #1a2332;
+  --muted:       #9e9e9e;
+  --border:      #3a3a3a;
+  --bg:          #1a1a1a;
+  --surface:     #242424;
+  --white:       #2e2e2e;
+  --green:       #4ade80;
+  --green-lt:    #14261a;
+  --amber:       #fbbf24;
+  --red:         #f87171;
+  --red-lt:      #2a1515;
+  --blue:        #60a5fa;
+  --blue-lt:     #1a2332;
   color-scheme: dark;
 }
 
-/* Dark mode overrides for elements that use hardcoded colours */
+/* Dark mode component overrides */
 @media (prefers-color-scheme: dark) {
-  :root:not(.light-mode) .site-nav { background: rgba(26,26,26,0.95); }
-  :root:not(.light-mode) img { opacity: 0.92; }
+  :root:not(.light-mode) body.cc-has-sidebar .site-nav { background: rgba(26,26,26,0.95); }
+  :root:not(.light-mode) body.cc-has-sidebar img { opacity: 0.92; }
 }
-:root.dark-mode .site-nav { background: rgba(26,26,26,0.95); }
-:root.dark-mode img { opacity: 0.92; }
+:root.dark-mode body.cc-has-sidebar .site-nav { background: rgba(26,26,26,0.95); }
+:root.dark-mode body.cc-has-sidebar img { opacity: 0.92; }
 
 /* ── Skeleton / Shimmer Loading States ───────────────────────────────────── */
 .skeleton {

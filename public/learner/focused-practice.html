@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <link rel="manifest" href="/manifest.json">
@@ -22,6 +22,7 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/brand-tokens.css">
   <link rel="stylesheet" href="/shared/learner.css">
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
@@ -47,7 +48,7 @@
     }
     .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
-    /* ── SETUP SCREEN ── */
+    /* â”€â”€ SETUP SCREEN â”€â”€ */
     .setup-screen { padding: 20px 0; }
     .setup-screen h1 {
       font-family: var(--font-head); font-size: 1.6rem; font-weight: 800;
@@ -90,7 +91,7 @@
       padding: 8px; margin-bottom: 16px; font-family: var(--font-body);
     }
 
-    /* ── FOCUS GUIDE ── */
+    /* â”€â”€ FOCUS GUIDE â”€â”€ */
     .focus-guide {
       background: var(--accent-lt); border: 1px solid rgba(245,131,33,0.2);
       border-radius: var(--radius); padding: 16px 20px; margin-bottom: 20px;
@@ -105,7 +106,7 @@
     }
     .focus-guide li::before { content: '\2022'; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
 
-    /* ── DRIVING SCREEN ── */
+    /* â”€â”€ DRIVING SCREEN â”€â”€ */
     .drive-screen { text-align: center; padding: 40px 0 20px; }
     .focus-pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 24px; }
     .focus-pill {
@@ -121,7 +122,7 @@
     .timer-label { font-size: 0.82rem; color: var(--muted); margin-bottom: 28px; }
     .btn-group { display: flex; flex-direction: column; gap: 10px; }
 
-    /* ── REFLECTION SCREEN ── */
+    /* â”€â”€ REFLECTION SCREEN â”€â”€ */
     .reflect-screen { padding: 20px 0; }
     .reflect-screen h2 {
       font-family: var(--font-head); font-size: 1.3rem; font-weight: 700; margin-bottom: 4px;
@@ -156,7 +157,7 @@
     }
     .reflect-note::placeholder { color: var(--muted); }
 
-    /* ── RESULTS SCREEN ── */
+    /* â”€â”€ RESULTS SCREEN â”€â”€ */
     .results-screen { padding: 30px 0 20px; text-align: center; }
     .results-screen h2 {
       font-family: var(--font-head); font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;
@@ -201,7 +202,7 @@
 <body>
 
 <main>
-  <!-- ── SCREEN 1: SETUP ── -->
+  <!-- â”€â”€ SCREEN 1: SETUP â”€â”€ -->
   <section id="screen-setup" class="screen">
     <div class="setup-screen">
       <h1>Focused Practice</h1>
@@ -223,7 +224,7 @@
     </div>
   </section>
 
-  <!-- ── SCREEN 2: DRIVING ── -->
+  <!-- â”€â”€ SCREEN 2: DRIVING â”€â”€ -->
   <section id="screen-drive" class="screen hidden">
     <div class="drive-screen">
       <h2>Driving...</h2>
@@ -239,7 +240,7 @@
     </div>
   </section>
 
-  <!-- ── SCREEN 3: REFLECTION ── -->
+  <!-- â”€â”€ SCREEN 3: REFLECTION â”€â”€ -->
   <section id="screen-reflect" class="screen hidden">
     <div class="reflect-screen">
       <h2>Reflect on Your Drive</h2>
@@ -249,7 +250,7 @@
     </div>
   </section>
 
-  <!-- ── SCREEN 4: RESULTS ── -->
+  <!-- â”€â”€ SCREEN 4: RESULTS â”€â”€ -->
   <section id="screen-results" class="screen hidden">
     <div class="results-screen">
       <h2>Practice Complete</h2>
