@@ -79,7 +79,7 @@
   var bottomSections = {
     learner: {
       tabs: [
-        { icon: 'home', label: 'Home', href: '/learner/',
+        { icon: 'home', label: 'Dashboard', href: '/learner/',
           activeOn: [] },
         { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
           activeOn: ['/learner/lessons-hub', '/learner/buy-credits', '/learner/lessons'] },
@@ -211,7 +211,10 @@
         '</button>' +
         '<button class="cc-sb-cookie-settings" id="cc-sb-cookie-settings" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;margin-top:4px;border:none;background:transparent;color:var(--muted, #797879);font-size:12px;cursor:pointer;font-family:inherit">' +
           '<span>Cookie Settings</span>' +
-        '</button></div>';
+        '</button>' +
+        '<a href="/" class="cc-sb-back-site" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border:none;background:transparent;color:var(--muted, #797879);font-size:12px;text-decoration:none;font-family:inherit">' +
+          '<span>← Back to website</span>' +
+        '</a></div>';
     } else {
       var currentTheme2 = (window.ccDarkMode ? ccDarkMode.get() : 'auto');
       return '<div class="cc-sb-footer" id="cc-sb-footer">' +
