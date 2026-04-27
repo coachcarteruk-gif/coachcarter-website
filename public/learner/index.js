@@ -169,6 +169,25 @@ function render() {
 
   renderNextLesson();
   renderUnlogged();
+  maybeShowArrivalToast();
+}
+
+// One-time toast confirming the learner has arrived in their dashboard
+// after login. Reuses the .credit-toast styles already in the page.
+function maybeShowArrivalToast() {
+  let flag;
+  try { flag = sessionStorage.getItem('cc_just_logged_in'); } catch (e) { return; }
+  if (flag !== '1') return;
+  try { sessionStorage.removeItem('cc_just_logged_in'); } catch (e) {}
+
+  const toast = document.getElementById('credit-toast');
+  if (!toast) return;
+  const firstName = AUTH?.user?.name ? AUTH.user.name.split(' ')[0] : null;
+  toast.textContent = firstName
+    ? `Welcome back, ${firstName}. You're in your dashboard.`
+    : "You're in your dashboard.";
+  toast.classList.add('show');
+  setTimeout(() => { toast.classList.remove('show'); }, 3500);
 }
 
 function renderNextLesson() {

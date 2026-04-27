@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <link rel="manifest" href="/manifest.json">
@@ -29,7 +29,7 @@
   <style>
     main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; }
 
-    /* â”€â”€ PAGE HEADER â”€â”€ */
+    /* ── PAGE HEADER ── */
     .page-header { padding: 32px 0 24px; }
     .page-header h1 {
       font-family: var(--font-head); font-size: 1.8rem; font-weight: 800;
@@ -38,7 +38,7 @@
     .page-header h1 em { font-style: normal; color: var(--accent); }
     .page-header p { color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
 
-    /* â”€â”€ STAT CARDS â”€â”€ */
+    /* ── STAT CARDS ── */
     .stats-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 32px;
     }
@@ -56,13 +56,13 @@
       text-transform: uppercase; letter-spacing: 0.04em;
     }
 
-    /* â”€â”€ SECTION HEADERS â”€â”€ */
+    /* ── SECTION HEADERS ── */
     .section-title {
       font-family: var(--font-head); font-size: 1.15rem; font-weight: 700;
       margin-bottom: 16px; padding-top: 8px;
     }
 
-    /* â”€â”€ RADAR CHART â”€â”€ */
+    /* ── RADAR CHART ── */
     .radar-section { margin-bottom: 36px; text-align: center; }
     .radar-wrap {
       max-width: 400px; margin: 0 auto;
@@ -71,7 +71,7 @@
     }
     .radar-wrap canvas { display: block; margin: 0 auto; }
 
-    /* â”€â”€ SKILL BREAKDOWN CARDS â”€â”€ */
+    /* ── SKILL BREAKDOWN CARDS ── */
     .area-card {
       background: var(--white); border: 1px solid var(--border); border-radius: var(--radius);
       margin-bottom: 16px; overflow: hidden; animation: fadeIn 0.3s ease;
@@ -118,7 +118,7 @@
       .skill-name { font-size: 0.8rem; }
     }
 
-    /* â”€â”€ MOCK TEST HISTORY â”€â”€ */
+    /* ── MOCK TEST HISTORY ── */
     .mock-section { margin-bottom: 32px; }
     .mock-card {
       background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -136,7 +136,7 @@
     .mock-fault-name { font-weight: 600; }
     .mock-fault-count { color: var(--red); font-weight: 700; }
 
-    /* â”€â”€ AREAS FOR IMPROVEMENT â”€â”€ */
+    /* ── AREAS FOR IMPROVEMENT ── */
     .improve-section { margin-bottom: 32px; }
     .improve-card {
       background: var(--white); border: 1px solid var(--border); border-radius: var(--radius);
@@ -157,7 +157,7 @@
     .improve-suggestion a { color: var(--accent); text-decoration: none; }
     .improve-suggestion a:hover { text-decoration: underline; }
 
-    /* â”€â”€ QUICK ACTIONS â”€â”€ */
+    /* ── QUICK ACTIONS ── */
     .actions-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 32px; }
     @media (max-width: 480px) { .actions-grid { grid-template-columns: 1fr; } }
     .action-card {
@@ -170,7 +170,7 @@
     .action-icon { font-size: 1.5rem; margin-bottom: 8px; }
     .action-label { font-family: var(--font-head); font-size: 0.85rem; font-weight: 700; }
 
-    /* â”€â”€ EMPTY STATE â”€â”€ */
+    /* ── EMPTY STATE ── */
     .empty-state {
       text-align: center; padding: 48px 20px; animation: fadeIn 0.3s ease;
     }
@@ -181,7 +181,7 @@
     .empty-state p { color: var(--muted); font-size: 0.92rem; line-height: 1.6; max-width: 440px; margin: 0 auto 24px; }
     .empty-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
-    /* â”€â”€ BUTTONS â”€â”€ */
+    /* ── BUTTONS ── */
     .btn-primary {
       display: inline-flex; align-items: center; gap: 8px;
       background: var(--accent); color: #fff; border: none; border-radius: 100px;
@@ -200,7 +200,7 @@
     .link-arrow { color: var(--accent); font-weight: 700; font-size: 0.88rem; text-decoration: none; }
     .link-arrow:hover { text-decoration: underline; }
 
-    /* â”€â”€ LOADING â”€â”€ */
+    /* ── LOADING ── */
     .loading { text-align: center; padding: 60px 20px; }
     .spinner {
       width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent);
@@ -233,7 +233,7 @@
 
   <!-- Empty state -->
   <div id="empty-state" class="empty-state hidden">
-    <div class="empty-icon">ðŸ“Š</div>
+    <div class="empty-icon">📊</div>
     <h2>Start tracking your progress!</h2>
     <p>Log your first session or take the Examiner Quiz to begin building your competency profile.</p>
     <div class="empty-actions">
@@ -274,15 +274,15 @@
     <h2 class="section-title">Quick Actions</h2>
     <div class="actions-grid">
       <a href="/learner/log-session.html" class="action-card">
-        <span class="action-icon">ðŸ“</span>
+        <span class="action-icon">📝</span>
         <span class="action-label">Log a Session</span>
       </a>
       <a href="/learner/mock-test.html" class="action-card">
-        <span class="action-icon">ðŸš—</span>
+        <span class="action-icon">🚗</span>
         <span class="action-label">Take a Mock Test</span>
       </a>
       <a href="/learner/examiner-quiz.html" class="action-card">
-        <span class="action-icon">ðŸ§ </span>
+        <span class="action-icon">🧠</span>
         <span class="action-label">Examiner Quiz</span>
       </a>
     </div>
