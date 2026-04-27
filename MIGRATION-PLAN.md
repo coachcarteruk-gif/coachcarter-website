@@ -50,6 +50,8 @@
 | webhook.js | 1 | Stripe webhook handler (checkout.session.completed, account.updated) |
 | connect.js | 7 | Stripe Connect onboarding, status, dashboard, admin invite, dismiss |
 | cron-payouts.js | 1 | Weekly Friday payout processing (Vercel cron) |
+| cron-referral-rewards.js | 1 | Daily 04:00 UTC. Per-lesson recurring referral rewards: floor(duration/3) min credited to referrer after a 7-day grace window. Per-booking idempotent via lesson_bookings.referral_rewarded_at |
+| r.js | 1 | Bound to /r/:code via vercel.json. Validates code, rate-limits, logs click in referral_clicks (hashed IP), 302s to /learner/login.html?ref=CODE. Fail-open |
 | reminders.js | 4 | send-due (hourly cron), daily-schedule (7pm cron), settings, update-settings |
 | Others (14) | 1 each | address-lookup, config, status, reviews, migrate, verify-session, etc. |
 
@@ -114,6 +116,11 @@
 - `waitlist` — learners waiting for specific slot types. Supports explicit day/time prefs or fallback to learner_availability. 14-day auto-expiry, notify-all on cancellation.
 - `sent_reminders` table — tracks sent reminders to prevent duplicates (unique on booking_id + reminder_type)
 - `lesson_bookings.series_id` — UUID grouping recurring weekly bookings (same time slot, N weeks)
+- `referrals` — one row per learner-with-a-code (learner_id, school_id, code, unique per school)
+- `referral_clicks` — one row per visit to `/r/CODE` (referral_code, school_id, ip_hash, user_agent, referer, clicked_at). Pre-signup, no learner_id. For attribution debugging + abuse signal.
+- `learner_users.referred_by` — FK to learner_users(id), permanent link to referrer
+- `magic_link_tokens.referral_code` — carries code through email/SMS signup flow
+- `lesson_bookings.referral_rewarded_at` — idempotency key for the recurring referral reward cron. Once stamped, the booking will never trigger another reward.
 
 ### Critical Design Decisions Already Made
 
