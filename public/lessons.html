@@ -1526,20 +1526,8 @@ footer a:hover { color: var(--accent); }
 </head>
 <body>
 
-<nav class="site-nav">
-  <a class="site-nav-logo" href="/">
-    <img src="/Logo.png" alt="CoachCarter">
-    <span>Coach<em>Carter</em></span>
-  </a>
-  <div class="site-nav-links">
-    <a class="site-nav-link" href="/">Home</a>
-    <a class="site-nav-link" href="/learner-journey.html">Pricing</a>
-    <a class="site-nav-link" href="/learner/login.html?redirect=/learner/book.html">Book</a>
-  </div>
-  <div class="site-nav-cta">
-    <a class="site-nav-link primary" href="/learner/login.html">Login</a>
-  </div>
-</nav>
+<!-- Markup rendered by window.ccNav.renderMarketing() — see /sidebar.js -->
+<nav class="site-nav" id="cc-site-nav"></nav>
 
 <div class="hero">
   <div class="hero-left reveal">
@@ -1868,12 +1856,11 @@ footer a:hover { color: var(--accent); }
 <script id="anywhere_book_now_script" type="text/javascript" src="https://assets.setmore.com/integration/book-now/live/v1/anywhere-book-now.js"></script>
 <button style="display: none;" id="Anywhere_button_iframe" class="anywhere-book-now-button" data-booking-url="https://coachcarteruk.setmore.com/services/f92268da-e2cc-4661-8cdd-82afa1b767a0" data-new-tab="false">Book now</button>
 
-<nav class="mobile-tab-bar">
-  <a href="/"><span class="mobile-tab-icon">🏠</span>Home</a>
-  <a href="/learner-journey.html"><span class="mobile-tab-icon">💰</span>Pricing</a>
-  <a href="/learner/login.html"><span class="mobile-tab-icon">👤</span>Log in</a>
-  <a href="/learner/login.html?redirect=/learner/book.html" class="cta"><span class="mobile-tab-icon">📅</span>Book</a>
-</nav>
+<!-- Markup rendered by window.ccNav.renderMarketing() — see /sidebar.js -->
+<nav class="mobile-tab-bar" id="cc-mobile-tab-bar"></nav>
+
+<script src="/sidebar.js"></script>
+<script>window.ccNav && ccNav.renderMarketing('#cc-site-nav', '#cc-mobile-tab-bar');</script>
 
 </body>
 </html>

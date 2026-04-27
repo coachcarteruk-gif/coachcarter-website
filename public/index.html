@@ -170,7 +170,7 @@ a { color: inherit; }
 }
 .shortcut-bar .shortcut-dismiss:hover { background: rgba(0,0,0,0.05); color: var(--primary); }
 
-body.has-shortcut .nav { top: 36px; }
+body.has-shortcut .site-nav { top: 36px; }
 body.has-shortcut .hero { padding-top: 136px; }
 
 @media (max-width: 600px) {
@@ -179,9 +179,9 @@ body.has-shortcut .hero { padding-top: 136px; }
 }
 
 /* ═══════════════════════════════════════
-   NAV
+   SITE NAV (top bar — markup rendered by sidebar.js / window.ccNav)
 ═══════════════════════════════════════ */
-.nav {
+.site-nav {
   position: fixed;
   top: 0; left: 0; right: 0;
   z-index: 100;
@@ -197,14 +197,14 @@ body.has-shortcut .hero { padding-top: 136px; }
   transition: background 0.3s;
 }
 
-.nav-logo {
+.site-nav-logo {
   display: flex;
   align-items: center;
   gap: 10px;
   text-decoration: none;
 }
 
-.nav-logo img {
+.site-nav-logo img {
   width: 34px; height: 34px;
   object-fit: contain;
   border-radius: 8px;
@@ -212,7 +212,7 @@ body.has-shortcut .hero { padding-top: 136px; }
   padding: 4px;
 }
 
-.nav-logo span {
+.site-nav-logo span {
   font-family: var(--font-head);
   font-size: 1.1rem;
   font-weight: 800;
@@ -220,24 +220,24 @@ body.has-shortcut .hero { padding-top: 136px; }
   letter-spacing: -0.02em;
 }
 
-.nav-logo span em {
+.site-nav-logo span em {
   font-style: normal;
   color: var(--accent);
 }
 
-.nav-links {
+.site-nav-links {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
 }
 
-.nav-cta {
+.site-nav-cta {
   display: flex;
   justify-content: flex-end;
 }
 
-.nav-link {
+.site-nav-link {
   color: rgba(255,255,255,0.6);
   font-family: var(--font-body);
   font-weight: 500;
@@ -250,20 +250,20 @@ body.has-shortcut .hero { padding-top: 136px; }
   white-space: nowrap;
 }
 
-.nav-link:hover {
+.site-nav-link:hover {
   color: #fff;
   border-color: rgba(255,255,255,0.15);
   background: rgba(255,255,255,0.05);
 }
 
-.nav-link.primary {
+.site-nav-link.primary {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
   font-weight: 600;
 }
 
-.nav-link.primary:hover {
+.site-nav-link.primary:hover {
   background: var(--accent-dk);
   border-color: var(--accent-dk);
   transform: translateY(-1px);
@@ -1162,8 +1162,30 @@ body.has-shortcut .hero { padding-top: 136px; }
   margin-bottom: 48px;
 }
 
-.footer-brand .nav-logo {
+.footer-brand .footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
   margin-bottom: 12px;
+}
+.footer-brand .footer-logo img {
+  width: 34px; height: 34px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  padding: 4px;
+}
+.footer-brand .footer-logo span {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+.footer-brand .footer-logo span em {
+  font-style: normal;
+  color: var(--accent);
 }
 
 .footer-brand p {
@@ -1257,8 +1279,8 @@ body.has-shortcut .hero { padding-top: 136px; }
   .steps { grid-template-columns: repeat(2, 1fr); gap: 32px; }
   .steps::before { display: none; }
   .footer-top { grid-template-columns: 1fr 1fr; gap: 32px; }
-  .nav { padding: 0 16px; }
-  .nav-links, .nav-cta { display: none; }
+  .site-nav { padding: 0 16px; }
+  .site-nav-links, .site-nav-cta { display: none; }
   .mobile-tab-bar { display: flex; }
 }
 
@@ -1305,20 +1327,8 @@ a:focus-visible, button:focus-visible {
 <!-- ──────────────────────────────────────
      NAV
 ────────────────────────────────────── -->
-<nav class="nav" role="navigation" aria-label="Main navigation">
-  <a class="nav-logo" href="/">
-    <img src="/Logo.png" alt="CoachCarter logo">
-    <span>Coach<em>Carter</em></span>
-  </a>
-  <div class="nav-links">
-    <a class="nav-link" href="/">Home</a>
-    <a class="nav-link" href="/learner-journey.html">Pricing</a>
-    <a class="nav-link" href="/learner/login.html?redirect=/learner/book.html">Book</a>
-  </div>
-  <div class="nav-cta">
-    <a class="nav-link primary" href="/learner/login.html">Login</a>
-  </div>
-</nav>
+<!-- Markup rendered by window.ccNav.renderMarketing() — see /sidebar.js -->
+<nav class="site-nav" id="cc-site-nav"></nav>
 
 <!-- ──────────────────────────────────────
      HERO
@@ -1655,7 +1665,7 @@ a:focus-visible, button:focus-visible {
   <div class="footer-inner">
     <div class="footer-top">
       <div class="footer-brand">
-        <a class="nav-logo" href="/">
+        <a class="footer-logo" href="/">
           <img src="/Logo.png" alt="CoachCarter logo">
           <span>Coach<em>Carter</em></span>
         </a>
@@ -1695,13 +1705,11 @@ a:focus-visible, button:focus-visible {
 </footer>
 
 <!-- Mobile tab bar -->
-<nav class="mobile-tab-bar" aria-label="Mobile navigation">
-  <a href="/" class="active"><span class="mobile-tab-icon">🏠</span>Home</a>
-  <a href="/learner-journey.html"><span class="mobile-tab-icon">💰</span>Pricing</a>
-  <a href="/learner/login.html"><span class="mobile-tab-icon">👤</span>Log in</a>
-  <a href="/learner/login.html?redirect=/learner/book.html" class="cta"><span class="mobile-tab-icon">📅</span>Book</a>
-</nav>
+<!-- Markup rendered by window.ccNav.renderMarketing() — see /sidebar.js -->
+<nav class="mobile-tab-bar" id="cc-mobile-tab-bar"></nav>
 
+<script src="/sidebar.js"></script>
+<script>window.ccNav && ccNav.renderMarketing('#cc-site-nav', '#cc-mobile-tab-bar');</script>
 <script src="/home.js"></script>
 
 </body>
