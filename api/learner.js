@@ -1012,7 +1012,7 @@ async function handleReferralCode(req, res) {
     const [existing] = await sql`SELECT code FROM referrals WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
     if (existing) {
       const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
-      return res.json({ ok: true, enabled: true, code: existing.code, share_url: `${baseUrl}/learner/login.html?ref=${existing.code}` });
+      return res.json({ ok: true, enabled: true, code: existing.code, share_url: `${baseUrl}/r/${existing.code}` });
     }
 
     // Generate a new code with collision retry
@@ -1030,7 +1030,7 @@ async function handleReferralCode(req, res) {
     }
 
     const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
-    return res.json({ ok: true, enabled: true, code, share_url: `${baseUrl}/learner/login.html?ref=${code}` });
+    return res.json({ ok: true, enabled: true, code, share_url: `${baseUrl}/r/${code}` });
   } catch (err) {
     console.error('referral-code error:', err);
     reportError('/api/learner', err);
@@ -1055,16 +1055,45 @@ async function handleReferralStats(req, res) {
       SELECT COALESCE(SUM(minutes), 0)::int AS total FROM credit_transactions
       WHERE learner_id = ${user.id} AND type = 'referral_reward' AND school_id = ${schoolId}`;
 
+    // Per-referee status timeline. Three states:
+    //   'joined'    — signed up, no booking yet
+    //   'booked'    — has at least one upcoming/confirmed booking
+    //   'lessoned'  — has at least one completed paid lesson (the trigger
+    //                 for actual reward issuance)
+    // Free-trial bookings count toward 'booked' but not 'lessoned' since they
+    // do not generate a referral reward.
     const recentReferrals = await sql`
-      SELECT name, created_at FROM learner_users
-      WHERE referred_by = ${user.id} AND school_id = ${schoolId}
-      ORDER BY created_at DESC LIMIT 10`;
+      SELECT
+        lu.name,
+        lu.created_at,
+        EXISTS (
+          SELECT 1 FROM lesson_bookings b
+           WHERE b.learner_id = lu.id
+             AND b.status = 'completed'
+             AND b.payment_method <> 'free'
+        ) AS has_completed_paid,
+        EXISTS (
+          SELECT 1 FROM lesson_bookings b
+           WHERE b.learner_id = lu.id
+             AND b.status IN ('confirmed','completed','awaiting_confirmation','rescheduled')
+        ) AS has_any_booking
+      FROM learner_users lu
+      WHERE lu.referred_by = ${user.id} AND lu.school_id = ${schoolId}
+      ORDER BY lu.created_at DESC LIMIT 10`;
+
+    const enriched = recentReferrals.map(r => ({
+      name: r.name,
+      created_at: r.created_at,
+      status: r.has_completed_paid ? 'lessoned'
+            : r.has_any_booking    ? 'booked'
+            : 'joined'
+    }));
 
     return res.json({
       ok: true,
       total_referred: countRow?.total || 0,
       total_reward_minutes: rewardRow?.total || 0,
-      recent_referrals: recentReferrals
+      recent_referrals: enriched
     });
   } catch (err) {
     console.error('referral-stats error:', err);

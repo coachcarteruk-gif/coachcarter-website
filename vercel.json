@@ -35,6 +35,7 @@
   ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/r/:code", "destination": "/api/r?code=:code" },
     { "source": "/book/:slug", "destination": "/learner/book.html" },
     { "source": "/:path*", "destination": "/public/:path*" }
   ]

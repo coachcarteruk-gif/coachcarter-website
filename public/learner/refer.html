@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>Refer a friend — CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/brand-tokens.css">
+  <link rel="stylesheet" href="/shared/learner.css">
+  <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/font-swap.js"></script>
+  <style>
+    main { max-width: 600px; margin: 0 auto; padding: 24px 16px 100px; }
+
+    .page-header { margin-bottom: 24px; }
+    .page-header h1 {
+      font-size: 1.5rem; font-weight: 700; font-family: var(--font-head);
+      color: var(--primary); letter-spacing: -0.02em;
+    }
+    .page-header p { font-size: 0.9rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+
+    .section-title {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px;
+      font-family: var(--font-body);
+    }
+
+    .card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px; margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
+    }
+
+    /* Hero share card — accent-toned */
+    .share-card {
+      background: linear-gradient(135deg, var(--accent), var(--accent-dk));
+      color: white; border: none; padding: 28px 24px;
+    }
+    .share-card .label {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; opacity: 0.85; margin-bottom: 8px;
+    }
+    .share-link {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,0.15); border-radius: 10px;
+      padding: 14px 16px; margin-bottom: 14px;
+      font-family: var(--font-body); font-size: 1rem;
+      font-weight: 600; word-break: break-all;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .share-link code {
+      flex: 1; font-family: inherit; font-size: inherit; color: white;
+      letter-spacing: 0.01em;
+    }
+    .share-buttons { display: flex; gap: 8px; }
+    .btn-share {
+      flex: 1; background: white; color: var(--accent-dk); border: none;
+      border-radius: 10px; padding: 12px 16px;
+      font-family: var(--font-head); font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn-share:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .btn-share.copied { background: #15803d; color: white; }
+    .btn-share-secondary {
+      background: rgba(255,255,255,0.15); color: white;
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    .btn-share-secondary:hover { background: rgba(255,255,255,0.25); }
+
+    /* How it works steps */
+    .steps { display: flex; flex-direction: column; gap: 16px; }
+    .step { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num {
+      flex-shrink: 0; width: 28px; height: 28px;
+      background: var(--accent-lt); color: var(--accent-dk);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-head); font-weight: 700; font-size: 0.9rem;
+    }
+    .step-body h4 { font-size: 0.95rem; font-weight: 700; margin: 0 0 2px; color: var(--primary); }
+    .step-body p { font-size: 0.85rem; color: var(--muted); margin: 0; line-height: 1.5; }
+
+    /* Stats */
+    .stats-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-pill {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 14px; text-align: center;
+    }
+    .stat-pill .num {
+      font-size: 1.6rem; font-weight: 700; color: var(--primary);
+      font-family: var(--font-head); font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+    }
+    .stat-pill .lbl {
+      font-size: 0.7rem; color: var(--muted); margin-top: 4px;
+      font-weight: 500; line-height: 1.3;
+    }
+
+    /* Recent referrals */
+    .ref-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .ref-row:last-child { border-bottom: none; }
+    .ref-row-name { font-size: 0.92rem; font-weight: 600; color: var(--primary); }
+    .ref-row-sub { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+    .ref-badge {
+      font-size: 0.68rem; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; white-space: nowrap;
+    }
+    .ref-badge-joined   { background: rgba(148,163,184,0.15); color: #475569; }
+    .ref-badge-booked   { background: rgba(245,158,11,0.12); color: #b45309; }
+    .ref-badge-lessoned { background: rgba(34,197,94,0.1);  color: #15803d; }
+    .ref-empty { font-size: 0.85rem; color: var(--muted); padding: 12px 0; font-style: italic; }
+
+    /* FAQ */
+    .faq-item { padding: 14px 0; border-bottom: 1px solid var(--border); }
+    .faq-item:last-child { border-bottom: none; }
+    .faq-q { font-size: 0.92rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+    .faq-a { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+
+    /* Disabled state — referrals turned off at school level */
+    .disabled-msg {
+      text-align: center; padding: 40px 20px;
+      color: var(--muted); font-size: 0.9rem;
+    }
+  </style>
+  <script src="/sidebar.js"></script>
+  <script src="/shared/learner-auth.js"></script>
+  <script src="/auth-gate.js"></script>
+</head>
+<body>
+
+<nav class="site-nav" style="display:none"></nav>
+
+<main>
+
+  <div class="page-header">
+    <h1>Refer a friend</h1>
+    <p>Your friends get a free first lesson. You earn driving time on every paid lesson they take — for life.</p>
+  </div>
+
+  <!-- Loading state -->
+  <div id="loading" class="card" style="text-align:center;padding:40px 20px;color:var(--muted);font-size:0.9rem">
+    Loading your referral link…
+  </div>
+
+  <!-- Disabled state (school config) -->
+  <div id="disabled-state" class="card" style="display:none">
+    <div class="disabled-msg">
+      Referrals aren't currently active at your school. Check back later.
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div id="main-content" style="display:none">
+
+    <!-- Share card -->
+    <div class="card share-card">
+      <div class="label">Your share link</div>
+      <div class="share-link"><code id="share-url"></code></div>
+      <div class="share-buttons">
+        <button class="btn-share" id="btn-copy" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span id="btn-copy-label">Copy link</span>
+        </button>
+        <button class="btn-share btn-share-secondary" id="btn-share-native" type="button" style="display:none">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+          <span>Share</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="section-title">Your impact</div>
+    <div class="stats-row">
+      <div class="stat-pill">
+        <div class="num" id="stat-friends">0</div>
+        <div class="lbl">Friends invited</div>
+      </div>
+      <div class="stat-pill">
+        <div class="num" id="stat-earned">0 min</div>
+        <div class="lbl">Driving time earned</div>
+      </div>
+    </div>
+
+    <!-- How it works -->
+    <div class="section-title">How it works</div>
+    <div class="card">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Share your link</h4>
+            <p>Send it to anyone learning to drive — text, WhatsApp, social, however you like.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>They get their first lesson free</h4>
+            <p>When they sign up using your link, their first lesson is on the house.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h4>You earn on every paid lesson they take</h4>
+            <p>One third of each lesson's length added to your balance — forever, not just the first time.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent referrals -->
+    <div class="section-title">Recent referrals</div>
+    <div class="card">
+      <div id="recent-list">
+        <div class="ref-empty">No one yet — share your link above.</div>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div class="section-title">Good to know</div>
+    <div class="card">
+      <div class="faq-item">
+        <div class="faq-q">When do I see the driving time on my balance?</div>
+        <div class="faq-a">After each completed lesson, with a 7-day window in case of cancellations or disputes. So expect about a week between your friend's lesson and the credit landing.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">What if my friend cancels?</div>
+        <div class="faq-a">No problem — you only earn on lessons that actually go ahead. Cancelled or no-show lessons don't count.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Can I take the reward as cash?</div>
+        <div class="faq-a">Not right now — rewards are driving time only. Once you've passed your test, we're working on options like donating your earned time to other learners. More on that soon.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Is there a limit?</div>
+        <div class="faq-a">No cap. Refer as many friends as you like. Each one's lessons keep adding driving time to your balance.</div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<script src="/learner/refer.js"></script>
+</body>
+</html>

@@ -1348,3 +1348,24 @@ UPDATE schools
      'referral_welcome_bonus_minutes', COALESCE(config->'referral_welcome_bonus_minutes', '90'::jsonb)
    )
  WHERE id = 1;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- REFERRAL CLICK LOG (April 2026)
+-- One row per visit to /r/<code>. Pre-signup, so referee_id is unknown here.
+-- Used for: (a) attribution debugging ("my friend used my link and I got
+-- nothing"), (b) light abuse detection (one IP hammering one code), (c) giving
+-- the referrer some signal that their link is being clicked even before
+-- anyone signs up. ip_hash (not raw IP) keeps this GDPR-friendly.
+-- ══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS referral_clicks (
+  id            SERIAL PRIMARY KEY,
+  referral_code TEXT NOT NULL,
+  school_id     INTEGER NOT NULL REFERENCES schools(id) DEFAULT 1,
+  ip_hash       TEXT,
+  user_agent    TEXT,
+  referer       TEXT,
+  clicked_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_referral_clicks_code ON referral_clicks(referral_code);
+CREATE INDEX IF NOT EXISTS idx_referral_clicks_school ON referral_clicks(school_id);
+CREATE INDEX IF NOT EXISTS idx_referral_clicks_clicked_at ON referral_clicks(clicked_at);
