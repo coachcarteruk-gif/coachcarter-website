@@ -710,6 +710,7 @@ function openBookModal(el) {
         document.getElementById('bookSpinner').style.display = 'none';
         document.getElementById('btnConfirmBook').disabled = false;
       }
+      updateBalanceLine(ltDuration);
     }
   }
 
@@ -832,7 +833,16 @@ function updateDeductDisplay() {
     const hasCreds = balanceMinutes >= totalMins;
     document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
     document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
+    updateBalanceLine(totalMins);
   }
+}
+
+function updateBalanceLine(deductMins) {
+  const el = document.getElementById('mdBalanceLine');
+  if (!el) return;
+  const fmt = m => (m / 60).toFixed(1).replace(/\.0$/, '') + 'h';
+  const after = Math.max(0, balanceMinutes - deductMins);
+  el.textContent = `You have ${fmt(balanceMinutes)} — ${fmt(after)} remaining after this booking.`;
 }
 
 function updateBookButtonState() {
