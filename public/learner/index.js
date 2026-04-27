@@ -144,9 +144,27 @@ function render() {
 
   // Try to get name from auth
   if (AUTH?.user?.name) {
-    nameEl.textContent = 'Hi, ' + AUTH.user.name;
+    nameEl.textContent = 'Hi, ' + AUTH.user.name.split(' ')[0] + '.';
   } else {
     nameEl.textContent = 'Welcome!';
+  }
+
+  // Credit balance sub-line
+  const greetingSub = document.getElementById('greeting-sub');
+  const creditLine = document.getElementById('credit-balance-line');
+  if (greetingSub && creditLine) {
+    const bal = AUTH?.user?.balance_minutes ?? AUTH?.user?.credits;
+    if (typeof bal !== 'undefined' && bal !== null) {
+      let display;
+      if (AUTH?.user?.balance_minutes != null) {
+        const hrs = AUTH.user.balance_minutes / 60;
+        display = (hrs % 1 === 0 ? hrs : hrs.toFixed(1)) + ' hr' + (hrs !== 1 ? 's' : '') + ' remaining';
+      } else {
+        display = (bal * 1.5) + ' hrs remaining';
+      }
+      creditLine.innerHTML = '<span class="credit-badge">' + display + '</span>';
+      greetingSub.style.display = 'flex';
+    }
   }
 
   renderNextLesson();
