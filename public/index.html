@@ -149,12 +149,12 @@ a { color: inherit; }
   z-index: 101;
   background: var(--accent-lt);
   border-bottom: 1px solid rgba(245,131,33,0.18);
-  padding: 6px 16px;
+  padding: 7px 20px;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 12px;
-  font-size: 0.78rem;
+  gap: 14px;
+  font-size: 0.9rem;
   color: var(--primary);
 }
 .shortcut-bar[hidden] { display: none; }
@@ -166,7 +166,7 @@ a { color: inherit; }
   color: var(--accent-dk);
   font-weight: 700;
   text-decoration: none;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 100px;
   transition: background 0.15s;
 }
@@ -177,7 +177,7 @@ a { color: inherit; }
   background: transparent;
   border: none;
   color: var(--muted);
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
   padding: 4px 6px;
@@ -185,11 +185,11 @@ a { color: inherit; }
 }
 .shortcut-bar .shortcut-dismiss:hover { background: rgba(0,0,0,0.05); color: var(--primary); }
 
-body.has-shortcut .nav { top: 32px; }
-body.has-shortcut .hero { padding-top: 132px; }
+body.has-shortcut .nav { top: 36px; }
+body.has-shortcut .hero { padding-top: 136px; }
 
 @media (max-width: 600px) {
-  .shortcut-bar { font-size: 0.72rem; gap: 6px; padding: 5px 10px; }
+  .shortcut-bar { font-size: 0.78rem; gap: 8px; padding: 6px 12px; }
   .shortcut-bar .shortcut-label { display: none; }
 }
 
