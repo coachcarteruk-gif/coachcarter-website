@@ -2,7 +2,21 @@
   'use strict';
 
   var ccAuth = window.ccAuth;
-  if (!ccAuth) return; // auth-gate.js will redirect
+  if (!ccAuth) return;
+
+  // Gate the whole page on login. ccAuth.requireAuth() shows the shared
+  // sign-in modal when the user is not logged in. Don't fetch anything
+  // until we know we're authed — otherwise the API returns 401, the JSON
+  // parse succeeds with an error body, and we end up rendering an empty
+  // share-link card.
+  if (!ccAuth.isLoggedIn) {
+    // Hide the loading panel so "Maybe later" leaves a clean (empty) page
+    // behind the modal instead of a stuck spinner.
+    var loadingEl = document.getElementById('loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+    ccAuth.requireAuth();
+    return;
+  }
 
   var $ = function (id) { return document.getElementById(id); };
 
