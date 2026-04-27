@@ -55,6 +55,7 @@ Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel wi
 4. **Don't expose error internals**: Never send `err.stack` or raw SQL errors to clients. Use `{ error: 'Human message', details: err.message }` at most.
 5. **Keep security headers in middleware.js**: Don't set or override security headers in individual API files.
 6. **Index all new FK columns**: Every new foreign key column must have a corresponding `CREATE INDEX IF NOT EXISTS` in `db/migration.sql`.
+7. **No inline `<script>` tags on public pages**: Production CSP `script-src` does not allow `'unsafe-inline'` (verify in `middleware.js`). Inline `<script>foo()</script>` blocks are silently dropped in production but run fine in local preview — easy to ship a regression. Put logic in an external `.js` file and have it auto-detect placeholder elements on load.
 
 ## InstructorBook principles
 
