@@ -1497,6 +1497,18 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.90 — Fix credits system: payments_enabled flag + booking confirmation balance display (27 April 2026)
+
+Root cause: `schools.config` for CoachCarter (school #1) never had `payments_enabled: true` set, so `skipPayments` was always `true` in `handleBook`. Result: no credits deducted on booking, `minutes_deducted = 0` stored, and refunds never fired on cancellation (all cascading from the same flag).
+
+**Fixes:**
+- `db/migration.sql`: `UPDATE schools SET config = config || '{"payments_enabled": true}'` for school #1 (idempotent, only sets if not already present)
+- `public/learner/book.html` + `book.js`: added `#successBalance` element to booking confirmation step showing remaining hours after booking
+
+**Files changed:** `db/migration.sql`, `public/learner/book.html`, `public/learner/book.js`
+
+---
+
 ## 2.89 — Hourly Stripe webhook reconciliation cron (26 April 2026)
 
 Safety net for silent webhook failures (entry 2.88 root-caused one). Runs every hour at :30 past, fetches all Stripe checkout sessions completed in the last 25 hours that are paid + have a tracked `payment_type` (`credit_purchase` / `slot_booking` / `lesson_offer`), and bulk-checks `credit_transactions.stripe_session_id`. Any paid session without a matching DB row is reported via email to `ERROR_ALERT_EMAIL` (or `STAFF_EMAIL` as fallback). Alert-only — no auto-replay — because re-running a partially-applied handler against a mutated DB is riskier than a manual "Resend" click in the Stripe dashboard. Legacy `pass_guarantee` / calculator-package payments use an in-memory store and are intentionally excluded. Window is 25h not 24h to guarantee no events slip through cron-schedule edges.

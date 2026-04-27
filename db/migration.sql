@@ -798,6 +798,11 @@ INSERT INTO schools (id, name, slug, contact_email, contact_phone, primary_colou
 VALUES (1, 'CoachCarter Driving School', 'coachcarter', 'fraser@coachcarter.uk', NULL, '#f97316', '#1e3a5f', '#3b82f6')
 ON CONFLICT (id) DO NOTHING;
 
+-- Ensure payments_enabled is set for CoachCarter (school #1) so credit deductions fire
+UPDATE schools
+   SET config = config || '{"payments_enabled": true}'::jsonb
+ WHERE id = 1 AND (config IS NULL OR NOT (config ? 'payments_enabled'));
+
 -- Ensure sequence is ahead of seeded id
 SELECT setval('schools_id_seq', GREATEST(nextval('schools_id_seq'), 2));
 

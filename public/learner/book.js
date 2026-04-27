@@ -994,6 +994,14 @@ function showBookSuccess(weeks, dates) {
   document.getElementById('successTime').textContent = pendingSlot.start_time;
   document.getElementById('successInstructor').textContent = pendingSlot.instructor_name;
 
+  const balanceEl = document.getElementById('successBalance');
+  if (balanceEl && balanceMinutes > 0) {
+    balanceEl.textContent = `Hours remaining: ${(balanceMinutes / 60).toFixed(1)}h`;
+    balanceEl.style.display = 'block';
+  } else if (balanceEl) {
+    balanceEl.style.display = 'none';
+  }
+
   const showSync = shouldShowCalSync();
   document.getElementById('calSyncPrompt').style.display = showSync ? 'block' : 'none';
   document.getElementById('calSyncedNote').style.display = showSync ? 'none' : 'block';
