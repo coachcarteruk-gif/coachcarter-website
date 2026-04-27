@@ -761,19 +761,25 @@ async function updateRepeatDates() {
     dates.push(d.toISOString().slice(0, 10));
   }
 
-  // Check conflicts
+  // Check conflicts. The /available endpoint caps each request at 31 days,
+  // so chunk by date span: max 4 weekly dates per request (≤21 days span).
   repeatConflicts = [];
   try {
-    const from = dates[0];
-    const to = dates[dates.length - 1];
     const ltId = selectedLessonType ? selectedLessonType.id : '';
     const instId = pendingSlot.instructor_id;
     const pc = getLearnerPostcode();
-    const res = await ccAuth.fetchAuthed(`/api/slots?action=available&from=${from}&to=${to}&instructor_id=${instId}${ltId ? '&lesson_type_id=' + ltId : ''}${pc ? '&pickup_postcode=' + pc : ''}`);
-    const data = await res.json();
-    // Check which dates have the slot available
+    const allSlots = {};
+    const CHUNK_WEEKS = 4;
+    for (let i = 0; i < dates.length; i += CHUNK_WEEKS) {
+      const chunk = dates.slice(i, i + CHUNK_WEEKS);
+      const from = chunk[0];
+      const to = chunk[chunk.length - 1];
+      const res = await ccAuth.fetchAuthed(`/api/slots?action=available&from=${from}&to=${to}&instructor_id=${instId}${ltId ? '&lesson_type_id=' + ltId : ''}${pc ? '&pickup_postcode=' + pc : ''}`);
+      const data = await res.json();
+      Object.assign(allSlots, data.slots || {});
+    }
     for (let i = 1; i < dates.length; i++) {
-      const dateSlots = data.slots?.[dates[i]] || [];
+      const dateSlots = allSlots[dates[i]] || [];
       const hasSlot = dateSlots.some(s => s.start_time === pendingSlot.start_time);
       if (!hasSlot) repeatConflicts.push(dates[i]);
     }
