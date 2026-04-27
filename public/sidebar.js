@@ -10,6 +10,12 @@
   if (path.startsWith('/learner/') || path === '/learner') context = 'learner';
   else if (path.startsWith('/instructor/') || path === '/instructor') context = 'instructor';
 
+  // Skip marketing/public pages entirely — they have their own .site-nav
+  // and .mobile-tab-bar. Injecting a sidebar here only hides the page's
+  // own nav and replaces it with a worse one. Marketing and hub are
+  // intentionally separate shells (see CLAUDE.md / InstructorBook plan).
+  if (context === 'public') return;
+
   // ── SVG icons (24x24 viewBox, stroke-based) ────────────────────
   var icons = {
     home: '<svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
