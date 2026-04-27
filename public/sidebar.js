@@ -118,6 +118,24 @@
     }
   };
 
+  // Auto-render marketing nav placeholders. Pages just include
+  // <nav class="site-nav" id="cc-site-nav"></nav> and/or
+  // <nav class="mobile-tab-bar" id="cc-mobile-tab-bar"></nav> —
+  // sidebar.js fills them on load. No inline <script> needed (CSP-safe).
+  function autoRenderMarketing() {
+    if (document.getElementById('cc-site-nav')) {
+      renderMarketingTopBar('#cc-site-nav');
+    }
+    if (document.getElementById('cc-mobile-tab-bar')) {
+      renderMarketingMobileBar('#cc-mobile-tab-bar');
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', autoRenderMarketing);
+  } else {
+    autoRenderMarketing();
+  }
+
   // Skip marketing/public pages — they keep their own .site-nav and
   // .mobile-tab-bar styling, but render contents via window.ccNav above.
   // Marketing and hub remain intentionally separate shells (see CLAUDE.md).
