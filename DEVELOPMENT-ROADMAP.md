@@ -1460,6 +1460,8 @@ Three bugs in `api/setmore-sync.js` caused lessons to be duplicated 1 hour ahead
 
 ## 2.80 — Learner Referral System (13 April 2026)
 
+> **Superseded by 2.91 (27 April 2026):** the purchase-time flat reward described below was replaced with per-lesson recurring rewards (`floor(duration/3)` minutes per completed paid lesson) issued by `cron-referral-rewards.js`. Share URL format also changed to `/r/CODE`. Welcome bonus, code generation, and signup attribution from this entry are unchanged.
+
 **What:** Each learner gets a unique referral code (format: FIRSTNAME-XXXX). New learners can enter a code at signup via URL param (`?ref=CODE`) or manual text input. The referred learner gets configurable welcome bonus minutes, and every future credit purchase by a referred learner earns the referrer a flat reward. Feature is gated behind `schools.config.referral_enabled`.
 
 **Schema changes:**
@@ -1494,6 +1496,34 @@ Instructors can now control which lesson lengths appear on their public booking 
 - Guest learners also get filtered lesson types (previously only authed learners passed `instructor_id` to the lesson-types API)
 
 **Files changed:** `db/migration.sql`, `api/instructor.js`, `api/lesson-types.js`, `public/instructor/profile.js`, `public/learner/book.js`
+
+---
+
+## 2.91 — Referral system Phase 1: per-lesson recurring rewards + share UI (27 April 2026)
+
+Builds on the original referral system from 2.80, replacing the broken purchase-time reward with a correct lesson-completion-time engine, and adding the user-facing share surface.
+
+**Reward engine ([#108](https://github.com/coachcarteruk-gif/coachcarter-website/pull/108)):**
+- New cron `api/cron-referral-rewards.js` runs daily at 04:00 UTC. For every completed paid lesson by a referred learner past a 7-day grace window, credits the referrer with `floor(duration_minutes / 3)` minutes — recurring per booking, single-tier only.
+- New column `lesson_bookings.referral_rewarded_at` is the per-booking idempotency key. Atomic stamp-then-credit via `UPDATE...RETURNING` makes the cron race-safe.
+- Removed the old purchase-time reward block from `api/credits.js` (was rewarding flat 30 min on credit purchase regardless of refunds — wrong on both counts).
+- Migration includes a backfill that stamps existing rewarded referees' first booking, so the new cron never double-pays anyone already credited under the old logic.
+
+**Share UI ([#109](https://github.com/coachcarteruk-gif/coachcarter-website/pull/109)):**
+- New short URL `/r/CODE` via `api/r.js` + `vercel.json` rewrite. Validates the code, rate-limits per IP+code (30/hr), logs the click with hashed IP, redirects to `/learner/login.html?ref=CODE`. Fail-open on any error so a shared link never breaks the friend's experience.
+- New `referral_clicks` table for attribution debugging and abuse signal.
+- New dedicated page `/learner/refer.html` — share link with copy + native share (mobile only, when `navigator.share` is supported), stats, three-step explainer, recent referrals with status badges (joined / booked / driving), small FAQ.
+- New "Refer a friend" sidebar entry with gift icon (learner role only).
+- Dashboard referral card simplified to a clickable teaser linking to `refer.html`.
+- `referral-stats` endpoint extended to compute per-referee status (`joined` → `booked` → `lessoned`).
+- Share URL format updated from `/learner/login.html?ref=X` to the short `/r/X` form.
+
+**Auth gate fix ([#110](https://github.com/coachcarteruk-gif/coachcarter-website/pull/110)):**
+- `refer.js` was assuming `ccAuth` only existed when logged in. It exists for logged-out users too (with `isLoggedIn: false`). Fixed by checking `ccAuth.isLoggedIn` and calling `ccAuth.requireAuth()` to show the shared sign-in modal when needed.
+
+**No share-message template by design:** every learner shares differently to different friends — a canned line reads as ad-spam when forwarded. Bare link with the sender's own context feels like a real recommendation.
+
+**Files changed:** `db/migration.sql`, `api/cron-referral-rewards.js` (new), `api/r.js` (new), `api/credits.js`, `api/learner.js`, `vercel.json`, `public/learner/refer.html` (new), `public/learner/refer.js` (new), `public/learner/index.html`, `public/learner/index.js`, `public/sidebar.js`, `PROJECT.md`, `MIGRATION-PLAN.md`
 
 ---
 

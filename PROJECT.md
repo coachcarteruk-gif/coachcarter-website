@@ -81,6 +81,8 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── address-lookup.js           # Address autocomplete API
 │   ├── cron-retention.js           # GDPR data retention cron (weekly, archives/purges inactive data)
 │   ├── cron-reconcile-payments.js  # Hourly Stripe webhook reconciliation — alerts on paid sessions missing from credit_transactions
+│   ├── cron-referral-rewards.js    # Daily 04:00 UTC. Issues per-lesson referrer rewards (floor(duration/3) min) after a 7-day grace
+│   ├── r.js                        # Bound to /r/:code via vercel.json. Logs click + redirects to login with ?ref=CODE
 │   ├── _audit.js                   # GDPR audit logging utility (logAudit)
 │   ├── seed-test-data.js           # Test data seed/reset (3 test learner accounts, protected by MIGRATION_SECRET)
 │   ├── reviews.js                  # Google Reviews API
@@ -323,8 +325,8 @@ JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls inc
 | `onboarding` | GET/POST | Yes | Get/save onboarding profile (prior experience + initial self-assessment) |
 | `profile-completeness` | GET | Yes | Returns profile completion steps; dashboard uses prior_experience + initial_assessment (2 steps) |
 | `validate-referral` | GET | No | Public. Validates a referral code before signup. Params: `code`, `school_id`. Returns `{ ok, valid, referrer_first_name }`. Rate-limited (10/min per IP) |
-| `referral-code` | GET | Yes | Returns learner's referral code (auto-generates on first call). Format: FIRSTNAME-XXXX. Returns `{ ok, enabled, code, share_url }` |
-| `referral-stats` | GET | Yes | Referral dashboard data: `{ ok, total_referred, total_reward_minutes, recent_referrals[] }` |
+| `referral-code` | GET | Yes | Returns learner's referral code (auto-generates on first call). `share_url` is the short form `https://coachcarter.uk/r/CODE`. Returns `{ ok, enabled, code, share_url }` |
+| `referral-stats` | GET | Yes | Referral dashboard data: `{ ok, total_referred, total_reward_minutes, recent_referrals[] }`. Each `recent_referrals` entry includes `status` (`joined` / `booked` / `lessoned`) computed from the referee's bookings |
 | `my-availability` | GET | Yes | Returns learner's active weekly availability windows |
 | `set-availability` | POST | Yes | Replace all availability windows. Body: `{ windows: [{ day_of_week, start_time, end_time }] }` |
 | `accept-terms` | POST | Yes | Records T&C acceptance (`terms_accepted_at = NOW()`). Called from login flow gate. |
@@ -355,7 +357,15 @@ Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancell
 |---|---|---|---|
 | `balance` | GET | Yes | Returns `balance_minutes`, `balance_hours`, `credit_balance` + recent transactions |
 | `checkout` | POST | Yes | Creates Stripe checkout for hours purchase. Body: `{ hours }` (or legacy `{ quantity }` for lesson count). Discount tiers: 6h=5%, 12h=10%, 18h=15%, 24h=20%, 30h=25% |
-| `verify` | GET | Yes | Post-checkout safety net. Params: `session_id` (Stripe checkout session ID). Checks Stripe payment status and grants credits idempotently if webhook missed them. Returns `{ ok, already_processed }` or `{ ok, granted, hours, minutes }` |
+| `verify` | GET | Yes | Post-checkout safety net. Params: `session_id` (Stripe checkout session ID). Checks Stripe payment status and grants credits idempotently if webhook missed them. Returns `{ ok, already_processed }` or `{ ok, granted, hours, minutes }`. Referrer rewards are NOT issued here — `cron-referral-rewards.js` handles them per completed lesson |
+
+### API — `api/r.js` (referral short URL)
+
+Bound to `/r/:code` via a `vercel.json` rewrite. No `?action=` routing — this is a single-purpose endpoint.
+
+| Method | Auth | Description |
+|---|---|---|
+| GET | No | Validates the code against `referrals`, rate-limits per IP+code (30/hr), logs a row in `referral_clicks` with hashed IP, then 302-redirects to `/learner/login.html?ref=CODE`. Unknown codes 302 to `/` with no attribution. Fail-open on any error so a shared link never breaks the friend's experience |
 
 ### API — `api/slots.js`
 
@@ -814,6 +824,7 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 | `/api/config?action=record-consent` | POST | None | Records cookie consent decision to DB |
 | `/api/cron-retention` | GET | Vercel cron / CRON_SECRET | Weekly data retention enforcement |
 | `/api/cron-reconcile-payments` | GET | Vercel cron / CRON_SECRET | Hourly check that completed Stripe sessions have matching `credit_transactions` rows; alerts on mismatches |
+| `/api/cron-referral-rewards` | GET | Vercel cron / CRON_SECRET | Daily (04:00 UTC). For every completed paid lesson by a referred learner past a 7-day grace window, credits the referrer with `floor(duration_minutes / 3)` minutes. Per-booking idempotency via `lesson_bookings.referral_rewarded_at` |
 
 ### Database tables
 
@@ -823,6 +834,7 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 | `audit_log` | Admin action audit trail (who did what to whom, when) |
 | `deletion_requests` | Tracks self-service deletion flow (pending → confirmed → completed) |
 | `referrals` | Learner referral codes (learner_id, school_id, code, unique per school) |
+| `referral_clicks` | One row per visit to `/r/CODE` — referral_code, school_id, ip_hash (sha256, first 16 chars), user_agent, referer, clicked_at. Pre-signup, so referee not yet known. Used for attribution debugging and abuse signal |
 
 ### Key columns added to existing tables
 
@@ -834,12 +846,14 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 | `credit_transactions` | `anonymized` | Boolean, set when learner is deleted (records kept for tax) |
 | `learner_users` | `referred_by` | FK to learner_users(id) — permanent link to referrer |
 | `magic_link_tokens` | `referral_code` | Carries referral code through the signup flow |
+| `lesson_bookings` | `referral_rewarded_at` | Per-booking idempotency key set by `cron-referral-rewards.js`. Once stamped, a booking will never trigger another reward |
 
 ### Deletion cascade (user-initiated or retention cron)
 
 When a learner is deleted, data is handled as follows:
 - **Anonymized** (kept for tax): `credit_transactions` — `learner_id` set to NULL, `anonymized = true`
 - **Deleted**: skill_ratings, driving_sessions, quiz_results, mock_tests, lesson_bookings, learner_onboarding, waitlist, instructor_learner_notes, learner_availability, magic_link_tokens, sent_reminders, slot_reservations, lesson_confirmations, referrals
+- **Untouched** (no PII tied to learner): `referral_clicks` is keyed by `referral_code` not `learner_id`, and stores only `ip_hash` — clicks remain attributable to the code without identifying any individual
 - **Nullified**: cookie_consents.learner_id set to NULL, learner_users.referred_by set to NULL (for referred learners)
 - **Confirmation email** sent after successful deletion
 
