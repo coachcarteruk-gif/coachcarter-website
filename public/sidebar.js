@@ -231,7 +231,7 @@
             '<option value="dark"' + (currentTheme2 === 'dark' ? ' selected' : '') + '>Dark</option>' +
           '</select>' +
         '</div>' +
-        '<a href="/" class="cc-sb-login">' +
+        '<a href="/learner/login.html?redirect=' + encodeURIComponent(window.location.pathname + window.location.search) + '" class="cc-sb-login">' +
           '<span class="cc-sb-icon">' + icons.logIn + '</span>' +
           '<span>Login</span>' +
         '</a></div>';
