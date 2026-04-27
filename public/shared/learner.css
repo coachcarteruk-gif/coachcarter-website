@@ -7,7 +7,8 @@
 /* Desktop sidebar layout: strip the legacy top-nav margin */
 @media (min-width: 960px) {
   body.cc-has-sidebar main,
-  body.cc-has-sidebar #main { margin-top: 0 !important; padding-top: 32px !important; }
+  body.cc-has-sidebar #main,
+  body.cc-has-sidebar .page { margin-top: 0 !important; padding-top: 32px !important; }
 }
 
 /* CSS Variables */
