@@ -851,13 +851,20 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
       opt.textContent = `${d.name} — ${formatHours(d.duration_minutes)} — unavailable (${why})`;
       select.appendChild(opt);
     }
-    // Preselect order: ?type= URL slug → first fitting (smallest). localStorage
-    // preselect lands in Commit 6.
+    // Preselect order: ?type= URL slug → cc_last_lesson_type_id (returning
+    // learner default) → first fitting (smallest). No expiry on the
+    // localStorage value — driving lessons are infrequent, want stickiness.
     let preselected = null;
     if (preselectedTypeSlug) {
       preselected = fitting.find(d => d.slug === preselectedTypeSlug);
     } else if (preselectedTypeId) {
       preselected = fitting.find(d => String(d.lesson_type_id) === String(preselectedTypeId));
+    }
+    if (!preselected) {
+      try {
+        const lastId = localStorage.getItem('cc_last_lesson_type_id');
+        if (lastId) preselected = fitting.find(d => String(d.lesson_type_id) === lastId);
+      } catch (_) { /* localStorage may be unavailable in private mode */ }
     }
     if (!preselected) preselected = fitting[0];
     select.value = String(preselected.lesson_type_id);
@@ -880,6 +887,14 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
 function formatHours(mins) {
   const h = mins / 60;
   return h % 1 === 0 ? `${h} hour${h !== 1 ? 's' : ''}` : `${h.toFixed(1)} hours`;
+}
+
+// Persist the last-picked lesson type so a returning learner sees their usual
+// duration preselected on the next booking. No expiry — driving lessons are
+// infrequent and we want stickiness across weeks/months.
+function setLastLessonType(lt) {
+  if (!lt || !lt.id) return;
+  try { localStorage.setItem('cc_last_lesson_type_id', String(lt.id)); } catch (_) {}
 }
 
 function closeBookModal() {
@@ -1065,6 +1080,7 @@ async function confirmBookWithCredit() {
     balanceMinutes = data.balance_minutes || 0;
     lastBookingId = data.booking_id;
     updateCreditBadge();
+    setLastLessonType(selectedLessonType);
     window.posthog && posthog.capture('booking_confirmed', { method: 'credit', lesson_type_slug: selectedLessonType?.slug });
     showBookSuccess(weeks, data.dates);
     refreshAfterBooking();
@@ -1129,6 +1145,7 @@ async function confirmPayAndBook() {
   }
 
   btn.disabled = true; label.textContent = 'Redirecting to payment…'; spinner.style.display = 'block';
+  setLastLessonType(selectedLessonType);
   window.posthog && posthog.capture('booking_pay_initiated', { method: 'stripe', is_guest: isGuest, lesson_type_slug: selectedLessonType?.slug });
 
   try {
