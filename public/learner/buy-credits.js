@@ -26,12 +26,27 @@
   var qty = 12;
 
   function initAuth() {
+    // Spectator mode: prices and pricing tiers are public — only the buy
+    // buttons gate on auth (existing requireAuth() calls below). The balance
+    // card is hidden for guests and replaced with a "sign in to see balance"
+    // hint, set up in initGuestUI().
     isAuthed = !!ccAuth.getAuth();
-    if (!isAuthed) {
-      if (window.ccAuth && window.ccAuth.requireAuth) window.ccAuth.requireAuth();
-      return false;
+    return isAuthed;
+  }
+
+  function initGuestUI() {
+    if (isAuthed) return;
+    // Hide the personal balance card; show a sign-in hint banner in its place.
+    var balanceCard = document.querySelector('.balance-card');
+    if (balanceCard) balanceCard.style.display = 'none';
+    var subtitle = document.querySelector('.subtitle');
+    if (subtitle) {
+      subtitle.innerHTML = 'Browse our pricing — '
+        + '<a href="/learner/login.html?redirect=/learner/buy-credits.html" style="color:var(--accent);font-weight:700">sign in</a>'
+        + ' or '
+        + '<a href="/free-trial.html" style="color:var(--accent);font-weight:700">try a free lesson</a>'
+        + ' first.';
     }
-    return true;
   }
 
   async function loadBalance() {
@@ -258,6 +273,7 @@
   }
 
   initAuth();
+  initGuestUI();
   selectPkg(12);
   loadProgrammePrice();
   loadLessonTypes();
