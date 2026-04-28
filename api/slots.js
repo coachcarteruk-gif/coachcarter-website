@@ -91,6 +91,12 @@ async function handleAvailable(req, res) {
 
   const { from, to, instructor_id, lesson_type_id, pickup_postcode, school_id } = req.query;
   const schoolId = parseInt(school_id) || 1;
+  // Slot-first: when true, the caller is using lesson_type_id only to set the
+  // grid spacing (smallest active duration). Skip the offered_lesson_types
+  // filter so instructors offering OTHER durations are not excluded — the
+  // per-duration check happens later in handleDurationsForSlot when the user
+  // clicks a slot.
+  const minDurationOnly = req.query.min_duration_only === '1' || req.query.min_duration_only === 'true';
 
   // Validate dates
   if (!from || !to)
@@ -126,44 +132,84 @@ async function handleAvailable(req, res) {
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const slotMinutes = lessonType.duration_minutes;
 
-    // 1. Load availability windows (optionally filtered to one instructor)
+    // 1. Load availability windows (optionally filtered to one instructor).
+    // When minDurationOnly is set, we don't filter by offered_lesson_types —
+    // the slot feed shows everyone, and per-duration filtering happens in
+    // handleDurationsForSlot when the user clicks a slot.
+    const offeredFilterJson = JSON.stringify([lessonType.slug]);
     const windows = instructor_id
-      ? await sql`
-          SELECT ia.instructor_id, ia.day_of_week,
-                 ia.start_time::text AS start_time,
-                 ia.end_time::text   AS end_time,
-                 i.name AS instructor_name,
-                 i.photo_url, i.bio,
-                 COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
-                 COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
-                 i.max_travel_minutes
-          FROM instructor_availability ia
-          JOIN instructors i ON i.id = ia.instructor_id
-          WHERE ia.instructor_id = ${instructor_id}
-            AND ia.active = true
-            AND i.active  = true
-            AND i.school_id = ${schoolId}
-            AND (i.offered_lesson_types IS NULL OR i.offered_lesson_types @> ${JSON.stringify([lessonType.slug])}::jsonb)
-          ORDER BY ia.day_of_week, ia.start_time
-        `
-      : await sql`
-          SELECT ia.instructor_id, ia.day_of_week,
-                 ia.start_time::text AS start_time,
-                 ia.end_time::text   AS end_time,
-                 i.name AS instructor_name,
-                 i.photo_url, i.bio,
-                 COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
-                 COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
-                 i.max_travel_minutes
-          FROM instructor_availability ia
-          JOIN instructors i ON i.id = ia.instructor_id
-          WHERE ia.active = true
-            AND i.active  = true
-            AND i.email  != 'demo@coachcarter.uk'
-            AND i.school_id = ${schoolId}
-            AND (i.offered_lesson_types IS NULL OR i.offered_lesson_types @> ${JSON.stringify([lessonType.slug])}::jsonb)
-          ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
-        `;
+      ? (minDurationOnly
+        ? await sql`
+            SELECT ia.instructor_id, ia.day_of_week,
+                   ia.start_time::text AS start_time,
+                   ia.end_time::text   AS end_time,
+                   i.name AS instructor_name,
+                   i.photo_url, i.bio,
+                   COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+                   COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   i.max_travel_minutes
+            FROM instructor_availability ia
+            JOIN instructors i ON i.id = ia.instructor_id
+            WHERE ia.instructor_id = ${instructor_id}
+              AND ia.active = true
+              AND i.active  = true
+              AND i.school_id = ${schoolId}
+            ORDER BY ia.day_of_week, ia.start_time
+          `
+        : await sql`
+            SELECT ia.instructor_id, ia.day_of_week,
+                   ia.start_time::text AS start_time,
+                   ia.end_time::text   AS end_time,
+                   i.name AS instructor_name,
+                   i.photo_url, i.bio,
+                   COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+                   COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   i.max_travel_minutes
+            FROM instructor_availability ia
+            JOIN instructors i ON i.id = ia.instructor_id
+            WHERE ia.instructor_id = ${instructor_id}
+              AND ia.active = true
+              AND i.active  = true
+              AND i.school_id = ${schoolId}
+              AND (i.offered_lesson_types IS NULL OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
+            ORDER BY ia.day_of_week, ia.start_time
+          `)
+      : (minDurationOnly
+        ? await sql`
+            SELECT ia.instructor_id, ia.day_of_week,
+                   ia.start_time::text AS start_time,
+                   ia.end_time::text   AS end_time,
+                   i.name AS instructor_name,
+                   i.photo_url, i.bio,
+                   COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+                   COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   i.max_travel_minutes
+            FROM instructor_availability ia
+            JOIN instructors i ON i.id = ia.instructor_id
+            WHERE ia.active = true
+              AND i.active  = true
+              AND i.email  != 'demo@coachcarter.uk'
+              AND i.school_id = ${schoolId}
+            ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
+          `
+        : await sql`
+            SELECT ia.instructor_id, ia.day_of_week,
+                   ia.start_time::text AS start_time,
+                   ia.end_time::text   AS end_time,
+                   i.name AS instructor_name,
+                   i.photo_url, i.bio,
+                   COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+                   COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   i.max_travel_minutes
+            FROM instructor_availability ia
+            JOIN instructors i ON i.id = ia.instructor_id
+            WHERE ia.active = true
+              AND i.active  = true
+              AND i.email  != 'demo@coachcarter.uk'
+              AND i.school_id = ${schoolId}
+              AND (i.offered_lesson_types IS NULL OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
+            ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
+          `);
 
     // 2. Load all confirmed/completed bookings in the date range
     const bookings = instructor_id
