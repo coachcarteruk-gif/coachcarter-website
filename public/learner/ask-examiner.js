@@ -8,10 +8,6 @@ let isSending = false;
 // ── Auth ──
 window.addEventListener('DOMContentLoaded', () => {
   AUTH = ccAuth.getAuth();
-  if (!AUTH) {
-    window.location.href = '/learner/login.html?redirect=/learner/ask-examiner.html';
-    return;
-  }
   // Enter key to send
   document.getElementById('chat-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -67,10 +63,9 @@ async function sendMessage(text) {
   scrollToBottom();
 
   try {
-    const res = await ccAuth.fetchAuthed('/api/ask-examiner', {
+    const res = await fetch('/api/ask-examiner', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: conversationHistory })
     });
 
@@ -159,7 +154,7 @@ function appendMessage(role, text) {
 
   const avatar = document.createElement('div');
   avatar.className = 'msg-avatar';
-  avatar.textContent = role === 'assistant' ? 'CC' : (AUTH.user?.name?.[0]?.toUpperCase() || 'U');
+  avatar.textContent = role === 'assistant' ? 'CC' : (AUTH?.user?.name?.[0]?.toUpperCase() || 'U');
 
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble';

@@ -21,10 +21,6 @@ const ANSWER_LABELS = {
 // ── Auth ──
 window.addEventListener('DOMContentLoaded', () => {
   AUTH = ccAuth.getAuth();
-  if (!AUTH) {
-    window.location.href = '/learner/login.html?redirect=/learner/examiner-quiz.html';
-    return;
-  }
   loadScenarios();
 });
 

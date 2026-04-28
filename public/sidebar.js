@@ -381,6 +381,8 @@
     if (context !== 'learner' && context !== 'instructor') return '';
     var items = navItems[context];
     if (!items) return '';
+    var _s2; try { _s2 = JSON.parse(localStorage.getItem('cc_learner') || 'null'); } catch(e) {}
+    var isLoggedIn2 = !!_s2;
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       if (!item || !item.children) continue;
@@ -392,6 +394,7 @@
       var html = '<div class="cc-sub-tabs">';
       for (var j = 0; j < item.children.length; j++) {
         var child = item.children[j];
+        if (child.authOnly && !isLoggedIn2) continue;
         var active = isActive(child.href, []) ? ' active' : '';
         html += '<a href="' + child.href + '" class="cc-sub-tab' + active + '">' + child.label + '</a>';
       }

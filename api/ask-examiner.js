@@ -150,7 +150,6 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const user = verifyAuth(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
   const { messages } = req.body;
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -163,8 +162,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Build personalised context from learner's competency + onboarding data
-    const learnerContext = await buildLearnerContext(user.id);
+    const learnerContext = user ? await buildLearnerContext(user.id) : '';
     const personalizedPrompt = SYSTEM_PROMPT + learnerContext;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
