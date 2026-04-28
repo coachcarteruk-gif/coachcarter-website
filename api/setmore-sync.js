@@ -16,7 +16,7 @@ const SERVICE_MAP = {
   '2ed2b2e6-37a5-45d1-ae00-5a9d1f1ab98e': { realMinutes: 90,  slug: 'standard' }, // 1.5hr Lesson
   '7617c797-c105-435c-b228-55fc7407b29c': { realMinutes: 90,  slug: 'standard' }, // 1.5 Pre-Paid Lesson
   '35805e49-94e7-40d5-bfb4-fd7329a5d3e0': { realMinutes: 120, slug: '2hr' },      // 2hr Lesson
-  '5b966cec-ad96-4897-afd3-020ac089a571': { realMinutes: 165, slug: '3hr' },      // 3hr Lesson
+  '5b966cec-ad96-4897-afd3-020ac089a571': { realMinutes: 180, slug: '3hr' },      // 3hr Lesson
   '3bc98ee4-5efa-4935-b8c5-7be4496e2225': { realMinutes: 60,  slug: '1hr' },      // Reading Test + 1hr
   'f92268da-e2cc-4661-8cdd-82afa1b767a0': { realMinutes: 60,  slug: 'trial' },    // Free Trial
 };
@@ -109,7 +109,7 @@ async function setSyncError(sql, instructorId, message) {
 // ── Fallback duration logic ─────────────────────────────────────────────────
 // Setmore adds a 30-min buffer to every service. When we don't recognise a
 // service_key we subtract the buffer and infer the lesson type from the result.
-const DURATION_TO_SLUG = { 60: '1hr', 90: 'standard', 120: '2hr', 165: '3hr' };
+const DURATION_TO_SLUG = { 60: '1hr', 90: 'standard', 120: '2hr', 180: '3hr' };
 const SETMORE_BUFFER_MINUTES = 30;
 
 function inferFromDuration(rawDuration) {

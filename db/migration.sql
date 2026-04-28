@@ -745,7 +745,7 @@ ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS franchise_fee_pence INTE
 -- Additional lesson types from Setmore (3hr active, others inactive)
 INSERT INTO lesson_types (name, slug, duration_minutes, price_pence, colour, active, sort_order)
 VALUES
-  ('3-Hour Lesson', '3hr', 165, 16500, '#ef4444', true, 3),
+  ('3-Hour Lesson', '3hr', 180, 16500, '#ef4444', true, 3),
   ('1-Hour Lesson', '1hr', 60, 5500, '#f59e0b', false, 4),
   ('Free Trial',    'trial', 60, 0, '#10b981', false, 5)
 ON CONFLICT (slug) DO NOTHING;
