@@ -518,7 +518,7 @@ function renderFeed() {
       html += `<div class="feed-date-header">${dateLabel}</div>`;
     }
 
-    const timeStr = `${s.start_time.slice(0,5)} – ${s.end_time.slice(0,5)}`;
+    const timeStr = s.start_time.slice(0, 5);
     const colour = s.colour || (selectedLessonType ? selectedLessonType.colour : 'var(--accent)');
     const avatar = s.instructor_avatar
       ? `<span class="slot-avatar"><img src="${esc(s.instructor_avatar)}" alt=""></span>`
