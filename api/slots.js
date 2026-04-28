@@ -73,6 +73,7 @@ function verifyAuth(req) {
 module.exports = async (req, res) => {
   const action = req.query.action;
   if (action === 'available')    return handleAvailable(req, res);
+  if (action === 'durations-for-slot') return handleDurationsForSlot(req, res);
   if (action === 'book')         return handleBook(req, res);
   if (action === 'checkout-slot') return handleCheckoutSlot(req, res);
   if (action === 'checkout-slot-guest') return handleCheckoutSlotGuest(req, res);
@@ -582,6 +583,231 @@ async function handleAvailable(req, res) {
     console.error('slots available error:', err);
     reportError('/api/slots', err);
     return res.status(500).json({ error: 'Failed to generate slots', details: 'Internal server error' });
+  }
+}
+
+// ── GET /api/slots?action=durations-for-slot ─────────────────────────────────
+// For a given (instructor, date, start_time), returns every active lesson
+// type for the school with a `fits` boolean + reason. Powers the slot-first
+// booking modal: the user clicks a slot, we tell them which durations fit.
+//
+// Query params:
+//   instructor_id     (required, integer)
+//   date              (required, YYYY-MM-DD)
+//   start_time        (required, HH:MM or HH:MM:SS)
+//   school_id         (optional, default 1)
+//   pickup_postcode   (optional) — when present, runs travel-time check
+//
+// Returns: { instructor_id, date, start_time, durations: [{lesson_type_id,
+//   slug, name, duration_minutes, price_pence, colour, fits, reason}] }
+async function handleDurationsForSlot(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { instructor_id, date, start_time, school_id, pickup_postcode } = req.query;
+  const schoolId = parseInt(school_id) || 1;
+  const instructorId = parseInt(instructor_id);
+
+  if (!instructorId || !date || !start_time) {
+    return res.status(400).json({ error: 'instructor_id, date and start_time are required' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+  }
+  if (!/^\d{2}:\d{2}(:\d{2})?$/.test(start_time)) {
+    return res.status(400).json({ error: 'Invalid start_time format. Use HH:MM' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Load all active lesson types for this school, excluding the free-trial
+    // type (free trials have their own dedicated flow at /free-trial.html).
+    const lessonTypes = await sql`
+      SELECT id, slug, name, duration_minutes, price_pence, colour
+      FROM lesson_types
+      WHERE school_id = ${schoolId}
+        AND active = true
+        AND slug != 'trial'
+      ORDER BY duration_minutes ASC
+    `;
+    if (lessonTypes.length === 0) {
+      return res.json({ instructor_id: instructorId, date, start_time, durations: [] });
+    }
+
+    // Load instructor + their availability windows for that day-of-week.
+    const dayOfWeek = new Date(date + 'T00:00:00Z').getUTCDay();
+    const [instructor] = await sql`
+      SELECT i.id, i.offered_lesson_types,
+             COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+             COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+             i.max_travel_minutes
+      FROM instructors i
+      WHERE i.id = ${instructorId}
+        AND i.school_id = ${schoolId}
+        AND i.active = true
+    `;
+    if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
+
+    const windows = await sql`
+      SELECT start_time::text AS start_time, end_time::text AS end_time
+      FROM instructor_availability
+      WHERE instructor_id = ${instructorId}
+        AND day_of_week = ${dayOfWeek}
+        AND active = true
+    `;
+
+    const slotStart = timeToMinutes(start_time);
+    const buffer = parseInt(instructor.buffer_minutes) || 0;
+    const offered = instructor.offered_lesson_types; // null = all, otherwise JSONB array of slugs
+
+    // Find the availability window covering this start time (so we know how
+    // long the door is open for).
+    let windowEnd = null;
+    for (const w of windows) {
+      const ws = timeToMinutes(w.start_time);
+      const we = timeToMinutes(w.end_time);
+      if (slotStart >= ws && slotStart < we) { windowEnd = we; break; }
+    }
+
+    // Notice cutoff: how soon-from-now the slot starts.
+    const slotDateTime = new Date(date + 'T00:00:00Z');
+    slotDateTime.setUTCHours(Math.floor(slotStart / 60), slotStart % 60, 0, 0);
+    const hoursUntilSlot = (slotDateTime - new Date()) / 3600000;
+    const violatesNotice = hoursUntilSlot < (parseInt(instructor.min_booking_notice_hours) || 0);
+
+    // Same-day blocks (bookings + reservations + pending offers + external).
+    const sameDayBookings = await sql`
+      SELECT start_time::text AS start_time, end_time::text AS end_time, pickup_address
+      FROM lesson_bookings
+      WHERE scheduled_date = ${date}
+        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND instructor_id = ${instructorId}
+        AND school_id = ${schoolId}
+    `;
+    let reservations = [];
+    try {
+      reservations = await sql`
+        SELECT start_time::text AS start_time, end_time::text AS end_time
+        FROM slot_reservations
+        WHERE scheduled_date = ${date}
+          AND expires_at > NOW()
+          AND instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
+      `;
+    } catch (_) {}
+    let pendingOffers = [];
+    try {
+      pendingOffers = await sql`
+        SELECT start_time::text AS start_time, end_time::text AS end_time
+        FROM lesson_offers
+        WHERE scheduled_date = ${date}
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
+      `;
+    } catch (_) {}
+    let externalEvents = [];
+    try {
+      externalEvents = await sql`
+        SELECT start_time::text AS start_time, end_time::text AS end_time, is_all_day
+        FROM instructor_external_events
+        WHERE event_date = ${date}
+          AND instructor_id = ${instructorId}
+      `;
+    } catch (_) {}
+
+    // If an all-day external event blocks this date, every duration is a clash.
+    const allDayBlocked = externalEvents.some(e => e.is_all_day);
+
+    // Convert all blocks to {start, end, postcode} in minutes.
+    const blocks = [];
+    for (const b of sameDayBookings) {
+      blocks.push({ start: timeToMinutes(b.start_time), end: timeToMinutes(b.end_time), postcode: b.pickup_address ? extractPostcode(b.pickup_address) : null });
+    }
+    for (const r of reservations) {
+      blocks.push({ start: timeToMinutes(r.start_time), end: timeToMinutes(r.end_time), postcode: null });
+    }
+    for (const o of pendingOffers) {
+      blocks.push({ start: timeToMinutes(o.start_time), end: timeToMinutes(o.end_time), postcode: null });
+    }
+    for (const e of externalEvents) {
+      if (!e.is_all_day && e.start_time && e.end_time) {
+        blocks.push({ start: timeToMinutes(e.start_time), end: timeToMinutes(e.end_time), postcode: null });
+      }
+    }
+
+    // Travel-time geocoding (only when a learner postcode is provided).
+    const learnerPostcode = pickup_postcode ? pickup_postcode.toUpperCase().replace(/\s+/g, ' ') : null;
+    let coordMap = {};
+    if (learnerPostcode) {
+      try {
+        const allPostcodes = new Set([learnerPostcode]);
+        for (const b of blocks) if (b.postcode) allPostcodes.add(b.postcode);
+        coordMap = await bulkGeocodeUK([...allPostcodes]);
+      } catch (_) { /* skip travel filter if geocoding fails */ }
+    }
+
+    // For each lesson type, decide fits + reason.
+    const durations = lessonTypes.map(lt => {
+      const slotEnd = slotStart + lt.duration_minutes;
+      let fits = true;
+      let reason = null;
+
+      if (allDayBlocked) {
+        fits = false; reason = 'clash';
+      } else if (windowEnd === null || slotEnd > windowEnd) {
+        fits = false; reason = 'window';
+      } else if (violatesNotice) {
+        fits = false; reason = 'notice';
+      } else if (offered != null && Array.isArray(offered) && !offered.includes(lt.slug)) {
+        fits = false; reason = 'not_offered';
+      } else if (blocks.some(b => slotStart < (b.end + buffer) && slotEnd > b.start)) {
+        fits = false; reason = 'clash';
+      } else if (learnerPostcode && coordMap[learnerPostcode]) {
+        const learnerCoord = coordMap[learnerPostcode];
+        let closestBefore = null, closestAfter = null;
+        for (const b of blocks) {
+          if (b.end <= slotStart && b.postcode && coordMap[b.postcode]) {
+            if (!closestBefore || b.end > closestBefore.end) closestBefore = b;
+          }
+          if (b.start >= slotEnd && b.postcode && coordMap[b.postcode]) {
+            if (!closestAfter || b.start < closestAfter.start) closestAfter = b;
+          }
+        }
+        if (closestBefore) {
+          const prev = coordMap[closestBefore.postcode];
+          const drive = estimateDriveMinutes(prev.lat, prev.lon, learnerCoord.lat, learnerCoord.lon);
+          if ((slotStart - closestBefore.end) < drive + TRAVEL_BUFFER_MINUTES) { fits = false; reason = 'travel'; }
+        }
+        if (fits && closestAfter) {
+          const next = coordMap[closestAfter.postcode];
+          const drive = estimateDriveMinutes(learnerCoord.lat, learnerCoord.lon, next.lat, next.lon);
+          if ((closestAfter.start - slotEnd) < drive + TRAVEL_BUFFER_MINUTES) { fits = false; reason = 'travel'; }
+        }
+      }
+
+      return {
+        lesson_type_id: lt.id,
+        slug: lt.slug,
+        name: lt.name,
+        duration_minutes: lt.duration_minutes,
+        price_pence: lt.price_pence,
+        colour: lt.colour,
+        fits,
+        reason
+      };
+    });
+
+    return res.json({
+      instructor_id: instructorId,
+      date,
+      start_time,
+      durations
+    });
+  } catch (err) {
+    reportError('/api/slots?action=durations-for-slot', err);
+    return res.status(500).json({ error: 'Failed to compute durations', details: 'Internal server error' });
   }
 }
 
