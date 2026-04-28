@@ -809,7 +809,21 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
 
     document.getElementById('mdLoadingRow').style.display = 'none';
 
+    window.posthog && posthog.capture('durations_loaded', {
+      instructor_id: slot.instructor_id,
+      date: slot.date,
+      start_time: slot.start_time,
+      fits_count: fitting.length,
+      total_count: durations.length
+    });
+
     if (fitting.length === 0) {
+      window.posthog && posthog.capture('slot_no_durations_fit', {
+        instructor_id: slot.instructor_id,
+        date: slot.date,
+        start_time: slot.start_time,
+        reasons: Array.from(new Set(durations.map(d => d.reason).filter(Boolean)))
+      });
       // No-fit empty state.
       const reasons = Array.from(new Set(durations.map(d => d.reason).filter(Boolean)));
       const reasonText = reasons.includes('travel') ? 'travel time prevents any duration here'
@@ -832,6 +846,15 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
       document.getElementById('mdSingleType').textContent = `${fitting[0].name} — ${formatHours(fitting[0].duration_minutes)} — £${(fitting[0].price_pence / 100).toFixed(2)}`;
       document.getElementById('mdSingleTypeRow').style.display = 'flex';
       applyLessonTypeToModal(fitting[0], isGuest, needsProfileFields);
+      window.posthog && posthog.capture('duration_selected', {
+        lesson_type_slug: fitting[0].slug,
+        duration_minutes: fitting[0].duration_minutes,
+        price_pence: fitting[0].price_pence,
+        was_preselected: true,
+        source: 'single_option',
+        fits: true,
+        all_options: durations.map(d => d.slug)
+      });
       return;
     }
 
@@ -855,26 +878,50 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
     // learner default) → first fitting (smallest). No expiry on the
     // localStorage value — driving lessons are infrequent, want stickiness.
     let preselected = null;
+    let preselectSource = 'default';
     if (preselectedTypeSlug) {
       preselected = fitting.find(d => d.slug === preselectedTypeSlug);
+      if (preselected) preselectSource = 'url_param';
     } else if (preselectedTypeId) {
       preselected = fitting.find(d => String(d.lesson_type_id) === String(preselectedTypeId));
+      if (preselected) preselectSource = 'url_param';
     }
     if (!preselected) {
       try {
         const lastId = localStorage.getItem('cc_last_lesson_type_id');
-        if (lastId) preselected = fitting.find(d => String(d.lesson_type_id) === lastId);
+        if (lastId) {
+          preselected = fitting.find(d => String(d.lesson_type_id) === lastId);
+          if (preselected) preselectSource = 'localStorage';
+        }
       } catch (_) { /* localStorage may be unavailable in private mode */ }
     }
     if (!preselected) preselected = fitting[0];
     select.value = String(preselected.lesson_type_id);
     document.getElementById('mdDurationPicker').style.display = 'flex';
     applyLessonTypeToModal(preselected, isGuest, needsProfileFields);
+    window.posthog && posthog.capture('duration_selected', {
+      lesson_type_slug: preselected.slug,
+      duration_minutes: preselected.duration_minutes,
+      price_pence: preselected.price_pence,
+      was_preselected: true,
+      source: preselectSource,
+      fits: true,
+      all_options: durations.map(d => d.slug)
+    });
 
     select.onchange = function () {
       const lt = durations.find(d => String(d.lesson_type_id) === select.value);
       if (!lt || !lt.fits) return; // disabled options shouldn't be selectable
       applyLessonTypeToModal(lt, isGuest, needsProfileFields);
+      window.posthog && posthog.capture('duration_selected', {
+        lesson_type_slug: lt.slug,
+        duration_minutes: lt.duration_minutes,
+        price_pence: lt.price_pence,
+        was_preselected: false,
+        source: 'manual',
+        fits: true,
+        all_options: durations.map(d => d.slug)
+      });
     };
   } catch (err) {
     console.error('durations-for-slot failed:', err);
@@ -899,7 +946,10 @@ function setLastLessonType(lt) {
 
 function closeBookModal() {
   const wasSuccess = document.getElementById('bookSuccessStep').style.display !== 'none';
-  window.posthog && posthog.capture('booking_modal_closed', { completed: wasSuccess });
+  window.posthog && posthog.capture('booking_modal_closed', {
+    completed: wasSuccess,
+    had_duration_selected: !!selectedLessonType
+  });
   clearSlotTimer();
   document.getElementById('bookModal').classList.remove('open');
   document.getElementById('repeatToggle').checked = false;
