@@ -1499,6 +1499,16 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.94 — Auto-scroll to free-trial details form on slot click (28 April 2026)
+
+QoL fix on `/free-trial.html`. Before: picking a slot tinted it green but left the learner scrolled at the slot picker, with the "Your details" form below the fold and the only CTA out of view — common cause of drop-off. After: `selectSlot()` smooth-scrolls `#step-2-heading` into view so the form lands at the top of the viewport with the submit button visible.
+
+Considered the alternative of collapsing other days, but auto-scroll is simpler, mobile-friendly, and doesn't hide context if the learner wants to glance back at their other options.
+
+**Files changed:** `public/free-trial.js`
+
+---
+
 ## 2.93 — Slot-first booking UX (28 April 2026)
 
 Inverts the booking flow so learners pick the **slot first** and the **lesson length second**, instead of the other way around. The lesson-type pill bar at the top of `book.html` is gone; the slot feed now renders at the smallest active duration; clicking a slot opens the modal in a "Checking durations…" state, then populates a `<select>` of every active lesson type with prices (non-fitting durations stay in the dropdown but disabled, with a reason suffix — `travel`, `clash`, `too long`, `short notice`, `not offered`).
