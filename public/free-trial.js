@@ -149,6 +149,14 @@
     var submit = document.getElementById('submitBtn');
     submit.disabled = false;
     submit.textContent = 'Book my free trial';
+
+    // QoL: auto-scroll to the details form so the learner can immediately
+    // see what to do next. Without this, the slot just changes colour and
+    // the form stays out of view — common cause of drop-off.
+    var formAnchor = document.getElementById('step-2-heading');
+    if (formAnchor && typeof formAnchor.scrollIntoView === 'function') {
+      formAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
   function updateSummary() {
