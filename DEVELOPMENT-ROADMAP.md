@@ -1499,6 +1499,34 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.93 — Slot-first booking UX (28 April 2026)
+
+Inverts the booking flow so learners pick the **slot first** and the **lesson length second**, instead of the other way around. The lesson-type pill bar at the top of `book.html` is gone; the slot feed now renders at the smallest active duration; clicking a slot opens the modal in a "Checking durations…" state, then populates a `<select>` of every active lesson type with prices (non-fitting durations stay in the dropdown but disabled, with a reason suffix — `travel`, `clash`, `too long`, `short notice`, `not offered`).
+
+**Rationale:** with no live customers yet, the council's "wait for funnel data" objection didn't apply, and the council's other concerns (4× OpenRouteService cost on feed render, irreversible refactor) turned out to be moot — the travel-time check uses cached postcodes.io geocoding + a heuristic (no OpenRouteService on feed at all), and the new endpoint is purely additive so a revert is one boolean flip away. Setmore-imported bookings continue to act as travel-time / clash blocks because they write to the same `lesson_bookings` columns the new endpoint reads — and Setmore is being retired anyway.
+
+**Backend (additive only — `available` keeps its old shape):**
+- New `?min_duration_only=1` flag on `?action=available`. When set, `lesson_type_id` is treated as grid-spacing only and the `offered_lesson_types` filter is dropped — so the slot feed shows every active instructor in the school, not only those who offer the (effectively arbitrary) min-duration type.
+- New `?action=durations-for-slot` endpoint. Accepts `instructor_id`, `date`, `start_time`, optional `school_id` and `pickup_postcode`. Returns `{durations: [{lesson_type_id, slug, name, duration_minutes, price_pence, colour, fits, reason}]}` with `reason` ∈ `'window'|'notice'|'not_offered'|'clash'|'travel'|null`. Excludes `slug='trial'` (free trials have their own dedicated flow). Reuses the same window/notice/clash/travel logic as the slot feed but runs it once per click for one slot.
+
+**Frontend:**
+- `book.html`: pill bar removed (CSS + container). Modal gets a duration `<select id="mdLessonTypeSelect">`, plus dedicated rows for the loading state, single-type confirmation, no-fit empty state, and a "Using your usual length" hint.
+- `book.js`: extracted `applyLessonTypeToModal(lt, isGuest, needsProfileFields)` that recomputes price/duration/credit-vs-pay UI for any picked lesson type and rewrites `pendingSlot.end_time` to match the chosen duration. New `loadDurationsForSlot(slot, ...)` fires the new endpoint, sorts fitting durations first, preselects via the chain `?type=` URL slug → `cc_last_lesson_type_id` localStorage → smallest fitting. Repeat-weekly works unchanged (it queries `?action=available` post-pick with the chosen `lesson_type_id`). Reschedule mode bypasses the picker — rescheduled bookings keep their original duration.
+- localStorage `cc_last_lesson_type_id` (no expiry) persists the returning learner's usual choice. Written on credit-path success and just-before Stripe redirect (guest + authed). When honoured, a tiny "Using your usual length" hint shows under the dropdown until the learner manually changes it.
+
+**PostHog funnel events:**
+- `slot_clicked` no longer carries `lesson_type_slug` (not known at click time).
+- New `durations_loaded` (`fits_count`, `total_count`).
+- New `duration_selected` fired on initial preselect and on dropdown change. Carries `lesson_type_slug`, `duration_minutes`, `price_pence`, `was_preselected`, `source` (`url_param`|`localStorage`|`single_option`|`default`|`manual`), `fits`, `all_options`.
+- New `slot_no_durations_fit` for the empty-state case, with `reasons` array.
+- `booking_modal_closed` extended with `had_duration_selected` boolean.
+
+**Rollback path:** every change is gated by either the `min_duration_only` flag (additive) or the new endpoint (additive). Reverting the merge commit restores length-first UX cleanly; the backend endpoint can stay (harmless).
+
+**Files changed:** `api/slots.js`, `public/learner/book.js`, `public/learner/book.html`, `PROJECT.md`, `docs/navigation.md`, `CLAUDE.md`, `MIGRATION-PLAN.md`, `DEVELOPMENT-ROADMAP.md`
+
+---
+
 ## 2.92 — Booking page spectator mode + inline free-trial CTA (28 April 2026)
 
 Drops the login wall in front of `/learner/book.html` so visitors can browse real availability before committing to an account. The page already supported guest checkout via `?action=checkout-slot-guest` — the wall was purely link-level (every "Book" CTA routed through `/learner/login.html?redirect=...`). Repointing the CTAs reveals the existing guest path.

@@ -34,6 +34,11 @@ let pendingReschedule = null; // { bookingId, date, start, end, instructorName, 
 let lastBookingId = null;
 let learnerProfile = { phone: '', pickup_address: '' };
 let hasFreeTrialSlot = false; // true if current school has a lesson_type with slug='trial'
+// Slot-first state: full list of selectable lesson types (excludes 'trial')
+// and the smallest active duration in minutes — used for slot-feed grid spacing.
+let availableLessonTypes = [];
+let slotFeedDuration = 60; // sensible default; updated from availableLessonTypes
+let slotFeedLessonTypeId = null; // id of the lesson type whose duration we use for grid spacing
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
@@ -217,65 +222,24 @@ async function loadLessonTypes() {
     if (!res.ok) throw new Error(data.error);
     lessonTypes = data.lesson_types || [];
     hasFreeTrialSlot = lessonTypes.some(lt => lt && lt.slug === 'trial');
-    // Auto-select from ?type=slug URL param, or default to first
-    // When arriving via /book/:slug (no ?type=), don't auto-select — let learner choose
-    if (lessonTypes.length > 0 && !selectedLessonType) {
-      if (preselectedTypeId) {
-        selectedLessonType = lessonTypes.find(lt => lt.id === parseInt(preselectedTypeId)) || lessonTypes[0];
-      } else if (preselectedTypeSlug) {
-        selectedLessonType = lessonTypes.find(lt => lt.slug === preselectedTypeSlug) || lessonTypes[0];
-      } else {
-        selectedLessonType = lessonTypes[0];
-      }
+    // Slot-first: cache the full bookable list (sans trial) and pick the
+    // smallest active duration to drive feed grid spacing. The duration
+    // dropdown inside the booking modal is built from this list.
+    availableLessonTypes = lessonTypes.filter(lt => lt && lt.slug !== 'trial');
+    if (availableLessonTypes.length > 0) {
+      const minLt = availableLessonTypes.reduce((a, b) => (a.duration_minutes <= b.duration_minutes ? a : b));
+      slotFeedDuration = minLt.duration_minutes;
+      slotFeedLessonTypeId = minLt.id;
     }
-    renderLessonTypePills();
+    // Slot-first: selectedLessonType is set by the modal's duration picker
+    // when the user clicks a slot, not at page-load time. The ?type= URL
+    // params (preselectedTypeSlug / preselectedTypeId) are read directly by
+    // loadDurationsForSlot to drive the dropdown preselect.
   } catch (err) {
     console.error('Failed to load lesson types:', err);
     lessonTypes = [{ id: null, name: 'Standard Lesson', slug: 'standard', duration_minutes: 90, price_pence: DEFAULT_PRICE_PENCE, colour: '#3b82f6' }];
-    selectedLessonType = lessonTypes[0];
   }
 }
-
-function renderLessonTypePills() {
-  const container = document.getElementById('lessonTypePills');
-  if (!container || lessonTypes.length <= 1) return;
-  const needsPrompt = !selectedLessonType && lessonTypes.length > 1;
-  // When showing prompt, switch to vertical card layout
-  if (needsPrompt) {
-    container.style.flexDirection = 'column';
-    container.style.overflow = 'visible';
-    container.style.gap = '8px';
-  } else {
-    container.style.flexDirection = '';
-    container.style.overflow = '';
-    container.style.gap = '';
-  }
-  let html = '';
-  if (needsPrompt) {
-    html += '<div style="font-size:0.85rem;font-weight:700;color:var(--primary)">Choose your lesson length</div>';
-  }
-  html += (needsPrompt ? '<div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none">' : '');
-  html += lessonTypes.map(lt => {
-    const hrs = lt.duration_minutes / 60;
-    const hrsStr = hrs % 1 === 0 ? `${hrs}hr` : `${hrs.toFixed(1)}hr`;
-    const priceStr = '£' + (lt.price_pence / 100).toFixed(0);
-    const isActive = selectedLessonType && selectedLessonType.id === lt.id;
-    return `<button class="lt-pill${isActive ? ' active' : ''}" data-action="select-lesson-type" data-lt-id="${lt.id}" style="--lt-colour: ${lt.colour}">
-      ${esc(lt.name)} · ${hrsStr} · ${priceStr}
-    </button>`;
-  }).join('');
-  html += (needsPrompt ? '</div>' : '');
-  container.innerHTML = html;
-}
-
-function selectLessonType(id) {
-  selectedLessonType = lessonTypes.find(lt => lt.id === id) || lessonTypes[0];
-  renderLessonTypePills();
-  slotCache = {};
-  loadedRanges = [];
-  initFeed();
-}
-window.selectLessonType = selectLessonType;
 
 // ─── Instructors ─────────────────────────────────────────────────────────────
 async function loadInstructors() {
@@ -432,16 +396,8 @@ function getLearnerPostcode() {
 function onFilterChange() { loadedRanges = []; slotCache = {}; loadLessonTypes(); initFeed(); }
 
 async function initFeed() {
-  // If no lesson type selected yet, show a prompt instead of loading slots
-  if (!selectedLessonType && lessonTypes.length > 1) {
-    document.getElementById('calContent').innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">👆</div>
-        <h3>Select a lesson length</h3>
-        <p>Choose a lesson type above to see available time slots.</p>
-      </div>`;
-    return;
-  }
+  // Slot-first: feed loads at the smallest active duration regardless of any
+  // single "selected" lesson type. The duration is picked inside the modal.
   feedFrom = new Date(); feedFrom.setHours(0,0,0,0);
   feedTo = addDaysLocal(feedFrom, FEED_CHUNK_DAYS - 1);
   const maxDate = addDaysLocal(feedFrom, FEED_MAX_DAYS);
@@ -463,8 +419,12 @@ async function fetchFeedSlots(fromDate, toDate) {
   if (to > maxDate) to = maxDate;
 
   const instructorId = document.getElementById('instructorFilter').value;
-  const ltId = selectedLessonType && selectedLessonType.id ? selectedLessonType.id : '';
-  const cacheKey = `${from}|${to}|${instructorId}|${ltId}`;
+  // Slot-first: feed renders at the smallest active duration, agnostic of which
+  // lesson type the learner will eventually pick. The grid lesson_type_id sets
+  // the slot length; min_duration_only=1 tells the API to skip the
+  // offered_lesson_types filter (per-duration check happens on slot click).
+  const ltId = slotFeedLessonTypeId || (selectedLessonType && selectedLessonType.id) || '';
+  const cacheKey = `${from}|${to}|${instructorId}|${ltId}|mdo`;
   if (loadedRanges.includes(cacheKey)) return true;
 
   const fromD = new Date(from + 'T00:00:00');
@@ -481,7 +441,7 @@ async function fetchFeedSlots(fromDate, toDate) {
   try {
     let travelHidden = 0;
     for (const chunk of chunks) {
-      let url = `/api/slots?action=available&from=${chunk.from}&to=${chunk.to}`;
+      let url = `/api/slots?action=available&from=${chunk.from}&to=${chunk.to}&min_duration_only=1`;
       if (instructorId) url += `&instructor_id=${instructorId}`;
       if (ltId) url += `&lesson_type_id=${ltId}`;
       const pc = getLearnerPostcode();
@@ -623,18 +583,70 @@ function showLoading() { document.getElementById('calContent').innerHTML = '<div
 function showError(msg) { document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`; document.getElementById('feedFooter').style.display = 'none'; }
 
 // ─── Book modal ──────────────────────────────────────────────────────────────
+// Apply a chosen lesson type to all the price/duration/credit/pay UI inside
+// the modal. Called from openBookModal after dropdown selection (or auto-pick
+// when only one option fits). Pure UI write — no side effects beyond the DOM
+// and selectedLessonType.
+function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
+  selectedLessonType = lt;
+  const ltDuration = lt.duration_minutes;
+  // Recompute pendingSlot.end_time to match the picked duration. Backend
+  // handlers (handleBook, handleCheckoutSlot, handleCheckoutSlotGuest) read
+  // start_time + end_time from the body — they must reflect the user's choice,
+  // not the grid's smallest-duration end-time.
+  if (pendingSlot && pendingSlot.start_time) {
+    const [h, m] = pendingSlot.start_time.split(':').map(Number);
+    const startMins = h * 60 + m;
+    const endMins = startMins + ltDuration;
+    const eh = Math.floor(endMins / 60);
+    const em = endMins % 60;
+    pendingSlot.end_time = `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+    document.getElementById('mdTime').textContent = `${pendingSlot.start_time} – ${pendingSlot.end_time}`;
+  }
+  const ltHrs = ltDuration / 60;
+  const ltHrsStr = ltHrs % 1 === 0 ? `${ltHrs} hour${ltHrs !== 1 ? 's' : ''}` : `${ltHrs.toFixed(1)} hours`;
+  document.getElementById('mdDuration').textContent = ltHrsStr;
+  document.getElementById('mdDeductHours').textContent = ltHrsStr;
+  const ltPrice = lt.price_pence != null ? lt.price_pence : DEFAULT_PRICE_PENCE;
+  const ltPriceStr = '£' + (ltPrice / 100).toFixed(2);
+  document.getElementById('mdPayAmount').textContent = ltPriceStr;
+  document.getElementById('payBtnLabel').textContent = `Pay ${ltPriceStr} & book`;
+  document.getElementById('paySpinner').style.display = 'none';
+  document.getElementById('btnPayAndBook').disabled = false;
+
+  // Credit-vs-pay path is duration-dependent for authed users.
+  if (isGuest) {
+    document.getElementById('modalCreditPath').style.display = 'none';
+    document.getElementById('modalPayPath').style.display = 'block';
+  } else if (!paymentsEnabled) {
+    document.getElementById('modalCreditPath').style.display = 'block';
+    document.getElementById('modalPayPath').style.display = 'none';
+    document.getElementById('mdDeductHours').textContent = 'free — no credits required';
+    document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
+    document.getElementById('bookSpinner').style.display = 'none';
+    document.getElementById('btnConfirmBook').disabled = false;
+  } else {
+    const hasCreds = balanceMinutes >= ltDuration;
+    document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
+    document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
+    if (hasCreds) {
+      document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
+      document.getElementById('bookSpinner').style.display = 'none';
+      document.getElementById('btnConfirmBook').disabled = false;
+    }
+    updateBalanceLine(ltDuration);
+  }
+}
+
 function openBookModal(el) {
   const isGuest = !auth;
-
-  // Authenticated users with incomplete profile see inline fields (same as guest) instead of being blocked
   const needsProfileFields = !isGuest && !isProfileComplete();
 
-  // If in reschedule mode, redirect to reschedule confirmation (auth required)
+  // Reschedule mode bypasses the duration picker — rescheduled bookings keep their original duration.
   if (pendingReschedule) {
     if (isGuest) { if (window.ccAuth) window.ccAuth.requireAuth(); return; }
-    const slotInstructorId = el.dataset.instructorId;
     openRescheduleConfirm({
-      instructor_id: slotInstructorId,
+      instructor_id: el.dataset.instructorId,
       date:          el.dataset.date,
       start_time:    el.dataset.start,
       end_time:      el.dataset.end
@@ -643,61 +655,51 @@ function openBookModal(el) {
   }
 
   window.posthog && posthog.capture('slot_clicked', {
-    lesson_type_slug: selectedLessonType?.slug, instructor_id: el.dataset.instructorId,
-    date: el.dataset.date, is_guest: isGuest
+    instructor_id: el.dataset.instructorId,
+    date: el.dataset.date,
+    is_guest: isGuest
   });
 
   pendingSlot = {
     instructor_id:   el.dataset.instructorId,
     date:            el.dataset.date,
     start_time:      el.dataset.start,
-    end_time:        el.dataset.end,
+    end_time:        el.dataset.end, // grid end-time; will be overwritten when duration is picked
     instructor_name: el.dataset.instructorName
   };
   const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
   document.getElementById('mdDate').textContent = dateDisplay;
-  document.getElementById('mdTime').textContent = `${pendingSlot.start_time} – ${pendingSlot.end_time}`;
+  document.getElementById('mdTime').textContent = pendingSlot.start_time;
   document.getElementById('mdInstructor').textContent = pendingSlot.instructor_name;
+  document.getElementById('mdDropoff').value = '';
 
-  const ltName     = selectedLessonType ? selectedLessonType.name : 'Standard Lesson';
-  const ltDuration = selectedLessonType ? selectedLessonType.duration_minutes : 90;
-  const ltHrs = ltDuration / 60;
-  const ltHrsStr = ltHrs % 1 === 0 ? `${ltHrs} hour${ltHrs !== 1 ? 's' : ''}` : `${ltHrs.toFixed(1)} hours`;
-  document.getElementById('mdType').textContent = ltName;
-  document.getElementById('mdDuration').textContent = ltHrsStr;
-  document.getElementById('mdDeductHours').textContent = ltHrsStr;
-  const ltPrice    = selectedLessonType ? selectedLessonType.price_pence : DEFAULT_PRICE_PENCE;
-  const ltPriceStr = '£' + (ltPrice / 100).toFixed(2);
-  // Always populate price in pay-path elements (for both guest and authenticated users)
-  document.getElementById('mdPayAmount').textContent = ltPriceStr;
-  document.getElementById('payBtnLabel').textContent = `Pay ${ltPriceStr} & book`;
-  document.getElementById('paySpinner').style.display = 'none';
-  document.getElementById('btnPayAndBook').disabled = false;
+  // Reset duration-picker UI to loading state.
+  document.getElementById('mdDurationPicker').style.display = 'none';
+  document.getElementById('mdSingleTypeRow').style.display = 'none';
+  document.getElementById('mdNoFitRow').style.display = 'none';
+  document.getElementById('mdLoadingRow').style.display = 'flex';
+  document.getElementById('mdDuration').textContent = '—';
+  document.getElementById('btnPayAndBook').disabled = true;
+  document.getElementById('btnConfirmBook') && (document.getElementById('btnConfirmBook').disabled = true);
+  selectedLessonType = null;
 
-  // Guest flow: show guest fields, force pay path, hide repeat/credit options
+  // Guest vs authed UI scaffolding (independent of duration choice).
   if (isGuest) {
     document.getElementById('guestFields').style.display = 'block';
     document.getElementById('repeatSection').style.display = 'none';
-    document.getElementById('modalCreditPath').style.display = 'none';
-    document.getElementById('modalPayPath').style.display = 'block';
-    // Clear previous guest field values (pre-fill name if from shareable link)
     document.getElementById('mdGuestName').value = prefilledName || '';
     document.getElementById('mdGuestEmail').value = '';
     document.getElementById('mdGuestPhone').value = '';
     document.getElementById('mdGuestPickup').value = '';
     document.getElementById('mdGuestTerms').checked = false;
-    // Show the "claim as free trial" CTA only when this school offers a trial lesson type.
-    // We do not pre-check eligibility — the free-trial submit handler returns a friendly
-    // 409 if the email/phone has already used a trial.
     const claimCta = document.getElementById('claimTrialCta');
     if (claimCta) {
       if (hasFreeTrialSlot) {
         claimCta.style.display = 'block';
         window.posthog && posthog.capture('claim_trial_cta_shown', {
           instructor_id: pendingSlot.instructor_id,
-          date: pendingSlot.date,
-          lesson_type_slug: selectedLessonType?.slug
+          date: pendingSlot.date
         });
       } else {
         claimCta.style.display = 'none';
@@ -708,7 +710,6 @@ function openBookModal(el) {
     const claimCta = document.getElementById('claimTrialCta');
     if (claimCta) claimCta.style.display = 'none';
     document.getElementById('repeatSection').style.display = '';
-    // Show profile completion fields if phone or pickup missing
     if (needsProfileFields) {
       document.getElementById('profileFields').style.display = 'block';
       const hasPhone = !!(learnerProfile.phone && learnerProfile.phone.trim());
@@ -720,37 +721,181 @@ function openBookModal(el) {
     } else {
       document.getElementById('profileFields').style.display = 'none';
     }
-    if (!paymentsEnabled) {
-      // Free booking mode — always show credit path, hide pay path
-      document.getElementById('modalCreditPath').style.display = 'block';
-      document.getElementById('modalPayPath').style.display = 'none';
-      document.getElementById('mdDeductHours').textContent = 'free — no credits required';
-      document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
-      document.getElementById('bookSpinner').style.display = 'none';
-      document.getElementById('btnConfirmBook').disabled = false;
-    } else {
-      const hasCreds = balanceMinutes >= ltDuration;
-      document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
-      document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
-      if (hasCreds) {
-        document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
-        document.getElementById('bookSpinner').style.display = 'none';
-        document.getElementById('btnConfirmBook').disabled = false;
-      }
-      updateBalanceLine(ltDuration);
-    }
   }
 
-  document.getElementById('mdDropoff').value = '';
   document.getElementById('bookConfirmStep').style.display = 'block';
   document.getElementById('bookSuccessStep').style.display = 'none';
   document.getElementById('bookModal').classList.add('open');
   startSlotTimer();
+
+  // Fire the duration check.
+  loadDurationsForSlot(pendingSlot, isGuest, needsProfileFields);
+}
+
+// Fetch durations-for-slot, populate the dropdown (or single-type confirmation
+// row), preselect, and call applyLessonTypeToModal. Surfaces a no-fit empty
+// state when nothing's bookable.
+async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
+  const select = document.getElementById('mdLessonTypeSelect');
+  try {
+    let url = `/api/slots?action=durations-for-slot&instructor_id=${encodeURIComponent(slot.instructor_id)}&date=${encodeURIComponent(slot.date)}&start_time=${encodeURIComponent(slot.start_time)}`;
+    const pc = getLearnerPostcode();
+    if (pc) url += `&pickup_postcode=${encodeURIComponent(pc)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load durations');
+
+    const durations = (data.durations || []).slice().sort((a, b) => a.duration_minutes - b.duration_minutes);
+    const fitting = durations.filter(d => d.fits);
+
+    document.getElementById('mdLoadingRow').style.display = 'none';
+
+    window.posthog && posthog.capture('durations_loaded', {
+      instructor_id: slot.instructor_id,
+      date: slot.date,
+      start_time: slot.start_time,
+      fits_count: fitting.length,
+      total_count: durations.length
+    });
+
+    if (fitting.length === 0) {
+      window.posthog && posthog.capture('slot_no_durations_fit', {
+        instructor_id: slot.instructor_id,
+        date: slot.date,
+        start_time: slot.start_time,
+        reasons: Array.from(new Set(durations.map(d => d.reason).filter(Boolean)))
+      });
+      // No-fit empty state.
+      const reasons = Array.from(new Set(durations.map(d => d.reason).filter(Boolean)));
+      const reasonText = reasons.includes('travel') ? 'travel time prevents any duration here'
+                       : reasons.includes('clash')  ? 'this time clashes with an existing booking'
+                       : reasons.includes('window') ? 'this is outside the instructor’s working hours for that length'
+                       : reasons.includes('notice') ? 'too short notice for any duration'
+                       : 'no lesson lengths fit this slot';
+      document.getElementById('mdNoFitText').textContent = reasonText;
+      document.getElementById('mdNoFitRow').style.display = 'flex';
+      document.getElementById('mdDuration').textContent = '—';
+      // Disable both confirm paths; user has to close + pick another slot.
+      document.getElementById('btnPayAndBook').disabled = true;
+      const credBtn = document.getElementById('btnConfirmBook');
+      if (credBtn) credBtn.disabled = true;
+      return;
+    }
+
+    // Auto-collapse when there's only one option for the school AND only one fits.
+    if (durations.length === 1 && fitting.length === 1) {
+      document.getElementById('mdSingleType').textContent = `${fitting[0].name} — ${formatHours(fitting[0].duration_minutes)} — £${(fitting[0].price_pence / 100).toFixed(2)}`;
+      document.getElementById('mdSingleTypeRow').style.display = 'flex';
+      applyLessonTypeToModal(fitting[0], isGuest, needsProfileFields);
+      window.posthog && posthog.capture('duration_selected', {
+        lesson_type_slug: fitting[0].slug,
+        duration_minutes: fitting[0].duration_minutes,
+        price_pence: fitting[0].price_pence,
+        was_preselected: true,
+        source: 'single_option',
+        fits: true,
+        all_options: durations.map(d => d.slug)
+      });
+      return;
+    }
+
+    // Render dropdown — fitting options first, non-fitting disabled with a reason suffix.
+    select.innerHTML = '';
+    for (const d of fitting) {
+      const opt = document.createElement('option');
+      opt.value = String(d.lesson_type_id);
+      opt.textContent = `${d.name} — ${formatHours(d.duration_minutes)} — £${(d.price_pence / 100).toFixed(2)}`;
+      select.appendChild(opt);
+    }
+    for (const d of durations.filter(d => !d.fits)) {
+      const opt = document.createElement('option');
+      opt.value = String(d.lesson_type_id);
+      opt.disabled = true;
+      const why = d.reason === 'travel' ? 'travel' : d.reason === 'clash' ? 'clash' : d.reason === 'window' ? 'too long' : d.reason === 'notice' ? 'short notice' : d.reason === 'not_offered' ? 'not offered' : 'unavailable';
+      opt.textContent = `${d.name} — ${formatHours(d.duration_minutes)} — unavailable (${why})`;
+      select.appendChild(opt);
+    }
+    // Preselect order: ?type= URL slug → cc_last_lesson_type_id (returning
+    // learner default) → first fitting (smallest). No expiry on the
+    // localStorage value — driving lessons are infrequent, want stickiness.
+    let preselected = null;
+    let preselectSource = 'default';
+    if (preselectedTypeSlug) {
+      preselected = fitting.find(d => d.slug === preselectedTypeSlug);
+      if (preselected) preselectSource = 'url_param';
+    } else if (preselectedTypeId) {
+      preselected = fitting.find(d => String(d.lesson_type_id) === String(preselectedTypeId));
+      if (preselected) preselectSource = 'url_param';
+    }
+    if (!preselected) {
+      try {
+        const lastId = localStorage.getItem('cc_last_lesson_type_id');
+        if (lastId) {
+          preselected = fitting.find(d => String(d.lesson_type_id) === lastId);
+          if (preselected) preselectSource = 'localStorage';
+        }
+      } catch (_) { /* localStorage may be unavailable in private mode */ }
+    }
+    if (!preselected) preselected = fitting[0];
+    select.value = String(preselected.lesson_type_id);
+    document.getElementById('mdDurationPicker').style.display = 'flex';
+    const usualHint = document.getElementById('mdUsualHint');
+    if (usualHint) usualHint.style.display = preselectSource === 'localStorage' ? 'block' : 'none';
+    applyLessonTypeToModal(preselected, isGuest, needsProfileFields);
+    window.posthog && posthog.capture('duration_selected', {
+      lesson_type_slug: preselected.slug,
+      duration_minutes: preselected.duration_minutes,
+      price_pence: preselected.price_pence,
+      was_preselected: true,
+      source: preselectSource,
+      fits: true,
+      all_options: durations.map(d => d.slug)
+    });
+
+    select.onchange = function () {
+      const lt = durations.find(d => String(d.lesson_type_id) === select.value);
+      if (!lt || !lt.fits) return; // disabled options shouldn't be selectable
+      // Manual change clears the "using your usual" hint.
+      const usualHintInner = document.getElementById('mdUsualHint');
+      if (usualHintInner) usualHintInner.style.display = 'none';
+      applyLessonTypeToModal(lt, isGuest, needsProfileFields);
+      window.posthog && posthog.capture('duration_selected', {
+        lesson_type_slug: lt.slug,
+        duration_minutes: lt.duration_minutes,
+        price_pence: lt.price_pence,
+        was_preselected: false,
+        source: 'manual',
+        fits: true,
+        all_options: durations.map(d => d.slug)
+      });
+    };
+  } catch (err) {
+    console.error('durations-for-slot failed:', err);
+    document.getElementById('mdLoadingRow').style.display = 'none';
+    document.getElementById('mdNoFitText').textContent = 'Could not load lesson options. Please try another slot.';
+    document.getElementById('mdNoFitRow').style.display = 'flex';
+  }
+}
+
+function formatHours(mins) {
+  const h = mins / 60;
+  return h % 1 === 0 ? `${h} hour${h !== 1 ? 's' : ''}` : `${h.toFixed(1)} hours`;
+}
+
+// Persist the last-picked lesson type so a returning learner sees their usual
+// duration preselected on the next booking. No expiry — driving lessons are
+// infrequent and we want stickiness across weeks/months.
+function setLastLessonType(lt) {
+  if (!lt || !lt.id) return;
+  try { localStorage.setItem('cc_last_lesson_type_id', String(lt.id)); } catch (_) {}
 }
 
 function closeBookModal() {
   const wasSuccess = document.getElementById('bookSuccessStep').style.display !== 'none';
-  window.posthog && posthog.capture('booking_modal_closed', { completed: wasSuccess });
+  window.posthog && posthog.capture('booking_modal_closed', {
+    completed: wasSuccess,
+    had_duration_selected: !!selectedLessonType
+  });
   clearSlotTimer();
   document.getElementById('bookModal').classList.remove('open');
   document.getElementById('repeatToggle').checked = false;
@@ -931,6 +1076,7 @@ async function confirmBookWithCredit() {
     balanceMinutes = data.balance_minutes || 0;
     lastBookingId = data.booking_id;
     updateCreditBadge();
+    setLastLessonType(selectedLessonType);
     window.posthog && posthog.capture('booking_confirmed', { method: 'credit', lesson_type_slug: selectedLessonType?.slug });
     showBookSuccess(weeks, data.dates);
     refreshAfterBooking();
@@ -995,6 +1141,7 @@ async function confirmPayAndBook() {
   }
 
   btn.disabled = true; label.textContent = 'Redirecting to payment…'; spinner.style.display = 'block';
+  setLastLessonType(selectedLessonType);
   window.posthog && posthog.capture('booking_pay_initiated', { method: 'stripe', is_guest: isGuest, lesson_type_slug: selectedLessonType?.slug });
 
   try {
@@ -1496,10 +1643,7 @@ document.addEventListener('click', function (e) {
   var target = e.target.closest('[data-action]');
   if (!target) return;
   var action = target.dataset.action;
-  if (action === 'select-lesson-type') {
-    var id = parseInt(target.dataset.ltId, 10);
-    if (!isNaN(id)) selectLessonType(id);
-  } else if (action === 'open-book-modal') {
+  if (action === 'open-book-modal') {
     openBookModal(target);
   } else if (action === 'submit-waitlist-join') {
     submitWaitlistJoin();

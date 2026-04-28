@@ -32,25 +32,6 @@
       padding: 10px 16px; margin: 0 -16px;
       width: calc(100% + 32px); flex-wrap: wrap;
     }
-    .lesson-type-pills {
-      display: flex; gap: 8px; overflow-x: auto; flex: 1; min-width: 0;
-      scrollbar-width: none; -ms-overflow-style: none;
-    }
-    .lesson-type-pills::-webkit-scrollbar { display: none; }
-    .lt-pill {
-      flex-shrink: 0; padding: 8px 16px; border-radius: 100px;
-      border: 1.5px solid var(--border); background: var(--white);
-      cursor: pointer; transition: all 0.15s;
-      font-family: var(--font-head); font-size: 0.8rem; font-weight: 600;
-      color: var(--muted); white-space: nowrap;
-    }
-    .lt-pill:hover { border-color: var(--muted); color: var(--primary); }
-    .lt-pill.active {
-      border-color: var(--lt-colour, var(--accent));
-      background: color-mix(in srgb, var(--lt-colour, var(--accent)) 15%, var(--white));
-      color: var(--primary); font-weight: 700;
-      box-shadow: 0 0 0 1px var(--lt-colour, var(--accent));
-    }
 
     /* ── Slot Feed ────────────────────────────────────────────────────────── */
     .slot-feed { display: flex; flex-direction: column; gap: 6px; }
@@ -435,7 +416,6 @@
 
   <!-- Toolbar: lesson type pills + instructor filter -->
   <div class="cal-toolbar" id="calToolbar">
-    <div class="lesson-type-pills" id="lessonTypePills"></div>
     <select class="filter-select" id="instructorFilter">
       <option value="">All instructors</option>
     </select>
@@ -485,8 +465,25 @@
         <div class="modal-detail-row"><span>Date</span><span id="mdDate">—</span></div>
         <div class="modal-detail-row"><span>Time</span><span id="mdTime">—</span></div>
         <div class="modal-detail-row"><span>Instructor</span><span id="mdInstructor">—</span></div>
-        <div class="modal-detail-row"><span>Type</span><span id="mdType">Standard Lesson</span></div>
-        <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">1.5 hours</span></div>
+        <!-- Slot-first duration picker. Hidden when only one option fits — replaced by mdSingleTypeRow which shows the locked-in option as a confirmation row so the user still sees price before paying. -->
+        <div class="modal-detail-row" id="mdDurationPicker" style="display:none">
+          <span>Lesson</span>
+          <select id="mdLessonTypeSelect" style="border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:0.9rem;background:white;font-weight:600;max-width:60%"></select>
+        </div>
+        <div id="mdUsualHint" style="display:none;font-size:0.75rem;color:var(--muted);text-align:right;margin-top:-4px">Using your usual length</div>
+        <div class="modal-detail-row" id="mdSingleTypeRow" style="display:none">
+          <span>Lesson</span>
+          <span id="mdSingleType">—</span>
+        </div>
+        <div class="modal-detail-row" id="mdLoadingRow" style="display:none">
+          <span>Lesson</span>
+          <span style="color:var(--muted);font-style:italic">Checking durations…</span>
+        </div>
+        <div class="modal-detail-row" id="mdNoFitRow" style="display:none;color:#b91c1c">
+          <span>Lesson</span>
+          <span id="mdNoFitText" style="font-weight:600">No lesson lengths fit this slot</span>
+        </div>
+        <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">—</span></div>
       </div>
       <div id="slotTimer" style="display:none;text-align:center;font-size:0.78rem;color:var(--muted);padding:6px 0">
         Slot held for <span id="slotTimerValue" style="font-weight:600">10:00</span>
