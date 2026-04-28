@@ -34,6 +34,11 @@ let pendingReschedule = null; // { bookingId, date, start, end, instructorName, 
 let lastBookingId = null;
 let learnerProfile = { phone: '', pickup_address: '' };
 let hasFreeTrialSlot = false; // true if current school has a lesson_type with slug='trial'
+// Slot-first state: full list of selectable lesson types (excludes 'trial')
+// and the smallest active duration in minutes — used for slot-feed grid spacing.
+let availableLessonTypes = [];
+let slotFeedDuration = 60; // sensible default; updated from availableLessonTypes
+let slotFeedLessonTypeId = null; // id of the lesson type whose duration we use for grid spacing
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
@@ -217,6 +222,15 @@ async function loadLessonTypes() {
     if (!res.ok) throw new Error(data.error);
     lessonTypes = data.lesson_types || [];
     hasFreeTrialSlot = lessonTypes.some(lt => lt && lt.slug === 'trial');
+    // Slot-first: cache the full bookable list (sans trial) and pick the
+    // smallest active duration to drive feed grid spacing. The duration
+    // dropdown inside the booking modal is built from this list.
+    availableLessonTypes = lessonTypes.filter(lt => lt && lt.slug !== 'trial');
+    if (availableLessonTypes.length > 0) {
+      const minLt = availableLessonTypes.reduce((a, b) => (a.duration_minutes <= b.duration_minutes ? a : b));
+      slotFeedDuration = minLt.duration_minutes;
+      slotFeedLessonTypeId = minLt.id;
+    }
     // Auto-select from ?type=slug URL param, or default to first
     // When arriving via /book/:slug (no ?type=), don't auto-select — let learner choose
     if (lessonTypes.length > 0 && !selectedLessonType) {
