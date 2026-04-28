@@ -6,7 +6,12 @@ let AUTH, PROGRESS;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = ccAuth.getAuth();
-  if (!AUTH) return; // form visible, save gated
+  if (!AUTH) {
+    // Spectator mode: form visible, saves gated by requireAuth() at submit time.
+    var guestHint = document.getElementById('guestHint');
+    if (guestHint) guestHint.style.display = 'block';
+    return;
+  }
   await loadProgress();
   render();
 });
