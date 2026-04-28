@@ -898,6 +898,8 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
     if (!preselected) preselected = fitting[0];
     select.value = String(preselected.lesson_type_id);
     document.getElementById('mdDurationPicker').style.display = 'flex';
+    const usualHint = document.getElementById('mdUsualHint');
+    if (usualHint) usualHint.style.display = preselectSource === 'localStorage' ? 'block' : 'none';
     applyLessonTypeToModal(preselected, isGuest, needsProfileFields);
     window.posthog && posthog.capture('duration_selected', {
       lesson_type_slug: preselected.slug,
@@ -912,6 +914,9 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
     select.onchange = function () {
       const lt = durations.find(d => String(d.lesson_type_id) === select.value);
       if (!lt || !lt.fits) return; // disabled options shouldn't be selectable
+      // Manual change clears the "using your usual" hint.
+      const usualHintInner = document.getElementById('mdUsualHint');
+      if (usualHintInner) usualHintInner.style.display = 'none';
       applyLessonTypeToModal(lt, isGuest, needsProfileFields);
       window.posthog && posthog.capture('duration_selected', {
         lesson_type_slug: lt.slug,
