@@ -435,7 +435,8 @@
 
   <!-- Toolbar: lesson type pills + instructor filter -->
   <div class="cal-toolbar" id="calToolbar">
-    <div class="lesson-type-pills" id="lessonTypePills"></div>
+    <!-- Slot-first: pill bar hidden — duration is picked inside the booking modal after slot click. Container kept until Commit 9 sweep. -->
+    <div class="lesson-type-pills" id="lessonTypePills" style="display:none"></div>
     <select class="filter-select" id="instructorFilter">
       <option value="">All instructors</option>
     </select>
@@ -485,8 +486,26 @@
         <div class="modal-detail-row"><span>Date</span><span id="mdDate">—</span></div>
         <div class="modal-detail-row"><span>Time</span><span id="mdTime">—</span></div>
         <div class="modal-detail-row"><span>Instructor</span><span id="mdInstructor">—</span></div>
-        <div class="modal-detail-row"><span>Type</span><span id="mdType">Standard Lesson</span></div>
-        <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">1.5 hours</span></div>
+        <!-- Slot-first duration picker. Hidden when only one option fits — replaced by mdSingleTypeRow which shows the locked-in option as a confirmation row so the user still sees price before paying. -->
+        <div class="modal-detail-row" id="mdDurationPicker" style="display:none">
+          <span>Lesson</span>
+          <select id="mdLessonTypeSelect" style="border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:0.9rem;background:white;font-weight:600;max-width:60%"></select>
+        </div>
+        <div class="modal-detail-row" id="mdSingleTypeRow" style="display:none">
+          <span>Lesson</span>
+          <span id="mdSingleType">—</span>
+        </div>
+        <div class="modal-detail-row" id="mdLoadingRow" style="display:none">
+          <span>Lesson</span>
+          <span style="color:var(--muted);font-style:italic">Checking durations…</span>
+        </div>
+        <div class="modal-detail-row" id="mdNoFitRow" style="display:none;color:#b91c1c">
+          <span>Lesson</span>
+          <span id="mdNoFitText" style="font-weight:600">No lesson lengths fit this slot</span>
+        </div>
+        <!-- Hidden legacy row left in for any code path that still reads mdType — Commit 9 sweep will retire. -->
+        <span id="mdType" style="display:none">—</span>
+        <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">—</span></div>
       </div>
       <div id="slotTimer" style="display:none;text-align:center;font-size:0.78rem;color:var(--muted);padding:6px 0">
         Slot held for <span id="slotTimerValue" style="font-weight:600">10:00</span>
