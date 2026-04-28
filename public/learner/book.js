@@ -231,65 +231,15 @@ async function loadLessonTypes() {
       slotFeedDuration = minLt.duration_minutes;
       slotFeedLessonTypeId = minLt.id;
     }
-    // Auto-select from ?type=slug URL param, or default to first
-    // When arriving via /book/:slug (no ?type=), don't auto-select — let learner choose
-    if (lessonTypes.length > 0 && !selectedLessonType) {
-      if (preselectedTypeId) {
-        selectedLessonType = lessonTypes.find(lt => lt.id === parseInt(preselectedTypeId)) || lessonTypes[0];
-      } else if (preselectedTypeSlug) {
-        selectedLessonType = lessonTypes.find(lt => lt.slug === preselectedTypeSlug) || lessonTypes[0];
-      } else {
-        selectedLessonType = lessonTypes[0];
-      }
-    }
-    renderLessonTypePills();
+    // Slot-first: selectedLessonType is set by the modal's duration picker
+    // when the user clicks a slot, not at page-load time. The ?type= URL
+    // params (preselectedTypeSlug / preselectedTypeId) are read directly by
+    // loadDurationsForSlot to drive the dropdown preselect.
   } catch (err) {
     console.error('Failed to load lesson types:', err);
     lessonTypes = [{ id: null, name: 'Standard Lesson', slug: 'standard', duration_minutes: 90, price_pence: DEFAULT_PRICE_PENCE, colour: '#3b82f6' }];
-    selectedLessonType = lessonTypes[0];
   }
 }
-
-function renderLessonTypePills() {
-  const container = document.getElementById('lessonTypePills');
-  if (!container || lessonTypes.length <= 1) return;
-  const needsPrompt = !selectedLessonType && lessonTypes.length > 1;
-  // When showing prompt, switch to vertical card layout
-  if (needsPrompt) {
-    container.style.flexDirection = 'column';
-    container.style.overflow = 'visible';
-    container.style.gap = '8px';
-  } else {
-    container.style.flexDirection = '';
-    container.style.overflow = '';
-    container.style.gap = '';
-  }
-  let html = '';
-  if (needsPrompt) {
-    html += '<div style="font-size:0.85rem;font-weight:700;color:var(--primary)">Choose your lesson length</div>';
-  }
-  html += (needsPrompt ? '<div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none">' : '');
-  html += lessonTypes.map(lt => {
-    const hrs = lt.duration_minutes / 60;
-    const hrsStr = hrs % 1 === 0 ? `${hrs}hr` : `${hrs.toFixed(1)}hr`;
-    const priceStr = '£' + (lt.price_pence / 100).toFixed(0);
-    const isActive = selectedLessonType && selectedLessonType.id === lt.id;
-    return `<button class="lt-pill${isActive ? ' active' : ''}" data-action="select-lesson-type" data-lt-id="${lt.id}" style="--lt-colour: ${lt.colour}">
-      ${esc(lt.name)} · ${hrsStr} · ${priceStr}
-    </button>`;
-  }).join('');
-  html += (needsPrompt ? '</div>' : '');
-  container.innerHTML = html;
-}
-
-function selectLessonType(id) {
-  selectedLessonType = lessonTypes.find(lt => lt.id === id) || lessonTypes[0];
-  renderLessonTypePills();
-  slotCache = {};
-  loadedRanges = [];
-  initFeed();
-}
-window.selectLessonType = selectLessonType;
 
 // ─── Instructors ─────────────────────────────────────────────────────────────
 async function loadInstructors() {
@@ -446,16 +396,8 @@ function getLearnerPostcode() {
 function onFilterChange() { loadedRanges = []; slotCache = {}; loadLessonTypes(); initFeed(); }
 
 async function initFeed() {
-  // If no lesson type selected yet, show a prompt instead of loading slots
-  if (!selectedLessonType && lessonTypes.length > 1) {
-    document.getElementById('calContent').innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">👆</div>
-        <h3>Select a lesson length</h3>
-        <p>Choose a lesson type above to see available time slots.</p>
-      </div>`;
-    return;
-  }
+  // Slot-first: feed loads at the smallest active duration regardless of any
+  // single "selected" lesson type. The duration is picked inside the modal.
   feedFrom = new Date(); feedFrom.setHours(0,0,0,0);
   feedTo = addDaysLocal(feedFrom, FEED_CHUNK_DAYS - 1);
   const maxDate = addDaysLocal(feedFrom, FEED_MAX_DAYS);
@@ -663,7 +605,6 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
   }
   const ltHrs = ltDuration / 60;
   const ltHrsStr = ltHrs % 1 === 0 ? `${ltHrs} hour${ltHrs !== 1 ? 's' : ''}` : `${ltHrs.toFixed(1)} hours`;
-  document.getElementById('mdType').textContent = lt.name;
   document.getElementById('mdDuration').textContent = ltHrsStr;
   document.getElementById('mdDeductHours').textContent = ltHrsStr;
   const ltPrice = lt.price_pence != null ? lt.price_pence : DEFAULT_PRICE_PENCE;
@@ -1702,10 +1643,7 @@ document.addEventListener('click', function (e) {
   var target = e.target.closest('[data-action]');
   if (!target) return;
   var action = target.dataset.action;
-  if (action === 'select-lesson-type') {
-    var id = parseInt(target.dataset.ltId, 10);
-    if (!isNaN(id)) selectLessonType(id);
-  } else if (action === 'open-book-modal') {
+  if (action === 'open-book-modal') {
     openBookModal(target);
   } else if (action === 'submit-waitlist-join') {
     submitWaitlistJoin();

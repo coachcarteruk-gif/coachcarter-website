@@ -32,25 +32,6 @@
       padding: 10px 16px; margin: 0 -16px;
       width: calc(100% + 32px); flex-wrap: wrap;
     }
-    .lesson-type-pills {
-      display: flex; gap: 8px; overflow-x: auto; flex: 1; min-width: 0;
-      scrollbar-width: none; -ms-overflow-style: none;
-    }
-    .lesson-type-pills::-webkit-scrollbar { display: none; }
-    .lt-pill {
-      flex-shrink: 0; padding: 8px 16px; border-radius: 100px;
-      border: 1.5px solid var(--border); background: var(--white);
-      cursor: pointer; transition: all 0.15s;
-      font-family: var(--font-head); font-size: 0.8rem; font-weight: 600;
-      color: var(--muted); white-space: nowrap;
-    }
-    .lt-pill:hover { border-color: var(--muted); color: var(--primary); }
-    .lt-pill.active {
-      border-color: var(--lt-colour, var(--accent));
-      background: color-mix(in srgb, var(--lt-colour, var(--accent)) 15%, var(--white));
-      color: var(--primary); font-weight: 700;
-      box-shadow: 0 0 0 1px var(--lt-colour, var(--accent));
-    }
 
     /* ── Slot Feed ────────────────────────────────────────────────────────── */
     .slot-feed { display: flex; flex-direction: column; gap: 6px; }
@@ -435,8 +416,6 @@
 
   <!-- Toolbar: lesson type pills + instructor filter -->
   <div class="cal-toolbar" id="calToolbar">
-    <!-- Slot-first: pill bar hidden — duration is picked inside the booking modal after slot click. Container kept until Commit 9 sweep. -->
-    <div class="lesson-type-pills" id="lessonTypePills" style="display:none"></div>
     <select class="filter-select" id="instructorFilter">
       <option value="">All instructors</option>
     </select>
@@ -504,8 +483,6 @@
           <span>Lesson</span>
           <span id="mdNoFitText" style="font-weight:600">No lesson lengths fit this slot</span>
         </div>
-        <!-- Hidden legacy row left in for any code path that still reads mdType — Commit 9 sweep will retire. -->
-        <span id="mdType" style="display:none">—</span>
         <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">—</span></div>
       </div>
       <div id="slotTimer" style="display:none;text-align:center;font-size:0.78rem;color:var(--muted);padding:6px 0">
