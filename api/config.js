@@ -1,6 +1,7 @@
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { safeEqual } = require('./_auth');
+const { validateBulkPricingConfig } = require('./_pricing-helpers');
 
 module.exports = async (req, res) => {
   // ── GET: return current config ──────────────────────────────────────────
@@ -69,6 +70,12 @@ module.exports = async (req, res) => {
       }
       if (!config || typeof config !== 'object') {
         return res.status(400).json({ error: 'Invalid config payload' });
+      }
+
+      // Validate bulk-pricing fields if present (server-side guard against bad admin input)
+      const bulkErr = validateBulkPricingConfig(config.pricing);
+      if (bulkErr) {
+        return res.status(400).json({ error: bulkErr });
       }
 
       const { _source, _updated, _school_id, ...cleanConfig } = config;

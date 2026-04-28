@@ -1369,3 +1369,39 @@ CREATE TABLE IF NOT EXISTS referral_clicks (
 CREATE INDEX IF NOT EXISTS idx_referral_clicks_code ON referral_clicks(referral_code);
 CREATE INDEX IF NOT EXISTS idx_referral_clicks_school ON referral_clicks(school_id);
 CREATE INDEX IF NOT EXISTS idx_referral_clicks_clicked_at ON referral_clicks(clicked_at);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- BULK CREDIT PRICING (April 2026)
+-- Per-school config moved from a hardcoded constant in api/credits.js to
+-- schools.config.pricing.bulk_hourly_pence + bulk_discount_tiers. This seed
+-- preserves CoachCarter's existing behaviour exactly: £55/hr with the
+-- previous 12hr/24hr/36hr → 5%/10%/15% tier structure. Idempotent: only sets
+-- the keys if they're not already present, so any admin edit via the editor
+-- persists across migration re-runs.
+--
+-- New schools onboarding via InstructorBook get NO bulk pricing seeded. They
+-- fall back to their standard 90-min lesson type's hourly rate (= no bulk
+-- discount), which is the safe default — admin must opt in to bulk discounts
+-- via the editor.
+-- ══════════════════════════════════════════════════════════════════════════════
+UPDATE schools
+   SET config = jsonb_set(
+         jsonb_set(
+           COALESCE(config, '{}'::jsonb),
+           '{pricing}',
+           COALESCE(config->'pricing', '{}'::jsonb) || jsonb_build_object(
+             'bulk_hourly_pence',
+             COALESCE(config->'pricing'->'bulk_hourly_pence', '5500'::jsonb)
+           ),
+           true
+         ),
+         '{pricing,bulk_discount_tiers}',
+         COALESCE(
+           config->'pricing'->'bulk_discount_tiers',
+           '[{"min_hours":12,"discount_pct":5},{"min_hours":24,"discount_pct":10},{"min_hours":36,"discount_pct":15}]'::jsonb
+         ),
+         true
+       )
+ WHERE id = 1
+   AND (config->'pricing'->'bulk_hourly_pence' IS NULL
+        OR config->'pricing'->'bulk_discount_tiers' IS NULL);
