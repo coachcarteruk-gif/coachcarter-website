@@ -148,11 +148,22 @@ a { color: var(--accent); }
   margin-bottom: 16px;
 }
 .day-group--preselected {
-  padding: 8px;
-  margin: -8px -8px 8px -8px;
-  border-radius: 10px;
-  background: rgba(255, 165, 0, 0.06);
-  border: 1px solid rgba(255, 165, 0, 0.25);
+  padding: 10px 12px;
+  margin: -10px -12px 12px -12px;
+  border-radius: 12px;
+  background: rgba(34, 197, 94, 0.10);
+  border: 2px solid rgba(34, 197, 94, 0.55);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.08);
+}
+.day-group--preselected .day-label {
+  color: rgb(21, 128, 61);
+}
+.day-group--preselected .day-label::after {
+  content: ' — picked from your slot';
+  font-weight: 500;
+  font-size: 0.78rem;
+  color: rgb(21, 128, 61);
+  opacity: 0.85;
 }
 
 .day-label {
