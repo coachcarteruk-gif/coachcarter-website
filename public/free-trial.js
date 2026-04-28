@@ -11,14 +11,24 @@
   var slotsByDate = {}; // { 'YYYY-MM-DD': [ {start_time, end_time, instructor_id, instructor_name}, ... ] }
   var selectedSlot = null;  // { date, start_time, end_time, instructor_id, instructor_name }
   var referralCode = null;
+  var prefInstructorId = null; // ?instructor_id= hint (filters slot feed)
+  var prefDate = null;         // ?date= hint (scrolls into view)
 
   // ── Init ────────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', function () {
     // Capture ?ref=XXX for forward-compat referrer flow
     var qs = new URLSearchParams(window.location.search);
     referralCode = qs.get('ref') || qs.get('referral_code') || null;
+    // Hints carried over from book.html "claim as free trial" CTA
+    var rawInstructor = qs.get('instructor_id');
+    if (rawInstructor && /^\d+$/.test(rawInstructor)) prefInstructorId = rawInstructor;
+    var rawDate = qs.get('date');
+    if (rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) prefDate = rawDate;
 
-    posthogCapture('free_trial_page_viewed', { has_referral: !!referralCode });
+    posthogCapture('free_trial_page_viewed', {
+      has_referral: !!referralCode,
+      from_book: !!(prefInstructorId || prefDate)
+    });
 
     document.getElementById('trialForm').addEventListener('submit', handleSubmit);
 
@@ -42,7 +52,9 @@
     to.setDate(to.getDate() + DAYS_AHEAD);
     var toStr = ymd(to);
 
-    fetch('/api/slots?action=available&from=' + fromStr + '&to=' + toStr + '&lesson_type_id=' + FREE_TRIAL_LESSON_TYPE_ID)
+    var url = '/api/slots?action=available&from=' + fromStr + '&to=' + toStr + '&lesson_type_id=' + FREE_TRIAL_LESSON_TYPE_ID;
+    if (prefInstructorId) url += '&instructor_id=' + encodeURIComponent(prefInstructorId);
+    fetch(url)
       .then(function (r) { return r.json(); })
       .then(function (slotsResp) {
         if (slotsResp && slotsResp.slots) {
@@ -74,7 +86,8 @@
       if (!slots.length) return;
 
       var label = formatDateLabel(date);
-      html += '<div class="day-group">';
+      var preselected = (prefDate && date === prefDate) ? ' day-group--preselected' : '';
+      html += '<div class="day-group' + preselected + '" data-date="' + escapeAttr(date) + '">';
       html += '<div class="day-label">' + escapeHtml(label) + '</div>';
       html += '<div class="slot-row">';
       slots.forEach(function (s) {
@@ -99,6 +112,14 @@
     picker.querySelectorAll('.slot-btn').forEach(function (btn) {
       btn.addEventListener('click', function () { selectSlot(btn); });
     });
+
+    // If we arrived with a ?date= hint, scroll the matching day group into view.
+    if (prefDate) {
+      var target = picker.querySelector('.day-group--preselected');
+      if (target && typeof target.scrollIntoView === 'function') {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
   }
 
   function renderSlotsError(msg) {

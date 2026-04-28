@@ -1499,6 +1499,33 @@ Instructors can now control which lesson lengths appear on their public booking 
 
 ---
 
+## 2.92 — Booking page spectator mode + inline free-trial CTA (28 April 2026)
+
+Drops the login wall in front of `/learner/book.html` so visitors can browse real availability before committing to an account. The page already supported guest checkout via `?action=checkout-slot-guest` — the wall was purely link-level (every "Book" CTA routed through `/learner/login.html?redirect=...`). Repointing the CTAs reveals the existing guest path.
+
+**Spectator mode:**
+- All "Book" links now point straight at `/learner/book.html`: homepage hero + footer (`public/index.html`), marketing top bar + mobile tab bar + public sidebar (`public/sidebar.js`).
+- New `#guestBanner` on `book.html` for logged-out visitors: "Browsing as a guest — pick any slot to pay & book, or sign in to use lesson hours." The misleading "No hours on your account" banner is suppressed for guests via an `auth &&` gate in `updateCreditBadge()`.
+- Sidebar `Buy Credits`, `Upcoming` (children of Lessons) and `Profile` (bottom-tab) now carry `authOnly: true` and are filtered out for guests. The bottom-bar renderer was extended to honour `authOnly` (it previously only worked on the sidebar tree).
+
+**Inline "claim as free trial" CTA:**
+- Inside the guest section of the booking modal, a dashed-border CTA reads "Never had a lesson with us before? Claim this as your free trial →". Shown only when the school's lesson-types list includes a row with `slug='trial'` (per-tenant gating, no new feature flag column needed).
+- Clicking redirects to `/free-trial.html?instructor_id=…&date=…`. The chosen slot is *not* force-converted to a trial booking — the trial handler (`api/slots.js handleBookFreeTrial`) enforces strict duration + offered-types matching, so the guest re-picks a real trial slot on the dedicated page. Eligibility (one-trial-per-email/phone) is checked at submit time by the existing handler, not pre-flighted (avoids a PII-enumeration endpoint).
+- `/free-trial.html` honours `?instructor_id=` (filters the slot feed to that instructor) and `?date=` (highlights and scroll-into-views the matching day group via a new `.day-group--preselected` style).
+
+**PostHog instrumentation (council-recommended, for evaluating slot-first later):**
+- New events `claim_trial_cta_shown` and `claim_trial_cta_clicked` (props: `instructor_id`, `date`, `lesson_type_slug`).
+- Existing `free_trial_page_viewed` extended with `from_book: boolean`.
+
+**Explicitly NOT done:**
+- `/free-trial.html` is **not** retired — kept as a marketing landing page (Google Ads target, social shares, school-specific deep links).
+- Booking UX is **not** inverted to slot-first (see CLAUDE.md "Booking page — do NOT re-add"). Lesson-type pills + "next available" feed unchanged.
+- No client-side trial-eligibility pre-check (would require a PII enumeration endpoint).
+
+**Files changed:** `public/index.html`, `public/sidebar.js`, `public/learner/book.html`, `public/learner/book.js`, `public/free-trial.html`, `public/free-trial.js`
+
+---
+
 ## 2.91 — Referral system Phase 1: per-lesson recurring rewards + share UI (27 April 2026)
 
 Builds on the original referral system from 2.80, replacing the broken purchase-time reward with a correct lesson-completion-time engine, and adding the user-facing share surface.

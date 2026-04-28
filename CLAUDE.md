@@ -87,6 +87,8 @@ Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel wi
 - Calendar views (weekly/monthly/daily were intentionally removed)
 - View toggles, date navigation arrows, or cursor state
 - Empty-hour grids
+- Login wall on `/learner/book.html` (removed April 2026 — page is spectator-mode for guests; the existing `?action=checkout-slot-guest` path lets them pay without an account, and a `#claimTrialCta` inside the guest modal links to `/free-trial.html?instructor_id=…&date=…` when the school has `slug='trial'`. Auth is required only for credit-pay, reschedule, and cancel actions.)
+- Slot-first booking UX inversion (lesson type FIRST, slot SECOND is the deliberate model — see council deliberation notes; can be revisited once spectator-mode PostHog funnel data is in)
 
 ## Navigation — intentionally removed (do NOT re-add)
 

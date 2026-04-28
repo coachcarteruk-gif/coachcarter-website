@@ -27,14 +27,14 @@
     desktopLinks: [
       { label: 'Home', href: '/' },
       { label: 'Pricing', href: '/learner-journey.html' },
-      { label: 'Book', href: '/learner/login.html?redirect=/learner/book.html' }
+      { label: 'Book', href: '/learner/book.html' }
     ],
     desktopCta: { label: 'Login', href: '/learner/login.html' },
     mobileTabs: [
       { label: 'Home', href: '/', icon: '🏠' },
       { label: 'Pricing', href: '/learner-journey.html', icon: '💰' },
       { label: 'Log in', href: '/learner/login.html', icon: '👤' },
-      { label: 'Book', href: '/learner/login.html?redirect=/learner/book.html', icon: '📅', cta: true }
+      { label: 'Book', href: '/learner/book.html', icon: '📅', cta: true }
     ]
   };
 
@@ -171,15 +171,15 @@
     public: [
       { icon: 'home', label: 'Home', href: '/' },
       'divider',
-      { icon: 'calendar', label: 'Book a Lesson', href: '/learner/login.html?redirect=/learner/book.html' },
+      { icon: 'calendar', label: 'Book a Lesson', href: '/learner/book.html' },
       { icon: 'logIn', label: 'Login', href: '/learner/login.html' }
     ],
     learner: [
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
       { icon: 'calendar', label: 'Lessons', href: '/learner/book.html', children: [
         { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
-        { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html' },
-        { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html' }
+        { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html', authOnly: true },
+        { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html', authOnly: true }
       ]},
       { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html', children: [
         { icon: 'home', label: 'Overview', href: '/learner/practice.html' },
@@ -220,7 +220,7 @@
         { icon: 'play', label: 'Learn', href: '/learner/ask-examiner.html',
           activeOn: ['/learner/learn', '/learner/examiner-quiz'] },
         { icon: 'user', label: 'Profile', href: '/learner/profile.html',
-          activeOn: [] }
+          activeOn: [], authOnly: true }
       ]
     },
     instructor: {
@@ -361,9 +361,12 @@
   function buildBottomBarHTML() {
     var tabs = getBottomTabs();
     if (!tabs) return '';
+    var _s; try { _s = JSON.parse(localStorage.getItem('cc_learner') || 'null'); } catch(e) {}
+    var isLoggedIn = !!_s;
     var html = '<nav class="cc-bottom-bar" aria-label="Quick navigation">';
     for (var i = 0; i < tabs.length; i++) {
       var tab = tabs[i];
+      if (tab.authOnly && !isLoggedIn) continue;
       var active = isActive(tab.href, tab.activeOn) ? ' active' : '';
       html += '<a href="' + tab.href + '" class="cc-bottom-tab' + active + '">' +
         '<span class="cc-bottom-icon">' + icons[tab.icon] + '</span>' +

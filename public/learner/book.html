@@ -413,6 +413,11 @@
     <p>No hours on your account. <a href="/learner/buy-credits.html" style="color:var(--accent);font-weight:700">Buy hours</a> or pay when you book.</p>
   </div>
 
+  <!-- Guest banner (shown only to non-logged-in visitors) -->
+  <div class="banner banner-credits" id="guestBanner" style="display:none">
+    <p>Browsing as a guest — pick any slot to pay &amp; book, or <a href="/learner/login.html?redirect=/learner/book.html" style="color:var(--accent);font-weight:700">sign in</a> to use lesson hours.</p>
+  </div>
+
   <!-- Next lesson card (replaces full upcoming strip) -->
   <div class="next-lesson-card" id="nextLessonCard" style="display:none">
     <div>
@@ -526,6 +531,10 @@
           <span>I agree to the <a href="/terms.html" target="_blank" style="color:var(--accent)">terms</a> and <a href="/privacy.html" target="_blank" style="color:var(--accent)">privacy policy</a></span>
         </label>
         <div class="field-error-msg" id="errGuestTerms">You must accept the terms and privacy policy</div>
+        <div id="claimTrialCta" style="display:none;margin-top:14px;padding:12px;border:1px dashed var(--border);border-radius:8px;background:var(--surface,#fafafa);font-size:0.85rem;text-align:center">
+          Never had a lesson with us before?
+          <a href="#" id="claimTrialLink" style="color:var(--accent);font-weight:700;display:inline-block;margin-top:4px">Claim this as your free trial &rarr;</a>
+        </div>
       </div>
 
       <div style="margin:12px 0">

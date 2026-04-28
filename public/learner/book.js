@@ -33,6 +33,7 @@ let prefilledName = null; // from ?name= URL param (shareable booking link)
 let pendingReschedule = null; // { bookingId, date, start, end, instructorName, instructorId }
 let lastBookingId = null;
 let learnerProfile = { phone: '', pickup_address: '' };
+let hasFreeTrialSlot = false; // true if current school has a lesson_type with slug='trial'
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
@@ -73,6 +74,8 @@ function init() {
   document.getElementById('bookModalCloseX').onclick = closeBookModal;
   document.getElementById('btnConfirmBook').onclick = confirmBookWithCredit;
   document.getElementById('btnPayAndBook').onclick = confirmPayAndBook;
+  const claimTrialLink = document.getElementById('claimTrialLink');
+  if (claimTrialLink) claimTrialLink.onclick = handleClaimTrialClick;
   document.getElementById('btnSuccessDone').onclick = closeBookModal;
   document.getElementById('btnSyncCalendar').onclick = handleCalendarSubscribe;
   const closeCancelModal = () => document.getElementById('cancelModal').classList.remove('open');
@@ -109,6 +112,10 @@ function init() {
   }
 
   if (!auth) {
+    // Spectator-mode banner: show guest hint, suppress the "No hours on your account" banner
+    // (it reads as broken for someone who has no account at all).
+    const guestBanner = document.getElementById('guestBanner');
+    if (guestBanner) guestBanner.style.display = 'flex';
     Promise.all([loadInstructors(), loadLessonTypes()])
       .then(async () => {
         preselectInstructor();
@@ -189,8 +196,9 @@ function formatBalanceHours(mins) {
 }
 
 function updateCreditBadge() {
-  // Hide credits banner entirely when payments are disabled
-  document.getElementById('noCreditsBanner').style.display = (paymentsEnabled && balanceMinutes === 0) ? 'flex' : 'none';
+  // Hide credits banner for guests (they have no account — guestBanner covers this case)
+  // and when payments are disabled.
+  document.getElementById('noCreditsBanner').style.display = (auth && paymentsEnabled && balanceMinutes === 0) ? 'flex' : 'none';
 }
 
 // ─── Lesson Types ───────────────────────────────────────────────────────────
@@ -208,6 +216,7 @@ async function loadLessonTypes() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     lessonTypes = data.lesson_types || [];
+    hasFreeTrialSlot = lessonTypes.some(lt => lt && lt.slug === 'trial');
     // Auto-select from ?type=slug URL param, or default to first
     // When arriving via /book/:slug (no ?type=), don't auto-select — let learner choose
     if (lessonTypes.length > 0 && !selectedLessonType) {
@@ -678,8 +687,26 @@ function openBookModal(el) {
     document.getElementById('mdGuestPhone').value = '';
     document.getElementById('mdGuestPickup').value = '';
     document.getElementById('mdGuestTerms').checked = false;
+    // Show the "claim as free trial" CTA only when this school offers a trial lesson type.
+    // We do not pre-check eligibility — the free-trial submit handler returns a friendly
+    // 409 if the email/phone has already used a trial.
+    const claimCta = document.getElementById('claimTrialCta');
+    if (claimCta) {
+      if (hasFreeTrialSlot) {
+        claimCta.style.display = 'block';
+        window.posthog && posthog.capture('claim_trial_cta_shown', {
+          instructor_id: pendingSlot.instructor_id,
+          date: pendingSlot.date,
+          lesson_type_slug: selectedLessonType?.slug
+        });
+      } else {
+        claimCta.style.display = 'none';
+      }
+    }
   } else {
     document.getElementById('guestFields').style.display = 'none';
+    const claimCta = document.getElementById('claimTrialCta');
+    if (claimCta) claimCta.style.display = 'none';
     document.getElementById('repeatSection').style.display = '';
     // Show profile completion fields if phone or pickup missing
     if (needsProfileFields) {
@@ -913,6 +940,26 @@ async function confirmBookWithCredit() {
     label.textContent = weeks > 1 ? `Book ${weeks} lessons` : 'Confirm booking';
     spinner.style.display = 'none';
   }
+}
+
+// ─── Claim-as-free-trial (guest CTA) ─────────────────────────────────────────
+// Routes the guest to /free-trial.html carrying the chosen instructor + date as
+// hints. The trial handler enforces strict duration matching, so the slot itself
+// cannot be force-converted — the guest re-picks a real trial slot on the
+// dedicated page. Eligibility (one-trial-per-email/phone) is checked at submit
+// time by the existing free-trial handler, not pre-flighted here.
+function handleClaimTrialClick(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  if (!pendingSlot) return;
+  window.posthog && posthog.capture('claim_trial_cta_clicked', {
+    instructor_id: pendingSlot.instructor_id,
+    date: pendingSlot.date,
+    lesson_type_slug: selectedLessonType?.slug
+  });
+  const params = new URLSearchParams();
+  if (pendingSlot.instructor_id) params.set('instructor_id', pendingSlot.instructor_id);
+  if (pendingSlot.date) params.set('date', pendingSlot.date);
+  window.location.href = '/free-trial.html' + (params.toString() ? '?' + params.toString() : '');
 }
 
 // ─── Pay & book (Stripe) ─────────────────────────────────────────────────────
