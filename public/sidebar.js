@@ -20,19 +20,21 @@
   // Single source of truth: change a marketing nav link here, not in
   // four HTML files. Per-page CSS is preserved so visual variation
   // remains possible per page if ever needed.
-  // Desktop top bar: Home / Pricing / Book / Login (CTA)
-  // Mobile bottom bar: Home / Pricing / Log in / Book (CTA, last)
-  // Order intentionally differs — mobile puts the strongest action last, by thumb.
+  // Desktop top bar: Home / Free Trial / Book / Login (CTA)
+  // Mobile bottom bar: Home / Free Trial / Log in / Book (CTA, last)
+  // "Pricing" → /learner-journey.html replaced with "Free Trial" 2026-04-28
+  // when the 3-tier journey was hidden from public marketing. To restore the
+  // Pricing link, swap label/href back to 'Pricing' / '/learner-journey.html'.
   var marketingNavConfig = {
     desktopLinks: [
       { label: 'Home', href: '/' },
-      { label: 'Pricing', href: '/learner-journey.html' },
+      { label: 'Free Trial', href: '/free-trial.html' },
       { label: 'Book', href: '/learner/book.html' }
     ],
     desktopCta: { label: 'Login', href: '/learner/login.html' },
     mobileTabs: [
       { label: 'Home', href: '/', icon: '🏠' },
-      { label: 'Pricing', href: '/learner-journey.html', icon: '💰' },
+      { label: 'Free Trial', href: '/free-trial.html', icon: '🎁' },
       { label: 'Log in', href: '/learner/login.html', icon: '👤' },
       { label: 'Book', href: '/learner/book.html', icon: '📅', cta: true }
     ]

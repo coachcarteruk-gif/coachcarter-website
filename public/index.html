@@ -13,9 +13,13 @@
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
   <title>CoachCarter — Learn to Drive in Reading</title>
-<meta name="description" content="CoachCarter Driving School — flexible driving lessons with a Test Ready Guarantee and a full learner portal. DVSA-approved instructors based in Reading.">
+<meta name="description" content="CoachCarter Driving School — flexible driving lessons and a full learner portal. DVSA-approved instructors in Reading. Book your free trial lesson today.">
 <meta property="og:title" content="CoachCarter — Learn to Drive">
+<meta property="og:description" content="Flexible driving lessons with DVSA-approved instructors in Reading. Book your free trial lesson online.">
+<!-- TRG meta copy preserved for easy restore — do not delete
+<meta name="description" content="CoachCarter Driving School — flexible driving lessons with a Test Ready Guarantee and a full learner portal. DVSA-approved instructors based in Reading.">
 <meta property="og:description" content="Flexible driving lessons with a Test Ready Guarantee. DVSA-approved instructors in Reading.">
+-->
 <meta property="og:image" content="https://coachcarter.uk/Logo.png">
 <meta property="og:url" content="https://coachcarter.uk">
 <meta property="og:type" content="website">
@@ -1432,10 +1436,18 @@ a:focus-visible, button:focus-visible {
         <p>Track your progress, book lessons, and buy credits — all in one place. Your driving journey, organised.</p>
       </a>
 
+      <!-- Test Ready Guarantee feature card hidden 2026-04-28 — preserved for easy restore.
       <a href="/learner-journey.html" class="feature-card fade-up" style="transition-delay: 0.1s">
         <div class="feature-icon">🎯</div>
         <h3>Test Ready Guarantee</h3>
         <p>Our structured programme gets you test-ready with a clear plan, dynamic pricing, and guaranteed progress.</p>
+      </a>
+      -->
+
+      <a href="/free-trial.html" class="feature-card fade-up" style="transition-delay: 0.1s">
+        <div class="feature-icon">🎯</div>
+        <h3>Free Trial Lesson</h3>
+        <p>Try a lesson on us before you commit. See how we teach and decide if we're the right fit — no pressure.</p>
       </a>
 
       <div class="feature-card fade-up" style="transition-delay: 0.15s">
@@ -1450,7 +1462,15 @@ a:focus-visible, button:focus-visible {
         <p>DVSA approved, patient, and friendly. Our instructors are passionate about helping you succeed.</p>
       </div>
 
+      <!-- "Pay As You Go" card linked to /learner-journey.html — hidden 2026-04-28 along with the rest of the 3-tier journey. Preserved for easy restore.
       <a href="/learner-journey.html" class="feature-card fade-up" style="transition-delay: 0.25s">
+        <div class="feature-icon">💳</div>
+        <h3>Pay As You Go</h3>
+        <p>No long-term commitment required. Pay per lesson or save with credit bundles — the choice is yours.</p>
+      </a>
+      -->
+
+      <a href="/learner/login.html" class="feature-card fade-up" style="transition-delay: 0.25s">
         <div class="feature-icon">💳</div>
         <h3>Pay As You Go</h3>
         <p>No long-term commitment required. Pay per lesson or save with credit bundles — the choice is yours.</p>
@@ -1575,12 +1595,12 @@ a:focus-visible, button:focus-visible {
 
       <div class="testimonial-card fade-up" style="transition-delay: 0.25s">
         <div class="testimonial-stars">★★★★★</div>
-        <blockquote>"I was so nervous about learning to drive, but the whole experience was calm and encouraging. The Test Ready Guarantee kept me on track and motivated."</blockquote>
+        <blockquote>"I was so nervous about learning to drive, but the whole experience was calm and encouraging. Fraser kept me on track and motivated all the way to test day."</blockquote>
         <div class="testimonial-author">
           <div class="testimonial-avatar"><img src="/images/home/testimonial-andrew.jpg" alt="Andrew after passing his driving test" loading="lazy"></div>
           <div>
             <div class="testimonial-name">Andrew</div>
-            <div class="testimonial-detail">Test Ready Guarantee graduate</div>
+            <div class="testimonial-detail">Reading learner</div>
           </div>
         </div>
       </div>
@@ -1588,9 +1608,10 @@ a:focus-visible, button:focus-visible {
   </div>
 </section>
 
-<!-- ──────────────────────────────────────
-     PRICING PREVIEW
-────────────────────────────────────── -->
+<!-- Pricing preview hidden 2026-04-28. Numbers (£82.50, credit bundle tiers, £1,500 TRG)
+     were stale and don't match what learners are actually charged in the hub. Visitors
+     are now funnelled to the free trial first; pricing is shown after sign-up.
+     Section preserved here in full for easy restore. Do not delete.
 <section class="section pricing" aria-labelledby="pricing-title">
   <div class="section-inner">
     <div class="pricing-header fade-up">
@@ -1641,6 +1662,7 @@ a:focus-visible, button:focus-visible {
     </div>
   </div>
 </section>
+-->
 
 <!-- ──────────────────────────────────────
      FINAL CTA
@@ -1674,9 +1696,10 @@ a:focus-visible, button:focus-visible {
 
       <div class="footer-col">
         <h4>Learners</h4>
-        <a href="/learner-journey.html">Pricing</a>
+        <a href="/free-trial.html">Free Trial</a>
         <a href="/learner/login.html">Learner Login</a>
         <a href="/learner/book.html">Book a Lesson</a>
+        <!-- <a href="/learner-journey.html">Pricing</a> hidden 2026-04-28 along with TRG / 3-tier journey -->
       </div>
 
       <div class="footer-col">

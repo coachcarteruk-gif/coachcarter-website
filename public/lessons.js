@@ -4,21 +4,59 @@
 // CONFIG SYSTEM
 let SITE_CONFIG = {};
 
+// Pull live per-hour rate from /api/lesson-types — same source the learner hub
+// uses when booking a slot, so this page never drifts from real prices.
+// Falls back to whatever config.json says if the API is unavailable.
+async function loadLivePricing() {
+  try {
+    const res = await fetch('/api/lesson-types?school_id=1&t=' + Date.now());
+    if (!res.ok) return null;
+    const data = await res.json();
+    const types = Array.isArray(data) ? data : (data.lesson_types || data.types || []);
+    // Prefer the standard 90-minute lesson; otherwise pick the smallest active duration.
+    const active = types.filter(t => t.active !== false && t.duration_minutes && t.price_pence);
+    if (!active.length) return null;
+    const standard = active.find(t => t.duration_minutes === 90) || active.sort((a, b) => a.duration_minutes - b.duration_minutes)[0];
+    const pricePerHourPence = Math.round(standard.price_pence / (standard.duration_minutes / 60));
+    return {
+      hourly: pricePerHourPence / 100,
+      lesson_price: Math.round(pricePerHourPence * 1.5) / 100,
+      duration_minutes: standard.duration_minutes
+    };
+  } catch (err) {
+    console.warn('Live pricing fetch failed, falling back to config:', err);
+    return null;
+  }
+}
+
 async function loadConfig() {
+  let configData = null;
   try {
     const res = await fetch('/api/config?t=' + Date.now());
-    SITE_CONFIG = await res.json();
-    applyConfig();
+    configData = await res.json();
   } catch (err) {
     console.error('Failed to load config from API, trying file fallback:', err);
     try {
       const res = await fetch('/config.json?t=' + Date.now());
-      SITE_CONFIG = await res.json();
-      applyConfig();
+      configData = await res.json();
     } catch (err2) {
       console.error('Config fallback also failed:', err2);
-      initWithDefaults();
     }
+  }
+
+  // Overlay live pricing from lesson_types so the page mirrors what learners actually pay.
+  const live = await loadLivePricing();
+  if (configData && live) {
+    configData.pricing = configData.pricing || {};
+    configData.pricing.payg_hourly = live.hourly;
+    configData.pricing.payg_lesson_price = live.lesson_price;
+  }
+
+  if (configData) {
+    SITE_CONFIG = configData;
+    applyConfig();
+  } else {
+    initWithDefaults();
   }
 }
 
@@ -48,16 +86,14 @@ function applyConfig() {
   const paygLessonPrice = p.payg_lesson_price || (p.payg_hourly ? p.payg_hourly * 1.5 : 90);
   if (paygPriceEl) paygPriceEl.textContent = '£' + paygLessonPrice;
 
-  if (c.hero && c.hero.stats) {
-    document.getElementById('hero-stat-1-value').textContent = c.hero.stats[0]?.value || '£' + paygLessonPrice;
-    document.getElementById('hero-stat-1-label').textContent = c.hero.stats[0]?.label || 'Per 1.5hr lesson';
-    document.getElementById('hero-stat-2-value').textContent = c.hero.stats[1]?.value || '15%';
-    document.getElementById('hero-stat-2-label').textContent = c.hero.stats[1]?.label || 'Max discount on\nbulk packages';
-    document.getElementById('hero-stat-3-value').textContent = c.hero.stats[2]?.value || '£' + p.core_programme.toLocaleString();
-    document.getElementById('hero-stat-3-label').textContent = c.hero.stats[2]?.label || 'Full Test Ready Guarantee\nprogramme';
-    document.getElementById('hero-stat-4-value').textContent = c.hero.stats[3]?.value || c.business?.programme_duration?.replace(' weeks', 'wk') || '18wk';
-    document.getElementById('hero-stat-4-label').textContent = c.hero.stats[3]?.label || 'Structured programme\nto test day';
-  }
+  // Hero stats reduced 2026-04-28 — TRG hidden, so stats 3 & 4 now show "Free trial"
+  // and "DVSA approved" instead of programme price/duration. Stat 1 shows the live
+  // hourly rate from /api/lesson-types (the same price learners pay when booking).
+  const hourly = p.payg_hourly || (p.payg_lesson_price ? p.payg_lesson_price / 1.5 : 60);
+  const stat1El = document.getElementById('hero-stat-1-value');
+  const stat1LabelEl = document.getElementById('hero-stat-1-label');
+  if (stat1El) stat1El.textContent = '£' + hourly;
+  if (stat1LabelEl) stat1LabelEl.innerHTML = 'Per hour,<br>standard rate';
 
   // Guarantee elements may not exist (section moved to learner-journey.html)
   const corePriceEl = document.getElementById('core-price-display');
@@ -77,26 +113,23 @@ function applyConfig() {
 
   basePrice = p.core_programme;
 
+  // Hero headline only — subheadline NO LONGER overridden from config (was reintroducing
+  // TRG copy from old config.json values). 2026-04-28.
   if (c.hero) {
     const headlineEl = document.getElementById('hero-headline');
     if (headlineEl && c.hero.headline) {
       headlineEl.innerHTML = c.hero.headline.replace('.', '.<br><em>') + '</em>';
     }
-    const subheadEl = document.getElementById('hero-subheadline');
-    if (subheadEl && c.hero.subheadline) {
-      subheadEl.textContent = c.hero.subheadline;
-    }
   }
 
   if (c.sections) {
-    document.getElementById('section-payg-title').textContent = c.sections.payg?.title || 'Pay As You Go';
-    document.getElementById('section-payg-subtitle').textContent = c.sections.payg?.subtitle || 'Maximum flexibility.';
-    document.getElementById('section-packages-title').textContent = c.sections.packages?.title || 'Bulk Hour Packages';
-    document.getElementById('section-packages-subtitle').textContent = c.sections.packages?.subtitle || 'Buy more hours up front and save.';
-    const sgt = document.getElementById('section-guarantee-title');
-    if (sgt) sgt.textContent = c.sections.guarantee?.title || 'The Test Ready Guarantee';
-    const sgs = document.getElementById('section-guarantee-subtitle');
-    if (sgs) sgs.textContent = c.sections.guarantee?.subtitle || '18 weeks to your driving licence.';
+    const setText = (id, val) => { const el = document.getElementById(id); if (el && val) el.textContent = val; };
+    setText('section-payg-title', c.sections.payg?.title);
+    setText('section-payg-subtitle', c.sections.payg?.subtitle);
+    setText('section-packages-title', c.sections.packages?.title);
+    setText('section-packages-subtitle', c.sections.packages?.subtitle);
+    setText('section-guarantee-title', c.sections.guarantee?.title);
+    setText('section-guarantee-subtitle', c.sections.guarantee?.subtitle);
   }
 
   if (c.features) {
@@ -111,14 +144,14 @@ function applyConfig() {
   }
 
   if (c.cta) {
-    document.getElementById('nav-cta-primary').textContent = c.cta.primary || 'Book a Lesson';
-    document.getElementById('hero-cta').textContent = 'View all options →';
-    document.getElementById('btn-payg').textContent = c.cta.payg_button || `Book £${p.payg_hourly} lesson →`;
-    document.getElementById('btn-package').textContent = c.cta.package_button || 'Buy this package →';
-    const btnGuarantee = document.getElementById('btn-guarantee');
-    if (btnGuarantee) btnGuarantee.textContent = c.cta.guarantee_button || 'Continue to Booking →';
-    document.getElementById('cta-primary').textContent = c.cta.primary || 'Book a lesson now';
-    document.getElementById('cta-secondary').textContent = c.cta.secondary || 'Talk to us first';
+    const setText = (id, val) => { const el = document.getElementById(id); if (el && val) el.textContent = val; };
+    setText('nav-cta-primary', c.cta.primary);
+    // hero-cta text is set in HTML ("Book your free trial →"); don't override from config.
+    setText('btn-payg', c.cta.payg_button);
+    setText('btn-package', c.cta.package_button);
+    setText('btn-guarantee', c.cta.guarantee_button);
+    setText('cta-primary', c.cta.primary);
+    setText('cta-secondary', c.cta.secondary);
   }
 
   if (c.business) {

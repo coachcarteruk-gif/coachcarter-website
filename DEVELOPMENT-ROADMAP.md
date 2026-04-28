@@ -1719,6 +1719,25 @@ Preparing to replace the linktree-style landing page (`index.html`) with a scrol
 
 ---
 
+## 2.83 — Hide TRG, 3-Tier Journey & Stale Pricing from Public Marketing (28 April 2026)
+
+The Test Ready Guarantee, the 3-tier learner journey programme, and the pay-as-you-go callouts were still being advertised on `index.html` and `lessons.html` despite no longer being offered. The "Pricing" page (`learner-journey.html`) also still listed old hourly rates and bundle prices that no longer matched what learners were actually charged in the hub at booking time. Cleanup pass to bring public marketing in line with what's currently sold, and to push curious visitors toward the free trial first.
+
+**What changed:**
+- **`public/lessons.html`** — TRG meta/OG tags, hero badge "Test Ready Guarantee Available", hero stats 3 & 4 (£2,400 / 18wk), full PAYG section, and the entire "Test Ready Guarantee redirect banner" all commented out (preserved in source for easy restore). Hero subheadline rewritten to push the free trial. Enquiry-form dropdown option "Test Ready Guarantee" hidden. Testimonial meta references to TRG cleaned.
+- **`public/lessons.js`** — `loadLivePricing()` added: fetches the standard 90-min lesson type from `/api/lesson-types?school_id=1` and overlays the live hourly rate onto the page so the marketing-side price always matches what learners are actually charged at booking. Stopped overriding hero subheadline / hero CTA / guarantee section titles from config (the DB-backed `/api/config` was reintroducing TRG copy from old `config.json` values). All element overrides made null-safe so commented-out sections don't throw.
+- **`public/index.html`** — TRG meta/OG tags, "Test Ready Guarantee" feature card, the entire "Pricing Preview" section (£82.50 PAYG / Credit Bundles / £1,500 TRG), and footer "Pricing" link all commented out. Andrew's testimonial copy updated to remove TRG reference. New "Free Trial Lesson" feature card added in TRG's slot.
+- **`public/sidebar.js`** — Marketing nav "Pricing" → "Free Trial". Both desktop top bar and mobile bottom-tab bar updated. Affects `index.html`, `lessons.html`, `learner-journey.html`, `instructor/login.html`.
+- **`public/learner-journey.html`** — Added `<meta name="robots" content="noindex, nofollow">`. Page still works at the direct URL for anyone with a saved link, but is dropped from search engines and unreachable from any public marketing nav or footer.
+
+**Restore path:** every commented-out block carries a dated note and the original HTML/copy verbatim. Restoring the TRG marketing presence is a 5-minute reversal; no source has been deleted.
+
+**Known follow-up flagged:** `api/credits.js` hardcodes `PRICE_PER_STANDARD_LESSON_PENCE = 8250` (£55/hr) for bulk-hour purchases, while individual slot bookings read `price_pence` from the `lesson_types` table. The two flows can disagree on price. Spawned as a separate task — not fixed in this commit.
+
+**Files changed:** `public/lessons.html`, `public/lessons.js`, `public/index.html`, `public/sidebar.js`, `public/learner-journey.html`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
