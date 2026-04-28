@@ -372,7 +372,8 @@ Bound to `/r/:code` via a `vercel.json` rewrite. No `?action=` routing — this 
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `available` | GET | No | Available slots for a lesson type duration. Params: `from`, `to`, `instructor_id?`, `lesson_type_id?` |
+| `available` | GET | No | Available slots for a lesson type duration. Params: `from`, `to`, `instructor_id?`, `lesson_type_id?`, `pickup_postcode?`, `min_duration_only?`. When `min_duration_only=1`, the API treats `lesson_type_id` as grid-spacing only and skips the `offered_lesson_types` filter — used by the slot-first feed where the instructor list isn't yet narrowed by duration. |
+| `durations-for-slot` | GET | No | Slot-first companion to `available`. For a given `instructor_id` + `date` + `start_time`, returns every active lesson type for the school (excluding `slug='trial'`) with a `fits` boolean + `reason` (`window`/`notice`/`not_offered`/`clash`/`travel`/`null`). Optional `pickup_postcode` runs the same travel-time heuristic as the slot feed. Used by `book.html` when the user clicks a slot to populate the modal duration dropdown. |
 | `book` | POST | Yes | Book a slot — deducts `duration_minutes` from `balance_minutes`. Body includes `lesson_type_id` |
 | `checkout-slot` | POST | Yes | Pay-per-slot: reserves slot, creates Stripe Checkout at lesson type's price |
 | `checkout-slot-guest` | POST | No | Guest checkout: validates guest fields (name, email, phone, pickup), finds-or-creates learner account, reserves slot, creates Stripe Checkout. Rate limited: 10/IP/hr + 5/phone/hr |
