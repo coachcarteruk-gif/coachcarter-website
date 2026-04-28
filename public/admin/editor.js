@@ -81,7 +81,7 @@ function getDefaultConfig() {
 function populateForm() {
   const p = currentConfig.pricing;
   const c = currentConfig.content;
-  
+
   // Pricing
   document.getElementById('paygHourly').value = p.payg_lesson_price || (p.payg_hourly ? p.payg_hourly * 1.5 : 90);
   document.getElementById('coreProgramme').value = p.core_programme;
@@ -89,6 +89,14 @@ function populateForm() {
   document.getElementById('retake1').value = p.retake_1;
   document.getElementById('retake2').value = p.retake_2;
   document.getElementById('retakeLifetime').value = p.retake_lifetime;
+
+  // Bulk credit pricing (the live rate learners actually pay at checkout)
+  const bulkHourlyPence = Number.isInteger(p.bulk_hourly_pence) ? p.bulk_hourly_pence : null;
+  const bulkInput = document.getElementById('bulkHourlyRate');
+  if (bulkInput) {
+    bulkInput.value = bulkHourlyPence != null ? (bulkHourlyPence / 100).toFixed(2) : '';
+  }
+  renderBulkTiers(Array.isArray(p.bulk_discount_tiers) ? p.bulk_discount_tiers : []);
   
   // Hero
   document.getElementById('heroHeadline').value = c.hero.headline;
@@ -346,11 +354,133 @@ function updatePreview() {
   document.getElementById('previewLifetime').textContent = '£' + (core + rLife).toLocaleString();
 }
 
+// ── BULK CREDIT PRICING (per-school) ────────────────────────────────────────
+// The hourly rate + tiers below control what learners are actually charged
+// at checkout (api/credits.js). The Bulk Packages table above is the marketing
+// display only — separate concern, separate save path.
+
+function renderBulkTiers(tiers) {
+  const tbody = document.getElementById('bulkTiersBody');
+  if (!tbody) return;
+  if (!tiers.length) {
+    tbody.innerHTML = '<tr id="bulk-tiers-empty"><td colspan="3" style="text-align:center; color: var(--muted); padding: 16px;">No discount tiers — bulk credits will be charged at the full hourly rate.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = tiers.map((t, i) => `
+    <tr data-tier-idx="${i}">
+      <td><input type="number" min="1" max="36" step="1" value="${Number(t.min_hours) || ''}" data-tier-field="min_hours" data-idx="${i}"></td>
+      <td><input type="number" min="0" max="50" step="1" value="${Number(t.discount_pct) || 0}" data-tier-field="discount_pct" data-idx="${i}"></td>
+      <td><button type="button" class="btn-remove-tier" data-tier-remove="${i}" style="background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; cursor: pointer; color: var(--muted);">Remove</button></td>
+    </tr>
+  `).join('');
+}
+
+function readTiersFromDom() {
+  const rows = document.querySelectorAll('#bulkTiersBody tr[data-tier-idx]');
+  const tiers = [];
+  rows.forEach(row => {
+    const minH = row.querySelector('[data-tier-field="min_hours"]');
+    const pct = row.querySelector('[data-tier-field="discount_pct"]');
+    if (!minH || !pct) return;
+    tiers.push({ min_hours: parseInt(minH.value, 10), discount_pct: parseInt(pct.value, 10) });
+  });
+  return tiers;
+}
+
+function addBulkTier() {
+  const existing = readTiersFromDom();
+  // Pick a sensible default for the new row: next round number above the highest current min_hours
+  const highest = existing.reduce((m, t) => Math.max(m, t.min_hours || 0), 0);
+  const newMin = Math.min(36, Math.max(12, highest + 12));
+  existing.push({ min_hours: newMin, discount_pct: 5 });
+  renderBulkTiers(existing);
+  validateBulkTiers();
+}
+
+function removeBulkTier(idx) {
+  const existing = readTiersFromDom();
+  existing.splice(idx, 1);
+  renderBulkTiers(existing);
+  validateBulkTiers();
+}
+
+// Returns null if valid, error string otherwise. Mirrors the server-side
+// rules in api/_pricing-helpers.js#validateBulkPricingConfig — keep in sync.
+function validateBulkTiers() {
+  const errEl = document.getElementById('bulkTiersError');
+  const saveBtn = document.getElementById('btn-save-config');
+  const tiers = readTiersFromDom();
+  let err = null;
+
+  const seen = new Set();
+  for (const t of tiers) {
+    if (!Number.isInteger(t.min_hours) || t.min_hours < 1 || t.min_hours > 36) {
+      err = 'Tier min hours must be a whole number between 1 and 36.';
+      break;
+    }
+    if (!Number.isInteger(t.discount_pct) || t.discount_pct < 0 || t.discount_pct > 50) {
+      err = 'Tier discount % must be a whole number between 0 and 50.';
+      break;
+    }
+    if (seen.has(t.min_hours)) {
+      err = `Duplicate tier for ${t.min_hours} hours — each milestone must be unique.`;
+      break;
+    }
+    seen.add(t.min_hours);
+  }
+
+  // Also validate the hourly rate input
+  if (!err) {
+    const v = document.getElementById('bulkHourlyRate')?.value;
+    if (v !== '' && v != null) {
+      const num = parseFloat(v);
+      if (!isFinite(num) || num <= 0 || num > 500) {
+        err = 'Bulk credit hourly rate must be between £0.01 and £500.';
+      }
+    }
+  }
+
+  if (errEl) {
+    if (err) {
+      errEl.textContent = '⚠️ ' + err;
+      errEl.className = 'status-msg error';
+      errEl.style.display = 'block';
+    } else {
+      errEl.style.display = 'none';
+    }
+  }
+  if (saveBtn) saveBtn.disabled = !!err;
+  return err;
+}
+
+// Event delegation for tier rows
+document.addEventListener('click', function (e) {
+  const removeIdx = e.target.closest('[data-tier-remove]')?.dataset.tierRemove;
+  if (removeIdx != null) removeBulkTier(parseInt(removeIdx, 10));
+});
+document.addEventListener('input', function (e) {
+  if (e.target.matches('[data-tier-field], #bulkHourlyRate')) validateBulkTiers();
+});
+
 function gatherFormData() {
   // Update pricing
   const lessonPrice = parseInt(document.getElementById('paygHourly').value) || 90;
   currentConfig.pricing.payg_lesson_price = lessonPrice;
   currentConfig.pricing.payg_hourly = lessonPrice / 1.5;
+
+  // Bulk credit pricing — only stored if a value has been entered. Empty
+  // input means "use the school's standard 90-min lesson type rate" (handled
+  // server-side in api/_pricing-helpers.js).
+  const bulkRaw = document.getElementById('bulkHourlyRate')?.value;
+  if (bulkRaw !== '' && bulkRaw != null) {
+    const pounds = parseFloat(bulkRaw);
+    if (isFinite(pounds) && pounds > 0) {
+      currentConfig.pricing.bulk_hourly_pence = Math.round(pounds * 100);
+    }
+  } else {
+    delete currentConfig.pricing.bulk_hourly_pence;
+  }
+  currentConfig.pricing.bulk_discount_tiers = readTiersFromDom();
   currentConfig.pricing.core_programme = parseInt(document.getElementById('coreProgramme').value) || 2400;
   currentConfig.pricing.core_hours = parseInt(document.getElementById('coreHours').value) || 30;
   currentConfig.pricing.retake_1 = parseInt(document.getElementById('retake1').value) || 200;
@@ -407,6 +537,14 @@ async function saveConfig() {
   if (!password) {
     showStatus('⚠️ Enter your admin password before saving.', 'error');
     document.getElementById('adminPassword').focus();
+    return;
+  }
+
+  // Block save if bulk pricing is invalid — server would reject anyway, but
+  // catching here gives a clearer message and avoids a wasted round-trip.
+  const bulkErr = validateBulkTiers();
+  if (bulkErr) {
+    showStatus('⚠️ Fix bulk pricing errors before saving.', 'error');
     return;
   }
 
@@ -558,5 +696,6 @@ document.addEventListener('change', function (e) {
   bind('btn-save-config', saveConfig);
   bind('btn-download-config', downloadConfig);
   bind('btn-reset-config', resetConfig);
+  bind('btnAddTier', addBulkTier);
 })();
 })();

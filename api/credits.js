@@ -2,31 +2,9 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { requireAuth } = require('./_auth');
+const { calcBulkTotal, getBulkPricing, MAX_HOURS_PER_PURCHASE } = require('./_pricing-helpers');
 
-const PRICE_PER_STANDARD_LESSON_PENCE = 8250; // £82.50 per 1.5 hrs
 const STANDARD_LESSON_MINUTES = 90;
-const MAX_HOURS_PER_PURCHASE = 36;
-
-// Bulk discount tiers — buy more hours, save more
-const DISCOUNT_TIERS = [
-  { minHours: 36, discountPct: 15 },
-  { minHours: 24, discountPct: 10 },
-  { minHours: 12, discountPct:  5 },
-];
-
-function getDiscount(hours) {
-  const tier = DISCOUNT_TIERS.find(t => hours >= t.minHours);
-  return tier ? tier.discountPct : 0;
-}
-
-function calcTotal(hours) {
-  // Price is based on the standard lesson rate: £82.50 per 1.5 hours = £55/hr
-  const pricePerHourPence = Math.round(PRICE_PER_STANDARD_LESSON_PENCE / 1.5);
-  const fullPence    = Math.round(pricePerHourPence * hours);
-  const discountPct  = getDiscount(hours);
-  const discountAmt  = Math.round(fullPence * discountPct / 100);
-  return { fullPence, discountPct, discountAmt, totalPence: fullPence - discountAmt, pricePerHourPence };
-}
 
 function verifyAuth(req) {
   return requireAuth(req, { roles: ['learner', 'admin'] });
@@ -39,9 +17,35 @@ module.exports = async (req, res) => {
   if (action === 'balance') return handleBalance(req, res);
   if (action === 'checkout') return handleCheckout(req, res);
   if (action === 'verify') return handleVerify(req, res);
+  if (action === 'bulk-pricing') return handleBulkPricing(req, res);
 
-  return res.status(400).json({ error: 'Unknown action. Use ?action=balance, ?action=checkout, or ?action=verify' });
+  return res.status(400).json({ error: 'Unknown action. Use ?action=balance, ?action=checkout, ?action=verify, or ?action=bulk-pricing' });
 };
+
+// ── GET /api/credits?action=bulk-pricing ─────────────────────────────────────
+// Returns the school's current bulk-credit hourly rate and discount tiers.
+// Public (no auth) — same data the buy-credits page uses to render prices.
+// The buy-credits page MUST use these values verbatim so what's displayed
+// matches what handleCheckout will charge — no client-side recalculation.
+async function handleBulkPricing(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = parseInt(req.query.school_id) || 1;
+    const { hourlyPence, discountTiers, source } = await getBulkPricing(sql, schoolId);
+    return res.json({
+      ok: true,
+      hourly_pence: hourlyPence,
+      discount_tiers: discountTiers, // sorted descending by min_hours; first match wins
+      max_hours: MAX_HOURS_PER_PURCHASE,
+      _source: source
+    });
+  } catch (err) {
+    console.error('credits bulk-pricing error:', err);
+    reportError('/api/credits?action=bulk-pricing', err);
+    return res.status(500).json({ error: 'Failed to load bulk pricing' });
+  }
+}
 
 // ── GET /api/credits?action=balance ──────────────────────────────────────────
 // Returns the authenticated learner's current balance and recent transactions.
@@ -120,14 +124,15 @@ async function handleCheckout(req, res) {
   const lessonEquiv = Math.round(hours / 1.5); // for backwards compat metadata
 
   try {
-    const { fullPence, discountPct, discountAmt, totalPence } = calcTotal(hours);
+    const sql = neon(process.env.POSTGRES_URL);
+    const { fullPence, discountPct, discountAmt, totalPence, pricePerHourPence } = await calcBulkTotal(sql, schoolId, hours);
     const origin = req.headers.origin || 'https://coachcarter.uk';
 
     const productName = discountPct > 0
       ? `${hours} Hours of Driving Lessons (${discountPct}% off)`
       : `${hours} Hour${hours !== 1 ? 's' : ''} of Driving Lessons`;
     const description = discountPct > 0
-      ? `${hours} hours at £${(PRICE_PER_STANDARD_LESSON_PENCE / 150).toFixed(2)}/hr. You save £${(discountAmt / 100).toFixed(2)} with the ${discountPct}% package discount.`
+      ? `${hours} hours at £${(pricePerHourPence / 100).toFixed(2)}/hr. You save £${(discountAmt / 100).toFixed(2)} with the ${discountPct}% package discount.`
       : `${hours} hours of driving lessons. Book online at any time.`;
 
     const session = await stripe.checkout.sessions.create({

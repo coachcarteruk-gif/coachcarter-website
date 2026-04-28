@@ -1738,6 +1738,28 @@ The Test Ready Guarantee, the 3-tier learner journey programme, and the pay-as-y
 
 ---
 
+## 2.84 — Per-School Bulk Credit Pricing (28 April 2026)
+
+The bulk-credits checkout (`api/credits.js`) was using a hardcoded £55/hr rate and a fixed 12hr/24hr/36hr → 5%/10%/15% discount tier structure. This created two issues: (a) the buy-credits page displayed prices computed from `lesson_types.price_pence` while the API charged from a different hardcoded constant — page and Stripe receipt would silently disagree the moment `lesson_types` was edited; (b) every InstructorBook school onboarding would inherit CoachCarter's hourly rate regardless of their local pricing.
+
+Bulk pricing was always intended as channel pricing (reward upfront commitment, help cashflow) — this commit makes that intent explicit and per-school configurable.
+
+**What changed:**
+- **`api/_pricing-helpers.js` (new)** — single source of truth for bulk pricing. `getBulkPricing(sql, schoolId)` reads `schools.config.pricing.bulk_hourly_pence` + `bulk_discount_tiers`, falls back to the school's standard 90-min lesson type rate, then to a hardcoded £55/hr last-resort. `calcBulkTotal()` does the full breakdown. `validateBulkPricingConfig()` enforces sanity caps (1–50000 pence, 0–50% discount, 1–36 min_hours, no duplicate tiers).
+- **`api/credits.js`** — removed `PRICE_PER_STANDARD_LESSON_PENCE` and `DISCOUNT_TIERS` hardcoded constants. `handleCheckout` now calls `calcBulkTotal(sql, schoolId, hours)`. New public `?action=bulk-pricing` endpoint returns the same data the page renders, so what's displayed = what's charged.
+- **`api/config.js`** — admin saves now run `validateBulkPricingConfig()` before persisting. Bad input is rejected with a clear error message.
+- **`public/admin/editor.html` + `editor.js`** — new "Bulk Credit Pricing" section under Pricing Settings: `bulk_hourly_pence` input + dynamic discount-tier table with add/remove rows. Client-side validation mirrors server. Save button blocks until errors are fixed.
+- **`public/learner/buy-credits.js`** — fetches live pricing from `/api/credits?action=bulk-pricing` on load. Both bulk packages and single-lesson cards now compute display price from `bulk_hourly × hours`, not from `lt.price_pence`. Page = receipt by construction.
+- **`db/migration.sql`** — idempotent seed for school 1 (CoachCarter): sets `bulk_hourly_pence = 5500` and the existing 5/10/15% tier structure if not already set. Preserves existing behaviour exactly. New schools get nothing seeded — they fall back to their lesson_types rate (= no bulk discount) until admin opts in.
+
+**Per-learner override behaviour:** `instructor_learner_notes.custom_hourly_rate_pence` continues to apply at slot-booking time only (`api/slots.js`). Bulk credits ignore custom rates — credits are paid into a balance not tied to a specific instructor at purchase time. Documented in helper file.
+
+**`paygHourly` field unchanged:** stays as the marketing-page rate (used by `lessons.html` display via `lessons.js`). Different concept from `bulk_hourly_pence`. Editor now has a callout explaining the difference.
+
+**Files changed:** `api/_pricing-helpers.js` (new), `api/credits.js`, `api/config.js`, `public/admin/editor.html`, `public/admin/editor.js`, `public/learner/buy-credits.js`, `db/migration.sql`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
