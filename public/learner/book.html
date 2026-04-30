@@ -20,8 +20,8 @@
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="/shared/brand-tokens.css">
   <link rel="stylesheet" href="/shared/learner.css">
-  <script src="/shared/dark-mode.js"></script>
-  <script src="/shared/font-swap.js"></script>
+  <script src="/shared/dark-mode.js" defer></script>
+  <script src="/shared/font-swap.js" defer></script>
   <style>
     /* ── Toolbar (sticky: pills + filter) ────────────────────────────────── */
     .cal-toolbar {
@@ -381,7 +381,8 @@
 </head>
 <body>
 
-<div class="page">
+<main class="page">
+  <h1 class="visually-hidden" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Book a driving lesson</h1>
 
   <!-- Welcome banner -->
   <div class="banner banner-welcome" id="welcomeBanner" style="display:none">
@@ -451,7 +452,7 @@
     <button class="btn-load-more" id="btnLoadMore">Show more slots</button>
   </div>
 
-</div>
+</main>
 
 <!-- ── Book confirmation modal ── -->
 <div class="modal-overlay" id="bookModal">
@@ -492,11 +493,11 @@
       <div id="profileFields" style="display:none;margin:12px 0">
         <p style="font-size:0.8rem;color:var(--muted);margin-bottom:10px">We need a couple of details for your first booking:</p>
         <div id="profilePhoneRow" style="margin-bottom:10px">
-          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Phone number *</label>
+          <label for="mdProfilePhone" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Phone number *</label>
           <input type="tel" id="mdProfilePhone" placeholder="07xxx xxx xxx" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
         </div>
         <div id="profilePickupRow" style="margin-bottom:10px">
-          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup address *</label>
+          <label for="mdProfilePickup" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup address *</label>
           <input type="text" id="mdProfilePickup" placeholder="e.g. 12 High Street, RG1 2AB" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
         </div>
       </div>
@@ -504,22 +505,22 @@
       <!-- Guest checkout fields (hidden for logged-in users) -->
       <div id="guestFields" style="display:none;margin:12px 0">
         <div style="margin-bottom:10px">
-          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Your name *</label>
+          <label for="mdGuestName" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Your name *</label>
           <input type="text" id="mdGuestName" placeholder="Full name" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:16px;box-sizing:border-box;">
           <div class="field-error-msg" id="errGuestName">Full name is required</div>
         </div>
         <div style="margin-bottom:10px">
-          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Email *</label>
+          <label for="mdGuestEmail" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Email *</label>
           <input type="email" id="mdGuestEmail" placeholder="you@example.com" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:16px;box-sizing:border-box;">
           <div class="field-error-msg" id="errGuestEmail">Enter a valid email address</div>
         </div>
         <div style="margin-bottom:10px">
-          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Phone number *</label>
+          <label for="mdGuestPhone" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Phone number *</label>
           <input type="tel" id="mdGuestPhone" placeholder="07xxx xxx xxx" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:16px;box-sizing:border-box;">
           <div class="field-error-msg" id="errGuestPhone">Enter a valid UK mobile number (07...)</div>
         </div>
         <div style="margin-bottom:10px">
-          <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup address *</label>
+          <label for="mdGuestPickup" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup address *</label>
           <input type="text" id="mdGuestPickup" placeholder="e.g. 12 High Street, RG1 2AB" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:16px;box-sizing:border-box;">
           <div class="field-error-msg" id="errGuestPickup">Pickup address is required</div>
         </div>
@@ -535,7 +536,7 @@
       </div>
 
       <div style="margin:12px 0">
-        <label style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off address (optional)</label>
+        <label for="mdDropoff" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off address (optional)</label>
         <input type="text" id="mdDropoff" placeholder="e.g. School, work, test centre…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
       </div>
       <!-- Repeat weekly toggle -->

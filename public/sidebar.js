@@ -325,7 +325,7 @@
         '<div class="cc-sb-credits" id="cc-sb-credits"></div>' +
         '<div class="cc-sb-theme" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;border-radius:6px;background:var(--surface, #f5f5f5);border:1px solid var(--border, #e5e5e5)">' +
           '<span style="font-size:0.8rem;color:var(--muted, #6b7280);font-weight:500">Theme</span>' +
-          '<select id="cc-sb-theme-select" style="background:var(--white, #fff);border:1px solid var(--border, #e5e5e5);border-radius:5px;color:var(--primary, #1a1a1a);font-family:inherit;font-size:0.78rem;padding:4px 8px;outline:none;cursor:pointer">' +
+          '<select id="cc-sb-theme-select" aria-label="Theme" style="background:var(--white, #fff);border:1px solid var(--border, #e5e5e5);border-radius:5px;color:var(--primary, #1a1a1a);font-family:inherit;font-size:0.78rem;padding:4px 8px;outline:none;cursor:pointer">' +
             '<option value="auto"' + (currentTheme === 'auto' ? ' selected' : '') + '>Auto</option>' +
             '<option value="light"' + (currentTheme === 'light' ? ' selected' : '') + '>Light</option>' +
             '<option value="dark"' + (currentTheme === 'dark' ? ' selected' : '') + '>Dark</option>' +
@@ -346,7 +346,7 @@
       return '<div class="cc-sb-footer" id="cc-sb-footer">' +
         '<div class="cc-sb-theme" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;border-radius:6px;background:var(--surface, #f5f5f5);border:1px solid var(--border, #e5e5e5)">' +
           '<span style="font-size:0.8rem;color:var(--muted, #6b7280);font-weight:500">Theme</span>' +
-          '<select id="cc-sb-theme-select" style="background:var(--white, #fff);border:1px solid var(--border, #e5e5e5);border-radius:5px;color:var(--primary, #1a1a1a);font-family:inherit;font-size:0.78rem;padding:4px 8px;outline:none;cursor:pointer">' +
+          '<select id="cc-sb-theme-select" aria-label="Theme" style="background:var(--white, #fff);border:1px solid var(--border, #e5e5e5);border-radius:5px;color:var(--primary, #1a1a1a);font-family:inherit;font-size:0.78rem;padding:4px 8px;outline:none;cursor:pointer">' +
             '<option value="auto"' + (currentTheme2 === 'auto' ? ' selected' : '') + '>Auto</option>' +
             '<option value="light"' + (currentTheme2 === 'light' ? ' selected' : '') + '>Light</option>' +
             '<option value="dark"' + (currentTheme2 === 'dark' ? ' selected' : '') + '>Dark</option>' +
@@ -579,7 +579,7 @@
     '    align-items: center;',
     '    text-decoration: none;',
     '    color: #a0a0a0;',
-    '    font-size: 0.63rem;',
+    '    font-size: 0.875rem;',
     '    font-weight: 600;',
     '    gap: 3px;',
     '    padding: 8px 2px;',

@@ -52,7 +52,8 @@
   </div>
 </nav>
 
-<div class="card">
+<main class="card">
+  <h1 class="visually-hidden" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Sign in to CoachCarter</h1>
 
   <!-- ═══════════════════════════════════════════════════════════════
        SCREEN 1 — Enter email or phone
@@ -77,15 +78,15 @@
 
     <form id="send-link-form">
       <div class="form-group" id="email-group">
-        <label>Email address</label>
+        <label for="input-email">Email address</label>
         <input type="email" id="input-email" placeholder="your@email.com" autocomplete="email">
       </div>
       <div class="form-group" id="phone-group" style="display:none;">
-        <label>Phone number</label>
+        <label for="input-phone">Phone number</label>
         <input type="tel" id="input-phone" placeholder="07700 900000" autocomplete="tel">
       </div>
       <div class="form-group" id="referral-group" style="display:none;">
-        <label>Referral code <span style="color:#888;font-weight:400">(optional)</span></label>
+        <label for="input-referral">Referral code <span style="color:#888;font-weight:400">(optional)</span></label>
         <input type="text" id="input-referral" placeholder="e.g. FRASER-A1B2" autocomplete="off" style="text-transform:uppercase;">
       </div>
       <button type="submit" class="btn-primary" id="send-btn">Send login link</button>
@@ -137,13 +138,13 @@
       We sent a 6-digit code to<br>
       <strong id="code-destination"></strong>
     </div>
-    <div class="code-inputs" id="code-inputs">
-      <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" data-idx="0">
-      <input type="text" inputmode="numeric" maxlength="1" data-idx="1">
-      <input type="text" inputmode="numeric" maxlength="1" data-idx="2">
-      <input type="text" inputmode="numeric" maxlength="1" data-idx="3">
-      <input type="text" inputmode="numeric" maxlength="1" data-idx="4">
-      <input type="text" inputmode="numeric" maxlength="1" data-idx="5">
+    <div class="code-inputs" id="code-inputs" role="group" aria-label="6-digit verification code">
+      <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" data-idx="0" aria-label="Code digit 1">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="1" aria-label="Code digit 2">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="2" aria-label="Code digit 3">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="3" aria-label="Code digit 4">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="4" aria-label="Code digit 5">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="5" aria-label="Code digit 6">
     </div>
     <div class="code-error" id="code-error"></div>
     <button class="btn-primary" id="verify-code-btn" disabled>Verify code</button>
@@ -183,7 +184,7 @@
     <div class="result-title">Welcome to CoachCarter!</div>
     <div class="result-sub">Your account is ready. Just tell us your name and you're all set.</div>
     <div class="name-form">
-      <label>Your name</label>
+      <label for="input-name">Your name</label>
       <input type="text" id="input-name" placeholder="e.g. Alex Smith" autofocus>
       <button class="btn-primary" id="btn-set-name">Continue</button>
     </div>
@@ -217,7 +218,7 @@
     <button class="btn-primary" id="btn-request-new-link" style="display:inline-block;width:auto;padding:12px 28px;">Request a new link</button>
   </div>
 
-</div>
+</main>
 
 <a href="/" class="back-link">&larr; Back to home</a>
 

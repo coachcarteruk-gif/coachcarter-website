@@ -2,6 +2,11 @@
   "name": "coachcarter-website",
   "version": "1.0.0",
   "description": "CoachCarter Driving School",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev",
+    "deploy": "vercel --prod"
+  },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.0",
     "bcryptjs": "^2.4.3",

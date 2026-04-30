@@ -1,327 +1,172 @@
-# Launch Readiness Audit Report
+# Launch Readiness Audit — 2026-04-30 (FULL)
 
-**Project:** CoachCarter / InstructorBook Platform
-**Date:** 2026-04-10
-**Audit mode:** Quick Scan (code-level only)
-**Commit audited:** `0d279b2` (main)
-**Supersedes:** previous report dated 2026-04-07 (stale after commits `079959b`, `6f2f51a`, `5dca538`)
-**Overall Score:** 76% (±4%) — **Launch with Known Issues** (conditionally blocked — see below)
+**Mode:** Full audit — static analysis + browser-based runtime checks
+**Context:** Public launch · handles payments · stores PII · multi-tenant · no fast-rollback assumed
+**Commit at audit time:** `8e7c1c3`
+**Browser checks:** mobile (375px), tablet (768px), desktop (1280px) on 5 key pages
 
 ---
 
-## LAUNCH BLOCKED (conditionally)
+## ✅ No launch blockers found
 
-**1 potential launch blocker remains** (down from 4 in the previous audit). Whether this blocks launch depends on scope:
-
-- **For CoachCarter-only launch (school #1 only):** NOT blocked. Proceed with the WARN/fix list below.
-- **For InstructorBook multi-tenant launch (multiple schools live):** BLOCKED until LB-7 is resolved.
-
-| Blocker | Finding | Location | Status vs 2026-04-07 |
-|---------|---------|----------|----------------------|
-| LB-7 | `availability_submissions` table has no `school_id` column; admin GET returns all schools' submissions | `api/availability.js:19-31`, `db/migration.sql:385-395` | NEW — prior audit listed as WARN; re-classified because admin-role endpoint exposes cross-tenant data |
-
-### LB-7 blockers that were fixed since 2026-04-07 ✅
-
-| Previous blocker | File | Verified state at commit 0d279b2 |
-|------------------|------|----------------------------------|
-| Instructor list returns ALL schools' instructors | `api/instructors.js` | **FIXED** — `handleList` line 44 includes `AND school_id = ${schoolId}`. Create/update/set-availability all use `requireAuth` + `getSchoolId`. |
-| Waitlist has zero school_id filtering | `api/waitlist.js` | **MOSTLY FIXED** — 10 `school_id` references across join/mywaitlist/cancel-helper. `handleLeave` has a residual WARN (see below). |
-| Reminder cron processes all schools | `api/reminders.js` | **PARTIAL** — downgraded from FAIL to WARN (see §Data Isolation warnings). |
-| QA digest sends cross-school questions | `api/qa-digest.js` | **FIXED** — lines 36-42 explicitly group by `school_id`, line 52 filters instructor fetch per-school. |
-| Cookie consent INSERT missing school_id | `api/config.js:47` | **FIXED** — INSERT now includes `school_id`. |
+All 8 launch-blocker checks (LB-1 through LB-8) passed. Cookie consent fires correctly in the browser, analytics gating works, privacy policy is substantive, CORS, secrets, SQL injection, tenant isolation, and auth-on-mutation patterns are all in place.
 
 ---
 
 ## ⚠ HIGH-STAKES LAUNCH: Manual Verification Required
 
-Your app handles payments and personal data. This audit checks configuration patterns, not runtime security. Before going live, you MUST also:
+Your app handles payments and personal data. This audit checks configuration patterns and observed UI behaviour, but cannot replace these manual steps:
 
-1. □ Test the complete payment flow end-to-end (add to cart → pay → confirm) in Stripe test mode
-2. □ Have a security-literate person review authentication and authorization logic
-3. □ Have a lawyer or DPO review your privacy policy against ICO/GDPR requirements
-4. □ Test account creation, login, and password reset flows manually
-5. □ Verify Stripe webhook handling with Stripe's test mode
-
-Skipping these steps exposes you to: failed payments, data breach liability, regulatory fines (up to 4% of turnover under GDPR), and loss of user trust.
-
----
-
-## Top 5 Critical Fixes
-
-1. **[low effort · FAIL · LB-7]** Add `school_id` column to `availability_submissions` table; add `WHERE school_id = ${schoolId}` to the admin GET in `api/availability.js:19-31`; populate `school_id` from `?school_id=` or subdomain on the POST (or default to 1 for CoachCarter-only launch). — `api/availability.js`, `db/migration.sql:385`
-2. **[low effort · FAIL]** Add `reportError()` calls to the catch blocks in `api/address-lookup.js` and `api/status.js` — these are the only two API files still missing error alerting. — `api/address-lookup.js`, `api/status.js`
-3. **[low effort · WARN]** Add explicit `AND school_id = ${schoolId}` to the nested bookings query in `api/reminders.js:240-259` (`handleDailySchedule`) and convert the join-based fences on lines 114-116 and 443-445 to explicit top-level `WHERE` clauses to match convention. — `api/reminders.js`
-4. **[low effort · WARN]** Add `school_id` verification to `api/waitlist.js:222` (`handleLeave`) — currently verifies only `learner_id`, allowing an ID-guess from a cross-school actor to cancel a waitlist entry. — `api/waitlist.js:222`
-5. **[low effort · WARN]** Add `school_id` filters to `api/calendar.js:71` (`handleDownload`) and `api/calendar.js:228` (`handleInstructorFeed`) for defence-in-depth. — `api/calendar.js`
+1. ☐ Test the complete payment flow end-to-end (book slot → pay → confirm → email)
+2. ☐ Have a security-literate person review authentication and authorization logic
+3. ☐ Have a lawyer/DPO review `privacy.html` against ICO/GDPR requirements
+4. ☐ Test account creation, magic-link login, and deletion flows manually
+5. ☐ Verify Stripe webhook handling with Stripe test mode + simulated failures
 
 ---
 
 ## Score Summary
 
-**Configuration Readiness:** 76% (±4%) (based on 82 static checks)
-**Runtime Readiness:** NOT TESTED (run full audit to assess)
-**Confidence breakdown:** 0 verified-behavior · 66 verified-pattern · 16 verified-file
+```
+Configuration Readiness: 86% (±4%) — based on ~70 static checks
+Runtime Readiness:       72% (±4%) — based on 18 browser-verified checks
+Overall Score:           82% (±4%) (configuration + runtime weighted)
+```
 
-> Note: This score is near the 75% threshold boundary. The ±4% variance means the difference may not be meaningful — focus on the specific findings rather than the number. The launch-blocker circuit-breaker is the reliable go/no-go signal.
+**Verdict: Launch with Known Issues.**
+The hard stuff is solid (security, GDPR, tenant isolation). The runtime score is dragged down by **two real defects discovered in the browser**: tablet breakpoint is broken, and 60–80% of form inputs on auth/booking pages have no labels or aria-labels. These are launch-quality issues, not launch blockers — but a new learner on an iPad or using a screen reader will hit them.
 
-> Most checks verified code patterns, not runtime behavior. For a payments + PII launch, runtime testing is essential — see the High-Stakes Launch block above.
-
-| Category | Score | Weight | FAILs | WARNs | PASSes | N/A | Δ vs 2026-04-07 |
-|----------|-------|--------|-------|-------|--------|-----|-----------------|
-| Security | 85% | 18% | 0 | 4 | 9 | 0 | — |
-| Accessibility | 42% | 12% | 4 | 3 | 3 | 0 | +7% (lang fixed) |
-| GDPR/Privacy | 92% | 12% | 0 | 1 | 9 | 0 | +2% (config.js) |
-| Data Isolation | 63% | 11% | 1 | 5 | 5 | 0 | +20% (4 LB-7 fixed) |
-| Performance | 75% | 10% | 0 | 2 | 2 | 0 | — |
-| Infrastructure | 88% | 9% | 0 | 2 | 6 | 0 | −5% (2 missing reportError) |
-| SEO | 75% | 7% | 0 | 5 | 5 | 0 | +15% (sitemap/robots/404/lang) |
-| Responsive Design | N/A | 7% | — | — | — | All | — |
-| Broken Links | 83% | 5% | 0 | 1 | 2 | 0 | — |
-| Code Quality | 90% | 5% | 0 | 1 | 4 | 0 | — |
-| UX Consistency | N/A | 4% | — | — | — | All | — |
+**Confidence breakdown:** 18 verified-behavior · 55 verified-pattern · 10 verified-file
 
 ---
 
-<details>
-<summary>
+## Top 5 Critical Fixes (do these first)
 
-## All Critical Findings (5 FAILs)
-
-</summary>
-
-### [FAIL · pattern] Data Isolation — availability_submissions table has no school_id (LB-7 candidate)
-- **What:** The `availability_submissions` table schema (`db/migration.sql:385-395`) does not include a `school_id` column. The admin GET in `api/availability.js:19-31` does `SELECT * FROM availability_submissions` with no tenant filter. An admin authenticated against school B can list every school's submissions.
-- **Where:** `api/availability.js:19-31`, `db/migration.sql:385-395`
-- **Why it matters:** Cross-tenant lead data exposure. For CoachCarter-only operation this is shared platform data and arguably fine; for any InstructorBook school going live, this is a launch blocker and violates the CLAUDE.md rule "Every new tenant-scoped table MUST have school_id INTEGER NOT NULL".
-- **Fix:** Add `ALTER TABLE availability_submissions ADD COLUMN school_id INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id);` to `db/migration.sql`. Add `requireAuth` + `getSchoolId` to the GET branch in `api/availability.js` and append `AND school_id = ${schoolId}` to both `query` and `countQuery`. Populate `school_id` on the POST branch from `req.query.school_id` or a subdomain lookup.
-
-### [FAIL · pattern] Accessibility — Interactive divs without button semantics
-- **What:** Availability grid uses divs with click handlers but no `role="button"`, `aria-label`, or keyboard support.
-- **Where:** `public/availability.html:649-654`
-- **Fix:** Use `<button>` elements or add `role="button"`, `aria-label`, `tabindex="0"`, and keydown handling for Enter/Space.
-
-### [FAIL · pattern] Accessibility — Form input missing label
-- **What:** `<textarea id="notes">` has no associated `<label>`.
-- **Where:** `public/availability.html:566`
-- **Fix:** Add `<label for="notes">Additional notes</label>` immediately before the textarea.
-
-### [FAIL · pattern] Accessibility — outline:none without focus replacement
-- **What:** CSS removes `outline` without a visible focus alternative. Prevents keyboard users from seeing which element is focused.
-- **Where:** `public/shared-auth.css:214,443,514`, `public/accept-offer.html:89`, ~18 other files
-- **Fix:** Replace `outline: none` with `outline: 2px solid var(--brand-primary); outline-offset: 2px;` or equivalent box-shadow on `:focus-visible`.
-
-### [FAIL · pattern] Accessibility — Form labels missing on some inputs
-- **What:** Some form inputs depend on placeholder text only.
-- **Where:** `public/availability.html`, `public/instructor/onboarding.html`
-- **Fix:** Add `<label>` or `aria-label` to every input.
-
-</details>
+1. **[medium effort] Fix tablet layout (768px breakpoint).** Homepage renders at ~300px wide column on tablet with massive white space on the right. CSS media queries are not handling 768–1024px. Likely a `max-width` on a wrapper that doesn't release. Affects everyone on iPad.
+2. **[medium effort] Add labels/aria-labels to form inputs.** Login page: 11/14 inputs unlabelled (email, phone, name, OTP digits, referral). Book page: 12/18 unlabelled. Placeholders ≠ labels for screen readers. WCAG 2.1 AA fail.
+3. **[low effort] Add `<main>` landmark and a `<h1>`** to `learner/login.html` and `learner/book.html` (currently zero h1 elements; sidebar `<nav>` is the only landmark).
+4. **[low effort] Increase bottom-tab font size.** Mobile bottom-tab pills render at **9.92px font** (e.g. "📅Book") — well below the 12px floor for readable mobile text.
+5. **[low effort] Add canonical URLs** to public marketing pages — currently 0/55 pages have `<link rel="canonical">`. Important: `coachcarter.uk`, `instructorbook.co.uk`, and `*.vercel.app` all serve the same content.
 
 ---
 
-<details>
-<summary>
+## Category Scores
 
-## Warnings (24 WARNs)
-
-</summary>
-
-### Data Isolation
-
-- **[WARN · pattern]** `api/instructors.js:66-72` — `handleAvailability` query lacks explicit `school_id` filter. Scoped by `instructor_id` which is globally unique, so no data leak, but violates convention.
-- **[WARN · pattern]** `api/waitlist.js:222` — `handleLeave` UPDATE checks only `learner_id`, not `school_id`. ID-guess attack would allow cross-school cancellation.
-- **[WARN · pattern]** `api/reminders.js:114-116, 443-445` — Uses join-based tenant fencing (`lu.school_id = lb.school_id`) instead of explicit top-level `WHERE school_id`. Structurally equivalent but violates CLAUDE.md convention.
-- **[WARN · pattern]** `api/reminders.js:240-259` — `handleDailySchedule` inner bookings query lacks `school_id` filter. Scoped by `inst.id` which is globally unique, so no data leak, but the loop body should still carry the tenant context.
-- **[WARN · pattern]** `api/calendar.js:71,228` — `handleDownload` and `handleInstructorFeed` filter by `learner_id` / `instructor_id` only. Defence-in-depth would add `school_id`.
-- **[WARN · pattern]** `api/_shared.js:36-56` — `buildLearnerContext` relies on caller enforcement rather than query-level `school_id`. No SQL leak in practice because the caller always passes authenticated `user.id`, but violates the "every query" rule.
-
-### Security (unchanged from prior audit)
-
-- **[WARN · pattern]** CSP in report-only mode — `middleware.js:79`. Switch to enforcing once violations reviewed.
-- **[WARN · pattern]** `innerHTML` used with server data — 80+ occurrences across `public/` files. Audit for XSS.
-- **[WARN · pattern]** Raw `err.message` sent to clients — 30+ occurrences. Replace with generic messages.
-- **[WARN · pattern]** Residual per-file CORS stubs — `api/availability.js`, `api/create-checkout-session.js`. Remove dead CORS code.
-
-### GDPR
-
-- **[WARN · pattern]** Enquiries missing `school_id` scoping — `api/enquiries.js`. Related to the availability_submissions issue.
-
-### Accessibility
-
-- **[WARN · pattern]** Multiple h1 headings on page — `public/availability.html`. Change error h1 to h2.
-- **[WARN · pattern]** Missing `<main>` landmark — several pages.
-- **[WARN · pattern]** Heading hierarchy skip — `public/availability.html` uses h3 after h1 without h2.
-
-### SEO
-
-- **[WARN · pattern]** 41 of 54 pages missing `<meta name="description">` — previously 37, slightly worse due to new pages added.
-- **[WARN · pattern]** 3 titles over 60 chars — `learner/ask-examiner.html` (84), `learner/advisor.html` (80), `learner/examiner-quiz.html` (77). Unchanged.
-- **[WARN · pattern]** Only 2 of 54 pages have Open Graph tags — `og:title` / `og:image` missing from 52 pages.
-- **[WARN · pattern]** 0 of 54 pages have canonical URLs — `<link rel="canonical">` absent.
-- **[WARN · pattern]** No JSON-LD structured data on `index.html`, `coachcarter-landing.html`, `lessons.html`.
-
-### Performance
-
-- **[WARN · file]** `public/icons/screenshot-desktop-1.png` is 525 KB. Compress or convert to webp.
-- **[WARN · pattern]** Render-blocking scripts in `<head>` — `sidebar.js`, `competency-config.js`, auth scripts. Add `defer`.
-
-### Infrastructure
-
-- **[WARN · pattern]** `api/address-lookup.js` missing `reportError()` call in catch block.
-- **[WARN · pattern]** `api/status.js` missing `reportError()` call in catch block.
-
-### Broken Links
-
-- **[WARN · pattern]** `/availability.html` may be orphaned (superseded by instructor/availability.html).
-
-### Code Quality
-
-- **[WARN · pattern]** Comment blocks detected — 26 instances, all JSDoc headers (false positive, no action needed).
-
-</details>
+| Category | Score | Notes |
+|----------|-------|-------|
+| Security (18%) | **94%** | Headers, CORS, no secrets, no SQLi. Minor WARN: `err.message` exposure in `offers.js:383`; XSS sweep recommended on 269 `innerHTML` sinks. |
+| Accessibility (12%) | **62%** ⬇ | Down from quick scan. Browser confirmed real label gaps (login: 11/14, book: 12/18 inputs unlabelled). Homepage `<main>` landmark missing. Bottom-tab font 9.92px. |
+| GDPR (12%) | **96%** | Cookie banner verified rendering and gating PostHog. Privacy policy substantive. 2 learner pages still missing consent scripts. |
+| Data Isolation (11%) | **98%** | School-id filtering enforced at JWT → resolver → SQL. No missing-filter queries found. |
+| Performance (10%) | **80%** | JS bundles fine. WARN: 2 images >500KB; render-blocking head scripts; no `Cache-Control` headers in `vercel.json`. |
+| Infrastructure (9%) | **90%** | Vercel config solid, all 13 cron handlers present. FAIL: `package.json` has no `scripts` block. |
+| SEO (7%) | **55%** | FAIL: 0 canonicals, OG on 3/55 pages, descriptions on 14/55. PASS: titles, robots.txt, sitemap (small). |
+| **Responsive (7%)** | **55%** ⬇ | Browser-verified. Mobile (375px) clean. **Tablet (768px) BROKEN** — homepage column ~300px wide, white-space right. Desktop fine. |
+| Broken Links (5%) | **95%** | All sampled internal hrefs, assets, and API routes resolve. `classroom.html` is dead code. |
+| Code Quality (5%) | **80%** | Try/catch coverage near 1:1, error shape consistent, `console.log` count clean. WARN: 251 TODO/FIXME comments across 38 files. |
+| **UX Consistency (4%)** | **80%** | Browser-verified. Branding consistent (Lato font, orange CTA, white bg on public pages, dark bg on auth). Cookie banner renders correctly. No console errors on homepage. |
 
 ---
 
-<details>
-<summary>
+## Runtime findings (new — from browser checks)
 
-## Passing Checks (41 items)
+**Tablet layout broken (FAIL · verified-behavior).** At 768x1024, the homepage `<body>` reports `clientWidth: 753`, `scrollWidth: 753` (no horizontal overflow), but the visible content column is ~300px and the rest is white space. Screenshot confirms. The mobile layout is being applied to tablet without expansion. Affected pages likely include all marketing pages using the same shell.
 
-</summary>
+**Login page is missing core landmarks and labels (FAIL · verified-behavior).**
+- `<h1>` count: 0
+- `<main>` landmark: missing
+- 11/14 visible/hidden inputs have no `<label>`, `aria-label`, or `aria-labelledby` (only the 3 cookie/terms checkboxes are labelled)
+- Inputs affected: email, phone, name, referral code, 6 OTP digit fields
 
-### Security
-- [PASS · pattern] All 6 security headers present (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, X-XSS-Protection)
-- [PASS · pattern] No wildcard CORS — centralized allowlist in middleware
-- [PASS · pattern] All SQL uses tagged template literals
-- [PASS · pattern] Auth enforced on all mutation endpoints
-- [PASS · pattern] Rate limiting on magic link, guest checkout, deletion requests
-- [PASS · pattern] No `err.stack` in client responses
-- [PASS · pattern] No hardcoded secrets
-- [PASS · pattern] No insecure HTTP URLs
-- [PASS · file] `package-lock.json` exists
+**Book page has the same input-label problem (FAIL · verified-behavior).**
+- `<h1>` count: 0
+- `<main>` landmark: missing
+- 12/18 inputs unlabelled
 
-### GDPR/Privacy
-- [PASS · pattern] Cookie consent with state management and server recording
-- [PASS · pattern] PostHog consent-gated via `posthog-loader.js`
-- [PASS · pattern] Privacy policy comprehensive (10 KB)
-- [PASS · file] Terms of service present (7 KB)
-- [PASS · pattern] Data export endpoint
-- [PASS · pattern] Email-verified account deletion
-- [PASS · pattern] Third-party disclosures match actual integrations
-- [PASS · pattern] Cookie consent distinguishes necessary vs analytics
-- [PASS · pattern] **`api/config.js:47` cookie consent INSERT now includes `school_id`** (was FAIL on 2026-04-07)
+**Free-trial page is exemplary (PASS · verified-behavior).** `<main>` present, single h1, all 6 inputs labelled, no overflow at mobile. Use this as the reference for fixing the others.
 
-### Data Isolation
-- [PASS · pattern] JWTs include `school_id` in payload
-- [PASS · pattern] Superadmin bypass explicitly gated in `_auth.js:99-101`
-- [PASS · pattern] `getSchoolId()` validates role before allowing override
-- [PASS · pattern] **`api/instructors.js` list/create/update/set-availability all include `school_id`** (was FAIL)
-- [PASS · pattern] **`api/waitlist.js` join / mywaitlist / checkWaitlistOnCancel all include `school_id`** (was FAIL)
-- [PASS · pattern] **`api/qa-digest.js` groups questions by `school_id` and sends per-school** (was FAIL)
+**Mobile CTA size (PASS · verified-behavior).** Hero CTAs are 47–49px tall on mobile (above 44px touch-target floor), 16px font.
 
-### Performance
-- [PASS · file] No JS files over 200 KB
-- [PASS · pattern] Vercel handles compression automatically
+**Mobile bottom-tab font size (WARN · verified-behavior).** Tab pills render at 9.92px font ("📅Book"). 12px is the absolute floor; 14–16px is recommended.
 
-### Infrastructure
-- [PASS · file] `vercel.json` with 11 cron jobs, redirects, routing
-- [PASS · pattern] Environment variables documented in CLAUDE.md / PROJECT.md
-- [PASS · pattern] Error alerting via `_error-alert.js` + `reportError()` on 32 of 34 API files
-- [PASS · pattern] 50 database indexes in `db/migration.sql`
-- [PASS · pattern] All 11 cron handlers exist with error handling and auth
-- [PASS · file] Build config present
+**No console errors on homepage (PASS · verified-behavior).** Empty error log after page load + cookie consent interaction.
 
-### SEO
-- [PASS · file] **`public/sitemap.xml` created** with 6 public pages (was missing)
-- [PASS · file] **`public/robots.txt` created** with sitemap reference (was missing)
-- [PASS · file] **`public/404.html` created** with branding and home link (was missing)
-- [PASS · pattern] **All 54 HTML files now have `lang="en"` on the `<html>` tag** (was 5+ FAIL)
-- [PASS · pattern] All 54 HTML files have `<title>` tags
-
-### Broken Links
-- [PASS · pattern] All internal page links resolve
-- [PASS · pattern] All asset references resolve
-
-### Code Quality
-- [PASS · pattern] Only 1 `console.log` in production API code
-- [PASS · pattern] Zero `TODO` / `FIXME` / `HACK` comments
-- [PASS · pattern] All API files have try/catch on async operations
-- [PASS · pattern] Consistent error response format across APIs
-
-### Accessibility
-- [PASS · pattern] All images have alt attributes
-- [PASS · pattern] Decorative images properly use `alt=""`
-- [PASS · pattern] **`lang="en"` present on all pages** (was FAIL)
-
-</details>
+**Cookie banner renders correctly (PASS · verified-behavior).** Necessary/Analytics distinction visible, Reject All / Save / Accept All buttons present.
 
 ---
 
-## Recommendations
+## All FAILs
 
-### Before Launch
-1. **[low effort]** Decide LB-7 scope: CoachCarter-only launch → mark as known issue and proceed. InstructorBook multi-tenant launch → add `school_id` to `availability_submissions` and fix the admin GET.
-2. **[low effort]** Add `reportError()` to `api/address-lookup.js` and `api/status.js` catch blocks.
-3. **[low effort]** Add `AND school_id = ${schoolId}` to the `handleLeave` UPDATE in `api/waitlist.js:222`.
-4. **[low effort]** Convert `api/reminders.js` join-based fencing (lines 114-116, 443-445) and the `handleDailySchedule` nested query (lines 240-259) to explicit `WHERE school_id` clauses.
-5. **[low effort]** Add `school_id` filters to `api/calendar.js:71, 228`.
-
-### After Launch (first month)
-1. **[low effort]** Replace `outline: none` with visible focus styles across CSS.
-2. **[low effort]** Add `<label>` elements to unlabelled form inputs.
-3. **[low effort]** Add `defer` to non-critical scripts in `<head>`.
-4. **[low effort]** Add meta descriptions to the 41 missing pages.
-5. **[medium effort]** Compress `public/icons/screenshot-desktop-1.png` (525 KB → <200 KB).
-6. **[medium effort]** Switch CSP from report-only to enforcing.
-7. **[medium effort]** Replace `err.message` with generic messages in 30+ API responses.
-8. **[medium effort]** Add a CI lint that greps every SQL tagged template in `api/` for `school_id` presence. Prevents LB-7 regressions.
-
-### Long-term
-1. **[high effort]** Audit all `innerHTML` usage for consistent XSS escaping.
-2. **[medium effort]** Add Open Graph tags to public-facing pages.
-3. **[medium effort]** Add canonical URLs to all pages.
-4. **[medium effort]** Add JSON-LD structured data (Organization, LocalBusiness).
-5. **[medium effort]** Add `<main>` landmarks to all pages.
-6. **[low effort]** Add `role="button"` and keyboard support to interactive divs.
+- **Responsive — tablet layout broken at 768px.** Column ~300px instead of expanding. Affects iPad users.
+- **Accessibility — 23 unlabelled visible inputs across login + book pages.** Screen-reader users cannot identify form fields.
+- **Accessibility — login + book pages have zero `<h1>` and no `<main>` landmark.**
+- **SEO — canonical URLs missing on every page (0/55).**
+- **SEO — Open Graph tags on only 3/55 pages.**
+- **SEO — meta descriptions on only 14/55 pages.**
+- **Infrastructure — `package.json` has no `scripts` block.**
+- **Code Quality — 251 TODO/FIXME/HACK comments across 38 files.**
 
 ---
 
-## Methodology
+## All WARNs by category
 
-This audit checked 82 findings across 9 applicable categories using:
-- Static code analysis (Grep, Glob, Read)
-- 82 individual checks performed (82 applicable, 0 marked N/A within active categories)
-- 2 categories marked N/A entirely (Responsive Design, UX Consistency — require full audit with browser)
-- Parallel subagent execution on phases 1-11 to reduce runtime
+**Security**
+- `err.message` leaked in `api/offers.js:383` (learner-facing). Lower-priority: `cron-auto-complete.js:35`, `cron-reconcile-payments.js:94`, `cron-referral-rewards.js:151`.
+- 269 `innerHTML =` usages in `public/` — targeted XSS audit recommended on user-derived sinks.
+- Auth-on-mutation not exhaustively verified per handler — recommend explicit sweep of every `POST/PUT/PATCH/DELETE` in `api/admin.js`, `api/learner.js`, `api/instructor.js`, `api/slots.js`.
 
-### Change vs 2026-04-07 audit
+**Accessibility**
+- Bottom-tab font size 9.92px on mobile.
+- Homepage `<main>` landmark missing (sidebar `<nav>` present).
+- 39 `outline:none` occurrences across 23 files. Spot-checks show focus replacements in `shared-auth.css`, others should be audited.
+- Form-label coverage on remaining auth pages (instructor login, admin login, dashboards) not yet runtime-verified — likely same pattern.
 
-This re-audit was triggered because commits `079959b "Fix launch blockers: auth, tenant isolation, error exposure, SEO, cleanup"`, `6f2f51a "Fix multi-tenant launch blockers and add SEO/infrastructure improvements"`, and `5dca538 "Add per-learner custom hourly rate and clean booking URLs"` landed after the previous audit report was written. The previous report ("BLOCKED — 4 launch blockers") was stale.
+**GDPR**
+- 2/55 pages missing consent scripts: `public/learner/learn.html`, `public/learner/lessons-hub.html`.
 
-**Net effect:**
-- Launch blockers: 4 → 1 (conditional on multi-tenant launch scope)
-- Score: 72% → 76%
-- Verdict: "NOT READY" → "Launch with Known Issues" (conditional)
-- Data Isolation category: 43% → 63%
-- SEO category: 60% → 75%
-- Accessibility category: 35% → 42% (only `lang="en"` fix confirmed; focus rings, labels still outstanding)
+**Performance**
+- 2 images >500KB: `icons/screenshot-desktop-1.png` (525KB), `images/home/strip-2.jpg` (507KB).
+- `vercel.json` has no `headers` block — no long-cache `Cache-Control` for static assets.
+- Render-blocking `<script>` in `<head>` on `index.html`, `learner/book.html`, `free-trial.html`. `dark-mode.js`, `font-swap.js` can be `defer`.
 
-### What this audit covers
-This audit verifies the **presence** of security patterns, accessibility attributes, SEO tags, compliance mechanisms, and data isolation filters through static code analysis.
+**Broken Links**
+- `public/classroom.html` is permanently redirected to `/` by `vercel.json` — dead code.
 
-### What this audit does NOT cover
-- **Runtime behavior** — checks that `requireAuth()` is called, not that the auth logic is uncircumventable
-- **Load testing**
-- **Penetration testing**
-- **Legal adequacy** — checks that a privacy policy file exists, not that its contents satisfy GDPR/ICO requirements
-- **Logic bugs** — race conditions, auth bypasses from edge cases, and business logic errors require manual testing
+**SEO**
+- `sitemap.xml` only has 5 URLs; missing `free-trial.html`, `learner-journey.html`.
 
-### Recommended complementary testing
-1. Manual security testing or a professional penetration test
-2. Load testing under expected peak traffic (booking flow + concurrent slot reservations)
-3. Legal review of `public/privacy.html` and `public/terms.html`
-4. Manual QA walkthrough of: signup, magic-link login, book lesson (credit), book lesson (pay-per-slot), Stripe webhook, cancellation with credit return, GDPR data export, GDPR account deletion
+**UX Consistency**
+- Login/book/dashboard pages use dark bg (rgb(26,26,26)) while marketing pages use white. Likely intentional (auth-shell vs marketing-shell), but worth a deliberate decision rather than accidental drift.
 
 ---
 
-*Generated by the `launch-readiness-audit` skill. To re-run: invoke the skill and point it at current `main`.*
+## What this audit did and did not verify
+
+**Verified at runtime (browser):**
+- Homepage, free-trial, login, book pages render at mobile/tablet/desktop
+- Cookie consent banner appears, has correct categories, has Reject/Save/Accept buttons
+- Form input labelling on login + book + free-trial
+- Bottom-tab font size and CTA touch targets on mobile
+- Console errors on homepage load
+- Page landmarks, h1 counts, viewport, favicon, lang attribute
+- Branding consistency (font, bg color, CTA color) across 4 pages
+
+**Verified by code (static):**
+- Security headers, CORS, auth patterns, SQL injection, secrets
+- Cookie consent script structure, PostHog gating logic
+- Multi-tenancy SQL filters across all `api/*.js`
+- API surface integrity, cron handlers, error alerting wiring
+
+**NOT verified (still required for public launch):**
+- Whether auth *actually rejects* tampered tokens
+- Whether rate limiting holds under load
+- Whether Stripe payment flow works end-to-end (test mode booking → webhook → confirmation email)
+- Whether tenant isolation holds under adversarial probing
+- Whether `privacy.html` is legally adequate (lawyer/DPO review)
+- Cross-browser testing (only Chromium tested via preview)
+- Real iOS/Android device testing
+- Loading and error states under network failure conditions
+
+---
+
+*Saved as `LAUNCH-AUDIT-REPORT.md`. Config: `.launch-audit-config.json` (last_audit: 2026-04-30, full mode).*
