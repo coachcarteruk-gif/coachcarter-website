@@ -85,23 +85,33 @@ function buildSessionClearCookie(name) {
  */
 function decodeToken(req, opts = {}) {
   const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
+  if (!secret) {
+    console.warn('[auth] JWT_SECRET not configured');
+    return null;
+  }
 
   const cookies = parseCookies(req);
   const allCookies = Object.values(SESSION_COOKIE_NAMES);
   const preferred = Array.isArray(opts.preferredCookies) ? opts.preferredCookies : [];
   const order = [...new Set([...preferred, ...allCookies])];
 
+  // Track failure reasons across all cookie attempts so the caller can
+  // log a single line that describes WHY decode failed (no cookies vs.
+  // expired vs. invalid signature).
+  const reasons = [];
+
   for (const name of order) {
     const token = cookies[name];
-    if (!token) continue;
+    if (!token) { reasons.push(`${name}=missing`); continue; }
     try {
       return jwt.verify(token, secret);
-    } catch {
-      // Bad cookie — keep trying the rest
+    } catch (e) {
+      // TokenExpiredError, JsonWebTokenError (signature), NotBeforeError, etc.
+      reasons.push(`${name}=${e.name || 'invalid'}`);
     }
   }
 
+  if (opts._debugReasons) opts._debugReasons.push(...reasons);
   return null;
 }
 
@@ -144,17 +154,24 @@ function cookiesForRoles(roles) {
  */
 function requireAuth(req, opts = {}) {
   const { roles, requireSchool } = opts;
+  const path = req.url || '?';
+  const method = req.method || 'GET';
 
   // Cookie-first decode, preferring cookies that could hold a token
   // matching the allowed roles.
-  const payload = decodeToken(req, { preferredCookies: cookiesForRoles(roles) });
-  if (!payload) return null;
+  const decodeReasons = [];
+  const payload = decodeToken(req, {
+    preferredCookies: cookiesForRoles(roles),
+    _debugReasons: decodeReasons,
+  });
+  if (!payload) {
+    console.warn(`[auth] REJECT ${method} ${path} — no valid token (${decodeReasons.join(', ') || 'no cookies'})`);
+    return null;
+  }
 
   // CSRF double-submit check on mutating requests. verifyCsrf is a no-op
-  // for GET/HEAD/OPTIONS. In log-only mode (CSRF_ENFORCE !== 'true') it
-  // always returns true but emits a console.warn for mismatches so we can
-  // see which pages still need migrating. In enforce mode, a mismatch
-  // fails the request the same way a bad token does.
+  // for GET/HEAD/OPTIONS. Mismatches are logged inside verifyCsrf with a
+  // [csrf] REJECT line, so no extra log needed here.
   if (!verifyCsrf(req)) return null;
 
   if (roles && roles.length > 0) {
@@ -170,7 +187,10 @@ function requireAuth(req, opts = {}) {
       }
     }
 
-    if (!allowed) return null;
+    if (!allowed) {
+      console.warn(`[auth] REJECT ${method} ${path} — role=${role} not in [${roles.join(',')}] (user_id=${payload.id})`);
+      return null;
+    }
   }
   // Note: when roles is empty/undefined, no role check is applied. This
   // matches the pre-consolidation behaviour of several local wrappers
