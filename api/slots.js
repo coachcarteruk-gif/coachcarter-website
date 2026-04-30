@@ -72,6 +72,20 @@ function verifyAuth(req) {
 
 module.exports = async (req, res) => {
   const action = req.query.action;
+  const method = req.method || 'GET';
+  const shouldLog = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+  const startedAt = shouldLog ? Date.now() : 0;
+
+  if (shouldLog) {
+    const origStatus = res.status.bind(res);
+    let statusCode = 200;
+    res.status = (code) => { statusCode = code; return origStatus(code); };
+    res.on('finish', () => {
+      const ms = Date.now() - startedAt;
+      console.log(`[slots-api] ${method} action=${action} status=${statusCode} ${ms}ms`);
+    });
+  }
+
   if (action === 'available')    return handleAvailable(req, res);
   if (action === 'durations-for-slot') return handleDurationsForSlot(req, res);
   if (action === 'book')         return handleBook(req, res);

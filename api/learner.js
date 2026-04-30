@@ -16,8 +16,27 @@ function verifyAuth(req) {
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────
+//
+// Every mutating request (non-GET) is logged with action, status, and
+// duration so "the button does nothing" reports can be diagnosed from
+// Vercel logs without contacting the learner. Tag the line with
+// [learner-api] so it's easy to grep / filter.
 module.exports = async (req, res) => {
   const action = req.query.action;
+  const method = req.method || 'GET';
+  const shouldLog = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+  const startedAt = shouldLog ? Date.now() : 0;
+
+  if (shouldLog) {
+    const origStatus = res.status.bind(res);
+    let statusCode = 200;
+    res.status = (code) => { statusCode = code; return origStatus(code); };
+    res.on('finish', () => {
+      const ms = Date.now() - startedAt;
+      console.log(`[learner-api] ${method} action=${action} status=${statusCode} ${ms}ms`);
+    });
+  }
+
   if (action === 'update-name')       return handleUpdateName(req, res);
   if (action === 'sessions')          return handleSessions(req, res);
   if (action === 'progress')          return handleProgress(req, res);
