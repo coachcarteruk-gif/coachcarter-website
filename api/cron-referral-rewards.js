@@ -148,6 +148,6 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ok: true, ...results });
   } catch (err) {
     reportError('/api/cron-referral-rewards', err);
-    return res.status(500).json({ error: 'Referral reward cron failed', details: err.message });
+    return res.status(500).json({ error: 'Referral reward cron failed' });
   }
 };

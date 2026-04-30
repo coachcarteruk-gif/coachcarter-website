@@ -32,6 +32,6 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ok: true, completed });
   } catch (err) {
     reportError('/api/cron-auto-complete', err);
-    return res.status(500).json({ error: 'Auto-complete failed', details: err.message });
+    return res.status(500).json({ error: 'Auto-complete failed' });
   }
 };

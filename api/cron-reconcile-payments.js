@@ -91,7 +91,7 @@ module.exports = async (req, res) => {
     });
   } catch (err) {
     reportError('/api/cron-reconcile-payments', err);
-    return res.status(500).json({ error: 'Reconciliation failed', details: err.message });
+    return res.status(500).json({ error: 'Reconciliation failed' });
   }
 };
 
