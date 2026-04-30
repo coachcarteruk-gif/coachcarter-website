@@ -5,10 +5,18 @@
   const token     = urlParams.get('token'); // magic-link token from URL
   const redirectTo = urlParams.get('redirect') || '/learner/';
   const referralCode = urlParams.get('ref') || '';
+  const expired   = urlParams.get('expired') === '1';
 
-  // Redirect if already logged in (and not verifying a new token)
+  // Redirect if already logged in (and not verifying a new token).
+  // Skip the redirect when ?expired=1 — fetchAuthed clears the localStorage
+  // blob before bouncing here, but a stale tab elsewhere could repopulate it.
   const existing = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-  if (existing && !token) { window.location.href = redirectTo; }
+  if (existing && !token && !expired) { window.location.href = redirectTo; }
+
+  if (expired) {
+    const banner = document.getElementById('expired-banner');
+    if (banner) banner.style.display = 'block';
+  }
 
   let currentMethod = 'email';
   let lastPayload = null;
