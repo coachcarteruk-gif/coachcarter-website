@@ -33,6 +33,37 @@ export default async function middleware(request) {
     });
   }
 
+  // ── Learner area auth gate ────────────────────────────────────────────
+  // If someone requests a learner page without the cc_learner session
+  // cookie, bounce them to the login page with ?expired=1 so the banner
+  // explains why and the auto-redirect is suppressed. Catches the
+  // "stale localStorage but missing cookie" state regardless of whether
+  // the user has cached an old version of login.js.
+  //
+  // Excluded:
+  //   - login.html itself (you need to be able to reach it)
+  //   - book.html (intentionally guest-accessible, see CLAUDE.md)
+  //   - ask-examiner.html / examiner-quiz.html (Learn section open to guests, commit 0276e8d)
+  //   - confirm-deletion.html (token-based GDPR flow)
+  //   - shared static assets (.js, .css, images)
+  if (url.pathname.startsWith('/learner/') &&
+      !url.pathname.startsWith('/learner/login') &&
+      !url.pathname.startsWith('/learner/book') &&
+      !url.pathname.startsWith('/learner/ask-examiner') &&
+      !url.pathname.startsWith('/learner/examiner-quiz') &&
+      !url.pathname.startsWith('/learner/confirm-deletion') &&
+      !/\.(js|css|png|jpg|jpeg|svg|webp|ico|woff2?|map)$/i.test(url.pathname)) {
+    const cookieHeader = request.headers.get('cookie') || '';
+    const hasSession = /(?:^|;\s*)cc_learner=[^;]+/.test(cookieHeader);
+    if (!hasSession) {
+      const redirect = encodeURIComponent(url.pathname + url.search);
+      return new Response(null, {
+        status: 307,
+        headers: { 'Location': '/learner/login.html?expired=1&redirect=' + redirect }
+      });
+    }
+  }
+
   // ── CORS for API routes ───────────────────────────────────────────────
   if (url.pathname.startsWith('/api/')) {
     const origin = request.headers.get('origin');
