@@ -415,14 +415,29 @@
       const res = await ccAuth.fetchAuthed('/api/learner?action=accept-terms', {
         method: 'POST'
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        const body = await res.text().catch(function () { return ''; });
+        throw new Error('HTTP ' + res.status + (body ? ': ' + body.slice(0, 200) : ''));
+      }
 
       showScreen('success');
       try { sessionStorage.setItem('cc_just_logged_in', '1'); } catch (e) {}
       setTimeout(() => { window.location.href = redirectTo; }, 800);
-    } catch {
+    } catch (err) {
+      console.error('accept-terms failed:', err);
       btn.disabled = false;
       btn.textContent = 'Continue';
+      // Surface the failure so the learner doesn't stare at a button that
+      // does nothing. Reuse the existing error-msg slot at the bottom of
+      // the terms screen if one exists, else inject one.
+      var errEl = document.getElementById('terms-error');
+      if (!errEl) {
+        errEl = document.createElement('div');
+        errEl.id = 'terms-error';
+        errEl.style.cssText = 'margin-top:12px;color:#ef4444;font-size:0.85rem;line-height:1.4;';
+        btn.parentNode.appendChild(errEl);
+      }
+      errEl.textContent = "Couldn't save — please try again, or refresh the page if it keeps failing. (" + (err.message || 'unknown error') + ")";
     }
   }
 
