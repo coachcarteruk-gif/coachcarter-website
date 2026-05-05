@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Franchise Fair-Value Calculator — CoachCarter Admin</title>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+<script src="/cookie-consent.js"></script>
+<script src="/posthog-loader.js"></script>
+<script src="/shared/dark-mode.js"></script>
+<script src="/shared/font-swap.js"></script>
+<script src="/shared/admin-auth.js"></script>
+<style>
+:root {
+  --primary: #262626;
+  --accent: #f58321;
+  --accent-dk: #e07518;
+  --accent-lt: #fff4ec;
+  --muted: #797879;
+  --border: #e5e5e5;
+  --bg: #ffffff;
+  --surface: #f9f9f9;
+  --green: #1a9e5c;
+  --red: #dc2626;
+  --red-tint: #fef2f2;
+  --red-border: #fecaca;
+  --cc-tint: #fff4ec;
+  --cc-border: #fbcfa3;
+  --font-head: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Lato', sans-serif;
+  --radius: 14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--surface);
+  color: var(--primary);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  padding: 24px 16px 80px;
+}
+.wrap { max-width: 1200px; margin: 0 auto; }
+header.page-head { margin-bottom: 24px; }
+header.page-head h1 {
+  font-family: var(--font-head);
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+header.page-head p {
+  color: var(--muted);
+  margin-top: 6px;
+  max-width: 720px;
+}
+.back-link {
+  display: inline-block;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+.back-link:hover { color: var(--primary); }
+
+/* Two-column compare grid */
+.compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.col {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.col.red { border-color: var(--red-border); }
+.col.cc  { border-color: var(--cc-border); }
+
+.col-head {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.col.red .col-head { background: var(--red-tint); border-color: var(--red-border); }
+.col.cc  .col-head { background: var(--cc-tint);  border-color: var(--cc-border); }
+.col-head h2 {
+  font-family: var(--font-head);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.col.red .col-head h2 { color: var(--red); }
+.col.cc  .col-head h2 { color: var(--accent-dk); }
+.col-head .sub {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-top: 2px;
+}
+
+.col-body { padding: 8px 20px 20px; flex: 1; }
+.col-body h3 {
+  font-family: var(--font-head);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 16px 0 4px;
+}
+.col-body h3:first-child { margin-top: 8px; }
+
+.input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.input-row:last-child { border-bottom: none; }
+.input-row label {
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+.input-row label small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 400;
+  margin-top: 2px;
+}
+.input-row input[type="number"] {
+  width: 100px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  text-align: right;
+}
+.input-row input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-lt);
+}
+.input-prefix { display: inline-flex; align-items: center; gap: 6px; }
+.input-prefix .currency { color: var(--muted); font-size: 0.9rem; }
+
+/* Toggle switch for yes/no fee adjustments */
+.toggle-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.toggle-switch .yesno {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-width: 28px;
+  text-align: right;
+}
+.toggle-switch input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 38px;
+  height: 22px;
+  background: #d4d4d4;
+  border-radius: 999px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.toggle-switch input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.15s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+.toggle-switch input[type="checkbox"]:checked {
+  background: var(--accent);
+}
+.toggle-switch input[type="checkbox"]:checked::after {
+  transform: translateX(16px);
+}
+.toggle-switch input[type="checkbox"]:checked + .yesno { color: var(--accent-dk); }
+
+/* Computed (read-only display) rows look like inputs but greyed */
+.computed-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.computed-row:last-child { border-bottom: none; }
+.computed-row .label {
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+.computed-row .label small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.76rem;
+  margin-top: 2px;
+}
+.computed-row .val {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+.computed-row .val.cost  { color: var(--red); }
+.computed-row .val.value { color: var(--green); }
+
+/* Take-home strip at the bottom of each column */
+.takehome {
+  padding: 16px 20px;
+  border-top: 2px solid var(--primary);
+  background: var(--bg);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+}
+.col.red .takehome { background: var(--red-tint); }
+.col.cc  .takehome { background: var(--cc-tint);  }
+.takehome .label {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.takehome .amt {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+.col.red .takehome .amt { color: var(--red); }
+.col.cc  .takehome .amt { color: var(--accent-dk); }
+
+/* Headline above the columns */
+.headline {
+  background: linear-gradient(135deg, #2a2a2a, #181818);
+  color: white;
+  border-radius: var(--radius);
+  padding: 22px 28px;
+  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 24px;
+}
+.headline .label {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 6px;
+}
+.headline .value {
+  font-family: var(--font-head);
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.headline .value.positive { color: #4ade80; }
+.headline .value.negative { color: #f87171; }
+.headline .verdict {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.85);
+  max-width: 480px;
+}
+.headline .right-stat {
+  text-align: right;
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.7);
+}
+.headline .right-stat strong {
+  display: block;
+  color: white;
+  font-family: var(--font-head);
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.footnote {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 18px;
+  line-height: 1.5;
+}
+
+.assumptions {
+  margin-top: 24px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+}
+.assumptions h3 {
+  font-family: var(--font-head);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.assumptions ul {
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.assumptions li { padding: 4px 0; }
+.assumptions li::before {
+  content: "—";
+  margin-right: 8px;
+  color: var(--accent);
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/admin/portal.html" class="back-link">← Back to admin portal</a>
+  <header class="page-head">
+    <h1>Franchise fair-value calculator</h1>
+    <p>RED Driving School vs CoachCarter, side by side. Tweak any number — the take-home for each column updates live.</p>
+  </header>
+
+  <div class="headline">
+    <div>
+      <div class="label">CoachCarter advantage — annual</div>
+      <div class="value" id="headlineValue">£0</div>
+      <div class="verdict" id="headlineVerdict">—</div>
+    </div>
+    <div class="right-stat">
+      Gross revenue (same in both)
+      <strong id="grossYearAmt">£0</strong>
+      <span id="grossDetail">— hrs/wk × £—/hr × 50 weeks</span>
+    </div>
+  </div>
+
+  <div class="compare">
+    <!-- ── RED column ── -->
+    <div class="col red">
+      <div class="col-head">
+        <h2>RED Driving School</h2>
+        <div class="sub">The benchmark — what they're paying today</div>
+      </div>
+      <div class="col-body">
+        <h3>Their business</h3>
+        <div class="input-row">
+          <label>Lesson hours per week</label>
+          <input type="number" id="red_lessonsWk" min="0" step="1" value="25">
+        </div>
+        <div class="input-row">
+          <label>Average hourly rate
+            <small>What the learner pays per hour</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="red_avgPrice" min="0" step="0.5" value="40">
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Admin hours/week
+            <small>Booking, chasing, accounts</small>
+          </label>
+          <input type="number" id="red_adminHrs" min="0" step="0.5" value="5">
+        </div>
+
+        <h3>Costs</h3>
+        <div class="input-row">
+          <label>Weekly franchise fee
+            <small>RED standard</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="red_franchiseFee" min="0" step="5" value="265">
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Weekly insurance
+            <small>Included in RED fee</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="red_insurance" min="0" step="1" value="0">
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Weekly maintenance
+            <small>Included in RED fee</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="red_maintenance" min="0" step="1" value="0">
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Per-hour cut
+            <small>Amount the school keeps from each teaching hour</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="red_perHourCut" min="0" step="0.5" value="0">
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Weekly cap on cut
+            <small>Hard limit per week. 0 = no cap</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="red_cutCap" min="0" step="5" value="0">
+          </span>
+        </div>
+
+        <h3>Annual breakdown</h3>
+        <div class="computed-row">
+          <span class="label">Gross revenue</span>
+          <span class="val" id="red_grossAmt">£0</span>
+        </div>
+        <div class="computed-row">
+          <span class="label">Franchise fee</span>
+          <span class="val cost" id="red_feeAmt">£0</span>
+        </div>
+        <div class="computed-row">
+          <span class="label">Insurance</span>
+          <span class="val cost" id="red_insAmt">£0</span>
+        </div>
+        <div class="computed-row">
+          <span class="label">Maintenance</span>
+          <span class="val cost" id="red_maintAmt">£0</span>
+        </div>
+        <div class="computed-row">
+          <span class="label">Admin time cost
+            <small id="red_adminDetail">— hrs/wk × £—/hr × 50</small>
+          </span>
+          <span class="val cost" id="red_adminAmt">£0</span>
+        </div>
+        <div class="computed-row">
+          <span class="label">Per-hour cut
+            <small id="red_cutDetail">£— × — hrs/wk × 50</small>
+          </span>
+          <span class="val cost" id="red_cutAmt">£0</span>
+        </div>
+      </div>
+      <div class="takehome">
+        <span class="label">RED annual take-home</span>
+        <span class="amt" id="red_takeHome">£0</span>
+      </div>
+    </div>
+
+    <!-- ── CoachCarter column ── -->
+    <div class="col cc">
+      <div class="col-head">
+        <h2>CoachCarter</h2>
+        <div class="sub">Your offer — same shape, different numbers</div>
+      </div>
+      <div class="col-body">
+        <h3>Their business</h3>
+        <div class="input-row">
+          <label>Lesson hours per week</label>
+          <input type="number" id="cc_lessonsWk" min="0" step="1" value="25">
+        </div>
+        <div class="input-row">
+          <label>Average hourly rate
+            <small>What the learner pays per hour</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="cc_avgPrice" min="0" step="0.5" value="50">
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Admin hours/week
+            <small>Lower thanks to platform automation</small>
+          </label>
+          <input type="number" id="cc_adminHrs" min="0" step="0.5" value="2">
+        </div>
+
+        <h3>Costs</h3>
+        <div class="input-row">
+          <label>Weekly franchise fee
+            <small>Base fee. Toggles below adjust this</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="cc_franchiseFee" min="0" step="5" value="200">
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Branding decals</label>
+          <span class="toggle-switch">
+            <span class="yesno" id="cc_wrappedAdj">+£0/wk</span>
+            <input type="checkbox" id="cc_wrapped" checked>
+            <span class="yesno" id="cc_wrappedLabel">Yes</span>
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Dash cam for social content</label>
+          <span class="toggle-switch">
+            <span class="yesno" id="cc_dashcamAdj">−£0/wk</span>
+            <input type="checkbox" id="cc_dashcam">
+            <span class="yesno" id="cc_dashcamLabel">No</span>
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Effective weekly fee
+            <small>After wrap + dash cam adjustments</small>
+          </label>
+          <span class="val" id="cc_effectiveFee" style="font-family:var(--font-head);font-weight:700;color:var(--accent-dk);">£0</span>
+        </div>
+        <div class="input-row">
+          <label>Weekly insurance
+            <small>Instructor pays insurance</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="cc_insurance" min="0" step="1" value="33">
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Weekly maintenance
+            <small>Included in CoachCarter fee</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="cc_maintenance" min="0" step="1" value="0">
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Per-hour cut
+            <small>Amount the school keeps from each teaching hour</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="cc_perHourCut" min="0" step="0.5" value="0">
+          </span>
+        </div>
+        <div class="input-row">
+          <label>Weekly cap on cut
+            <small>Hard limit per week. 0 = no cap</small>
+          </label>
+          <span class="input-prefix">
+            <span class="currency">£</span>
+            <input type="number" id="cc_cutCap" min="0" step="5" value="0">
+          </span>
+        </div>
+
+        <h3>Annual breakdown</h3>
+        <div class="computed-row">
+          <span class="label">Gross revenue</span>
+          <span class="val" id="cc_grossAmt">£0</span>
+        </div>
+        <div class="computed-row">
+          <span class="label">Franchise fee</span>
+          <span class="val cost" id="cc_feeAmt">£0</span>
+        </div>
+        <div class="computed-row">
+          <span class="label">Insurance</span>
+          <span class="val cost" id="cc_insAmt">£0</span>
+        </div>
+        <div class="computed-row">
+          <span class="label">Maintenance</span>
+          <span class="val cost" id="cc_maintAmt">£0</span>
+        </div>
+        <div class="computed-row">
+          <span class="label">Admin time cost
+            <small id="cc_adminDetail">— hrs/wk × £—/hr × 50</small>
+          </span>
+          <span class="val cost" id="cc_adminAmt">£0</span>
+        </div>
+        <div class="computed-row">
+          <span class="label">Per-hour cut
+            <small id="cc_cutDetail">£— × — hrs/wk × 50</small>
+          </span>
+          <span class="val cost" id="cc_cutAmt">£0</span>
+        </div>
+      </div>
+      <div class="takehome">
+        <span class="label">CoachCarter annual take-home</span>
+        <span class="amt" id="cc_takeHome">£0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="assumptions">
+    <h3>How the maths works</h3>
+    <ul>
+      <li>50 working weeks per year (2 weeks off)</li>
+      <li><strong>Take-home</strong> = gross − franchise fee − insurance − maintenance − admin time cost</li>
+      <li><strong>Admin time cost</strong> = admin hrs/wk × lesson price × 50 weeks. Time is real money even if it doesn't leave the bank account</li>
+      <li>Franchise fee is capped at weekly gross (instructor never goes negative on a quiet week)</li>
+      <li>Petrol is left out — same in both scenarios</li>
+      <li>Doesn't price in non-cash benefits: brand, AI tools, platform features, compliance, support</li>
+    </ul>
+  </div>
+
+  <p class="footnote">
+    Internal tool — share screen with the prospect, type their numbers in live. The honest framing is that the cash side is one piece; the platform features (AI, GDPR cover, learner funnel, automation) are the rest.
+  </p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // Auth gate — redirect to admin login if not authed.
+  // Skipped on localhost / preview hosts so the calculator works for design review.
+  var host = window.location.hostname;
+  var isLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.vercel.app') || host === '';
+  if (!isLocal) {
+    var hasAdmin = !!localStorage.getItem('cc_admin');
+    var hasInstructor = (document.cookie || '').indexOf('cc_instructor=') !== -1;
+    if (!hasAdmin && !hasInstructor) {
+      window.location.href = '/admin/login.html?next=' + encodeURIComponent(window.location.pathname);
+      return;
+    }
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var WEEKS_PER_YEAR = 50;
+
+  function fmt(n) {
+    var sign = n < 0 ? '-' : '';
+    return sign + '£' + Math.abs(Math.round(n)).toLocaleString('en-GB');
+  }
+  function num(el) {
+    var v = parseFloat(el.value);
+    return isNaN(v) ? 0 : v;
+  }
+
+  // Compute one column. Returns object with everything we need to render + the take-home figure.
+  function computeColumn(prefix) {
+    var lessonsWk    = num($(prefix + '_lessonsWk'));
+    var avgPrice     = num($(prefix + '_avgPrice'));
+    var adminHrs     = num($(prefix + '_adminHrs'));
+    var baseFee      = num($(prefix + '_franchiseFee'));
+
+    // CoachCarter-only toggles. Adjust the franchise fee before any downstream maths.
+    var wrapAdj = 0, dashcamAdj = 0;
+    var wrappedEl = $(prefix + '_wrapped');
+    var dashcamEl = $(prefix + '_dashcam');
+    if (wrappedEl) wrapAdj = wrappedEl.checked ? 0 : 25;       // +£25/wk if NOT wrapped
+    if (dashcamEl) dashcamAdj = dashcamEl.checked ? -30 : 0;   // −£30/wk if dash cam fitted
+
+    var franchiseWk = baseFee + wrapAdj + dashcamAdj;
+    if (franchiseWk < 0) franchiseWk = 0;
+    var insuranceWk  = num($(prefix + '_insurance'));
+    var maintWk      = num($(prefix + '_maintenance'));
+    var perHourCut   = num($(prefix + '_perHourCut'));
+    var cutCapWk     = num($(prefix + '_cutCap'));
+    var grossWeek = lessonsWk * avgPrice;
+    var grossYear = grossWeek * WEEKS_PER_YEAR;
+
+    // Franchise fee capped at weekly gross
+    var feeEffective = Math.min(franchiseWk, grossWeek);
+    var feeAnnual    = feeEffective * WEEKS_PER_YEAR;
+
+    var insuranceAnnual = insuranceWk * WEEKS_PER_YEAR;
+    var maintAnnual     = maintWk * WEEKS_PER_YEAR;
+    // Admin time costed at the lesson price (hourly opportunity cost)
+    var adminAnnual     = adminHrs * avgPrice * WEEKS_PER_YEAR;
+    // Per-hour cut: £X taken from each teaching hour, capped at cutCapWk if set (0 = no cap)
+    var perHourCutWeekly = perHourCut * lessonsWk;
+    if (cutCapWk > 0 && perHourCutWeekly > cutCapWk) {
+      perHourCutWeekly = cutCapWk;
+    }
+    var perHourCutAnnual = perHourCutWeekly * WEEKS_PER_YEAR;
+
+    var takeHome = grossYear - feeAnnual - insuranceAnnual - maintAnnual - adminAnnual - perHourCutAnnual;
+
+    return {
+      lessonsWk: lessonsWk,
+      avgPrice: avgPrice,
+      adminHrs: adminHrs,
+      grossWeek: grossWeek,
+      grossYear: grossYear,
+      feeAnnual: feeAnnual,
+      feeEffective: feeEffective,
+      franchiseWk: franchiseWk,
+      insuranceAnnual: insuranceAnnual,
+      maintAnnual: maintAnnual,
+      adminAnnual: adminAnnual,
+      perHourCut: perHourCut,
+      perHourCutAnnual: perHourCutAnnual,
+      cutCapWk: cutCapWk,
+      cutCapHit: cutCapWk > 0 && (perHourCut * lessonsWk) > cutCapWk,
+      takeHome: takeHome
+    };
+  }
+
+  function renderColumn(prefix, c) {
+    $(prefix + '_grossAmt').textContent  = fmt(c.grossYear);
+    $(prefix + '_feeAmt').textContent    = '−' + fmt(c.feeAnnual);
+    $(prefix + '_insAmt').textContent    = '−' + fmt(c.insuranceAnnual);
+    $(prefix + '_maintAmt').textContent  = '−' + fmt(c.maintAnnual);
+    $(prefix + '_adminAmt').textContent  = '−' + fmt(c.adminAnnual);
+    $(prefix + '_adminDetail').textContent = c.adminHrs + ' hrs/wk × ' + fmt(c.avgPrice) + '/hr × ' + WEEKS_PER_YEAR;
+
+    $(prefix + '_cutAmt').textContent    = '−' + fmt(c.perHourCutAnnual);
+    if (c.cutCapHit) {
+      $(prefix + '_cutDetail').textContent = 'Capped at ' + fmt(c.cutCapWk) + '/wk × ' + WEEKS_PER_YEAR + ' (would be ' + fmt(c.perHourCut * c.lessonsWk) + '/wk uncapped)';
+    } else {
+      $(prefix + '_cutDetail').textContent = fmt(c.perHourCut) + ' × ' + c.lessonsWk + ' hrs/wk × ' + WEEKS_PER_YEAR;
+    }
+
+    $(prefix + '_takeHome').textContent  = fmt(c.takeHome);
+  }
+
+  function recalc() {
+    var red = computeColumn('red');
+    var cc  = computeColumn('cc');
+
+    renderColumn('red', red);
+    renderColumn('cc',  cc);
+
+    // CC-only: live effective weekly fee under the toggles
+    var effEl = $('cc_effectiveFee');
+    if (effEl) effEl.textContent = fmt(cc.feeEffective) + '/wk';
+
+    // CC-only: per-toggle £ adjustment labels
+    var wrappedEl = $('cc_wrapped');
+    var dashcamEl = $('cc_dashcam');
+    var wrappedAdjEl = $('cc_wrappedAdj');
+    var dashcamAdjEl = $('cc_dashcamAdj');
+    if (wrappedEl && wrappedAdjEl) {
+      wrappedAdjEl.textContent = wrappedEl.checked ? '+£0/wk' : '+£25/wk';
+    }
+    if (dashcamEl && dashcamAdjEl) {
+      dashcamAdjEl.textContent = dashcamEl.checked ? '−£30/wk' : '−£0/wk';
+    }
+
+    // Headline strip — gross shown is RED's gross (acts as the baseline; CC may differ)
+    // Show both grosses if they differ
+    var grossText;
+    if (Math.round(red.grossYear) === Math.round(cc.grossYear)) {
+      grossText = fmt(red.grossYear);
+    } else {
+      grossText = fmt(red.grossYear) + ' / ' + fmt(cc.grossYear);
+    }
+    $('grossYearAmt').textContent = grossText;
+    $('grossDetail').textContent =
+      'RED: ' + red.lessonsWk + ' × ' + fmt(red.avgPrice) +
+      '  ·  CC: ' + cc.lessonsWk + ' × ' + fmt(cc.avgPrice);
+
+    // Headline delta
+    var delta = cc.takeHome - red.takeHome;
+    var headline = $('headlineValue');
+    headline.textContent = (delta >= 0 ? '+' : '−') + '£' + Math.abs(Math.round(delta)).toLocaleString('en-GB');
+    headline.classList.toggle('positive', delta >= 0);
+    headline.classList.toggle('negative', delta < 0);
+
+    var verdict = $('headlineVerdict');
+    if (red.takeHome <= 0 && cc.takeHome <= 0) {
+      verdict.textContent = 'Both columns lose money — sense-check the inputs.';
+    } else if (delta > Math.abs(red.takeHome) * 0.25) {
+      verdict.textContent = 'Strong CoachCarter advantage on cash alone — before counting the platform, AI tools, or brand.';
+    } else if (delta > 0) {
+      verdict.textContent = 'CoachCarter edges ahead on cash. The non-cash side (platform, funnel, support) widens the gap.';
+    } else if (delta > -Math.abs(red.takeHome) * 0.05) {
+      verdict.textContent = 'Roughly level on cash. The case sits in the platform features and brand.';
+    } else {
+      verdict.textContent = 'RED comes out ahead on these inputs. Worth pressure-testing the assumptions on either side.';
+    }
+  }
+
+  // Wire up every input on both columns
+  document.querySelectorAll('input[type="number"]').forEach(function (el) {
+    el.addEventListener('input', recalc);
+  });
+
+  // Toggles on the CC column — re-run calc and refresh Yes/No labels
+  function syncToggleLabel(checkboxId, labelId) {
+    var cb = $(checkboxId);
+    var lbl = $(labelId);
+    if (!cb || !lbl) return;
+    var update = function () { lbl.textContent = cb.checked ? 'Yes' : 'No'; };
+    cb.addEventListener('change', function () { update(); recalc(); });
+    update();
+  }
+  syncToggleLabel('cc_wrapped', 'cc_wrappedLabel');
+  syncToggleLabel('cc_dashcam', 'cc_dashcamLabel');
+
+  recalc();
+})();
+</script>
+</body>
+</html>

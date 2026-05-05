@@ -159,3 +159,4 @@ When making structural changes (new tables, new API routes, new shared modules, 
 - [`docs/setmore-sync.md`](docs/setmore-sync.md) — sync flow, service mapping, email mismatches, cancellation, welcome emails, transition plan
 - [`docs/travel-time.md`](docs/travel-time.md) — postcodes.io slot filter, OpenRouteService booking warnings
 - [`docs/navigation.md`](docs/navigation.md) — learner/instructor sidebar + bottom tabs, booking page structure
+- [`docs/franchise-benefits.md`](docs/franchise-benefits.md) — CoachCarter franchise pack: live + pipeline benefits, CoachCarter-vs-InstructorBook split
