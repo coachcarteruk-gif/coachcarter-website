@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-/* ── State ── */
+/* â”€â”€ State â”€â”€ */
 let AUTH;
 let mockTestId = null;
 let testMode = null; // 'supervisor' or 'instructor'
@@ -37,7 +37,7 @@ const SKILLS = CC_COMPETENCY.SKILLS;
 const FAULT_TYPES = CC_COMPETENCY.FAULT_TYPES;
 const MOCK_TEST = CC_COMPETENCY.MOCK_TEST;
 
-/* ── Auth ── */
+/* â”€â”€ Auth â”€â”€ */
 window.addEventListener('DOMContentLoaded', () => {
   AUTH = ccAuth.getAuth();
   if (!AUTH) {
@@ -46,7 +46,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-/* ── Helpers ── */
+/* â”€â”€ Helpers â”€â”€ */
 function formatTime(seconds) {
   var m = Math.floor(seconds / 60);
   var s = seconds % 60;
@@ -83,7 +83,7 @@ function apiCall(method, action, body) {
   return ccAuth.fetchAuthed('/api/learner?action=' + action, opts);
 }
 
-/* ── Screen 0: Mode Selection ── */
+/* â”€â”€ Screen 0: Mode Selection â”€â”€ */
 function selectMode(mode) {
   testMode = mode;
 
@@ -103,7 +103,7 @@ function selectMode(mode) {
   showScreen('screen-start');
 }
 
-/* ── Screen 1: Begin ── */
+/* â”€â”€ Screen 1: Begin â”€â”€ */
 async function beginMockTest() {
   var btn = document.getElementById('btn-begin');
   btn.disabled = true;
@@ -133,7 +133,7 @@ async function beginMockTest() {
   showPartScreen();
 }
 
-/* ── Screen 2: Part Start ── */
+/* â”€â”€ Screen 2: Part Start â”€â”€ */
 function showPartScreen() {
   var partDef = MOCK_TEST.parts[currentPart % MOCK_TEST.parts.length];
 
@@ -176,7 +176,7 @@ async function startDriving() {
           navigator.geolocation.getCurrentPosition(resolve, resolve, { timeout: 5000 });
         });
       }
-    } catch(e) { /* permission denied or unavailable — continue without GPS */ }
+    } catch(e) { /* permission denied or unavailable "” continue without GPS */ }
   }
 
   isDriving = true;
@@ -207,7 +207,7 @@ function pullOver() {
   showFaultScreen();
 }
 
-/* ── Screen 3: Fault Recording ── */
+/* â”€â”€ Screen 3: Fault Recording â”€â”€ */
 function showFaultScreen() {
   document.getElementById('fault-time').textContent = formatTime(partTimes[currentPart]) + ' driven';
 
@@ -335,7 +335,7 @@ function toggleArea(btn) {
   }
 }
 
-/* ── Supervisor Fault Recording ── */
+/* â”€â”€ Supervisor Fault Recording â”€â”€ */
 var SUP_CATS = CC_COMPETENCY.SUPERVISOR_CATEGORIES;
 var SUP_RATINGS = CC_COMPETENCY.SUPERVISOR_RATINGS;
 
@@ -525,7 +525,7 @@ function getAriaLabel(skillKey, type, val, subKey) {
   var label = skill ? skill.label : skillKey;
   if (subKey && skill && skill.subs) {
     var sub = skill.subs.find(function(s) { return s.key === subKey; });
-    if (sub) label = skill.label + ' — ' + sub.label;
+    if (sub) label = skill.label + ' "” ' + sub.label;
   }
   return label + ' ' + (ft ? ft.label : type) + ': ' + val;
 }
@@ -587,7 +587,7 @@ async function saveFaults() {
   var faultArray = [];
 
   if (testMode === 'supervisor') {
-    // Build supervisor fault array — one entry per DL25 skill mapped from each rated category
+    // Build supervisor fault array "” one entry per DL25 skill mapped from each rated category
     var ratings = supervisorRatings[currentPart];
     Object.keys(ratings).forEach(function(catKey) {
       var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
@@ -684,7 +684,7 @@ async function endMockTest() {
   showResults();
 }
 
-/* ── Screen 4: Results ── */
+/* â”€â”€ Screen 4: Results â”€â”€ */
 function showResults() {
   updateStepIndicator('done');
 
@@ -703,7 +703,7 @@ function showResults() {
 }
 
 function showSupervisorResults() {
-  // Aggregate all ratings across parts — take the worst rating per category
+  // Aggregate all ratings across parts "” take the worst rating per category
   var allRatings = {};
   var ratingPriority = { concern: 0, needs_work: 1, good: 2 };
 
@@ -1023,7 +1023,7 @@ function showInstructorResults() {
   showScreen('screen-results');
 }
 
-/* ── Route Selection ── */
+/* â”€â”€ Route Selection â”€â”€ */
 function showRouteSelection() {
   var centres = CC_TEST_ROUTES.CENTRES;
   selectedCentre = centres[0]; // default to first (only one for now)
@@ -1054,7 +1054,7 @@ function skipRouteSelection() {
   beginMockTest();
 }
 
-/* ── GPS Tracking ── */
+/* â”€â”€ GPS Tracking â”€â”€ */
 function startGpsTracking() {
   if (!navigator.geolocation) return;
   stopGpsTracking();
@@ -1071,13 +1071,13 @@ function startGpsTracking() {
     function(err) {
       console.warn('GPS error:', err.code, err.message);
       if (err.code === 1) {
-        // Permission denied — show a subtle note
+        // Permission denied "” show a subtle note
         var existing = document.getElementById('gps-denied-note');
         if (!existing) {
           var note = document.createElement('div');
           note.id = 'gps-denied-note';
           note.style.cssText = 'background:#fff3e0;color:#e65100;padding:8px 12px;border-radius:8px;font-size:0.82rem;margin:8px 0;text-align:center;';
-          note.textContent = 'Location access denied — the fault map will use your selected route instead of GPS tracking.';
+          note.textContent = 'Location access denied "” the fault map will use your selected route instead of GPS tracking.';
           var timer = document.getElementById('timer-display');
           if (timer && timer.parentNode) timer.parentNode.insertAdjacentElement('afterend', note);
         }
@@ -1094,7 +1094,7 @@ function stopGpsTracking() {
   }
 }
 
-/* ── Wake Lock ── */
+/* â”€â”€ Wake Lock â”€â”€ */
 async function requestWakeLock() {
   if (!('wakeLock' in navigator)) return;
   try {
@@ -1112,7 +1112,7 @@ document.addEventListener('visibilitychange', function() {
   }
 });
 
-/* ── Fault Map ── */
+/* â”€â”€ Fault Map â”€â”€ */
 function showFaultMap() {
   releaseWakeLock();
   showScreen('screen-map');
@@ -1230,7 +1230,7 @@ function placeFaultOnMap(latlng) {
     radius: 14, fillColor: colour, color: '#fff', weight: 2, fillOpacity: 0.9
   }).addTo(faultMap);
 
-  marker.bindTooltip(pendingFaultPlacement.shortLabel + ' — ' + pendingFaultPlacement.skillLabel, {
+  marker.bindTooltip(pendingFaultPlacement.shortLabel + ' "” ' + pendingFaultPlacement.skillLabel, {
     permanent: false, direction: 'top', offset: [0, -10]
   });
 
@@ -1289,7 +1289,7 @@ function updatePlacedFaultsSummary() {
   }).join('');
 }
 
-// ── CSP-friendly event delegation for dynamically rendered handlers ──
+// â”€â”€ CSP-friendly event delegation for dynamically rendered handlers â”€â”€
 document.addEventListener('click', function (e) {
   // Honor data-stop-propagation on ancestor elements (replaces inline event.stopPropagation())
   var stopper = e.target.closest('[data-stop-propagation]');
@@ -1320,7 +1320,7 @@ document.addEventListener('pointerleave', function (e) {
   var t = e.target.closest && e.target.closest('[data-action="fault-counter"]');
   if (t) fcCancel(t);
 }, true);
-// ── Supervisor hint checkboxes ──
+// â”€â”€ Supervisor hint checkboxes â”€â”€
 document.addEventListener('change', function(e) {
   var cb = e.target.closest('.sup-hint-cb');
   if (!cb) return;
@@ -1334,7 +1334,7 @@ document.addEventListener('change', function(e) {
   else if (!cb.checked && pos !== -1) hints.splice(pos, 1);
 });
 
-// ── Supervisor note textarea ──
+// â”€â”€ Supervisor note textarea â”€â”€
 document.addEventListener('input', function(e) {
   var ta = e.target.closest('.sup-note-area');
   if (!ta) return;
@@ -1344,7 +1344,7 @@ document.addEventListener('input', function(e) {
   supervisorNotes[currentPart][catKey].note = ta.value;
 });
 
-// ── Static handlers previously inline in HTML ──
+// â”€â”€ Static handlers previously inline in HTML â”€â”€
 (function wire() {
   document.querySelectorAll('.mode-card[data-mode]').forEach(function (btn) {
     btn.addEventListener('click', function () { selectMode(btn.dataset.mode); });

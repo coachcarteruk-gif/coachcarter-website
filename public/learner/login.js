@@ -8,7 +8,7 @@
   const expired   = urlParams.get('expired') === '1';
 
   // Redirect if already logged in (and not verifying a new token).
-  // Skip the redirect when ?expired=1 — fetchAuthed clears the localStorage
+  // Skip the redirect when ?expired=1 "” fetchAuthed clears the localStorage
   // blob before bouncing here, but a stale tab elsewhere could repopulate it.
   const existing = JSON.parse(localStorage.getItem('cc_learner') || 'null');
   if (existing && !token && !expired) { window.location.href = redirectTo; }
@@ -23,19 +23,19 @@
   let sessionData = null;
   let smsPhone = null;
 
-  // ── Screen management ──────────────────────────────────────────
+  // â”€â”€ Screen management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById('screen-' + id).classList.add('active');
   }
 
-  // ── If magic link token is in URL, verify immediately ──────────
+  // â”€â”€ If magic link token is in URL, verify immediately â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (token) {
     showScreen('verifying');
     verifyToken(token);
   }
 
-  // ── Method toggle (email / SMS) ────────────────────────────────
+  // â”€â”€ Method toggle (email / SMS) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function switchMethod(method) {
     currentMethod = method;
     document.getElementById('method-email').classList.toggle('active', method === 'email');
@@ -46,7 +46,7 @@
     const hint = document.getElementById('method-hint');
     hint.innerHTML = method === 'sms'
       ? "We'll text you a 6-digit code that expires in 15 minutes."
-      : "We'll send a one-time link that expires in 15 minutes.<br>Click it to sign in — no password to remember.";
+      : "We'll send a one-time link that expires in 15 minutes.<br>Click it to sign in "” no password to remember.";
     clearError();
   }
 
@@ -59,10 +59,10 @@
     document.getElementById('error-msg').classList.remove('show');
   }
 
-  // ── Referral validation state ──────────────────────────────────
+  // â”€â”€ Referral validation state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   let skipReferral = false;  // user chose to continue without referral
 
-  // ── Send magic link ────────────────────────────────────────────
+  // â”€â”€ Send magic link â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleSendLink(e) {
     e.preventDefault();
     clearError();
@@ -100,7 +100,7 @@
           return;
         }
       } catch {
-        // Validation endpoint failed — proceed anyway (don't block signup)
+        // Validation endpoint failed "” proceed anyway (don't block signup)
       }
     }
 
@@ -154,7 +154,7 @@
     }
   }
 
-  // ── Resend magic link / code ──────────────────────────────────
+  // â”€â”€ Resend magic link / code â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleResend() {
     if (!lastPayload) return;
     const btn = document.getElementById('screen-code')?.classList.contains('active')
@@ -185,16 +185,16 @@
           btn.disabled = false;
         }, 5000);
       } else {
-        btn.textContent = 'Failed — try again';
+        btn.textContent = 'Failed "” try again';
         btn.disabled = false;
       }
     } catch {
-      btn.textContent = 'Failed — try again';
+      btn.textContent = 'Failed "” try again';
       btn.disabled = false;
     }
   }
 
-  // ── SMS code input handling ─────────────────────────────────────
+  // â”€â”€ SMS code input handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   (function setupCodeInputs() {
     const container = document.getElementById('code-inputs');
     if (!container) return;
@@ -244,7 +244,7 @@
     });
   })();
 
-  // ── Verify SMS code ─────────────────────────────────────────────
+  // â”€â”€ Verify SMS code â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleVerifyCode() {
     const inputs = document.querySelectorAll('#code-inputs input');
     const code = Array.from(inputs).map(i => i.value).join('');
@@ -273,7 +273,7 @@
         return;
       }
 
-      // Store the session (display-only blob — JWT is in the httpOnly cookie)
+      // Store the session (display-only blob "” JWT is in the httpOnly cookie)
       localStorage.setItem('cc_learner', JSON.stringify({
         user: data.user
       }));
@@ -285,7 +285,7 @@
         return;
       }
 
-      // Existing user — check terms then redirect
+      // Existing user "” check terms then redirect
       btn.textContent = 'Signed in!';
       proceedOrShowTerms(data);
     } catch {
@@ -295,10 +295,10 @@
     }
   }
 
-  // ── Verify magic link token (two-step: validate then verify) ───
+  // â”€â”€ Verify magic link token (two-step: validate then verify) â”€â”€â”€
   async function verifyToken(token) {
     try {
-      // Step 1: Validate (GET — does NOT consume the token)
+      // Step 1: Validate (GET "” does NOT consume the token)
       const valRes = await fetch('/api/magic-link?action=validate&token=' + encodeURIComponent(token));
       const valData = await valRes.json();
 
@@ -314,7 +314,7 @@
         return;
       }
 
-      // Step 2: Consume (POST — marks token as used, returns JWT)
+      // Step 2: Consume (POST "” marks token as used, returns JWT)
       const res = await fetch('/api/magic-link?action=verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -338,7 +338,7 @@
         return;
       }
 
-      // Store the session (display-only blob — JWT is in the httpOnly cookie)
+      // Store the session (display-only blob "” JWT is in the httpOnly cookie)
       sessionData = data;
       localStorage.setItem('cc_learner', JSON.stringify({
         user: data.user
@@ -351,7 +351,7 @@
         return;
       }
 
-      // Existing user — check terms then redirect
+      // Existing user "” check terms then redirect
       proceedOrShowTerms(data);
     } catch {
       showScreen('error');
@@ -360,7 +360,7 @@
     }
   }
 
-  // ── Set name for new users ─────────────────────────────────────
+  // â”€â”€ Set name for new users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleSetName() {
     const name = document.getElementById('input-name').value.trim();
     if (!name) {
@@ -388,7 +388,7 @@
     }
   }
 
-  // ── Terms checkbox toggle ───────────────────────────────────────
+  // â”€â”€ Terms checkbox toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Use both 'change' and 'click' because mobile browsers don't always fire
   // 'change' when the tap lands on the label rather than the checkbox itself.
   function syncTermsBtn() {
@@ -405,7 +405,7 @@
     });
   }
 
-  // ── Accept terms & continue ────────────────────────────────────
+  // â”€â”€ Accept terms & continue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleAcceptTerms() {
     const btn = document.getElementById('accept-terms-btn');
     btn.disabled = true;
@@ -437,11 +437,11 @@
         errEl.style.cssText = 'margin-top:12px;color:#ef4444;font-size:0.85rem;line-height:1.4;';
         btn.parentNode.appendChild(errEl);
       }
-      errEl.textContent = "Couldn't save — please try again, or refresh the page if it keeps failing. (" + (err.message || 'unknown error') + ")";
+      errEl.textContent = "Couldn't save "” please try again, or refresh the page if it keeps failing. (" + (err.message || 'unknown error') + ")";
     }
   }
 
-  // ── Helper: proceed after auth or show terms gate ──────────────
+  // â”€â”€ Helper: proceed after auth or show terms gate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function proceedOrShowTerms(data) {
     if (!data.terms_accepted) {
       showScreen('terms');
@@ -465,7 +465,7 @@
     if (e.key === 'Enter') { e.preventDefault(); handleSetName(); }
   });
 
-// ── Referral validation error UI ──────────────────────────────────
+// â”€â”€ Referral validation error UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showReferralError(badCode) {
   var el = document.getElementById('referral-error');
   if (!el) return;
@@ -494,18 +494,18 @@ function handleSkipReferral() {
   if (form) form.requestSubmit();
 }
 
-// ── Referral code UI ──────────────────────────────────────────────
+// â”€â”€ Referral code UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 (function setupReferral() {
   var banner = document.getElementById('referral-banner');
   var group = document.getElementById('referral-group');
   var input = document.getElementById('input-referral');
   if (referralCode) {
-    // URL has ?ref=CODE — show banner, auto-fill the hidden input
+    // URL has ?ref=CODE "” show banner, auto-fill the hidden input
     if (banner) banner.style.display = 'block';
     if (input) input.value = referralCode;
-    // Keep the input hidden — code already captured from URL
+    // Keep the input hidden "” code already captured from URL
   } else {
-    // No URL param — show optional manual input field
+    // No URL param "” show optional manual input field
     if (group) group.style.display = 'block';
   }
 })();

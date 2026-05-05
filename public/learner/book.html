@@ -23,7 +23,7 @@
   <script src="/shared/dark-mode.js" defer></script>
   <script src="/shared/font-swap.js" defer></script>
   <style>
-    /* ── Toolbar (sticky: pills + filter) ────────────────────────────────── */
+    /* â”€â”€ Toolbar (sticky: pills + filter) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .cal-toolbar {
       position: sticky; top: 0; z-index: 50;
       background: var(--white); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
@@ -33,7 +33,7 @@
       width: calc(100% + 32px); flex-wrap: wrap;
     }
 
-    /* ── Slot Feed ────────────────────────────────────────────────────────── */
+    /* â”€â”€ Slot Feed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .slot-feed { display: flex; flex-direction: column; gap: 6px; }
     .feed-date-header {
       font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
@@ -82,10 +82,10 @@
     .btn-load-more:hover { background: var(--surface); }
     .btn-load-more:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* ── Page ──────────────────────────────────────────────────────────────── */
+    /* â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .page { max-width: 960px; margin: 0 auto; padding: 24px 16px 24px; }
 
-    /* ── Welcome / no-credits banners ─────────────────────────────────────── */
+    /* â”€â”€ Welcome / no-credits banners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .banner {
       border-radius: var(--radius); padding: 14px 20px;
       display: flex; align-items: center; justify-content: space-between;
@@ -96,7 +96,7 @@
     .banner strong { color: var(--primary); }
     .banner-dismiss { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--muted); padding: 4px; }
 
-    /* ── Next lesson card ─────────────────────────────────────────────────── */
+    /* â”€â”€ Next lesson card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .next-lesson-card {
       display: flex; align-items: center; justify-content: space-between;
       background: var(--white); border: 1px solid var(--border);
@@ -134,7 +134,7 @@
     }
     .upcoming-cal-btn:hover { border-color: var(--accent); background: var(--accent-lt); }
 
-    /* ── Repeat/recurring booking ─────────────────────────────────────────── */
+    /* â”€â”€ Repeat/recurring booking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .repeat-section { margin: 12px 0; padding: 12px; background: var(--page-bg); border-radius: 10px; }
     .repeat-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
     .repeat-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
@@ -156,7 +156,7 @@
       color: var(--primary); cursor: pointer; font-family: var(--font-body);
     }
 
-    /* ── Loading / Empty ──────────────────────────────────────────────────── */
+    /* â”€â”€ Loading / Empty â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
     .spinner {
       width: 32px; height: 32px; border: 3px solid var(--border);
@@ -214,7 +214,7 @@
       font-size: 0.88rem; color: #15803d; text-align: center;
     }
 
-    /* ── Slot avatar (reused in feed cards) ──────────────────────────────── */
+    /* â”€â”€ Slot avatar (reused in feed cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .slot-avatar {
       width: 22px; height: 22px; border-radius: 50%;
       background: var(--accent-mid); display: flex; align-items: center; justify-content: center;
@@ -222,7 +222,7 @@
     }
     .slot-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-    /* ── Modals (shared) ──────────────────────────────────────────────────── */
+    /* â”€â”€ Modals (shared) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.5);
       display: flex; align-items: center; justify-content: center;
@@ -326,14 +326,14 @@
     .btn-confirm-cancel:hover { background: #dc2626; }
     .btn-confirm-cancel:disabled { background: var(--border); cursor: not-allowed; }
 
-    /* ── Inline field errors ── */
+    /* â”€â”€ Inline field errors â”€â”€ */
     .field-error-msg {
       display: none; font-size: 0.75rem; color: var(--red); margin-top: 3px;
     }
     .field-error-msg.show { display: block; }
     .input-error { border-color: var(--red) !important; }
 
-    /* ── Toast ────────────────────────────────────────────────────────────── */
+    /* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .toast {
       position: fixed; bottom: 72px; left: 50%;
       transform: translateX(-50%) translateY(120px);
@@ -347,7 +347,7 @@
     .toast.success { background: #16a34a; }
     .toast.error   { background: var(--red); }
 
-    /* ── Postcode prompt ──────────────────────────────────────────────────── */
+    /* â”€â”€ Postcode prompt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .postcode-prompt {
       width: 100%; display: none;
       background: var(--surface); border: 1px solid var(--border);
@@ -362,7 +362,7 @@
     }
     .postcode-prompt-error { display: none; color: #e74c3c; font-size: 0.75rem; margin: 6px 0 0; }
 
-    /* ── Travel-hidden banner ─────────────────────────────────────────────── */
+    /* â”€â”€ Travel-hidden banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .travel-hidden-banner {
       display: none; align-items: center; gap: 8px;
       background: var(--surface); border: 1px solid var(--border);
@@ -370,7 +370,7 @@
       font-size: 0.82rem; color: var(--muted);
     }
 
-    /* ── Responsive ───────────────────────────────────────────────────────── */
+    /* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     @media (max-width: 700px) {
       .cal-toolbar { flex-direction: column; align-items: stretch; }
     }
@@ -454,7 +454,7 @@
 
 </main>
 
-<!-- ── Book confirmation modal ── -->
+<!-- â”€â”€ Book confirmation modal â”€â”€ -->
 <div class="modal-overlay" id="bookModal">
   <div class="modal">
     <div id="bookConfirmStep">
@@ -594,7 +594,7 @@
       </div>
     </div>
     <div id="bookSuccessStep" class="modal-success" style="display:none">
-      <div class="modal-success-icon">✓</div>
+      <div class="modal-success-icon">âœ“</div>
       <h2>Lesson booked!</h2>
       <p>Your lesson on <strong id="successDate">—</strong> at <strong id="successTime">—</strong> with <strong id="successInstructor">—</strong> is confirmed. Check your email for details.</p>
       <p id="successBalance" style="display:none;font-size:0.875rem;color:var(--muted);margin-top:-8px"></p>
@@ -618,7 +618,7 @@
   </div>
 </div>
 
-<!-- ── Cancel confirmation modal ── -->
+<!-- â”€â”€ Cancel confirmation modal â”€â”€ -->
 <div class="modal-overlay" id="cancelModal">
   <div class="modal cancel-modal">
     <div class="modal-header">
@@ -651,7 +651,7 @@
   </div>
 </div>
 
-<!-- ── Reschedule confirmation modal ── -->
+<!-- â”€â”€ Reschedule confirmation modal â”€â”€ -->
 <div class="modal-overlay" id="rescheduleModal">
   <div class="modal">
     <div class="modal-header">

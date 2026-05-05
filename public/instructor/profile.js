@@ -51,7 +51,7 @@
         </div>
       </div>
 
-      <div class="success-banner" id="successBanner">✓ Profile updated successfully</div>
+      <div class="success-banner" id="successBanner">âœ“ Profile updated successfully</div>
 
       <div class="form-card">
         <div class="form-card-title">Personal details</div>
@@ -78,7 +78,7 @@
 
         <div class="form-group">
           <label for="inputBio">Bio</label>
-          <textarea id="inputBio" placeholder="Tell learners a bit about yourself — your experience, teaching style, areas covered…">${esc(p.bio || '')}</textarea>
+          <textarea id="inputBio" placeholder="Tell learners a bit about yourself "” your experience, teaching style, areas covered…">${esc(p.bio || '')}</textarea>
           <p class="field-hint">Shown to learners when choosing an instructor.</p>
         </div>
 
@@ -118,7 +118,7 @@
           <div class="chip-group" id="specialismsChips">
             ${buildSpecialismChips(p.specialisms || [])}
           </div>
-          <p class="field-hint">Select all that apply — shown to learners on your profile.</p>
+          <p class="field-hint">Select all that apply "” shown to learners on your profile.</p>
         </div>
       </div>
 
@@ -237,7 +237,7 @@
             ? '<span style="color:#c0392b">\u274c Sync error: ' + (p.ical_sync_error || '') + '</span>'
             : p.ical_last_synced_at
               ? '<span style="color:#27ae60">\u2705 Last synced: ' + new Date(p.ical_last_synced_at).toLocaleString('en-GB') + '</span>'
-              : '<span style="color:#f39c12">\u23f3 Sync pending — will run within 15 minutes</span>'
+              : '<span style="color:#f39c12">\u23f3 Sync pending "” will run within 15 minutes</span>'
           }
         </div>
 
@@ -359,7 +359,7 @@
     var allSlugs = Array.from(checkboxes).map(function(cb) { return cb.dataset.ltSlug; });
     var enabledSlugs = Array.from(checkboxes).filter(function(cb) { return cb.checked; }).map(function(cb) { return cb.dataset.ltSlug; });
 
-    // null means "all" — only send an explicit array if some are disabled
+    // null means "all" "” only send an explicit array if some are disabled
     var offeredPayload = (enabledSlugs.length === allSlugs.length) ? null : enabledSlugs;
 
     btn.disabled = true;
@@ -420,7 +420,7 @@
     const file = input.files[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      alert('Image too large — max 2MB'); return;
+      alert('Image too large "” max 2MB'); return;
     }
     const status = document.getElementById('uploadStatus');
     status.style.display = ''; status.textContent = 'Uploading…';
@@ -437,7 +437,7 @@
         if (!res.ok) throw new Error(data.error);
         document.getElementById('inputPhoto').value = data.photo_url;
         previewPhoto(data.photo_url);
-        status.textContent = '✓ Photo uploaded';
+        status.textContent = 'âœ“ Photo uploaded';
         status.style.color = 'var(--green)';
 
         // Update local session
@@ -554,7 +554,7 @@
       });
       const data = await res.json();
       if (data.ok) {
-        resultEl.innerHTML = `<span style="color:#27ae60">\u2705 Feed is valid — ${data.event_count} event${data.event_count !== 1 ? 's' : ''} found</span>`;
+        resultEl.innerHTML = `<span style="color:#27ae60">\u2705 Feed is valid "” ${data.event_count} event${data.event_count !== 1 ? 's' : ''} found</span>`;
       } else {
         resultEl.innerHTML = `<span style="color:#c0392b">\u274c ${data.error || 'Feed test failed'}</span>`;
       }
@@ -592,10 +592,10 @@ document.addEventListener('change', function (e) {
   if (e.target && e.target.id === 'inputPhotoFile') handlePhotoUpload(e.target);
 });
 
-// Delegated image error handler — replaces inline onerror. Capture because
+// Delegated image error handler "” replaces inline onerror. Capture because
 // the 'error' event doesn't bubble. Two cases:
-//  - data-hide-on-error → hide the img
-//  - data-fallback-initials="XY" → hide img and replace parent textContent
+//  - data-hide-on-error â†’ hide the img
+//  - data-fallback-initials="XY" â†’ hide img and replace parent textContent
 //    with the initials (used on the avatar row).
 document.addEventListener('error', function (e) {
   var t = e.target;

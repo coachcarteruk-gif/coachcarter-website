@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-// ── Auth ──
+// â”€â”€ Auth â”€â”€
 let AUTH, PROGRESS;
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -58,7 +58,7 @@ function render() {
   }
 }
 
-// ── Postcode address lookup ──
+// â”€â”€ Postcode address lookup â”€â”€
 let confirmedPostcodeData = null;
 
 async function lookupPostcode() {
@@ -110,7 +110,7 @@ function buildFullAddress() {
   updateProfileBadge();
 }
 
-// ── Profile (phone + pickup address) ──
+// â”€â”€ Profile (phone + pickup address) â”€â”€
 function renderProfile() {
   if (!PROGRESS) return;
   document.getElementById('profilePhone').value = PROGRESS.phone || '';
@@ -173,7 +173,7 @@ async function saveProfile() {
   }
 }
 
-// ── Driving Test Date ──
+// â”€â”€ Driving Test Date â”€â”€
 function renderTestDate() {
   const dateInput = document.getElementById('testDate');
   const timeInput = document.getElementById('testTime');
@@ -241,7 +241,7 @@ async function saveTest() {
   }
 }
 
-// ── Contact preference toggle ──
+// â”€â”€ Contact preference toggle â”€â”€
 function updatePrefSub(isOn) {
   const sub = document.getElementById('pref-sub');
   sub.textContent = isOn
@@ -269,7 +269,7 @@ async function toggleContactPref() {
   }
 }
 
-// ── Availability ──
+// â”€â”€ Availability â”€â”€
 let AVAIL_WINDOWS = [];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // Display order: Mon-Sun
@@ -303,7 +303,7 @@ function drawAvailDays() {
     } else {
       for (let i = 0; i < windows.length; i++) {
         const w = windows[i];
-        html += `<span class="avail-chip">${fmtTime(w.start_time)} – ${fmtTime(w.end_time)}<span class="avail-chip-x" data-action="remove-avail-window" data-day="${day}" data-idx="${i}">&times;</span></span>`;
+        html += `<span class="avail-chip">${fmtTime(w.start_time)} "“ ${fmtTime(w.end_time)}<span class="avail-chip-x" data-action="remove-avail-window" data-day="${day}" data-idx="${i}">&times;</span></span>`;
       }
     }
     html += `<button type="button" class="avail-add-btn" data-action="show-add-row" data-day="${day}">+</button>`;
@@ -421,7 +421,7 @@ async function saveAvailability() {
   }
 }
 
-// ── Waitlist ──
+// â”€â”€ Waitlist â”€â”€
 async function loadWaitlist() {
   const container = document.getElementById('waitlistEntries');
   const badge = document.getElementById('waitlistBadge');
@@ -447,7 +447,7 @@ async function loadWaitlist() {
     for (const e of entries) {
       const dayName = e.preferred_day !== null ? DAY_NAMES[e.preferred_day] : null;
       const timeStr = e.preferred_start_time
-        ? `${fmtTime(e.preferred_start_time.slice(0,5))} – ${fmtTime(e.preferred_end_time.slice(0,5))}`
+        ? `${fmtTime(e.preferred_start_time.slice(0,5))} "“ ${fmtTime(e.preferred_end_time.slice(0,5))}`
         : null;
 
       let title;
@@ -465,7 +465,7 @@ async function loadWaitlist() {
       html += `<div class="wl-entry">
         <div class="wl-entry-info">
           <div class="wl-entry-title">${title}</div>
-          <div class="wl-entry-sub">${instructor}${lessonType ? ' · ' + lessonType : ''}</div>
+          <div class="wl-entry-sub">${instructor}${lessonType ? ' Â· ' + lessonType : ''}</div>
           <div class="wl-entry-badges">
             <span class="wl-badge ${statusClass}">${statusLabel}</span>
             <span class="wl-badge wl-badge-expires">${daysLeft}d left</span>
@@ -482,7 +482,7 @@ async function loadWaitlist() {
 }
 
 
-// ── GDPR: Request Account Deletion ──
+// â”€â”€ GDPR: Request Account Deletion â”€â”€
 async function requestDeletion(btn) {
   if (!confirm('Are you sure you want to delete your account? This action CANNOT be undone. All your bookings, progress, and personal data will be permanently removed.')) return;
   if (!confirm('This is your final confirmation. Proceed with account deletion?')) return;

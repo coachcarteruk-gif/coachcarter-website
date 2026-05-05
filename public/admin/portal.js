@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-// ── HTML-escape helper ─────────────────────────────────────────────
+// â”€â”€ HTML-escape helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // User data from the API is NEVER trusted. Every ${field} interpolation
 // into innerHTML MUST be wrapped in esc(). Covers element + attribute contexts.
 function esc(str) {
@@ -13,16 +13,16 @@ function esc(str) {
     .replace(/'/g, '&#39;');
 }
 
-// ── Auth ──────────────────────────────────────────────────────────
+// â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Authentication now lives in the httpOnly cc_admin / cc_instructor
 // cookies. Session JWTs are attached automatically by the browser on
 // same-origin fetches; the backend accepts either cookie for admin
-// endpoints (via requireAuth({ roles: ['admin'] }) — which includes
+// endpoints (via requireAuth({ roles: ['admin'] }) "” which includes
 // instructors with isAdmin=true).
 //
 // localStorage display blobs are read for sidebar greetings because
 // they're the fastest way to populate name/email on page load without
-// an extra API round-trip. They contain NO auth material — session JWTs
+// an extra API round-trip. They contain NO auth material "” session JWTs
 // live in the httpOnly cc_admin / cc_instructor cookies.
 const adminData = JSON.parse(localStorage.getItem('cc_admin') || 'null');
 const instrData = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
@@ -48,7 +48,7 @@ if (isInstructorAdmin) {
 function logout() {
   if (isInstructorAdmin) {
     // Instructor-admins: clear the instructor session on the server
-    // (not the admin one — they authenticated via cc_instructor).
+    // (not the admin one "” they authenticated via cc_instructor).
     try {
       fetchAdmin('/api/instructor?action=logout', { method: 'POST', keepalive: true })
         .catch(function () {});
@@ -67,10 +67,10 @@ fetchAdmin('/api/admin?action=verify')
 
 // Instructor-admins see "Back to Portal" instead of "Sign Out"
 if (isInstructorAdmin) {
-  document.getElementById('logout-btn').textContent = '← Back to Portal';
+  document.getElementById('logout-btn').textContent = 'â† Back to Portal';
 }
 
-// ── Navigation ────────────────────────────────────────────────────
+// â”€â”€ Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showSection(name) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById('section-' + name).classList.add('active');
@@ -97,7 +97,7 @@ function toggleSidebar() {
   document.getElementById('sidebar-overlay').classList.toggle('open');
 }
 
-// ── Toast ─────────────────────────────────────────────────────────
+// â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function toast(msg, type = '') {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -105,11 +105,11 @@ function toast(msg, type = '') {
   setTimeout(() => el.classList.remove('show'), 3000);
 }
 
-// ── Modal helpers ─────────────────────────────────────────────────
+// â”€â”€ Modal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
-// ── Date helpers ──────────────────────────────────────────────────
+// â”€â”€ Date helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -130,9 +130,9 @@ function statusBadge(status) {
   return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + (labels[status] || status) + '</span>';
 }
 
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // DASHBOARD
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 async function loadDashboard() {
   try {
     const res = await fetchAdmin('/api/admin?action=dashboard-stats', { headers: HEADERS });
@@ -169,7 +169,7 @@ async function loadDashboard() {
     body.innerHTML = upcoming.map(b =>
       '<tr>' +
         '<td>' + formatDate(b.scheduled_date) + '</td>' +
-        '<td>' + formatTime(b.start_time) + ' – ' + formatTime(b.end_time) + '</td>' +
+        '<td>' + formatTime(b.start_time) + ' "“ ' + formatTime(b.end_time) + '</td>' +
         '<td><strong>' + esc(b.learner_name) + '</strong><br><span style="font-size:0.8rem;color:var(--muted)">' + esc(b.learner_email) + '</span></td>' +
         '<td>' + esc(b.instructor_name) + '</td>' +
         '<td>' + statusBadge(b.status) + '</td>' +
@@ -180,9 +180,9 @@ async function loadDashboard() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // INSTRUCTORS
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 let instructorsCache = [];
 
 async function loadInstructors() {
@@ -207,7 +207,7 @@ function renderInstructors() {
 
   el.innerHTML = instructorsCache.map(i => {
     const availSummary = i.availability.length > 0
-      ? i.availability.map(w => DAYS[w.day_of_week] + ' ' + formatTime(w.start_time) + '–' + formatTime(w.end_time)).join(', ')
+      ? i.availability.map(w => DAYS[w.day_of_week] + ' ' + formatTime(w.start_time) + '"“' + formatTime(w.end_time)).join(', ')
       : 'No availability set';
 
     return '<div class="panel-card" style="margin-bottom: 16px;">' +
@@ -343,9 +343,9 @@ async function toggleInstructor(id, active) {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // AVAILABILITY
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 let availWindows = []; // current working set
 
 async function loadInstructorSelect() {
@@ -399,7 +399,7 @@ function renderAvailGrid() {
         ? dayWindows.map((w, idx) => {
             const globalIdx = availWindows.indexOf(w);
             return '<div class="avail-slot">' +
-              '<span>' + w.start_time + '–' + w.end_time + '</span>' +
+              '<span>' + w.start_time + '"“' + w.end_time + '</span>' +
               '<button class="remove-slot" data-action="remove-window" data-idx="' + globalIdx + '" title="Remove">&times;</button>' +
             '</div>';
           }).join('')
@@ -459,9 +459,9 @@ async function saveAvailability() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // BLACKOUT DATES (admin management)
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 let blackoutRanges = [];
 
 async function loadBlackouts(instructorId) {
@@ -493,7 +493,7 @@ function renderBlackoutList() {
     var days = Math.round((endD - startD) / 86400000) + 1;
     var label = startD.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     if (r.start_date !== r.end_date) {
-      label += ' – ' + endD.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      label += ' "“ ' + endD.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     }
     return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">' +
       '<div style="flex:1">' +
@@ -561,9 +561,9 @@ async function saveBlackouts() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // BOOKINGS
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 let allBookings = [];
 let currentBookingFilter = '';
 
@@ -605,7 +605,7 @@ function renderBookings() {
     const typeLabel = b.lesson_type_name ? '<br><span style="font-size:0.78rem;color:var(--muted)">' + esc(b.lesson_type_name) + '</span>' : '';
     return '<tr>' +
       '<td>' + formatDate(b.scheduled_date) + '</td>' +
-      '<td>' + formatTime(b.start_time) + ' – ' + formatTime(b.end_time) + typeLabel + '</td>' +
+      '<td>' + formatTime(b.start_time) + ' "“ ' + formatTime(b.end_time) + typeLabel + '</td>' +
       '<td><strong>' + esc(b.learner_name) + '</strong><br><span style="font-size:0.8rem;color:var(--muted)">' + esc(b.learner_email) + '</span></td>' +
       '<td>' + esc(b.instructor_name) + '</td>' +
       '<td>' + statusBadge(b.status) + (b.edited_at ? ' <span style="font-size:0.7rem;color:var(--muted)">(edited)</span>' : '') + '</td>' +
@@ -631,7 +631,7 @@ async function markComplete(bookingId) {
   }
 }
 
-// ── Edit Booking (Admin) ────────────────────────────────────────────────────
+// â”€â”€ Edit Booking (Admin) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let adminEditBookingId = null;
 let adminEditLessonTypes = [];
 let adminEditOrigMinutes = 0;
@@ -720,7 +720,7 @@ async function confirmAdminEditBooking(forceOverride) {
       var msg = 'This time overlaps with:\n\n';
       for (var i = 0; i < data.conflicts.length; i++) {
         var c = data.conflicts[i];
-        msg += '• ' + c.learner_name + ' (' + c.time + ')\n';
+        msg += '"¢ ' + c.learner_name + ' (' + c.time + ')\n';
       }
       msg += '\nSave anyway?';
       btn.disabled = false; btn.textContent = 'Save changes';
@@ -738,9 +738,9 @@ async function confirmAdminEditBooking(forceOverride) {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // LEARNERS
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 let allLearners = [];
 let currentLearnerTierFilter = 0;
 
@@ -855,7 +855,7 @@ async function showLearnerDetail(id) {
       html += '<div class="table-wrap" style="margin-bottom:24px;"><table class="data-table"><thead><tr><th>Date</th><th>Time</th><th>Instructor</th><th>Status</th><th>Notes</th></tr></thead><tbody>';
       html += data.bookings.map(b =>
         '<tr><td>' + formatDate(b.scheduled_date) + '</td>' +
-        '<td>' + formatTime(b.start_time) + ' – ' + formatTime(b.end_time) + '</td>' +
+        '<td>' + formatTime(b.start_time) + ' "“ ' + formatTime(b.end_time) + '</td>' +
         '<td>' + esc(b.instructor_name) + '</td>' +
         '<td>' + statusBadge(b.status) + '</td>' +
         '<td>' + esc(b.notes || '') + '</td></tr>'
@@ -881,7 +881,7 @@ async function showLearnerDetail(id) {
 
     // Delete button
     html += '<div style="margin-top:32px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.06);">';
-    html += '<button data-action="confirm-delete-learner" data-id="' + id + '" data-name="' + esc(learner?.name || learner?.email || '') + '" style="background:#e74c3c;color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600;">🗑 Delete Learner</button>';
+    html += '<button data-action="confirm-delete-learner" data-id="' + id + '" data-name="' + esc(learner?.name || learner?.email || '') + '" style="background:#e74c3c;color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600;">ðŸ—‘ Delete Learner</button>';
     html += '<span style="margin-left:12px;font-size:0.78rem;color:var(--muted);">Permanently removes this learner and all their data.</span>';
     html += '</div>';
 
@@ -918,7 +918,7 @@ function closeLearnerDetail() {
   document.getElementById('learner-detail-panel').style.display = 'none';
 }
 
-// ── Edit learner details ──
+// â”€â”€ Edit learner details â”€â”€
 
 function openEditLearner() {
   if (!_detailLearnerId) return;
@@ -964,7 +964,7 @@ async function saveEditLearner() {
   }
 }
 
-// ── Credit adjustment ──
+// â”€â”€ Credit adjustment â”€â”€
 let _adjustLearnerId = null;
 
 function fmtBalanceMins(mins) {
@@ -987,7 +987,7 @@ function openAdjustCredits(learnerId, balanceMinutes) {
       <p style="color:var(--muted);font-size:0.85rem;margin:0 0 20px;">Current balance: <strong>${fmtBalanceMins(balanceMinutes)}</strong></p>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <button data-action="adj-type" data-type="add" id="adj-add-btn" style="flex:1;padding:10px;border-radius:8px;border:2px solid var(--accent);background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">+ Add</button>
-        <button data-action="adj-type" data-type="remove" id="adj-remove-btn" style="flex:1;padding:10px;border-radius:8px;border:2px solid #ef4444;background:transparent;color:#ef4444;font-weight:600;cursor:pointer;">− Remove</button>
+        <button data-action="adj-type" data-type="remove" id="adj-remove-btn" style="flex:1;padding:10px;border-radius:8px;border:2px solid #ef4444;background:transparent;color:#ef4444;font-weight:600;cursor:pointer;">âˆ’ Remove</button>
       </div>
       <input type="number" id="adj-hours-input" min="0.5" max="100" step="0.5" value="1.5" placeholder="Hours (e.g. 1.5)"
         style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:1rem;margin-bottom:12px;box-sizing:border-box;">
@@ -1053,9 +1053,9 @@ async function submitAdjustCredits() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // VIDEOS
-// ══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const CF_BASE = 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com';
 let videosCache = [];
 let videoCategoriesCache = [];
@@ -1140,7 +1140,7 @@ function renderVideosList() {
         '<div style="flex:1;min-width:180px;">' +
           '<div style="font-weight:700;font-size:0.9rem;margin-bottom:3px;">' + esc(v.title) + ' ' + badges.join(' ') + '</div>' +
           '<div style="font-size:0.78rem;color:var(--muted);margin-bottom:3px;">' + esc(v.description || '') + '</div>' +
-          '<div style="font-size:0.72rem;color:var(--muted);">' + esc(v.category_label || v.category_slug) + ' · Order: ' + v.sort_order + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--muted);">' + esc(v.category_label || v.category_slug) + ' Â· Order: ' + v.sort_order + '</div>' +
         '</div>' +
         '<div style="display:flex;gap:6px;flex-shrink:0;">' +
           '<button class="btn btn-sm" data-action="edit-video" data-id="' + v.id + '">Edit</button>' +
@@ -1152,7 +1152,7 @@ function renderVideosList() {
   updateBulkBar();
 }
 
-// ── Bulk selection ──
+// â”€â”€ Bulk selection â”€â”€
 function toggleBulkSelect(id, checked) {
   if (checked) bulkSelected.add(id); else bulkSelected.delete(id);
   updateBulkBar();
@@ -1206,7 +1206,7 @@ async function bulkAction(type) {
   loadVideos();
 }
 
-// ── Upload ──
+// â”€â”€ Upload â”€â”€
 function toggleManualUid(e) {
   e.preventDefault();
   const wrap = document.getElementById('vid-manual-uid');
@@ -1314,7 +1314,7 @@ async function pollVideoMeta(uid) {
       const res = await fetchAdmin(`/api/videos?action=fetch-meta&uid=${uid}`, { headers: HEADERS });
       const data = await res.json();
       if (data.ready && data.duration) {
-        document.getElementById('vid-upload-status').textContent = 'Ready · Duration: ' + formatDuration(data.duration);
+        document.getElementById('vid-upload-status').textContent = 'Ready Â· Duration: ' + formatDuration(data.duration);
         // Store duration for saveVideo
         document.getElementById('vid-uid-hidden').dataset.duration = data.duration;
         return;
@@ -1323,7 +1323,7 @@ async function pollVideoMeta(uid) {
   }
 }
 
-// ── Preview ──
+// â”€â”€ Preview â”€â”€
 function showVideoPreview(uid) {
   if (!uid) { hideVideoPreview(); return; }
   const wrap = document.getElementById('vid-preview-wrap');
@@ -1459,7 +1459,7 @@ async function deleteVideo(id) {
   }
 }
 
-// ── Category management ──
+// â”€â”€ Category management â”€â”€
 function openCategoryModal() {
   renderCategoriesList();
   openModal('modal-categories');
@@ -1514,8 +1514,8 @@ async function deleteCategory(slug) {
   } catch (err) { toast(err.message, 'error'); }
 }
 
-// ── Escape HTML ───────────────────────────────────────────────────
-// ── Lesson Types ─────────────────────────────────────────────────
+// â”€â”€ Escape HTML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ Lesson Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let lessonTypesCache = [];
 
 async function loadLessonTypes() {
@@ -1631,7 +1631,7 @@ async function toggleLessonType(id, active) {
   }
 }
 
-// ── Payouts ──────────────────────────────────────────────────────
+// â”€â”€ Payouts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function fmtPence(p) { return '\u00A3' + (p / 100).toFixed(2); }
 function fmtDateShort(d) {
   if (!d) return '';
@@ -1763,17 +1763,17 @@ async function processPayoutsNow() {
   }
 }
 
-// ── Initial load ──────────────────────────────────────────────────
+// â”€â”€ Initial load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 loadDashboard();
 
-// ── Delegated error listener — replaces inline onerror on dynamically
+// â”€â”€ Delegated error listener "” replaces inline onerror on dynamically
 //    inserted <img data-hide-on-error>. Capture because 'error' doesn't bubble.
 document.addEventListener('error', function (e) {
   var t = e.target;
   if (t && t.tagName === 'IMG' && t.hasAttribute('data-hide-on-error')) t.style.display = 'none';
 }, true);
 
-// ── Event delegation (dynamically rendered handlers) ──
+// â”€â”€ Event delegation (dynamically rendered handlers) â”€â”€
 document.addEventListener('click', function (e) {
   var t = e.target.closest('[data-action]');
   if (!t) return;
@@ -1814,7 +1814,7 @@ document.addEventListener('input', function (e) {
   if (!t) return;
   if (t.dataset.action === 'render-learners') renderLearners();
 });
-// ── Referrals section ──
+// â”€â”€ Referrals section â”€â”€
 async function loadReferrals() {
   loadReferralConfig();
   loadReferralActivity();
@@ -1919,11 +1919,11 @@ async function loadReferralActivity() {
   }
 }
 
-// ── Sidebar nav ──
+// â”€â”€ Sidebar nav â”€â”€
 document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   a.addEventListener('click', function (e) { e.preventDefault(); showSection(a.dataset.section); });
 });
-// ── Static id-based buttons ──
+// â”€â”€ Static id-based buttons â”€â”€
 (function wire() {
   var bind = function (id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
   bind('btn-hamburger', toggleSidebar);

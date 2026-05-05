@@ -10,19 +10,19 @@
 
   let lastLoginEmail = null;
 
-  // ── Screen management ──────────────────────────────────────────
+  // â”€â”€ Screen management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById('screen-' + id).classList.add('active');
   }
 
-  // ── If magic link token is in URL, verify immediately ──────────
+  // â”€â”€ If magic link token is in URL, verify immediately â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (token) {
     showScreen('verifying');
     verifyToken(token);
   }
 
-  // ── Sign in: request magic link ────────────────────────────────
+  // â”€â”€ Sign in: request magic link â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleLoginSubmit(e) {
     e.preventDefault();
     const email = document.getElementById('loginEmail').value.trim();
@@ -55,7 +55,7 @@
     }
   }
 
-  // ── Resend sign-in link ────────────────────────────────────────
+  // â”€â”€ Resend sign-in link â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleResend() {
     if (!lastLoginEmail) return;
     const btn = document.getElementById('resendBtn');
@@ -72,19 +72,19 @@
         btn.textContent = 'Sent! Check again';
         setTimeout(() => { btn.textContent = "Didn't get it? Send again"; btn.disabled = false; }, 5000);
       } else {
-        btn.textContent = 'Failed — try again';
+        btn.textContent = 'Failed "” try again';
         btn.disabled = false;
       }
     } catch {
-      btn.textContent = 'Failed — try again';
+      btn.textContent = 'Failed "” try again';
       btn.disabled = false;
     }
   }
 
-  // ── Verify magic link token (two-step: validate then verify) ───
+  // â”€â”€ Verify magic link token (two-step: validate then verify) â”€â”€â”€
   async function verifyToken(token) {
     try {
-      // Step 1: Validate (GET — does NOT consume the token)
+      // Step 1: Validate (GET "” does NOT consume the token)
       const valRes = await fetch('/api/instructor?action=validate-token&token=' + encodeURIComponent(token));
       const valData = await valRes.json();
 
@@ -95,7 +95,7 @@
         return;
       }
 
-      // Step 2: Consume (POST — marks token as used, returns JWT)
+      // Step 2: Consume (POST "” marks token as used, returns JWT)
       const res = await fetch('/api/instructor?action=verify-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,7 +120,7 @@
     }
   }
 
-  // ── Join the team: submit enquiry ──────────────────────────────
+  // â”€â”€ Join the team: submit enquiry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleJoinSubmit(e) {
     e.preventDefault();
     const name    = document.getElementById('joinName').value.trim();

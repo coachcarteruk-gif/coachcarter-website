@@ -1,14 +1,14 @@
 (function () {
   'use strict';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const DAY_SHORT  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const DAY_FULL   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_SHORT  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MON_FULL   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAY_INDEX  = [1,2,3,4,5,6,0]; // Mon–Sun display order
+const DAY_INDEX  = [1,2,3,4,5,6,0]; // Mon"“Sun display order
 
-// ─── State ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let instructor = null;
 let currentView = 'agenda'; // 'monthly' | 'weekly' | 'agenda'
 let cursor     = new Date(); // current date driving the view
@@ -20,7 +20,7 @@ let instructorSlug = null; // from profile, used for shareable booking links
 let loadedRanges = []; // [{from, to}] already fetched
 let selectedBooking = null;
 
-// ─── Init ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function init() {
   const session = ccAuth.getAuth();
   if (!session) { window.location.href = '/instructor/login.html'; return; }
@@ -47,7 +47,7 @@ async function loadCalendarPrefs() {
   } catch {}
 }
 
-// ─── View switching ──────────────────────────────────���───────────────────────
+// â”€â”€â”€ View switching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ï¿½ï¿½ï¿½â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function setView(view) {
   currentView = view;
   document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
@@ -80,7 +80,7 @@ function navNext() {
   else { cursor.setDate(cursor.getDate() + 14); } // agenda
   renderCurrentView();
 }
-// ─── Swipe navigation for daily/weekly views ─────────────────────────────────
+// â”€â”€â”€ Swipe navigation for daily/weekly views â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 (function() {
   let touchStartX = 0, touchStartY = 0;
   const calEl = document.getElementById('calContent');
@@ -106,14 +106,14 @@ function goToday() {
   renderCurrentView();
 }
 
-// ─── Render dispatcher ───────────────────────────────────────────────────────
+// â”€â”€â”€ Render dispatcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function renderCurrentView() {
   updateToolbarLabel();
   await fetchNeededData();
   if (currentView === 'monthly') renderMonthly();
   else if (currentView === 'weekly') renderWeekly();
   else renderAgenda();
-  // Async — populate travel time indicators between consecutive bookings
+  // Async "” populate travel time indicators between consecutive bookings
   injectTravelIndicators();
 }
 
@@ -126,16 +126,16 @@ function updateToolbarLabel() {
   } else if (currentView === 'weekly') {
     const mon = getWeekStart(cursor);
     const sun = addDays(mon, 6);
-    label.textContent = `${mon.getDate()} ${MON_SHORT[mon.getMonth()]} – ${sun.getDate()} ${MON_SHORT[sun.getMonth()]} ${sun.getFullYear()}`;
+    label.textContent = `${mon.getDate()} ${MON_SHORT[mon.getMonth()]} "“ ${sun.getDate()} ${MON_SHORT[sun.getMonth()]} ${sun.getFullYear()}`;
   } else if (currentView === 'agenda') {
     const endDate = addDays(cursor, 13);
-    label.textContent = `${cursor.getDate()} ${MON_SHORT[cursor.getMonth()]} – ${endDate.getDate()} ${MON_SHORT[endDate.getMonth()]}`;
+    label.textContent = `${cursor.getDate()} ${MON_SHORT[cursor.getMonth()]} "“ ${endDate.getDate()} ${MON_SHORT[endDate.getMonth()]}`;
   } else {
     label.textContent = `${DAY_SHORT[cursor.getDay()]} ${cursor.getDate()} ${MON_SHORT[cursor.getMonth()]}`;
   }
 }
 
-// ─── Data fetching ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Data fetching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function fetchNeededData() {
   let from, to;
   if (currentView === 'monthly') {
@@ -168,7 +168,7 @@ async function fetchNeededData() {
     if (!res.ok) throw new Error(data.error);
 
     // Replace cache entries for this date range with fresh data
-    // (clear dates in range first, then populate — prevents stale/duplicate entries)
+    // (clear dates in range first, then populate "” prevents stale/duplicate entries)
     const rangeStart = new Date(from + 'T00:00:00');
     const rangeEnd = new Date(to + 'T00:00:00');
     for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
@@ -192,10 +192,10 @@ function showLoading() {
   document.getElementById('calContent').innerHTML = `<div class="loading"><div class="spinner"></div><p>Loading…</p></div>`;
 }
 function showError(msg) {
-  document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p><button data-action="retry-current-view" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>`;
+  document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">âš ï¸</div><p>${msg}</p><button data-action="retry-current-view" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>`;
 }
 
-// ─── Availability fetching ───────────────────────────────────────────────────
+// â”€â”€â”€ Availability fetching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function loadAvailability() {
   try {
     const res  = await ccAuth.fetchAuthed('/api/instructor?action=availability');
@@ -211,7 +211,7 @@ async function loadAvailability() {
   } catch {}
 }
 
-// ─── MONTHLY RENDER ──────────────────────────────────────────────────────────
+// â”€â”€â”€ MONTHLY RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderMonthly() {
   const today      = new Date(); today.setHours(0,0,0,0);
   const firstOfMon = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -269,7 +269,7 @@ function renderMonthly() {
   document.getElementById('calContent').innerHTML = html;
 }
 
-// ─── WEEKLY RENDER ───────────────────────────────────────────────────────────
+// â”€â”€â”€ WEEKLY RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderWeekly() {
   const today     = new Date(); today.setHours(0,0,0,0);
   const weekStart = getWeekStart(cursor);
@@ -286,7 +286,7 @@ function renderWeekly() {
 
     html += `<div class="tp-day${isToday ? ' is-today' : ''}">`;
 
-    // Day label (left column) — click to jump to agenda for that day
+    // Day label (left column) "” click to jump to agenda for that day
     html += `<div class="tp-day-label" data-action="cursor-to-agenda" data-day="${ds}">
       <div class="tp-day-dow">${DAY_SHORT[day.getDay()]}</div>
       <div class="tp-day-num">${day.getDate()}</div>
@@ -309,9 +309,9 @@ function renderWeekly() {
         html += `
           <div class="${cls}" style="border-left-color:${borderCol}" data-action="open-booking-detail" data-id="${b.id}">
             <div class="tp-lesson-info">
-              <div class="tp-lesson-name">${esc(b.learner_name)}${b.prefer_contact_before ? ' <span class="contact-badge">📞</span>' : ''}</div>
-              <div class="tp-lesson-time">${b.start_time.slice(0,5)} → ${b.end_time.slice(0,5)}</div>
-              ${address ? `<div class="tp-lesson-address">📍 ${esc(address)}</div>` : ''}
+              <div class="tp-lesson-name">${esc(b.learner_name)}${b.prefer_contact_before ? ' <span class="contact-badge">ðŸ“ž</span>' : ''}</div>
+              <div class="tp-lesson-time">${b.start_time.slice(0,5)} â†’ ${b.end_time.slice(0,5)}</div>
+              ${address ? `<div class="tp-lesson-address">ðŸ“ ${esc(address)}</div>` : ''}
             </div>
             <span class="tp-lesson-type" style="background:${ltColour}18;color:${ltColour}">${esc(ltName)}</span>
           </div>`;
@@ -324,7 +324,7 @@ function renderWeekly() {
   document.getElementById('calContent').innerHTML = html;
 }
 
-// ─── DAILY RENDER ────────────────────────────────────────────────────────────
+// â”€â”€â”€ DAILY RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderDaily() {
   const today    = new Date(); today.setHours(0,0,0,0);
   const ds       = dateStr(cursor);
@@ -345,7 +345,7 @@ function renderDaily() {
     <div class="daily-header">
       <div>
         <div class="daily-date-label">${cursor.getDate()} ${MON_FULL[cursor.getMonth()]} ${cursor.getFullYear()}${todayBadge}</div>
-        <div class="daily-date-sub">${DAY_FULL[cursor.getDay()]} · ${bookings.length} lesson${bookings.length !== 1 ? 's' : ''}${availWins.length > 0 ? ' · Available ' + availWins.map(w => w.start_time + '–' + w.end_time).join(', ') : ''}</div>
+        <div class="daily-date-sub">${DAY_FULL[cursor.getDay()]} Â· ${bookings.length} lesson${bookings.length !== 1 ? 's' : ''}${availWins.length > 0 ? ' Â· Available ' + availWins.map(w => w.start_time + '"“' + w.end_time).join(', ') : ''}</div>
       </div>
       <button class="btn-add-avail" data-action="open-avail-modal">+ Add availability</button>
     </div>
@@ -373,13 +373,13 @@ function renderDaily() {
         `style="border-left-color:${ltColour};${isCompleted ? `background:${ltColour}08;border-color:${ltColour}40;` : `background:${ltColour}12;border-color:${ltColour}50;`}"`;
       html += `
         <div class="daily-booking-card ${isCompleted ? 'completed' : b.status === 'cancelled' ? 'cancelled' : ''}" ${cardStyle}>
-          <div class="daily-booking-time">${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)} <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span></div>
+          <div class="daily-booking-time">${b.start_time.slice(0,5)}"“${b.end_time.slice(0,5)} <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span></div>
           <div>
-            <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before their first lesson">📞 Contact first</span>' : ''}</div>
+            <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before their first lesson">ðŸ“ž Contact first</span>' : ''}</div>
             <div class="daily-booking-email">${esc(b.learner_email)}</div>
-            ${b.learner_phone ? `<div class="daily-booking-contact"><a href="tel:${esc(b.learner_phone)}">📞 ${esc(b.learner_phone)}</a>${waUrl ? `<a href="${waUrl}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}</div>` : ''}
-            ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="daily-booking-email">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</div>` : ''}
-            ${b.booking_dropoff_address ? `<div class="daily-booking-email">🏁 ${esc(b.booking_dropoff_address)}</div>` : ''}
+            ${b.learner_phone ? `<div class="daily-booking-contact"><a href="tel:${esc(b.learner_phone)}">ðŸ“ž ${esc(b.learner_phone)}</a>${waUrl ? `<a href="${waUrl}" target="_blank" rel="noopener">ðŸ’¬ WhatsApp</a>` : ''}</div>` : ''}
+            ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="daily-booking-email">ðŸ“ ${esc(b.booking_pickup_address || b.learner_pickup_address)}</div>` : ''}
+            ${b.booking_dropoff_address ? `<div class="daily-booking-email">ðŸ ${esc(b.booking_dropoff_address)}</div>` : ''}
           </div>
           <span class="daily-booking-status status-${b.status}">${statusLabel(b.status)}</span>
           ${b.status === 'awaiting_confirmation' ? `<button class="btn-confirm-sm" data-action="toggle-confirm-form" data-id="${b.id}">Confirm lesson</button><div id="confirm-form-${b.id}" style="display:none">${renderConfirmForm(b.id)}</div>` : ''}
@@ -389,7 +389,7 @@ function renderDaily() {
         </div>`;
     }
   } else if (availWins.length > 0) {
-    html += `<div style="padding:28px 20px;text-align:center;color:var(--muted);font-size:0.875rem;">No lessons booked for this day.<br>You're available ${availWins.map(w => w.start_time + '–' + w.end_time).join(', ')}.</div>`;
+    html += `<div style="padding:28px 20px;text-align:center;color:var(--muted);font-size:0.875rem;">No lessons booked for this day.<br>You're available ${availWins.map(w => w.start_time + '"“' + w.end_time).join(', ')}.</div>`;
   } else {
     html += `<div style="padding:28px 20px;text-align:center;color:var(--muted);font-size:0.875rem;">No lessons or availability set for this day. Tap <b>+ Add availability</b> to make yourself bookable.</div>`;
   }
@@ -398,7 +398,7 @@ function renderDaily() {
   document.getElementById('calContent').innerHTML = html;
 }
 
-// ─── AGENDA RENDER ──────────────────────────────────────────────────────────
+// â”€â”€â”€ AGENDA RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderAgenda() {
   const today = new Date(); today.setHours(0,0,0,0);
   const rangeStart = new Date(cursor);
@@ -425,7 +425,7 @@ function renderAgenda() {
   if (allBookings.length === 0) {
     document.getElementById('calContent').innerHTML = `
       <div class="agenda-empty">
-        <div class="empty-icon">📋</div>
+        <div class="empty-icon">ðŸ“‹</div>
         <p>No upcoming lessons in this period.</p>
         <p style="font-size:0.8rem;color:var(--muted)">Navigate forward or share your booking link to get started.</p>
       </div>`;
@@ -474,15 +474,15 @@ function renderAgenda() {
       html += `
         <div class="${cardCls}" style="border-left-color:${isCancelled ? 'var(--muted)' : ltColour}" data-action="open-booking-detail" data-id="${b.id}">
           <div class="agenda-card-left">
-            <div class="agenda-time">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
+            <div class="agenda-time">${b.start_time.slice(0,5)} "“ ${b.end_time.slice(0,5)}</div>
             <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span>
           </div>
           <div class="agenda-card-mid">
-            <div class="agenda-learner">${esc(b.learner_name)}${b.prefer_contact_before ? ' <span class="contact-badge">📞</span>' : ''}</div>
-            ${thisAddr ? `<div class="agenda-address">📍 ${esc(thisAddr)}</div>` : ''}
+            <div class="agenda-learner">${esc(b.learner_name)}${b.prefer_contact_before ? ' <span class="contact-badge">ðŸ“ž</span>' : ''}</div>
+            ${thisAddr ? `<div class="agenda-address">ðŸ“ ${esc(thisAddr)}</div>` : ''}
           </div>
           <div class="agenda-card-right">
-            <span class="agenda-status status-${b.status}">${isCompleted ? '✓' : isCancelled ? '✕' : '●'}</span>
+            <span class="agenda-status status-${b.status}">${isCompleted ? 'âœ“' : isCancelled ? 'âœ•' : 'â—'}</span>
           </div>
         </div>`;
     }
@@ -494,21 +494,21 @@ function renderAgenda() {
   if (todayHeader) todayHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// ─── Drill-down from monthly ─────────────────────────────────────────────────
+// â”€â”€â”€ Drill-down from monthly â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function drillToDay(ds) {
   cursor = new Date(ds + 'T00:00:00');
   setView('agenda');
 }
 
-// ─── Status helpers ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Status helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function statusLabel(status) {
   switch (status) {
-    case 'completed': return '✓ Completed';
-    case 'cancelled': return '✕ Cancelled';
-    case 'rescheduled': return '↻ Rescheduled';
-    case 'awaiting_confirmation': return '⏳ Awaiting confirmation';
-    case 'disputed': return '⚠ Disputed';
-    case 'no_show': return '✕ No show';
+    case 'completed': return 'âœ“ Completed';
+    case 'cancelled': return 'âœ• Cancelled';
+    case 'rescheduled': return 'â†» Rescheduled';
+    case 'awaiting_confirmation': return 'â³ Awaiting confirmation';
+    case 'disputed': return 'âš  Disputed';
+    case 'no_show': return 'âœ• No show';
     default: return 'Confirmed';
   }
 }
@@ -571,7 +571,7 @@ async function submitConfirmation(bookingId) {
   }
 }
 
-// ─── Mark complete ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Mark complete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function markComplete(bookingId) {
   const btn = document.getElementById(`complete-${bookingId}`);
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
@@ -589,7 +589,7 @@ function handleBookingModalOverlayClick(e) {
   if (e.target === document.getElementById('bookingModal')) closeBookingModal();
 }
 
-// ─── Add Availability Modal ──────────────────────────────────────────────────
+// â”€â”€â”€ Add Availability Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let modalTargetDate = null; // the date we're adding availability for
 
 function openAvailModal() {
@@ -649,7 +649,7 @@ async function saveNewAvailability() {
     }));
 
     closeAvailModal();
-    showToast('Availability saved ✓', 'success');
+    showToast('Availability saved âœ“', 'success');
     renderCurrentView();
   } catch (err) {
     showToast(err.message || 'Failed to save', 'error');
@@ -658,7 +658,7 @@ async function saveNewAvailability() {
   }
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function dateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2,'0');
@@ -708,7 +708,7 @@ function renderFeedbackHTML(b) {
   </div>`;
 }
 
-// ─── WhatsApp URL helper ──────────────────────────────────────────────────────
+// â”€â”€â”€ WhatsApp URL helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function whatsappUrl(phone) {
   if (!phone) return null;
   let num = phone.replace(/\s+/g, '');
@@ -717,7 +717,7 @@ function whatsappUrl(phone) {
   return 'https://wa.me/' + num;
 }
 
-// ─── Inline notes on completed lessons ────────────────────────────────────────
+// â”€â”€â”€ Inline notes on completed lessons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderInlineNotes(b) {
   const hasNotes = b.instructor_notes && b.instructor_notes.trim();
   return `
@@ -771,7 +771,7 @@ async function saveInlineNotes(bookingId) {
   }
 }
 
-// ─── Travel time between consecutive bookings ──────────────────────────────
+// â”€â”€â”€ Travel time between consecutive bookings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const UK_PC_RE = /([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})/i;
 function clientExtractPostcode(addr) {
   if (!addr) return null;
@@ -827,26 +827,26 @@ async function injectTravelIndicators() {
     const to = clientExtractPostcode(el.dataset.travelTo);
     if (!from || !to || !coordMap[from] || !coordMap[to]) return;
     if (from.replace(/\s/g,'') === to.replace(/\s/g,'')) {
-      el.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">🚗 Same area</span>';
+      el.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">ðŸš— Same area</span>';
       return;
     }
     const mins = clientEstimateDrive(coordMap[from].lat, coordMap[from].lon, coordMap[to].lat, coordMap[to].lon);
     const colour = mins <= 15 ? 'var(--green,#16a34a)' : mins <= 30 ? 'var(--accent)' : 'var(--red,#e00)';
-    el.innerHTML = `<span style="font-size:0.75rem;color:${colour}">🚗 ~${mins} min travel</span>`;
+    el.innerHTML = `<span style="font-size:0.75rem;color:${colour}">ðŸš— ~${mins} min travel</span>`;
   });
 }
 
-// ─── Refresh schedule ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Refresh schedule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function refreshSchedule(silent) {
   const btn = document.getElementById('refreshBtn');
-  if (btn && !silent) btn.textContent = '⟳';
+  if (btn && !silent) btn.textContent = 'âŸ³';
   // Full refresh: clear everything and re-fetch + re-render in one step.
   // renderCurrentView calls fetchNeededData (which awaits) before rendering,
   // so the calendar shows fresh data directly without flashing empty.
   bookingCache = {};
   loadedRanges = [];
   await renderCurrentView();
-  if (btn) btn.textContent = '↻';
+  if (btn) btn.textContent = 'â†»';
   if (!silent) showToast('Schedule refreshed', 'success');
 }
 
@@ -877,7 +877,7 @@ function showToast(msg, type = '') {
   setTimeout(() => t.classList.remove('show'), 3500);
 }
 
-// ─── Calendar Sync Banner ──────────────────────────────────────────────────
+// â”€â”€â”€ Calendar Sync Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function shouldShowInstructorCalSync() {
   const val = localStorage.getItem('cc_instructor_cal_synced');
   if (!val) return true;
@@ -887,11 +887,11 @@ function shouldShowInstructorCalSync() {
   return Date.now() - ts > 30 * 24 * 60 * 60 * 1000; // 30 days
 }
 
-// Calendar sync banner removed — accessible via profile page
+// Calendar sync banner removed "” accessible via profile page
 
 // Stats + next lesson moved to /instructor/dashboard.html
 
-// ─── Instructor Notes in Complete Flow ───────────────────────────────────────
+// â”€â”€â”€ Instructor Notes in Complete Flow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openBookingDetail(bookingId) {
   let b = null;
   for (const ds in bookingCache) {
@@ -906,15 +906,15 @@ function openBookingDetail(bookingId) {
 
   document.getElementById('bookingDetailContent').innerHTML = `
     <div class="booking-detail-row"><span class="booking-detail-label">Date</span><span class="booking-detail-val">${dateLabel}</span></div>
-    <div class="booking-detail-row"><span class="booking-detail-label">Time</span><span class="booking-detail-val">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</span></div>
+    <div class="booking-detail-row"><span class="booking-detail-label">Time</span><span class="booking-detail-val">${b.start_time.slice(0,5)} "“ ${b.end_time.slice(0,5)}</span></div>
     <div class="booking-detail-row"><span class="booking-detail-label">Type</span><span class="booking-detail-val"><span class="lesson-type-badge" style="background:${b.lesson_type_colour || 'var(--accent)'}20;color:${b.lesson_type_colour || 'var(--accent)'};border:1px solid ${b.lesson_type_colour || 'var(--accent)'}40">${esc(b.lesson_type_name || 'Standard Lesson')}</span> ${b.duration_minutes ? `(${b.duration_minutes >= 60 ? (b.duration_minutes % 60 === 0 ? b.duration_minutes/60 + ' hr' + (b.duration_minutes/60 !== 1 ? 's' : '') : (b.duration_minutes/60).toFixed(1) + ' hrs') : b.duration_minutes + ' min'})` : ''}</span></div>
     <div class="booking-detail-row"><span class="booking-detail-label">Learner</span><span class="booking-detail-val"><a href="#" data-action="open-learner-history" data-id="${b.learner_id}" style="color:var(--accent);text-decoration:underline">${esc(b.learner_name)}</a></span></div>
     <div class="booking-detail-row"><span class="booking-detail-label">Email</span><span class="booking-detail-val">${esc(b.learner_email)}</span></div>
     ${b.learner_phone ? `<div class="booking-detail-row"><span class="booking-detail-label">Phone</span><span class="booking-detail-val"><a href="tel:${esc(b.learner_phone)}" style="color:var(--accent)">${esc(b.learner_phone)}</a></span></div>` : ''}
-    ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="booking-detail-row"><span class="booking-detail-label">Pickup</span><span class="booking-detail-val">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</span></div>` : ''}
-    ${b.booking_dropoff_address ? `<div class="booking-detail-row"><span class="booking-detail-label">Drop-off</span><span class="booking-detail-val">🏁 ${esc(b.booking_dropoff_address)}</span></div>` : ''}
+    ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="booking-detail-row"><span class="booking-detail-label">Pickup</span><span class="booking-detail-val">ðŸ“ ${esc(b.booking_pickup_address || b.learner_pickup_address)}</span></div>` : ''}
+    ${b.booking_dropoff_address ? `<div class="booking-detail-row"><span class="booking-detail-label">Drop-off</span><span class="booking-detail-val">ðŸ ${esc(b.booking_dropoff_address)}</span></div>` : ''}
     <div class="booking-detail-row"><span class="booking-detail-label">Status</span><span class="booking-detail-val"><span class="daily-booking-status status-${b.status}">${statusLabel(b.status)}</span></span></div>
-    ${b.prefer_contact_before ? `<div class="booking-detail-row"><span class="booking-detail-label">Note</span><span class="booking-detail-val" style="color:var(--accent);">📞 Learner would like a call or message before their first lesson</span></div>` : ''}
+    ${b.prefer_contact_before ? `<div class="booking-detail-row"><span class="booking-detail-label">Note</span><span class="booking-detail-val" style="color:var(--accent);">ðŸ“ž Learner would like a call or message before their first lesson</span></div>` : ''}
     ${b.instructor_notes ? `<div class="booking-detail-row"><span class="booking-detail-label">Your notes</span><span class="booking-detail-val" style="font-style:italic">${esc(b.instructor_notes)}</span></div>` : ''}
     ${b.status !== 'completed' ? `
       <div class="notes-label">Lesson notes (saved when you mark complete)</div>
@@ -970,14 +970,14 @@ async function markCompleteWithNotes(bookingId, instructorNotes) {
       const bk = bookingCache[ds].find(b => b.id === bookingId);
       if (bk) { bk.status = 'completed'; bk.instructor_notes = instructorNotes; break; }
     }
-    showToast('Lesson marked as complete ✓', 'success');
+    showToast('Lesson marked as complete âœ“', 'success');
     renderCurrentView();
   } catch (err) {
     showToast(err.message || 'Failed to mark as complete', 'error');
   }
 }
 
-// ─── Learner History ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Learner History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function openLearnerHistory(learnerId) {
   document.getElementById('historyModal').classList.add('open');
   document.getElementById('historyContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading…</p></div>';
@@ -990,7 +990,7 @@ async function openLearnerHistory(learnerId) {
     const l = data.learner;
     const initials = l.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
 
-    // Format phone for WhatsApp (07xxx → 447xxx)
+    // Format phone for WhatsApp (07xxx â†’ 447xxx)
     const waPhone = l.phone ? l.phone.replace(/\s+/g, '').replace(/^0/, '44') : '';
 
     let html = `
@@ -998,8 +998,8 @@ async function openLearnerHistory(learnerId) {
         <div class="history-avatar">${initials}</div>
         <div>
           <div class="history-name">${esc(l.name)}</div>
-          <div class="history-meta">${esc(l.email)}${l.phone ? ' · ' + esc(l.phone) : ''}</div>
-          <div class="history-meta">${data.totalLessons} completed lesson${data.totalLessons !== 1 ? 's' : ''} with you${l.tier ? ' · ' + esc(l.tier) : ''}</div>
+          <div class="history-meta">${esc(l.email)}${l.phone ? ' Â· ' + esc(l.phone) : ''}</div>
+          <div class="history-meta">${data.totalLessons} completed lesson${data.totalLessons !== 1 ? 's' : ''} with you${l.tier ? ' Â· ' + esc(l.tier) : ''}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap">
@@ -1016,15 +1016,15 @@ async function openLearnerHistory(learnerId) {
     for (const b of data.bookings) {
       const d = new Date(b.scheduled_date + 'T00:00:00');
       const dateLabel = `${d.getDate()} ${MON_SHORT[d.getMonth()]} ${d.getFullYear()}`;
-      const statusBadge = b.status === 'completed' ? '<span style="color:var(--green);font-size:0.75rem">✓</span>'
-        : b.status === 'cancelled' ? '<span style="color:var(--red);font-size:0.75rem">✕ cancelled</span>'
+      const statusBadge = b.status === 'completed' ? '<span style="color:var(--green);font-size:0.75rem">âœ“</span>'
+        : b.status === 'cancelled' ? '<span style="color:var(--red);font-size:0.75rem">âœ• cancelled</span>'
         : '<span style="color:var(--blue);font-size:0.75rem">upcoming</span>';
 
       html += `<div class="history-item">
-        <div class="history-item-date">${dateLabel} · ${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)} ${statusBadge}</div>`;
+        <div class="history-item-date">${dateLabel} Â· ${b.start_time.slice(0,5)}"“${b.end_time.slice(0,5)} ${statusBadge}</div>`;
 
-      if (b.instructor_notes) html += `<div class="history-item-notes">📝 ${esc(b.instructor_notes)}</div>`;
-      if (b.session_notes) html += `<div class="history-item-notes">💬 "${esc(b.session_notes)}"</div>`;
+      if (b.instructor_notes) html += `<div class="history-item-notes">ðŸ“ ${esc(b.instructor_notes)}</div>`;
+      if (b.session_notes) html += `<div class="history-item-notes">ðŸ’¬ "${esc(b.session_notes)}"</div>`;
 
       if (b.learner_ratings && b.learner_ratings.length > 0) {
         html += '<div class="feedback-pills">';
@@ -1049,7 +1049,7 @@ function closeHistoryModal() {
   document.getElementById('historyModal').classList.remove('open');
 }
 
-// ─── Cancel Booking ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Cancel Booking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let cancelBookingId = null;
 
 function openCancelModal(bookingId) {
@@ -1080,7 +1080,7 @@ async function confirmCancel() {
     if (!res.ok) throw new Error(data.error);
 
     closeCancelModal();
-    showToast('Lesson cancelled — learner notified and credit refunded', 'success');
+    showToast('Lesson cancelled "” learner notified and credit refunded', 'success');
     await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to cancel', 'error');
@@ -1089,7 +1089,7 @@ async function confirmCancel() {
   }
 }
 
-// ─── Reschedule Booking ──────────────────────────────────────────────────────
+// â”€â”€â”€ Reschedule Booking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let rescheduleBookingId = null;
 
 function openRescheduleModal(bookingId, date, start, end, learnerName) {
@@ -1138,7 +1138,7 @@ async function confirmInstrReschedule() {
     if (!res.ok) throw new Error(data.error);
 
     closeInstrRescheduleModal();
-    showToast('Lesson rescheduled — learner notified', 'success');
+    showToast('Lesson rescheduled "” learner notified', 'success');
     await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to reschedule', 'error');
@@ -1147,7 +1147,7 @@ async function confirmInstrReschedule() {
   }
 }
 
-// ─── Edit Booking ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Edit Booking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let editBookingId = null;
 let editBookingLessonTypes = [];
 let editBookingOrigMinutes = 0;
@@ -1254,13 +1254,13 @@ async function confirmEditBooking(forceOverride) {
     });
     const data = await res.json();
 
-    // Handle conflict warning — show details and ask for confirmation
+    // Handle conflict warning "” show details and ask for confirmation
     if (res.status === 409 && data.can_force && data.conflicts) {
       let msg = 'This time overlaps with:\n\n';
       for (const c of data.conflicts) {
-        msg += '• ' + c.learner_name + ' (' + c.time + ')';
+        msg += '"¢ ' + c.learner_name + ' (' + c.time + ')';
         if (c.travel_minutes != null) {
-          msg += ' — ~' + c.travel_minutes + ' min travel between pickups';
+          msg += ' "” ~' + c.travel_minutes + ' min travel between pickups';
         }
         msg += '\n';
       }
@@ -1275,8 +1275,8 @@ async function confirmEditBooking(forceOverride) {
     if (!res.ok) throw new Error(data.error || data.message);
 
     closeEditBookingModal();
-    showToast('Lesson updated' + (data.balanceAdjusted ? ' — balance adjusted' : ''), 'success');
-    // Full refresh from server — renderCurrentView awaits fetch before rendering
+    showToast('Lesson updated' + (data.balanceAdjusted ? ' "” balance adjusted' : ''), 'success');
+    // Full refresh from server "” renderCurrentView awaits fetch before rendering
     await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to edit booking', 'error');
@@ -1288,7 +1288,7 @@ async function confirmEditBooking(forceOverride) {
 // Wire up time input change to recalculate end time
 document.getElementById('editBookingTime')?.addEventListener('input', updateEditEndTime);
 
-// ─── Add Lesson (Instructor-Initiated Booking) ──────────────────────────────
+// â”€â”€â”€ Add Lesson (Instructor-Initiated Booking) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let addLessonLearners = [];
 let selectedLearnerId = null;
 
@@ -1359,7 +1359,7 @@ function filterAddLessonLearners() {
     dropdown.innerHTML = filtered.map(l => `
       <div class="learner-option" data-action="select-learner" data-id="${l.id}" data-name="${esc(l.name)}" data-phone="${esc(l.phone || l.email)}" data-balance="${l.credit_balance || 0}">
         <div class="learner-opt-name">${esc(l.name)}</div>
-        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? '·' : ''} ${esc(l.email || '')} · ${l.credit_balance || 0} credit${(l.credit_balance || 0) !== 1 ? 's' : ''}</div>
+        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? 'Â·' : ''} ${esc(l.email || '')} Â· ${l.credit_balance || 0} credit${(l.credit_balance || 0) !== 1 ? 's' : ''}</div>
       </div>
     `).join('');
   }
@@ -1445,7 +1445,7 @@ async function confirmCreateBooking() {
     if (!res.ok) throw new Error(data.error);
 
     closeAddLessonModal();
-    showToast(`Lesson booked for ${data.learner_name || 'learner'} — they've been notified`, 'success');
+    showToast(`Lesson booked for ${data.learner_name || 'learner'} "” they've been notified`, 'success');
     await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to create booking', 'error');
@@ -1454,7 +1454,7 @@ async function confirmCreateBooking() {
   }
 }
 
-// ── Offer Lesson Modal ────────────────────────────────────────────────────────
+// â”€â”€ Offer Lesson Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function openOfferModal(prefillEmail, prefillName) {
   document.getElementById('offerName').value = prefillName || '';
   document.getElementById('offerEmail').value = prefillEmail || '';
@@ -1505,9 +1505,9 @@ async function openOfferModal(prefillEmail, prefillName) {
       const hrs = lt.duration_minutes / 60;
       const hrsStr = hrs % 1 === 0 ? `${hrs}hr` : `${hrs.toFixed(1)}hrs`;
       const price = (lt.price_pence / 100).toFixed(2);
-      return `<option value="${lt.id}" data-price="${lt.price_pence}">${lt.name} (${hrsStr}) — £${price}</option>`;
+      return `<option value="${lt.id}" data-price="${lt.price_pence}">${lt.name} (${hrsStr}) "” Â£${price}</option>`;
     }).join('');
-  } catch { /* fallback — select will be empty */ }
+  } catch { /* fallback "” select will be empty */ }
 
   document.getElementById('offerLessonModal').classList.add('open');
   // Reset custom price
@@ -1529,7 +1529,7 @@ function updateOfferPrice() {
   // If custom price is empty, show lesson type default as placeholder
   if (!customInput.value) {
     customInput.placeholder = defaultPrice;
-    noteEl.innerHTML = `Learner will pay <strong>£${defaultPrice}</strong> (lesson type default)`;
+    noteEl.innerHTML = `Learner will pay <strong>Â£${defaultPrice}</strong> (lesson type default)`;
     return;
   }
 
@@ -1540,12 +1540,12 @@ function updateOfferPrice() {
   }
 
   if (customPrice === 0) {
-    noteEl.innerHTML = 'Learner will receive a <strong style="color:var(--green)">free lesson</strong> — no payment required';
+    noteEl.innerHTML = 'Learner will receive a <strong style="color:var(--green)">free lesson</strong> "” no payment required';
   } else if (customPrice < parseFloat(defaultPrice)) {
     const saving = (parseFloat(defaultPrice) - customPrice).toFixed(2);
-    noteEl.innerHTML = `Learner will pay <strong>£${customPrice.toFixed(2)}</strong> <span style="text-decoration:line-through;color:#999">£${defaultPrice}</span> (£${saving} off)`;
+    noteEl.innerHTML = `Learner will pay <strong>Â£${customPrice.toFixed(2)}</strong> <span style="text-decoration:line-through;color:#999">Â£${defaultPrice}</span> (Â£${saving} off)`;
   } else {
-    noteEl.innerHTML = `Learner will pay <strong>£${customPrice.toFixed(2)}</strong>`;
+    noteEl.innerHTML = `Learner will pay <strong>Â£${customPrice.toFixed(2)}</strong>`;
   }
 }
 
@@ -1574,7 +1574,7 @@ async function sendOffer() {
   if (!flexible && !date) { errorEl.textContent = 'Please select a date, or tick "Flexible".'; errorEl.style.display = 'block'; return; }
   if (!flexible && !time) { errorEl.textContent = 'Please select a start time, or tick "Flexible".'; errorEl.style.display = 'block'; return; }
 
-  // Build price: custom input → pence, or omit to use lesson type default
+  // Build price: custom input â†’ pence, or omit to use lesson type default
   let offerPricePence;
   if (customPriceStr !== '') {
     const parsed = parseFloat(customPriceStr);
@@ -1607,10 +1607,10 @@ async function sendOffer() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to send offer');
 
-    const priceMsg = offerPricePence === 0 ? ' (free lesson)' : offerPricePence != null ? ` (£${(offerPricePence / 100).toFixed(2)})` : '';
+    const priceMsg = offerPricePence === 0 ? ' (free lesson)' : offerPricePence != null ? ` (Â£${(offerPricePence / 100).toFixed(2)})` : '';
     const flexMsg = flexible ? ' (flexible time)' : '';
 
-    // Use the accept URL (token-based) — carries the offer price
+    // Use the accept URL (token-based) "” carries the offer price
     const shareUrl = data.accept_url;
     const safeName = offerName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
@@ -1619,7 +1619,7 @@ async function sendOffer() {
       const safeEmail = email.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       statusLine = `Offer sent to ${safeEmail}${priceMsg}${flexMsg}! They have 24 hours to accept.`;
     } else {
-      statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg} — share the link below.`;
+      statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg} "” share the link below.`;
     }
 
     successEl.innerHTML = `
@@ -1655,7 +1655,7 @@ async function sendOffer() {
       }
     });
     successEl.style.display = 'block';
-    btn.textContent = sendEmail ? 'Sent ✓' : 'Created ✓';
+    btn.textContent = sendEmail ? 'Sent âœ“' : 'Created âœ“';
 
     // Refresh schedule to show blocked slot (if slot-pinned)
     if (!flexible) renderCurrentView();
@@ -1667,7 +1667,7 @@ async function sendOffer() {
   }
 }
 
-// ─── Boot ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 init();
 
 // Auto-open offer modal if ?offer=email param is present (from learners page)
@@ -1722,19 +1722,19 @@ document.addEventListener('change', function (e) {
     if (row) row.style.display = t.value ? 'block' : 'none';
   }
 });
-// ── Toolbar overflow buttons (combo actions) ──
+// â”€â”€ Toolbar overflow buttons (combo actions) â”€â”€
 document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
   btn.addEventListener('click', function () {
     var op = btn.dataset.toolbarOf;
     if (op === 'offer') { openOfferModal(); toggleToolbarOverflow(); }
   });
 });
-// ── Offer modal price/type changes ──
+// â”€â”€ Offer modal price/type changes â”€â”€
 (function () {
   var cp = document.getElementById('offerCustomPrice');
   if (cp) cp.addEventListener('input', updateOfferPrice);
 })();
-// ── Static wires ──
+// â”€â”€ Static wires â”€â”€
 (function wire() {
   var bind = function (id, fn, ev) {
     var el = document.getElementById(id);
