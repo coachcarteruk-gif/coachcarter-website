@@ -1398,7 +1398,7 @@ UPDATE schools
          '{pricing,bulk_discount_tiers}',
          COALESCE(
            config->'pricing'->'bulk_discount_tiers',
-           '[{"min_hours":12,"discount_pct":5},{"min_hours":24,"discount_pct":10},{"min_hours":36,"discount_pct":15}]'::jsonb
+           '[{"min_hours":12,"discount_pct":4},{"min_hours":24,"discount_pct":8},{"min_hours":36,"discount_pct":12}]'::jsonb
          ),
          true
        )
