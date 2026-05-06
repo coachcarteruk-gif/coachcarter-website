@@ -1760,6 +1760,32 @@ Bulk pricing was always intended as channel pricing (reward upfront commitment, 
 
 ---
 
+## 2.95 — Learner Password Auth (7 May 2026)
+
+Magic-link login was failing for PWA users: clicking the email link opened in the system browser, not the installed PWA, leaving the PWA still on the login screen because OS-level storage isolation gives PWAs their own cookie jar. This pushed users into a broken loop. Replaced learner login with email + password, keeping magic-link infrastructure only for password reset and a one-time migration code for existing accounts. Magic links for *login* are gone.
+
+**What changed:**
+
+- **`api/_password.js` (new)** — shared bcrypt hash/verify, NIST-aligned password validation (8 char min, common-password blocklist, no complexity rules), and 5-fail / 15-min lockout per email keyed off the existing `rate_limits` table. Used by learner-auth; admin keeps its own bcrypt calls (predates this module — left untouched).
+- **`api/learner-auth.js` (new)** — `login`, `signup`, `set-password`, `request-reset`, `add-email`, `check-account`. `login` enforces lockout + fails closed on missing password (no enumeration leak). `signup` audit-logs as `learner.signup`. `set-password` consumes a 5-min ticket from `verify-email-code` and audit-logs as `learner.password_set` or `learner.password_reset`. `add-email` lets phone-only users attach an email so they can migrate.
+- **`api/magic-link.js`** — new `send-email-code` and `verify-email-code` actions for `purpose: 'migration' | 'reset'`. Codes are 6 digits, 15-min expiry, scoped via a new `email_code` column (avoiding the global UNIQUE collision the SMS path could theoretically hit). `verify-email-code` returns a JWT ticket (`audience: 'password-set'`) the caller redeems through learner-auth — login is never granted by the email step alone.
+- **`db/migration.sql`** — `email_verified` + `password_set_at` on `learner_users`, `instructors`, `admin_users`. `password_hash` added to `instructors` (nullable; flow not yet wired). `magic_link_tokens` gains `purpose`, `email_code`, `role` columns + a partial index for `(email, email_code, role, purpose) WHERE used = false`.
+- **`public/learner/login.html` + `login.js`** — full rewrite. Explicit "Sign in" / "Sign up" tabs, forgot-password screen with code-based reset (PWA-safe), migration screen for existing users, add-email screen for phone-only users, SMS fallback retained. Reuses the existing 6-digit code input UI for three different purposes (migration / reset / SMS). Legacy `?token=` magic-link URLs still work for ~15 min after deploy via the preserved `verify` action.
+- **`CLAUDE.md`** — corrected "JWT in localStorage" claim (it's an httpOnly cookie; localStorage holds a display blob). Added "Password auth" rules section with audit-log requirements, enumeration-leak rules, and the email-code rationale for PWA round-trips.
+- **`PROJECT.md`** — Authentication section rewritten. New `learner-auth.js` action table; `magic-link.js` table updated to mark legacy actions and add the email-code paths.
+
+**Why email codes, not magic links, for PWA round-trips:** an email link clicked in iOS/Android Mail or Gmail opens in Safari/Chrome — never the installed PWA. The browser logs in (cookie lands in browser jar). The PWA still has no cookie because storage is partitioned per origin × install. A 6-digit code typed into the PWA stays inside the PWA's storage context, so the session lands where it's needed.
+
+**Migration UX (existing accounts with no password):** user enters their email + any password → server returns "exists, no password" → UI sends a code → user types it → ticket issued → user picks a password → logged in. Three taps after the email box.
+
+**Phone-only users:** SMS code login still works. After verifying, if the account has no email the UI routes them through `add-email` → migration code → set-password.
+
+**Deferred to next session:** instructor password flow + admin forgot-password + the matching login UI for both. Instructors are still magic-link only — they're not the PWA user (they use the desktop dashboard).
+
+**Files changed:** `api/_password.js` (new), `api/learner-auth.js` (new), `api/magic-link.js`, `db/migration.sql`, `public/learner/login.html`, `public/learner/login.js`, `CLAUDE.md`, `PROJECT.md`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

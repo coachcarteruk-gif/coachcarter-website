@@ -294,17 +294,36 @@ Base rate: **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Learners 
 
 ### Authentication
 
-Magic-link login at `/learner/login.html` — learner enters email (or phone), receives a link, clicks it to sign in. No password needed. New accounts are created automatically on first login with 1 free trial credit.
+**Password login** at `/learner/login.html` (May 2026 — replaced magic links). Learner enters email + password. Existing accounts without a password (created via the old magic-link or SMS flow) are migrated on next login: a 6-digit code is emailed, they verify it, then choose a password. Phone-only learners (no email on the account) are prompted to add an email first.
 
-JWT stored in `localStorage` as `cc_learner: { token, user }`. All API calls include it as a `Bearer` header.
+JWT lives in an httpOnly cookie (`cc_learner`); the `cc_learner` localStorage key holds a display-only blob `{ user: { id, name, email, school_id, tier } }` so the sidebar doesn't need an extra API call.
 
-### API — `api/magic-link.js`
+**Forgot password** sends both a 6-digit code and a clickable reset link. The code is the primary path (works inside the PWA without cross-context bugs); the link is a desktop-friendly fallback.
+
+### API — `api/learner-auth.js` (May 2026)
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `send-link` | POST | No | Sends magic link to email or phone. Body: `{ email, phone, method }` |
-| `validate` | GET | No | Lightweight token check (does NOT consume). Prevents email prefetchers from burning tokens |
-| `verify` | POST | No | Consumes token, issues JWT, auto-creates account if new. Body: `{ token }` |
+| `check-account` | POST | No | Routes login UI: `{ exists, has_password }` for an email. Blocks instructor emails. Body: `{ email }` |
+| `login` | POST | No | Email + password sign-in. 5-fail / 15-min lockout per email. Body: `{ email, password }` |
+| `signup` | POST | No | Create account with password. Free-trial credit + audit-logged. Body: `{ email, password, name?, referral_code?, school_id? }` |
+| `set-password` | POST | No (ticket) | Completes migration or reset. Body: `{ ticket, password }` (ticket from `verify-email-code`) |
+| `request-reset` | POST | No | Sends reset email (code + link). Enumeration-safe. Body: `{ email }` |
+| `add-email` | POST | No | Phone-only user adds an email so they can migrate to password. Body: `{ phone, email }` |
+
+### API — `api/magic-link.js` (legacy + email-code paths)
+
+Kept for SMS code login, password-reset emails, and the migration code flow. Magic-link login (long URL token) is no longer the primary path for learners but `verify` is preserved for in-flight emails during deploys.
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `send-link` | POST | No | Legacy magic-link / current SMS code send. Body: `{ email, phone, method }` |
+| `validate` | GET | No | Lightweight token check (legacy) |
+| `verify` | POST | No | Legacy magic-link consume + login. Body: `{ token }` |
+| `verify-code` | POST | No | SMS 6-digit code → JWT. Body: `{ code, phone }` |
+| `send-email-code` | POST | No | Sends a 6-digit email code for `purpose: 'migration'\|'reset'`. Enumeration-safe. Body: `{ email, purpose, role? }` |
+| `verify-email-code` | POST | No | Verifies a 6-digit email code, returns a 5-min ticket the caller exchanges via `learner-auth?action=set-password`. Body: `{ email, code, purpose, role? }` |
+| `logout` | POST | No | Clears `cc_learner` + `cc_csrf` cookies |
 
 ### API — `api/learner.js`
 

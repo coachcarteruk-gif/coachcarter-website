@@ -29,11 +29,13 @@ function generateSmsCode() {
 // ── CORS + routing ──────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   const action = req.query.action;
-  if (action === 'send-link')   return handleSendLink(req, res);
-  if (action === 'validate')    return handleValidate(req, res);
-  if (action === 'verify')      return handleVerify(req, res);
-  if (action === 'verify-code') return handleVerifyCode(req, res);
-  if (action === 'logout')      return handleLogout(req, res);
+  if (action === 'send-link')         return handleSendLink(req, res);
+  if (action === 'validate')          return handleValidate(req, res);
+  if (action === 'verify')            return handleVerify(req, res);
+  if (action === 'verify-code')       return handleVerifyCode(req, res);
+  if (action === 'send-email-code')   return handleSendEmailCode(req, res);
+  if (action === 'verify-email-code') return handleVerifyEmailCode(req, res);
+  if (action === 'logout')            return handleLogout(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -459,6 +461,177 @@ async function handleVerifyCode(req, res) {
   }
 }
 
+// ── Send email code (May 2026) ──────────────────────────────────────────────
+//
+// Used by the new password auth flow for two purposes:
+//   - 'migration': existing user with no password — verify they own the email,
+//     then let them set one in the PWA (no cross-context bug).
+//   - 'reset': forgot-password flow alternative for PWA users who can't tap
+//     the reset link.
+//
+// Distinct from `send-link` which keeps the long URL token for password reset
+// emails (those are tapped from desktop and don't need code entry).
+//
+// Body: { email, purpose: 'migration'|'reset', role?: 'learner', school_id? }
+async function handleSendEmailCode(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  try {
+    const { email, purpose } = req.body || {};
+    const role = req.body?.role || 'learner';
+    if (!email) return res.status(400).json({ error: 'Email address is required' });
+    if (purpose !== 'migration' && purpose !== 'reset') {
+      return res.status(400).json({ error: 'Invalid purpose' });
+    }
+
+    const cleanEmail = sanitizeEmail(email);
+    if (!cleanEmail) return res.status(400).json({ error: 'Please enter a valid email address.' });
+
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Rate limiting: max 5 codes per email per hour. Reuses existing window.
+    const rateLimitKey = `email_code:${cleanEmail}:${purpose}`;
+    try {
+      await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '1 hour'`;
+      const [existing] = await sql`SELECT request_count FROM rate_limits WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      if (existing && existing.request_count >= 5) {
+        return res.status(429).json({ error: 'Too many code requests. Please try again in an hour.' });
+      }
+      if (existing) {
+        await sql`UPDATE rate_limits SET request_count = request_count + 1 WHERE key = ${rateLimitKey} AND window_start > NOW() - INTERVAL '1 hour'`;
+      } else {
+        await sql`INSERT INTO rate_limits (key, request_count, window_start) VALUES (${rateLimitKey}, 1, NOW())`;
+      }
+    } catch { /* fail open */ }
+
+    // For 'migration' on learner role: confirm an account actually exists with
+    // this email (otherwise an attacker could probe for valid emails). We
+    // *always* respond success to avoid email-enumeration leaks — but only
+    // actually send the email if the account exists.
+    let shouldSend = true;
+    if (role === 'learner') {
+      const [acct] = await sql`SELECT id, password_hash FROM learner_users WHERE email = ${cleanEmail}`;
+      if (!acct) {
+        // No account — silently skip sending. Same outward response.
+        shouldSend = false;
+      } else if (purpose === 'migration' && acct.password_hash) {
+        // Account already has a password — migration code wouldn't apply.
+        // Don't leak this either; just don't send.
+        shouldSend = false;
+      } else if (purpose === 'reset' && !acct.password_hash) {
+        // Can't reset what hasn't been set. Don't leak; don't send.
+        shouldSend = false;
+      }
+    }
+
+    if (!shouldSend) {
+      return res.json({
+        success: true,
+        message: 'If that email matches an account, a 6-digit code has been sent.'
+      });
+    }
+
+    // Generate the 6-digit code + a long token (kept for any URL fallback).
+    const emailCode = generateSmsCode();
+    const longToken = generateToken();
+    const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
+    const schoolId = parseInt(req.body.school_id || req.query.school_id) || 1;
+
+    // Invalidate any prior unused codes for this (email, purpose, role)
+    await sql`UPDATE magic_link_tokens
+                 SET used = true
+               WHERE email = ${cleanEmail}
+                 AND purpose = ${purpose}
+                 AND role = ${role}
+                 AND used = false`;
+
+    await sql`
+      INSERT INTO magic_link_tokens
+        (token, email_code, email, method, expires_at, school_id, purpose, role)
+      VALUES
+        (${longToken}, ${emailCode}, ${cleanEmail}, 'email', ${expiresAt}, ${schoolId}, ${purpose}, ${role})`;
+
+    // Cleanup
+    await sql`DELETE FROM magic_link_tokens WHERE expires_at < NOW() - INTERVAL '1 day'`;
+
+    await sendEmailCodeEmail(cleanEmail, emailCode, purpose);
+
+    return res.json({
+      success: true,
+      message: 'A 6-digit code has been sent to your email.'
+    });
+  } catch (err) {
+    console.error('send-email-code error:', err);
+    reportError('/api/magic-link', err);
+    return res.status(500).json({ error: 'Failed to send code' });
+  }
+}
+
+// ── Verify email code (May 2026) ────────────────────────────────────────────
+//
+// Verifies a 6-digit code and returns a short-lived "verification ticket" the
+// caller can present to /api/learner-auth?action=set-password (for migration)
+// or ?action=reset-password (for reset). Does NOT issue a session JWT — that
+// happens after the password is actually set.
+//
+// Body: { email, code, purpose: 'migration'|'reset', role?: 'learner' }
+async function handleVerifyEmailCode(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  try {
+    const { email, code, purpose } = req.body || {};
+    const role = req.body?.role || 'learner';
+    if (!email || !code) return res.status(400).json({ error: 'Email and code are required' });
+    if (purpose !== 'migration' && purpose !== 'reset') {
+      return res.status(400).json({ error: 'Invalid purpose' });
+    }
+
+    const cleanEmail = sanitizeEmail(email);
+    if (!cleanEmail) return res.status(400).json({ error: 'Invalid email address' });
+
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const rows = await sql`
+      SELECT id, school_id FROM magic_link_tokens
+       WHERE email = ${cleanEmail}
+         AND email_code = ${String(code).trim()}
+         AND purpose = ${purpose}
+         AND role = ${role}
+         AND used = false
+         AND expires_at > NOW()`;
+
+    if (rows.length === 0) {
+      return res.status(400).json({
+        error: 'invalid_code',
+        message: 'Invalid or expired code. Please request a new one.'
+      });
+    }
+
+    const linkRecord = rows[0];
+
+    // Mint a short-lived signed verification ticket (5 min) the caller will
+    // present to set-password / reset-password. Reusing JWT for simplicity —
+    // it's a one-shot, signed by the same secret.
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return res.status(500).json({ error: 'JWT_SECRET not configured' });
+
+    const ticket = jwt.sign(
+      { sub: cleanEmail, role, purpose, token_id: linkRecord.id, school_id: linkRecord.school_id },
+      secret,
+      { expiresIn: '5m', audience: 'password-set' }
+    );
+
+    // Mark the token as used now — ticket is what authorises the next step.
+    await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
+
+    return res.json({ success: true, ticket });
+  } catch (err) {
+    console.error('verify-email-code error:', err);
+    reportError('/api/magic-link', err);
+    return res.status(500).json({ error: 'Verification failed' });
+  }
+}
+
 // ── Email helpers ───────────────────────────────────────────────────────────
 async function sendMagicLinkEmail(email, magicUrl) {
   const mailer = createTransporter();
@@ -535,6 +708,43 @@ async function sendReferralUsedEmail(referrerEmail, referrerName, newLearnerName
         </p>
         <p style="color: #999; font-size: 0.8rem; margin-top: 20px;">
           Check your dashboard to see your referral stats.
+        </p>
+      </div>
+    `
+  });
+}
+
+async function sendEmailCodeEmail(email, code, purpose) {
+  const mailer = createTransporter();
+  const subject = purpose === 'reset'
+    ? 'Your CoachCarter password reset code'
+    : 'Your CoachCarter sign-in code';
+  const headline = purpose === 'reset' ? 'Reset your password' : 'Sign in to CoachCarter';
+  const lead = purpose === 'reset'
+    ? 'Enter the code below to reset your password. It expires in 15 minutes.'
+    : 'Enter the code below to sign in. It expires in 15 minutes.';
+  await mailer.sendMail({
+    from:    'CoachCarter <bookings@coachcarter.uk>',
+    to:      email,
+    subject,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h1 style="font-size: 1.3rem; color: #262626; margin: 0;">${headline}</h1>
+        </div>
+        <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">${lead}</p>
+        <div style="text-align: center; margin: 28px 0;">
+          <div style="display: inline-block; background: #fff4ec; border: 2px dashed #f58321;
+                      border-radius: 12px; padding: 18px 28px;
+                      font-family: 'SF Mono', Menlo, Consolas, monospace;
+                      font-size: 2rem; letter-spacing: 0.4em;
+                      font-weight: 700; color: #262626;">
+            ${code}
+          </div>
+        </div>
+        <p style="color: #999; font-size: 0.8rem; line-height: 1.5; text-align: center;">
+          If you didn't request this, you can safely ignore this email.<br>
+          We'll never ask you to share this code with anyone.
         </p>
       </div>
     `

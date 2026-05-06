@@ -10,8 +10,8 @@
   <script src="/pwa.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<script src="/cookie-consent.js"></script>
-<script src="/posthog-loader.js"></script>
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
   <title>Sign In — CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,9 +32,47 @@
       flex-shrink: 0; cursor: pointer;
     }
     .terms-check a { color: #f58321; text-decoration: underline; }
+    /* Auth-mode tabs (Sign in / Sign up) */
+    .auth-tabs {
+      display: flex; gap: 4px; padding: 4px;
+      background: #f1f1f1; border-radius: 12px; margin-bottom: 22px;
+    }
+    .auth-tab {
+      flex: 1; padding: 10px 12px; border: none;
+      background: transparent; border-radius: 8px;
+      font-family: inherit; font-size: 0.92rem; font-weight: 600;
+      color: #666; cursor: pointer; transition: all 0.15s;
+    }
+    .auth-tab.active {
+      background: #fff; color: #262626;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .forgot-link {
+      display: inline-block; margin-top: 6px;
+      font-size: 0.85rem; color: #f58321;
+      background: none; border: none; cursor: pointer;
+      text-decoration: underline; font-family: inherit;
+    }
+    .password-hint {
+      font-size: 0.82rem; color: #888; margin-top: 4px; line-height: 1.4;
+    }
+    .small-link-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 16px; font-size: 0.85rem;
+    }
+    .small-link-row button {
+      background: none; border: none; color: #f58321;
+      cursor: pointer; font-family: inherit; font-size: inherit;
+      text-decoration: underline; padding: 0;
+    }
+    .info-banner {
+      background: #fff4ec; border: 1px solid #f8c89a; color: #7a3d00;
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;
+      font-size: 0.88rem; line-height: 1.5;
+    }
   </style>
-<script src="/sidebar.js"></script>
-<script src="/shared/learner-auth.js"></script>
+  <script src="/sidebar.js"></script>
+  <script src="/shared/learner-auth.js"></script>
 </head>
 <body>
 
@@ -61,80 +99,186 @@
     Sign in again to pick up where you left off.
   </div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       SCREEN 1 — Enter email or phone
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-  <div class="screen active" id="screen-form">
-    <div class="card-title">Sign in or create account</div>
-    <div class="card-sub">Enter your email or phone number and we'll help you sign in. No password needed.</div>
-
-
-    <div class="method-toggle">
-      <button class="method-btn active" id="method-email" data-method="email">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>
-        Email
-      </button>
-      <button class="method-btn" id="method-sms" data-method="sms">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-        Text message
-      </button>
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCREEN 1 — Sign in / Sign up (default landing)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="screen active" id="screen-auth">
+    <div class="auth-tabs" role="tablist">
+      <button class="auth-tab active" id="tab-signin" data-mode="signin" role="tab">Sign in</button>
+      <button class="auth-tab" id="tab-signup" data-mode="signup" role="tab">Sign up</button>
     </div>
 
     <div class="error-msg" id="error-msg"></div>
 
-    <form id="send-link-form">
-      <div class="form-group" id="email-group">
-        <label for="input-email">Email address</label>
-        <input type="email" id="input-email" placeholder="your@email.com" autocomplete="email">
+    <!-- Sign-in form -->
+    <form id="signin-form" data-mode-form="signin">
+      <div class="form-group">
+        <label for="signin-email">Email address</label>
+        <input type="email" id="signin-email" placeholder="your@email.com" autocomplete="email" required>
       </div>
-      <div class="form-group" id="phone-group" style="display:none;">
-        <label for="input-phone">Phone number</label>
-        <input type="tel" id="input-phone" placeholder="07700 900000" autocomplete="tel">
+      <div class="form-group">
+        <label for="signin-password">Password</label>
+        <input type="password" id="signin-password" placeholder="" autocomplete="current-password" required>
       </div>
-      <div class="form-group" id="referral-group" style="display:none;">
-        <label for="input-referral">Referral code <span style="color:#888;font-weight:400">(optional)</span></label>
-        <input type="text" id="input-referral" placeholder="e.g. FRASER-A1B2" autocomplete="off" style="text-transform:uppercase;">
+      <button type="submit" class="btn-primary" id="signin-btn">Sign in</button>
+      <div class="small-link-row">
+        <button type="button" id="btn-forgot">Forgot password?</button>
+        <button type="button" id="btn-sms-fallback" title="Use phone number instead">Use phone instead</button>
       </div>
-      <button type="submit" class="btn-primary" id="send-btn">Send login link</button>
     </form>
 
-    <div class="referral-error" id="referral-error" style="display:none;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:14px 16px;margin-bottom:12px;text-align:center;">
-      <p style="font-size:0.88rem;color:#991b1b;margin:0 0 6px;line-height:1.4;">
-        We couldn't find the referral code "<strong class="ref-error-code"></strong>". Check for typos and try again.
-      </p>
-      <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;">
-        <button type="button" class="btn-primary" style="padding:8px 18px;font-size:0.82rem;background:#f58321;" onclick="document.getElementById('input-referral').focus()">Fix code</button>
-        <button type="button" id="btn-skip-referral" style="padding:8px 18px;font-size:0.82rem;background:none;border:1px solid #ccc;border-radius:8px;color:#666;cursor:pointer;font-family:var(--font-head,inherit);font-weight:600;">Continue without bonus</button>
+    <!-- Sign-up form -->
+    <form id="signup-form" data-mode-form="signup" style="display:none;">
+      <div class="form-group">
+        <label for="signup-name">Your name</label>
+        <input type="text" id="signup-name" placeholder="e.g. Alex Smith" autocomplete="name" required>
       </div>
-    </div>
+      <div class="form-group">
+        <label for="signup-email">Email address</label>
+        <input type="email" id="signup-email" placeholder="your@email.com" autocomplete="email" required>
+      </div>
+      <div class="form-group">
+        <label for="signup-password">Choose a password</label>
+        <input type="password" id="signup-password" placeholder="" autocomplete="new-password" required minlength="8">
+        <div class="password-hint">At least 8 characters.</div>
+      </div>
+      <div class="form-group" id="referral-group" style="display:none;">
+        <label for="signup-referral">Referral code <span style="color:#888;font-weight:400">(optional)</span></label>
+        <input type="text" id="signup-referral" placeholder="e.g. FRASER-A1B2" autocomplete="off" style="text-transform:uppercase;">
+      </div>
+      <button type="submit" class="btn-primary" id="signup-btn">Create account</button>
+    </form>
 
-    <div class="referral-banner" id="referral-banner" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;margin-bottom:12px;font-size:0.85rem;color:#166534;text-align:center;">
+    <div class="referral-banner" id="referral-banner" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;margin-top:14px;font-size:0.85rem;color:#166534;text-align:center;">
       You were referred! Sign up to get <strong>free lesson time</strong>.
     </div>
-    <p class="hint" id="method-hint">We'll send a one-time link that expires in 15 minutes.<br>Click it to sign in — no password to remember.</p>
   </div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       SCREEN 2 — Link sent confirmation
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-  <div class="screen" id="screen-sent" style="text-align:center;">
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCREEN 2 — Migration: existing user, no password yet (enter code)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-migration-code" style="text-align:center;">
     <div class="result-icon orange">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9z"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>
     </div>
-    <div class="result-title">Check your <span id="sent-method-label">email</span></div>
+    <div class="result-title">Set up your password</div>
     <div class="result-sub">
-      We sent a login link to<br>
-      <strong id="sent-destination"></strong>
+      Welcome back! We've moved to email + password sign-in.<br>
+      We sent a 6-digit code to <strong id="migration-email-display"></strong> to verify it's you.
     </div>
-    <button class="resend-link" id="resend-btn">
+    <div class="code-inputs" id="migration-code-inputs" role="group" aria-label="6-digit verification code">
+      <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" data-idx="0" aria-label="Code digit 1">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="1" aria-label="Code digit 2">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="2" aria-label="Code digit 3">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="3" aria-label="Code digit 4">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="4" aria-label="Code digit 5">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="5" aria-label="Code digit 6">
+    </div>
+    <div class="code-error" id="migration-code-error"></div>
+    <button class="btn-primary" id="migration-verify-btn" disabled>Continue</button>
+    <button class="resend-link" id="migration-resend-btn" style="margin-top: 14px;">
       Didn't get it? Send again
     </button>
-    <p class="hint" style="margin-top: 16px;">The link expires in 15 minutes and can only be used once.</p>
+    <p class="hint" style="margin-top: 10px;">The code expires in 15 minutes.</p>
   </div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       SCREEN 2b — SMS code entry
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCREEN 3 — Set password (after migration code verified, or after reset)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-set-password">
+    <div class="card-title">Choose a password</div>
+    <div class="card-sub" id="set-password-sub">From now on you'll sign in with your email and password.</div>
+
+    <div class="error-msg" id="set-password-error"></div>
+
+    <form id="set-password-form">
+      <div class="form-group">
+        <label for="set-password-input">New password</label>
+        <input type="password" id="set-password-input" placeholder="" autocomplete="new-password" required minlength="8">
+        <div class="password-hint">At least 8 characters.</div>
+      </div>
+      <div class="form-group">
+        <label for="set-password-confirm">Confirm password</label>
+        <input type="password" id="set-password-confirm" placeholder="" autocomplete="new-password" required minlength="8">
+      </div>
+      <button type="submit" class="btn-primary" id="set-password-btn">Save password &amp; continue</button>
+    </form>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCREEN 4 — Forgot password (request reset)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-forgot">
+    <div class="card-title">Forgot password?</div>
+    <div class="card-sub">Enter your email and we'll send a 6-digit code (and a reset link). The code works in the app.</div>
+
+    <div class="error-msg" id="forgot-error"></div>
+
+    <form id="forgot-form">
+      <div class="form-group">
+        <label for="forgot-email">Email address</label>
+        <input type="email" id="forgot-email" placeholder="your@email.com" autocomplete="email" required>
+      </div>
+      <button type="submit" class="btn-primary" id="forgot-btn">Send reset code</button>
+    </form>
+
+    <div class="small-link-row" style="justify-content:center;">
+      <button type="button" id="btn-back-from-forgot">Back to sign in</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCREEN 5 — Reset code entry (enter 6-digit + new password)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-reset" style="text-align:center;">
+    <div class="result-icon orange">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>
+    </div>
+    <div class="result-title">Enter your reset code</div>
+    <div class="result-sub">
+      We sent a 6-digit code to <strong id="reset-email-display"></strong>.
+    </div>
+    <div class="code-inputs" id="reset-code-inputs" role="group" aria-label="6-digit verification code">
+      <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" data-idx="0">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="1">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="2">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="3">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="4">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="5">
+    </div>
+    <div class="code-error" id="reset-code-error"></div>
+    <button class="btn-primary" id="reset-verify-btn" disabled>Continue</button>
+    <button class="resend-link" id="reset-resend-btn" style="margin-top: 14px;">
+      Didn't get it? Send again
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCREEN 6 — SMS sign-in (phone number entry — fallback for users
+                   who didn't sign up with an email)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-sms-phone">
+    <div class="card-title">Sign in with phone</div>
+    <div class="card-sub">We'll text a 6-digit code to your phone.</div>
+
+    <div class="error-msg" id="sms-phone-error"></div>
+
+    <form id="sms-phone-form">
+      <div class="form-group">
+        <label for="sms-phone-input">Phone number</label>
+        <input type="tel" id="sms-phone-input" placeholder="07700 900000" autocomplete="tel" required>
+      </div>
+      <button type="submit" class="btn-primary" id="sms-phone-btn">Send code</button>
+    </form>
+
+    <div class="small-link-row" style="justify-content:center;">
+      <button type="button" id="btn-back-from-sms">Back to sign in</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCREEN 7 — SMS code entry (kept from old flow)
+       ═══════════════════════════════════════════════════════════════════════ -->
   <div class="screen" id="screen-code" style="text-align:center;">
     <div class="result-icon orange">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
@@ -145,33 +289,49 @@
       <strong id="code-destination"></strong>
     </div>
     <div class="code-inputs" id="code-inputs" role="group" aria-label="6-digit verification code">
-      <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" data-idx="0" aria-label="Code digit 1">
-      <input type="text" inputmode="numeric" maxlength="1" data-idx="1" aria-label="Code digit 2">
-      <input type="text" inputmode="numeric" maxlength="1" data-idx="2" aria-label="Code digit 3">
-      <input type="text" inputmode="numeric" maxlength="1" data-idx="3" aria-label="Code digit 4">
-      <input type="text" inputmode="numeric" maxlength="1" data-idx="4" aria-label="Code digit 5">
-      <input type="text" inputmode="numeric" maxlength="1" data-idx="5" aria-label="Code digit 6">
+      <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" data-idx="0">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="1">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="2">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="3">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="4">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="5">
     </div>
     <div class="code-error" id="code-error"></div>
     <button class="btn-primary" id="verify-code-btn" disabled>Verify code</button>
-    <button class="resend-link" id="code-resend-btn" style="margin-top: 16px;">
+    <button class="resend-link" id="code-resend-btn" style="margin-top: 14px;">
       Didn't get it? Send again
     </button>
-    <p class="hint" style="margin-top: 12px;">The code expires in 15 minutes.</p>
+    <p class="hint" style="margin-top: 10px;">The code expires in 15 minutes.</p>
   </div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       SCREEN 3 — Verifying token (spinner)
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCREEN 8 — SMS user adding email (phone-only migration to password)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="screen" id="screen-add-email">
+    <div class="card-title">Add your email</div>
+    <div class="card-sub">We've moved to email + password sign-in. Add an email to your account so we can send you a verification code.</div>
+
+    <div class="error-msg" id="add-email-error"></div>
+
+    <form id="add-email-form">
+      <div class="form-group">
+        <label for="add-email-input">Email address</label>
+        <input type="email" id="add-email-input" placeholder="your@email.com" autocomplete="email" required>
+      </div>
+      <button type="submit" class="btn-primary" id="add-email-btn">Send verification code</button>
+    </form>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       Legacy screens — kept for verifying / success / new-user / terms / error
+       ═══════════════════════════════════════════════════════════════════════ -->
+
   <div class="screen" id="screen-verifying" style="text-align:center;">
     <div class="spinner"></div>
     <div class="result-title">Signing you in…</div>
-    <div class="result-sub">Verifying your login link.</div>
+    <div class="result-sub">Verifying your link.</div>
   </div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       SCREEN 4 — Success (existing user)
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
   <div class="screen" id="screen-success" style="text-align:center;">
     <div class="result-icon green">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
@@ -180,15 +340,12 @@
     <div class="result-sub">Redirecting to your dashboard…</div>
   </div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       SCREEN 5 — New user (collect name)
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
   <div class="screen" id="screen-new-user" style="text-align:center;">
     <div class="result-icon green">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26z"/></svg>
     </div>
     <div class="result-title">Welcome to CoachCarter!</div>
-    <div class="result-sub">Your account is ready. Just tell us your name and you're all set.</div>
+    <div class="result-sub">Just tell us your name and you're all set.</div>
     <div class="name-form">
       <label for="input-name">Your name</label>
       <input type="text" id="input-name" placeholder="e.g. Alex Smith" autofocus>
@@ -196,9 +353,6 @@
     </div>
   </div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       SCREEN 5b — Terms & Conditions acceptance
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
   <div class="screen" id="screen-terms" style="text-align:center;">
     <div class="result-icon orange">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
@@ -212,16 +366,13 @@
     <button class="btn-primary" id="accept-terms-btn" disabled>Continue</button>
   </div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       SCREEN 6 — Error
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
   <div class="screen" id="screen-error" style="text-align:center;">
     <div class="result-icon red">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
     </div>
-    <div class="result-title" id="error-title">Link expired</div>
-    <div class="result-sub" id="error-sub">This login link has expired or has already been used. Please request a new one.</div>
-    <button class="btn-primary" id="btn-request-new-link" style="display:inline-block;width:auto;padding:12px 28px;">Request a new link</button>
+    <div class="result-title" id="error-title">Something went wrong</div>
+    <div class="result-sub" id="error-sub">Please try again.</div>
+    <button class="btn-primary" id="btn-back-from-error" style="display:inline-block;width:auto;padding:12px 28px;">Back to sign in</button>
   </div>
 
 </main>

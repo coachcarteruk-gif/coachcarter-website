@@ -13,12 +13,23 @@ Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel wi
 ## Key conventions
 
 - API routes use `?action=` routing (e.g. `/api/slots?action=book`)
-- Auth: JWT stored in localStorage (`cc_learner`, `cc_instructor`, `cc_admin`)
+- Auth: JWT in httpOnly cookies (`cc_learner`, `cc_instructor`, `cc_admin`); display-only blob in localStorage at the same key. Never put auth material in localStorage — it's untrusted.
 - Frontend auth via `window.ccAuth` from shared auth JS files
 - All new pages must include `sidebar.js` and `branding.js`
 - Phone numbers stored as UK format (07xxx), converted to +447xxx at send time
 - Always `await` async operations before `res.json()` — Vercel kills functions after response
 - **Every SQL query on tenant-scoped tables MUST filter by `school_id`**
+
+## Password auth (May 2026)
+
+Learners now sign in with email + password. Magic-link login was retired (kept only for password-reset emails and the one-time migration code for existing accounts). Instructors are still magic-link only — password flow planned for next session. Admins have always been password-based.
+
+1. **Use `api/_password.js`** for all hash/verify/validate/lockout — do not call `bcrypt` directly except in `api/admin.js` (predates the shared module).
+2. **All password mutations must be audit-logged** via `api/_audit.js`. Action names: `learner.signup`, `learner.password_set`, `learner.password_reset`.
+3. **No password-set or login endpoint may leak account existence.** Generic "Email or password is incorrect" / "If that email matches an account, we've sent a code." Only the `signup` endpoint may return `account_exists` (since the user just typed it).
+4. **Email-code flows for the PWA**: any "magic" that needs to land back inside an installed PWA must use a 6-digit code, not a clickable link. The link goes to the OS browser, breaking session continuity. See `magic-link.js?action=send-email-code` / `verify-email-code`.
+5. **`learner_users.password_hash` is nullable** — accounts created before May 2026 (or via SMS-only signup) have no password until they migrate. Login API must handle the null case gracefully (return invalid_credentials, route the UI into migration).
+6. **Verification tickets** (5-minute JWT, `audience: 'password-set'`) bridge `verify-email-code` → `set-password`. Don't issue a session JWT until the password is actually saved.
 
 ## Multi-tenancy rules
 

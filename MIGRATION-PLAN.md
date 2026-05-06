@@ -9,7 +9,7 @@
 **Frontend:** 43 HTML pages (vanilla HTML/CSS/JS), no framework, no bundler, no build step
 **Backend:** 29 Vercel serverless API route files, 100+ actions via `?action=X` routing
 **Database:** Neon PostgreSQL, 26 tables, single idempotent migration file
-**Auth:** JWT in localStorage, magic link login via SMS (Twilio) and email (SMTP/nodemailer)
+**Auth:** JWT in httpOnly cookies (display blob in localStorage). Learner login is **email + password** via `api/learner-auth.js` (May 2026); SMS login still available as fallback. Magic-link infrastructure (`api/magic-link.js`) is retained for password reset codes, the migration code for accounts created before passwords shipped, and SMS code login. Instructor login is still magic-link only — password flow is queued for a follow-up session.
 **Payments:** Stripe Checkout sessions + webhook handler
 **AI:** Direct Anthropic API calls (ask-examiner + advisor endpoints)
 **Analytics:** PostHog (bypassed in service worker)
@@ -365,20 +365,20 @@ export async function apiCall(
 
 **Important:** This matches the existing `?action=` routing pattern used by all API files. The web frontend already uses this exact pattern.
 
-### 1.5 — Auth flow
+### 1.5 — Auth flow (May 2026: email + password)
 
-Port the magic link login from `public/learner/login.html` + `api/magic-link.js`:
+Port the password login from `public/learner/login.html` + `api/learner-auth.js`:
 
-1. User enters phone number OR email (the web supports both — `magic-link.js` handles `method: 'phone'` or `method: 'email'`)
-2. App calls `POST /api/magic-link` with `{ method, phone/email }`
-3. User receives SMS code or email link
-4. App calls `POST /api/magic-link?action=verify` with the code
-5. Response includes `{ token, user, is_new_user, needs_name }`
-6. Store JWT in SecureStore (NOT AsyncStorage)
-7. If `is_new_user` or `needs_name`, route to onboarding
-8. Otherwise route to learner/instructor portal based on user type
+1. **Sign in:** user enters email + password → `POST /api/learner-auth?action=login` → response `{ user, is_new_user, needs_name, terms_accepted }` and a `Set-Cookie` for the session JWT.
+2. **Sign up:** user enters email + password + name → `POST /api/learner-auth?action=signup`. Same response shape.
+3. **Forgot password:** `POST /api/learner-auth?action=request-reset { email }` → user gets a 6-digit code by email → `POST /api/magic-link?action=verify-email-code { email, code, purpose: 'reset', role: 'learner' }` returns a 5-min ticket → `POST /api/learner-auth?action=set-password { ticket, password }` to finish.
+4. **Storage:** in the React Native app, store the session JWT in SecureStore (the web uses an httpOnly cookie which doesn't translate). Use the same JWT shape `{ id, email, role: 'learner', school_id }` so server-side `requireAuth` keeps working.
+5. **First-run terms gate:** if `terms_accepted` is false, route to a terms-acceptance screen before the dashboard. The web does this via `/api/learner?action=accept-terms` — same endpoint in the app.
+6. **No magic-link login in the app.** The web kept `?action=verify` only for in-flight emails during the May 2026 deploy and it should not be ported. SMS code login (`?action=verify-code`) is still valid and worth porting as a fallback for users without email — same flow as before, response shape unchanged.
 
-**Nuance the plan missed:** The web has a `FREE_TRIAL_CREDITS` system — new users get free credits on signup. The API handles this server-side in `magic-link.js`, so the app doesn't need to do anything special, but the onboarding flow should mention it.
+**Nuance:** The web's `FREE_TRIAL_CREDITS` constant is currently `0` but the credit-transaction row is still written on signup as an audit trail. App can be agnostic — server handles it.
+
+**Migration of existing accounts:** any learner created before May 2026 has `password_hash = NULL`. The web routes them through a one-time email-code → set-password flow. The app should detect `error: 'invalid_credentials'` from login and offer the same migration path: `POST /api/magic-link?action=send-email-code { email, purpose: 'migration', role: 'learner' }` → `verify-email-code` → `set-password`.
 
 ### 1.6 — Port competency-config.js to TypeScript
 

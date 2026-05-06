@@ -1405,3 +1405,54 @@ UPDATE schools
  WHERE id = 1
    AND (config->'pricing'->'bulk_hourly_pence' IS NULL
         OR config->'pricing'->'bulk_discount_tiers' IS NULL);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- PASSWORD AUTH (May 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Replaces magic-link login for learners + instructors. Magic links are kept
+-- only for password reset (via 6-digit email code) and as a one-time migration
+-- path for existing accounts with no password set.
+--
+-- Admins already have password auth — see `admin_users.password_hash`.
+--
+-- learner_users.password_hash already exists (April 2026, kept nullable when
+-- magic links replaced passwords). Just add email_verified.
+--
+-- instructors needs both password_hash + email_verified (was magic-link only).
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- learner_users: add email_verified (password_hash already exists)
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ;
+
+-- instructors: add password_hash + email_verified
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ;
+
+-- admin_users: add email_verified for parity (password_hash already NOT NULL)
+ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT TRUE;
+-- Existing admins were created via SQL/superadmin → email is implicitly verified.
+
+-- magic_link_tokens: add purpose column to distinguish migration / reset / login
+-- ('login' is the legacy default; new flows use 'reset' or 'set-password')
+ALTER TABLE magic_link_tokens ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'login';
+
+-- magic_link_tokens: add a short 6-digit email_code column. The existing
+-- `token` column stays as the long URL nonce (kept for password-reset emails
+-- and backwards compat). The short code lives here so we don't collide on
+-- the global UNIQUE constraint on `token` when two emails happen to draw
+-- the same 6 digits. Lookups use (email, email_code, purpose, used=false)
+-- which is scoped, not global.
+ALTER TABLE magic_link_tokens ADD COLUMN IF NOT EXISTS email_code TEXT;
+
+-- Role column lets us scope codes per role (a learner + instructor can share
+-- the same email but live in different tables). Default 'learner' for legacy
+-- rows, since pre-existing email magic-links were learner-only.
+ALTER TABLE magic_link_tokens ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'learner';
+
+-- Index for fast lookup of unused tokens by email + purpose (used by reset flow)
+CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_email_purpose
+  ON magic_link_tokens(email, purpose) WHERE used = false;
+CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_email_code
+  ON magic_link_tokens(email, email_code, role, purpose) WHERE used = false;
