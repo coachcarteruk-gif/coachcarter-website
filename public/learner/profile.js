@@ -113,8 +113,11 @@ function buildFullAddress() {
 // â”€â”€ Profile (phone + pickup address) â”€â”€
 function renderProfile() {
   if (!PROGRESS) return;
-  document.getElementById('profilePhone').value = PROGRESS.phone || '';
+  const phone = PROGRESS.phone || '';
   const saved = PROGRESS.pickup_address || '';
+
+  // Always populate the form fields so they're ready when editing
+  document.getElementById('profilePhone').value = phone;
   document.getElementById('profileAddress').value = saved;
   if (saved) {
     document.getElementById('addressLine').value = saved;
@@ -123,7 +126,37 @@ function renderProfile() {
     document.getElementById('postcodeConfirmed').style.display = 'block';
     confirmedPostcodeData = null;
   }
+
+  // Show read-only view when both fields are filled, otherwise the edit form
+  if (phone && saved) {
+    showProfileSavedView();
+  } else {
+    showProfileEditForm();
+  }
   updateProfileBadge();
+}
+
+function showProfileSavedView() {
+  const view = document.getElementById('profileSavedView');
+  const form = document.getElementById('profileEditForm');
+  if (!view || !form) return;
+  document.getElementById('savedPhone').textContent = PROGRESS.phone || '';
+  document.getElementById('savedAddress').textContent = PROGRESS.pickup_address || '';
+  view.style.display = 'flex';
+  form.style.display = 'none';
+}
+
+function showProfileEditForm(focusField) {
+  const view = document.getElementById('profileSavedView');
+  const form = document.getElementById('profileEditForm');
+  if (!view || !form) return;
+  view.style.display = 'none';
+  form.style.display = 'block';
+  if (focusField === 'phone') {
+    setTimeout(function () { var el = document.getElementById('profilePhone'); if (el) el.focus(); }, 0);
+  } else if (focusField === 'address') {
+    setTimeout(function () { var el = document.getElementById('postcodeInput'); if (el) el.focus(); }, 0);
+  }
 }
 
 function updateProfileBadge() {
@@ -161,7 +194,10 @@ async function saveProfile() {
     PROGRESS.pickup_address = address;
     updateProfileBadge();
     btn.textContent = 'Saved \u2713';
-    setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; }, 2000);
+    setTimeout(() => {
+      btn.textContent = 'Save'; btn.disabled = false;
+      if (phone && address) showProfileSavedView();
+    }, 800);
   } catch (err) {
     btn.textContent = 'Save'; btn.disabled = false;
     const note = document.getElementById('profileSaveNote');
@@ -534,6 +570,8 @@ document.addEventListener('click', function (e) {
   bind('btnSaveProfile', saveProfile);
   bind('btnSaveTest', saveTest);
   bind('btnSaveAvail', saveAvailability);
+  bind('btnEditPhone', function () { showProfileEditForm('phone'); });
+  bind('btnEditAddress', function () { showProfileEditForm('address'); });
   var addressLine = document.getElementById('addressLine');
   if (addressLine) addressLine.addEventListener('input', buildFullAddress);
   var contactToggle = document.getElementById('contactToggle');

@@ -112,6 +112,29 @@
     .acc-body .profile-card-header,
     .acc-body .test-card-header { display: none; }
 
+    /* SAVED-VIEW (read-only display of stored details) */
+    .saved-view { display: flex; flex-direction: column; gap: 14px; }
+    .saved-row {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px;
+    }
+    .saved-row-label {
+      font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted); margin-bottom: 4px;
+    }
+    .saved-row-value {
+      font-size: 0.95rem; color: var(--primary);
+      font-weight: 500; line-height: 1.4; word-break: break-word;
+    }
+    .saved-row-edit {
+      background: none; border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 6px 14px; font-family: var(--font-head); font-size: 0.78rem;
+      font-weight: 700; color: var(--primary); cursor: pointer;
+      white-space: nowrap; transition: all 0.15s; flex-shrink: 0;
+    }
+    .saved-row-edit:hover { border-color: var(--accent); color: var(--accent); }
+
     /* PROFILE CARD */
     .profile-card {
       background: var(--white);
@@ -452,26 +475,47 @@
       </span>
     </summary>
     <div class="acc-body">
-      <div class="profile-fields">
-        <div class="profile-field">
-          <label for="profilePhone">Phone number</label>
-          <input type="tel" id="profilePhone" placeholder="e.g. 07912 345678">
-        </div>
-        <div class="profile-field">
-          <label for="profileAddress">Pickup address</label>
-          <div class="postcode-lookup-row">
-            <input type="text" id="postcodeInput" placeholder="Enter postcode" maxlength="8">
-            <button type="button" class="btn-lookup" id="btnLookup">Find address</button>
+      <!-- Saved view (shown when phone + address already stored) -->
+      <div class="saved-view" id="profileSavedView" style="display:none">
+        <div class="saved-row">
+          <div style="flex:1; min-width:0">
+            <div class="saved-row-label">Phone number</div>
+            <div class="saved-row-value" id="savedPhone"></div>
           </div>
-          <div class="postcode-error" id="postcodeError" style="display:none"></div>
-          <div class="postcode-confirmed" id="postcodeConfirmed" style="display:none"></div>
-          <input type="text" id="addressLine" style="display:none" placeholder="House number/name and street">
-          <input type="hidden" id="profileAddress" value="">
+          <button type="button" class="saved-row-edit" id="btnEditPhone">Edit</button>
+        </div>
+        <div class="saved-row">
+          <div style="flex:1; min-width:0">
+            <div class="saved-row-label">Pickup address</div>
+            <div class="saved-row-value" id="savedAddress"></div>
+          </div>
+          <button type="button" class="saved-row-edit" id="btnEditAddress">Edit</button>
         </div>
       </div>
-      <div class="profile-save-row">
-        <span class="profile-save-note" id="profileSaveNote">Required before you can book a lesson.</span>
-        <button class="btn-save-profile" id="btnSaveProfile">Save</button>
+
+      <!-- Edit form (shown for new users or when editing) -->
+      <div id="profileEditForm">
+        <div class="profile-fields">
+          <div class="profile-field">
+            <label for="profilePhone">Phone number</label>
+            <input type="tel" id="profilePhone" placeholder="e.g. 07912 345678">
+          </div>
+          <div class="profile-field">
+            <label for="profileAddress">Pickup address</label>
+            <div class="postcode-lookup-row">
+              <input type="text" id="postcodeInput" placeholder="Enter postcode" maxlength="8">
+              <button type="button" class="btn-lookup" id="btnLookup">Find address</button>
+            </div>
+            <div class="postcode-error" id="postcodeError" style="display:none"></div>
+            <div class="postcode-confirmed" id="postcodeConfirmed" style="display:none"></div>
+            <input type="text" id="addressLine" style="display:none" placeholder="House number/name and street">
+            <input type="hidden" id="profileAddress" value="">
+          </div>
+        </div>
+        <div class="profile-save-row">
+          <span class="profile-save-note" id="profileSaveNote">Required before you can book a lesson.</span>
+          <button class="btn-save-profile" id="btnSaveProfile">Save</button>
+        </div>
       </div>
     </div>
   </details>
