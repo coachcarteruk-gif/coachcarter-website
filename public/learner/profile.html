@@ -48,6 +48,70 @@
       font-family: var(--font-body);
     }
 
+    /* ACCORDION SECTIONS */
+    .acc-section {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      overflow: hidden;
+    }
+    .acc-section[open] { border-color: var(--accent); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
+    .acc-section > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-family: var(--font-head);
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--primary);
+      user-select: none;
+    }
+    .acc-section > summary::-webkit-details-marker { display: none; }
+    .acc-section > summary::marker { content: ''; }
+    .acc-summary-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    .acc-summary-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .acc-chevron {
+      width: 16px; height: 16px;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+      color: var(--muted);
+    }
+    .acc-section[open] > summary .acc-chevron { transform: rotate(90deg); color: var(--accent); }
+    .acc-section > summary .acc-status {
+      font-size: 0.7rem; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; white-space: nowrap;
+      font-family: var(--font-body);
+      background: rgba(0,0,0,0.04); color: var(--muted);
+    }
+    .acc-status.is-warn { background: rgba(239,68,68,0.1); color: #b91c1c; }
+    .acc-status.is-ok { background: rgba(34,197,94,0.1); color: #15803d; }
+    .acc-status.is-accent { background: var(--accent-lt); color: var(--accent); }
+    .acc-body { padding: 0 20px 20px; }
+
+    /* Inside the accordion the inner cards have no border/shadow — the section is the card */
+    .acc-body .profile-card,
+    .acc-body .test-card,
+    .acc-body .pref-card {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+      margin: 0;
+    }
+    .acc-body .profile-card:hover,
+    .acc-body .test-card:hover,
+    .acc-body .pref-card:hover { border: none; box-shadow: none; }
+    .acc-body .profile-card-header,
+    .acc-body .test-card-header { display: none; }
+
     /* PROFILE CARD */
     .profile-card {
       background: var(--white);
@@ -330,6 +394,9 @@
     @media (max-width: 480px) {
       .stats-bar { grid-template-columns: repeat(2, 1fr); }
       .test-row { grid-template-columns: 1fr; }
+      .acc-section > summary { padding: 14px 16px; font-size: 0.9rem; gap: 8px; }
+      .acc-section > summary .acc-status { font-size: 0.65rem; padding: 2px 8px; }
+      .acc-body { padding: 0 16px 16px; }
     }
   </style>
   <script src="/sidebar.js"></script>
@@ -352,141 +419,185 @@
     <strong>Browsing as a guest.</strong> This is what your profile area looks like once you join — <a href="/learner/login.html?redirect=/learner/profile.html" style="color:var(--accent);font-weight:700">sign in</a> to manage your details, or <a href="/free-trial.html" style="color:var(--accent);font-weight:700">try a free lesson</a> first.
   </div>
 
+  <!-- AVAILABILITY -->
+  <details class="acc-section" id="avail-card">
+    <summary>
+      <span class="acc-summary-left">
+        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+        My Availability
+      </span>
+      <span class="acc-summary-right">
+        <span class="acc-status is-warn" id="availBadge">Not set</span>
+      </span>
+    </summary>
+    <div class="acc-body">
+      <p class="avail-explainer">Tell us when you're typically free for lessons. We'll use this to notify you when matching slots open up.</p>
+      <div id="availDays"></div>
+      <div class="profile-save-row">
+        <span class="profile-save-note" id="availSaveNote"></span>
+        <button class="btn-save-profile" id="btnSaveAvail">Save</button>
+      </div>
+    </div>
+  </details>
+
   <!-- MY DETAILS -->
-  <div class="section-title">My Details</div>
-  <div class="profile-card" id="profile-card">
-    <div class="profile-card-header">
-      <div class="profile-card-title">Phone &amp; Pickup Address</div>
-      <span class="profile-card-badge badge-incomplete" id="profileBadge">Required for booking</span>
-    </div>
-    <div class="profile-fields">
-      <div class="profile-field">
-        <label for="profilePhone">Phone number</label>
-        <input type="tel" id="profilePhone" placeholder="e.g. 07912 345678">
-      </div>
-      <div class="profile-field">
-        <label for="profileAddress">Pickup address</label>
-        <div class="postcode-lookup-row">
-          <input type="text" id="postcodeInput" placeholder="Enter postcode" maxlength="8">
-          <button type="button" class="btn-lookup" id="btnLookup">Find address</button>
+  <details class="acc-section" id="profile-card">
+    <summary>
+      <span class="acc-summary-left">
+        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+        My Details
+      </span>
+      <span class="acc-summary-right">
+        <span class="acc-status is-warn" id="profileBadge">Required for booking</span>
+      </span>
+    </summary>
+    <div class="acc-body">
+      <div class="profile-fields">
+        <div class="profile-field">
+          <label for="profilePhone">Phone number</label>
+          <input type="tel" id="profilePhone" placeholder="e.g. 07912 345678">
         </div>
-        <div class="postcode-error" id="postcodeError" style="display:none"></div>
-        <div class="postcode-confirmed" id="postcodeConfirmed" style="display:none"></div>
-        <input type="text" id="addressLine" style="display:none" placeholder="House number/name and street">
-        <input type="hidden" id="profileAddress" value="">
+        <div class="profile-field">
+          <label for="profileAddress">Pickup address</label>
+          <div class="postcode-lookup-row">
+            <input type="text" id="postcodeInput" placeholder="Enter postcode" maxlength="8">
+            <button type="button" class="btn-lookup" id="btnLookup">Find address</button>
+          </div>
+          <div class="postcode-error" id="postcodeError" style="display:none"></div>
+          <div class="postcode-confirmed" id="postcodeConfirmed" style="display:none"></div>
+          <input type="text" id="addressLine" style="display:none" placeholder="House number/name and street">
+          <input type="hidden" id="profileAddress" value="">
+        </div>
+      </div>
+      <div class="profile-save-row">
+        <span class="profile-save-note" id="profileSaveNote">Required before you can book a lesson.</span>
+        <button class="btn-save-profile" id="btnSaveProfile">Save</button>
       </div>
     </div>
-    <div class="profile-save-row">
-      <span class="profile-save-note" id="profileSaveNote">Required before you can book a lesson.</span>
-      <button class="btn-save-profile" id="btnSaveProfile">Save</button>
-    </div>
-  </div>
+  </details>
 
   <!-- DRIVING TEST -->
-  <div class="section-title">My Driving Test</div>
-  <div class="test-card" id="test-card">
-    <div class="test-card-header">
-      <div class="test-card-title">Test Date &amp; Time</div>
-    </div>
-    <div class="test-fields">
-      <div class="test-row">
-        <div class="test-field">
-          <label for="testDate">Date</label>
-          <input type="date" id="testDate">
+  <details class="acc-section" id="test-card">
+    <summary>
+      <span class="acc-summary-left">
+        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+        My Driving Test
+      </span>
+    </summary>
+    <div class="acc-body">
+      <div class="test-fields">
+        <div class="test-row">
+          <div class="test-field">
+            <label for="testDate">Date</label>
+            <input type="date" id="testDate">
+          </div>
+          <div class="test-field">
+            <label for="testTime">Time</label>
+            <input type="time" id="testTime">
+          </div>
         </div>
-        <div class="test-field">
-          <label for="testTime">Time</label>
-          <input type="time" id="testTime">
+      </div>
+      <div id="testCountdown"></div>
+      <div class="test-save-row">
+        <button class="btn-save-profile" id="btnSaveTest">Save</button>
+      </div>
+    </div>
+  </details>
+
+  <!-- WAITLIST -->
+  <details class="acc-section" id="waitlist-card">
+    <summary>
+      <span class="acc-summary-left">
+        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+        My Waitlist
+      </span>
+      <span class="acc-summary-right">
+        <span class="acc-status" id="waitlistBadge">0</span>
+      </span>
+    </summary>
+    <div class="acc-body">
+      <div id="waitlistEntries">
+        <div class="wl-empty">Loading...</div>
+      </div>
+    </div>
+  </details>
+
+  <!-- CONTACT PREFERENCE -->
+  <details class="acc-section" id="pref-card">
+    <summary>
+      <span class="acc-summary-left">
+        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+        Preferences
+      </span>
+    </summary>
+    <div class="acc-body">
+      <div class="pref-card">
+        <div class="pref-card-left">
+          <div class="pref-card-title">Contact me before my first lesson</div>
+          <div class="pref-card-sub" id="pref-sub">Let your instructor know you'd like a call or message before your first session.</div>
+        </div>
+        <label class="toggle-wrap">
+          <input type="checkbox" id="contactToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </details>
+
+  <!-- STATS -->
+  <details class="acc-section">
+    <summary>
+      <span class="acc-summary-left">
+        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+        Your Stats
+      </span>
+    </summary>
+    <div class="acc-body">
+      <div class="stats-bar" style="margin-bottom:0">
+        <div class="stat-pill">
+          <div class="num" id="stat-sessions">&mdash;</div>
+          <div class="lbl">Sessions</div>
+        </div>
+        <div class="stat-pill">
+          <div class="num" id="stat-hours">&mdash;</div>
+          <div class="lbl">Hours logged</div>
+        </div>
+        <div class="stat-pill">
+          <div class="num" id="stat-instructor">&mdash;</div>
+          <div class="lbl">With instructor</div>
+        </div>
+        <div class="stat-pill">
+          <div class="num" id="stat-private">&mdash;</div>
+          <div class="lbl">Private practice</div>
         </div>
       </div>
     </div>
-    <div id="testCountdown"></div>
-    <div class="test-save-row">
-      <button class="btn-save-profile" id="btnSaveTest">Save</button>
-    </div>
-  </div>
-
-  <!-- CONTACT PREFERENCE -->
-  <div class="section-title">Preferences</div>
-  <div class="pref-card" id="pref-card">
-    <div class="pref-card-left">
-      <div class="pref-card-title">Contact me before my first lesson</div>
-      <div class="pref-card-sub" id="pref-sub">Let your instructor know you'd like a call or message before your first session.</div>
-    </div>
-    <label class="toggle-wrap">
-      <input type="checkbox" id="contactToggle">
-      <span class="toggle-slider"></span>
-    </label>
-  </div>
-
-  <!-- AVAILABILITY -->
-  <div class="section-title">My Availability</div>
-  <div class="profile-card" id="avail-card">
-    <div class="profile-card-header">
-      <div class="profile-card-title">Weekly Free Times</div>
-      <span class="profile-card-badge badge-incomplete" id="availBadge">Not set</span>
-    </div>
-    <p class="avail-explainer">Tell us when you're typically free for lessons. We'll use this to notify you when matching slots open up.</p>
-    <div id="availDays"></div>
-    <div class="profile-save-row">
-      <span class="profile-save-note" id="availSaveNote"></span>
-      <button class="btn-save-profile" id="btnSaveAvail">Save</button>
-    </div>
-  </div>
-
-  <!-- WAITLIST -->
-  <div class="section-title">My Waitlist</div>
-  <div class="profile-card" id="waitlist-card">
-    <div class="profile-card-header">
-      <div class="profile-card-title">Waiting For</div>
-      <span class="profile-card-badge badge-incomplete" id="waitlistBadge">0</span>
-    </div>
-    <div id="waitlistEntries">
-      <div class="wl-empty">Loading...</div>
-    </div>
-  </div>
-
-  <!-- STATS -->
-  <div class="section-title">Your Stats</div>
-  <div class="stats-bar">
-    <div class="stat-pill">
-      <div class="num" id="stat-sessions">&mdash;</div>
-      <div class="lbl">Sessions</div>
-    </div>
-    <div class="stat-pill">
-      <div class="num" id="stat-hours">&mdash;</div>
-      <div class="lbl">Hours logged</div>
-    </div>
-    <div class="stat-pill">
-      <div class="num" id="stat-instructor">&mdash;</div>
-      <div class="lbl">With instructor</div>
-    </div>
-    <div class="stat-pill">
-      <div class="num" id="stat-private">&mdash;</div>
-      <div class="lbl">Private practice</div>
-    </div>
-  </div>
+  </details>
 
   <!-- PRIVACY & DATA -->
-  <div class="section-title">Privacy & Data</div>
-  <div class="profile-card" style="display:flex;flex-direction:column;gap:12px">
-    <div class="profile-card-header">
-      <div class="profile-card-title">Your Data Rights</div>
+  <details class="acc-section">
+    <summary>
+      <span class="acc-summary-left">
+        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+        Privacy &amp; Data
+      </span>
+    </summary>
+    <div class="acc-body">
+      <div style="padding:4px 4px 0;font-size:12px;color:#797879;line-height:1.8">
+        <a href="/learner/my-data.html" style="color:#797879;text-decoration:underline">View my data</a>
+        <span style="margin:0 6px">·</span>
+        <a href="#" id="link-cookie-prefs" style="color:#797879;text-decoration:underline">Cookie preferences</a>
+        <span style="margin:0 6px">·</span>
+        <a href="/privacy.html" style="color:#797879;text-decoration:underline">Privacy policy</a>
+      </div>
+      <div style="border-top:1px solid #fee2e2;margin-top:12px;padding-top:16px">
+        <button id="btn-request-deletion" style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit;text-align:left;width:100%;color:#dc2626">
+          <span style="font-size:18px">&#9888;&#65039;</span>
+          <span><strong>Delete My Account</strong><br><span style="font-size:12px;color:#b91c1c">Permanently delete your account and all data</span></span>
+        </button>
+      </div>
     </div>
-    <div style="padding:4px 4px 0;font-size:12px;color:#797879;line-height:1.8">
-      <a href="/learner/my-data.html" style="color:#797879;text-decoration:underline">View my data</a>
-      <span style="margin:0 6px">Â·</span>
-      <a href="#" id="link-cookie-prefs" style="color:#797879;text-decoration:underline">Cookie preferences</a>
-      <span style="margin:0 6px">Â·</span>
-      <a href="/privacy.html" style="color:#797879;text-decoration:underline">Privacy policy</a>
-    </div>
-    <div style="border-top:1px solid #fee2e2;margin-top:8px;padding-top:16px">
-      <button id="btn-request-deletion" style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit;text-align:left;width:100%;color:#dc2626">
-        <span style="font-size:18px">&#9888;&#65039;</span>
-        <span><strong>Delete My Account</strong><br><span style="font-size:12px;color:#b91c1c">Permanently delete your account and all data</span></span>
-      </button>
-    </div>
-  </div>
+  </details>
 
 </main>
 

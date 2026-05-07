@@ -133,11 +133,11 @@ function updateProfileBadge() {
   const note = document.getElementById('profileSaveNote');
   if (phone && address) {
     badge.textContent = 'Complete';
-    badge.className = 'profile-card-badge badge-complete';
+    badge.className = 'acc-status is-ok';
     note.textContent = 'Your instructor will see these details when you book.';
   } else {
     badge.textContent = 'Required for booking';
-    badge.className = 'profile-card-badge badge-incomplete';
+    badge.className = 'acc-status is-warn';
     note.textContent = 'Required before you can book a lesson.';
   }
 }
@@ -324,10 +324,10 @@ function updateAvailBadge() {
   const badge = document.getElementById('availBadge');
   if (AVAIL_WINDOWS.length === 0) {
     badge.textContent = 'Not set';
-    badge.className = 'profile-card-badge badge-incomplete';
+    badge.className = 'acc-status is-warn';
   } else {
     badge.textContent = AVAIL_WINDOWS.length + ' slot' + (AVAIL_WINDOWS.length !== 1 ? 's' : '') + ' set';
-    badge.className = 'profile-card-badge badge-complete';
+    badge.className = 'acc-status is-ok';
   }
 }
 
@@ -436,12 +436,12 @@ async function loadWaitlist() {
     if (entries.length === 0) {
       container.innerHTML = '<div class="wl-empty">You\'re not waiting for any slots. When no slots are available on the booking page, you can join the waitlist.</div>';
       badge.textContent = '0';
-      badge.className = 'profile-card-badge badge-incomplete';
+      badge.className = 'acc-status';
       return;
     }
 
     badge.textContent = entries.length;
-    badge.className = 'profile-card-badge badge-complete';
+    badge.className = 'acc-status is-accent';
 
     let html = '';
     for (const e of entries) {
