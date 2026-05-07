@@ -252,10 +252,21 @@ async function handleSetPassword(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Confirm the instructor belongs to this admin's school (multi-tenant guard)
-    const [target] = await sql`
-      SELECT id, email, school_id FROM instructors
-       WHERE id = ${parseInt(id)} AND school_id = ${schoolId}`;
+    // Multi-tenant guard: admin must only set passwords for instructors in
+    // their own school. Superadmins (or platform-level admins with no
+    // school_id) can target any school — getSchoolId returns null for them.
+    let target;
+    if (schoolId) {
+      const rows = await sql`
+        SELECT id, email, school_id FROM instructors
+         WHERE id = ${parseInt(id)} AND school_id = ${schoolId}`;
+      target = rows[0];
+    } else {
+      const rows = await sql`
+        SELECT id, email, school_id FROM instructors
+         WHERE id = ${parseInt(id)}`;
+      target = rows[0];
+    }
     if (!target) {
       return res.status(404).json({ error: 'Instructor not found' });
     }
