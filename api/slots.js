@@ -31,7 +31,7 @@ const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { sendWhatsApp } = require('./_whatsapp');
 const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
-const { checkWaitlistOnCancel } = require('./waitlist');
+const { notifyAvailableLearners } = require('./_notify-availability');
 const { checkAdjacentTravelTime, extractPostcode, bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES } = require('./_travel-time');
 
 
@@ -2151,19 +2151,18 @@ async function handleCancel(req, res) {
         );
       }
 
-      // Waitlist: notify matching learners for each freed slot (fire-and-forget)
+      // Notify learners with matching weekly availability (fire-and-forget)
       for (const sb of seriesBookings) {
-        checkWaitlistOnCancel({
+        notifyAvailableLearners({
           instructor_id:   booking.instructor_id,
           instructor_name: booking.instructor_name,
           scheduled_date:  sb.scheduled_date,
           start_time:      sb.start_time,
           end_time:        sb.end_time,
-          lesson_type_id:  booking.lesson_type_id,
           school_id:       booking.school_id
         }).catch(err => {
-          console.warn('waitlist series check failed:', err.message);
-          reportError('/api/slots:waitlist-series', err);
+          console.warn('availability notify (series) failed:', err.message);
+          reportError('/api/slots:availability-series', err);
         });
       }
 
@@ -2271,18 +2270,17 @@ async function handleCancel(req, res) {
       );
     }
 
-    // Waitlist: notify matching learners for this freed slot (fire-and-forget)
-    checkWaitlistOnCancel({
+    // Notify learners with matching weekly availability (fire-and-forget)
+    notifyAvailableLearners({
       instructor_id:   booking.instructor_id,
       instructor_name: booking.instructor_name,
       scheduled_date:  String(booking.scheduled_date).slice(0, 10),
       start_time:      booking.start_time,
       end_time:        booking.end_time,
-      lesson_type_id:  booking.lesson_type_id,
       school_id:       booking.school_id
     }).catch(err => {
-      console.warn('waitlist check failed:', err.message);
-      reportError('/api/slots:waitlist', err);
+      console.warn('availability notify failed:', err.message);
+      reportError('/api/slots:availability', err);
     });
 
     return res.json({

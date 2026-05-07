@@ -335,31 +335,6 @@
     }
     .stat-pill .lbl { font-size: 0.68rem; color: var(--muted); margin-top: 4px; font-weight: 500; }
 
-    /* WAITLIST CARD */
-    .wl-entry {
-      display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
-      padding: 10px 0; border-bottom: 1px solid var(--border);
-    }
-    .wl-entry:last-child { border-bottom: none; }
-    .wl-entry-info { flex: 1; }
-    .wl-entry-title { font-size: 0.88rem; font-weight: 600; color: var(--primary); }
-    .wl-entry-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
-    .wl-entry-badges { display: flex; gap: 6px; margin-top: 4px; }
-    .wl-badge {
-      font-size: 0.68rem; font-weight: 700; padding: 2px 8px;
-      border-radius: 12px; white-space: nowrap;
-    }
-    .wl-badge-active { background: rgba(34,197,94,0.1); color: #15803d; }
-    .wl-badge-notified { background: rgba(245,158,11,0.12); color: #b45309; }
-    .wl-badge-expires { background: var(--accent-lt); color: var(--accent); }
-    .btn-wl-leave {
-      background: none; border: 1.5px solid var(--border); border-radius: 8px;
-      padding: 6px 12px; font-size: 0.75rem; font-weight: 600; color: var(--muted);
-      cursor: pointer; white-space: nowrap; transition: all 0.15s;
-    }
-    .btn-wl-leave:hover { border-color: #e74c3c; color: #e74c3c; }
-    .wl-empty { font-size: 0.82rem; color: var(--muted); font-style: italic; padding: 8px 0; }
-
     /* AVAILABILITY CARD */
     .avail-explainer {
       font-size: 0.82rem; color: var(--muted); margin-bottom: 14px; line-height: 1.4;
@@ -544,24 +519,6 @@
       <div id="testCountdown"></div>
       <div class="test-save-row">
         <button class="btn-save-profile" id="btnSaveTest">Save</button>
-      </div>
-    </div>
-  </details>
-
-  <!-- WAITLIST -->
-  <details class="acc-section" id="waitlist-card">
-    <summary>
-      <span class="acc-summary-left">
-        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
-        My Waitlist
-      </span>
-      <span class="acc-summary-right">
-        <span class="acc-status" id="waitlistBadge">0</span>
-      </span>
-    </summary>
-    <div class="acc-body">
-      <div id="waitlistEntries">
-        <div class="wl-empty">Loading...</div>
       </div>
     </div>
   </details>

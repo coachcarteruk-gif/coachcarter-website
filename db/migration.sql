@@ -1460,3 +1460,12 @@ CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_email_purpose
   ON magic_link_tokens(email, purpose) WHERE used = false;
 CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_email_code
   ON magic_link_tokens(email, email_code, role, purpose) WHERE used = false;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- May 2026: retire the waitlist
+--
+-- Replaced by `learner_availability` driving cancellation notifications via
+-- api/_notify-availability.js. Weekly availability is now the single primitive
+-- for "ping me when something opens up". See CLAUDE.md.
+-- ─────────────────────────────────────────────────────────────────────────────
+DROP TABLE IF EXISTS waitlist CASCADE;

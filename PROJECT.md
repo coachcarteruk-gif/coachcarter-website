@@ -351,15 +351,11 @@ Kept for SMS code login, password-reset emails, and the migration code flow. Mag
 | `set-availability` | POST | Yes | Replace all availability windows. Body: `{ windows: [{ day_of_week, start_time, end_time }] }` |
 | `accept-terms` | POST | Yes | Records T&C acceptance (`terms_accepted_at = NOW()`). Called from login flow gate. |
 
-### API — `api/waitlist.js`
+### Module — `api/_notify-availability.js`
 
-| Action | Method | Auth | Description |
-|---|---|---|---|
-| `join` | POST | Yes | Join waitlist with optional day/time/instructor prefs or `use_my_availability` flag |
-| `my-waitlist` | GET | Yes | List active/notified entries (expires stale on read) |
-| `leave` | POST | Yes | Remove a waitlist entry. Body: `{ waitlist_id }` |
+Internal module (no public actions). Exports `notifyAvailableLearners({ instructor_id, instructor_name, scheduled_date, start_time, end_time, school_id })` — called from `api/slots.js` after a cancellation. Finds every learner with an active `learner_availability` window covering the freed slot and sends WhatsApp + email so they can rebook.
 
-Internal: `checkWaitlistOnCancel()` — called from `api/slots.js` after cancellation. Matches entries by explicit prefs or `learner_availability` fallback. Sends WhatsApp + email to all matches.
+Replaced the retired `api/waitlist.js` (May 2026). Weekly availability is now the single primitive — no separate waitlist signup is required.
 
 ### API — `api/lesson-types.js`
 
@@ -507,9 +503,9 @@ sort_order INTEGER DEFAULT 0
 created_at TIMESTAMPTZ
 ```
 
-**`learner_availability`** — recurring weekly free-time windows per learner (mirrors `instructor_availability`). Columns: `learner_id`, `day_of_week` (0-6), `start_time`, `end_time`, `active`. Used for waitlist matching.
+**`learner_availability`** — recurring weekly free-time windows per learner (mirrors `instructor_availability`). Columns: `learner_id`, `day_of_week` (0-6), `start_time`, `end_time`, `active`. Used by `api/_notify-availability.js` to ping matching learners on cancellation, and surfaced on the instructor's "My Learners" page so the instructor can see who's flexible.
 
-**`waitlist`** — learners waiting for specific slot types. Columns: `learner_id`, `instructor_id` (nullable = any), `preferred_day` (nullable), `preferred_start_time`/`preferred_end_time` (nullable = use learner_availability), `lesson_type_id`, `status` (active/notified/booked/expired), `expires_at` (14 days), `notified_at`. Auto-expired on read.
+**`waitlist`** — *retired May 2026.* Replaced by `learner_availability` driving cancellation notifications. Table dropped via `db/migration.sql`.
 
 **`driving_sessions`** / **`skill_ratings`** — session logging tables. `driving_sessions` has optional `booking_id` (FK to `lesson_bookings`) to link sessions to completed bookings. Unique constraint ensures one log per booking. Skill ratings use Traffic Light system: `struggled` (red), `ok` (amber), `nailed` (green). `skill_ratings` also has `driving_faults`, `serious_faults`, and `dangerous_faults` columns for DL25 fault tracking.
 
@@ -885,7 +881,7 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 
 When a learner is deleted, data is handled as follows:
 - **Anonymized** (kept for tax): `credit_transactions` — `learner_id` set to NULL, `anonymized = true`
-- **Deleted**: skill_ratings, driving_sessions, quiz_results, mock_tests, lesson_bookings, learner_onboarding, waitlist, instructor_learner_notes, learner_availability, magic_link_tokens, sent_reminders, slot_reservations, lesson_confirmations, referrals
+- **Deleted**: skill_ratings, driving_sessions, quiz_results, mock_tests, lesson_bookings, learner_onboarding, instructor_learner_notes, learner_availability, magic_link_tokens, sent_reminders, slot_reservations, lesson_confirmations, referrals
 - **Untouched** (no PII tied to learner): `referral_clicks` is keyed by `referral_code` not `learner_id`, and stores only `ip_hash` — clicks remain attributable to the code without identifying any individual
 - **Nullified**: cookie_consents.learner_id set to NULL, learner_users.referred_by set to NULL (for referred learners)
 - **Confirmation email** sent after successful deletion

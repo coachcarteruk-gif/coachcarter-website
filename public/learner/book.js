@@ -1524,116 +1524,6 @@ function clearAllGuestErrors() {
   document.querySelectorAll('#guestFields .field-error-msg.show').forEach(el => el.classList.remove('show'));
 }
 
-// â”€â”€â”€ Waitlist â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function showWaitlistJoin(dayOfWeek, dateStr) {
-  const area = document.getElementById('waitlistFormArea');
-  if (!area) return;
-
-  // Build time options (07:00 - 21:00 in 30-min steps)
-  let timeOpts = '<option value="">Any time</option>';
-  for (let h = 7; h <= 21; h++) {
-    for (const m of ['00', '30']) {
-      if (h === 21 && m === '30') continue;
-      const val = String(h).padStart(2, '0') + ':' + m;
-      const ampm = h >= 12 ? 'pm' : 'am';
-      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-      const label = m === '00' ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
-      timeOpts += `<option value="${val}">${label}</option>`;
-    }
-  }
-
-  // Get current instructor filter
-  const instrSel = document.getElementById('instructorFilter');
-  const instrId = instrSel ? instrSel.value : '';
-  const instrName = instrSel && instrSel.value ? instrSel.options[instrSel.selectedIndex].text : 'Any instructor';
-
-  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-
-  area.innerHTML = `
-    <div class="waitlist-form">
-      <label>Day</label>
-      <select id="wlDay">
-        <option value="${dayOfWeek}">${dayNames[dayOfWeek]}</option>
-        <option value="">Any day (match my availability)</option>
-      </select>
-      <label>From</label>
-      <select id="wlStart">${timeOpts}</select>
-      <label>To</label>
-      <select id="wlEnd">${timeOpts}</select>
-      <div class="waitlist-check-row">
-        <input type="checkbox" id="wlUseAvail" data-action="toggle-waitlist-avail">
-        <span>Match my weekly availability instead</span>
-      </div>
-      <input type="hidden" id="wlInstructor" value="${instrId}">
-      <div class="waitlist-form-actions">
-        <button class="btn-waitlist-submit" id="btnWlJoin" data-action="submit-waitlist-join">Join Waitlist</button>
-        <button class="btn-waitlist-cancel" data-action="close-waitlist-form">Cancel</button>
-      </div>
-    </div>`;
-}
-
-function toggleWaitlistAvail() {
-  const useAvail = document.getElementById('wlUseAvail').checked;
-  const dayEl = document.getElementById('wlDay');
-  const startEl = document.getElementById('wlStart');
-  const endEl = document.getElementById('wlEnd');
-  dayEl.disabled = useAvail;
-  startEl.disabled = useAvail;
-  endEl.disabled = useAvail;
-  if (useAvail) {
-    dayEl.value = '';
-    startEl.value = '';
-    endEl.value = '';
-  }
-}
-
-async function submitWaitlistJoin() {
-  const btn = document.getElementById('btnWlJoin');
-  btn.disabled = true; btn.textContent = 'Joining…';
-
-  const useAvail = document.getElementById('wlUseAvail').checked;
-  const body = { use_my_availability: useAvail };
-
-  if (!useAvail) {
-    const day = document.getElementById('wlDay').value;
-    const start = document.getElementById('wlStart').value;
-    const end = document.getElementById('wlEnd').value;
-    if (day !== '') body.preferred_day = parseInt(day);
-    if (start && end) {
-      if (start >= end) {
-        showToast('End time must be after start time', 'error');
-        btn.disabled = false; btn.textContent = 'Join Waitlist';
-        return;
-      }
-      body.preferred_start_time = start;
-      body.preferred_end_time = end;
-    }
-  }
-
-  const instrId = document.getElementById('wlInstructor').value;
-  if (instrId) body.instructor_id = parseInt(instrId);
-  if (selectedLessonType) body.lesson_type_id = selectedLessonType.id;
-
-  try {
-    const res = await ccAuth.fetchAuthed('/api/waitlist?action=join', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-
-    document.getElementById('waitlistFormArea').innerHTML = `
-      <div class="waitlist-success">
-        You're on the waitlist! We'll WhatsApp and email you when a matching slot opens.
-      </div>`;
-  } catch (err) {
-    showToast(err.message || 'Failed to join waitlist', 'error');
-    btn.disabled = false; btn.textContent = 'Join Waitlist';
-  }
-}
-
 // â”€â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 init();
 
@@ -1645,17 +1535,7 @@ document.addEventListener('click', function (e) {
   var action = target.dataset.action;
   if (action === 'open-book-modal') {
     openBookModal(target);
-  } else if (action === 'submit-waitlist-join') {
-    submitWaitlistJoin();
-  } else if (action === 'close-waitlist-form') {
-    var area = document.getElementById('waitlistFormArea');
-    if (area) area.innerHTML = '';
   }
-});
-document.addEventListener('change', function (e) {
-  var target = e.target.closest('[data-action]');
-  if (!target) return;
-  if (target.dataset.action === 'toggle-waitlist-avail') toggleWaitlistAvail();
 });
 
 // â”€â”€ Static handlers previously inline in the HTML â”€â”€
