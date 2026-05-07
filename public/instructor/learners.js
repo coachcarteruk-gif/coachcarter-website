@@ -121,6 +121,12 @@ function renderLearners() {
       notesPreview = '<div class="learner-notes-preview">' + esc(preview) + '</div>';
     }
 
+    // Free-times chips (weekly availability — empty string if learner hasn't set any)
+    const ftChips = renderFreeTimesChips(l.availability);
+    const freeTimesRow = ftChips
+      ? '<div class="learner-freetimes"><span class="learner-freetimes-label">Free</span>' + ftChips + '</div>'
+      : '';
+
     return `
       <div class="learner-card fade-in" style="cursor:pointer" data-action="open-learner" data-learner-id="${l.id}">
         <div class="learner-card-top">
@@ -134,6 +140,7 @@ function renderLearners() {
         <div class="learner-contact">
           ${contact.join(' &middot; ')}
         </div>
+        ${freeTimesRow}
         ${notesPreview}
       </div>`;
   }).join('');
@@ -366,6 +373,32 @@ function esc(s) {
 function formatDate(str) {
   const d = new Date(str + 'T00:00:00Z');
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+// ── Free-times formatter ──
+// `windows` is an array of { day_of_week, start_time, end_time } with HH:MM strings.
+// Returns short HTML chips like "Mon 4–6pm · Wed 5–7pm" — empty string if none.
+const FT_DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const FT_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+function fmtFTTime(t) {
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'pm' : 'am';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return m === 0 ? h12 + ampm : h12 + ':' + String(m).padStart(2,'0') + ampm;
+}
+function renderFreeTimesChips(windows) {
+  if (!windows || windows.length === 0) return '';
+  // Sort Mon-Sun, then by start time
+  const orderIdx = {};
+  FT_DAY_ORDER.forEach((d, i) => { orderIdx[d] = i; });
+  const sorted = [...windows].sort((a, b) =>
+    (orderIdx[a.day_of_week] - orderIdx[b.day_of_week]) ||
+    a.start_time.localeCompare(b.start_time)
+  );
+  return sorted.map(w =>
+    '<span class="freetime-chip">' + FT_DAY_NAMES[w.day_of_week] + ' ' +
+    fmtFTTime(w.start_time) + '–' + fmtFTTime(w.end_time) + '</span>'
+  ).join('');
 }
 
 function showToast(msg, type = '') {

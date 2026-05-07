@@ -127,6 +127,7 @@ All three roles use email + password sign-in. Magic-link login was retired entir
 - Hour-slot time grid on instructor daily calendar (replaced with compact lesson list — April 2026)
 - Daily view tab on instructor calendar (removed April 2026 — agenda absorbs its function)
 - "Weekdays" and "Cancelled" filter buttons on instructor calendar (removed April 2026 — weekends always shown, cancelled always hidden)
+- Waitlist feature entirely (removed May 2026 — `waitlist` table, `api/waitlist.js`, learner profile "My Waitlist" card, and waitlist join form on `book.html` all deleted. Replaced by `learner_availability` driving cancellation notifications via `api/_notify-availability.js`. Weekly availability is now the single primitive for "ping me when something opens up". Do not re-add.)
 
 ## React Native migration principles
 

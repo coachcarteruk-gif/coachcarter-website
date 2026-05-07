@@ -779,6 +779,22 @@ Removed "Weekdays" and "Cancelled" filter buttons from the instructor calendar t
 
 ---
 
+### 2.55 — Weekly Availability as Cancellation-Notify Primitive ✅ Complete (7 May 2026)
+
+Retired the waitlist. Weekly availability (`learner_availability`) is now the single primitive for "ping me when something opens up" — learners no longer need to opt into a separate waitlist entry. When a booking is cancelled, every learner whose availability window covers the freed slot gets an immediate WhatsApp + email notification.
+
+The instructor's "My Learners" page now shows each learner's weekly free times as chips so the instructor can see at a glance who's flexible.
+
+Conceptual model: weekly availability is durable ("I'm typically free Mon 4–6pm"); waitlists were the *active* layer ("I want a lesson in the next 14 days"). With cancellations as the only real trigger, the active layer was pure ceremony — setting availability already captured everything we needed.
+
+Follow-up (PR 2, planned): a 25%-off "flash" notification for cancellations <48h out, with single-use Stripe checkout tokens, follow-up "no longer available" messages once booked or withdrawn, and a per-instructor opt-in.
+
+- **Added**: `api/_notify-availability.js` (exports `notifyAvailableLearners()`); free-times chip row + endpoint extension in `api/instructor.js?action=my-learners`.
+- **Removed**: `api/waitlist.js`; `waitlist` table (via `db/migration.sql` `DROP TABLE IF EXISTS waitlist CASCADE`); "My Waitlist" card on `public/learner/profile.html`; orphaned waitlist join form in `public/learner/book.js` + CSS in `public/learner/book.html`; GDPR-cascade and seed-test-data references.
+- **Modified**: `api/slots.js` (both single + series cancel paths now call `notifyAvailableLearners()`); `public/instructor/learners.html` + `learners.js` (chip rendering); `CLAUDE.md`, `PROJECT.md`, `MIGRATION-PLAN.md`.
+
+---
+
 ### 3.1 — Push Notifications
 
 PWA push notifications for lesson reminders, quiz nudges, and new message alerts.

@@ -1350,7 +1350,6 @@ async function handleConfirmDeletion(req, res) {
     try { await sql`DELETE FROM lesson_confirmations WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete lesson_confirmations skipped:', e.message); }
     try { await sql`DELETE FROM lesson_bookings WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete lesson_bookings skipped:', e.message); }
     try { await sql`DELETE FROM learner_onboarding WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete learner_onboarding skipped:', e.message); }
-    try { await sql`DELETE FROM waitlist WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete waitlist skipped:', e.message); }
     try { await sql`DELETE FROM instructor_learner_notes WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete instructor_learner_notes skipped:', e.message); }
     try { await sql`DELETE FROM learner_availability WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete learner_availability skipped:', e.message); }
     if (learner?.email) { try { await sql`DELETE FROM magic_link_tokens WHERE email = ${learner.email}`; } catch (e) { console.warn('gdpr delete magic_link_tokens skipped:', e.message); } }

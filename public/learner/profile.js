@@ -44,9 +44,8 @@ function render() {
     updatePrefSub(PROGRESS.prefer_contact_before);
   }
 
-  // Availability + Waitlist (async, non-blocking)
+  // Availability (async, non-blocking)
   loadAvailability();
-  loadWaitlist();
 
   // Stats
   const s = PROGRESS.stats;
@@ -457,67 +456,6 @@ async function saveAvailability() {
   }
 }
 
-// â”€â”€ Waitlist â”€â”€
-async function loadWaitlist() {
-  const container = document.getElementById('waitlistEntries');
-  const badge = document.getElementById('waitlistBadge');
-  if (!container) return;
-
-  try {
-    const res = await ccAuth.fetchAuthed('/api/waitlist?action=my-waitlist');
-    if (!res.ok) { container.innerHTML = '<div class="wl-empty">Could not load waitlist.</div>'; return; }
-    const data = await res.json();
-    const entries = data.entries || [];
-
-    if (entries.length === 0) {
-      container.innerHTML = '<div class="wl-empty">You\'re not waiting for any slots. When no slots are available on the booking page, you can join the waitlist.</div>';
-      badge.textContent = '0';
-      badge.className = 'acc-status';
-      return;
-    }
-
-    badge.textContent = entries.length;
-    badge.className = 'acc-status is-accent';
-
-    let html = '';
-    for (const e of entries) {
-      const dayName = e.preferred_day !== null ? DAY_NAMES[e.preferred_day] : null;
-      const timeStr = e.preferred_start_time
-        ? `${fmtTime(e.preferred_start_time.slice(0,5))} "“ ${fmtTime(e.preferred_end_time.slice(0,5))}`
-        : null;
-
-      let title;
-      if (dayName && timeStr) title = `${dayName} ${timeStr}`;
-      else if (dayName) title = dayName;
-      else title = 'Matching my availability';
-
-      const instructor = e.instructor_name || 'Any instructor';
-      const lessonType = e.lesson_type_name || '';
-
-      const daysLeft = Math.max(0, Math.ceil((new Date(e.expires_at) - Date.now()) / 86400000));
-      const statusClass = e.status === 'notified' ? 'wl-badge-notified' : 'wl-badge-active';
-      const statusLabel = e.status === 'notified' ? 'Notified' : 'Active';
-
-      html += `<div class="wl-entry">
-        <div class="wl-entry-info">
-          <div class="wl-entry-title">${title}</div>
-          <div class="wl-entry-sub">${instructor}${lessonType ? ' Â· ' + lessonType : ''}</div>
-          <div class="wl-entry-badges">
-            <span class="wl-badge ${statusClass}">${statusLabel}</span>
-            <span class="wl-badge wl-badge-expires">${daysLeft}d left</span>
-          </div>
-        </div>
-        <button class="btn-wl-leave" data-action="leave-waitlist" data-entry-id="${e.id}">Leave</button>
-      </div>`;
-    }
-    container.innerHTML = html;
-  } catch (err) {
-    console.error('load-waitlist error:', err);
-    container.innerHTML = '<div class="wl-empty">Could not load waitlist.</div>';
-  }
-}
-
-
 // â”€â”€ GDPR: Request Account Deletion â”€â”€
 async function requestDeletion(btn) {
   if (!confirm('Are you sure you want to delete your account? This action CANNOT be undone. All your bookings, progress, and personal data will be permanently removed.')) return;
@@ -537,23 +475,6 @@ async function requestDeletion(btn) {
   btn.disabled = false; btn.style.opacity = '1';
 }
 
-async function leaveWaitlist(waitlistId, btn) {
-  btn.disabled = true; btn.textContent = 'Leaving…';
-  try {
-    const res = await ccAuth.fetchAuthed('/api/waitlist?action=leave', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ waitlist_id: waitlistId })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    loadWaitlist();
-  } catch (err) {
-    alert(err.message || 'Failed to leave waitlist');
-    btn.disabled = false; btn.textContent = 'Leave';
-  }
-}
-
 document.addEventListener('click', function (e) {
   var target = e.target.closest('[data-action]');
   if (!target) return;
@@ -562,7 +483,6 @@ document.addEventListener('click', function (e) {
   else if (action === 'show-add-row') showAddRow(target, parseInt(target.dataset.day, 10));
   else if (action === 'confirm-add-window') confirmAddWindow(target, parseInt(target.dataset.day, 10));
   else if (action === 'remove-parent') { if (target.parentElement) target.parentElement.remove(); }
-  else if (action === 'leave-waitlist') leaveWaitlist(parseInt(target.dataset.entryId, 10), target);
 });
 (function wire() {
   var bind = function (id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); };

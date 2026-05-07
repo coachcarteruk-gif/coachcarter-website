@@ -1851,6 +1851,34 @@ async function handleMyLearners(req, res) {
       ORDER BY MAX(lb.scheduled_date) DESC
     `;
 
+    // Bolt on availability windows for each learner so the list view can show
+    // "free Mon 4–6pm, Wed evenings…" without a per-row fetch.
+    const learnerIds = learners.map(l => l.id);
+    let availabilityByLearner = {};
+    if (learnerIds.length > 0) {
+      const windows = await sql`
+        SELECT learner_id, day_of_week,
+               start_time::text AS start_time,
+               end_time::text   AS end_time
+        FROM learner_availability
+        WHERE active = true
+          AND school_id = ${schoolId}
+          AND learner_id = ANY(${learnerIds})
+        ORDER BY day_of_week, start_time
+      `;
+      for (const w of windows) {
+        if (!availabilityByLearner[w.learner_id]) availabilityByLearner[w.learner_id] = [];
+        availabilityByLearner[w.learner_id].push({
+          day_of_week: w.day_of_week,
+          start_time:  w.start_time.slice(0, 5),
+          end_time:    w.end_time.slice(0, 5)
+        });
+      }
+    }
+    for (const l of learners) {
+      l.availability = availabilityByLearner[l.id] || [];
+    }
+
     return res.json({ learners });
   } catch (err) {
     console.error('instructor my-learners error:', err);

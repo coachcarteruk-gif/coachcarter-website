@@ -35,7 +35,7 @@
 | File | Actions | Key notes |
 |------|---------|-----------|
 | learner.js | 20 | Core learner data — sessions, progress, profile, mock-tests, quiz, competency, onboarding, weekly availability |
-| waitlist.js | 3 | Waiting list — join, my-waitlist, leave + internal checkWaitlistOnCancel (called from slots.js) |
+| _notify-availability.js | 0 (internal) | Cancellation→notification fan-out: matches `learner_availability` to freed slots, sends WhatsApp + email |
 | instructor.js | 27+ | Auth, schedule, availability, blackouts, learner history, notes, stats, photo upload, cancel-booking, reschedule-booking, create-booking |
 | admin.js | 14+ | Dashboard stats, bookings, instructor CRUD, learner management, credit adjustment |
 | slots.js | 7 | available (with lead-time filter), book (+ repeat_weeks), checkout-slot, cancel (+ cancel_series), reschedule, my-bookings, series-info |
@@ -78,7 +78,7 @@
 
 **Users:** learner_users, instructors, admin_users
 **Auth:** magic_link_tokens, instructor_login_tokens
-**Scheduling:** instructor_availability, instructor_blackout_dates, lesson_bookings, slot_reservations, learner_availability, waitlist
+**Scheduling:** instructor_availability, instructor_blackout_dates, lesson_bookings, slot_reservations, learner_availability
 **Notifications:** sent_reminders
 **Payments:** credit_transactions
 **Learning:** driving_sessions, skill_ratings, learner_onboarding, quiz_results, mock_tests, mock_test_faults
@@ -112,8 +112,8 @@
 - `instructors.languages` — JSONB array of languages spoken (default ["English"])
 
 **Notable tables added (April 2026):**
-- `learner_availability` — recurring weekly free-time windows (mirrors instructor_availability). Used for waitlist matching.
-- `waitlist` — learners waiting for specific slot types. Supports explicit day/time prefs or fallback to learner_availability. 14-day auto-expiry, notify-all on cancellation.
+- `learner_availability` — recurring weekly free-time windows (mirrors instructor_availability). On cancellation, `api/_notify-availability.js` finds learners with windows covering the freed slot and pings them via WhatsApp + email. Also surfaced as a "Free" chip row on the instructor's "My Learners" page.
+- ~~`waitlist`~~ — *retired May 2026.* Replaced by `learner_availability` driving cancellation notifications. Table dropped, `api/waitlist.js` deleted, learner-side join/list UI removed.
 - `sent_reminders` table — tracks sent reminders to prevent duplicates (unique on booking_id + reminder_type)
 - `lesson_bookings.series_id` — UUID grouping recurring weekly bookings (same time slot, N weeks)
 - `referrals` — one row per learner-with-a-code (learner_id, school_id, code, unique per school)
