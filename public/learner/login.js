@@ -17,7 +17,6 @@
   // ── URL params ───────────────────────────────────────────────────────────
   var urlParams    = new URLSearchParams(window.location.search);
   var legacyToken  = urlParams.get('token');           // legacy magic-link
-  var resetToken   = urlParams.get('reset_token');     // password-reset link
   var redirectTo   = urlParams.get('redirect') || '/learner/';
   var referralCode = urlParams.get('ref') || '';
   var expired      = urlParams.get('expired') === '1';
@@ -32,7 +31,7 @@
   // ── Existing session redirect ────────────────────────────────────────────
   var existing = null;
   try { existing = JSON.parse(localStorage.getItem('cc_learner') || 'null'); } catch (_) {}
-  if (existing && !legacyToken && !resetToken && !expired) {
+  if (existing && !legacyToken && !expired) {
     window.location.href = redirectTo;
   }
   if (expired) {
@@ -665,47 +664,6 @@
     }, 100);
   }
 
-  // ── Reset-link landing (?reset_token=...) ────────────────────────────────
-  // If the user clicked the "Reset on the web" button in the email, they land
-  // here. The token in the URL grants them a one-shot ticket which we exchange
-  // and drop them straight into the set-password screen. Same flow as code-
-  // based reset, just without typing a code.
-  function handleResetTokenLanding(token) {
-    showScreen('verifying');
-    fetch('/api/magic-link?action=validate&token=' + encodeURIComponent(token))
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-      .then(function (out) {
-        if (!out.ok) {
-          showErrorScreen('Reset link expired',
-            'This reset link has expired or has already been used. Please request a new one.');
-          return;
-        }
-        // We need to consume the long token AND mint a ticket. Easiest path:
-        // call verify-email-code with the long token as the 'code' won't work
-        // (different column). Instead, treat the long-token reset link by
-        // calling verify with role='learner', purpose='reset', and use the
-        // legacy verify endpoint to consume — but legacy verify issues a
-        // session, which we don't want.
-        //
-        // Simplest pragmatic path: bounce them through the normal forgot
-        // flow by extracting their email from the token. We don't have the
-        // email client-side, so route them to the forgot screen and let them
-        // enter it — matches the in-app flow exactly.
-        //
-        // (The reset link is mainly a desktop-friendly fallback; the code is
-        // the primary path. Adding a token→email lookup endpoint is a future
-        // optimisation.)
-        showScreen('forgot');
-        var infoEl = document.querySelector('#screen-forgot .card-sub');
-        if (infoEl) {
-          infoEl.innerHTML = '<span style="color:#7a3d00;">Enter your email to receive a fresh reset code in the app.</span>';
-        }
-      })
-      .catch(function () {
-        showErrorScreen('Connection error', 'Please try again.');
-      });
-  }
-
   function showErrorScreen(title, sub) {
     document.getElementById('error-title').textContent = title;
     document.getElementById('error-sub').textContent = sub;
@@ -812,9 +770,11 @@
   }
 
   // ── URL-based landing routing ────────────────────────────────────────────
-  if (resetToken) {
-    handleResetTokenLanding(resetToken);
-  } else if (legacyToken) {
+  // Legacy magic-link tokens (?token=...) still work for ~15 min after the
+  // May 2026 password rollout, then this is dead code. Reset emails now
+  // contain a 6-digit code only, no link — so ?reset_token= is no longer
+  // generated and the handler was removed.
+  if (legacyToken) {
     handleLegacyTokenLanding(legacyToken);
   }
 })();

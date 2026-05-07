@@ -407,8 +407,6 @@ async function handleRequestReset(req, res) {
       try {
         const { createTransporter } = require('./_auth-helpers');
         const mailer = createTransporter();
-        const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
-        const resetUrl = `${baseUrl}/learner/login.html?reset_token=${longToken}`;
         await mailer.sendMail({
           from: 'CoachCarter <bookings@coachcarter.uk>',
           to: cleanEmail,
@@ -417,8 +415,7 @@ async function handleRequestReset(req, res) {
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
               <h1 style="font-size: 1.3rem; color: #262626; text-align: center;">Reset your password</h1>
               <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
-                Use this 6-digit code in the app, or tap the button below to reset on the web.
-                Both expire in 15 minutes.
+                Enter this 6-digit code in the app to reset your password. It expires in 15 minutes.
               </p>
               <div style="text-align: center; margin: 28px 0;">
                 <div style="display: inline-block; background: #fff4ec; border: 2px dashed #f58321;
@@ -428,13 +425,6 @@ async function handleRequestReset(req, res) {
                             font-weight: 700; color: #262626;">
                   ${emailCode}
                 </div>
-              </div>
-              <div style="text-align: center; margin: 24px 0;">
-                <a href="${resetUrl}"
-                   style="background: #f58321; color: white; padding: 12px 28px; text-decoration: none;
-                          border-radius: 8px; display: inline-block; font-weight: 600; font-size: 0.95rem;">
-                  Reset on the web
-                </a>
               </div>
               <p style="color: #999; font-size: 0.8rem; line-height: 1.5; text-align: center;">
                 Didn't request this? You can safely ignore this email — your password won't change.
