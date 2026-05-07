@@ -18,6 +18,8 @@ const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
 const { requireAuth, getSchoolId } = require('./_auth');
+const { validatePassword, hashPassword } = require('./_password');
+const { logAudit } = require('./_audit');
 
 module.exports = async (req, res) => {
   const action = req.query.action;
@@ -27,6 +29,7 @@ module.exports = async (req, res) => {
   if (action === 'create')           return handleCreate(req, res);
   if (action === 'update')           return handleUpdate(req, res);
   if (action === 'set-availability') return handleSetAvailability(req, res);
+  if (action === 'set-password')     return handleSetPassword(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -221,6 +224,65 @@ async function handleSetAvailability(req, res) {
     console.error('instructors set-availability error:', err);
     reportError('/api/instructors', err);
     return res.status(500).json({ error: 'Failed to save availability', details: 'Internal server error' });
+  }
+}
+
+// ── POST /api/instructors?action=set-password ────────────────────────────────
+//
+// Admin-driven instructor password set/reset. The admin types a password,
+// the system hashes it and marks must_change_password=TRUE so the
+// instructor is forced through a change-password screen on next login.
+//
+// Body: { id, password }
+//
+// Audit-logged as admin.instructor_password_set (sensitive auth-state mutation).
+async function handleSetPassword(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const payload = requireAuth(req, { roles: ['admin'] });
+  if (!payload) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getSchoolId(payload, req);
+
+  const { id, password } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id is required' });
+
+  const pwdErr = validatePassword(password);
+  if (pwdErr) return res.status(400).json({ error: 'invalid_password', message: pwdErr });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Confirm the instructor belongs to this admin's school (multi-tenant guard)
+    const [target] = await sql`
+      SELECT id, email, school_id FROM instructors
+       WHERE id = ${parseInt(id)} AND school_id = ${schoolId}`;
+    if (!target) {
+      return res.status(404).json({ error: 'Instructor not found' });
+    }
+
+    const hash = await hashPassword(password);
+    await sql`
+      UPDATE instructors
+         SET password_hash = ${hash},
+             password_set_at = NOW(),
+             must_change_password = TRUE
+       WHERE id = ${target.id}`;
+
+    try {
+      await logAudit(sql, {
+        adminId: payload.id, adminEmail: payload.email,
+        action: 'admin.instructor_password_set',
+        targetType: 'instructors', targetId: target.id,
+        details: { target_email: target.email },
+        schoolId, req,
+      });
+    } catch {}
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('instructors set-password error:', err);
+    reportError('/api/instructors', err);
+    return res.status(500).json({ error: 'Failed to set password' });
   }
 }
 

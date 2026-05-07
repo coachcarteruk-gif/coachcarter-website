@@ -1429,6 +1429,10 @@ ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ;
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ;
+-- Set TRUE when an admin (re)sets an instructor's password. The instructor
+-- is forced through a change-password screen on next login, after which
+-- this is cleared. Prevents the admin-typed password from lingering.
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;
 
 -- admin_users: add email_verified for parity (password_hash already NOT NULL)
 ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT TRUE;

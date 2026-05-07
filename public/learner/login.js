@@ -16,7 +16,6 @@
 
   // ── URL params ───────────────────────────────────────────────────────────
   var urlParams    = new URLSearchParams(window.location.search);
-  var legacyToken  = urlParams.get('token');           // legacy magic-link
   var redirectTo   = urlParams.get('redirect') || '/learner/';
   var referralCode = urlParams.get('ref') || '';
   var expired      = urlParams.get('expired') === '1';
@@ -31,7 +30,7 @@
   // ── Existing session redirect ────────────────────────────────────────────
   var existing = null;
   try { existing = JSON.parse(localStorage.getItem('cc_learner') || 'null'); } catch (_) {}
-  if (existing && !legacyToken && !expired) {
+  if (existing && !expired) {
     window.location.href = redirectTo;
   }
   if (expired) {
@@ -664,44 +663,6 @@
     }, 100);
   }
 
-  function showErrorScreen(title, sub) {
-    document.getElementById('error-title').textContent = title;
-    document.getElementById('error-sub').textContent = sub;
-    showScreen('error');
-  }
-
-  // ── Legacy magic-link token landing (?token=...) ─────────────────────────
-  // Kept for in-flight emails during the rollout. Uses the old verify path
-  // which logs the user in directly. After ~15 min of deploy this is unused.
-  function handleLegacyTokenLanding(token) {
-    showScreen('verifying');
-    fetch('/api/magic-link?action=validate&token=' + encodeURIComponent(token))
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-      .then(function (out) {
-        if (!out.ok) {
-          showErrorScreen('Link expired',
-            'This login link has expired or has already been used. Please request a new one.');
-          return;
-        }
-        return fetch('/api/magic-link?action=verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: token })
-        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); });
-      })
-      .then(function (out) {
-        if (!out) return;
-        if (!out.ok) {
-          showErrorScreen('Link expired',
-            'This login link has expired or has already been used. Please request a new one.');
-          return;
-        }
-        finishLogin(out.data);
-      })
-      .catch(function () {
-        showErrorScreen('Connection error', 'Could not verify your link. Please try signing in.');
-      });
-  }
 
   // ── Wiring ───────────────────────────────────────────────────────────────
   document.querySelectorAll('.auth-tab').forEach(function (tab) {
@@ -769,12 +730,4 @@
     switchAuthMode('signup');
   }
 
-  // ── URL-based landing routing ────────────────────────────────────────────
-  // Legacy magic-link tokens (?token=...) still work for ~15 min after the
-  // May 2026 password rollout, then this is dead code. Reset emails now
-  // contain a 6-digit code only, no link — so ?reset_token= is no longer
-  // generated and the handler was removed.
-  if (legacyToken) {
-    handleLegacyTokenLanding(legacyToken);
-  }
 })();

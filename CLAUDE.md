@@ -22,14 +22,21 @@ Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel wi
 
 ## Password auth (May 2026)
 
-Learners now sign in with email + password. Magic-link login was retired (kept only for password-reset emails and the one-time migration code for existing accounts). Instructors are still magic-link only — password flow planned for next session. Admins have always been password-based.
+All three roles use email + password sign-in. Magic-link login was retired entirely. Magic-link infrastructure survives only for the SMS code flow, learner password-reset codes, and a one-time email-code migration path for learner accounts created before passwords shipped.
 
-1. **Use `api/_password.js`** for all hash/verify/validate/lockout — do not call `bcrypt` directly except in `api/admin.js` (predates the shared module).
-2. **All password mutations must be audit-logged** via `api/_audit.js`. Action names: `learner.signup`, `learner.password_set`, `learner.password_reset`.
-3. **No password-set or login endpoint may leak account existence.** Generic "Email or password is incorrect" / "If that email matches an account, we've sent a code." Only the `signup` endpoint may return `account_exists` (since the user just typed it).
-4. **Email-code flows for the PWA**: any "magic" that needs to land back inside an installed PWA must use a 6-digit code, not a clickable link. The link goes to the OS browser, breaking session continuity. See `magic-link.js?action=send-email-code` / `verify-email-code`.
-5. **`learner_users.password_hash` is nullable** — accounts created before May 2026 (or via SMS-only signup) have no password until they migrate. Login API must handle the null case gracefully (return invalid_credentials, route the UI into migration).
-6. **Verification tickets** (5-minute JWT, `audience: 'password-set'`) bridge `verify-email-code` → `set-password`. Don't issue a session JWT until the password is actually saved.
+**Per-role auth model:**
+- **Learner** — self-serve signup + login + forgot-password (code-based reset). `api/learner-auth.js`.
+- **Instructor** — invite-only (no public signup). Admin sets/resets password via the admin portal; instructor is forced through change-password screen on first login. No self-serve forgot-password — instructors contact the admin. `api/instructor-auth.js`.
+- **Admin** — password login (predates this module, lives in `api/admin.js`). Self-serve forgot-password via 6-digit code added May 2026.
+
+**Hard rules:**
+1. **Use `api/_password.js`** for all hash/verify/validate/lockout in new code. `api/admin.js` keeps its own `bcrypt` calls (predates the shared module — left alone deliberately).
+2. **All password mutations must be audit-logged** via `api/_audit.js`. Action names: `learner.signup`, `learner.password_set`, `learner.password_reset`, `instructor.password_change`, `admin.instructor_password_set`, `admin.password_reset`.
+3. **No password-set or login endpoint may leak account existence.** Generic "Email or password is incorrect" / "If that email matches an account, we've sent a code." Only the learner `signup` endpoint may return `account_exists` (since the user just typed it).
+4. **Email-code flows for the PWA**: any "magic" that needs to land back inside an installed PWA must use a 6-digit code, not a clickable link. The link goes to the OS browser, breaking session continuity. See `magic-link.js?action=send-email-code` / `verify-email-code`, and `admin.js?action=request-reset` / `reset-password`.
+5. **`*.password_hash` is nullable** — accounts created before May 2026 (or via SMS-only signup) have no password until they migrate. Login APIs must handle the null case gracefully (return invalid_credentials; route the UI into migration if applicable).
+6. **Verification tickets** (5-minute JWT, `audience: 'password-set'`) bridge learner `verify-email-code` → `set-password`. Don't issue a session JWT until the password is actually saved.
+7. **Admin-set instructor passwords** mark `instructors.must_change_password = TRUE`. The instructor login flow checks this on success and forces a change-password screen before the dashboard. Cleared on successful change.
 
 ## Multi-tenancy rules
 

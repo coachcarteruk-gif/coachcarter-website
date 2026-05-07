@@ -30,8 +30,6 @@ function generateSmsCode() {
 module.exports = async (req, res) => {
   const action = req.query.action;
   if (action === 'send-link')         return handleSendLink(req, res);
-  if (action === 'validate')          return handleValidate(req, res);
-  if (action === 'verify')            return handleVerify(req, res);
   if (action === 'verify-code')       return handleVerifyCode(req, res);
   if (action === 'send-email-code')   return handleSendEmailCode(req, res);
   if (action === 'verify-email-code') return handleVerifyEmailCode(req, res);
@@ -145,12 +143,12 @@ async function handleSendLink(req, res) {
         method: 'sms'
       });
     } else {
-      // Email delivery
-      await sendMagicLinkEmail(cleanEmail, magicUrl);
-      return res.json({
-        success: true,
-        message: 'A login link has been sent to your email.',
-        method: 'email'
+      // Email magic-link login was retired in May 2026 — learners now use
+      // email + password (api/learner-auth.js). This branch is left in
+      // place returning a clear error in case any old client still calls it.
+      return res.status(410).json({
+        error: 'magic_link_retired',
+        message: 'Email login links have been retired. Please use email + password to sign in.'
       });
     }
   } catch (err) {
@@ -160,195 +158,10 @@ async function handleSendLink(req, res) {
   }
 }
 
-// ── Validate token (lightweight, does NOT consume it) ────────────────────────
-// Used by the verify page to check if the token is still valid before consuming.
-// This prevents email-client link prefetchers from burning the token.
-async function handleValidate(req, res) {
-  const token = req.query.token;
-  if (!token) return res.status(400).json({ error: 'Token is required' });
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-    const rows = await sql`
-      SELECT id FROM magic_link_tokens
-      WHERE token = ${token} AND used = false AND expires_at > NOW()`;
-
-    if (rows.length === 0) {
-      return res.status(400).json({ error: 'expired', message: 'This link has expired or has already been used. Please request a new one.' });
-    }
-
-    return res.json({ valid: true });
-  } catch (err) {
-    console.error('validate error:', err);
-    reportError('/api/magic-link', err);
-    return res.status(500).json({ error: 'Validation failed' });
-  }
-}
-
-// ── Verify token and issue JWT ──────────────────────────────────────────────
-async function handleVerify(req, res) {
-  // Only accept POST — prevents email prefetchers from consuming the token
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const token = req.body?.token;
-  if (!token) return res.status(400).json({ error: 'Token is required' });
-
-  try {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) return res.status(500).json({ error: 'JWT_SECRET not configured' });
-
-    const sql = neon(process.env.POSTGRES_URL);
-
-    // Look up the token
-    const rows = await sql`
-      SELECT * FROM magic_link_tokens
-      WHERE token = ${token} AND used = false AND expires_at > NOW()`;
-
-    if (rows.length === 0) {
-      return res.status(400).json({ error: 'expired', message: 'This link has expired or has already been used. Please request a new one.' });
-    }
-
-    const linkRecord = rows[0];
-    const identifier = linkRecord.email || linkRecord.phone;
-
-    // Mark token as used immediately (prevents reuse)
-    await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
-
-    // Look up or create the user
-    let user;
-    let isNewUser = false;
-
-    if (linkRecord.email) {
-      const existing = await sql`
-        SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at
-        FROM learner_users WHERE email = ${linkRecord.email}`;
-      if (existing.length > 0) {
-        user = existing[0];
-      } else {
-        // Check if this email belongs to an instructor
-        const instructorMatch = await sql`
-          SELECT id FROM instructors
-          WHERE LOWER(email) = LOWER(${linkRecord.email}) AND active = TRUE`;
-        if (instructorMatch.length > 0) {
-          return res.status(400).json({
-            error: 'instructor_account',
-            message: 'This email is linked to an instructor account. Please use the instructor login instead.',
-            redirect: '/instructor/login.html'
-          });
-        }
-
-        // Auto-create new learner account
-        isNewUser = true;
-        const newSchoolId = linkRecord.school_id || 1;
-
-        // Resolve referral code if present
-        let referrerId = null;
-        if (linkRecord.referral_code) {
-          const [ref] = await sql`
-            SELECT r.learner_id FROM referrals r
-            WHERE r.code = ${linkRecord.referral_code} AND r.school_id = ${newSchoolId}`;
-          if (ref) referrerId = ref.learner_id;
-        }
-
-        const newRows = await sql`
-          INSERT INTO learner_users (email, credit_balance, school_id, referred_by)
-          VALUES (${linkRecord.email}, ${FREE_TRIAL_CREDITS}, ${newSchoolId}, ${referrerId})
-          RETURNING *`;
-        user = newRows[0];
-
-        // Record the free trial credit
-        await sql`
-          INSERT INTO credit_transactions
-            (learner_id, type, credits, amount_pence, payment_method)
-          VALUES
-            (${user.id}, 'purchase', ${FREE_TRIAL_CREDITS}, 0, 'free_trial')`;
-
-        // Apply referral welcome bonus
-        if (referrerId) {
-          try {
-            await applyReferralWelcomeBonus(sql, user.id, referrerId, newSchoolId);
-          } catch (e) { console.warn('referral welcome bonus failed:', e.message); }
-        }
-      }
-    } else if (linkRecord.phone) {
-      const existing = await sql`
-        SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at
-        FROM learner_users WHERE phone = ${linkRecord.phone}`;
-      if (existing.length > 0) {
-        user = existing[0];
-      } else {
-        isNewUser = true;
-        const newSchoolId2 = linkRecord.school_id || 1;
-
-        // Resolve referral code if present
-        let referrerId2 = null;
-        if (linkRecord.referral_code) {
-          const [ref] = await sql`
-            SELECT r.learner_id FROM referrals r
-            WHERE r.code = ${linkRecord.referral_code} AND r.school_id = ${newSchoolId2}`;
-          if (ref) referrerId2 = ref.learner_id;
-        }
-
-        const newRows = await sql`
-          INSERT INTO learner_users (phone, credit_balance, school_id, referred_by)
-          VALUES (${linkRecord.phone}, ${FREE_TRIAL_CREDITS}, ${newSchoolId2}, ${referrerId2})
-          RETURNING *`;
-        user = newRows[0];
-
-        await sql`
-          INSERT INTO credit_transactions
-            (learner_id, type, credits, amount_pence, payment_method)
-          VALUES
-            (${user.id}, 'purchase', ${FREE_TRIAL_CREDITS}, 0, 'free_trial')`;
-
-        // Apply referral welcome bonus
-        if (referrerId2) {
-          try {
-            await applyReferralWelcomeBonus(sql, user.id, referrerId2, newSchoolId2);
-          } catch (e) { console.warn('referral welcome bonus failed:', e.message); }
-        }
-      }
-    }
-
-    // Issue JWT
-    const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
-    const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '180d' });
-
-    // Set httpOnly session cookie + CSRF double-submit cookie.
-    appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
-    appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
-
-    // GDPR: update last activity timestamp
-    try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`; } catch (e) {}
-
-    // Send welcome email to new users
-    if (isNewUser && linkRecord.email) {
-      try {
-        await sendWelcomeEmail(linkRecord.email);
-      } catch (emailErr) {
-        console.error('welcome email error:', emailErr);
-      }
-    }
-
-    return res.json({
-      success: true,
-      user: {
-        id: user.id,
-        name: user.name || null,
-        email: user.email || null,
-        tier: user.current_tier,
-        school_id: user.school_id || 1
-      },
-      is_new_user: isNewUser,
-      needs_name: !user.name,
-      terms_accepted: !!user.terms_accepted_at
-    });
-  } catch (err) {
-    console.error('verify error:', err);
-    reportError('/api/magic-link', err);
-    return res.status(500).json({ error: 'Verification failed' });
-  }
-}
+// (handleValidate + handleVerify removed in May 2026 — magic-link login was
+// retired in favour of email + password. SMS code flow lives below in
+// handleVerifyCode. The applyReferralWelcomeBonus + sendWelcomeEmail helpers
+// are still used by the SMS path and by api/learner-auth signup.)
 
 // ── POST /api/magic-link?action=logout ───────────────────────────────────────
 // Clear the cc_learner + cc_csrf cookies. No auth required.
@@ -632,37 +445,6 @@ async function handleVerifyEmailCode(req, res) {
   }
 }
 
-// ── Email helpers ───────────────────────────────────────────────────────────
-async function sendMagicLinkEmail(email, magicUrl) {
-  const mailer = createTransporter();
-  await mailer.sendMail({
-    from:    'CoachCarter <bookings@coachcarter.uk>',
-    to:      email,
-    subject: 'Your CoachCarter login link',
-    html: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-        <div style="text-align: center; margin-bottom: 32px;">
-          <h1 style="font-size: 1.3rem; color: #262626; margin: 0;">Sign in to CoachCarter</h1>
-        </div>
-        <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
-          Tap the button below to sign in. This link expires in ${TOKEN_EXPIRY_MINUTES} minutes.
-        </p>
-        <div style="text-align: center; margin: 32px 0;">
-          <a href="${magicUrl}"
-             style="background: #f58321; color: white; padding: 14px 36px; text-decoration: none;
-                    border-radius: 8px; display: inline-block; font-weight: 600; font-size: 1rem;">
-            Sign in to CoachCarter
-          </a>
-        </div>
-        <p style="color: #999; font-size: 0.8rem; line-height: 1.5;">
-          If you didn't request this, you can safely ignore this email.<br>
-          This link can only be used once.
-        </p>
-      </div>
-    `
-  });
-}
-
 // ── Referral helpers ──────────────────────────────────────────────────────
 async function applyReferralWelcomeBonus(sql, newLearnerId, referrerId, schoolId) {
   // Load school config to check if referrals are enabled
@@ -751,35 +533,6 @@ async function sendEmailCodeEmail(email, code, purpose) {
   });
 }
 
-async function sendWelcomeEmail(email) {
-  const mailer = createTransporter();
-  await mailer.sendMail({
-    from:    'CoachCarter <bookings@coachcarter.uk>',
-    to:      email,
-    subject: 'Welcome to CoachCarter',
-    html: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-        <h1 style="font-size: 1.4rem; color: #262626;">Welcome to CoachCarter!</h1>
-        <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
-          Your account is set up and you're ready to go.
-        </p>
-        <h2 style="font-size: 1rem; color: #262626; margin-top: 24px;">What to do next:</h2>
-        <ol style="color: #555; font-size: 0.95rem; line-height: 1.8; padding-left: 20px;">
-          <li><strong>Buy lessons</strong> — Choose a package that suits you</li>
-          <li><strong>Pick a slot</strong> — Browse available times and book</li>
-          <li><strong>Turn up and drive</strong> — Meet your instructor and get behind the wheel</li>
-        </ol>
-        <div style="text-align: center; margin: 28px 0;">
-          <a href="https://coachcarter.uk/learner/book.html"
-             style="background: #f58321; color: white; padding: 14px 28px; text-decoration: none;
-                    border-radius: 8px; display: inline-block; font-weight: 600;">
-            Book a lesson →
-          </a>
-        </div>
-        <p style="color: #999; font-size: 0.8rem; margin-top: 20px;">
-          Questions? Just reply to this email — we're here to help.
-        </p>
-      </div>
-    `
-  });
-}
+// (sendWelcomeEmail removed in May 2026 — was only called from the retired
+// magic-link verify path. New signups via api/learner-auth.js don't currently
+// trigger a welcome email; if that becomes desired, add it there.)

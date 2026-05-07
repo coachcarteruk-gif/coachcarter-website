@@ -1786,6 +1786,38 @@ Magic-link login was failing for PWA users: clicking the email link opened in th
 
 ---
 
+## 2.96 — Instructor + Admin Password Auth (7 May 2026)
+
+Follow-up to 2.95. Brings instructor and admin sign-in onto the same email + password model as learner, with a different operational shape per role:
+
+- **Instructors are invite-only.** No self-serve signup. Admins set or reset instructor passwords via a new modal in the admin portal; the instructor is forced through a change-password screen on first sign-in. No self-serve forgot-password — instructors contact the admin (login page hint mails `bookings@coachcarter.uk`). Decision rationale: instructors are non-technical; "your password is X, change it on first login" over WhatsApp is more reliable than email-code flows.
+- **Admins** keep their existing password login (already shipped pre-May 2026) but gain a code-based forgot-password flow that mirrors the learner UX — 6-digit code by email, set new password, fresh session. Same enumeration-safe and PWA-safe behaviour.
+- **Magic-link login retired entirely.** The `validate` and `verify` actions in `api/magic-link.js`, the email-link branch of `send-link`, plus the `sendMagicLinkEmail` and `sendWelcomeEmail` helpers are gone. The legacy `?token=` URL handler in `learner/login.js` is also gone. Magic-link infrastructure that survives: SMS code login (`verify-code`), learner email-code migration/reset (`send-email-code` / `verify-email-code`), and the admin reset code path. Instructor magic-link handlers in `api/instructor.js` (`request-login`, `validate-token`, `verify-token`) are preserved as a dead-but-callable fallback in case of admin lockout.
+
+**What changed:**
+
+- **`api/instructor-auth.js` (new)** — `login`, `change-password` (authed), `logout`. Login uses the shared `_password.js` lockout, returns `must_change_password` when the password was admin-set so the UI can route to the change-password screen. `change-password` re-verifies the current password before saving; clears `must_change_password`; audit-logged as `instructor.password_change`.
+- **`api/instructors.js`** — new admin-only `set-password` action. Hashes the typed password, sets `must_change_password = TRUE`, audit-logged as `admin.instructor_password_set`. Multi-tenant guard (school must match admin's school).
+- **`api/admin.js`** — new `request-reset` and `reset-password` actions. Code-based, enumeration-safe, mirrors learner reset UX. Issues a fresh admin session JWT on success. Audit-logged as `admin.password_reset`.
+- **`db/migration.sql`** — `instructors.must_change_password BOOLEAN DEFAULT FALSE`. Existing learner/admin schema unchanged.
+- **`public/instructor/login.html` + `login.js`** — sign-in screen now email + password. New change-password screen forced after admin-set password. Forgot-password hint points to admin email instead of self-serve flow. Magic-link sign-in / link-sent / verify spinner / verify-error screens left in HTML as harmless dead markup (JS no longer activates them); will be deleted in a tidy-up pass.
+- **`public/admin/login.html` + `login.js`** — sign-in screen unchanged; new "Forgot password?" link toggles to a forgot-email screen → reset code + new password screen. Same code+pw atomic flow as the API.
+- **`public/admin/portal.js` + `dashboard.js`** — instructor list rows gain a "Set password" / "Reset password" button (label switches based on `has_password`). Modal asks the admin to type the password and warns it'll force change on first sign-in. `api/admin.js?action=all-instructors` now returns a `has_password` boolean (never the hash itself).
+- **`api/magic-link.js`** — cleanup: dropped routes for `validate` + `verify`; `send-link` with `method:'email'` returns 410 with a clear message; helpers `sendMagicLinkEmail` and `sendWelcomeEmail` removed. SMS path + email-code paths untouched.
+- **`public/learner/login.js`** — dropped the `?token=` legacy magic-link landing handler and its unused `showErrorScreen` helper.
+- **`CLAUDE.md`** — Password auth section rewritten to cover all three roles + their per-role rules. Added the audit-log action name list.
+- **`PROJECT.md`** — Instructor portal section rewritten to describe the password flow + invite-only model; new `instructor-auth.js` action table; admin action table gains `request-reset` + `reset-password`.
+
+**Migration UX (existing instructors):** they have no `password_hash` yet, so login fails with invalid_credentials. Admin opens the portal, clicks "Set password" on each instructor row, types a temporary password, and shares it via WhatsApp/text. Instructor signs in, is forced through change-password, picks their own password.
+
+**Known follow-ups:**
+- Delete the dead magic-link screens from `instructor/login.html` and the unused `request-login` / `validate-token` / `verify-token` handlers in `api/instructor.js` after a few days of stable operation.
+- Add a "Change password" section on the instructor profile page so instructors can voluntarily change their password after the initial admin-set one. The API endpoint exists (`api/instructor-auth.js?action=change-password`); only the UI is missing.
+
+**Files changed:** `api/instructor-auth.js` (new), `api/instructors.js`, `api/admin.js`, `api/magic-link.js`, `db/migration.sql`, `public/instructor/login.html`, `public/instructor/login.js`, `public/admin/login.html`, `public/admin/login.js`, `public/admin/portal.js`, `public/admin/dashboard.js`, `public/learner/login.js`, `CLAUDE.md`, `PROJECT.md`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

@@ -78,6 +78,8 @@ module.exports = async (req, res) => {
   const action = req.query.action;
   if (action === 'login')           return handleLogin(req, res);
   if (action === 'logout')          return handleLogout(req, res);
+  if (action === 'request-reset')   return handleRequestReset(req, res);
+  if (action === 'reset-password')  return handleResetPassword(req, res);
   if (action === 'create-admin')    return handleCreateAdmin(req, res);
   if (action === 'verify')          return handleVerify(req, res);
   if (action === 'dashboard-stats') return handleDashboardStats(req, res);
@@ -601,6 +603,7 @@ async function handleAllInstructors(req, res) {
         i.max_travel_minutes,
         COALESCE(i.commission_rate, 0.85) AS commission_rate,
         i.weekly_franchise_fee_pence,
+        (i.password_hash IS NOT NULL) AS has_password,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.instructor_id = i.id AND lb.status = 'confirmed'
            AND lb.scheduled_date >= CURRENT_DATE AND lb.school_id = ${schoolId}) AS upcoming_bookings,
@@ -1646,5 +1649,200 @@ async function handleUpdateReferralConfig(req, res) {
     console.error('update-referral-config error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to update referral config' });
+  }
+}
+
+// ── POST /api/admin?action=request-reset ─────────────────────────────────────
+//
+// Code-based password reset for admins. Mirrors the learner UX: a 6-digit code
+// goes to the admin's email, they enter it on the login page, then set a new
+// password via reset-password.
+//
+// Enumeration-safe: same response regardless of whether the email matches an
+// admin account.
+//
+// Body: { email }
+async function handleRequestReset(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  try {
+    const rawEmail = req.body?.email;
+    if (!rawEmail) return res.status(400).json({ error: 'Email is required' });
+    const cleanEmail = String(rawEmail).replace(/\s+/g, '').toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Rate limit: 5 reset requests per email per hour
+    const rl = await checkRateLimit(sql, {
+      key: `admin_reset:${cleanEmail}`,
+      max: 5,
+      windowSeconds: 3600,
+    });
+    if (!rl.allowed) {
+      // Same outward response to avoid leaking the rate-limit hit either
+      return res.json({
+        success: true,
+        message: 'If that email matches an admin account, a reset code has been sent.',
+      });
+    }
+
+    const [admin] = await sql`
+      SELECT id, school_id FROM admin_users
+       WHERE email = ${cleanEmail} AND active = TRUE`;
+
+    if (admin) {
+      const cryptoMod = require('crypto');
+      const emailCode = cryptoMod.randomInt(100000, 999999).toString();
+      const longToken = cryptoMod.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+      // Invalidate prior unused admin reset rows
+      await sql`UPDATE magic_link_tokens SET used = true
+                 WHERE email = ${cleanEmail}
+                   AND purpose = 'reset'
+                   AND role = 'admin'
+                   AND used = false`;
+
+      await sql`
+        INSERT INTO magic_link_tokens
+          (token, email_code, email, method, expires_at, school_id, purpose, role)
+        VALUES
+          (${longToken}, ${emailCode}, ${cleanEmail}, 'email', ${expiresAt}, ${admin.school_id || 1}, 'reset', 'admin')`;
+
+      try {
+        const mailer = createTransporter();
+        await mailer.sendMail({
+          from: 'CoachCarter <bookings@coachcarter.uk>',
+          to: cleanEmail,
+          subject: 'Reset your CoachCarter admin password',
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+              <h1 style="font-size: 1.3rem; color: #262626; text-align: center;">Reset your admin password</h1>
+              <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
+                Enter this 6-digit code on the admin sign-in page to reset your password. It expires in 15 minutes.
+              </p>
+              <div style="text-align: center; margin: 28px 0;">
+                <div style="display: inline-block; background: #fff4ec; border: 2px dashed #f58321;
+                            border-radius: 12px; padding: 18px 28px;
+                            font-family: 'SF Mono', Menlo, Consolas, monospace;
+                            font-size: 2rem; letter-spacing: 0.4em;
+                            font-weight: 700; color: #262626;">
+                  ${emailCode}
+                </div>
+              </div>
+              <p style="color: #999; font-size: 0.8rem; line-height: 1.5; text-align: center;">
+                Didn't request this? You can safely ignore this email — your password won't change.
+              </p>
+            </div>
+          `,
+        });
+      } catch (e) {
+        console.error('admin reset email failed:', e.message);
+        // Still return success
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'If that email matches an admin account, a reset code has been sent.',
+    });
+  } catch (err) {
+    console.error('admin request-reset error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Could not send reset email' });
+  }
+}
+
+// ── POST /api/admin?action=reset-password ────────────────────────────────────
+//
+// Verifies the 6-digit code and sets a new password atomically. Issues a
+// fresh admin session JWT on success.
+//
+// Body: { email, code, new_password }
+async function handleResetPassword(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  try {
+    const { email, code, new_password } = req.body || {};
+    if (!email || !code || !new_password) {
+      return res.status(400).json({ error: 'Email, code, and new password are required.' });
+    }
+
+    const cleanEmail = String(email).replace(/\s+/g, '').toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+
+    // Validate password using shared helper (matches learner/instructor rules)
+    const { validatePassword: validatePw } = require('./_password');
+    const pwdErr = validatePw(new_password);
+    if (pwdErr) return res.status(400).json({ error: 'invalid_password', message: pwdErr });
+
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [token] = await sql`
+      SELECT id, school_id FROM magic_link_tokens
+       WHERE email = ${cleanEmail}
+         AND email_code = ${String(code).trim()}
+         AND purpose = 'reset'
+         AND role = 'admin'
+         AND used = false
+         AND expires_at > NOW()`;
+
+    if (!token) {
+      return res.status(400).json({
+        error: 'invalid_code',
+        message: 'Invalid or expired code. Please request a new one.',
+      });
+    }
+
+    const [admin] = await sql`
+      SELECT id, name, email, role, school_id FROM admin_users
+       WHERE email = ${cleanEmail} AND active = TRUE`;
+    if (!admin) {
+      // Token was valid but admin row vanished/deactivated — treat as invalid
+      return res.status(400).json({
+        error: 'invalid_code',
+        message: 'Invalid or expired code. Please request a new one.',
+      });
+    }
+
+    const newHash = await bcrypt.hash(new_password, 10);
+    await sql`UPDATE admin_users SET password_hash = ${newHash} WHERE id = ${admin.id}`;
+    await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${token.id}`;
+
+    // Audit
+    try {
+      const { logAudit } = require('./_audit');
+      await logAudit(sql, {
+        adminId: admin.id, adminEmail: admin.email,
+        action: 'admin.password_reset',
+        targetType: 'admin_users', targetId: admin.id,
+        details: { self: true },
+        schoolId: admin.school_id || 1, req,
+      });
+    } catch {}
+
+    // Issue session
+    const secret = process.env.JWT_SECRET;
+    const sessionToken = jwt.sign(
+      { id: admin.id, email: admin.email, role: admin.role, isAdmin: true, school_id: admin.school_id || null },
+      secret,
+      { expiresIn: '7d' }
+    );
+    appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.admin, sessionToken, SESSION_MAX_AGE_SEC.admin));
+    appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+
+    return res.json({
+      success: true,
+      admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role, school_id: admin.school_id || null },
+    });
+  } catch (err) {
+    console.error('admin reset-password error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Could not reset password' });
   }
 }

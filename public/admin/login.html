@@ -109,20 +109,65 @@
   </a>
 
   <div class="card">
-    <div class="card-title">Staff Sign In</div>
-    <div class="card-sub">Sign in to manage instructors, bookings and availability.</div>
-    <div class="error-msg" id="login-error"></div>
-    <form id="admin-login-form">
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="login-email" placeholder="admin@coachcarter.uk" required autocomplete="email">
+    <!-- Sign-in screen (default) -->
+    <div id="screen-login">
+      <div class="card-title">Staff Sign In</div>
+      <div class="card-sub">Sign in to manage instructors, bookings and availability.</div>
+      <div class="error-msg" id="login-error"></div>
+      <form id="admin-login-form">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="login-email" placeholder="admin@coachcarter.uk" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="Enter your password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
+      </form>
+      <div style="text-align:center;margin-top:14px;">
+        <button type="button" id="btn-forgot" style="background:none;border:none;color:var(--accent);font-family:inherit;font-size:0.85rem;cursor:pointer;text-decoration:underline;padding:0;">Forgot password?</button>
       </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="login-password" placeholder="Enter your password" required autocomplete="current-password">
+    </div>
+
+    <!-- Forgot-password: enter email -->
+    <div id="screen-forgot" style="display:none;">
+      <div class="card-title">Reset password</div>
+      <div class="card-sub">We'll send a 6-digit code to your email.</div>
+      <div class="error-msg" id="forgot-error"></div>
+      <form id="admin-forgot-form">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="forgot-email" placeholder="admin@coachcarter.uk" required autocomplete="email">
+        </div>
+        <button type="submit" class="btn-primary" id="forgot-btn">Send reset code</button>
+      </form>
+      <div style="text-align:center;margin-top:14px;">
+        <button type="button" id="btn-back-to-login" style="background:none;border:none;color:var(--accent);font-family:inherit;font-size:0.85rem;cursor:pointer;text-decoration:underline;padding:0;">Back to sign in</button>
       </div>
-      <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
-    </form>
+    </div>
+
+    <!-- Reset: code + new password -->
+    <div id="screen-reset" style="display:none;">
+      <div class="card-title">Enter your reset code</div>
+      <div class="card-sub">We sent a 6-digit code to <strong id="reset-email-display"></strong>. Enter it with your new password.</div>
+      <div class="error-msg" id="reset-error"></div>
+      <form id="admin-reset-form">
+        <div class="form-group">
+          <label>6-digit code</label>
+          <input type="text" id="reset-code" inputmode="numeric" maxlength="6" pattern="\d{6}" autocomplete="one-time-code" required style="letter-spacing:0.4em;text-align:center;">
+        </div>
+        <div class="form-group">
+          <label>New password</label>
+          <input type="password" id="reset-password" autocomplete="new-password" required minlength="8">
+          <div style="font-size:0.8rem;color:var(--muted);margin-top:4px;">At least 8 characters.</div>
+        </div>
+        <button type="submit" class="btn-primary" id="reset-btn">Reset password</button>
+      </form>
+      <div style="text-align:center;margin-top:14px;">
+        <button type="button" id="btn-resend-reset" style="background:none;border:none;color:var(--accent);font-family:inherit;font-size:0.85rem;cursor:pointer;text-decoration:underline;padding:0;">Send another code</button>
+      </div>
+    </div>
   </div>
 
   <a href="/" class="back-link">Back to website</a>

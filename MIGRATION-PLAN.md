@@ -9,7 +9,7 @@
 **Frontend:** 43 HTML pages (vanilla HTML/CSS/JS), no framework, no bundler, no build step
 **Backend:** 29 Vercel serverless API route files, 100+ actions via `?action=X` routing
 **Database:** Neon PostgreSQL, 26 tables, single idempotent migration file
-**Auth:** JWT in httpOnly cookies (display blob in localStorage). Learner login is **email + password** via `api/learner-auth.js` (May 2026); SMS login still available as fallback. Magic-link infrastructure (`api/magic-link.js`) is retained for password reset codes, the migration code for accounts created before passwords shipped, and SMS code login. Instructor login is still magic-link only — password flow is queued for a follow-up session.
+**Auth:** JWT in httpOnly cookies (display blob in localStorage). All three roles use **email + password** sign-in (May 2026). `api/learner-auth.js` for learners, `api/instructor-auth.js` for instructors, `api/admin.js` for admins. Magic-link login retired. Magic-link infrastructure (`api/magic-link.js`) survives only for SMS code login, learner password-reset codes, and the email-code migration path for legacy learner accounts. Instructors are invite-only — admin sets/resets their password via the admin portal; instructor is forced to change it on first sign-in.
 **Payments:** Stripe Checkout sessions + webhook handler
 **AI:** Direct Anthropic API calls (ask-examiner + advisor endpoints)
 **Analytics:** PostHog (bypassed in service worker)
@@ -501,10 +501,10 @@ The web version streams responses from Anthropic. In React Native:
 | Dashboard/Calendar | Medium | Schedule view, upcoming lessons, completion marking |
 | Availability | Medium | Weekly time slot grid editor |
 | Learners | Medium | Learner list with notes, phone/WhatsApp links |
-| Profile | Low | Bio, photo upload (uses presigned URL), contact details |
-| Login | Low | Separate magic link flow via `instructor_login_tokens` table |
+| Profile | Low | Bio, photo upload (uses presigned URL), contact details. Should also include "Change password" form posting to `api/instructor-auth.js?action=change-password` (web has the API but not yet a UI for voluntary changes) |
+| Login | Low | Email + password via `api/instructor-auth.js`. Force-change-password screen if `must_change_password: true` is returned on login. No self-serve forgot-password — point users to contact admin. |
 
-**Important nuance:** Instructor auth is completely separate from learner auth. Uses `instructor_login_tokens` table and different JWT payload. The API client needs to handle both token types.
+**Important nuance:** Instructor auth uses a separate JWT (`role: 'instructor'`, `cc_instructor` cookie on web) but the same API auth model as learners. Use `api/instructor-auth.js` (May 2026) for sign-in, not the legacy magic-link endpoints in `api/instructor.js`.
 
 ---
 
@@ -514,7 +514,7 @@ The web version streams responses from Anthropic. In React Native:
 |--------|-------|
 | Dashboard | Stats, booking management, instructor CRUD, learner management |
 | Editor | Video content management (CRUD, upload URLs, categories) |
-| Login | Password-based (not magic link) — uses `admin_users.password_hash` |
+| Login | Email + password via `api/admin.js?action=login`. Forgot-password is a 6-digit code by email (`request-reset` + `reset-password`) — same UX shape as the learner reset flow. |
 
 Admin is lowest priority — Fraser is the only admin user. Could stay web-only initially.
 

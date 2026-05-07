@@ -166,20 +166,97 @@ function renderInstructors(instructors) {
     return;
   }
   listEl.innerHTML = instructors.map(i => `
-    <div class="booking-row" style="grid-template-columns: 1fr 200px 160px 100px 100px; opacity:${i.active ? 1 : 0.5};">
+    <div class="booking-row" style="grid-template-columns: 1fr 200px 160px 100px 160px; opacity:${i.active ? 1 : 0.5};">
       <div class="customer">
         <span class="customer-name">${esc(i.name)}${!i.active ? ' <span style="font-size:0.75rem;color:var(--muted)">(inactive)</span>' : ''}</span>
         ${i.bio ? `<span class="customer-email" style="font-size:0.8rem;">${esc(i.bio.slice(0,60))}${i.bio.length>60?'…':''}</span>` : ''}
       </div>
       <div class="customer-email" style="font-size:0.9rem;">${esc(i.email)}</div>
-      <div style="font-size:0.9rem;">${esc(i.phone || '"”')}</div>
+      <div style="font-size:0.9rem;">${esc(i.phone || '—')}</div>
       <div style="font-size:0.9rem; color:var(--muted);">${esc(i.upcoming_bookings)} upcoming<br><span style="font-size:0.8rem;">${esc(i.completed_lessons)} done</span></div>
       <div class="actions">
         <button class="action-btn" data-action="edit-instructor" data-instructor='${esc(JSON.stringify(i))}'>Edit</button>
+        <button class="action-btn" data-action="set-password" data-id="${parseInt(i.id)||0}" data-name="${esc(i.name)}" data-has-password="${i.has_password ? 1 : 0}">${i.has_password ? 'Reset password' : 'Set password'}</button>
         <button class="action-btn" data-action="toggle-instructor" data-id="${parseInt(i.id)||0}" data-active="${!i.active}" style="${i.active ? 'color:var(--red)' : 'color:var(--green)'}">${i.active ? 'Deactivate' : 'Activate'}</button>
       </div>
     </div>
   `).join('');
+}
+
+// ── Set/reset instructor password ─────────────────────────────────────────
+function openInstructorPasswordModal(instructorId, instructorName, hasPassword) {
+  var existing = document.getElementById('instrPwModal');
+  if (existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'instrPwModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;max-width:420px;width:100%;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,0.18);font-family:Lato,sans-serif;">
+      <h2 style="font-family:'Bricolage Grotesque',sans-serif;font-size:1.2rem;margin:0 0 6px;color:#262626;">${hasPassword ? 'Reset' : 'Set'} password</h2>
+      <p style="font-size:0.88rem;color:#666;margin:0 0 18px;line-height:1.5;">
+        For <strong>${instructorName}</strong>. They'll be forced to change it on next sign-in.
+      </p>
+      <div id="instrPwError" style="display:none;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:0.85rem;color:#991b1b;"></div>
+      <label style="display:block;font-size:0.78rem;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">New password</label>
+      <input type="text" id="instrPwInput" autocomplete="off" placeholder="Type a temporary password" style="width:100%;padding:11px 13px;border:1px solid #ddd;border-radius:8px;font-size:0.95rem;font-family:inherit;box-sizing:border-box;">
+      <div style="font-size:0.8rem;color:#888;margin-top:6px;line-height:1.4;">
+        At least 8 characters. Share this with the instructor — they'll change it on their first sign-in.
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button id="instrPwCancel" style="flex:1;padding:11px;background:#f1f1f1;border:none;border-radius:8px;font-family:inherit;font-weight:600;cursor:pointer;color:#444;">Cancel</button>
+        <button id="instrPwSave" style="flex:2;padding:11px;background:#f58321;color:#fff;border:none;border-radius:8px;font-family:inherit;font-weight:600;cursor:pointer;">${hasPassword ? 'Reset' : 'Save'} password</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  var input = document.getElementById('instrPwInput');
+  var errEl = document.getElementById('instrPwError');
+  setTimeout(function () { input.focus(); }, 50);
+
+  function close() { overlay.remove(); }
+
+  document.getElementById('instrPwCancel').onclick = close;
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+
+  async function save() {
+    errEl.style.display = 'none';
+    var pw = input.value;
+    if (!pw || pw.length < 8) {
+      errEl.textContent = 'Password must be at least 8 characters.';
+      errEl.style.display = 'block';
+      return;
+    }
+    var saveBtn = document.getElementById('instrPwSave');
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+    try {
+      var res = await fetchAdmin('/api/instructors?action=set-password', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, ADMIN_HEADERS),
+        body: JSON.stringify({ id: instructorId, password: pw }),
+      });
+      var data = await res.json();
+      if (!res.ok) {
+        errEl.textContent = data.message || data.error || 'Could not set password.';
+        errEl.style.display = 'block';
+        saveBtn.disabled = false; saveBtn.textContent = (hasPassword ? 'Reset' : 'Save') + ' password';
+        return;
+      }
+      close();
+      alert('Password ' + (hasPassword ? 'reset' : 'set') + ' for ' + instructorName + '.\n\nShare it with them — they\'ll be asked to change it on next sign-in.');
+      loadInstructors();
+    } catch (ex) {
+      errEl.textContent = 'Network error. Please try again.';
+      errEl.style.display = 'block';
+      saveBtn.disabled = false; saveBtn.textContent = (hasPassword ? 'Reset' : 'Save') + ' password';
+    }
+  }
+
+  document.getElementById('instrPwSave').onclick = save;
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+    if (e.key === 'Escape') close();
+  });
 }
 
 function openInstructorModal(instructor) {
@@ -427,6 +504,7 @@ document.addEventListener('click', function (e) {
     try { openInstructorModal(JSON.parse(t.dataset.instructor)); } catch (err) { console.error(err); }
   }
   else if (a === 'toggle-instructor') toggleInstructor(parseInt(t.dataset.id, 10), t.dataset.active === 'true');
+  else if (a === 'set-password') openInstructorPasswordModal(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.hasPassword === '1');
   else if (a === 'view-enquiry') viewEnquiry(parseInt(t.dataset.id, 10));
 });
 // Sidebar nav

@@ -601,15 +601,25 @@ created_at TIMESTAMPTZ
 
 ## Instructor portal
 
-The instructor login page (`/instructor/login.html`) presents a choice: "I'm a CoachCarter instructor" (magic-link sign in) or "Join the team" (enquiry form for prospective instructors). Magic link login uses the same two-step validate/verify pattern as the learner login to prevent email prefetchers from consuming tokens. Join-the-team submissions go through the existing enquiry system (`api/enquiries.js`) with `enquiry_type: 'join-team'`.
+The instructor login page (`/instructor/login.html`) presents a choice: "I'm a CoachCarter instructor" (email + password sign in) or "Join the team" (enquiry form for prospective instructors). Instructors are **invite-only** — accounts are created by admins via the admin portal. Admins set or reset instructor passwords; the instructor is forced to change their password on first login. There is no self-serve forgot-password — instructors are told to contact the admin.
 
-### API — `api/instructor.js`
+### API — `api/instructor-auth.js` (May 2026)
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `request-login` | POST | No | Sends magic link to instructor email |
-| `validate-token` | GET | No | Lightweight token check (does NOT consume). Prevents email prefetchers from burning tokens |
-| `verify-token` | POST | No | Consumes token, returns JWT. Body: `{ token }` |
+| `login` | POST | No | Email + password sign-in. Returns `must_change_password: true` if the password was admin-set. 5-fail / 15-min lockout per email. |
+| `change-password` | POST | JWT | Self-serve password change. Requires current_password to re-prove identity. Used by both forced first-login and voluntary changes from profile. |
+| `logout` | POST | No | Clear `cc_instructor` + `cc_csrf` cookies |
+
+### API — `api/instructor.js` (legacy magic-link login + portal actions)
+
+The magic-link login actions (`request-login`, `validate-token`, `verify-token`) are retained but no longer called by the UI — they stay as an emergency fallback path. New code should use `api/instructor-auth.js` for sign-in.
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `request-login` | POST | No | (Legacy) Send magic link to instructor email — retained, not used by UI. |
+| `validate-token` | GET | No | (Legacy) Lightweight token check |
+| `verify-token` | POST | No | (Legacy) Consume token, return JWT. Body: `{ token }` |
 | `schedule` | GET | JWT | Instructor's upcoming confirmed bookings |
 | `schedule-range` | GET | JWT | Bookings in date range for calendar views. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
 | `complete` | POST | JWT | Mark a lesson as completed |
@@ -677,7 +687,9 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `login` | POST | No | Returns JWT |
+| `login` | POST | No | Returns JWT. 5-fail/hour per email + 10/hour per IP rate limit. |
+| `request-reset` | POST | No | Sends a 6-digit reset code to the admin's email. Enumeration-safe. Body: `{ email }` |
+| `reset-password` | POST | No | Verify code + set new password atomically; issues fresh session. Body: `{ email, code, new_password }`. Audit-logged as `admin.password_reset` |
 | `stats` | GET | JWT | Dashboard stats (upcoming lessons, revenue, learner count) |
 | `bookings` | GET | JWT | All bookings with status filters |
 | `instructors` | GET | JWT | Instructor list |

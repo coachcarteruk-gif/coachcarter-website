@@ -67,16 +67,42 @@
       Back
     </button>
     <div class="card-title">Instructor sign in</div>
-    <div class="card-sub">Enter your CoachCarter email and we'll send you a sign-in link. No password needed.</div>
+    <div class="card-sub">Enter your CoachCarter email and password.</div>
     <div class="error-msg" id="loginError"></div>
     <form id="instr-login-form">
       <div class="form-group">
         <label for="loginEmail">Email address</label>
-        <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+        <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email" required>
       </div>
-      <button type="submit" class="btn-primary" id="loginBtn">Send sign-in link</button>
+      <div class="form-group">
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn-primary" id="loginBtn">Sign in</button>
     </form>
-    <p class="hint">The link expires in 30 minutes and can only be used once.</p>
+    <p class="hint" style="margin-top:14px;">
+      Forgotten your password? Contact your administrator at
+      <a href="mailto:bookings@coachcarter.uk">bookings@coachcarter.uk</a> to reset it.
+    </p>
+  </div>
+
+  <!-- Force change password (first login after admin set/reset) -->
+  <div class="screen" id="screen-change-password">
+    <div class="card-title">Choose a new password</div>
+    <div class="card-sub">Your administrator set a temporary password for you. Choose a new one to continue.</div>
+    <div class="error-msg" id="changePwError"></div>
+    <form id="instr-change-pw-form">
+      <div class="form-group">
+        <label for="changeNewPassword">New password</label>
+        <input type="password" id="changeNewPassword" autocomplete="new-password" required minlength="8">
+        <div style="font-size:0.82rem;color:#888;margin-top:4px;">At least 8 characters.</div>
+      </div>
+      <div class="form-group">
+        <label for="changeConfirmPassword">Confirm new password</label>
+        <input type="password" id="changeConfirmPassword" autocomplete="new-password" required minlength="8">
+      </div>
+      <button type="submit" class="btn-primary" id="changePwBtn">Save and continue</button>
+    </form>
   </div>
 
   <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
