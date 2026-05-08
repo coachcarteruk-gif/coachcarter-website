@@ -35,7 +35,7 @@
 | File | Actions | Key notes |
 |------|---------|-----------|
 | learner.js | 20 | Core learner data — sessions, progress, profile, mock-tests, quiz, competency, onboarding, weekly availability |
-| _notify-availability.js | 0 (internal) | Cancellation→notification fan-out: matches `learner_availability` to freed slots, sends WhatsApp + email |
+| _notify-availability.js | 0 (internal) | Cancellation→notification fan-out + broadcast-offer minting + sibling supersession on booking. Two exports: `notifyAvailableLearners()` and `supersedeBroadcastSiblings()`. |
 | instructor.js | 27+ | Auth, schedule, availability, blackouts, learner history, notes, stats, photo upload, cancel-booking, reschedule-booking, create-booking |
 | admin.js | 14+ | Dashboard stats, bookings, instructor CRUD, learner management, credit adjustment |
 | slots.js | 7 | available (with lead-time filter), book (+ repeat_weeks), checkout-slot, cancel (+ cancel_series), reschedule, my-bookings, series-info |
@@ -114,6 +114,8 @@
 **Notable tables added (April 2026):**
 - `learner_availability` — recurring weekly free-time windows (mirrors instructor_availability). On cancellation, `api/_notify-availability.js` finds learners with windows covering the freed slot and pings them via WhatsApp + email. Also surfaced as a "Free" chip row on the instructor's "My Learners" page.
 - ~~`waitlist`~~ — *retired May 2026.* Replaced by `learner_availability` driving cancellation notifications. Table dropped, `api/waitlist.js` deleted, learner-side join/list UI removed.
+- `lesson_offers` — extended in PR 2a (May 2026) to support broadcast offers. New columns: `kind` (`'manual'` | `'broadcast'`), `batch_id` (UUID grouping all rows in one fan-out), `trigger` (`'cancellation'` | `'instructor_manual'`). New status value `'superseded'` for broadcast losers. Per-slot unique index now partial on `kind = 'manual'`.
+- `instructors.broadcast_offers_enabled` (BOOLEAN, DEFAULT FALSE) — per-instructor opt-in for cancellation-triggered broadcasts.
 - `sent_reminders` table — tracks sent reminders to prevent duplicates (unique on booking_id + reminder_type)
 - `lesson_bookings.series_id` — UUID grouping recurring weekly bookings (same time slot, N weeks)
 - `referrals` — one row per learner-with-a-code (learner_id, school_id, code, unique per school)

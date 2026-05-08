@@ -117,6 +117,7 @@ async function handleGetOffer(req, res) {
              o.scheduled_date::text,
              o.start_time::text, o.end_time::text, o.status, o.expires_at,
              o.discount_pct, o.offer_price_pence,
+             o.kind, o.trigger,
              lt.name AS lesson_type_name, lt.duration_minutes, lt.price_pence,
              i.name AS instructor_name, i.school_id AS instructor_school_id,
              lu.name AS learner_name, lu.phone AS learner_phone,
@@ -139,6 +140,10 @@ async function handleGetOffer(req, res) {
 
     if (offer.status === 'cancelled')
       return res.status(410).json({ error: true, code: 'CANCELLED', message: 'This offer has been cancelled' });
+
+    // Broadcast offer where another learner won the race.
+    if (offer.status === 'superseded')
+      return res.status(410).json({ error: true, code: 'SUPERSEDED', message: 'Sorry — that slot is no longer available!' });
 
     // Determine what details the learner still needs to provide
     // Prefer offer's own learner_name, fall back to joined learner_users name
@@ -169,6 +174,9 @@ async function handleGetOffer(req, res) {
         duration_minutes: offer.duration_minutes || 90,
         price_pence: finalPricePence,
         original_price_pence: originalPricePence,
+        discount_pct: offer.discount_pct || 0,
+        kind: offer.kind || 'manual',
+        trigger: offer.trigger || null,
         is_flexible: isFlexible,
         learner_email: offer.learner_email,
         learner_name: resolvedName,
@@ -212,8 +220,17 @@ async function handleAcceptOffer(req, res) {
       WHERE o.token = ${token} AND o.status = 'pending' AND o.expires_at > NOW()
     `;
 
-    if (!offer)
+    if (!offer) {
+      // Distinguish a broadcast loser ("someone else booked it") from generic
+      // expiry/not-found. Superseded rows still exist in the table, just with
+      // a non-pending status — we look them up explicitly here.
+      const [superseded] = await sql`
+        SELECT id FROM lesson_offers WHERE token = ${token} AND status = 'superseded'
+      `;
+      if (superseded)
+        return res.status(410).json({ error: true, code: 'SUPERSEDED', message: 'Sorry — that slot is no longer available!' });
       return res.status(404).json({ error: true, code: 'NOT_FOUND', message: 'Offer not found, expired, or already accepted' });
+    }
 
     // Validate required details
     if (!name || !name.trim())

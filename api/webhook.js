@@ -247,6 +247,19 @@ async function handleSlotBooking(session) {
       return;
     }
 
+    // 5a. Supersede any pending broadcast offers on this slot — a learner just
+    // booked it through the guest-checkout flow, so the broadcast is moot.
+    // Fire-and-forget; sends "no longer available" to other broadcast recipients.
+    try {
+      const { supersedeBroadcastSiblings } = require('./_notify-availability');
+      supersedeBroadcastSiblings({
+        instructor_id: instructorId,
+        scheduled_date: scheduledDate,
+        start_time: startTime,
+        school_id: schoolId
+      }).catch(err => console.warn('supersede on guest-book failed:', err.message));
+    } catch (e) {}
+
     // 5. Clean up the reservation
     try {
       await sql`DELETE FROM slot_reservations WHERE stripe_session_id = ${session.id}`;
@@ -845,12 +858,27 @@ async function handleOfferBooking(session) {
     }
 
     // 4. Update the offer
-    await sql`
+    const [acceptedOffer] = await sql`
       UPDATE lesson_offers
       SET status = 'accepted', booking_id = ${booking.id}, learner_id = ${learnerId},
           accepted_at = NOW()
       WHERE id = ${offerId}
+      RETURNING kind, batch_id
     `;
+
+    // 4b. If this was a broadcast offer, supersede sibling rows in the batch
+    // and send "no longer available" follow-up to those losers (fire-and-forget).
+    if (acceptedOffer?.kind === 'broadcast') {
+      const { supersedeBroadcastSiblings } = require('./_notify-availability');
+      supersedeBroadcastSiblings({
+        instructor_id: instructorId,
+        scheduled_date: scheduledDate,
+        start_time: startTime,
+        school_id: schoolId,
+        winnerOfferId: offerId,
+        batchId: acceptedOffer.batch_id
+      }).catch(err => console.warn('supersede siblings failed:', err.message));
+    }
 
     // 5. Send confirmation emails
     const [instructor] = await sql`SELECT name, email, phone FROM instructors WHERE id = ${instructorId}`;

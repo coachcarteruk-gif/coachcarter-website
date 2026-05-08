@@ -787,11 +787,29 @@ The instructor's "My Learners" page now shows each learner's weekly free times a
 
 Conceptual model: weekly availability is durable ("I'm typically free Mon 4–6pm"); waitlists were the *active* layer ("I want a lesson in the next 14 days"). With cancellations as the only real trigger, the active layer was pure ceremony — setting availability already captured everything we needed.
 
-Follow-up (PR 2, planned): a 25%-off "flash" notification for cancellations <48h out, with single-use Stripe checkout tokens, follow-up "no longer available" messages once booked or withdrawn, and a per-instructor opt-in.
+Follow-up landed in PR 2a (see entry below).
 
 - **Added**: `api/_notify-availability.js` (exports `notifyAvailableLearners()`); free-times chip row + endpoint extension in `api/instructor.js?action=my-learners`.
 - **Removed**: `api/waitlist.js`; `waitlist` table (via `db/migration.sql` `DROP TABLE IF EXISTS waitlist CASCADE`); "My Waitlist" card on `public/learner/profile.html`; orphaned waitlist join form in `public/learner/book.js` + CSS in `public/learner/book.html`; GDPR-cascade and seed-test-data references.
 - **Modified**: `api/slots.js` (both single + series cancel paths now call `notifyAvailableLearners()`); `public/instructor/learners.html` + `learners.js` (chip rendering); `CLAUDE.md`, `PROJECT.md`, `MIGRATION-PLAN.md`.
+
+---
+
+### 2.56 — Broadcast Offers, Cancellation-Triggered (PR 2a) ✅ Complete (8 May 2026)
+
+Extended the existing `lesson_offers` system to support 1-slot-to-many-learners "broadcast" offers. When a booking is cancelled <48h before lesson start *and* the instructor has opted in, the system mints one offer per matching learner (same `batch_id`, individual `token` each) at 25% off the lesson type's price. First learner to accept wins; siblings get marked `'superseded'` and receive a "no longer available" follow-up message.
+
+The accept page (`/accept-offer.html`) detects `kind='broadcast'` and swaps copy: shows a "We've had a last-minute cancellation" banner, race-aware framing ("first come, first served — book quickly to secure it"), and a "Book this slot" button instead of "Accept & pay". The existing 1:1 manual offer flow ("Offer a lesson" button on the instructor's learner detail page) is unchanged — new offers default to `kind='manual'`.
+
+The unique index `uq_offer_slot` was replaced with `uq_offer_slot_manual` (partial: `WHERE kind = 'manual'`) so manual offers keep their per-slot uniqueness while broadcasts can have many pending rows for the same slot.
+
+Sibling supersession is centralised in `api/_notify-availability.js::supersedeBroadcastSiblings()` and called from three booking paths: the Stripe offer-acceptance webhook, `slots.js?action=book` (credit-based), and `webhook.js::handleSlotBooking()` (guest checkout). Fire-and-forget and idempotent.
+
+Follow-up planned in PR 2b: instructor-triggered manual broadcasts (instructor picks a slot + audience from a multi-select picker). Same primitives, different trigger.
+
+- **Schema** (`db/migration.sql`): added `lesson_offers.kind` (`'manual'` | `'broadcast'`), `batch_id` (UUID), `trigger` (`'cancellation'` | `'instructor_manual'`); added `'superseded'` to status CHECK; replaced `uq_offer_slot` with partial-on-manual variant; added two new indexes; added `instructors.broadcast_offers_enabled BOOLEAN DEFAULT FALSE`.
+- **Modified**: `api/_notify-availability.js` (split into plain + broadcast paths, exported new `supersedeBroadcastSiblings()`); `api/slots.js` (passes `lesson_type_id` to notify; calls supersede after credit booking); `api/webhook.js` (calls supersede after offer-accept and after guest-checkout slot booking); `api/offers.js` (returns `kind`/`trigger` from `get-offer`, distinguishes `SUPERSEDED` from generic NOT_FOUND); `public/accept-offer.html` + `accept-offer.js` (race-aware banner + button copy).
+- **Docs**: `CLAUDE.md` (broadcast-offers rules), `PROJECT.md`, `MIGRATION-PLAN.md`.
 
 ---
 

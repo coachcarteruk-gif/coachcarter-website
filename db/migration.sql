@@ -1469,3 +1469,54 @@ CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_email_code
 -- for "ping me when something opens up". See CLAUDE.md.
 -- ─────────────────────────────────────────────────────────────────────────────
 DROP TABLE IF EXISTS waitlist CASCADE;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- May 2026: broadcast offers (PR 2a)
+--
+-- Extend lesson_offers to support 1-slot-to-many-learners broadcasts. When a
+-- booking is cancelled <48h before lesson start and the instructor opted in,
+-- _notify-availability.js mints a "batch" of offers (one row per matching
+-- learner) at 25% off. First learner to accept wins; siblings get superseded
+-- and notified that the slot is no longer available.
+--
+-- Manual 1:1 offers (the existing "Offer a lesson" feature) are unchanged —
+-- new rows simply default to kind='manual'.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Distinguish manual (1:1) offers from broadcast (1:many).
+ALTER TABLE lesson_offers ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'manual'
+  CHECK (kind IN ('manual','broadcast'));
+
+-- Group all rows in one fan-out together. NULL for manual offers.
+ALTER TABLE lesson_offers ADD COLUMN IF NOT EXISTS batch_id UUID;
+
+-- Why the broadcast was sent. NULL for manual offers.
+ALTER TABLE lesson_offers ADD COLUMN IF NOT EXISTS trigger TEXT
+  CHECK (trigger IS NULL OR trigger IN ('cancellation','instructor_manual'));
+
+-- New status value: a sibling lost the race and was superseded.
+ALTER TABLE lesson_offers DROP CONSTRAINT IF EXISTS lesson_offers_status_check;
+ALTER TABLE lesson_offers ADD CONSTRAINT lesson_offers_status_check
+  CHECK (status IN ('pending','accepted','expired','cancelled','superseded'));
+
+-- Replace per-slot uniqueness so it only applies to manual offers. Broadcasts
+-- intentionally have many pending rows for the same slot (one per recipient).
+DROP INDEX IF EXISTS uq_offer_slot;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_offer_slot_manual
+  ON lesson_offers(instructor_id, scheduled_date, start_time)
+  WHERE status = 'pending' AND scheduled_date IS NOT NULL AND kind = 'manual';
+
+-- Lookup: "find all pending siblings of this batch" (used in supersede logic).
+CREATE INDEX IF NOT EXISTS idx_offers_batch
+  ON lesson_offers(batch_id) WHERE batch_id IS NOT NULL;
+
+-- Lookup: "find pending broadcast offers on this slot" (used in normal-booking
+-- hook to supersede broadcasts when a learner books via the regular flow).
+CREATE INDEX IF NOT EXISTS idx_offers_slot_pending_broadcast
+  ON lesson_offers(instructor_id, scheduled_date, start_time)
+  WHERE status = 'pending' AND kind = 'broadcast';
+
+-- Per-instructor opt-in for cancellation auto-broadcasts. Default OFF so nothing
+-- changes for existing instructors until they explicitly enable it.
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS broadcast_offers_enabled
+  BOOLEAN NOT NULL DEFAULT FALSE;

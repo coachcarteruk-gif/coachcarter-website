@@ -25,12 +25,14 @@
           EXPIRED: 'Offer expired',
           ALREADY_ACCEPTED: 'Already accepted',
           CANCELLED: 'Offer cancelled',
+          SUPERSEDED: 'Slot already booked',
           NOT_FOUND: 'Offer not found'
         };
         var messages = {
           EXPIRED: 'This lesson offer has expired. Please ask your instructor to send a new one.',
           ALREADY_ACCEPTED: 'This lesson offer has already been accepted and paid for.',
           CANCELLED: 'This lesson offer was cancelled by the instructor.',
+          SUPERSEDED: 'Sorry — that slot is no longer available! Another learner booked it first.',
           NOT_FOUND: 'This offer link is invalid. Please check the link from your email.'
         };
         showError(titles[data.code] || 'Unavailable', messages[data.code] || data.message || 'Something went wrong.');
@@ -62,8 +64,32 @@
       durStr = mins + ' mins';
     }
 
-    // Fill card
-    document.getElementById('instructor-name').textContent = o.instructor_name;
+    // Fill card (do this before any subtitle rewrites so #instructor-name still exists)
+    var instrSpan = document.getElementById('instructor-name');
+    if (instrSpan) instrSpan.textContent = o.instructor_name;
+
+    // Broadcast offer (first-come-first-served): swap copy + show banner.
+    var isBroadcast = o.kind === 'broadcast';
+    if (isBroadcast) {
+      var bannerEl = document.getElementById('broadcast-banner');
+      var bannerBody = document.getElementById('broadcast-banner-body');
+      var bannerTitle = document.getElementById('broadcast-banner-title');
+      var titleEl = document.getElementById('page-title');
+      var subEl = document.getElementById('page-sub');
+
+      if (o.trigger === 'cancellation') {
+        titleEl.textContent = 'Last-minute slot';
+        subEl.textContent = '';  // banner explains the situation; no subtitle needed
+        bannerTitle.textContent = "We've had a last-minute cancellation";
+        bannerBody.textContent = "This slot is being offered to a few learners who said they're free at this time. First to book it gets it — book quickly to secure it.";
+      } else {
+        titleEl.textContent = 'Driving lesson offer';
+        subEl.textContent = o.instructor_name + ' has a slot available';
+        bannerTitle.textContent = 'First come, first served';
+        bannerBody.textContent = "This slot is being offered to a few learners who said they're free at this time. First to book it gets it.";
+      }
+      bannerEl.classList.remove('hidden');
+    }
 
     // Handle flexible vs slot-pinned offers
     var dateEl = document.getElementById('offer-date');
@@ -119,9 +145,13 @@
       document.getElementById('email-field').style.display = '';
     }
 
-    // Update button text for free lessons
+    // Update button text: broadcast offers say "Book this slot" (race-aware
+    // urgency), free lessons override that to "Accept free lesson".
+    var btn = document.getElementById('accept-btn');
     if (o.price_pence === 0) {
-      document.getElementById('accept-btn').textContent = 'Accept free lesson →';
+      btn.textContent = 'Accept free lesson →';
+    } else if (isBroadcast) {
+      btn.textContent = 'Book this slot →';
     }
 
     // Start expiry countdown
@@ -206,7 +236,7 @@
         errorEl.textContent = data.message || data.error || 'Something went wrong. Please try again.';
         errorEl.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = 'Accept & pay →';
+        btn.textContent = (offerData && offerData.kind === 'broadcast') ? 'Book this slot →' : 'Accept & pay →';
         return;
       }
 
@@ -222,7 +252,7 @@
       errorEl.textContent = 'Connection failed. Please try again.';
       errorEl.style.display = 'block';
       btn.disabled = false;
-      btn.textContent = 'Accept & pay →';
+      btn.textContent = (offerData && offerData.kind === 'broadcast') ? 'Book this slot →' : 'Accept & pay →';
     }
   }
 
