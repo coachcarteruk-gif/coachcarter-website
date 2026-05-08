@@ -215,6 +215,19 @@
       </div>
 
       <div class="form-card">
+        <div class="form-card-title">Last-minute broadcasts</div>
+
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" id="inputBroadcastEnabled" ${p.broadcast_offers_enabled ? 'checked' : ''}
+              style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
+            Auto-broadcast cancelled slots at 25% off
+          </label>
+          <p class="field-hint">When a booking is cancelled less than 48 hours before the lesson, automatically offer the freed slot to learners with matching weekly availability at 25% off. First learner to accept books it.</p>
+        </div>
+      </div>
+
+      <div class="form-card">
         <div class="form-card-title">Calendar Sync</div>
         <p class="field-hint" style="margin-bottom:14px">
           Paste your personal calendar's iCal feed URL below. Your personal events will automatically block booking slots so learners can't book over your commitments.
@@ -462,6 +475,7 @@
     const buffer_minutes = parseInt(document.getElementById('inputBuffer').value);
     const reminder_hours = parseInt(document.getElementById('inputReminderHours').value);
     const daily_schedule_email = document.getElementById('inputDailySchedule').checked;
+    const broadcast_offers_enabled = document.getElementById('inputBroadcastEnabled').checked;
 
     // New profile fields
     const adi_grade      = document.getElementById('inputAdiGrade').value.trim() || null;
@@ -494,6 +508,7 @@
         body:    JSON.stringify({
           name, phone: phone || null, bio: bio || null, photo_url: photo_url || null,
           buffer_minutes, reminder_hours, daily_schedule_email,
+          broadcast_offers_enabled,
           adi_grade, pass_rate, years_experience, specialisms,
           vehicle_make, vehicle_model, transmission_type, dual_controls,
           service_areas, languages, ical_feed_url

@@ -78,6 +78,34 @@
     }
     .dash-booking-link-btn:hover { background: var(--accent-dk); }
 
+    /* ── Pending broadcast offers card ── */
+    .dash-broadcasts-title {
+      font-family: var(--font-head); font-size: 0.78rem; font-weight: 700;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+    .broadcast-batch-card {
+      background: var(--accent-lt); border: 1px solid #fcd4b0;
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .broadcast-batch-info { flex: 1; min-width: 200px; }
+    .broadcast-batch-title {
+      font-family: var(--font-head); font-weight: 800;
+      font-size: 0.95rem; color: var(--primary); margin-bottom: 2px;
+    }
+    .broadcast-batch-meta {
+      font-size: 0.78rem; color: var(--muted); line-height: 1.4;
+    }
+    .broadcast-batch-meta strong { color: var(--accent); font-weight: 700; }
+    .broadcast-close-btn {
+      background: none; border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 6px 14px; font-size: 0.78rem; font-weight: 700;
+      color: var(--muted); cursor: pointer; white-space: nowrap;
+      font-family: var(--font-body); transition: all 0.15s;
+    }
+    .broadcast-close-btn:hover { border-color: #e74c3c; color: #e74c3c; }
+
     /* ── Date header ── */
     .dash-date {
       font-family: var(--font-head); font-size: 0.78rem; font-weight: 700;
@@ -396,6 +424,9 @@
     <div class="dash-booking-link-url" id="dashBookingUrl"></div>
     <button class="dash-booking-link-btn" id="dashCopyBtn">Copy link</button>
   </div>
+
+  <!-- Pending broadcast offers (loaded async, hidden when none) -->
+  <div id="dashBroadcasts" style="display:none"></div>
 
   <!-- Date header -->
   <div class="dash-date" id="dashDate"></div>

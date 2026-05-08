@@ -812,24 +812,58 @@
 
 <!-- â”€â”€ Offer Lesson Modal â”€â”€ -->
 <div class="modal-overlay" id="offerLessonModal">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:480px">
     <div class="modal-title">Offer Lesson</div>
-    <div class="modal-sub">Create a lesson offer — send by email or share a link directly.</div>
+    <div class="modal-sub">Send a lesson offer to one learner, or broadcast it to everyone free at this time.</div>
     <div style="margin:16px 0; display:flex; flex-direction:column; gap:12px;">
+
+      <!-- Audience picker (one learner vs broadcast) -->
+      <div>
+        <div class="notes-label">Send to</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:0.88rem;">
+            <input type="radio" name="offerAudience" value="one" id="offerAudienceOne" checked
+              style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+            One specific learner
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:0.88rem;">
+            <input type="radio" name="offerAudience" value="broadcast" id="offerAudienceBroadcast"
+              style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+            All learners free at this time
+          </label>
+        </div>
+      </div>
+
+      <!-- Pane: One specific learner (existing fields) -->
+      <div id="offerOneLearnerPane">
       <div>
         <div class="notes-label">Learner name *</div>
         <input type="text" id="offerName" placeholder="e.g. John Smith" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
       </div>
-      <div>
+      <div style="margin-top:12px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
           <input type="checkbox" id="offerSendEmail" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
           <span style="font-size:0.88rem;font-weight:600;color:var(--primary);">Send by email</span>
         </label>
       </div>
-      <div id="offerEmailRow" style="display:none">
+      <div id="offerEmailRow" style="display:none;margin-top:12px">
         <div class="notes-label">Learner email *</div>
         <input type="email" id="offerEmail" placeholder="e.g. john@example.com" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
       </div>
+      </div>
+      <!-- /pane -->
+
+      <!-- Pane: Broadcast audience preview (loaded once a slot is set) -->
+      <div id="offerBroadcastPane" style="display:none">
+        <div class="notes-label">Recipients</div>
+        <div id="offerAudienceList"
+          style="border:1px solid var(--border);border-radius:8px;padding:10px;max-height:240px;overflow-y:auto;background:var(--bg);font-size:0.85rem;">
+          <div style="color:var(--muted);font-style:italic;padding:6px 0">Pick a date and time below — we'll show who's free.</div>
+        </div>
+        <div id="offerAudienceSummary" style="font-size:0.8rem;color:var(--muted);margin-top:6px"></div>
+        <div id="offerBroadcastWarn" style="display:none;margin-top:8px;padding:8px 10px;background:#fff7e6;border:1px solid #ffd591;border-radius:6px;font-size:0.78rem;color:#7a4f00"></div>
+      </div>
+      <!-- /pane -->
       <div>
         <div class="notes-label">Lesson type</div>
         <select id="offerLessonType" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;"></select>

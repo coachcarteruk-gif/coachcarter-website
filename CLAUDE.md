@@ -142,7 +142,8 @@ Hard rules:
 2. Broadcasts MUST share a `batch_id` (UUID) so sibling supersession finds them.
 3. Broadcasts MUST set `trigger` (`'cancellation'` or `'instructor_manual'`) so messaging templates can render the right framing.
 4. Sibling supersession lives in `api/_notify-availability.js::supersedeBroadcastSiblings()`. Call it from any path that books a slot (Stripe webhook for offer acceptance, slots.js `?action=book`, webhook `handleSlotBooking` for guest checkout). It is fire-and-forget and idempotent.
-5. The `instructors.broadcast_offers_enabled` toggle defaults to `FALSE`. Cancellation-driven broadcasts only fire when this is `TRUE` and the cancellation is <48h before lesson start.
+5. The `instructors.broadcast_offers_enabled` toggle defaults to `FALSE`. Cancellation-driven broadcasts only fire when this is `TRUE` and the cancellation is <48h before lesson start. Toggle UI lives on `/instructor/profile.html` ("Last-minute broadcasts" card).
+6. Instructor-triggered manual broadcasts (`trigger='instructor_manual'`) are not gated by the toggle — the toggle only affects auto-cancellation broadcasts. Manual broadcasts always go through `?action=create-broadcast-offer` and require an explicit `learner_ids` array.
 
 ## React Native migration principles
 

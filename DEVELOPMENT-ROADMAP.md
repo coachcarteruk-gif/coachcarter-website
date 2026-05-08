@@ -795,6 +795,27 @@ Follow-up landed in PR 2a (see entry below).
 
 ---
 
+### 2.57 — Broadcast Offers, Instructor-Triggered (PR 2b) ✅ Complete (8 May 2026)
+
+Builds on PR 2a's broadcast-offer plumbing by exposing it to the instructor as a manual lever. Three additions:
+
+1. **Profile toggle** for `broadcast_offers_enabled` so the auto-cancellation flow PR 2a built can actually be turned on without poking the DB. Sits in a new "Last-minute broadcasts" card on `/instructor/profile.html`. Default off.
+
+2. **Manual broadcast picker** on the existing "Offer a lesson" modal. New "Send to" radio: *One specific learner* (existing behaviour, unchanged) or *All learners free at this time* (new). When broadcast is selected, the picker fetches the matching audience via `?action=preview-broadcast-audience`, shows a checkbox list with all learners ticked by default, and lets the instructor untick anyone they don't want to message. Soft warning at >10 selected ("Twilio cost approx £X"). On send, posts to `?action=create-broadcast-offer` which mints a `kind='broadcast', trigger='instructor_manual'` batch.
+
+3. **Pending-broadcast dashboard card** on `/instructor/dashboard.html` showing every active batch (slot date/time, recipient count, trigger source, discount) with a one-click "Close offer" button. Closing fires `?action=close-broadcast-offer` which cancels all pending siblings via the existing `supersedeBroadcastSiblings()` helper, sends "no longer available" follow-up, and frees the slot back up on the calendar.
+
+The existing 1:1 "Offer a lesson" path (instructor → specific learner) is untouched — same modal, same fields, same result. The radio defaults to that mode so muscle memory works.
+
+- **Schema**: none. Re-uses everything PR 2a shipped.
+- **Added** (`api/instructor.js`): four new actions — `preview-broadcast-audience` (GET), `create-broadcast-offer` (POST), `close-broadcast-offer` (POST), `my-broadcast-batches` (GET). Plus `broadcast_offers_enabled` plumbed through `handleProfile` and `handleUpdateProfile`.
+- **Added** (`public/instructor/index.html` + `index.js`): audience-radio + broadcast pane in the offer modal; `loadBroadcastAudience()`, `updateAudienceSummary()`, `sendBroadcastOffer()`. Lesson-type / date / time changes reload the audience list.
+- **Added** (`public/instructor/dashboard.html` + `dashboard.js`): `#dashBroadcasts` card; `loadBroadcasts()`, `closeBroadcastBatch()`. Card auto-hides when there are no pending batches.
+- **Added** (`public/instructor/profile.js`): "Last-minute broadcasts" card with the opt-in toggle, wired into the existing `update-profile` POST.
+- **Modified**: `CLAUDE.md`, `PROJECT.md`, `MIGRATION-PLAN.md`.
+
+---
+
 ### 2.56 — Broadcast Offers, Cancellation-Triggered (PR 2a) ✅ Complete (8 May 2026)
 
 Extended the existing `lesson_offers` system to support 1-slot-to-many-learners "broadcast" offers. When a booking is cancelled <48h before lesson start *and* the instructor has opted in, the system mints one offer per matching learner (same `batch_id`, individual `token` each) at 25% off the lesson type's price. First learner to accept wins; siblings get marked `'superseded'` and receive a "no longer available" follow-up message.

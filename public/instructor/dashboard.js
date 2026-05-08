@@ -72,6 +72,10 @@ async function loadDashboard() {
       todayBookings.sort(function(a, b) { return a.start_time < b.start_time ? -1 : 1; });
       renderLessons();
     }
+
+    // Pending broadcast offers (fire-and-forget — failure to load this card
+    // shouldn't block the rest of the dashboard).
+    loadBroadcasts().catch(function(e) { console.warn('broadcasts load failed:', e.message); });
   } catch (err) {
     document.getElementById('dashLessons').innerHTML =
       '<div class="dash-empty"><div class="dash-empty-icon">&#x26A0;&#xFE0F;</div><p>' + (err.message || 'Failed to load') + '</p><button data-action="retry-load" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>';
@@ -537,7 +541,70 @@ document.addEventListener('click', function (e) {
   else if (a === 'select-learner') selectLearner(parseInt(t.dataset.learnerId, 10), t.dataset.name, t.dataset.det, parseInt(t.dataset.balance, 10));
   else if (a === 'complete-lesson') completeLesson();
   else if (a === 'cancel-from-detail') cancelFromDetail();
+  else if (a === 'close-broadcast-batch') closeBroadcastBatch(t.dataset.batchId, t);
 });
+
+// ── Pending broadcast offers card ──
+async function loadBroadcasts() {
+  var container = document.getElementById('dashBroadcasts');
+  if (!container) return;
+  try {
+    var res = await ccAuth.fetchAuthed('/api/instructor?action=my-broadcast-batches');
+    if (!res.ok) { container.style.display = 'none'; return; }
+    var data = await res.json();
+    var batches = data.batches || [];
+    if (batches.length === 0) { container.style.display = 'none'; return; }
+
+    var html = '<div class="dash-broadcasts-title">Pending broadcast offers</div>';
+    html += batches.map(function (b) {
+      var date = new Date(b.scheduled_date + 'T00:00:00Z');
+      var dateStr = date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+      var timeStr = (b.start_time || '').slice(0, 5);
+      var triggerLabel = b.trigger === 'cancellation' ? 'auto · cancellation' : 'manual';
+      var discountStr = b.discount_pct > 0 ? ' · ' + b.discount_pct + '% off' : '';
+      return '<div class="broadcast-batch-card">' +
+        '<div class="broadcast-batch-info">' +
+          '<div class="broadcast-batch-title">' + esc(dateStr) + ' at ' + esc(timeStr) + '</div>' +
+          '<div class="broadcast-batch-meta">' +
+            '<strong>' + b.pending_count + ' awaiting</strong>' +
+            (b.accepted_count > 0 ? ' · ' + b.accepted_count + ' accepted' : '') +
+            (b.superseded_count > 0 ? ' · ' + b.superseded_count + ' superseded' : '') +
+            ' · ' + esc(triggerLabel) + esc(discountStr) +
+          '</div>' +
+        '</div>' +
+        '<button class="broadcast-close-btn" data-action="close-broadcast-batch" data-batch-id="' + esc(b.batch_id) + '">' +
+          'Close offer' +
+        '</button>' +
+      '</div>';
+    }).join('');
+
+    container.innerHTML = html;
+    container.style.display = '';
+  } catch (err) {
+    console.warn('loadBroadcasts:', err.message);
+    container.style.display = 'none';
+  }
+}
+
+async function closeBroadcastBatch(batchId, btn) {
+  if (!batchId) return;
+  if (!confirm('Close this broadcast offer? All pending recipients will get a "no longer available" message and the slot will be free again.')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Closing…'; }
+  try {
+    var res = await ccAuth.fetchAuthed('/api/instructor?action=close-broadcast-offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batch_id: batchId })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to close');
+    showToast(data.closed === 1 ? 'Closed · 1 learner notified' : 'Closed · ' + data.closed + ' learners notified');
+    loadBroadcasts();
+  } catch (err) {
+    showToast(err.message || 'Failed to close', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Close offer'; }
+  }
+}
 (function wire() {
   var bind = function (id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
   bind('btnLate', openLateModal);
