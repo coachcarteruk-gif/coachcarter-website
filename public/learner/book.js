@@ -769,7 +769,7 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
       const reasons = Array.from(new Set(durations.map(d => d.reason).filter(Boolean)));
       const reasonText = reasons.includes('travel') ? 'travel time prevents any duration here'
                        : reasons.includes('clash')  ? 'this time clashes with an existing booking'
-                       : reasons.includes('window') ? 'this is outside the instructor's working hours for that length'
+                       : reasons.includes('window') ? 'this is outside the instructor\'s working hours for that length'
                        : reasons.includes('notice') ? 'too short notice for any duration'
                        : 'no lesson lengths fit this slot';
       document.getElementById('mdNoFitText').textContent = reasonText;
