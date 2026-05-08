@@ -351,6 +351,15 @@ Kept for SMS code login, password-reset emails, and the migration code flow. Mag
 | `set-availability` | POST | Yes | Replace all availability windows. Body: `{ windows: [{ day_of_week, start_time, end_time }] }` |
 | `accept-terms` | POST | Yes | Records T&C acceptance (`terms_accepted_at = NOW()`). Called from login flow gate. |
 
+### Broadcast offer endpoints (PR 2b, on `api/instructor.js`)
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `preview-broadcast-audience` | GET | Instructor | `?scheduled_date=YYYY-MM-DD&start_time=HH:MM&end_time=HH:MM` — returns learners with active weekly availability covering the slot. Each learner row includes their full availability windows so the picker can show "Mon · Wed eves" alongside the name. |
+| `create-broadcast-offer` | POST | Instructor | Body: `{ scheduled_date, start_time, lesson_type_id?, discount_pct? (0/25/50/75/100), learner_ids[] }`. Mints `lesson_offers` rows with `kind='broadcast'`, `trigger='instructor_manual'`, shared `batch_id`. Sends WhatsApp + email per recipient. |
+| `close-broadcast-offer` | POST | Instructor | Body: `{ batch_id }`. Cancels all pending siblings via `supersedeBroadcastSiblings()` and sends "no longer available" follow-up. Slot is implicitly freed. |
+| `my-broadcast-batches` | GET | Instructor | Returns active broadcast batches with pending counts for the dashboard card. |
+
 ### Module — `api/_notify-availability.js`
 
 Internal module (no public actions). Two exports:

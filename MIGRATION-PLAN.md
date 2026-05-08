@@ -115,7 +115,8 @@
 - `learner_availability` — recurring weekly free-time windows (mirrors instructor_availability). On cancellation, `api/_notify-availability.js` finds learners with windows covering the freed slot and pings them via WhatsApp + email. Also surfaced as a "Free" chip row on the instructor's "My Learners" page.
 - ~~`waitlist`~~ — *retired May 2026.* Replaced by `learner_availability` driving cancellation notifications. Table dropped, `api/waitlist.js` deleted, learner-side join/list UI removed.
 - `lesson_offers` — extended in PR 2a (May 2026) to support broadcast offers. New columns: `kind` (`'manual'` | `'broadcast'`), `batch_id` (UUID grouping all rows in one fan-out), `trigger` (`'cancellation'` | `'instructor_manual'`). New status value `'superseded'` for broadcast losers. Per-slot unique index now partial on `kind = 'manual'`.
-- `instructors.broadcast_offers_enabled` (BOOLEAN, DEFAULT FALSE) — per-instructor opt-in for cancellation-triggered broadcasts.
+- `instructors.broadcast_offers_enabled` (BOOLEAN, DEFAULT FALSE) — per-instructor opt-in for cancellation-triggered broadcasts. Toggle UI on `/instructor/profile.html` (PR 2b).
+- Instructor broadcast endpoints (PR 2b, on `api/instructor.js`): `preview-broadcast-audience`, `create-broadcast-offer`, `close-broadcast-offer`, `my-broadcast-batches`. Powers the manual broadcast picker (extends the existing offer modal on the schedule page) and the pending-broadcasts dashboard card.
 - `sent_reminders` table — tracks sent reminders to prevent duplicates (unique on booking_id + reminder_type)
 - `lesson_bookings.series_id` — UUID grouping recurring weekly bookings (same time slot, N weeks)
 - `referrals` — one row per learner-with-a-code (learner_id, school_id, code, unique per school)

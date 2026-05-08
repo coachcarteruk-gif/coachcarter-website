@@ -99,6 +99,10 @@ module.exports = async (req, res) => {
   if (action === 'create-offer')         return handleCreateOffer(req, res);
   if (action === 'list-offers')          return handleListOffers(req, res);
   if (action === 'cancel-offer')         return handleCancelOffer(req, res);
+  if (action === 'preview-broadcast-audience') return handlePreviewBroadcastAudience(req, res);
+  if (action === 'create-broadcast-offer')     return handleCreateBroadcastOffer(req, res);
+  if (action === 'close-broadcast-offer')      return handleCloseBroadcastOffer(req, res);
+  if (action === 'my-broadcast-batches')       return handleMyBroadcastBatches(req, res);
   if (action === 'payout-history')       return handlePayoutHistory(req, res);
   if (action === 'next-payout-preview')  return handleNextPayoutPreview(req, res);
   if (action === 'complete-onboarding')  return handleCompleteOnboarding(req, res);
@@ -747,7 +751,8 @@ async function handleProfile(req, res) {
              COALESCE(service_areas, '[]'::jsonb) AS service_areas,
              COALESCE(languages, '["English"]'::jsonb) AS languages,
              ical_feed_url, ical_last_synced_at, ical_sync_error,
-             offered_lesson_types
+             offered_lesson_types,
+             COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled
       FROM instructors WHERE id = ${instructor.id}
     `;
 
@@ -775,8 +780,14 @@ async function handleUpdateProfile(req, res) {
     name, phone, bio, photo_url, buffer_minutes, calendar_start_hour, reminder_hours, daily_schedule_email,
     adi_grade, pass_rate, years_experience, specialisms,
     vehicle_make, vehicle_model, transmission_type, dual_controls,
-    service_areas, languages, ical_feed_url, offered_lesson_types
+    service_areas, languages, ical_feed_url, offered_lesson_types,
+    broadcast_offers_enabled
   } = req.body;
+
+  // Validate broadcast_offers_enabled if provided
+  if (broadcast_offers_enabled !== undefined && broadcast_offers_enabled !== null && typeof broadcast_offers_enabled !== 'boolean') {
+    return res.status(400).json({ error: 'broadcast_offers_enabled must be true or false' });
+  }
 
   // Validate buffer_minutes if provided
   if (buffer_minutes !== undefined && buffer_minutes !== null) {
@@ -877,6 +888,8 @@ async function handleUpdateProfile(req, res) {
       ? parseInt(reminder_hours) : null;
     const dseVal = (daily_schedule_email !== undefined && daily_schedule_email !== null)
       ? daily_schedule_email : null;
+    const broVal = (broadcast_offers_enabled !== undefined && broadcast_offers_enabled !== null)
+      ? broadcast_offers_enabled : null;
     const prVal = (pass_rate !== undefined && pass_rate !== null)
       ? parseFloat(pass_rate) : null;
     const yeVal = (years_experience !== undefined && years_experience !== null)
@@ -922,7 +935,8 @@ async function handleUpdateProfile(req, res) {
         ical_feed_url        = CASE WHEN ${icalChanged} THEN ${icalVal} ELSE ical_feed_url END,
         ical_last_synced_at  = CASE WHEN ${icalChanged} THEN NULL ELSE ical_last_synced_at END,
         ical_sync_error      = CASE WHEN ${icalChanged} THEN NULL ELSE ical_sync_error END,
-        offered_lesson_types = CASE WHEN ${offeredChanged} THEN ${offeredVal}::jsonb ELSE offered_lesson_types END
+        offered_lesson_types = CASE WHEN ${offeredChanged} THEN ${offeredVal}::jsonb ELSE offered_lesson_types END,
+        broadcast_offers_enabled = COALESCE(${broVal}, broadcast_offers_enabled)
       WHERE id = ${instructor.id}
       RETURNING id, name, email, phone, bio, photo_url,
                 COALESCE(buffer_minutes, 30) AS buffer_minutes,
@@ -937,7 +951,8 @@ async function handleUpdateProfile(req, res) {
                 COALESCE(service_areas, '[]'::jsonb) AS service_areas,
                 COALESCE(languages, '["English"]'::jsonb) AS languages,
                 ical_feed_url, ical_last_synced_at, ical_sync_error,
-                offered_lesson_types
+                offered_lesson_types,
+                COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled
     `;
 
     return res.json({ success: true, instructor: updated });
@@ -2693,6 +2708,396 @@ async function handleCancelOffer(req, res) {
     console.error('cancel-offer error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to cancel offer' });
+  }
+}
+
+// ── GET /api/instructor?action=preview-broadcast-audience ────────────────────
+// Query: ?scheduled_date=YYYY-MM-DD&start_time=HH:MM&end_time=HH:MM
+// Returns the list of learners with active weekly availability covering the
+// slot, for the instructor's broadcast picker. Names + per-learner availability
+// summary (the same chips shown on the My Learners page) so the instructor
+// can untick anyone they don't want to message.
+async function handlePreviewBroadcastAudience(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const { scheduled_date, start_time, end_time } = req.query;
+  if (!scheduled_date || !start_time || !end_time)
+    return res.status(400).json({ error: 'scheduled_date, start_time, end_time all required' });
+
+  // Validate date format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduled_date))
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+  // Validate times
+  const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+  if (!timeRe.test(start_time) || !timeRe.test(end_time))
+    return res.status(400).json({ error: 'Times must be HH:MM format' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Compute day-of-week from the slot date (UTC).
+    const dayOfWeek = new Date(scheduled_date + 'T00:00:00Z').getUTCDay();
+
+    // Find all learners with an active availability window covering the slot,
+    // scoped to this school. Aggregate their other availability windows so the
+    // picker can show "Mon/Wed eves" alongside each name.
+    const learners = await sql`
+      SELECT lu.id, lu.name, lu.email,
+             COALESCE(json_agg(
+               json_build_object(
+                 'day_of_week', la2.day_of_week,
+                 'start_time', la2.start_time::text,
+                 'end_time', la2.end_time::text
+               ) ORDER BY la2.day_of_week, la2.start_time
+             ) FILTER (WHERE la2.id IS NOT NULL), '[]'::json) AS availability
+      FROM learner_availability la
+      JOIN learner_users lu ON lu.id = la.learner_id
+      LEFT JOIN learner_availability la2
+        ON la2.learner_id = lu.id AND la2.active = true AND la2.school_id = ${schoolId}
+      WHERE la.active = true
+        AND la.school_id = ${schoolId}
+        AND lu.school_id = ${schoolId}
+        AND la.day_of_week = ${dayOfWeek}
+        AND la.start_time <= ${start_time}::time
+        AND la.end_time   >= ${end_time}::time
+      GROUP BY lu.id, lu.name, lu.email
+      ORDER BY lu.name ASC
+    `;
+
+    return res.json({ ok: true, learners });
+  } catch (err) {
+    console.error('preview-broadcast-audience error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to load audience' });
+  }
+}
+
+// ── POST /api/instructor?action=create-broadcast-offer ───────────────────────
+// Body: {
+//   scheduled_date: 'YYYY-MM-DD',
+//   start_time: 'HH:MM',
+//   lesson_type_id?: number (defaults to standard),
+//   discount_pct?: 0|25|50|75|100 (defaults to 0),
+//   learner_ids: number[]
+// }
+// Mints a broadcast batch in lesson_offers (kind='broadcast', trigger='instructor_manual').
+// One row per learner_id with its own single-use token. Sends WhatsApp + email
+// per recipient with a link to /accept-offer.html?token=… (race-aware copy).
+async function handleCreateBroadcastOffer(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const { scheduled_date, start_time, lesson_type_id, discount_pct, learner_ids } = req.body;
+
+  if (!scheduled_date || !/^\d{4}-\d{2}-\d{2}$/.test(scheduled_date))
+    return res.status(400).json({ error: 'scheduled_date (YYYY-MM-DD) required' });
+  if (!start_time || !/^([01]\d|2[0-3]):[0-5]\d$/.test(start_time))
+    return res.status(400).json({ error: 'start_time (HH:MM) required' });
+  if (!Array.isArray(learner_ids) || learner_ids.length === 0)
+    return res.status(400).json({ error: 'learner_ids must be a non-empty array' });
+  if (learner_ids.some(id => !Number.isInteger(id) || id <= 0))
+    return res.status(400).json({ error: 'learner_ids must contain positive integers' });
+
+  // Reject past dates so we don't create offers for slots that have already passed
+  const slotDT = new Date(`${scheduled_date}T${start_time}:00Z`);
+  if (slotDT.getTime() <= Date.now())
+    return res.status(400).json({ error: 'Cannot broadcast for a slot in the past' });
+
+  // discount_pct must match the table's CHECK constraint
+  const dp = (discount_pct === undefined || discount_pct === null) ? 0 : parseInt(discount_pct);
+  if (![0, 25, 50, 75, 100].includes(dp))
+    return res.status(400).json({ error: 'discount_pct must be 0, 25, 50, 75, or 100' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Look up lesson type (or default to standard).
+    let lessonType;
+    if (lesson_type_id) {
+      const [lt] = await sql`
+        SELECT id, name, duration_minutes, price_pence
+        FROM lesson_types
+        WHERE id = ${parseInt(lesson_type_id)} AND active = true AND school_id = ${schoolId}
+      `;
+      lessonType = lt;
+    }
+    if (!lessonType) {
+      const [lt] = await sql`
+        SELECT id, name, duration_minutes, price_pence
+        FROM lesson_types
+        WHERE slug = 'standard' AND active = true AND school_id = ${schoolId}
+      `;
+      lessonType = lt || { id: null, name: 'Standard Lesson', duration_minutes: 90, price_pence: 8250 };
+    }
+    const durationMins = lessonType.duration_minutes;
+
+    // Compute end_time from start + duration
+    const [sh, sm] = start_time.split(':').map(Number);
+    const startMins = sh * 60 + sm;
+    const endMins = startMins + durationMins;
+    const end_time = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+
+    // Slot-conflict checks: don't broadcast on a slot that's already booked or
+    // has a pending manual offer. (Many pending broadcasts on the same slot are
+    // fine — that's the whole point — so we don't check those.)
+    const [existingBooking] = await sql`
+      SELECT id FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id}
+        AND scheduled_date = ${scheduled_date}
+        AND start_time = ${start_time}::time
+        AND status IN ('confirmed','completed','awaiting_confirmation')
+        AND school_id = ${schoolId}
+    `;
+    if (existingBooking)
+      return res.status(409).json({ error: 'That slot is already booked.' });
+
+    const [existingManualOffer] = await sql`
+      SELECT id FROM lesson_offers
+      WHERE instructor_id = ${instructor.id}
+        AND scheduled_date = ${scheduled_date}
+        AND start_time = ${start_time}::time
+        AND status = 'pending'
+        AND kind = 'manual'
+        AND school_id = ${schoolId}
+    `;
+    if (existingManualOffer)
+      return res.status(409).json({ error: 'There is already a pending offer on that slot.' });
+
+    // Verify each learner is in this school AND has availability covering the slot.
+    // We trust the frontend less than the DB — re-validate so a malicious client
+    // can't broadcast to learners who didn't opt in to that time.
+    const dayOfWeek = new Date(scheduled_date + 'T00:00:00Z').getUTCDay();
+    const validLearners = await sql`
+      SELECT DISTINCT lu.id, lu.name, lu.email, lu.phone
+      FROM learner_users lu
+      JOIN learner_availability la ON la.learner_id = lu.id
+      WHERE lu.id = ANY(${learner_ids})
+        AND lu.school_id = ${schoolId}
+        AND la.school_id = ${schoolId}
+        AND la.active = true
+        AND la.day_of_week = ${dayOfWeek}
+        AND la.start_time <= ${start_time}::time
+        AND la.end_time   >= ${end_time}::time
+    `;
+
+    if (validLearners.length === 0)
+      return res.status(400).json({ error: 'None of the selected learners are free at that time.' });
+
+    // Mint the batch.
+    const crypto = require('crypto');
+    const batchId = crypto.randomUUID();
+    const expiresAt = new Date(`${scheduled_date}T${start_time}:00Z`);
+
+    const offerRows = [];
+    for (const lu of validLearners) {
+      const token = crypto.randomBytes(24).toString('hex');
+      try {
+        const [row] = await sql`
+          INSERT INTO lesson_offers
+            (token, instructor_id, learner_email, learner_id, learner_name,
+             scheduled_date, start_time, end_time,
+             lesson_type_id, discount_pct, status,
+             kind, batch_id, trigger,
+             expires_at, school_id)
+          VALUES
+            (${token}, ${instructor.id}, ${lu.email || null}, ${lu.id}, ${lu.name || null},
+             ${scheduled_date}, ${start_time}, ${end_time},
+             ${lessonType.id}, ${dp}, 'pending',
+             'broadcast', ${batchId}, 'instructor_manual',
+             ${expiresAt.toISOString()}, ${schoolId})
+          RETURNING id, token
+        `;
+        offerRows.push({ ...row, learner: lu });
+      } catch (err) {
+        console.warn('broadcast offer insert failed for learner', lu.id, err.message);
+      }
+    }
+
+    if (offerRows.length === 0)
+      return res.status(500).json({ error: 'Failed to create any offers' });
+
+    // Send notifications in parallel (fire-and-forget).
+    const { sendWhatsApp } = require('./_whatsapp');
+    const { createTransporter } = require('./_auth-helpers');
+    const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+
+    const isoDate = scheduled_date;
+    const dateObj = new Date(isoDate + 'T00:00:00Z');
+    const dateStr = dateObj.toLocaleDateString('en-GB', {
+      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+    });
+    function fmtTime(t) {
+      const [h, m] = t.split(':').map(Number);
+      const ampm = h >= 12 ? 'pm' : 'am';
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, '0')}${ampm}`;
+    }
+    const timeStr = fmtTime(start_time);
+    const originalPricePence = lessonType.price_pence || 8250;
+    const finalPricePence = Math.round(originalPricePence * (100 - dp) / 100);
+    const priceStr = finalPricePence === 0 ? 'FREE' : `£${(finalPricePence / 100).toFixed(2)}`;
+    const wasStr = `£${(originalPricePence / 100).toFixed(2)}`;
+    const discountLabel = dp > 0 ? ` at ${dp}% off (${priceStr} instead of ${wasStr})` : ` for ${priceStr}`;
+
+    const [instrRow] = await sql`SELECT name FROM instructors WHERE id = ${instructor.id}`;
+    const instructorName = instrRow?.name || 'Your instructor';
+
+    const mailer = createTransporter();
+
+    for (const { token, learner } of offerRows) {
+      const acceptLink = `${baseUrl}/accept-offer.html?token=${token}`;
+      const waMsg = `${instructorName} has a ${timeStr} slot on ${dateStr}${discountLabel}.\n\nFirst come, first served. Click to book: ${acceptLink}`;
+
+      if (learner.phone) {
+        sendWhatsApp(learner.phone, waMsg)
+          .catch(err => console.warn('manual broadcast WA failed:', err.message));
+      }
+      if (learner.email) {
+        mailer.sendMail({
+          from:    'CoachCarter <bookings@coachcarter.uk>',
+          to:      learner.email,
+          subject: `${instructorName} has a ${timeStr} slot on ${dateStr}`,
+          html: `
+            <h2>A lesson slot is available</h2>
+            <p><strong>${instructorName}</strong> has a slot opening up that matches your weekly availability:</p>
+            <table style="border-collapse:collapse;margin:16px 0">
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Date</td><td>${dateStr}</td></tr>
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Time</td><td>${timeStr}</td></tr>
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Lesson</td><td>${lessonType.name}</td></tr>
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td>
+                ${dp > 0
+                  ? `<strong>${priceStr}</strong> <span style="text-decoration:line-through;color:#888;font-weight:normal">${wasStr}</span> &middot; ${dp}% off`
+                  : `<strong>${priceStr}</strong>`}
+              </td></tr>
+            </table>
+            <p><strong>First come, first served</strong> — this slot is being offered to a few learners who said they're free at this time.</p>
+            <p style="margin:24px 0">
+              <a href="${acceptLink}"
+                 style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                        border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem">
+                Book this slot →
+              </a>
+            </p>
+            <p style="font-size:0.85rem;color:#888">You received this because you set weekly availability covering this time. Update your availability anytime on your profile.</p>
+          `
+        }).catch(err => console.warn('manual broadcast email failed:', err.message));
+      }
+    }
+
+    return res.json({
+      ok: true,
+      batch_id: batchId,
+      notified: offerRows.length,
+      skipped: learner_ids.length - validLearners.length,
+      expires_at: expiresAt.toISOString()
+    });
+  } catch (err) {
+    console.error('create-broadcast-offer error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to create broadcast offer' });
+  }
+}
+
+// ── POST /api/instructor?action=close-broadcast-offer ────────────────────────
+// Body: { batch_id }
+// Cancels all pending offers in the batch and sends a "no longer available"
+// follow-up to those recipients. Slot is implicitly withdrawn — no booking
+// gets made, the calendar shows it as free again.
+async function handleCloseBroadcastOffer(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const { batch_id } = req.body;
+  if (!batch_id) return res.status(400).json({ error: 'batch_id required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Verify the batch belongs to this instructor (and isn't already closed).
+    // We grab one row to confirm ownership; the supersede helper handles the
+    // rest of the logic + notifications.
+    const [sample] = await sql`
+      SELECT scheduled_date::text AS scheduled_date, start_time::text AS start_time
+      FROM lesson_offers
+      WHERE batch_id = ${batch_id}
+        AND instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND status = 'pending'
+        AND kind = 'broadcast'
+      LIMIT 1
+    `;
+
+    if (!sample)
+      return res.status(404).json({ error: 'No pending broadcast found with that batch_id (already closed or not yours)' });
+
+    const { supersedeBroadcastSiblings } = require('./_notify-availability');
+    const { superseded } = await supersedeBroadcastSiblings({
+      instructor_id: instructor.id,
+      scheduled_date: sample.scheduled_date,
+      start_time: sample.start_time.slice(0, 5),
+      school_id: schoolId,
+      winnerOfferId: null, // no winner — instructor is closing
+      batchId: batch_id
+    });
+
+    return res.json({ ok: true, closed: superseded });
+  } catch (err) {
+    console.error('close-broadcast-offer error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to close broadcast' });
+  }
+}
+
+// ── GET /api/instructor?action=my-broadcast-batches ──────────────────────────
+// Returns active broadcast batches (pending offers grouped by batch_id) for
+// the dashboard card. Each batch shows slot details + recipient count.
+async function handleMyBroadcastBatches(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const batches = await sql`
+      SELECT
+        batch_id,
+        MIN(scheduled_date::text)            AS scheduled_date,
+        MIN(start_time::text)                AS start_time,
+        MIN(end_time::text)                  AS end_time,
+        MIN(lesson_type_id)                  AS lesson_type_id,
+        MIN(discount_pct)                    AS discount_pct,
+        MIN(trigger)                         AS trigger,
+        MIN(created_at)                      AS created_at,
+        MIN(expires_at)                      AS expires_at,
+        COUNT(*) FILTER (WHERE status = 'pending')::int    AS pending_count,
+        COUNT(*) FILTER (WHERE status = 'accepted')::int   AS accepted_count,
+        COUNT(*) FILTER (WHERE status = 'superseded')::int AS superseded_count,
+        COUNT(*)::int                         AS total_count
+      FROM lesson_offers
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND kind = 'broadcast'
+        AND batch_id IS NOT NULL
+        AND expires_at > NOW()
+      GROUP BY batch_id
+      HAVING COUNT(*) FILTER (WHERE status = 'pending') > 0
+      ORDER BY MIN(scheduled_date) ASC, MIN(start_time) ASC
+    `;
+
+    return res.json({ ok: true, batches });
+  } catch (err) {
+    console.error('my-broadcast-batches error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to load broadcast batches' });
   }
 }
 

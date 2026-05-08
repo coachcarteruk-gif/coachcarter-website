@@ -1495,11 +1495,53 @@ async function openOfferModal(prefillEmail, prefillName) {
     document.getElementById('offerSlotFields').style.display = flexCb.checked ? 'none' : '';
   };
 
+  // Reset audience radio (default: one specific learner — preserves existing UX)
+  const audOne = document.getElementById('offerAudienceOne');
+  const audBcast = document.getElementById('offerAudienceBroadcast');
+  const onePane = document.getElementById('offerOneLearnerPane');
+  const bcastPane = document.getElementById('offerBroadcastPane');
+  audOne.checked = true;
+  audBcast.checked = false;
+  onePane.style.display = '';
+  bcastPane.style.display = 'none';
+  // If a learner email was prefilled (came in via ?offer=…) keep one-learner mode.
+  // Otherwise let the instructor switch to broadcast.
+  const switchAudience = () => {
+    const isBroadcast = audBcast.checked;
+    onePane.style.display = isBroadcast ? 'none' : '';
+    bcastPane.style.display = isBroadcast ? '' : 'none';
+    // Broadcasts must be slot-pinned (we need a date+time to find matches).
+    flexCb.disabled = isBroadcast;
+    if (isBroadcast) {
+      flexCb.checked = false;
+      document.getElementById('offerSlotFields').style.display = '';
+    }
+    // Update CTA copy
+    const sendBtn = document.getElementById('offerSendBtn');
+    if (isBroadcast) {
+      sendBtn.textContent = 'Send broadcast';
+      loadBroadcastAudience();
+    } else {
+      const emailCb = document.getElementById('offerSendEmail');
+      sendBtn.textContent = emailCb.checked ? 'Send offer' : 'Create link';
+    }
+  };
+  audOne.onchange = switchAudience;
+  audBcast.onchange = switchAudience;
+
+  // Reload audience whenever slot fields change (broadcast mode only)
+  const slotChange = () => { if (audBcast.checked) loadBroadcastAudience(); };
+  document.getElementById('offerDate').onchange = slotChange;
+  document.getElementById('offerTime').onchange = slotChange;
+  // Lesson type change matters for end_time (which decides who's free for the full window)
+  // — wired below where we already attach updateOfferPrice.
+
   // Fetch lesson types
   try {
     const typesRes = await ccAuth.fetchAuthed('/api/lesson-types?action=list');
     const typesData = await typesRes.json();
     const types = typesData.lesson_types || [];
+    window._offerLessonTypes = types; // used by loadBroadcastAudience() to compute end_time
     const sel = document.getElementById('offerLessonType');
     sel.innerHTML = types.map(lt => {
       const hrs = lt.duration_minutes / 60;
@@ -1553,7 +1595,195 @@ function closeOfferModal() {
   document.getElementById('offerLessonModal').classList.remove('open');
 }
 
+// ── Broadcast audience picker ──
+// Fetches learners with active weekly availability covering the slot the
+// instructor has currently selected in the modal. Renders one row per learner
+// with a checkbox (all checked by default) and a short summary of their other
+// availability windows.
+async function loadBroadcastAudience() {
+  const listEl = document.getElementById('offerAudienceList');
+  const summaryEl = document.getElementById('offerAudienceSummary');
+  const warnEl = document.getElementById('offerBroadcastWarn');
+
+  const date = document.getElementById('offerDate').value;
+  const time = document.getElementById('offerTime').value;
+  const sel = document.getElementById('offerLessonType');
+  const opt = sel.options[sel.selectedIndex];
+  if (!date || !time || !opt) {
+    listEl.innerHTML = '<div style="color:var(--muted);font-style:italic;padding:6px 0">Pick a date, time and lesson type to see who\'s free.</div>';
+    summaryEl.textContent = '';
+    warnEl.style.display = 'none';
+    return;
+  }
+
+  // Find duration so we can compute end_time
+  const types = window._offerLessonTypes || [];
+  const lt = types.find(t => String(t.id) === sel.value);
+  const durationMins = lt ? lt.duration_minutes : 90;
+  const [sh, sm] = time.split(':').map(Number);
+  const endMins = sh * 60 + sm + durationMins;
+  const endTime = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+
+  listEl.innerHTML = '<div style="color:var(--muted);font-style:italic;padding:6px 0">Loading…</div>';
+  summaryEl.textContent = '';
+  warnEl.style.display = 'none';
+
+  try {
+    const url = '/api/instructor?action=preview-broadcast-audience' +
+      '&scheduled_date=' + encodeURIComponent(date) +
+      '&start_time=' + encodeURIComponent(time) +
+      '&end_time=' + encodeURIComponent(endTime);
+    const res = await ccAuth.fetchAuthed(url);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const learners = data.learners || [];
+    if (learners.length === 0) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-style:italic;padding:6px 0">No learners are free at that time.</div>';
+      summaryEl.textContent = '';
+      return;
+    }
+
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    function fmtTime(t) {
+      const [h, m] = t.split(':').map(Number);
+      const ampm = h >= 12 ? 'pm' : 'am';
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      return m === 0 ? h12 + ampm : h12 + ':' + String(m).padStart(2,'0') + ampm;
+    }
+    function summariseWindows(windows) {
+      if (!windows || windows.length === 0) return '';
+      // De-dup days and show like "Mon · Wed · Fri eves"
+      return windows.slice(0, 4).map(w =>
+        dayNames[w.day_of_week] + ' ' + fmtTime(w.start_time.slice(0,5)) + '–' + fmtTime(w.end_time.slice(0,5))
+      ).join(' · ') + (windows.length > 4 ? ' · …' : '');
+    }
+
+    listEl.innerHTML = learners.map(l =>
+      '<label style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;cursor:pointer;border-bottom:1px solid var(--border)">' +
+        '<input type="checkbox" class="offer-aud-chk" data-learner-id="' + l.id + '" checked ' +
+          'style="margin-top:3px;width:16px;height:16px;accent-color:var(--accent);cursor:pointer">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:600;color:var(--primary)">' + escapeHtml(l.name || 'Unnamed') + '</div>' +
+          '<div style="font-size:0.75rem;color:var(--muted)">' + escapeHtml(summariseWindows(l.availability)) + '</div>' +
+        '</div>' +
+      '</label>'
+    ).join('');
+
+    // Re-bind checkbox change handler to update summary
+    [...listEl.querySelectorAll('.offer-aud-chk')].forEach(cb => {
+      cb.addEventListener('change', updateAudienceSummary);
+    });
+    updateAudienceSummary();
+  } catch (err) {
+    listEl.innerHTML = '<div style="color:var(--red);padding:6px 0">Failed to load audience: ' + escapeHtml(err.message || 'unknown error') + '</div>';
+  }
+}
+
+function updateAudienceSummary() {
+  const listEl = document.getElementById('offerAudienceList');
+  const summaryEl = document.getElementById('offerAudienceSummary');
+  const warnEl = document.getElementById('offerBroadcastWarn');
+  if (!listEl || !summaryEl) return;
+  const all = [...listEl.querySelectorAll('.offer-aud-chk')];
+  const checked = all.filter(cb => cb.checked).length;
+  const total = all.length;
+  summaryEl.textContent = checked + ' of ' + total + ' learners selected';
+  if (checked > 10) {
+    warnEl.textContent = 'Sending to ' + checked + ' learners — Twilio cost approx £' + (checked * 0.05).toFixed(2) + '.';
+    warnEl.style.display = '';
+  } else {
+    warnEl.style.display = 'none';
+  }
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── Broadcast offer submission ──
+// POSTs to ?action=create-broadcast-offer with the learner_ids the instructor
+// has ticked. Discount is derived from the custom-price field by comparing it
+// against the lesson type default (so the existing UX stays consistent).
+async function sendBroadcastOffer() {
+  const errorEl = document.getElementById('offerError');
+  const successEl = document.getElementById('offerSuccess');
+  const btn = document.getElementById('offerSendBtn');
+  errorEl.style.display = 'none';
+  successEl.style.display = 'none';
+
+  const date = document.getElementById('offerDate').value;
+  const time = document.getElementById('offerTime').value;
+  const lessonTypeId = document.getElementById('offerLessonType').value;
+  if (!date) { errorEl.textContent = 'Please select a date.'; errorEl.style.display = 'block'; return; }
+  if (!time) { errorEl.textContent = 'Please select a start time.'; errorEl.style.display = 'block'; return; }
+  if (!lessonTypeId) { errorEl.textContent = 'Please select a lesson type.'; errorEl.style.display = 'block'; return; }
+
+  const checked = [...document.querySelectorAll('#offerAudienceList .offer-aud-chk:checked')]
+    .map(cb => parseInt(cb.dataset.learnerId, 10))
+    .filter(n => Number.isInteger(n) && n > 0);
+  if (checked.length === 0) {
+    errorEl.textContent = 'Please tick at least one learner.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  // Map the custom price to a discount_pct the create endpoint accepts.
+  // The create endpoint's CHECK constraint only allows {0, 25, 50, 75, 100} so
+  // we snap to the nearest valid bucket. Empty custom price = 0 (full price).
+  const customPriceStr = document.getElementById('offerCustomPrice').value.trim();
+  const sel = document.getElementById('offerLessonType');
+  const opt = sel.options[sel.selectedIndex];
+  const defaultPence = parseInt(opt && opt.dataset.price) || 0;
+  let discount_pct = 0;
+  if (customPriceStr !== '' && defaultPence > 0) {
+    const parsed = parseFloat(customPriceStr);
+    if (isNaN(parsed) || parsed < 0) { errorEl.textContent = 'Please enter a valid price.'; errorEl.style.display = 'block'; return; }
+    const customPence = Math.round(parsed * 100);
+    const pct = Math.round(100 - (customPence / defaultPence) * 100);
+    // Snap to allowed buckets {0, 25, 50, 75, 100}
+    const allowed = [0, 25, 50, 75, 100];
+    discount_pct = allowed.reduce((best, v) => Math.abs(v - pct) < Math.abs(best - pct) ? v : best, 0);
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=create-broadcast-offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scheduled_date: date,
+        start_time: time,
+        lesson_type_id: parseInt(lessonTypeId, 10),
+        discount_pct: discount_pct,
+        learner_ids: checked
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send broadcast');
+
+    const skipMsg = data.skipped > 0 ? ` (${data.skipped} skipped — no longer free at that time)` : '';
+    successEl.innerHTML = `<div>Broadcast sent to <strong>${data.notified}</strong> learner${data.notified === 1 ? '' : 's'}${skipMsg}. First to book wins.</div>`;
+    successEl.style.display = 'block';
+    btn.textContent = 'Sent ✓';
+
+    // Refresh schedule so the broadcast batch appears in the dashboard card / calendar.
+    if (typeof renderCurrentView === 'function') renderCurrentView();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Send broadcast';
+  }
+}
+
 async function sendOffer() {
+  const isBroadcast = document.getElementById('offerAudienceBroadcast').checked;
+  if (isBroadcast) {
+    return sendBroadcastOffer();
+  }
   const offerName = document.getElementById('offerName').value.trim();
   const sendEmail = document.getElementById('offerSendEmail').checked;
   const email = document.getElementById('offerEmail').value.trim();
@@ -1790,7 +2020,12 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
     offerModal.addEventListener('click', function (e) { if (e.target === offerModal && offerMouseDownTarget === offerModal) closeOfferModal(); });
   }
   var offerType = document.getElementById('offerLessonType');
-  if (offerType) offerType.addEventListener('change', updateOfferPrice);
+  if (offerType) offerType.addEventListener('change', function () {
+    updateOfferPrice();
+    // If broadcast mode is active, the audience depends on duration → end_time → reload.
+    var bcastRadio = document.getElementById('offerAudienceBroadcast');
+    if (bcastRadio && bcastRadio.checked) loadBroadcastAudience();
+  });
   bind('btn-close-offer', closeOfferModal);
   bind('offerSendBtn', sendOffer);
 })();
