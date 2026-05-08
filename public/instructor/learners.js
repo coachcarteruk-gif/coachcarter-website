@@ -111,7 +111,7 @@ function renderLearners() {
     // Custom rate badge
     let rateBadge = '';
     if (l.custom_hourly_rate_pence) {
-      rateBadge = '<span class="test-date-badge" style="background:var(--accent-lt);color:var(--accent)">Â£' + (l.custom_hourly_rate_pence / 100).toFixed(0) + '/hr</span>';
+      rateBadge = '<span class="test-date-badge" style="background:var(--accent-lt);color:var(--accent)">£' + (l.custom_hourly_rate_pence / 100).toFixed(0) + '/hr</span>';
     }
 
     // Notes preview
