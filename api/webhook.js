@@ -32,7 +32,13 @@ module.exports = async (req, res) => {
     return res.status(400).send('Webhook signature verification failed');
   }
 
-  if (event.type === 'checkout.session.completed') {
+  // Klarna and other delayed-payment methods deliver `completed` early with
+  // payment_status='unpaid', then fire `async_payment_succeeded` once the
+  // payment actually clears. Card payments only fire `completed` (paid).
+  // We route both events through the same dispatch — handlers are idempotent
+  // via stripe_session_id and gate writes on payment_status='paid'.
+  if (event.type === 'checkout.session.completed' ||
+      event.type === 'checkout.session.async_payment_succeeded') {
     const session = event.data.object;
     const paymentType = session.metadata?.payment_type;
 
@@ -49,6 +55,20 @@ module.exports = async (req, res) => {
       // ── Legacy pass guarantee / package flow ──────────────────────────────
       await handleCheckoutComplete(session);
     }
+  }
+
+  // Klarna failure / cancellation — log only. No DB writes happened on the
+  // earlier `completed` event because handlers gate on payment_status='paid'.
+  if (event.type === 'checkout.session.async_payment_failed') {
+    const session = event.data.object;
+    console.error('Stripe async payment failed:', {
+      session_id: session.id,
+      payment_type: session.metadata?.payment_type,
+      learner_email: session.customer_details?.email || session.metadata?.learner_email,
+    });
+    reportError('/api/webhook (async_payment_failed)', new Error(
+      `Async payment failed for session ${session.id} (${session.metadata?.payment_type || 'unknown'})`
+    ));
   }
 
   // ── Stripe Connect: instructor onboarding complete ──
@@ -81,8 +101,19 @@ module.exports = async (req, res) => {
   res.json({ received: true });
 };
 
+// Don't process unpaid sessions. Klarna fires `completed` with
+// payment_status='unpaid' before the payment clears; the follow-up
+// `async_payment_succeeded` event re-runs this handler with status='paid'.
+function isPaid(session) {
+  if (session.payment_status === 'paid') return true;
+  console.log(`⏭  Skipping ${session.id} — payment_status=${session.payment_status} (will re-run on async_payment_succeeded)`);
+  return false;
+}
+
 // ── Credit purchase handler ───────────────────────────────────────────────────
 async function handleCreditPurchase(session) {
+  if (!isPaid(session)) return;
+
   const metadata      = session.metadata || {};
   const learnerId     = parseInt(metadata.learner_id, 10);
   const credits       = parseInt(metadata.credits_purchased, 10);
@@ -163,6 +194,8 @@ async function handleCreditPurchase(session) {
 
 // ── Slot booking handler (pay-per-slot) ─────────────────────────────────────
 async function handleSlotBooking(session) {
+  if (!isPaid(session)) return;
+
   const metadata      = session.metadata || {};
   const learnerId     = parseInt(metadata.learner_id, 10);
   const instructorId  = parseInt(metadata.instructor_id, 10);
@@ -406,6 +439,8 @@ function toICSDate(dateStr, timeStr) {
 
 // ── Legacy checkout handler ───────────────────────────────────────────────────
 async function handleCheckoutComplete(session) {
+  if (!isPaid(session)) return;
+
   const provisionalLicence = session.custom_fields?.find(f => f.key === 'provisional_licence')?.text?.value;
   const testStatus = session.custom_fields?.find(f => f.key === 'has_test_booked')?.dropdown?.value;
   const testReference = session.custom_fields?.find(f => f.key === 'dvsa_reference')?.text?.value;
@@ -657,6 +692,8 @@ async function sendAvailabilityFormLink(booking) {
 // ── Lesson offer handler ─────────────────────────────────────────────────────
 // Instructor created an offer, learner accepted and paid via Stripe.
 async function handleOfferBooking(session) {
+  if (!isPaid(session)) return;
+
   const metadata       = session.metadata || {};
   const offerToken     = metadata.offer_token;
   const offerId        = parseInt(metadata.offer_id, 10);
