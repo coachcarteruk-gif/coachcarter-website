@@ -978,10 +978,40 @@ body.has-shortcut .hero { padding-top: 136px; }
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 1.15rem;
   color: var(--accent-dk);
   overflow: hidden;
   flex-shrink: 0;
+}
+
+.testimonials-cta {
+  margin-top: 36px;
+  text-align: center;
+}
+
+.testimonials-google-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background: var(--white);
+  border: 1px solid rgba(245,131,33,0.25);
+  border-radius: 100px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.testimonials-google-link:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.testimonials-google-stars {
+  color: var(--accent);
+  letter-spacing: 1px;
 }
 
 .testimonial-avatar img {
@@ -1572,39 +1602,47 @@ a:focus-visible, button:focus-visible {
     <div class="testimonial-grid">
       <div class="testimonial-card fade-up" style="transition-delay: 0.05s">
         <div class="testimonial-stars">★★★★★</div>
-        <blockquote>"Fraser made me feel so comfortable from day one. Calm, patient, and never made me feel rushed. Passed first time!"</blockquote>
+        <blockquote>"I'd failed 9 times and almost gave up on driving altogether, but decided to give it one last go, and try Coach Carter. I was completely blown away by his teaching methods and his character. Fraser got me to think through exactly what I should be mindful of at what point, and why — thinking about the reasons behind actions, not just what to do. In just a few lessons I went from a liability on the road, to passing on the first try! I honestly cannot recommend this instructor enough."</blockquote>
         <div class="testimonial-author">
-          <div class="testimonial-avatar"><img src="/tasha pass.png" alt="Tasha after passing her driving test" loading="lazy"></div>
+          <div class="testimonial-avatar" aria-hidden="true">P</div>
           <div>
-            <div class="testimonial-name">Tasha</div>
-            <div class="testimonial-detail">Passed first time</div>
+            <div class="testimonial-name">Pete Humphries</div>
+            <div class="testimonial-detail">Google review</div>
           </div>
         </div>
       </div>
 
       <div class="testimonial-card fade-up" style="transition-delay: 0.15s">
         <div class="testimonial-stars">★★★★★</div>
-        <blockquote>"The learner portal is brilliant — I could see my progress after every lesson. The flexible scheduling meant I could fit lessons around uni easily."</blockquote>
+        <blockquote>"Fraser came to the rescue as my daughter's driving instructor unfortunately became ill. Great teaching and flexibility for lessons. My daughter passed with only two minors. Fraser is a fantastic instructor who I would highly recommend."</blockquote>
         <div class="testimonial-author">
-          <div class="testimonial-avatar"><img src="/evie pass.jpeg" alt="Evie after passing her driving test" loading="lazy"></div>
+          <div class="testimonial-avatar" aria-hidden="true">O</div>
           <div>
-            <div class="testimonial-name">Evie</div>
-            <div class="testimonial-detail">University of Reading student</div>
+            <div class="testimonial-name">Oberah Qadeer</div>
+            <div class="testimonial-detail">Google review</div>
           </div>
         </div>
       </div>
 
       <div class="testimonial-card fade-up" style="transition-delay: 0.25s">
         <div class="testimonial-stars">★★★★★</div>
-        <blockquote>"I was so nervous about learning to drive, but the whole experience was calm and encouraging. Fraser kept me on track and motivated all the way to test day."</blockquote>
+        <blockquote>"Fraser is a fantastic instructor and was the driving force behind me passing with only 1 minor today! He really put me at ease from my first lesson, which meant I was able to fully focus on refining my skills. His constructive criticism was clear and kind, and I never felt patronised or like I was in trouble! I ended up looking forward to my lessons instead of dreading them and any nerves I previously had about driving went away."</blockquote>
         <div class="testimonial-author">
-          <div class="testimonial-avatar"><img src="/images/home/testimonial-andrew.jpg" alt="Andrew after passing his driving test" loading="lazy"></div>
+          <div class="testimonial-avatar" aria-hidden="true">O</div>
           <div>
-            <div class="testimonial-name">Andrew</div>
-            <div class="testimonial-detail">Reading learner</div>
+            <div class="testimonial-name">Olivia May</div>
+            <div class="testimonial-detail">Google review</div>
           </div>
         </div>
       </div>
+    </div>
+
+    <div class="testimonials-cta fade-up">
+      <a href="https://share.google/hsaXG9ZY7jdrUDMqD" target="_blank" rel="noopener" class="testimonials-google-link">
+        <span class="testimonials-google-stars">★★★★★</span>
+        <span>See all reviews on Google</span>
+        <span aria-hidden="true">→</span>
+      </a>
     </div>
   </div>
 </section>
