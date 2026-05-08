@@ -353,9 +353,15 @@ Kept for SMS code login, password-reset emails, and the migration code flow. Mag
 
 ### Module — `api/_notify-availability.js`
 
-Internal module (no public actions). Exports `notifyAvailableLearners({ instructor_id, instructor_name, scheduled_date, start_time, end_time, school_id })` — called from `api/slots.js` after a cancellation. Finds every learner with an active `learner_availability` window covering the freed slot and sends WhatsApp + email so they can rebook.
+Internal module (no public actions). Two exports:
 
-Replaced the retired `api/waitlist.js` (May 2026). Weekly availability is now the single primitive — no separate waitlist signup is required.
+**`notifyAvailableLearners({ instructor_id, instructor_name, scheduled_date, start_time, end_time, lesson_type_id, school_id })`** — called from `api/slots.js` after a cancellation. Finds every learner with an active `learner_availability` window covering the freed slot and either:
+- Sends a plain "slot opened" WhatsApp + email (default), OR
+- Mints a broadcast offer batch in `lesson_offers` at 25% off and emails per-recipient single-use tokens to `/accept-offer.html?token=…`. Triggered when the cancellation is <48h before lesson start AND `instructors.broadcast_offers_enabled = TRUE`.
+
+**`supersedeBroadcastSiblings({ instructor_id, scheduled_date, start_time, school_id, winnerOfferId, batchId })`** — called from booking paths (Stripe webhook for offer accept, `slots.js?action=book`, webhook `handleSlotBooking`). Marks all pending broadcast offers on the slot/batch except the winner as `'superseded'` and sends a "no longer available" WhatsApp + email follow-up.
+
+Replaced the retired `api/waitlist.js` (May 2026). Weekly availability is now the single primitive — no separate waitlist signup is required. Broadcast offers shipped in PR 2a.
 
 ### API — `api/lesson-types.js`
 

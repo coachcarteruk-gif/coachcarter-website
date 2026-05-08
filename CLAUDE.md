@@ -129,6 +129,21 @@ All three roles use email + password sign-in. Magic-link login was retired entir
 - "Weekdays" and "Cancelled" filter buttons on instructor calendar (removed April 2026 — weekends always shown, cancelled always hidden)
 - Waitlist feature entirely (removed May 2026 — `waitlist` table, `api/waitlist.js`, learner profile "My Waitlist" card, and waitlist join form on `book.html` all deleted. Replaced by `learner_availability` driving cancellation notifications via `api/_notify-availability.js`. Weekly availability is now the single primitive for "ping me when something opens up". Do not re-add.)
 
+## Broadcast offers
+
+> Full plan: see DEVELOPMENT-ROADMAP.md entry 2.55
+
+The `lesson_offers` table supports two `kind`s:
+- **`'manual'`** — instructor-initiated 1:1 offer (the existing "Offer a lesson" feature). Per-slot uniqueness enforced via partial index `uq_offer_slot_manual`.
+- **`'broadcast'`** — 1:many fan-out where multiple learners receive simultaneous single-use offer tokens. First to accept wins; siblings get marked `'superseded'` and receive a "no longer available" follow-up. Many pending broadcast rows can exist for the same slot — the partial index excludes them.
+
+Hard rules:
+1. New code creating offers MUST set `kind` explicitly (default `'manual'` is preserved for backwards compatibility but new flows should be deliberate).
+2. Broadcasts MUST share a `batch_id` (UUID) so sibling supersession finds them.
+3. Broadcasts MUST set `trigger` (`'cancellation'` or `'instructor_manual'`) so messaging templates can render the right framing.
+4. Sibling supersession lives in `api/_notify-availability.js::supersedeBroadcastSiblings()`. Call it from any path that books a slot (Stripe webhook for offer acceptance, slots.js `?action=book`, webhook `handleSlotBooking` for guest checkout). It is fire-and-forget and idempotent.
+5. The `instructors.broadcast_offers_enabled` toggle defaults to `FALSE`. Cancellation-driven broadcasts only fire when this is `TRUE` and the cancellation is <48h before lesson start.
+
 ## React Native migration principles
 
 > Full plan: [`MIGRATION-PLAN.md`](MIGRATION-PLAN.md)

@@ -71,6 +71,18 @@
     }
     .expiry-bar.expired { background: var(--red-lt); border-color: #fca5a5; color: var(--red); }
 
+    /* Broadcast banner — race-aware framing for first-come-first-served offers */
+    .broadcast-banner {
+      background: var(--accent-lt); border: 1px solid #fcd4b0;
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;
+      font-size: 0.9rem; line-height: 1.45;
+    }
+    .broadcast-banner-title {
+      font-family: var(--font-head); font-weight: 800; font-size: 0.95rem;
+      color: var(--accent); margin-bottom: 4px;
+    }
+    .broadcast-banner-body { color: var(--primary); }
+
     /* Form */
     .form-section { margin-bottom: 24px; }
     .form-section h3 {
@@ -158,8 +170,14 @@
 
   <!-- Main offer content -->
   <div id="offer-content" class="page hidden">
-    <h1 class="page-title">Driving lesson offer</h1>
-    <p class="page-sub"><span id="instructor-name"></span> has offered you a lesson</p>
+    <h1 class="page-title" id="page-title">Driving lesson offer</h1>
+    <p class="page-sub" id="page-sub"><span id="instructor-name"></span> has offered you a lesson</p>
+
+    <!-- Broadcast banner: shown only when kind === 'broadcast' (first-come-first-served) -->
+    <div class="broadcast-banner hidden" id="broadcast-banner">
+      <div class="broadcast-banner-title" id="broadcast-banner-title">First come, first served</div>
+      <div class="broadcast-banner-body" id="broadcast-banner-body"></div>
+    </div>
 
     <div class="expiry-bar" id="expiry-bar">
       <span>⏰</span>

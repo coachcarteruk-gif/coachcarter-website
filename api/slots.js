@@ -31,7 +31,7 @@ const stripe      = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { sendWhatsApp } = require('./_whatsapp');
 const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
-const { notifyAvailableLearners } = require('./_notify-availability');
+const { notifyAvailableLearners, supersedeBroadcastSiblings } = require('./_notify-availability');
 const { checkAdjacentTravelTime, extractPostcode, bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES } = require('./_travel-time');
 
 
@@ -1046,6 +1046,18 @@ async function handleBook(req, res) {
 
     // GDPR: update last activity timestamp
     try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`; } catch (e) {}
+
+    // Supersede any pending broadcast offers on these slots — a learner just
+    // booked one of them through the regular flow, so the broadcast is moot.
+    // Fire-and-forget; sends a "no longer available" message to other recipients.
+    for (const b of createdBookings) {
+      supersedeBroadcastSiblings({
+        instructor_id: instructor_id,
+        scheduled_date: String(b.scheduled_date).slice(0, 10),
+        start_time: String(b.start_time).slice(0, 5),
+        school_id: schoolId
+      }).catch(err => console.warn('supersede on book failed:', err.message));
+    }
 
     // 6. Get updated balance for response
     const [updated] = await sql`SELECT balance_minutes, credit_balance FROM learner_users WHERE id = ${user.id}`;
@@ -2151,7 +2163,9 @@ async function handleCancel(req, res) {
         );
       }
 
-      // Notify learners with matching weekly availability (fire-and-forget)
+      // Notify learners with matching weekly availability (fire-and-forget).
+      // <48h cancellations with the instructor opted in mint a discounted
+      // broadcast offer; otherwise this fans out a plain "slot opened" message.
       for (const sb of seriesBookings) {
         notifyAvailableLearners({
           instructor_id:   booking.instructor_id,
@@ -2159,6 +2173,7 @@ async function handleCancel(req, res) {
           scheduled_date:  sb.scheduled_date,
           start_time:      sb.start_time,
           end_time:        sb.end_time,
+          lesson_type_id:  booking.lesson_type_id,
           school_id:       booking.school_id
         }).catch(err => {
           console.warn('availability notify (series) failed:', err.message);
@@ -2270,13 +2285,16 @@ async function handleCancel(req, res) {
       );
     }
 
-    // Notify learners with matching weekly availability (fire-and-forget)
+    // Notify learners with matching weekly availability (fire-and-forget).
+    // <48h cancellations with the instructor opted in mint a discounted
+    // broadcast offer; otherwise this fans out a plain "slot opened" message.
     notifyAvailableLearners({
       instructor_id:   booking.instructor_id,
       instructor_name: booking.instructor_name,
       scheduled_date:  String(booking.scheduled_date).slice(0, 10),
       start_time:      booking.start_time,
       end_time:        booking.end_time,
+      lesson_type_id:  booking.lesson_type_id,
       school_id:       booking.school_id
     }).catch(err => {
       console.warn('availability notify failed:', err.message);
