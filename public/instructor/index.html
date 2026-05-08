@@ -618,12 +618,12 @@
     </div>
     <button class="btn-add-lesson" id="btn-open-add-lesson">+ Add Lesson</button>
     <span class="toolbar-secondary">
-      <button class="btn-today" id="btn-open-offer" title="Send a lesson offer">Offer</button>
+      <button class="btn-today" id="btn-open-offer" title="Send a lesson offer to one learner — or broadcast it to everyone free at this time">Offer</button>
     </span>
     <div class="toolbar-overflow-wrap">
       <button class="btn-today toolbar-overflow-btn" id="btn-toolbar-overflow" title="More options">&#x22EF;</button>
       <div class="toolbar-overflow-menu" id="toolbarOverflow">
-        <button class="toolbar-overflow-item" data-toolbar-of="offer">Offer Lesson</button>
+        <button class="toolbar-overflow-item" data-toolbar-of="offer">Offer Lesson / Broadcast</button>
       </div>
     </div>
   </div>
@@ -868,7 +868,7 @@
         <div class="notes-label">Lesson type</div>
         <select id="offerLessonType" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;"></select>
       </div>
-      <div>
+      <div id="offerFlexibleRow">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
           <input type="checkbox" id="offerFlexible" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
           <span style="font-size:0.88rem;font-weight:600;color:var(--primary);">Flexible — learner picks their own time</span>

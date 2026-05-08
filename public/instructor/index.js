@@ -1510,8 +1510,11 @@ async function openOfferModal(prefillEmail, prefillName) {
     const isBroadcast = audBcast.checked;
     onePane.style.display = isBroadcast ? 'none' : '';
     bcastPane.style.display = isBroadcast ? '' : 'none';
-    // Broadcasts must be slot-pinned (we need a date+time to find matches).
-    flexCb.disabled = isBroadcast;
+    // Broadcasts must be slot-pinned (we need a date+time to find matches),
+    // so the "Flexible — learner picks their own time" option doesn't apply.
+    // Hide it entirely in broadcast mode rather than disabling it (less confusing).
+    const flexRow = document.getElementById('offerFlexibleRow');
+    if (flexRow) flexRow.style.display = isBroadcast ? 'none' : '';
     if (isBroadcast) {
       flexCb.checked = false;
       document.getElementById('offerSlotFields').style.display = '';
