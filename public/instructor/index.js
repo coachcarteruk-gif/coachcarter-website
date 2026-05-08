@@ -311,7 +311,7 @@ function renderWeekly() {
             <div class="tp-lesson-info">
               <div class="tp-lesson-name">${esc(b.learner_name)}${b.prefer_contact_before ? ' <span class="contact-badge">📞</span>' : ''}</div>
               <div class="tp-lesson-time">${b.start_time.slice(0,5)} → ${b.end_time.slice(0,5)}</div>
-              ${address ? `<div class="tp-lesson-address">📍 ${esc(address)}</div>` : ''}
+              ${address ? `<div class="tp-lesson-address">📍 ${esc(address)}</div>` : ''}
             </div>
             <span class="tp-lesson-type" style="background:${ltColour}18;color:${ltColour}">${esc(ltName)}</span>
           </div>`;
@@ -378,8 +378,8 @@ function renderDaily() {
             <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before their first lesson">📞 Contact first</span>' : ''}</div>
             <div class="daily-booking-email">${esc(b.learner_email)}</div>
             ${b.learner_phone ? `<div class="daily-booking-contact"><a href="tel:${esc(b.learner_phone)}">📞 ${esc(b.learner_phone)}</a>${waUrl ? `<a href="${waUrl}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}</div>` : ''}
-            ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="daily-booking-email">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</div>` : ''}
-            ${b.booking_dropoff_address ? `<div class="daily-booking-email">📍 ${esc(b.booking_dropoff_address)}</div>` : ''}
+            ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="daily-booking-email">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</div>` : ''}
+            ${b.booking_dropoff_address ? `<div class="daily-booking-email">📍 ${esc(b.booking_dropoff_address)}</div>` : ''}
           </div>
           <span class="daily-booking-status status-${b.status}">${statusLabel(b.status)}</span>
           ${b.status === 'awaiting_confirmation' ? `<button class="btn-confirm-sm" data-action="toggle-confirm-form" data-id="${b.id}">Confirm lesson</button><div id="confirm-form-${b.id}" style="display:none">${renderConfirmForm(b.id)}</div>` : ''}
@@ -479,10 +479,10 @@ function renderAgenda() {
           </div>
           <div class="agenda-card-mid">
             <div class="agenda-learner">${esc(b.learner_name)}${b.prefer_contact_before ? ' <span class="contact-badge">📞</span>' : ''}</div>
-            ${thisAddr ? `<div class="agenda-address">📍 ${esc(thisAddr)}</div>` : ''}
+            ${thisAddr ? `<div class="agenda-address">📍 ${esc(thisAddr)}</div>` : ''}
           </div>
           <div class="agenda-card-right">
-            <span class="agenda-status status-${b.status}">${isCompleted ? '✓' : isCancelled ? '✕' : '●'}</span>
+            <span class="agenda-status status-${b.status}">${isCompleted ? '✓' : isCancelled ? '✕' : '●'}</span>
           </div>
         </div>`;
     }
@@ -911,8 +911,8 @@ function openBookingDetail(bookingId) {
     <div class="booking-detail-row"><span class="booking-detail-label">Learner</span><span class="booking-detail-val"><a href="#" data-action="open-learner-history" data-id="${b.learner_id}" style="color:var(--accent);text-decoration:underline">${esc(b.learner_name)}</a></span></div>
     <div class="booking-detail-row"><span class="booking-detail-label">Email</span><span class="booking-detail-val">${esc(b.learner_email)}</span></div>
     ${b.learner_phone ? `<div class="booking-detail-row"><span class="booking-detail-label">Phone</span><span class="booking-detail-val"><a href="tel:${esc(b.learner_phone)}" style="color:var(--accent)">${esc(b.learner_phone)}</a></span></div>` : ''}
-    ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="booking-detail-row"><span class="booking-detail-label">Pickup</span><span class="booking-detail-val">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</span></div>` : ''}
-    ${b.booking_dropoff_address ? `<div class="booking-detail-row"><span class="booking-detail-label">Drop-off</span><span class="booking-detail-val">📍 ${esc(b.booking_dropoff_address)}</span></div>` : ''}
+    ${(b.booking_pickup_address || b.learner_pickup_address) ? `<div class="booking-detail-row"><span class="booking-detail-label">Pickup</span><span class="booking-detail-val">📍 ${esc(b.booking_pickup_address || b.learner_pickup_address)}</span></div>` : ''}
+    ${b.booking_dropoff_address ? `<div class="booking-detail-row"><span class="booking-detail-label">Drop-off</span><span class="booking-detail-val">📍 ${esc(b.booking_dropoff_address)}</span></div>` : ''}
     <div class="booking-detail-row"><span class="booking-detail-label">Status</span><span class="booking-detail-val"><span class="daily-booking-status status-${b.status}">${statusLabel(b.status)}</span></span></div>
     ${b.prefer_contact_before ? `<div class="booking-detail-row"><span class="booking-detail-label">Note</span><span class="booking-detail-val" style="color:var(--accent);">📞 Learner would like a call or message before their first lesson</span></div>` : ''}
     ${b.instructor_notes ? `<div class="booking-detail-row"><span class="booking-detail-label">Your notes</span><span class="booking-detail-val" style="font-style:italic">${esc(b.instructor_notes)}</span></div>` : ''}
@@ -1023,7 +1023,7 @@ async function openLearnerHistory(learnerId) {
       html += `<div class="history-item">
         <div class="history-item-date">${dateLabel} · ${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)} ${statusBadge}</div>`;
 
-      if (b.instructor_notes) html += `<div class="history-item-notes">📍 ${esc(b.instructor_notes)}</div>`;
+      if (b.instructor_notes) html += `<div class="history-item-notes">📍 ${esc(b.instructor_notes)}</div>`;
       if (b.session_notes) html += `<div class="history-item-notes">💬 "${esc(b.session_notes)}"</div>`;
 
       if (b.learner_ratings && b.learner_ratings.length > 0) {
