@@ -36,3 +36,8 @@ Thumbs.db
 
 # Nimbalyst editor local state (per-machine, not shared)
 nimbalyst-local/
+
+# Playwright / test artefacts
+playwright-report/
+test-results/
+screenshots/
