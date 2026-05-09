@@ -153,6 +153,22 @@ Hard rules:
 5. The `instructors.broadcast_offers_enabled` toggle defaults to `FALSE`. Cancellation-driven broadcasts only fire when this is `TRUE` and the cancellation is <48h before lesson start. Toggle UI lives on `/instructor/profile.html` ("Last-minute broadcasts" card).
 6. Instructor-triggered manual broadcasts (`trigger='instructor_manual'`) are not gated by the toggle — the toggle only affects auto-cancellation broadcasts. Manual broadcasts always go through `?action=create-broadcast-offer` and require an explicit `learner_ids` array.
 
+## Multi-instructor franchise model
+
+> Full plans: [`FRANCHISE-MODEL-PLAN.md`](FRANCHISE-MODEL-PLAN.md), [`INSTRUCTOR-EXPERIENCE-PLAN.md`](INSTRUCTOR-EXPERIENCE-PLAN.md)
+
+CoachCarter is moving from single-instructor (Fraser) to a multi-instructor franchise model. Instructor #2 onboarding planned a couple of months out from May 2026. Read both plan docs before doing any franchise/payout/credit/pricing work.
+
+Hard rules:
+
+1. **Numbers live in admin-editable config, never hardcoded.** £55/hour, £195/£70 franchise tier fees, 2.5%/5%/7.5% bulk discounts, 12-month contracts, tier inclusions — all live in DB columns or JSONB. Adding a tier or changing a fee is an admin action, not a deploy. The pricing infrastructure is `schools.config.pricing.bulk_hourly_pence`, `schools.config.pricing.bulk_discount_tiers`, `franchise_tiers` table (planned), `instructors.weekly_franchise_fee_pence`, `instructors.hourly_rate_pence` (planned).
+2. **Per-instructor credit scoping is required for new credit work.** Once Phase 2 ships, learner credits will scope to a specific instructor at purchase via `learner_credit_balances(learner_id, instructor_id)`. Don't write code that assumes the legacy pooled `learner_users.balance_minutes` model — that's read-only legacy after Phase 2.
+3. **Three-level pricing fallback** (most-specific wins): per-learner-pair custom rate (`instructor_learner_notes.custom_hourly_rate_pence`) → per-instructor rate (`instructors.hourly_rate_pence`) → school default (`schools.config.pricing.bulk_hourly_pence`). Bulk discount percentages always apply to the *effective* rate from this fallback.
+4. **Bulk-tier discounts are per-instructor opt-in. The instructor absorbs the discount.** `instructors.bulk_tiers_enabled` flag (planned). Their payout uses the snapshotted effective rate from `lesson_bookings.list_price_pence`, not the school list rate.
+5. **Don't re-add deferred phases without checking trigger conditions.** `franchise_fee_debts`, `franchise_fee_overrides`, `marketing_promos`, `instructor_promo_optins`, automated Bacs DD invoicing, vehicle/fleet management — all deliberately deferred. Trigger conditions for each are in the plan's Alternatives Appendix. Until then: manual workarounds (Fraser personally invoices, spreadsheet for debts, admin tweaks `weekly_franchise_fee_pence` for one-week overrides).
+6. **Year-one franchise relationships are human, not automated.** Negative-payout weeks are personally handled by Fraser, not auto-invoiced via Bacs DD. This is deliberate.
+7. **Configurability discipline**: don't add columns "for future flexibility" if no active code path reads them. Exception is justified only when the user has a specific commercial reason to set the value at onboarding.
+
 ## React Native migration principles
 
 > Full plan: [`MIGRATION-PLAN.md`](MIGRATION-PLAN.md)
@@ -193,6 +209,8 @@ When making structural changes (new tables, new API routes, new shared modules, 
 - `DESIGN-REVIEW.md` — UI/UX design principles, style guide, component standards
 - `MIGRATION-PLAN.md` — React Native app migration plan (keep updated)
 - `INSTRUCTORBOOK-PLAN.md` — InstructorBook national SaaS strategy, pricing, competitive analysis, marketplace phasing
+- `FRANCHISE-MODEL-PLAN.md` — multi-instructor franchise expansion: schema, code, configurability, legal-status research, MVP scope, deferred phases with trigger conditions
+- `INSTRUCTOR-EXPERIENCE-PLAN.md` — non-software companion to FRANCHISE-MODEL-PLAN: cold-start lead allocation, three crunch moments, signing-day conversation, 90-day success criteria for instructor #2
 
 **Area reference (load on demand):**
 - [`docs/multi-tenancy.md`](docs/multi-tenancy.md) — schools, roles, auth module, branding, school onboarding
