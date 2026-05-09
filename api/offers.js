@@ -10,12 +10,142 @@
 //   POST /api/offers?action=expire-offers
 //     → cron-triggered: bulk-expire stale pending offers
 
+const crypto = require('crypto');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const jwt    = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { safeEqual, verifyCronAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, buildSessionCookie } = require('./_auth');
 const { buildCsrfCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Series fan-out for offer-driven weekly repeats (May 2026)
+// ─────────────────────────────────────────────────────────────────────────────
+// Walks weekly from `firstDate` and books up to `repeatWeeks` lessons at the
+// same day-of-week / time. Skips any week the instructor isn't available
+// (existing booking, blackout, no availability window for that DoW) and rolls
+// to the next free week. Search is bounded to 18 weeks past `firstDate` —
+// matches the offer's maximum so we never search beyond what the instructor
+// agreed to.
+//
+// Returns { booked: [{ date, booking_id }...], skipped: [{ date, reason }...] }.
+// The first week is always week 0; if that's clashed, the offer caller has
+// already set status=cancelled and refunded — this helper assumes the first
+// week is bookable (it's been held by the offer until now).
+async function bookOfferSeries(sql, {
+  instructorId, learnerId, firstDate, startTime, endTime, lessonTypeId,
+  durationMins, pickupAddress, schoolId, repeatWeeks, paymentMethod
+}) {
+  const SERIES_LOOKAHEAD_WEEKS = 18;
+  const seriesId = repeatWeeks > 1 ? crypto.randomUUID() : null;
+
+  // Day-of-week (0=Sun..6=Sat) of the first slot — must match every week.
+  const firstDateObj = new Date(firstDate + 'T00:00:00Z');
+  const dow = firstDateObj.getUTCDay();
+
+  // Pull instructor's availability for this DoW (any window covering the slot).
+  const availability = await sql`
+    SELECT start_time::text AS start_time, end_time::text AS end_time
+    FROM instructor_availability
+    WHERE instructor_id = ${instructorId}
+      AND day_of_week = ${dow}
+      AND active = true
+  `;
+  const slotStartM = parseInt(startTime.slice(0,2),10)*60 + parseInt(startTime.slice(3,5),10);
+  const slotEndM   = parseInt(endTime.slice(0,2),10)*60 + parseInt(endTime.slice(3,5),10);
+  const dowCoversSlot = availability.some(w => {
+    const ws = parseInt(w.start_time.slice(0,2),10)*60 + parseInt(w.start_time.slice(3,5),10);
+    const we = parseInt(w.end_time.slice(0,2),10)*60 + parseInt(w.end_time.slice(3,5),10);
+    return ws <= slotStartM && we >= slotEndM;
+  });
+
+  // If the instructor doesn't even cover this DoW/time in their normal
+  // availability, only book the first lesson (it was the offered slot — they
+  // chose to make an exception). Skip all repeats.
+  const allowRepeats = dowCoversSlot && repeatWeeks > 1;
+
+  // Pull blackout ranges that overlap the search window so we can check each
+  // candidate date in memory without hammering the DB.
+  const lookaheadEnd = new Date(firstDateObj);
+  lookaheadEnd.setUTCDate(lookaheadEnd.getUTCDate() + SERIES_LOOKAHEAD_WEEKS * 7);
+  const lookaheadEndStr = lookaheadEnd.toISOString().slice(0, 10);
+  const blackouts = await sql`
+    SELECT blackout_date::text AS start_date, end_date::text AS end_date
+    FROM instructor_blackout_dates
+    WHERE instructor_id = ${instructorId}
+      AND blackout_date <= ${lookaheadEndStr}
+      AND end_date >= ${firstDate}
+  `;
+  const isBlackedOut = (dateStr) => blackouts.some(b => dateStr >= b.start_date && dateStr <= b.end_date);
+
+  const fmt = d => d.toISOString().slice(0, 10);
+  const booked = [];
+  const skipped = [];
+
+  // Walk weeks. We try each week in turn; on clash we move to the next week
+  // (still same DoW/time) until we hit either repeatWeeks confirmed bookings
+  // or the lookahead boundary.
+  let weekOffset = 0;
+  while (booked.length < repeatWeeks && weekOffset <= SERIES_LOOKAHEAD_WEEKS) {
+    const candidate = new Date(firstDateObj);
+    candidate.setUTCDate(candidate.getUTCDate() + weekOffset * 7);
+    const candidateStr = fmt(candidate);
+
+    // First lesson is always week 0 — booked unconditionally (the offer held
+    // this slot). For later weeks, run the conflict checks.
+    let canBook = weekOffset === 0;
+    let skipReason = null;
+
+    if (!canBook) {
+      if (!allowRepeats) { weekOffset++; continue; }
+      if (isBlackedOut(candidateStr)) { skipped.push({ date: candidateStr, reason: 'blackout' }); weekOffset++; continue; }
+
+      const [existing] = await sql`
+        SELECT id FROM lesson_bookings
+        WHERE instructor_id = ${instructorId}
+          AND scheduled_date = ${candidateStr}
+          AND start_time = ${startTime}::time
+          AND status IN ('confirmed','completed','awaiting_confirmation')
+      `;
+      if (existing) { skipped.push({ date: candidateStr, reason: 'already_booked' }); weekOffset++; continue; }
+
+      canBook = true;
+    }
+
+    if (canBook) {
+      try {
+        const [b] = await sql`
+          INSERT INTO lesson_bookings
+            (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+             created_by, payment_method, lesson_type_id, minutes_deducted,
+             pickup_address, series_id, school_id)
+          VALUES
+            (${learnerId}, ${instructorId}, ${candidateStr}, ${startTime}, ${endTime}, 'confirmed',
+             'instructor_offer', ${paymentMethod}, ${lessonTypeId}, ${durationMins},
+             ${pickupAddress || null}, ${seriesId}, ${schoolId})
+          RETURNING id
+        `;
+        booked.push({ date: candidateStr, booking_id: b.id });
+      } catch (insertErr) {
+        // Race: someone booked the slot between our check and INSERT. Treat as clash.
+        if (insertErr.message?.includes('uq_booking_slot') || insertErr.message?.includes('uq_instructor_slot')) {
+          if (weekOffset === 0) {
+            // First slot lost the race — bubble up so caller can refund/cancel.
+            throw insertErr;
+          }
+          skipped.push({ date: candidateStr, reason: 'race' });
+        } else {
+          throw insertErr;
+        }
+      }
+    }
+
+    weekOffset++;
+  }
+
+  return { booked, skipped, series_id: seriesId };
+}
+
 
 function setCors(res) {
 }
@@ -29,6 +159,9 @@ module.exports = async (req, res) => {
 
   return res.status(400).json({ error: 'Unknown action' });
 };
+
+// Exposed for api/webhook.js handleOfferBooking — see top of file for behaviour.
+module.exports.bookOfferSeries = bookOfferSeries;
 
 // ── Shared: find or create a learner by email/phone ─────────────────────────
 // Handles phone format mismatches and unique constraint races gracefully.
@@ -116,7 +249,7 @@ async function handleGetOffer(req, res) {
       SELECT o.id, o.learner_email, o.learner_id, o.learner_name AS offer_learner_name,
              o.scheduled_date::text,
              o.start_time::text, o.end_time::text, o.status, o.expires_at,
-             o.discount_pct, o.offer_price_pence,
+             o.discount_pct, o.offer_price_pence, o.max_repeat_weeks,
              o.kind, o.trigger,
              lt.name AS lesson_type_name, lt.duration_minutes, lt.price_pence,
              i.name AS instructor_name, i.school_id AS instructor_school_id,
@@ -177,6 +310,7 @@ async function handleGetOffer(req, res) {
         discount_pct: offer.discount_pct || 0,
         kind: offer.kind || 'manual',
         trigger: offer.trigger || null,
+        max_repeat_weeks: offer.max_repeat_weeks || null,
         is_flexible: isFlexible,
         learner_email: offer.learner_email,
         learner_name: resolvedName,
@@ -198,7 +332,7 @@ async function handleGetOffer(req, res) {
 async function handleAcceptOffer(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { token, name, phone, pickup_address, email } = req.body;
+  const { token, name, phone, pickup_address, email, repeat_weeks } = req.body;
   if (!token) return res.status(400).json({ error: 'Token is required' });
 
   try {
@@ -250,6 +384,19 @@ async function handleAcceptOffer(req, res) {
     const isFlexible = !offer.scheduled_date && !offer.start_time;
     const originalPricePence = offer.price_pence || 8250;
 
+    // Resolve weekly-repeat count. The offer's max_repeat_weeks is the ceiling
+    // the instructor set (null/1 = single lesson only). Learner-supplied count
+    // is clamped to that ceiling. Repeats are slot-pinned only — flexible
+    // offers credit the learner instead and let them book themselves.
+    const offerMaxRepeat = (offer.max_repeat_weeks && !isFlexible) ? parseInt(offer.max_repeat_weeks, 10) : 1;
+    let repeatWeeksClean = 1;
+    if (repeat_weeks != null && repeat_weeks !== '') {
+      const rw = parseInt(repeat_weeks, 10);
+      if (isNaN(rw) || rw < 1)
+        return res.status(400).json({ error: 'repeat_weeks must be a positive integer' });
+      repeatWeeksClean = Math.min(rw, offerMaxRepeat);
+    }
+
     // offer_price_pence (custom price) takes precedence over discount_pct
     let pricePence;
     if (offer.offer_price_pence != null) {
@@ -274,7 +421,7 @@ async function handleAcceptOffer(req, res) {
 
     // Free offer → skip Stripe, confirm directly (only for slot-pinned offers)
     if (pricePence === 0 && !isFlexible) {
-      return await handleFreeOffer(sql, offer, { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() }, baseUrl, token, res, resolvedEmail);
+      return await handleFreeOffer(sql, offer, { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() }, baseUrl, token, res, resolvedEmail, repeatWeeksClean);
     }
 
     // Flexible + free → create/find learner, add credit, redirect to success
@@ -341,6 +488,8 @@ async function handleAcceptOffer(req, res) {
     let priceLabel;
     if (isFlexible) {
       priceLabel = `${offer.lesson_type_name || 'Standard Lesson'} — flexible time`;
+    } else if (repeatWeeksClean > 1) {
+      priceLabel = `${offer.lesson_type_name || 'Standard Lesson'} — ${repeatWeeksClean} weekly lessons from ${lessonDate}`;
     } else {
       priceLabel = `${offer.lesson_type_name || 'Standard Lesson'} — ${lessonDate} ${offer.start_time}–${offer.end_time}`;
     }
@@ -354,10 +503,12 @@ async function handleAcceptOffer(req, res) {
           unit_amount: pricePence,
           product_data: {
             name: priceLabel,
-            description: `${durationStr} driving lesson with ${offer.instructor_name}`
+            description: repeatWeeksClean > 1
+              ? `${repeatWeeksClean} × ${durationStr} driving lessons with ${offer.instructor_name}`
+              : `${durationStr} driving lesson with ${offer.instructor_name}`
           }
         },
-        quantity: 1
+        quantity: repeatWeeksClean
       }],
       metadata: {
         payment_type:      'lesson_offer',
@@ -375,6 +526,7 @@ async function handleAcceptOffer(req, res) {
         lesson_type_id:    String(offer.lesson_type_id || ''),
         duration_minutes:  String(durationMins),
         amount_pence:      String(pricePence),
+        repeat_weeks:      String(repeatWeeksClean),
         school_id:         String(schoolId),
         is_flexible:       isFlexible ? '1' : '0'
       },
@@ -403,9 +555,10 @@ async function handleAcceptOffer(req, res) {
 
 // ── Free offer handler (100% discount — no Stripe) ───────────────────────────
 // Creates learner + booking directly without payment.
-async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, resolvedEmail) {
+async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, resolvedEmail, repeatWeeks) {
   const { createTransporter } = require('./_auth-helpers');
   const durationMins = offer.duration_minutes || 90;
+  const repeats = Math.max(1, parseInt(repeatWeeks, 10) || 1);
 
   // Derive school_id from instructor
   const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
@@ -425,27 +578,30 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
     appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
   }
 
-  // 2. Create booking directly (free — no credit transaction)
-  let booking;
+  // 2. Create booking(s) — single lesson or weekly series with skip-clash.
+  const isoDate0 = offer.scheduled_date instanceof Date ? offer.scheduled_date.toISOString().slice(0, 10) : String(offer.scheduled_date).slice(0, 10);
+  let seriesResult;
   try {
-    const [b] = await sql`
-      INSERT INTO lesson_bookings
-        (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-         created_by, payment_method, lesson_type_id, minutes_deducted,
-         pickup_address, school_id)
-      VALUES
-        (${learnerId}, ${offer.instructor_id}, ${offer.scheduled_date}, ${offer.start_time}, ${offer.end_time}, 'confirmed',
-         'instructor_offer', 'free', ${offer.lesson_type_id}, 0,
-         ${learnerDetails.pickup_address || null}, ${schoolId})
-      RETURNING id, scheduled_date, start_time::text, end_time::text
-    `;
-    booking = b;
+    seriesResult = await bookOfferSeries(sql, {
+      instructorId: offer.instructor_id,
+      learnerId,
+      firstDate: isoDate0,
+      startTime: offer.start_time,
+      endTime: offer.end_time,
+      lessonTypeId: offer.lesson_type_id,
+      durationMins: 0,        // free — no minutes deducted
+      pickupAddress: learnerDetails.pickup_address || null,
+      schoolId,
+      repeatWeeks: repeats,
+      paymentMethod: 'free'
+    });
   } catch (insertErr) {
-    if (insertErr.message?.includes('uq_booking_slot')) {
+    if (insertErr.message?.includes('uq_booking_slot') || insertErr.message?.includes('uq_instructor_slot')) {
       return res.status(409).json({ error: true, code: 'SLOT_TAKEN', message: 'Sorry, that slot has been taken.' });
     }
     throw insertErr;
   }
+  const booking = { id: seriesResult.booked[0].booking_id };
 
   // 3. Update offer
   await sql`
@@ -467,20 +623,34 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
     const transporter = createTransporter();
     const firstName = (learnerDetails.name || '').split(' ')[0] || 'there';
 
+    const isSeries = seriesResult.booked.length > 1;
+    const seriesListHtml = isSeries
+      ? '<ul style="padding-left:18px;margin:8px 0">' + seriesResult.booked.map(b => {
+          const ds = new Date(b.date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+          return `<li>${ds} at ${offer.start_time}</li>`;
+        }).join('') + '</ul>'
+      : '';
+    const skippedListHtml = (isSeries && seriesResult.skipped.length > 0)
+      ? '<p style="font-size:0.85rem;color:#797879">Skipped weeks where the instructor was unavailable — those slots rolled to the next free week.</p>'
+      : '';
+
     await transporter.sendMail({
       from: 'CoachCarter <bookings@coachcarter.uk>',
       to: resolvedEmail,
-      subject: `Free lesson confirmed — ${lessonDate} at ${offer.start_time}`,
+      subject: isSeries
+        ? `${seriesResult.booked.length} free lessons confirmed with ${offer.instructor_name}`
+        : `Free lesson confirmed — ${lessonDate} at ${offer.start_time}`,
       html: `
-        <h1>Lesson confirmed!</h1>
-        <p>Hi ${firstName}, your free lesson is booked.</p>
+        <h1>${isSeries ? 'Lessons confirmed!' : 'Lesson confirmed!'}</h1>
+        <p>Hi ${firstName}, your ${isSeries ? `${seriesResult.booked.length} free lessons are` : 'free lesson is'} booked.</p>
+        ${isSeries ? `<p><strong>Your weekly lessons:</strong></p>${seriesListHtml}${skippedListHtml}` : `
         <table>
           <tr><td><strong>Date:</strong></td><td>${lessonDate}</td></tr>
           <tr><td><strong>Time:</strong></td><td>${offer.start_time} – ${offer.end_time}</td></tr>
           <tr><td><strong>Instructor:</strong></td><td>${offer.instructor_name}</td></tr>
           <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
           <tr><td><strong>Price:</strong></td><td>FREE</td></tr>
-        </table>
+        </table>`}
         <p><a href="${baseUrl}/learner/" style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">View my bookings →</a></p>
       `
     });

@@ -2404,18 +2404,20 @@ async function handleIcalStatus(req, res) {
 }
 
 // ── POST /api/instructor?action=create-offer ──────────────────────────────────
-// Body: { learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence? }
+// Body: { learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, max_repeat_weeks? }
 // Creates a lesson offer. If learner_email is provided, emails the learner an accept link.
 // If only learner_name is provided, creates a link-only offer (no email sent).
 // Slot fields are optional — omit for "flexible" offers where learner picks their own time.
 // offer_price_pence overrides the lesson-type price; omit to use lesson-type default.
+// max_repeat_weeks (1..18, default null = single lesson): caps how many weekly
+// repeats the learner can choose on the accept page. Slot-pinned only.
 async function handleCreateOffer(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence } = req.body;
+  const { learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence, max_repeat_weeks } = req.body;
   if (!learner_email && !learner_name)
     return res.status(400).json({ error: 'Either learner_email or learner_name is required' });
 
@@ -2425,6 +2427,19 @@ async function handleCreateOffer(req, res) {
   if (offer_price_pence != null) {
     const p = parseInt(offer_price_pence);
     if (isNaN(p) || p < 0) return res.status(400).json({ error: 'offer_price_pence must be a non-negative integer' });
+  }
+
+  // Validate max_repeat_weeks if provided. Range 1..18 (1 = single lesson, no
+  // repeat option shown; 2..18 = learner picks count on accept page). Only
+  // valid for slot-pinned offers — flexible offers credit the learner instead.
+  let maxRepeatWeeksClean = null;
+  if (max_repeat_weeks != null && max_repeat_weeks !== '') {
+    const mrw = parseInt(max_repeat_weeks, 10);
+    if (isNaN(mrw) || mrw < 1 || mrw > 18)
+      return res.status(400).json({ error: 'max_repeat_weeks must be between 1 and 18' });
+    if (isFlexible && mrw > 1)
+      return res.status(400).json({ error: 'Weekly repeats can only be offered with a fixed slot, not flexible offers' });
+    maxRepeatWeeksClean = mrw;
   }
 
   // Validate email format (only when email is provided)
@@ -2440,6 +2455,13 @@ async function handleCreateOffer(req, res) {
     today.setUTCHours(0, 0, 0, 0);
     if (bookingDate < today)
       return res.status(400).json({ error: 'Cannot offer a lesson in the past' });
+    // First slot of the offer must be within the 12-week (84-day) advance cap.
+    // The series itself may run past it (the webhook creates the repeats with
+    // the exemption justified by the instructor's explicit opt-in).
+    const maxAhead = new Date(today);
+    maxAhead.setUTCDate(maxAhead.getUTCDate() + 84);
+    if (bookingDate > maxAhead)
+      return res.status(400).json({ error: 'Offer date cannot be more than 12 weeks in advance' });
     if (!start_time)
       return res.status(400).json({ error: 'start_time is required when scheduled_date is provided' });
   }
@@ -2532,11 +2554,11 @@ async function handleCreateOffer(req, res) {
     const [offer] = await sql`
       INSERT INTO lesson_offers
         (token, instructor_id, learner_email, learner_name, learner_id, scheduled_date, start_time, end_time,
-         lesson_type_id, discount_pct, offer_price_pence, status, expires_at)
+         lesson_type_id, discount_pct, offer_price_pence, max_repeat_weeks, status, expires_at)
       VALUES
         (${token}, ${instructor.id}, ${learner_email ? learner_email.toLowerCase() : null}, ${offerName}, ${existingLearner?.id || null},
          ${scheduled_date || null}, ${start_time || null}, ${end_time},
-         ${lessonType.id}, ${0}, ${customPricePence}, 'pending', NOW() + INTERVAL '24 hours')
+         ${lessonType.id}, ${0}, ${customPricePence}, ${maxRepeatWeeksClean}, 'pending', NOW() + INTERVAL '24 hours')
       RETURNING id, expires_at
     `;
 
@@ -2564,11 +2586,15 @@ async function handleCreateOffer(req, res) {
         weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
       });
       emailSubject = `Driving lesson offer from ${instrDetails.name} — ${dateStr}`;
+      const repeatRow = maxRepeatWeeksClean && maxRepeatWeeksClean > 1
+        ? `<tr><td style="padding:6px 16px 6px 0;font-weight:bold">Weekly repeats</td><td style="padding:6px 0">Pick up to ${maxRepeatWeeksClean} weekly lessons on the accept page</td></tr>`
+        : '';
       emailSlotRows = `
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Date</td><td style="padding:6px 0">${dateStr}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Time</td><td style="padding:6px 0">${start_time} – ${end_time}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Duration</td><td style="padding:6px 0">${durationStr}</td></tr>
-        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceStr}</td></tr>`;
+        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceStr}${maxRepeatWeeksClean && maxRepeatWeeksClean > 1 ? ' per lesson' : ''}</td></tr>
+        ${repeatRow}`;
     }
 
     // Send offer email (only when email is provided)

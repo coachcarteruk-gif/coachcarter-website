@@ -135,6 +135,33 @@
       priceEl.textContent = '\u00A3' + (o.price_pence / 100).toFixed(2);
     }
 
+    // Weekly-repeat picker (slot-pinned offers only). Builds 1..max_repeat_weeks.
+    var maxRepeat = (!o.is_flexible && o.max_repeat_weeks) ? parseInt(o.max_repeat_weeks, 10) : 1;
+    if (maxRepeat > 1) {
+      var repeatSection = document.getElementById('repeat-section');
+      var repeatSel = document.getElementById('repeat-weeks');
+      repeatSel.innerHTML = '';
+      for (var n = 1; n <= maxRepeat; n++) {
+        var optEl = document.createElement('option');
+        optEl.value = String(n);
+        optEl.textContent = n === 1 ? '1 lesson' : n + ' weekly lessons';
+        repeatSel.appendChild(optEl);
+      }
+      repeatSection.style.display = '';
+      var updateRepeatTotal = function () {
+        var n = parseInt(repeatSel.value, 10) || 1;
+        var totalEl = document.getElementById('repeat-total');
+        if (o.price_pence === 0) {
+          totalEl.textContent = n + (n === 1 ? ' free lesson' : ' free lessons');
+        } else {
+          totalEl.textContent = 'Total: £' + ((o.price_pence * n) / 100).toFixed(2)
+            + (n > 1 ? ' (' + n + ' × £' + (o.price_pence / 100).toFixed(2) + ')' : '');
+        }
+      };
+      repeatSel.addEventListener('change', updateRepeatTotal);
+      updateRepeatTotal();
+    }
+
     // Pre-fill form
     if (o.learner_name) document.getElementById('name').value = o.learner_name;
     if (o.learner_phone) document.getElementById('phone').value = o.learner_phone;
@@ -222,6 +249,11 @@
 
     var payload = { token: token, name: name, phone: phone, pickup_address: pickup };
     if (email) payload.email = email;
+    var repeatSel = document.getElementById('repeat-weeks');
+    if (repeatSel && repeatSel.options.length > 0) {
+      var rw = parseInt(repeatSel.value, 10);
+      if (rw > 1) payload.repeat_weeks = rw;
+    }
 
     try {
       var res = await fetch(API + '?action=accept-offer', {

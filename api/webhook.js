@@ -712,6 +712,7 @@ async function handleOfferBooking(session) {
   const schoolId       = parseInt(metadata.school_id, 10) || 1;
 
   const isFlexible = metadata.is_flexible === '1';
+  const repeatWeeks = Math.max(1, parseInt(metadata.repeat_weeks, 10) || 1);
   if (!offerToken || !instructorId || (!isFlexible && (!scheduledDate || !startTime || !endTime))) {
     console.error('❌ lesson_offer webhook missing required metadata', metadata);
     return;
@@ -781,18 +782,23 @@ async function handleOfferBooking(session) {
       }
     }
 
-    // 2. Record the transaction (add-then-deduct pattern for consistency)
+    // 2. Record the transaction (add-then-deduct pattern for consistency).
+    // For repeat-weeks series, amountPence is per-lesson and Stripe charged
+    // amountPence × repeatWeeks via line-item quantity.
+    const totalAmountPence = amountPence * repeatWeeks;
+    const totalMinutes     = durationMins * repeatWeeks;
+    const totalCredits     = repeatWeeks;
     await sql`
       INSERT INTO credit_transactions
         (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id)
       VALUES
-        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId})
+        (${learnerId}, 'slot_purchase', ${totalCredits}, ${totalAmountPence}, 'card', ${session.id}, ${totalMinutes}, ${schoolId})
     `;
 
     await sql`
       UPDATE learner_users
-      SET credit_balance = credit_balance + 1,
-          balance_minutes = balance_minutes + ${durationMins}
+      SET credit_balance = credit_balance + ${totalCredits},
+          balance_minutes = balance_minutes + ${totalMinutes}
       WHERE id = ${learnerId}
     `;
 
@@ -851,12 +857,12 @@ async function handleOfferBooking(session) {
       return;
     }
 
-    // ── Slot-pinned offers: deduct credit and create booking ──
+    // ── Slot-pinned offers: deduct credit and create booking(s) ──
     const [deducted] = await sql`
       UPDATE learner_users
-      SET credit_balance = credit_balance - 1,
-          balance_minutes = balance_minutes - ${durationMins}
-      WHERE id = ${learnerId} AND balance_minutes >= ${durationMins}
+      SET credit_balance = credit_balance - ${totalCredits},
+          balance_minutes = balance_minutes - ${totalMinutes}
+      WHERE id = ${learnerId} AND balance_minutes >= ${totalMinutes}
       RETURNING credit_balance, balance_minutes
     `;
 
@@ -865,33 +871,58 @@ async function handleOfferBooking(session) {
       return;
     }
 
-    // 3. Create the booking
+    // 3. Create the booking(s) — single lesson, or weekly series with skip-clash.
+    const { bookOfferSeries } = require('./offers');
     let booking;
+    let seriesResult;
     try {
-      const [b] = await sql`
-        INSERT INTO lesson_bookings
-          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           created_by, payment_method, lesson_type_id, minutes_deducted,
-           pickup_address, school_id)
-        VALUES
-          (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, 'confirmed',
-           'instructor_offer', 'card', ${lessonTypeId}, ${durationMins},
-           ${pickupAddress || null}, ${schoolId})
-        RETURNING id, scheduled_date, start_time::text, end_time::text
-      `;
-      booking = b;
+      seriesResult = await bookOfferSeries(sql, {
+        instructorId,
+        learnerId,
+        firstDate: scheduledDate,
+        startTime,
+        endTime,
+        lessonTypeId,
+        durationMins,
+        pickupAddress: pickupAddress || null,
+        schoolId,
+        repeatWeeks,
+        paymentMethod: 'card'
+      });
+      booking = { id: seriesResult.booked[0].booking_id, scheduled_date: scheduledDate, start_time: startTime, end_time: endTime };
     } catch (insertErr) {
-      // Slot was taken — refund hours
+      // First slot lost the race — refund and cancel offer.
       await sql`
         UPDATE learner_users
-        SET credit_balance = credit_balance + 1,
-            balance_minutes = balance_minutes + ${durationMins}
+        SET credit_balance = credit_balance + ${totalCredits},
+            balance_minutes = balance_minutes + ${totalMinutes}
         WHERE id = ${learnerId}
       `;
-      console.error('❌ lesson_offer: slot already taken, hours refunded', insertErr.message);
-      // Mark offer as cancelled since the slot is gone
+      console.error('❌ lesson_offer: first slot already taken, hours refunded', insertErr.message);
       await sql`UPDATE lesson_offers SET status = 'cancelled' WHERE id = ${offerId}`;
       return;
+    }
+
+    // If we couldn't book all the requested weeks (skip-clash hit the 18-week
+    // lookahead boundary), refund the unused weeks via Stripe. Balance is
+    // already net-zero from the add-then-deduct above and the bookings each
+    // recorded their own minutes_deducted, so no further balance change is
+    // needed — only a money refund.
+    const bookedCount = seriesResult.booked.length;
+    if (bookedCount < repeatWeeks) {
+      const unused = repeatWeeks - bookedCount;
+      try {
+        if (session.payment_intent) {
+          await stripe.refunds.create({
+            payment_intent: session.payment_intent,
+            amount: amountPence * unused,
+            reason: 'requested_by_customer',
+            metadata: { offer_id: String(offerId), unused_weeks: String(unused) }
+          });
+        }
+      } catch (refundErr) {
+        console.error('❌ lesson_offer: partial refund failed', refundErr.message);
+      }
     }
 
     // 4. Update the offer
@@ -943,19 +974,37 @@ async function handleOfferBooking(session) {
     const firstName = (learner?.name || '').split(' ')[0] || 'there';
 
     // Email to learner
+    const isSeries = (seriesResult?.booked?.length || 1) > 1;
+    const seriesListHtml = isSeries
+      ? '<ul style="padding-left:18px;margin:8px 0">' + seriesResult.booked.map(b => {
+          const ds = new Date(b.date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+          return `<li>${ds} at ${startTime} – ${endTime}</li>`;
+        }).join('') + '</ul>'
+      : '';
+    const skippedNote = (isSeries && seriesResult.skipped.length > 0)
+      ? `<p style="font-size:0.85rem;color:#797879">We rolled past ${seriesResult.skipped.length} week${seriesResult.skipped.length === 1 ? '' : 's'} where ${instructorName} was unavailable.</p>`
+      : '';
+    // Stripe charged amountPence × repeatWeeks. If we couldn't fill all weeks,
+    // we've already issued a partial refund above, so the net charge is the
+    // per-lesson price × the number we actually booked.
+    const totalChargedPence = amountPence * bookedCount;
+
     await transporter.sendMail({
       from:    'CoachCarter <bookings@coachcarter.uk>',
       to:      learnerEmail,
-      subject: `Lesson confirmed — ${lessonDate} at ${startTime}`,
+      subject: isSeries
+        ? `${bookedCount} lessons confirmed with ${instructorName}`
+        : `Lesson confirmed — ${lessonDate} at ${startTime}`,
       html: `
-        <h1>Lesson confirmed!</h1>
-        <p>Hi ${firstName}, your payment of <strong>£${(amountPence / 100).toFixed(2)}</strong> was successful and your lesson is booked.</p>
+        <h1>${isSeries ? 'Lessons confirmed!' : 'Lesson confirmed!'}</h1>
+        <p>Hi ${firstName}, your payment of <strong>£${(totalChargedPence / 100).toFixed(2)}</strong> was successful and your ${isSeries ? `${bookedCount} weekly lessons are` : 'lesson is'} booked.</p>
+        ${isSeries ? `<p><strong>Your weekly lessons with ${instructorName}:</strong></p>${seriesListHtml}${skippedNote}` : `
         <table>
           <tr><td><strong>Date:</strong></td><td>${lessonDate}</td></tr>
           <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
           <tr><td><strong>Instructor:</strong></td><td>${instructorName}</td></tr>
           <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
-        </table>
+        </table>`}
         <p style="margin-top:16px;font-size:0.875rem;color:#797879">
           Need to cancel? Do so at least 48 hours before and the hours return to your balance.
         </p>
@@ -978,16 +1027,19 @@ async function handleOfferBooking(session) {
       await transporter.sendMail({
         from:    'CoachCarter <system@coachcarter.uk>',
         to:      instructor.email,
-        subject: `Offer accepted — ${learner?.name || learnerEmail} on ${lessonDate}`,
+        subject: isSeries
+          ? `Offer accepted — ${learner?.name || learnerEmail} booked ${bookedCount} weekly lessons`
+          : `Offer accepted — ${learner?.name || learnerEmail} on ${lessonDate}`,
         html: `
-          <h2>Lesson offer accepted!</h2>
-          <p>${learner?.name || learnerEmail} has accepted your lesson offer and paid.</p>
+          <h2>${isSeries ? 'Weekly lesson series accepted!' : 'Lesson offer accepted!'}</h2>
+          <p>${learner?.name || learnerEmail} has accepted your lesson offer and paid £${(totalChargedPence / 100).toFixed(2)}.</p>
+          ${isSeries ? `<p><strong>Booked weeks:</strong></p>${seriesListHtml}${skippedNote}` : `
           <table>
             <tr><td><strong>Learner:</strong></td><td>${learner?.name || 'New learner'}</td></tr>
             <tr><td><strong>Email:</strong></td><td>${learnerEmail}</td></tr>
             <tr><td><strong>Date:</strong></td><td>${lessonDate}</td></tr>
             <tr><td><strong>Time:</strong></td><td>${lessonTime}</td></tr>
-          </table>
+          </table>`}
           <p style="margin-top:16px">
             <a href="https://coachcarter.uk/instructor/"
                style="background:#f58321;color:white;padding:10px 20px;text-decoration:none;

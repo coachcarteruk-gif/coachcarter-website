@@ -1495,6 +1495,10 @@ async function openOfferModal(prefillEmail, prefillName) {
     document.getElementById('offerSlotFields').style.display = flexCb.checked ? 'none' : '';
   };
 
+  // Reset weekly-repeats selector to "no repeat"
+  const repeatSel = document.getElementById('offerMaxRepeatWeeks');
+  if (repeatSel) repeatSel.value = '1';
+
   // Reset audience radio (default: one specific learner — preserves existing UX)
   const audOne = document.getElementById('offerAudienceOne');
   const audBcast = document.getElementById('offerAudienceBroadcast');
@@ -1818,6 +1822,11 @@ async function sendOffer() {
   btn.disabled = true;
   btn.textContent = sendEmail ? 'Sending…' : 'Creating…';
 
+  // Weekly-repeats cap (1 = single lesson, 2..18 = learner picks count on accept page).
+  // Only valid for slot-pinned offers; the API rejects flexible+repeat anyway.
+  const repeatSel = document.getElementById('offerMaxRepeatWeeks');
+  const maxRepeatWeeks = (!flexible && repeatSel) ? parseInt(repeatSel.value, 10) : 1;
+
   try {
     const payload = {
       learner_name: offerName,
@@ -1827,6 +1836,7 @@ async function sendOffer() {
     if (!flexible) {
       payload.scheduled_date = date;
       payload.start_time = time;
+      if (maxRepeatWeeks > 1) payload.max_repeat_weeks = maxRepeatWeeks;
     }
     if (offerPricePence !== undefined) {
       payload.offer_price_pence = offerPricePence;

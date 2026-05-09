@@ -1520,3 +1520,17 @@ CREATE INDEX IF NOT EXISTS idx_offers_slot_pending_broadcast
 -- changes for existing instructors until they explicitly enable it.
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS broadcast_offers_enabled
   BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Lesson offers: optional weekly-repeat series (May 2026)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Instructors can offer a slot with up to 18 weekly repeats. The learner picks
+-- how many on the accept page (1..max_repeat_weeks). On payment the webhook
+-- creates a series sharing one series_id, skipping any clashing weeks (existing
+-- booking, blackout, no availability) up to a 18-week lookahead from the
+-- original date.
+--
+-- This is the only path that may create bookings beyond the global 12-week
+-- (84-day) advance cap — the instructor explicitly opted in by setting it.
+ALTER TABLE lesson_offers ADD COLUMN IF NOT EXISTS max_repeat_weeks INTEGER
+  CHECK (max_repeat_weeks IS NULL OR max_repeat_weeks BETWEEN 1 AND 18);
