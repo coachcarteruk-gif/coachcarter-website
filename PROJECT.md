@@ -464,7 +464,7 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `create-offer` | POST | Instructor JWT | Creates lesson offer, sends email to learner |
+| `create-offer` | POST | Instructor JWT | Creates lesson offer, sends email to learner. Body: `{ learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, max_repeat_weeks? (1-18) }`. `max_repeat_weeks > 1` lets the learner book a recurring weekly series via the accept page (skip-clash, may exceed the 12-week self-serve cap). |
 | `list-offers` | GET | Instructor JWT | Lists instructor's offers with status filter |
 | `cancel-offer` | POST | Instructor JWT | Cancels a pending offer |
 

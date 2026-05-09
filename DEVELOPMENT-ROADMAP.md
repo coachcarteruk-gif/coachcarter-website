@@ -1026,6 +1026,43 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 ---
 
+### 2.65a — Fix Klarna async_payment_succeeded handling ✅ Complete (8 May 2026)
+
+**What:** Klarna purchases were silently dropping confirmation emails because the webhook only listened for `checkout.session.completed`. Stripe fires that event early for Klarna with `payment_status='unpaid'`, then a follow-up `checkout.session.async_payment_succeeded` once the payment clears. We weren't subscribed to the second event and the first one shouldn't have run any handler logic anyway.
+
+**Diagnosis:** Reconciliation cron (entry 2.89) caught the silent drops — paid Klarna sessions kept showing up in the "missing webhook processing" alert email despite `cron-reconcile-payments` running hourly. Tracing it back: card payments worked because `completed` already had `payment_status='paid'`; Klarna stayed `unpaid` until `async_payment_succeeded`.
+
+**Fix:**
+- `api/webhook.js` dispatcher routes both `checkout.session.completed` and `checkout.session.async_payment_succeeded` to the same handler chain
+- New `isPaid(session)` guard at the top of all four payment handlers (`handleCreditPurchase`, `handleSlotBooking`, `handleOfferBooking`, plus pass-guarantee path) — no-ops when `payment_status !== 'paid'`, so the early `completed` event for Klarna does nothing and the `async_payment_succeeded` event drives all writes
+- New tiny handler for `checkout.session.async_payment_failed` that logs via `reportError` so payment failures show up in the alert email rather than being invisible
+
+**Manual step (one-time, in Stripe Dashboard):** add `checkout.session.async_payment_succeeded` and `checkout.session.async_payment_failed` to the webhook endpoint's subscribed events. Without this Stripe still won't deliver them no matter what the code does.
+
+**Files changed:** `api/webhook.js`
+
+---
+
+### 2.65 — 12-Week Booking Cap + Offer-Driven Recurring Series ✅ Complete (8 May 2026)
+
+**What:** Tightened the global advance booking window from 90 days to 84 days (12 weeks) for self-serve learner bookings, and gave instructors a way to offer a regular weekly slot that legitimately runs past the cap.
+
+**Two changes that work together:**
+
+1. **Hard 12-week cap** — `MAX_DAYS_AHEAD` in `api/slots.js` lowered from 90 → 84. Frontend `FEED_MAX_DAYS` in `public/learner/book.js` matched. New `create-offer` validation rejects offer dates more than 84 days out.
+
+2. **Weekly-repeat offers** — when an instructor sends a one-to-one "Offer a slot", they now see a "Weekly repeats (optional)" select with options 1–18. If they pick > 1, the learner sees a "How many weekly lessons?" select on the accept page. The chosen count multiplies the Stripe charge (per-lesson price × N).
+
+**Skip-clash fan-out:** the webhook (`api/offers.js bookOfferSeries()`, called from `api/webhook.js handleOfferBooking`) walks weekly from the offer's start date, booking the slot whenever it's free. If a week is clashed (existing non-cancelled booking, blackout, or instructor not available that day-of-week), it skips and rolls to the next free week at the same time. Bounded to a 18-week lookahead from the original date so a 6-lesson series can't drag on forever. If we hit the boundary without filling all weeks, Stripe is partially refunded for the unused weeks.
+
+**Why offers can exceed the cap:** the 12-week cap is for *self-serve* bookings. An instructor who explicitly sets `max_repeat_weeks` is opting in to offer this learner a regular slot — their schedule, their call. The series creation in the webhook is the only path that may insert bookings past 84 days from today.
+
+**Schema:** `lesson_offers.max_repeat_weeks INTEGER NULL` with `CHECK (BETWEEN 1 AND 18)`. Null/1 = single lesson (existing behaviour).
+
+**Files changed:** `db/migration.sql`, `api/slots.js`, `api/instructor.js` (handleCreateOffer), `api/offers.js` (bookOfferSeries helper, handleAcceptOffer, handleFreeOffer), `api/webhook.js` (handleOfferBooking), `public/instructor/index.html` + `index.js` (offer modal), `public/accept-offer.html` + `accept-offer.js` (repeat-weeks picker), `public/learner/book.js`.
+
+---
+
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
 - ~~**T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.~~ ✅ Done (2.54)

@@ -4,87 +4,126 @@
 
 ---
 
-## Current Architecture (Verified March 2026)
+## Current Architecture (Verified May 2026)
 
-**Frontend:** 43 HTML pages (vanilla HTML/CSS/JS), no framework, no bundler, no build step
-**Backend:** 29 Vercel serverless API route files, 100+ actions via `?action=X` routing
-**Database:** Neon PostgreSQL, 26 tables, single idempotent migration file
-**Auth:** JWT in httpOnly cookies (display blob in localStorage). All three roles use **email + password** sign-in (May 2026). `api/learner-auth.js` for learners, `api/instructor-auth.js` for instructors, `api/admin.js` for admins. Magic-link login retired. Magic-link infrastructure (`api/magic-link.js`) survives only for SMS code login, learner password-reset codes, and the email-code migration path for legacy learner accounts. Instructors are invite-only — admin sets/resets their password via the admin portal; instructor is forced to change it on first sign-in.
-**Payments:** Stripe Checkout sessions + webhook handler
-**AI:** Direct Anthropic API calls (ask-examiner + advisor endpoints)
-**Analytics:** PostHog (bypassed in service worker)
-**Hosting:** Vercel (frontend + serverless), domain coachcarter.co.uk (also coachcarter.uk)
-**PWA:** Service worker (cache-first shell, network-first API), manifest with maskable icons
+**Frontend:** 57 HTML pages (vanilla HTML/CSS/JS), no framework, no bundler, no build step
+**Backend:** 40 Vercel serverless API route files (excluding `_*.js` shared modules), 100+ actions via `?action=X` routing
+**Database:** Neon PostgreSQL, ~40 tables (single idempotent migration file at `db/migration.sql`; `waitlist` and `qa_*` tables are explicitly dropped near the end)
+**Multi-tenancy:** Every tenant-scoped table has `school_id INTEGER NOT NULL REFERENCES schools(id) DEFAULT 1`. Every SQL query filters by `school_id`. Every JWT carries `school_id`. School #1 is CoachCarter; new schools onboard via the superadmin portal. See `docs/multi-tenancy.md`.
+**Branding:** Two front doors share the same backend — `coachcarter.uk` (driving school) and `instructorbook.co.uk` (national SaaS for instructors). See `INSTRUCTORBOOK-PLAN.md`.
+**Auth:** JWT in httpOnly cookies (display blob in localStorage). All three roles use **email + password** sign-in (May 2026). `api/learner-auth.js` for learners, `api/instructor-auth.js` for instructors, `api/admin.js` for admins. Magic-link login retired. Magic-link infrastructure (`api/magic-link.js`) survives only for SMS code login, learner password-reset codes, and the email-code migration path for legacy learner accounts. Instructors are invite-only — admin sets/resets their password via the admin portal; instructor is forced to change it on first sign-in. Password helpers live in `api/_password.js`. Audit log via `api/_audit.js`.
+**Payments:** Stripe Checkout sessions + webhook handler. Klarna enabled. Stripe Connect for instructor payouts (Model D: 0.75% fee on weekly automated payouts).
+**Booking:** 12-week (84-day) advance cap for self-serve. Slot-first UX on `book.html` (no calendar views, no lesson-type pill bar — pick slot first, then duration in modal). Offer-driven recurring series (`lesson_offers.max_repeat_weeks` 1–18) is the only path that may exceed the 12-week cap.
+**AI:** Direct Anthropic API calls (ask-examiner + advisor endpoints, both hidden in v1)
+**Analytics:** PostHog (loaded via `posthog-loader.js` after cookie consent)
+**Hosting:** Vercel (frontend + serverless), domains coachcarter.uk + instructorbook.co.uk
+**PWA:** Service worker (cache-first shell, network-first API), manifest with maskable icons. Cookie consent gating analytics scripts via `cookie-consent.js`.
 
 ### Verified Page Inventory
 
-**Learner portal (15 pages):**
-- index (dashboard), book, buy-credits, lessons, log-session, progress, mock-test, examiner-quiz, ask-examiner, advisor, videos, qa, profile, onboarding, login
+**Learner portal (22 pages):**
+- index (dashboard), book, buy-credits, lessons, lessons-hub, log-session, progress, mock-test, examiner-quiz, ask-examiner, advisor (hidden), videos, profile, onboarding, login, learn, practice, focused-practice, refer, my-data, confirm-deletion, confirm-lesson
 
-**Instructor portal (6 pages):**
-- index (calendar/dashboard), availability, learners, qa, profile, login
+**Instructor portal (8 pages):**
+- index (calendar/dashboard), dashboard, availability, learners, profile, earnings, onboarding, login
 
-**Admin portal (4 pages):**
-- dashboard, editor, portal, login
+**Admin portal (7 pages):**
+- dashboard, editor, portal, login, franchise-calculator, franchise-comparison, plus the legacy `admin.html` redirect at `public/admin.html`
 
-**Public pages (12 pages):**
-- index (role selector), coachcarter-landing, classroom, availability, lessons, admin-availability, privacy, terms, success, maintenance, offline, demo/book
+**Superadmin portal (3 pages):**
+- index, schools, school-detail (cross-tenant management; not visible to school admins)
 
-### Verified API Surface (30 route files, 100+ actions)
+**Public / marketing pages (~17):**
+- index (role selector), classroom, availability, lessons, login, learner-journey, accept-offer, offer-success, free-trial, free-trial-success, privacy, terms, success, maintenance, offline, 404, demo/book
 
-| File | Actions | Key notes |
-|------|---------|-----------|
-| learner.js | 20 | Core learner data — sessions, progress, profile, mock-tests, quiz, competency, onboarding, weekly availability |
-| _notify-availability.js | 0 (internal) | Cancellation→notification fan-out + broadcast-offer minting + sibling supersession on booking. Two exports: `notifyAvailableLearners()` and `supersedeBroadcastSiblings()`. |
-| instructor.js | 27+ | Auth, schedule, availability, blackouts, learner history, notes, stats, photo upload, cancel-booking, reschedule-booking, create-booking |
-| admin.js | 14+ | Dashboard stats, bookings, instructor CRUD, learner management, credit adjustment |
-| slots.js | 7 | available (with lead-time filter), book (+ repeat_weeks), checkout-slot, cancel (+ cancel_series), reschedule, my-bookings, series-info |
-| videos.js | 12 | CRUD, upload-url, categories, bulk operations |
-| credits.js | 2-3 | balance, checkout |
-| calendar.js | 5 | ICS feed download + URLs for learner and instructor |
-| enquiries.js | 4 | submit, list, get, update-status |
-| magic-link.js | 2 | send + verify (handles both email and phone) |
-| ask-examiner.js | 1 | Anthropic API streaming chat |
-| advisor.js | 1 | Anthropic API lesson advisor |
-| create-checkout-session.js | 1 | Stripe session creation |
-| webhook.js | 1 | Stripe webhook handler (checkout.session.completed, account.updated) |
-| connect.js | 7 | Stripe Connect onboarding, status, dashboard, admin invite, dismiss |
-| cron-payouts.js | 1 | Weekly Friday payout processing (Vercel cron) |
-| cron-referral-rewards.js | 1 | Daily 04:00 UTC. Per-lesson recurring referral rewards: floor(duration/3) min credited to referrer after a 7-day grace window. Per-booking idempotent via lesson_bookings.referral_rewarded_at |
-| r.js | 1 | Bound to /r/:code via vercel.json. Validates code, rate-limits, logs click in referral_clicks (hashed IP), 302s to /learner/login.html?ref=CODE. Fail-open |
-| reminders.js | 4 | send-due (hourly cron), daily-schedule (7pm cron), settings, update-settings |
-| Others (14) | 1 each | address-lookup, config, status, reviews, migrate, verify-session, etc. |
+### Verified API Surface (40 route files, 100+ actions)
+
+| File | Auth | Notes |
+|------|------|-------|
+| `learner.js` | learner | Sessions, progress, profile, mock-tests, quiz, competency, onboarding, weekly availability, GDPR export/deletion |
+| `learner-auth.js` | none → learner | Signup, login, forgot-password (code-based reset), email-code migration |
+| `instructor.js` | instructor | Schedule, availability, blackouts, learner history, notes, stats, cancel-booking, reschedule, create-booking, create-offer (with `max_repeat_weeks`), broadcast endpoints |
+| `instructor-auth.js` | none → instructor | Login, change-password (forced on first sign-in via `must_change_password`) |
+| `instructors.js` | public/instructor | Public instructor profile lookups (used by booking page) |
+| `admin.js` | admin | Dashboard, bookings, instructor CRUD, learner management, credit adjustment, set-instructor-password, forgot-password code flow |
+| `slots.js` | mostly learner | available (12-wk cap), durations-for-slot, book (+ `repeat_weeks` 1–8), checkout-slot, checkout-slot-guest, book-free-trial, cancel (+ cancel_series), reschedule, my-bookings, series-info |
+| `offers.js` | public (token) | get-offer, accept-offer (with `repeat_weeks`), expire-offers (cron). Exports `bookOfferSeries()` for the webhook |
+| `lesson-types.js` | mixed | CRUD for lesson types per school |
+| `schools.js` | superadmin | School onboarding + config (per-school feature flags via `schools.config` JSONB) |
+| `videos.js` | mixed | CRUD, upload-url, categories, bulk ops |
+| `credits.js` | learner | balance, checkout |
+| `calendar.js` | token | ICS feed for learners + instructors |
+| `enquiries.js` | mixed | submit (public), list/get/update (admin) |
+| `magic-link.js` | none | SMS code login, learner password-reset codes, email-code migration only |
+| `ask-examiner.js` | learner | Anthropic streaming chat (hidden in v1) |
+| `advisor.js` | learner | Anthropic lesson advisor (hidden in v1) |
+| `availability.js` | mixed | Public availability submissions + lookups |
+| `connect.js` | instructor/admin | Stripe Connect onboarding, status, dashboard, admin invite, dismiss |
+| `create-checkout-session.js` | learner | Stripe session for credit purchase |
+| `webhook.js` | none (Stripe) | checkout.session.completed (incl. lesson_offer with series fan-out + partial refund), account.updated, async_payment_succeeded (Klarna) |
+| `cron-payouts.js` | cron | Weekly Friday payout processing |
+| `cron-auto-complete.js` | cron | Auto-completes bookings >24h after end_time |
+| `cron-reconcile-payments.js` | cron | Stripe ↔ DB reconciliation safety net |
+| `cron-referral-rewards.js` | cron | Daily 04:00 UTC. Per-lesson recurring referral rewards (floor(duration/3) min, 7-day grace window, idempotent via `lesson_bookings.referral_rewarded_at`) |
+| `cron-retention.js` | cron | GDPR retention sweeps + deletion processing |
+| `r.js` | none | Bound to `/r/:code` via vercel.json — referral code redirector with rate-limit + click logging |
+| `reminders.js` | mixed | send-due (hourly cron), daily-schedule (7pm cron), settings, update-settings |
+| `setmore-sync.js` | cron | Setmore → CoachCarter booking import (every 15 min). Service mapping hardcoded for Fraser's account |
+| `setmore-welcome.js` | cron | Welcome emails for setmore-imported learners |
+| `ical-sync.js` | cron | Per-instructor iCal feed sync (`instructor_external_events`) |
+| `migrate.js` | secret | One-shot migration runner (`?secret=MIGRATION_SECRET`) |
+| `seed-test-data.js` | secret | Test-data seeder for dev/staging |
+| `update-status.js` | mixed | Generic status updates |
+| `verify-session.js` | none | Session validation endpoint |
+| `address-lookup.js` | mixed | postcodes.io proxy for travel-time fits |
+| `guarantee-price.js` | none | Reads `guarantee_pricing` for the homepage CTA |
+| `reviews.js` | mixed | Google Reviews proxy + cache |
+| `config.js` | none | Per-school config lookup (logo, colours, slug) |
+| `status.js` | none | Health check |
 
 **Shared server modules (prefixed with `_`):**
+- `_auth.js` — `requireAuth({ roles })`, JWT verification, cookie helpers, CSRF
 - `_auth-helpers.js` — SMTP transporter, token generation
-- `_shared.js` — JWT verification (`verifyAuth`), AI context builder (`buildLearnerContext`), skill labels
+- `_shared.js` — Legacy `verifyAuth()`, AI context builder, skill labels
+- `_password.js` — Hash/verify/validate/lockout for password auth (May 2026)
+- `_audit.js` — Audit log writer for admin/auth mutations
+- `_csrf.js` — CSRF token mint + cookie helpers
 - `_error-alert.js` — Email alerts on 500 errors
-- `_payout-helpers.js` — Payout calculation and Stripe transfer logic (shared by cron + admin manual trigger)
+- `_notify-availability.js` — Cancellation → learner_availability fan-out, broadcast-offer minting, sibling supersession on booking
+- `_payout-helpers.js` — Payout calculation and Stripe transfer logic
+- `_travel-time.js` — postcodes.io geocoding + OpenRouteService drive-time estimates for slot fit checks
+- `_whatsapp.js` — WhatsApp Business API send wrapper
 
 ### Shared Client Modules
 
-| File | Size | Purpose |
-|------|------|---------|
-| sidebar.js | 30KB | Context-aware nav — desktop sidebar with collapsible groups + mobile floating pill bottom bar (Home/Lessons/Practice/Learn/Profile). Also injects card styling overrides (borderless shadows) site-wide. |
-| competency-config.js | 19KB | 10 DL25 categories, 39 sub-skills, fault types, ratings, readiness scoring |
-| auth-gate.js | 7KB | Modal login prompt, `window.ccAuth` (token, user, requireAuth) |
-| pwa.js | 5KB | Service worker registration + install banner |
-| posthog-tracking.js | 3KB | Event tracking |
-| test-routes.js | 2KB | Mock test GPS route definitions for test centres |
-| shared/learner-auth.js | 1.3KB | Learner auth helpers |
-| shared/instructor-auth.js | 1.2KB | Instructor auth helpers |
+| File | Purpose |
+|------|---------|
+| `sidebar.js` | Context-aware nav — desktop sidebar with collapsible groups + mobile floating pill bottom bar (Home/Lessons/Practice/Learn/Profile) |
+| `branding.js` | Per-school logo/colour injection from `schools.config` |
+| `competency-config.js` | 10 DL25 categories, 39 sub-skills, fault types, ratings, readiness scoring (single source of truth — port to TS for the app) |
+| `cookie-consent.js` | GDPR cookie banner — gates analytics |
+| `posthog-loader.js` | Loads PostHog only after analytics consent |
+| `auth-gate.js` | Modal login prompt, `window.ccAuth` (token, user, requireAuth) |
+| `pwa.js` | Service worker registration + install banner |
+| `test-routes.js` | Mock test GPS route definitions for test centres |
+| `shared/learner-auth.js` + `shared/instructor-auth.js` | Per-role auth helpers |
 
-### Database (27 tables)
+### Database (~40 tables, organised by area)
 
-**Users:** learner_users, instructors, admin_users
-**Auth:** magic_link_tokens, instructor_login_tokens
-**Scheduling:** instructor_availability, instructor_blackout_dates, lesson_bookings, slot_reservations, learner_availability
-**Notifications:** sent_reminders
-**Payments:** credit_transactions
-**Learning:** driving_sessions, skill_ratings, learner_onboarding, quiz_results, mock_tests, mock_test_faults
-**Community:** enquiries, availability_submissions
-**Config:** site_config, google_reviews, google_reviews_meta
-**Notes:** instructor_learner_notes
+**Multi-tenancy:** `schools`, `school_payouts`
+**Users:** `learner_users`, `instructors`, `admin_users`
+**Auth (legacy magic-link, kept for SMS / password-reset codes):** `magic_link_tokens`, `instructor_login_tokens`
+**Scheduling:** `instructor_availability`, `instructor_blackout_dates`, `instructor_external_events`, `lesson_bookings`, `slot_reservations`, `learner_availability`, `lesson_confirmations`
+**Lesson catalogue:** `lesson_types`, `lesson_offers` (manual + broadcast, with `max_repeat_weeks` for recurring series)
+**Notifications:** `sent_reminders`
+**Payments:** `credit_transactions`, `instructor_payouts`, `payout_line_items`, `guarantee_pricing`
+**Learning:** `driving_sessions`, `skill_ratings`, `learner_onboarding`, `quiz_results`, `mock_tests`, `mock_test_faults`, `focused_practice_sessions`
+**Community:** `enquiries`, `availability_submissions`
+**Config:** `site_config`, `google_reviews`, `google_reviews_meta`
+**Notes:** `instructor_learner_notes`
+**Referrals:** `referrals`, `referral_clicks`
+**GDPR / compliance:** `cookie_consents`, `audit_log`, `deletion_requests`, `rate_limits`
+**Dropped (do not re-add):** `qa_questions`, `qa_answers` (April 2026), `waitlist` (May 2026 — replaced by `learner_availability` + cancellation broadcasts)
 
 **Notable columns added (March 2026):**
 - `lesson_bookings.rescheduled_from` — FK to previous booking in reschedule chain
@@ -125,6 +164,19 @@
 - `magic_link_tokens.referral_code` — carries code through email/SMS signup flow
 - `lesson_bookings.referral_rewarded_at` — idempotency key for the recurring referral reward cron. Once stamped, the booking will never trigger another reward.
 
+**Notable additions (May 2026):**
+- **Multi-tenancy fully landed** — `schools` table + `school_id` on every tenant-scoped table (default 1 = CoachCarter). Every JWT carries `school_id`. Public endpoints accept `?school_id=X` or `?school=slug`. Per-school feature flags in `schools.config` JSONB. Superadmin portal for cross-tenant ops.
+- **Password auth across all roles** — `learner_users.password_hash`, `instructors.password_hash`, `admin_users.password_hash` (all nullable for pre-May 2026 accounts). `instructors.must_change_password` forces password change on first sign-in for admin-created accounts. Magic-link login retired; SMS code login + email-code migration paths preserved on `api/magic-link.js`. Audit log entries: `learner.signup`, `learner.password_set`, `learner.password_reset`, `instructor.password_change`, `admin.instructor_password_set`, `admin.password_reset`. See `api/_password.js` and `api/_audit.js`.
+- **GDPR compliance landed** — `cookie_consents`, `audit_log`, `deletion_requests`, `rate_limits` tables. PostHog now consent-gated via `posthog-loader.js`. `cron-retention.js` handles deletions + retention sweeps. `learner.js` exposes export-data and confirm-deletion. Credit/financial records are anonymised, never hard-deleted (7-year legal retention).
+- **InstructorBook split** — same backend, two front doors. `branding.js` injects per-school logo/colour from `schools.config`. `coachcarter.uk` (school) and `instructorbook.co.uk` (national SaaS for instructors) coexist. Pricing model D: free to use, 0.75% fee on weekly automated payouts. See `INSTRUCTORBOOK-PLAN.md`.
+- **`lesson_offers.max_repeat_weeks` (8 May 2026)** — INTEGER NULL, CHECK 1–18. Lets an instructor offer a recurring weekly slot. Learner picks count on the accept page. The webhook fans out a series with `series_id` via `bookOfferSeries()` in `api/offers.js`, skipping clashed weeks (existing booking, blackout, no DoW availability) and rolling to the next free week up to an 18-week lookahead. Stripe charges per-lesson × N; partial refund if we can't fill all weeks. **Only path that may exceed the 12-week self-serve booking cap.**
+- **12-week advance booking cap** — `MAX_DAYS_AHEAD = 84` in `api/slots.js`, `FEED_MAX_DAYS = 84` in `public/learner/book.js`. Down from 90 days. Applies to all self-serve booking flows.
+- **Booking-page slot-first refactor (April 2026)** — `book.html` no longer has calendar views, view toggles, lesson-type pill bar, or a login wall. Slot feed renders at the smallest active duration; per-duration fits checked on slot click via `?action=durations-for-slot`. Guests can pay without an account via `?action=checkout-slot-guest`.
+- **Instructor calendar refactor (April 2026)** — daily view absorbed into agenda. Hour-slot time grid replaced with compact lesson list. Removed "Weekdays" and "Cancelled" filter buttons.
+- **Free trial flow** — `free-trial.html` + `?action=book-free-trial` on `slots.js`. Tied to schools with `slug='trial'`.
+- **Klarna BNPL** — webhook handles `async_payment_succeeded` for Klarna's deferred-confirmation flow.
+- **Setmore sync (ongoing)** — every 15 min cron pulls Fraser's Setmore bookings as real `lesson_bookings` rows with `created_by='setmore_sync'`, `setmore_key` for idempotency. Edits protected via `edited_at`. Service mapping hardcoded.
+
 ### Critical Design Decisions Already Made
 
 **Navigation (app-mode design — do NOT deviate):**
@@ -137,7 +189,15 @@
 - Lesson Advisor (hidden)
 - Privacy/Terms as nav tabs (pages exist, just not in nav)
 - Q&A — removed entirely April 2026 (pages, API, tables all gone)
+- Waitlist — removed May 2026 (table dropped, `api/waitlist.js` deleted, learner UI removed). Replaced by `learner_availability` driving cancellation broadcasts via `_notify-availability.js`.
 - Dashboard as permanent bottom tab
+- Calendar views (weekly/monthly/daily) on `book.html` — slot-first feed only
+- Lesson-type pill bar on `book.html` — duration picked inside the modal after slot click
+- Daily view tab on instructor calendar — agenda absorbs its function
+- Hour-slot time grid on instructor daily calendar — replaced with compact lesson list
+- "Weekdays" and "Cancelled" filter buttons on instructor calendar
+- Videos in Learn-section nav (page still exists, just not in nav)
+- Old `.site-nav` top bar, `.bottom-nav` inline bar, `.sub-tabs` — all replaced by `sidebar.js`
 
 **Competency framework (just restructured March 2026):**
 - 10 DL25 categories: Control, Move Off, Mirrors, Signals, Junctions, Judgement, Positioning, Progress, Signs/Signals, Manoeuvres
@@ -158,7 +218,7 @@
 - The bottom-bar navigation design translates naturally to React Navigation tab bars
 
 **What migrates to the app:** Learner portal, Instructor portal, Admin portal
-**What stays on the website:** Landing page, public pages, SEO content
+**What stays on the website:** Landing page, public pages, SEO content, Superadmin portal (cross-tenant ops, low traffic), the offer-acceptance page (`accept-offer.html` is reached via email link from a non-logged-in context), free-trial flow (`free-trial.html`)
 
 ---
 
@@ -173,7 +233,7 @@ Create `api/API_SPEC.md` from the actual code. This is critical because the app 
 **Claude Code prompt:**
 > "Read every file in /api/*.js. Generate API_SPEC.md documenting each endpoint: HTTP method, `?action=` value, auth required (learner/instructor/admin/none), request body TypeScript types, response TypeScript types, error codes. Use the actual code — don't guess."
 
-**What already exists to work from:** `_shared.js` has `verifyAuth()` which all routes use. Most routes follow a consistent pattern of `if (action === 'X') return handleX(req, res)`.
+**What already exists to work from:** `api/_auth.js` exposes `requireAuth(req, { roles })` — the canonical auth helper used by most new code (May 2026). Older routes still use `verifyAuth()` from `_shared.js` and inline JWT checks; converging on `requireAuth` is part of the prep work. Most routes follow `if (action === 'X') return handleX(req, res)`.
 
 ### 0.2 — Standardise error responses
 
@@ -199,16 +259,14 @@ This lets you handle web vs app differences without forking routes.
 
 ### 0.4 — Consolidate auth middleware
 
-Auth is already partially centralised in `_shared.js` (`verifyAuth`) and `_auth-helpers.js` (SMTP + tokens). But each route file still has its own inline checks. Consolidate into:
+`api/_auth.js` already exposes the canonical `requireAuth(req, { roles })` helper, plus session cookie helpers (`buildSessionCookie`, `SESSION_COOKIE_NAMES`), and is used by all post-May-2026 code. The remaining work is:
 
-```javascript
-// _shared.js additions:
-function requireLearner(req, res) { /* returns user or sends 401 */ }
-function requireInstructor(req, res) { /* returns user or sends 401 */ }
-function requireAdmin(req, res) { /* returns user or sends 401 */ }
-```
+1. **Migrate older routes** that still use the legacy `verifyAuth()` from `_shared.js` or inline JWT verification. They should be calling `requireAuth(req, { roles: ['learner'] })` etc.
+2. **Standardise role checks** — current code uses `roles: ['learner']`, `roles: ['instructor']`, `roles: ['admin']`. Avoid creating new role names.
+3. **Password auth** is on all three roles as of May 2026. `api/_password.js` is the shared module for hash/verify/lockout. `api/admin.js` retains its own `bcrypt` calls (legacy, intentionally left alone).
+4. **CSRF**: `api/_csrf.js` mints + validates CSRF tokens via cookie + header pair. App auth flow needs to send the token back; web does this automatically via `ccAuth.fetchAuthed()`.
 
-**Important nuance:** The instructor auth flow is different from learner — instructors use `instructor_login_tokens` table and a separate `verifyInstructorToken()` function in `instructor.js`. These need to be unified under one pattern.
+The instructor auth flow used to use `instructor_login_tokens` (magic-link). That's retired for login — passwords now. The table survives only for the email-code migration path.
 
 ### 0.5 — Add push notification infrastructure
 
