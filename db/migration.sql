@@ -740,6 +740,18 @@ ALTER TABLE instructors ADD COLUMN IF NOT EXISTS weekly_franchise_fee_pence INTE
 -- Audit trail: actual franchise fee deducted for each payout (may be less than configured if gross was lower)
 ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS franchise_fee_pence INTEGER DEFAULT NULL;
 
+-- ── Shortfall tracking (plan item 1.3) + £250 vehicle deposit deduction (plan item 2.10) ──
+-- shortfall_pence: positive value = amount instructor owes CCL from this period (rolls forward to next positive payout).
+-- shortfall_recovered_from_payout_id: NULL until the shortfall is recovered; set to the recovering payout's id when cleared.
+-- deposit_deducted_pence: £250 (25000) deducted from week-1 Full-Franchise payouts; stores actual amount when revenue can't cover full amount.
+ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS shortfall_pence INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS shortfall_recovered_from_payout_id INTEGER REFERENCES instructor_payouts(id);
+ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS deposit_deducted_pence INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_instructor_payouts_unrecovered_shortfall
+  ON instructor_payouts (instructor_id, period_end)
+  WHERE status = 'completed' AND shortfall_pence > 0 AND shortfall_recovered_from_payout_id IS NULL;
+
 -- ── Setmore sync ──────────────────────────────────────────────────────────────
 
 -- Additional lesson types from Setmore (3hr active, others inactive)

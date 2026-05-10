@@ -265,22 +265,45 @@
 
   function renderPayoutHistory(data) {
     if (!data.payouts || data.payouts.length === 0) return '';
-    const rows = data.payouts.map(p => `
-      <div class="payout-row">
-        <div>
-          <div style="font-size:0.82rem;font-weight:600;">${formatDateShort(p.period_start)} &ndash; ${formatDateShort(p.period_end)}</div>
-          <div style="font-size:0.75rem;color:var(--muted);">${p.lesson_count} lesson${p.lesson_count == 1 ? '' : 's'}</div>
+    const rows = data.payouts.map(p => {
+      const details = [];
+      if (p.deposit_deducted_pence > 0) {
+        details.push(`<div class="payout-detail">&minus; ${formatPence(p.deposit_deducted_pence)} vehicle deposit (refundable at end of contract)</div>`);
+      }
+      // shortfall_recovered_from_payout_id is set on the prior row when this payout recovered it,
+      // so the recovery shows on the recovering row by detecting that the prior shortfall was cleared.
+      // Server returns prior_shortfall_recovered_pence on the live payout via the cron return shape,
+      // but for history we don't store that. We surface recovery on the row that *had* the shortfall instead:
+      // when this row's shortfall is recovered, mark it.
+      if (p.shortfall_pence > 0 && p.shortfall_recovered_from_payout_id) {
+        details.push(`<div class="payout-detail">${formatPence(p.shortfall_pence)} shortfall recovered from a later payout</div>`);
+      } else if (p.shortfall_pence > 0) {
+        details.push(`<div class="payout-detail shortfall">${formatPence(p.shortfall_pence)} carries forward to next week's payout</div>`);
+      }
+      return `
+        <div class="payout-row">
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;font-weight:600;">${formatDateShort(p.period_start)} &ndash; ${formatDateShort(p.period_end)}</div>
+            <div style="font-size:0.75rem;color:var(--muted);">${p.lesson_count} lesson${p.lesson_count == 1 ? '' : 's'}</div>
+            ${details.join('')}
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="payout-status ${p.status}">${p.status}</span>
+            <span style="font-family:var(--font-head);font-weight:700;">${formatPence(p.amount_pence)}</span>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span class="payout-status ${p.status}">${p.status}</span>
-          <span style="font-family:var(--font-head);font-weight:700;">${formatPence(p.amount_pence)}</span>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
+
+    const outstanding = parseInt(data.outstanding_shortfall_pence) || 0;
+    const banner = outstanding > 0
+      ? `<div class="outstanding-banner">Outstanding from prior weeks: <strong>${formatPence(outstanding)}</strong> &mdash; will be deducted from your next positive payout.</div>`
+      : '';
 
     return `
       <div class="section-card">
         <div class="section-title" style="margin-bottom:16px;">Payout History</div>
+        ${banner}
         ${rows}
       </div>
     `;

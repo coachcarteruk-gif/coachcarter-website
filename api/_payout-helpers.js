@@ -51,11 +51,69 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
 
   let totalInstructorPence;
   let actualFranchiseFee = null;
+  // Plan items 1.3 + 2.10 — only apply to franchise-model instructors.
+  let shortfallThisWeek = 0;
+  let depositDeducted = 0;
+  let priorShortfallPence = 0;
+  let priorShortfallId = null;
+  let shortfallRecoveryId = null;
 
   if (franchiseFee != null) {
-    // Franchise model: fixed weekly fee, instructor keeps the rest
-    actualFranchiseFee = Math.min(franchiseFee, totalGrossPence);
-    totalInstructorPence = totalGrossPence - actualFranchiseFee;
+    // Read prior unrecovered shortfall (full-or-nothing recovery; partial deferred).
+    // Only consider completed payouts — failed/processing rows must not be treated as settled debts.
+    const priorRows = await sql`
+      SELECT id, shortfall_pence
+        FROM instructor_payouts
+       WHERE instructor_id = ${instructor.id}
+         AND status = 'completed'
+         AND shortfall_pence > 0
+         AND shortfall_recovered_from_payout_id IS NULL
+       ORDER BY period_end DESC
+       LIMIT 1
+    `;
+    if (priorRows.length) {
+      priorShortfallPence = parseInt(priorRows[0].shortfall_pence);
+      priorShortfallId = priorRows[0].id;
+    }
+
+    // Week-1 deposit eligibility: no prior completed payout AND Full Franchise.
+    // Heuristic on weekly_franchise_fee_pence === 19500 until Phase 1 ships franchise_tier_id (FRANCHISE-MODEL-PLAN).
+    const priorCompleted = await sql`
+      SELECT 1 FROM instructor_payouts
+       WHERE instructor_id = ${instructor.id}
+         AND status = 'completed'
+       LIMIT 1
+    `;
+    const isWeekOne = priorCompleted.length === 0;
+    const isFullFranchise = franchiseFee === 19500;
+    const depositAmount = (isWeekOne && isFullFranchise) ? 25000 : 0;
+
+    const totalDeductionPence = franchiseFee + depositAmount + priorShortfallPence;
+
+    if (totalGrossPence >= totalDeductionPence) {
+      // Positive payout — all deductions applied.
+      totalInstructorPence = totalGrossPence - totalDeductionPence;
+      actualFranchiseFee = franchiseFee;
+      depositDeducted = depositAmount;
+      if (priorShortfallPence > 0) shortfallRecoveryId = priorShortfallId;
+    } else {
+      // Cannot cover all deductions — payout is zero.
+      // Cover fee first (always — bounded by gross), then deposit (partial allowed),
+      // then prior shortfall (full-or-nothing — rolls forward unchanged unless fully covered).
+      totalInstructorPence = 0;
+      actualFranchiseFee = Math.min(franchiseFee, totalGrossPence);
+      const coveredAfterFee = Math.max(0, totalGrossPence - franchiseFee);
+      depositDeducted = Math.min(depositAmount, coveredAfterFee);
+      const coveredAfterDeposit = coveredAfterFee - depositDeducted;
+      if (priorShortfallPence > 0 && coveredAfterDeposit >= priorShortfallPence) {
+        shortfallRecoveryId = priorShortfallId;
+      }
+      // This week's shortfall = uncovered fee + uncovered deposit (+ prior shortfall only if NOT being recovered).
+      const uncoveredFee = franchiseFee - actualFranchiseFee;
+      const uncoveredDeposit = depositAmount - depositDeducted;
+      const carriedPrior = (priorShortfallPence > 0 && shortfallRecoveryId === null) ? priorShortfallPence : 0;
+      shortfallThisWeek = uncoveredFee + uncoveredDeposit + carriedPrior;
+    }
   } else {
     // Commission model: instructor gets commission_rate of each lesson
     totalInstructorPence = 0;
@@ -94,10 +152,18 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
   const periodStart = bookings[0].scheduled_date;
   const periodEnd = bookings[bookings.length - 1].scheduled_date;
 
-  // Create payout record
+  // Create payout record (now also writes shortfall + deposit columns — plan items 1.3 + 2.10).
   const [payout] = await sql`
-    INSERT INTO instructor_payouts (instructor_id, amount_pence, platform_fee_pence, franchise_fee_pence, period_start, period_end, status)
-    VALUES (${instructor.id}, ${totalInstructorPence}, ${totalGrossPence - totalInstructorPence}, ${actualFranchiseFee}, ${periodStart}, ${periodEnd}, 'processing')
+    INSERT INTO instructor_payouts (
+      instructor_id, amount_pence, platform_fee_pence, franchise_fee_pence,
+      period_start, period_end, status,
+      shortfall_pence, deposit_deducted_pence
+    )
+    VALUES (
+      ${instructor.id}, ${totalInstructorPence}, ${totalGrossPence - totalInstructorPence}, ${actualFranchiseFee},
+      ${periodStart}, ${periodEnd}, 'processing',
+      ${shortfallThisWeek}, ${depositDeducted}
+    )
     RETURNING id
   `;
 
@@ -107,6 +173,38 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
       INSERT INTO payout_line_items (payout_id, booking_id, price_pence, instructor_amount_pence, commission_rate)
       VALUES (${payout.id}, ${li.booking_id}, ${li.price_pence}, ${li.instructor_amount_pence}, ${li.commission_rate})
     `;
+  }
+
+  // Build the success-return shape once — used by both transfer paths.
+  const buildResult = (extras) => ({
+    payout_id: payout.id,
+    instructor_id: instructor.id,
+    instructor_name: instructor.name,
+    instructor_email: instructor.email,
+    amount_pence: totalInstructorPence,
+    lesson_count: bookings.length,
+    shortfall_pence: shortfallThisWeek,
+    deposit_deducted_pence: depositDeducted,
+    prior_shortfall_recovered_pence: shortfallRecoveryId !== null ? priorShortfallPence : 0,
+    ...extras
+  });
+
+  // Zero-payout case (entire gross consumed by fee + deposit + prior shortfall, or commission gross was 0):
+  // skip Stripe — it rejects amount=0 — and mark completed. Line items still record £0 attribution.
+  if (totalInstructorPence === 0) {
+    await sql`
+      UPDATE instructor_payouts
+         SET status = 'completed', completed_at = NOW()
+       WHERE id = ${payout.id}
+    `;
+    if (shortfallRecoveryId !== null) {
+      await sql`
+        UPDATE instructor_payouts
+           SET shortfall_recovered_from_payout_id = ${payout.id}
+         WHERE id = ${shortfallRecoveryId}
+      `;
+    }
+    return buildResult({ status: 'completed' });
   }
 
   // Create Stripe transfer
@@ -129,34 +227,26 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
        WHERE id = ${payout.id}
     `;
 
-    return {
-      payout_id: payout.id,
-      instructor_id: instructor.id,
-      instructor_name: instructor.name,
-      instructor_email: instructor.email,
-      amount_pence: totalInstructorPence,
-      lesson_count: bookings.length,
-      transfer_id: transfer.id,
-      status: 'completed'
-    };
+    // Mark prior shortfall recovered ONLY after a successful transfer.
+    if (shortfallRecoveryId !== null) {
+      await sql`
+        UPDATE instructor_payouts
+           SET shortfall_recovered_from_payout_id = ${payout.id}
+         WHERE id = ${shortfallRecoveryId}
+      `;
+    }
+
+    return buildResult({ transfer_id: transfer.id, status: 'completed' });
   } catch (err) {
-    // Transfer failed — mark payout as failed and DELETE line items so bookings retry next run
+    // Transfer failed — mark payout as failed and DELETE line items so bookings retry next run.
+    // Prior shortfall is intentionally NOT marked recovered (rollback safety).
     await sql`
       UPDATE instructor_payouts SET status = 'failed', failure_reason = ${err.message} WHERE id = ${payout.id}
     `;
     await sql`
       DELETE FROM payout_line_items WHERE payout_id = ${payout.id}
     `;
-    return {
-      payout_id: payout.id,
-      instructor_id: instructor.id,
-      instructor_name: instructor.name,
-      instructor_email: instructor.email,
-      amount_pence: totalInstructorPence,
-      lesson_count: bookings.length,
-      status: 'failed',
-      error: err.message
-    };
+    return buildResult({ status: 'failed', error: err.message });
   }
 }
 

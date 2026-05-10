@@ -1063,6 +1063,55 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 ---
 
+### 2.66 — Payout Shortfall Tracking + £250 Vehicle Deposit Deduction ✅ Complete (10 May 2026)
+
+**What:** Negative-payout weeks no longer silently disappear — the gap is recorded as a shortfall on the payout row and rolls forward to the next positive payout. Full-Franchise instructors automatically get £250 deducted from week-1 (vehicle deposit per agreement clause 5.5). Both visible to the instructor on `/instructor/earnings.html` so there are no surprise conversations.
+
+**Why:** Pre-signing-day prep for instructor #2 (franchise plan items 1.3 + 2.10, bundled — same file, same migration, same statement-email surface). Today's `_payout-helpers.js` did `Math.min(franchiseFee, totalGrossPence)` which truncated the negative — the £85 / £140 just disappeared. The 12-week earnings projection (`docs/franchise/sample-earnings-projection.md`) surfaced that £250 deposit means £0 net to instructor in week 1 of every scenario, so the deposit code had to be in place by Start Date, not month 3.
+
+**Schema:** Three new columns on `instructor_payouts`:
+- `shortfall_pence INTEGER NOT NULL DEFAULT 0` — positive = amount instructor owes CCL from this period.
+- `shortfall_recovered_from_payout_id INTEGER REFERENCES instructor_payouts(id)` — NULL until cleared by a later payout.
+- `deposit_deducted_pence INTEGER NOT NULL DEFAULT 0` — week-1 Full-Franchise deposit, partial-amount tolerant.
+- Partial index `idx_instructor_payouts_unrecovered_shortfall` on `(instructor_id, period_end) WHERE status='completed' AND shortfall_pence > 0 AND shortfall_recovered_from_payout_id IS NULL` — drives the lookup query and the running-balance banner.
+
+**Recovery model:** Full-or-nothing. If the next positive payout can cover the prior shortfall in full, it does and the prior row is marked recovered. Otherwise the prior shortfall rolls forward unchanged (no partial recovery — deliberately simpler; revisit only if multi-week complex partial-recovery becomes a real pattern).
+
+**Failure safety:** The prior shortfall is marked recovered ONLY after the Stripe transfer succeeds. On transfer failure, line items are deleted (so bookings retry next run) and the prior shortfall stays unrecovered. The SELECT for prior shortfalls also filters `status='completed'` so a failed-and-rolled-back row can't masquerade as a settled debt.
+
+**Zero-payout case:** When the entire gross is consumed by fee + deposit + prior shortfall, `totalInstructorPence` is 0 and Stripe is skipped (it rejects amount=0). The payout row is still marked `completed` and any recovery applied — the statement email is reframed as "Weekly Statement" instead of "Payout Sent".
+
+**Full-Franchise detection:** Heuristic on `weekly_franchise_fee_pence === 19500` (£195) until Phase 1 ships `franchise_tier_id`. Comment in helper marks the swap-out point.
+
+**Files changed:** `db/migration.sql` (3 columns + partial index), `api/_payout-helpers.js` (prior-shortfall read, week-1 + Full-Franchise detection, branched maths for positive vs zero-payout, recovery UPDATE inside try block, refactored return shape via `buildResult` helper), `api/cron-payouts.js` (statement email body now adds deposit / recovery / shortfall lines, reframes header on £0 weeks), `api/instructor.js` (`handlePayoutHistory` exposes new columns + computes `outstanding_shortfall_pence`), `public/instructor/earnings.html` (CSS for `.payout-detail` + `.outstanding-banner`), `public/instructor/earnings.js` (per-row deposit/shortfall/recovery sub-rows + top-of-list outstanding banner).
+
+---
+
+### 2.67 — Overflow Lead Routing on book.html ✅ Complete (10 May 2026)
+
+**What:** When a learner picks a specific instructor on `book.html` and that instructor has zero bookable slots across the full 12-week window, the empty state is replaced with a heading ("No slots with [FirstName] in the next 12 weeks.") + subhead ("Slots with our other instructors:") + a slot feed showing alternatives from the school's other active instructors. Clicking an alternative opens the booking modal with that instructor; the dropdown filter stays on the originally-chosen instructor.
+
+**Why:** Pre-signing-day prep for instructor #2 (franchise plan item 1.2). Platform-side delivery of the Lead Floor commitment (agreement clause 4.4). Without this, a learner who picks instructor #2 in their sparse first weeks sees "No slots available" and leaves CCL's funnel.
+
+**Trigger conditions** (all must hold; the original empty state renders otherwise):
+1. A specific instructor is selected via `instructorFilter`.
+2. That instructor has zero slots across the full 84-day window (`FEED_MAX_DAYS`). Triggering on shorter windows would falsely surface alternatives for instructors who book ahead.
+3. The school has more than one active instructor (otherwise overflow has nothing to show).
+
+**API:** None changed. The existing `?action=available` endpoint already returns slots from all active instructors when `instructor_id` is omitted. Lesson-type, postcode and travel-time filters continue to apply.
+
+**Eager full-window fetch:** When a specific instructor is chosen, `initFeed` fetches the full 84 days up front (rather than the usual 14-day chunk). This is required to know whether the instructor is *truly* empty before deciding overflow has fired — chunked load could falsely declare empty after only chunk 1. Side benefit: when the learner picks one specific instructor, showing all 84 days of their diary at once is a better UX than chunked load-more clicks. The "load more" button is hidden for chosen-instructor mode.
+
+**Alternatives caching:** The alternatives result (all-instructor query) is cached in `overflowCache` keyed by `${ltId}|${postcode}` so toggling the dropdown back to the same chosen-empty-instructor doesn't re-fetch. Invalidated on lesson-type or postcode change via `onFilterChange`.
+
+**Travel-hidden banner:** The alternatives fetch passes `skipTravelBanner: true` so it doesn't overwrite the chosen-instructor banner state. The chosen-instructor fetch (which runs first) sets the banner correctly.
+
+**Out of scope (separate plan items):** geographic instructor-coverage filtering (H9.6, deferred), "jump to next available slot" button when chosen instructor has slots-but-far-out (2.11), direct booking from instructor profile page (3.9), dropdown-switch on alternative-slot click (explicitly rejected during design).
+
+**Files changed:** `public/learner/book.js` (3 module-level overflow state vars; `onFilterChange` resets them; `fetchFeedSlots` now accepts `targetCache`/`omitInstructor`/`skipTravelBanner`/`skipRangeDedup` opts; `initFeed` does the eager 84-day fetch + alternatives query when needed; `renderFeed` has a new top branch for overflow that renders heading + subhead + the shared `buildSlotFeedHtml` helper, plus a tweaked empty-state for the alternatives-also-empty case; slot-card markup factored into `buildSlotFeedHtml` to share between branches), `public/learner/book.html` (CSS for `.overflow-section` / `.overflow-heading` / `.overflow-subhead`).
+
+---
+
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
 - ~~**T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.~~ ✅ Done (2.54)

@@ -143,6 +143,10 @@ Concretely: Fraser blocks one half-day per week as "instructor support time." Us
 
 If unused, fine — that's OK time. If used, it was the most important time of the week. **The cost of this slack is real (one fewer half-day of Fraser's teaching revenue per week, ~£200-300/week) and should be priced into the franchise tier fees.**
 
+### Use servicing/MOT days as scheduled relationship-maintenance time
+
+**(Added May 2026 from agreement-drafting interview.)** On Full Franchise the vehicle is serviced and MOT'd on a schedule set by Coach Carter Ltd. The instructor releases the vehicle for those days regardless. **Treat those days as in-person check-in meetings** — coffee, hour-long conversation, "how's it going, what's hard, what would you change" before or after the garage drop-off. This piggy-backs the operational requirement (servicing) onto the relationship requirement (mentorship), uses time that is already lost to teaching, and avoids the dynamic where Fraser has to *invent* a reason to check in. Built into clause 6.5 of the franchise agreement.
+
 ---
 
 ## What to track during the 90 days

@@ -3139,8 +3139,9 @@ async function handlePayoutHistory(req, res) {
     const offset = parseInt(req.query.offset) || 0;
 
     const payouts = await sql`
-      SELECT id, amount_pence, platform_fee_pence, stripe_transfer_id,
+      SELECT id, amount_pence, platform_fee_pence, franchise_fee_pence, stripe_transfer_id,
              period_start, period_end, status, failure_reason,
+             shortfall_pence, shortfall_recovered_from_payout_id, deposit_deducted_pence,
              created_at, completed_at,
              (SELECT COUNT(*) FROM payout_line_items WHERE payout_id = ip.id) AS lesson_count
         FROM instructor_payouts ip
@@ -3153,7 +3154,18 @@ async function handlePayoutHistory(req, res) {
       SELECT COUNT(*)::int AS total FROM instructor_payouts WHERE instructor_id = ${user.id}
     `;
 
-    return res.json({ ok: true, payouts, total, limit, offset });
+    // Running outstanding shortfall — sum of completed-but-unrecovered shortfalls.
+    // Drives the "Outstanding from prior weeks" banner on /instructor/earnings.html.
+    const [{ outstanding_shortfall_pence }] = await sql`
+      SELECT COALESCE(SUM(shortfall_pence), 0)::int AS outstanding_shortfall_pence
+        FROM instructor_payouts
+       WHERE instructor_id = ${user.id}
+         AND status = 'completed'
+         AND shortfall_pence > 0
+         AND shortfall_recovered_from_payout_id IS NULL
+    `;
+
+    return res.json({ ok: true, payouts, total, limit, offset, outstanding_shortfall_pence });
   } catch (err) {
     console.error('payout-history error:', err);
     reportError('/api/instructor', err);

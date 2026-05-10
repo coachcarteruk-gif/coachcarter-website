@@ -24,6 +24,13 @@ let feedFrom      = null; // Date: start of loaded window (always today)
 let feedTo        = null; // Date: end of currently loaded window
 const FEED_CHUNK_DAYS = 14;
 const FEED_MAX_DAYS   = 84;
+// Overflow lead routing (plan item 1.2). When a specific instructor is selected
+// and they have zero slots across the full 84-day window, render a slot-feed of
+// alternatives from the school's other active instructors. State below is reset
+// on filter change via onFilterChange().
+let overflowMode  = false;            // true when chosen instructor has 0 slots in 84d
+let overflowCache = null;             // { dateStr: [slot, ...] } for alternatives, or null
+let overflowFingerprint = null;       // `${ltId}|${postcode}` — invalidates cache on change
 let pendingSlot   = null;
 let pendingCancel = null;
 let preselectedTypeSlug = null;
@@ -393,7 +400,16 @@ function getLearnerPostcode() {
 }
 
 // â”€â”€â”€ Feed controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function onFilterChange() { loadedRanges = []; slotCache = {}; loadLessonTypes(); initFeed(); }
+function onFilterChange() {
+  loadedRanges = []; slotCache = {};
+  // Lesson-type / postcode filters affect alternatives too — overflow cache is per (ltId|postcode).
+  // Instructor change just re-runs initFeed() which will rebuild overflow detection from scratch.
+  overflowMode = false;
+  overflowCache = null;
+  overflowFingerprint = null;
+  loadLessonTypes();
+  initFeed();
+}
 
 async function initFeed() {
   // Slot-first: feed loads at the smallest active duration regardless of any
@@ -404,13 +420,61 @@ async function initFeed() {
   if (feedTo > maxDate) feedTo = maxDate;
   slotCache = {};
   loadedRanges = [];
+  overflowMode = false; // re-evaluated below
   showLoading();
+
+  const instructorId = document.getElementById('instructorFilter').value;
+
+  // Overflow lead routing (plan item 1.2). Only when a specific instructor is
+  // selected do we eagerly fetch the full 84-day window — needed to know whether
+  // they're truly empty (chunked load could falsely declare empty on chunk 1).
+  if (instructorId) {
+    const fullTo = addDaysLocal(feedFrom, FEED_MAX_DAYS);
+    // Eager full-window fetch is needed to know if the chosen instructor is truly empty
+    // (chunked load could falsely declare empty after only chunk 1). Side benefit: when
+    // the learner picks one specific instructor, showing all 84 days of their diary at
+    // once is a better UX than chunked load-more clicks.
+    const ok = await fetchFeedSlots(feedFrom, fullTo);
+    if (ok === false) return;
+    feedTo = fullTo; // hide load-more — full window already rendered
+    const chosenHasSlots = Object.values(slotCache).some(arr => arr && arr.length > 0);
+    if (!chosenHasSlots && instructors.length > 1) {
+      // Fetch alternatives (all-instructor query) once, cache by lesson-type + postcode.
+      const ltId = slotFeedLessonTypeId || (selectedLessonType && selectedLessonType.id) || '';
+      const pc = getLearnerPostcode() || '';
+      const fingerprint = `${ltId}|${pc}`;
+      if (!overflowCache || overflowFingerprint !== fingerprint) {
+        overflowCache = {};
+        overflowFingerprint = fingerprint;
+        const altOk = await fetchFeedSlots(feedFrom, fullTo, {
+          targetCache: overflowCache,
+          omitInstructor: true,
+          skipTravelBanner: true,
+          skipRangeDedup: true
+        });
+        if (altOk === false) { overflowCache = null; overflowFingerprint = null; renderFeed(); return; }
+      }
+      overflowMode = true;
+    }
+    renderFeed();
+    return;
+  }
+
+  // No specific instructor — original chunked load path.
   const ok = await fetchFeedSlots(feedFrom, feedTo);
   if (ok === false) return;
   renderFeed();
 }
 
-async function fetchFeedSlots(fromDate, toDate) {
+async function fetchFeedSlots(fromDate, toDate, opts) {
+  // opts (all optional):
+  //   targetCache  — write slots into this object instead of slotCache (for overflow alternatives).
+  //   omitInstructor — drop ?instructor_id from the query (overflow path uses this to fetch all-instructor slots).
+  //   skipTravelBanner — don't update the travel-hidden banner from this fetch.
+  //   skipRangeDedup — don't consult/write loadedRanges (overflow has its own fingerprint cache).
+  opts = opts || {};
+  const targetCache = opts.targetCache || slotCache;
+
   const today = new Date(); today.setHours(0,0,0,0);
   let from = fmtDate(fromDate < today ? today : fromDate);
   let to = fmtDate(toDate);
@@ -418,14 +482,14 @@ async function fetchFeedSlots(fromDate, toDate) {
   if (from > maxDate) return true;
   if (to > maxDate) to = maxDate;
 
-  const instructorId = document.getElementById('instructorFilter').value;
+  const instructorId = opts.omitInstructor ? '' : document.getElementById('instructorFilter').value;
   // Slot-first: feed renders at the smallest active duration, agnostic of which
   // lesson type the learner will eventually pick. The grid lesson_type_id sets
   // the slot length; min_duration_only=1 tells the API to skip the
   // offered_lesson_types filter (per-duration check happens on slot click).
   const ltId = slotFeedLessonTypeId || (selectedLessonType && selectedLessonType.id) || '';
   const cacheKey = `${from}|${to}|${instructorId}|${ltId}|mdo`;
-  if (loadedRanges.includes(cacheKey)) return true;
+  if (!opts.skipRangeDedup && loadedRanges.includes(cacheKey)) return true;
 
   const fromD = new Date(from + 'T00:00:00');
   const toD = new Date(to + 'T00:00:00');
@@ -452,60 +516,40 @@ async function fetchFeedSlots(fromDate, toDate) {
       if (data.travel_hidden) travelHidden += data.travel_hidden;
       const slots = data.slots || {};
       for (const ds in slots) {
-        if (!slotCache[ds]) slotCache[ds] = [];
+        if (!targetCache[ds]) targetCache[ds] = [];
         for (const s of slots[ds]) {
-          if (!slotCache[ds].find(x => x.date === s.date && x.start_time === s.start_time && x.instructor_id === s.instructor_id)) {
-            slotCache[ds].push(s);
+          if (!targetCache[ds].find(x => x.date === s.date && x.start_time === s.start_time && x.instructor_id === s.instructor_id)) {
+            targetCache[ds].push(s);
           }
         }
       }
     }
-    const banner = document.getElementById('travelHiddenBanner');
-    if (travelHidden > 0) {
-      document.getElementById('travelHiddenText').textContent =
-        `${travelHidden} slot${travelHidden === 1 ? '' : 's'} hidden due to travel distance from your pickup address`;
-      banner.style.display = 'flex';
-    } else {
-      banner.style.display = 'none';
+    if (!opts.skipTravelBanner) {
+      const banner = document.getElementById('travelHiddenBanner');
+      if (travelHidden > 0) {
+        document.getElementById('travelHiddenText').textContent =
+          `${travelHidden} slot${travelHidden === 1 ? '' : 's'} hidden due to travel distance from your pickup address`;
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
+      }
     }
-    loadedRanges.push(cacheKey);
+    if (!opts.skipRangeDedup) loadedRanges.push(cacheKey);
     return true;
   } catch (err) {
     console.error('fetchFeedSlots error:', err);
-    showError(err.message || 'Failed to load available slots');
+    if (!opts.targetCache) showError(err.message || 'Failed to load available slots');
     return false;
   }
 }
 
-function renderFeed() {
-  const allSlots = [];
-  const fromStr = fmtDate(feedFrom);
-  const toStr = fmtDate(feedTo);
-  for (const ds in slotCache) {
-    if (ds < fromStr || ds > toStr) continue;
-    for (const s of slotCache[ds]) allSlots.push(s);
-  }
-  allSlots.sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-    return a.start_time < b.start_time ? -1 : 1;
-  });
-
-  if (allSlots.length === 0) {
-    document.getElementById('calContent').innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">ðŸ“…</div>
-        <h3>No slots available</h3>
-        <p>No slots found in the next ${FEED_CHUNK_DAYS} days. Try a different lesson type or check back later.</p>
-      </div>`;
-    updateFeedFooter(0);
-    return;
-  }
-
+// Build the inner slot-feed HTML (date headers + cards) from a flat slot list.
+// Shared by the normal feed and the overflow-alternatives feed.
+function buildSlotFeedHtml(allSlots) {
   const today = new Date(); today.setHours(0,0,0,0);
   let html = '<div class="slot-feed">';
   let lastDateStr = '';
   for (const s of allSlots) {
-    // Date header when date changes
     if (s.date !== lastDateStr) {
       lastDateStr = s.date;
       const d = new Date(s.date + 'T00:00:00');
@@ -517,13 +561,11 @@ function renderFeed() {
       else dateLabel = `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
       html += `<div class="feed-date-header">${dateLabel}</div>`;
     }
-
     const timeStr = s.start_time.slice(0, 5);
     const colour = s.colour || (selectedLessonType ? selectedLessonType.colour : 'var(--accent)');
     const avatar = s.instructor_avatar
       ? `<span class="slot-avatar"><img src="${esc(s.instructor_avatar)}" alt=""></span>`
       : `<span class="slot-avatar">${esc((s.instructor_name || '?')[0])}</span>`;
-
     html += `<div class="feed-card" data-action="open-book-modal"
       data-instructor-id="${s.instructor_id}"
       data-date="${s.date}"
@@ -539,7 +581,81 @@ function renderFeed() {
     </div>`;
   }
   html += '</div>';
-  document.getElementById('calContent').innerHTML = html;
+  return html;
+}
+
+function renderFeed() {
+  // Overflow lead routing (plan item 1.2): chosen instructor has zero slots
+  // across the full 84-day window. Render heading + subheading + alternatives.
+  if (overflowMode) {
+    const chosenId = document.getElementById('instructorFilter').value;
+    const chosen = instructors.find(i => String(i.id) === String(chosenId));
+    const fullName = (chosen && chosen.name) || 'this instructor';
+    const firstName = fullName.includes(' ') ? fullName.split(' ')[0] : fullName;
+
+    // Render alternatives within the same date window as the normal feed.
+    const altSlots = [];
+    const fromStr = fmtDate(feedFrom);
+    const toStr = fmtDate(feedTo);
+    for (const ds in (overflowCache || {})) {
+      if (ds < fromStr || ds > toStr) continue;
+      for (const s of overflowCache[ds]) altSlots.push(s);
+    }
+    altSlots.sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      return a.start_time < b.start_time ? -1 : 1;
+    });
+
+    if (altSlots.length === 0) {
+      // Edge case: even alternatives have no slots in the loaded window.
+      // This happens when (a) school has only one active instructor (already
+      // handled in initFeed by skipping overflowMode) or (b) lesson-type /
+      // postcode filter narrows alternatives to zero.
+      document.getElementById('calContent').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">📅</div>
+          <h3>No slots with ${esc(firstName)} in the next 12 weeks.</h3>
+          <p>No slots found with our other instructors either. Try a different lesson type or check back later.</p>
+        </div>`;
+      updateFeedFooter(0);
+      return;
+    }
+
+    const html = `
+      <div class="overflow-section">
+        <h3 class="overflow-heading">No slots with ${esc(firstName)} in the next 12 weeks.</h3>
+        <p class="overflow-subhead">Slots with our other instructors:</p>
+        ${buildSlotFeedHtml(altSlots)}
+      </div>`;
+    document.getElementById('calContent').innerHTML = html;
+    updateFeedFooter(altSlots.length);
+    return;
+  }
+
+  const allSlots = [];
+  const fromStr = fmtDate(feedFrom);
+  const toStr = fmtDate(feedTo);
+  for (const ds in slotCache) {
+    if (ds < fromStr || ds > toStr) continue;
+    for (const s of slotCache[ds]) allSlots.push(s);
+  }
+  allSlots.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return a.start_time < b.start_time ? -1 : 1;
+  });
+
+  if (allSlots.length === 0) {
+    document.getElementById('calContent').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📅</div>
+        <h3>No slots available</h3>
+        <p>No slots found in the next ${FEED_CHUNK_DAYS} days. Try a different lesson type or check back later.</p>
+      </div>`;
+    updateFeedFooter(0);
+    return;
+  }
+
+  document.getElementById('calContent').innerHTML = buildSlotFeedHtml(allSlots);
   updateFeedFooter(allSlots.length);
 }
 

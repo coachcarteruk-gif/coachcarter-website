@@ -41,16 +41,32 @@ module.exports = async (req, res) => {
         const transporter = createTransporter();
         for (const payout of completedPayouts) {
           const amountStr = '£' + (payout.amount_pence / 100).toFixed(2);
+          const fmt = (p) => '£' + (p / 100).toFixed(2);
+          const isZero = payout.amount_pence === 0;
+          const headline = isZero
+            ? `<p>Your weekly statement for <strong>${payout.lesson_count} lesson${payout.lesson_count === 1 ? '' : 's'}</strong> shows <strong>£0.00</strong> sent to your bank this week — your gross has been used to cover the items below.</p>`
+            : `<p>Your weekly payout of <strong>${amountStr}</strong> for <strong>${payout.lesson_count} lesson${payout.lesson_count === 1 ? '' : 's'}</strong> has been sent to your bank account.</p>
+               <p>It should arrive within 1–2 working days.</p>`;
+          const extraLines = [];
+          if (payout.deposit_deducted_pence > 0) {
+            extraLines.push(`<p style="margin:6px 0;">Vehicle deposit (week 1): <strong>−${fmt(payout.deposit_deducted_pence)}</strong> <span style="color:#6b7280;">(refundable at end of contract per clause 5.5)</span></p>`);
+          }
+          if (payout.prior_shortfall_recovered_pence > 0) {
+            extraLines.push(`<p style="margin:6px 0;">Recovered from prior shortfall: <strong>−${fmt(payout.prior_shortfall_recovered_pence)}</strong></p>`);
+          }
+          if (payout.shortfall_pence > 0) {
+            extraLines.push(`<p style="margin:6px 0;color:#b45309;">This week's shortfall (rolls forward): <strong>${fmt(payout.shortfall_pence)}</strong>. This will be deducted from your next positive payout.</p>`);
+          }
           await transporter.sendMail({
             from: process.env.SMTP_USER,
             to: payout.instructor_email,
             subject: `CoachCarter Payout — ${amountStr}`,
             html: `
               <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
-                <h2 style="color:#f97316;">Payout Sent</h2>
+                <h2 style="color:#f97316;">${isZero ? 'Weekly Statement' : 'Payout Sent'}</h2>
                 <p>Hi ${payout.instructor_name},</p>
-                <p>Your weekly payout of <strong>${amountStr}</strong> for <strong>${payout.lesson_count} lesson${payout.lesson_count === 1 ? '' : 's'}</strong> has been sent to your bank account.</p>
-                <p>It should arrive within 1–2 working days.</p>
+                ${headline}
+                ${extraLines.join('\n')}
                 <p style="color:#6b7280;font-size:13px;">You can view your full payout history in your <a href="https://coachcarter.uk/instructor/earnings.html">earnings dashboard</a>.</p>
               </div>
             `

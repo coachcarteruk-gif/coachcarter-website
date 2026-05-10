@@ -101,7 +101,7 @@ These are the values the franchise tiers and pricing would launch with **if onbo
 | 1 | CoachCarter is merchant of record. Money sits on CoachCarter Stripe balance until lesson delivered. **No `on_behalf_of`** on charges. |
 | 2 | Instructors are self-employed franchisees, not employees. (See `LEGAL-STATUS-RESEARCH` section below for stress-test of this assumption.) |
 | 3 | Fee structure: pure franchise fee. **Tiers are admin-managed** via `franchise_tiers` table — not hardcoded as enums. Launch with two tiers seeded ("Full" and "Part") but adding/removing/editing tiers is an admin action. No commission layered on top. |
-| 4 | Stripe payment-processing fees absorbed by CoachCarter, baked into franchise fee pricing. |
+| 4 | **REVISED May 2026**: Stripe payment-processing fees passed through at cost to the instructor (deducted from lesson revenue before payout calculation). CoachCarter does not retain any margin on Stripe fees — they are itemised on the weekly payout statement. Originally Decision 4 said "CoachCarter absorbs Stripe fees, baked into franchise fee pricing" — superseded after the agreement-drafting interview made the trade-off explicit (instructor bears real transaction cost — small but reinforces contractor-status framing). Code change: payout cron must subtract `stripe_fee_pence` (already in webhook metadata) from `lesson_bookings.list_price_pence` when calculating payouts. |
 | 5 | **Hourly rate has a school default (in `schools.config.pricing.bulk_hourly_pence`) AND a per-instructor override (`instructors.hourly_rate_pence`).** Override is NULL by default → use school rate. Admin can set per-instructor rates from instructor edit form. Senior instructors can charge more, new instructors can charge less. Each rate is set at onboarding by mutual agreement — strengthens contractor-status framing. Three-level fallback for any specific lesson: per-learner custom rate (`instructor_learner_notes.custom_hourly_rate_pence`) → per-instructor rate (`instructors.hourly_rate_pence`) → school rate (`schools.config.pricing.bulk_hourly_pence`). |
 | 6 | **Bulk-tier discounts (12h/24h/36h at 2.5%/5%/7.5% off) are per-instructor opt-in. Instructor absorbs the discount.** Their payout reflects the effective rate the credits were bought at, not the £55 default. New instructors default opted-out; Fraser is grandfathered in. This is structural list pricing, not a campaign promo. |
 | 6b | **Time-bound campaign promos** (e.g. "spring sale", "first lesson £20") remain deferred to the alternatives appendix. When CoachCarter eventually runs one, the design is per-instructor opt-in too — and the instructor decides whether they absorb that discount or not at the time. |
@@ -112,6 +112,7 @@ These are the values the franchise tiers and pricing would launch with **if onbo
 | 11 | Marketing all runs through CoachCarter / business website. Instructors don't run independent marketing. **Tier inclusions (decals, dual control, etc.) are admin-editable** via `franchise_tiers.inclusions` — making any inclusion optional or required is an admin action. |
 | 12 | No automatic debt cap. Franchise fees are contractually owed for the contract duration. `payouts_paused` remains a manual admin action. |
 | 13 | Per-instructor-per-learner custom rates (existing `instructor_learner_notes.custom_hourly_rate_pence`) override the default. When credits are bought against a custom-rate relationship, `effective_rate_pence_per_minute` reflects the custom rate. |
+| 14 | **Lead Floor (added May 2026 from agreement interview, revised twice same day)**: CoachCarter contractually commits to routing a minimum number of Qualifying Leads per week to each franchised instructor (default 0.5/week, set per-instructor on the Schedule). Measured over consecutive 13-week periods. **Reduction formula**: pro-rata against a per-instructor maximum (default £15/week max reduction), rounded up to nearest 50p. Formula: `reduction_per_week = ceil_to_50p(max_reduction × leads_short / leads_owed)`. The £15 cap is the reduction at 100% shortfall (zero leads delivered); smaller shortfalls produce proportionally smaller reductions. £15 cap stays £15 even if Lead Floor is set higher. A Qualifying Lead = a learner introduced via Platform/free-trial/direct-introduction who completes at least one lesson. Phase 2 schema additions deferred until first instructor signs (no code change needed in Phase 1 — admin can manually compute & adjust `weekly_franchise_fee_pence` for the affected quarter). When automation is wanted: new table `instructor_lead_floor_periods (instructor_id, period_start, period_end, leads_required, leads_delivered, reduction_per_week_pence)` plus per-instructor `instructors.lead_floor_per_week` (NUMERIC) and `instructors.lead_floor_max_reduction_pence` (INTEGER) columns. Round-up-to-50p logic lives in `_pricing-helpers.js`. |
 
 ---
 
@@ -131,13 +132,13 @@ The minimum to onboard instructor #2.
 
 ### Phase –1 — Legal & contract gate (BLOCKING)
 
-- [ ] Draft franchise agreement covering: pure franchise fee, 12-month contract duration, fees accrue regardless of work delivered, CoachCarter's recourse if instructor leaves with debt, no exclusivity, the £55/hour default and bulk-tier opt-in mechanics, instructor absorbs bulk discount, late-cancellation refund policy.
+- [x] ~~Draft franchise agreement covering: pure franchise fee, 12-month contract duration, fees accrue regardless of work delivered, CoachCarter's recourse if instructor leaves with debt, no exclusivity, the £55/hour default and bulk-tier opt-in mechanics, instructor absorbs bulk discount, late-cancellation refund policy.~~ **Drafted May 2026** as plain-English heads-of-terms in [`FRANCHISE-AGREEMENT-DRAFT.md`](FRANCHISE-AGREEMENT-DRAFT.md). Now needs solicitor review (see "Solicitor checklist" at end of that document) before signing instructor #2.
 - [x] ~~Resolve tier prices~~ — **resolved**:
   - **Full Franchise**: £195/week. Includes car, decals, dual control. 12-month contract.
   - **Part Franchise**: £70/week. Includes decals, dual control (instructor's own car). 12-month contract.
 - [ ] **Verify Full Franchise economics** before locking £195. Get 3 lease quotes for the actual car you'd buy (Hyundai i10, Corsa, Yaris hybrid or similar) + 1 driving-school insurance quote with dual control + £25/week buffer for servicing/MOT/tyres/breakdown. Target: real cost ≤ £150/week to leave £45 margin for CoachCarter platform overhead. If real cost lands at £160+, raise tier price to £210-220.
 - [x] ~~Decide pricing band and default rate~~ — **resolved**: £55/hour default for all instructors.
-- [ ] Clarify in franchise agreement: who provides the dual-control kit on Part Franchise? Reading the £70/week pricing, the instructor sources and installs their own (CoachCarter doesn't provide hardware on this tier — only fits decals to the instructor's car). Confirm this is the intent.
+- [x] ~~Clarify in franchise agreement: who provides the dual-control kit on Part Franchise?~~ **Resolved (May 2026 interview)**: Coach Carter Ltd purchases and fits the dual-control kit on **both** Full and Part Franchise. The plan's earlier wording ("instructor sources own kit") was wrong. Cost is absorbed into the tier fee. Removal at end of contract paid by Coach Carter Ltd; removal on early-exit paid by the instructor at a fixed admin fee.
 - [ ] When you next see a UK accountant for any reason: ask about VAT trajectory (lesson revenue + franchise revenue both count toward £90k threshold). Low priority — Fraser is nowhere near today.
 
 ### Phase 1 — Schema groundwork (no behavioural change)
@@ -435,6 +436,15 @@ Bulk-tier opt-in is in MVP (it's structural list pricing). Campaign promos — l
 - `contract_end_date`, `contract_term_months`, contract document storage.
 
 **Trigger**: ≥3 active contracts, where remembering renewal dates becomes a real burden.
+
+### Per-lesson payout-eligibility flag (insurance gating)
+
+- New column `lesson_bookings.is_payout_eligible BOOLEAN DEFAULT TRUE`.
+- Admin sets this to FALSE for any lesson whose delivery date falls inside an uninsured gap for the relevant instructor (e.g. tuition vehicle insurance lapsed between Apr 3 and Apr 10 → all lessons delivered in that window are flagged FALSE).
+- Payout cron sums only `is_payout_eligible = TRUE`. Flagged lessons disappear from the instructor's payout silently — Weekly Fee still accrues per clause 7.3.2.
+- Likely simple admin UI: in instructor edit form, "log insurance gap (start date / end date)" button that flips the flag for all lessons in that window.
+
+**Trigger**: first instructor-#2 insurance lapse where Fraser needs to actually exclude lessons from a payout. Until then, manual SQL fix is fine. Phase 1 schema column may as well be added now if there's a migration coming up regardless.
 
 ---
 

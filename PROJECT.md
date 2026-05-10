@@ -684,7 +684,7 @@ Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment.
 
 **`instructor_login_tokens`** — magic-link tokens with expiry and used flag
 
-**`instructor_payouts`** — id, instructor_id, amount_pence, platform_fee_pence, franchise_fee_pence (audit trail, NULL for commission model), stripe_transfer_id, period_start, period_end, status ('pending'/'processing'/'completed'/'failed'/'skipped'), failure_reason, created_at, completed_at
+**`instructor_payouts`** — id, instructor_id, amount_pence, platform_fee_pence, franchise_fee_pence (audit trail, NULL for commission model), stripe_transfer_id, period_start, period_end, status ('pending'/'processing'/'completed'/'failed'/'skipped'), failure_reason, created_at, completed_at, shortfall_pence (amount instructor owes CCL from this period; rolls forward to next positive payout), shortfall_recovered_from_payout_id (NULL until cleared by a later payout), deposit_deducted_pence (£250 vehicle deposit deducted on week-1 Full-Franchise payouts; partial-amount tolerant)
 
 **`payout_line_items`** — id, payout_id, booking_id (UNIQUE — prevents double-payment), price_pence, instructor_amount_pence, commission_rate
 
