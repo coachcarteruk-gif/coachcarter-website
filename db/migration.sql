@@ -1592,7 +1592,7 @@ CREATE TABLE IF NOT EXISTS balance_audit (
   new_credit_balance     INTEGER,
   delta_minutes          INTEGER,
   delta_credits          INTEGER,
-  session_user           TEXT,
+  db_session_user        TEXT,
   application_name       TEXT,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -1617,7 +1617,7 @@ BEGIN
     END IF;
     INSERT INTO balance_audit (learner_id, op, old_balance_minutes, new_balance_minutes,
       old_credit_balance, new_credit_balance, delta_minutes, delta_credits,
-      session_user, application_name)
+      db_session_user, application_name)
     VALUES (NEW.id, 'INSERT', NULL, new_bm, NULL, new_cb,
       COALESCE(new_bm, 0), COALESCE(new_cb, 0),
       session_user, current_setting('application_name', true));
@@ -1631,7 +1631,7 @@ BEGIN
     END IF;
     INSERT INTO balance_audit (learner_id, op, old_balance_minutes, new_balance_minutes,
       old_credit_balance, new_credit_balance, delta_minutes, delta_credits,
-      session_user, application_name)
+      db_session_user, application_name)
     VALUES (NEW.id, 'UPDATE', old_bm, new_bm, old_cb, new_cb,
       COALESCE(new_bm, 0) - COALESCE(old_bm, 0),
       COALESCE(new_cb, 0) - COALESCE(old_cb, 0),
@@ -1641,7 +1641,7 @@ BEGIN
   ELSIF TG_OP = 'DELETE' THEN
     INSERT INTO balance_audit (learner_id, op, old_balance_minutes, new_balance_minutes,
       old_credit_balance, new_credit_balance, delta_minutes, delta_credits,
-      session_user, application_name)
+      db_session_user, application_name)
     VALUES (OLD.id, 'DELETE', OLD.balance_minutes, NULL, OLD.credit_balance, NULL,
       -COALESCE(OLD.balance_minutes, 0), -COALESCE(OLD.credit_balance, 0),
       session_user, current_setting('application_name', true));
