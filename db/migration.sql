@@ -1567,3 +1567,91 @@ ALTER TABLE instructors ADD COLUMN IF NOT EXISTS broadcast_offers_enabled
 -- (84-day) advance cap — the instructor explicitly opted in by setting it.
 ALTER TABLE lesson_offers ADD COLUMN IF NOT EXISTS max_repeat_weeks INTEGER
   CHECK (max_repeat_weeks IS NULL OR max_repeat_weeks BETWEEN 1 AND 18);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Balance audit trail (May 2026)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- DB-level safety net for every change to learner_users.balance_minutes /
+-- credit_balance. Catches what credit_transactions misses — namely booking
+-- deductions, cancel refunds, free-offer credits, and (the original motivation)
+-- raw SQL run outside the app. Triggered by an investigation on 2026-05-10
+-- where a learner had 270 mins on their account with zero credit_transactions
+-- rows and zero audit_log entries.
+--
+-- One row is written for every UPDATE/INSERT/DELETE on learner_users where
+-- balance_minutes or credit_balance actually changed. The trigger captures
+-- session_user (Postgres role) and application_name (set by the connection),
+-- which together distinguish app traffic from raw SQL.
+CREATE TABLE IF NOT EXISTS balance_audit (
+  id                     BIGSERIAL PRIMARY KEY,
+  learner_id             INTEGER NOT NULL,
+  op                     TEXT NOT NULL CHECK (op IN ('INSERT', 'UPDATE', 'DELETE')),
+  old_balance_minutes    INTEGER,
+  new_balance_minutes    INTEGER,
+  old_credit_balance     INTEGER,
+  new_credit_balance     INTEGER,
+  delta_minutes          INTEGER,
+  delta_credits          INTEGER,
+  session_user           TEXT,
+  application_name       TEXT,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_balance_audit_learner_created
+  ON balance_audit(learner_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_balance_audit_created
+  ON balance_audit(created_at DESC);
+
+CREATE OR REPLACE FUNCTION trg_balance_audit() RETURNS TRIGGER AS $$
+DECLARE
+  old_bm INTEGER;
+  new_bm INTEGER;
+  old_cb INTEGER;
+  new_cb INTEGER;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    old_bm := NULL; old_cb := NULL;
+    new_bm := NEW.balance_minutes; new_cb := NEW.credit_balance;
+    IF COALESCE(new_bm, 0) = 0 AND COALESCE(new_cb, 0) = 0 THEN
+      RETURN NEW;
+    END IF;
+    INSERT INTO balance_audit (learner_id, op, old_balance_minutes, new_balance_minutes,
+      old_credit_balance, new_credit_balance, delta_minutes, delta_credits,
+      session_user, application_name)
+    VALUES (NEW.id, 'INSERT', NULL, new_bm, NULL, new_cb,
+      COALESCE(new_bm, 0), COALESCE(new_cb, 0),
+      session_user, current_setting('application_name', true));
+    RETURN NEW;
+
+  ELSIF TG_OP = 'UPDATE' THEN
+    old_bm := OLD.balance_minutes; new_bm := NEW.balance_minutes;
+    old_cb := OLD.credit_balance;  new_cb := NEW.credit_balance;
+    IF old_bm IS NOT DISTINCT FROM new_bm AND old_cb IS NOT DISTINCT FROM new_cb THEN
+      RETURN NEW;
+    END IF;
+    INSERT INTO balance_audit (learner_id, op, old_balance_minutes, new_balance_minutes,
+      old_credit_balance, new_credit_balance, delta_minutes, delta_credits,
+      session_user, application_name)
+    VALUES (NEW.id, 'UPDATE', old_bm, new_bm, old_cb, new_cb,
+      COALESCE(new_bm, 0) - COALESCE(old_bm, 0),
+      COALESCE(new_cb, 0) - COALESCE(old_cb, 0),
+      session_user, current_setting('application_name', true));
+    RETURN NEW;
+
+  ELSIF TG_OP = 'DELETE' THEN
+    INSERT INTO balance_audit (learner_id, op, old_balance_minutes, new_balance_minutes,
+      old_credit_balance, new_credit_balance, delta_minutes, delta_credits,
+      session_user, application_name)
+    VALUES (OLD.id, 'DELETE', OLD.balance_minutes, NULL, OLD.credit_balance, NULL,
+      -COALESCE(OLD.balance_minutes, 0), -COALESCE(OLD.credit_balance, 0),
+      session_user, current_setting('application_name', true));
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS balance_audit_trigger ON learner_users;
+CREATE TRIGGER balance_audit_trigger
+  AFTER INSERT OR UPDATE OR DELETE ON learner_users
+  FOR EACH ROW EXECUTE FUNCTION trg_balance_audit();
