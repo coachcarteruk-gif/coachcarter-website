@@ -308,6 +308,7 @@ JWT lives in an httpOnly cookie (`cc_learner`); the `cc_learner` localStorage ke
 | `login` | POST | No | Email + password sign-in. 5-fail / 15-min lockout per email. Body: `{ email, password }` |
 | `signup` | POST | No | Create account with password. Free-trial credit + audit-logged. Body: `{ email, password, name?, referral_code?, school_id? }` |
 | `set-password` | POST | No (ticket) | Completes migration or reset. Body: `{ ticket, password }` (ticket from `verify-email-code`) |
+| `set-password-from-offer` | POST | No (offer token) | Bridges a paid lesson offer to an authed session for guest learners on `offer-success.html`. Verifies offer is `accepted`, learner has no password yet, and `accepted_at` is within 24h. Sets password + issues session. Audit-logged as `learner.password_set` with `purpose: 'offer_signup'`. Body: `{ offer_token, password }` |
 | `request-reset` | POST | No | Sends reset email (code + link). Enumeration-safe. Body: `{ email }` |
 | `add-email` | POST | No | Phone-only user adds an email so they can migrate to password. Body: `{ phone, email }` |
 

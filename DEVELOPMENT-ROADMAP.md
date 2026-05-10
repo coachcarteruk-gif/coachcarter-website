@@ -1959,6 +1959,27 @@ Follow-up to 2.95. Brings instructor and admin sign-in onto the same email + pas
 
 ---
 
+## 2.98 — Auth gate on offer-success.html for guest learners (10 May 2026)
+
+Closes the customer-impacting gap from the 10 May incident. A learner who paid for a flexible lesson offer as a guest (no prior CoachCarter account) landed on `offer-success.html?flexible=1`, picked a slot, tapped Confirm booking, and the call to `/api/slots?action=book` 401'd because they had no session cookie on this device. The Stripe webhook had created their `learner_users` row but no session was ever issued to the browser that just paid.
+
+The fix: an inline auth gate appears on `offer-success.html` before the slot picker for guests. Two modes:
+
+- **Set password** (default for new accounts) — POSTs to a new endpoint `?action=set-password-from-offer` with `{ offer_token, password }`. The endpoint verifies the offer is `accepted`, the learner has `password_hash IS NULL`, and `accepted_at` is within 24h, then hashes the password, issues a session JWT, and audit-logs as `learner.password_set` with `purpose: 'offer_signup'`. Email field is hidden (server resolves email from the offer).
+- **Sign in** (when `check-account` reports `has_password: true`) — uses the existing `?action=login` endpoint. Email is pre-filled and readonly. Includes a "Forgotten your password?" escape hatch linking to `/learner/login.html` with a redirect-back param.
+
+Once the gate posts successfully, the session cookie is set server-side, the `cc_learner` localStorage display blob is updated client-side, and `initSlotPicker()` runs. The booking `fetchAuthed` then succeeds because the session is now established.
+
+Authorisation: the offer token alone is unguessable (32 bytes random) and the `status='accepted'` gate prevents pre-payment use. The `password_hash IS NULL` check refuses to overwrite an existing customer's password — they must use sign-in mode instead. The 24h post-acceptance window prevents stale tokens from being weaponised long after the booking flow has lapsed.
+
+API contract changes: `?action=get-offer` on a `status='accepted'` offer now returns the existing 410 response **plus** a minimal `offer` payload (`id`, `learner_email`, `instructor_name`, `duration_minutes`, `is_flexible`) so the auth gate can pre-fill the email field and route to the correct mode. Existing callers that only check `data.code === 'ALREADY_ACCEPTED'` are unaffected.
+
+**Why not auto-issue a session JWT silently from Stripe metadata:** any leak of the offer token would mint a session for someone else's account. Forcing a password step ties account access to a secret only the legitimate learner sets, and onboards them to a real account they can re-use for future bookings.
+
+**Files changed:** `api/learner-auth.js`, `api/offers.js`, `public/offer-success.html`, `public/offer-success.js`, `PROJECT.md`
+
+---
+
 ## 2.97 — Sync `credit_transactions.type` CHECK constraint with codebase reality (10 May 2026)
 
 Production's `credit_transactions_type_check` CHECK constraint, inherited from the original `db/migrations/001_booking_system.sql`, only allowed `('purchase','refund')`. The codebase has since added six other type values, all of which were silently 23514-erroring in production:

@@ -40,12 +40,13 @@ const COOKIE_MAX_AGE = SESSION_MAX_AGE_SEC.learner;
 // ── Router ──────────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   const action = req.query.action;
-  if (action === 'login')          return handleLogin(req, res);
-  if (action === 'signup')         return handleSignup(req, res);
-  if (action === 'set-password')   return handleSetPassword(req, res);
-  if (action === 'request-reset')  return handleRequestReset(req, res);
-  if (action === 'add-email')      return handleAddEmail(req, res);
-  if (action === 'check-account')  return handleCheckAccount(req, res);
+  if (action === 'login')                    return handleLogin(req, res);
+  if (action === 'signup')                   return handleSignup(req, res);
+  if (action === 'set-password')             return handleSetPassword(req, res);
+  if (action === 'set-password-from-offer')  return handleSetPasswordFromOffer(req, res);
+  if (action === 'request-reset')            return handleRequestReset(req, res);
+  if (action === 'add-email')                return handleAddEmail(req, res);
+  if (action === 'check-account')            return handleCheckAccount(req, res);
   return res.status(400).json({ error: 'Unknown action' });
 };
 
@@ -356,6 +357,101 @@ async function handleSetPassword(req, res) {
     });
   } catch (err) {
     console.error('set-password error:', err);
+    reportError('/api/learner-auth', err);
+    return res.status(500).json({ error: 'Could not set password' });
+  }
+}
+
+// ── POST ?action=set-password-from-offer ────────────────────────────────────
+//
+// Bridges a paid lesson_offer to an authed session for guest learners. After
+// Stripe checkout the webhook creates a learner_users row but the device that
+// just paid has no session cookie — the learner lands on offer-success.html
+// and can't book the slot via fetchAuthed without one.
+//
+// Authorisation: possessing the offer token + the offer being in 'accepted'
+// state (i.e. the webhook successfully ran and credited the learner). The
+// token alone is unguessable (32 bytes) and the 'accepted' gate means no-one
+// can use it pre-payment. We further require password_hash IS NULL on the
+// learner — existing customers with passwords go through normal login. The
+// 24h post-acceptance window prevents stale tokens being weaponised long
+// after the booking flow has lapsed.
+//
+// Body: { offer_token, password }
+async function handleSetPasswordFromOffer(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    const offerToken = typeof req.body?.offer_token === 'string' ? req.body.offer_token.trim() : '';
+    const password = req.body?.password;
+    if (!offerToken) return res.status(400).json({ error: 'Missing offer token.' });
+
+    const pwdErr = validatePassword(password);
+    if (pwdErr) return res.status(400).json({ error: 'invalid_password', message: pwdErr });
+
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [offer] = await sql`
+      SELECT id, learner_id, accepted_at, status
+        FROM lesson_offers
+       WHERE token = ${offerToken}`;
+
+    if (!offer || offer.status !== 'accepted' || !offer.learner_id) {
+      return res.status(400).json({ error: 'invalid_offer', message: 'This offer is no longer valid.' });
+    }
+
+    // Reject stale tokens — the post-payment "set a password" window is short.
+    if (!offer.accepted_at || (Date.now() - new Date(offer.accepted_at).getTime()) > 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ error: 'expired', message: 'This setup link has expired. Please use the login page instead.' });
+    }
+
+    const [user] = await sql`
+      SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at, password_hash
+        FROM learner_users
+       WHERE id = ${offer.learner_id}`;
+
+    if (!user) {
+      return res.status(400).json({ error: 'invalid_offer', message: 'Account not found.' });
+    }
+
+    // Refuse to overwrite an existing password — existing customers must use login.
+    if (user.password_hash) {
+      return res.status(409).json({
+        error: 'password_already_set',
+        message: 'This account already has a password. Please sign in instead.',
+      });
+    }
+
+    const passwordHash = await hashPassword(password);
+    await sql`
+      UPDATE learner_users
+         SET password_hash = ${passwordHash},
+             password_set_at = NOW(),
+             email_verified = TRUE,
+             last_activity_at = NOW()
+       WHERE id = ${user.id}`;
+
+    await clearLoginLockout(sql, ROLE, user.email);
+
+    try {
+      await logAudit(sql, {
+        adminId: null, adminEmail: user.email,
+        action: 'learner.password_set',
+        targetType: 'learner_users', targetId: user.id,
+        details: { purpose: 'offer_signup', offer_id: offer.id },
+        schoolId: user.school_id || 1, req,
+      });
+    } catch {}
+
+    issueSession(res, user);
+    return res.json({
+      success: true,
+      user: publicUser(user),
+      is_new_user: false,
+      needs_name: !user.name,
+      terms_accepted: !!user.terms_accepted_at,
+    });
+  } catch (err) {
+    console.error('set-password-from-offer error:', err);
     reportError('/api/learner-auth', err);
     return res.status(500).json({ error: 'Could not set password' });
   }

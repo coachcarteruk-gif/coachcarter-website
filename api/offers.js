@@ -268,8 +268,24 @@ async function handleGetOffer(req, res) {
     if (offer.status === 'expired')
       return res.status(410).json({ error: true, code: 'EXPIRED', message: 'This offer has expired' });
 
-    if (offer.status === 'accepted')
-      return res.status(410).json({ error: true, code: 'ALREADY_ACCEPTED', message: 'This offer has already been accepted' });
+    if (offer.status === 'accepted') {
+      // Minimal payload for the offer-success.html post-payment auth gate
+      // (a guest who just paid needs the learner_email to set a password).
+      // Leaves status at 410 + code=ALREADY_ACCEPTED so existing callers that
+      // only check `code` keep working unchanged.
+      return res.status(410).json({
+        error: true,
+        code: 'ALREADY_ACCEPTED',
+        message: 'This offer has already been accepted',
+        offer: {
+          id: offer.id,
+          learner_email: offer.learner_email,
+          instructor_name: offer.instructor_name,
+          duration_minutes: offer.duration_minutes || 90,
+          is_flexible: !offer.scheduled_date && !offer.start_time,
+        }
+      });
+    }
 
     if (offer.status === 'cancelled')
       return res.status(410).json({ error: true, code: 'CANCELLED', message: 'This offer has been cancelled' });

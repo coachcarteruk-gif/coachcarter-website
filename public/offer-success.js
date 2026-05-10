@@ -17,6 +17,11 @@
   var feedTo = null;
   var selectedSlot = null;
 
+  // Captured from the offer payload so the auth gate can show the learner's
+  // own email in a readonly username field (helps password managers, and
+  // confirms which account they're setting up).
+  var offerLearnerEmail = '';
+
   var DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var MON_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -48,6 +53,13 @@
     try {
       var res = await fetch(API + '?action=get-offer&token=' + encodeURIComponent(token));
       var data = await res.json();
+
+      // Capture learner_email when the API returns it — both the pending-offer
+      // payload and the post-acceptance minimal payload include it. The auth
+      // gate uses it to pre-fill the username field for password managers.
+      if (data.offer && data.offer.learner_email) {
+        offerLearnerEmail = data.offer.learner_email;
+      }
 
       if (data.code === 'ALREADY_ACCEPTED' || (data.ok && data.offer)) {
         if (data.ok && data.offer) {
@@ -97,9 +109,9 @@
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('success-content').classList.remove('hidden');
 
-    // Init slot picker for flexible offers
+    // Init slot picker for flexible offers — gate on auth first if guest
     if (flexible && instructorId) {
-      initSlotPicker();
+      gateThenInitSlotPicker();
     } else if (flexible) {
       // Fallback: show the old CTA if we don't have instructor data
       document.getElementById('s-info').classList.remove('hidden');
@@ -126,7 +138,7 @@
         document.getElementById('s-info').classList.add('hidden');
         document.getElementById('s-cta').classList.add('hidden');
         document.getElementById('success-content').classList.remove('hidden');
-        initSlotPicker();
+        gateThenInitSlotPicker();
       } else {
         document.getElementById('s-info').innerHTML =
           '<strong>What\u2019s next?</strong> Browse available slots and book your lesson at a time that works for you.';
@@ -148,6 +160,184 @@
       return (mins / 60).toFixed(1) + ' hours';
     }
     return mins + ' mins';
+  }
+
+  // ── Auth Gate ──────────────────────────────────────────────────────────────
+  // Guests who paid via Stripe Checkout have no session cookie on this device.
+  // The slot-booking call uses fetchAuthed and would 401, leaving them with the
+  // same broken-on-Confirm experience that brought us here. We force a tiny
+  // password-set or sign-in step before showing the picker; on success the
+  // session cookie is set and the picker proceeds normally.
+
+  async function gateThenInitSlotPicker() {
+    // Already signed in on this device? Skip the gate.
+    if (window.ccAuth && window.ccAuth.getAuth && window.ccAuth.getAuth()) {
+      initSlotPicker();
+      return;
+    }
+
+    // Need an email to know which flow (set-password vs sign-in). The offer
+    // payload should have it; if not, fall back to sign-in form with empty email.
+    var email = offerLearnerEmail || '';
+    var hasPassword = false;
+    if (email) {
+      try {
+        var probe = await fetch('/api/learner-auth?action=check-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email })
+        });
+        var probeData = await probe.json();
+        hasPassword = !!probeData.has_password;
+      } catch (e) {
+        // If the lookup fails we'll still render the gate — sign-in mode is
+        // the safer default since it never overwrites a password.
+        hasPassword = true;
+      }
+    }
+
+    renderAuthGate({ email: email, mode: hasPassword ? 'login' : 'set' });
+  }
+
+  function renderAuthGate(opts) {
+    var mode = opts.mode; // 'set' or 'login'
+    var gate = document.getElementById('auth-gate');
+    var heading = document.getElementById('auth-gate-heading');
+    var sub = document.getElementById('auth-gate-sub');
+    var emailInput = document.getElementById('auth-gate-email');
+    var pwInput = document.getElementById('auth-gate-password');
+    var submitBtn = document.getElementById('auth-gate-submit');
+    var errEl = document.getElementById('auth-gate-error');
+    var switchEl = document.getElementById('auth-gate-switch');
+    var form = document.getElementById('auth-gate-form');
+
+    if (mode === 'set') {
+      heading.textContent = 'Last step — set a password';
+      sub.textContent = 'Pick a password so you can manage this booking and see your lesson history.';
+      pwInput.setAttribute('autocomplete', 'new-password');
+      pwInput.setAttribute('placeholder', 'At least 8 characters');
+      submitBtn.textContent = 'Continue to slot picker';
+    } else {
+      heading.textContent = 'Sign in to book your slot';
+      sub.textContent = 'You already have a CoachCarter account — enter your password to continue.';
+      pwInput.setAttribute('autocomplete', 'current-password');
+      pwInput.setAttribute('placeholder', 'Your password');
+      submitBtn.textContent = 'Sign in and continue';
+      // Offer a forgot-password escape hatch
+      switchEl.innerHTML = 'Forgotten your password? <a href="/learner/login.html?redirect=' +
+        encodeURIComponent(window.location.pathname + window.location.search) + '">Reset it on the sign-in page</a>.';
+      switchEl.classList.remove('hidden');
+    }
+
+    if (opts.email) {
+      emailInput.value = opts.email;
+      emailInput.removeAttribute('readonly');
+      emailInput.setAttribute('readonly', 'readonly');
+      emailInput.style.display = '';
+    } else if (mode === 'set') {
+      // 'set' uses offer_token + password and ignores any typed email — hide the
+      // field rather than risk the user thinking they can choose the email here.
+      emailInput.style.display = 'none';
+      emailInput.value = '';
+    } else {
+      // 'login' fallback — no captured email, let the user type one.
+      emailInput.removeAttribute('readonly');
+      emailInput.value = '';
+      emailInput.setAttribute('placeholder', 'Your email');
+      emailInput.style.display = '';
+    }
+
+    errEl.classList.add('hidden');
+    gate.classList.remove('hidden');
+    pwInput.focus();
+
+    // Idempotent — replace any previous handler
+    form.onsubmit = function (e) {
+      e.preventDefault();
+      submitAuthGate(mode);
+    };
+  }
+
+  async function submitAuthGate(mode) {
+    var emailInput = document.getElementById('auth-gate-email');
+    var pwInput = document.getElementById('auth-gate-password');
+    var submitBtn = document.getElementById('auth-gate-submit');
+    var errEl = document.getElementById('auth-gate-error');
+
+    var email = (emailInput.value || '').trim();
+    var password = pwInput.value;
+
+    if (mode === 'set') {
+      if (!password) {
+        errEl.textContent = 'Please enter a password.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+    } else {
+      if (!email || !password) {
+        errEl.textContent = 'Please enter your email and password.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+    }
+    if (mode === 'set' && password.length < 8) {
+      errEl.textContent = 'Password must be at least 8 characters.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    var origLabel = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = mode === 'set' ? 'Setting password…' : 'Signing in…';
+    errEl.classList.add('hidden');
+
+    try {
+      var url, body;
+      if (mode === 'set') {
+        url = '/api/learner-auth?action=set-password-from-offer';
+        body = { offer_token: params.get('token'), password: password };
+      } else {
+        url = '/api/learner-auth?action=login';
+        body = { email: email, password: password };
+      }
+
+      var res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      var data = await res.json();
+
+      if (!res.ok || !data.success) {
+        // password_already_set is a recoverable case — switch to login mode
+        if (data.error === 'password_already_set') {
+          renderAuthGate({ email: email, mode: 'login' });
+          return;
+        }
+        errEl.textContent = data.message || data.error || 'Could not continue. Please try again.';
+        errEl.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = origLabel;
+        return;
+      }
+
+      // Success — server set the session cookie. Update the localStorage
+      // display blob so window.ccAuth.getAuth() returns truthy on the booking
+      // call's CSRF check.
+      try {
+        localStorage.setItem('cc_learner', JSON.stringify({ user: data.user }));
+        if (window.ccAuth && window.ccAuth.onLogin) window.ccAuth.onLogin(data);
+      } catch (_) {}
+
+      // Hide the gate, render the slot picker.
+      document.getElementById('auth-gate').classList.add('hidden');
+      initSlotPicker();
+    } catch (err) {
+      errEl.textContent = 'Connection failed. Please try again.';
+      errEl.classList.remove('hidden');
+      submitBtn.disabled = false;
+      submitBtn.textContent = origLabel;
+    }
   }
 
   // ── Slot Picker ────────────────────────────────────────────────────────────
