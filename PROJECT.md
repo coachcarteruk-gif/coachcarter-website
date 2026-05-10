@@ -528,7 +528,7 @@ created_at TIMESTAMPTZ
 ```sql
 id SERIAL PRIMARY KEY
 learner_id INTEGER
-type TEXT               -- 'purchase', 'slot_purchase', 'refund'
+type TEXT               -- see allowed values below
 credits INTEGER
 minutes INTEGER DEFAULT 0  -- hours equivalent (in minutes)
 amount_pence INTEGER
@@ -536,6 +536,14 @@ payment_method TEXT
 stripe_session_id TEXT
 created_at TIMESTAMPTZ
 ```
+Allowed `type` values (enforced by `credit_transactions_type_check`):
+- `purchase` — bulk credit purchase via Stripe (or free trial bonus from learner signup)
+- `slot_purchase` — pay-per-slot or lesson-offer payment via Stripe
+- `edit_adjustment` — booking edit changed lesson length (admin/instructor)
+- `admin_add` / `admin_remove` — manual credit adjustment by admin
+- `referral_bonus` — credit granted to a new learner who signed up with a referral code
+- `referral_reward` — credit granted to the referrer when the referee completes a lesson (cron)
+- `refund` — reserved for future refund flows (no callsite writes this today; cancellations update `balance_minutes` directly without an audit row)
 
 **`lesson_bookings`**
 ```sql

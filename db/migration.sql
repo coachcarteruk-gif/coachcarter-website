@@ -734,6 +734,27 @@ ALTER TABLE lesson_bookings DROP CONSTRAINT IF EXISTS lesson_bookings_status_che
 ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_status_check
   CHECK (status IN ('confirmed', 'completed', 'cancelled', 'rescheduled', 'awaiting_confirmation', 'disputed', 'no_show'));
 
+-- ── Sync credit_transactions.type CHECK with values the codebase actually writes ──
+-- Original constraint from db/migrations/001_booking_system.sql only allowed
+-- ('purchase','refund'). Code has since added: slot_purchase (webhook slot/offer
+-- payments), edit_adjustment (booking edits), admin_add/admin_remove (manual
+-- adjustments), referral_bonus (referee signup), referral_reward (referrer cron).
+-- Inserts with the newer values were silently 23514-erroring on prod (some sites
+-- swallowed in try/catch, leaving balance_minutes correct but the audit row
+-- missing). Patched live 2026-05-10 after a webhook outage exposed it.
+ALTER TABLE credit_transactions DROP CONSTRAINT IF EXISTS credit_transactions_type_check;
+ALTER TABLE credit_transactions ADD CONSTRAINT credit_transactions_type_check
+  CHECK (type IN (
+    'purchase',
+    'refund',
+    'slot_purchase',
+    'edit_adjustment',
+    'admin_add',
+    'admin_remove',
+    'referral_bonus',
+    'referral_reward'
+  ));
+
 -- ── Weekly franchise fee model (alternative to commission_rate) ──
 -- When non-NULL, platform takes this fixed amount per week instead of per-lesson commission.
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS weekly_franchise_fee_pence INTEGER DEFAULT NULL;

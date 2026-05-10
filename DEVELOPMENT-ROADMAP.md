@@ -1959,6 +1959,31 @@ Follow-up to 2.95. Brings instructor and admin sign-in onto the same email + pas
 
 ---
 
+## 2.97 — Sync `credit_transactions.type` CHECK constraint with codebase reality (10 May 2026)
+
+Production's `credit_transactions_type_check` CHECK constraint, inherited from the original `db/migrations/001_booking_system.sql`, only allowed `('purchase','refund')`. The codebase has since added six other type values, all of which were silently 23514-erroring in production:
+
+- `slot_purchase` — written by `api/webhook.js` for slot-booking and lesson-offer payments
+- `edit_adjustment` — written by `api/admin.js` and `api/instructor.js` when a booking edit changes lesson length
+- `admin_add` / `admin_remove` — written by `api/admin.js` for manual credit adjustments
+- `referral_bonus` — written by `api/magic-link.js` for referee signup bonuses
+- `referral_reward` — written by `api/cron-referral-rewards.js` for referrer rewards (and queried in `admin.js` and `learner.js`)
+
+The webhook insert was the most visible failure — it's not in a try/catch, so the whole `handleOfferBooking` flow aborted before the offer could be marked accepted. This was discovered on 10 May 2026 when a Stripe webhook outage (apex-vs-www URL mismatch) was diagnosed and webhook events were resent — they then failed for a second reason: this constraint. Live-patched at the time; this commit makes it permanent.
+
+**What changed:**
+
+- `db/migration.sql` — DROP CONSTRAINT IF EXISTS + ADD CONSTRAINT block in the migration-evolution section, following the same pattern used for `lesson_bookings_status_check`. The new allowed set is the union of every type string the code actually writes plus `'refund'` (kept for legacy/future use even though no callsite writes it today).
+- `PROJECT.md` — `credit_transactions` table doc now lists every allowed `type` value with its meaning.
+
+**Audit-trail gap:** `credit_transactions` rows for non-`purchase`/`refund` types are missing in production for the entire pre-2026-05-10 history. The customer-facing `balance_minutes` column was always updated correctly (those updates are separate from the audit insert), so balances are right — only the historical audit trail is incomplete. Not backfilling: too risky, balances are consistent, and going forward the audit row will land.
+
+**Deploy:** requires running `GET /api/migrate?secret=MIGRATION_SECRET` in production after merge so the constraint is updated.
+
+**Files changed:** `db/migration.sql`, `PROJECT.md`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
