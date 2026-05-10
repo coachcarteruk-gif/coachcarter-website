@@ -10,12 +10,16 @@
 >
 > **2026-05-09** — audit + plan + £195 economics + content arrangement scope (home-PC storage, spreadsheet-based published-clips register, manual SAR/retention).
 >
-> **One Tier 1 item remaining**, coding/operational:
-> 1. **1.7 rehearsal** — Stripe Connect dry-run. Pre-session checklist: `docs/franchise/spec-1.7-rehearsal-checklist.md`. Now meaningfully exercises the 1.3 + 2.10 logic that shipped earlier today.
+> **2026-05-10 (late evening)** — **1.7 rehearsal DONE.** Full report at `FRANCHISE-REHEARSAL-2026-05-10.md`. Walked phase A (worst-case week 1: £0 payout, £362.50 shortfall, no deposit deductible) → phase A2 (week 2 recovery: £20 to instructor, prior shortfall fully recovered, real test-Stripe transfer fired, recovery linkage written). Pre-signing-day Tier 1 stack passes end-to-end. Three findings — none signing-day blockers; one operational, one new Tier 3 item (3.10), one Tier 4. Tier 3 deferrals (B3.3 / B3.4 / B3.5 / email path) confirmed can wait until month 2.
 >
-> **Pre-deploy reminder for 1.3 + 2.10:** migration runs via `GET /api/migrate?secret=MIGRATION_SECRET` on first deploy. The new columns default to 0 / NULL so existing payout rows are untouched.
+> **Tier 1 is COMPLETE.** Pre-signing-day platform stack is ready. Outstanding pre-signing items now off-keyboard only: solicitor review (C10.1, C10.2). And the new Tier 3 plan item 3.10 surfaced by the rehearsal.
 >
-> **Pre-deploy reminder for 1.2:** no migration; pure frontend. Worth manually confirming on production with a real instructor who has zero slots before signing day.
+> **Pre-deploy reminders before instructor #2's first payout:**
+> - **CRITICAL — 1.3 + 2.10 migration must run** via `GET /api/migrate?secret=MIGRATION_SECRET` after deploying commit d0452ea. Without this, the next Friday cron at 09:00 UTC crashes with `column "shortfall_pence" does not exist` for every instructor and zero payouts go out (rehearsal finding 1).
+> - **1.2 overflow routing**: pure frontend, no migration. Worth manually confirming with a real chosen-empty instructor before signing day.
+> - **Email-path re-rehearsal** (~15 min) worth doing — exercise the `cron-payouts.js` endpoint via curl with admin auth to confirm statement email renders new deposit/shortfall/recovery sub-lines correctly. Not done in 1.7 because we called the helper directly to skip auth setup.
+>
+> **New plan item from rehearsal — see Tier 3 below.**
 >
 > ---
 
@@ -94,6 +98,21 @@ The bar: without these, instructor #2 cannot truthfully sign because the pitch i
 - **Files to touch**: New file in repo (recommend `docs/franchise/sample-earnings-projection.md` or a printable PDF). Referenced from the conversation script.
 - **Scope**: 1 session.
 - **Dependencies**: 1.1 (number must be locked first), 1.3 (so the projection can show shortfall handling consistently with whatever was decided).
+
+### ~~1.7~~ ✅ DONE 2026-05-10 — Pre-signing rehearsal pass (full report at FRANCHISE-REHEARSAL-2026-05-10.md)
+
+**Outcome:** pre-signing-day Tier 1 stack passes end-to-end. Worst-case week 1 → £0 payout, £362.50 shortfall recorded. Week 2 with adequate revenue → £20 to instructor, prior shortfall fully recovered, real test-Stripe transfer fired. Recovery linkage written. Failure rollback path verified (when Stripe transfer fails, line items deleted and prior shortfall NOT marked recovered — clean retry).
+
+**Three findings, none signing-day blockers**:
+1. Migration must run after deploy (operational checklist, not code) — see pre-deploy reminders above.
+2. Stripe platform balance can be insufficient in edge cases → new Tier 3 plan item 3.10 below.
+3. `platform_fee_pence` column semantics drift in mixed cases — Tier 4, low priority.
+
+**Tier 3 deferrals confirmed can wait**: B3.3 (snapshot reads), B3.4 (Stripe-fee passthrough), B3.5 (statement itemisation), email-path re-rehearsal.
+
+---
+
+### Original 1.7 spec (retained for reference)
 
 ### 1.7 — Pre-signing rehearsal pass (audit cross-cutting risk #5)
 - **What**: A dry-run of "instructor #2's first payout day" using a test Stripe Connect account, with Phase 1 columns faked by hand or in a scratch branch. Walk through: Friday cron fires, gross calculated, franchise fee deducted, Stripe fee status (currently NOT deducted — that's fine for the rehearsal, the point is to discover that it's not), payout email goes to the right inbox, instructor sees the right thing in `/instructor/earnings.html`, shortfall path triggers correctly (per the 1.3 decision).
@@ -250,6 +269,15 @@ The bar: needed before the first quarterly checkpoint (week 13, ~month 3) or the
 - **Scope**: 1–2 sessions. Full UX brief deferred until you actually want to start it.
 - **Dependencies**: 2.2 (Phase 2A credit scoping must be stable). Likely also 2.6 (consent UI) so the profile-page experience is complete.
 - **Trigger**: Phase 2A in production for ≥4 weeks without per-instructor credit issues.
+
+### 3.10 — Pre-payout Stripe balance check (added 2026-05-10 from rehearsal finding 2)
+- **What**: At the top of `processAllPayouts()` in `_payout-helpers.js`, query `stripe.balance.retrieve()` and compare available GBP balance against the estimated sum of payouts about to fire. If insufficient, abort the entire run and email Fraser instead of doing partial fan-out where some instructors get paid and others fail mid-cycle.
+- **Why this tier**: Discovered during plan 1.7 rehearsal. Single-instructor today (Fraser) means partial fan-out is impossible — there's only one transfer per Friday. The risk only bites with multiple instructors AND an edge case where the platform balance is tied up in pending Stripe holds (first-time customers, refund-prone activity, large Klarna delays). Both conditions need to be true simultaneously, which is unlikely in instructor #2's first month but compounds as instructor count grows.
+- **Why not Tier 1/2**: doesn't bite single-instructor today. Belongs in the same payout-helper rewrite session as the other Tier 3 items (B3.3 / B3.4 / B3.5) since it's the same file and same mental model.
+- **Files to touch**: `api/_payout-helpers.js` (`processAllPayouts` — pre-flight check), `api/cron-payouts.js` (handle the abort case — email instead of crashing).
+- **Scope**: <1 session, bundled with the Tier 3 payout rewrite.
+- **Dependencies**: bundle into the same session as B3.3 / B3.4 / B3.5.
+- **Trigger**: address when adding instructor #3 (multi-instructor amplifies partial-fan-out risk). For instructor #2 onboarding, accept the risk (one transfer per cycle, partial fan-out impossible).
 
 ### 3.6 — H9.5 new-instructor highlight on free-trial.html
 - **What**: Per-instructor highlight markup so a learner landing on `/free-trial.html?instructor_id=…` sees the chosen instructor framed correctly.
