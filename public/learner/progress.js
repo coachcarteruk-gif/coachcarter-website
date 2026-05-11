@@ -355,6 +355,17 @@ function renderRadar() {
 }
 
 // ── Section 3: Skill Breakdown ──
+//
+// Progressive disclosure: each area's row carries the full at-a-glance
+// summary (rating dot, quiz progress, score bar, trend), so a scan of the
+// closed list tells the learner / parent / instructor what's going on in
+// every category. Expanding the row reveals the DL25 sub-skills with their
+// attention dots — the "what specifically went wrong" detail layer.
+//
+// We deliberately don't render a duplicate parent-skill row inside the
+// expanded body: today every area has exactly one parent skill with the same
+// key + label as the area itself, so its data IS the area's data and lives
+// on the area header. Sub-skills are the only content inside the open body.
 function renderSkillBreakdown() {
   var CC = window.CC_COMPETENCY;
   var container = document.getElementById('skill-breakdown');
@@ -366,91 +377,87 @@ function renderSkillBreakdown() {
     var avg = areaAvg(area.id);
     var bgColour = scoreColour(avg);
 
+    // Every area has exactly one parent skill — its data is the area's
+    // headline data, surfaced on the area header itself.
+    var parentSkill = skills[0];
+    var pLessons = parentSkill ? (lessonMap[parentSkill.key] || []) : [];
+    var pQuiz = parentSkill ? quizMap[parentSkill.key] : null;
+    var hasParentData = pLessons.length > 0 || (pQuiz && pQuiz.attempts > 0);
+
+    // Rating dot (latest lesson rating for this area's parent skill)
+    var summaryDotHtml = '<span class="area-summary-dot" style="background:var(--border)"></span>';
+    if (pLessons.length > 0) {
+      var latestRating = pLessons[0].rating;
+      var dotCol = latestRating === 'nailed' ? 'var(--green)' : latestRating === 'ok' ? 'var(--amber)' : 'var(--red)';
+      summaryDotHtml = '<span class="area-summary-dot" style="background:' + dotCol + '" title="Latest lesson rating"></span>';
+    }
+
+    // Quiz accuracy summary
+    var summaryQuizText = '—';
+    if (pQuiz && pQuiz.attempts > 0) {
+      summaryQuizText = pQuiz.correct + '/' + pQuiz.attempts;
+    }
+
+    // Trend indicator across lesson ratings
+    var summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--muted)">—</span>';
+    if (pLessons.length >= 2) {
+      var newest = pLessons[0].score;
+      var oldest = pLessons[pLessons.length - 1].score;
+      if (newest > oldest) {
+        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--green)" title="Improving">&uarr;</span>';
+      } else if (newest < oldest) {
+        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--red)" title="Declining">&darr;</span>';
+      } else {
+        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--muted)" title="Stable">&rarr;</span>';
+      }
+    }
+
     html += '<div class="area-card">';
     html += '<div class="area-header" data-action="toggle-area">';
     html += '<span class="area-icon">' + area.icon + '</span>';
     html += '<span class="area-name">' + area.label + '</span>';
+    if (hasParentData) {
+      html += '<div class="area-summary">';
+      html += summaryDotHtml;
+      html += '<span class="area-summary-quiz" title="Quiz: correct / attempts">' + summaryQuizText + '</span>';
+      html += '<div class="area-summary-bar"><div class="area-summary-bar-fill" style="width:' + avg + '%;background:' + bgColour + '"></div></div>';
+      html += summaryTrendHtml;
+      html += '</div>';
+    }
     html += '<span class="area-badge" style="background:' + bgColour + '">' + avg + '%</span>';
     html += '<span class="area-toggle">&#9660;</span>';
     html += '</div>';
     html += '<div class="area-body">';
 
-    for (var s = 0; s < skills.length; s++) {
-      var sk = skills[s];
-      var score = skillScores[sk.key] || 0;
-      var lessons = lessonMap[sk.key] || [];
-      var quiz = quizMap[sk.key];
-      var hasData = lessons.length > 0 || quiz;
+    // No-data state: surface that we're tracking this area but have nothing yet
+    if (!hasParentData) {
+      html += '<div class="area-empty">No lesson ratings or quiz attempts yet for this area.</div>';
+    }
 
-      if (!hasData) {
-        html += '<div class="skill-row"><span class="skill-no-data">' + sk.label + ' — No data yet</span></div>';
-        continue;
-      }
-
-      // Rating dot (latest lesson)
-      var dotHtml = '<span class="skill-rating-dot" style="background:var(--border)"></span>';
-      if (lessons.length > 0) {
-        var latestRating = lessons[0].rating;
-        var dotCol = latestRating === 'nailed' ? 'var(--green)' : latestRating === 'ok' ? 'var(--amber)' : 'var(--red)';
-        dotHtml = '<span class="skill-rating-dot" style="background:' + dotCol + '"></span>';
-      }
-
-      // Quiz accuracy text
-      var quizText = '\u2014';
-      if (quiz && quiz.attempts > 0) {
-        quizText = quiz.correct + '/' + quiz.attempts;
-      }
-
-      // Progress bar
-      var barCol = scoreColour(score);
-
-      // Trend indicator
-      var trendHtml = '<span class="skill-trend" style="color:var(--muted)">\u2014</span>';
-      if (lessons.length >= 2) {
-        var newest = lessons[0].score;
-        var oldest = lessons[lessons.length - 1].score;
-        if (newest > oldest) {
-          trendHtml = '<span class="skill-trend" style="color:var(--green)">&uarr;</span>';
-        } else if (newest < oldest) {
-          trendHtml = '<span class="skill-trend" style="color:var(--red)">&darr;</span>';
+    // Sub-skill rows — every DL25 sub-skill listed under the area, with a
+    // coloured attention dot only if the most recent mock test logged a fault
+    // here. Sub-skills with no fault stay quiet (muted text, faint dot).
+    if (parentSkill && parentSkill.subs && parentSkill.subs.length > 0) {
+      for (var ss = 0; ss < parentSkill.subs.length; ss++) {
+        var sub = parentSkill.subs[ss];
+        var subFault = subFaultMap[parentSkill.key] && subFaultMap[parentSkill.key][sub.key];
+        var attentionDot;
+        var rowClass = 'sub-skill-row';
+        if (subFault) {
+          // Red = serious or dangerous fault (would fail the test)
+          // Amber = driving fault only (minor)
+          var attentionColour = (subFault.serious > 0 || subFault.dangerous > 0)
+            ? 'var(--red)'
+            : 'var(--amber)';
+          attentionDot = '<span class="sub-skill-dot" style="background:' + attentionColour + '" title="Fault noted on most recent mock test"></span>';
+          rowClass += ' has-attention';
         } else {
-          trendHtml = '<span class="skill-trend" style="color:var(--muted)">&rarr;</span>';
+          attentionDot = '<span class="sub-skill-dot sub-skill-dot-quiet"></span>';
         }
-      }
-
-      html += '<div class="skill-row">';
-      html += '<span class="skill-name">' + sk.label + '</span>';
-      html += dotHtml;
-      html += '<span class="skill-quiz">' + quizText + '</span>';
-      html += '<div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:' + score + '%;background:' + barCol + '"></div></div>';
-      html += trendHtml;
-      html += '</div>';
-
-      // Sub-skill attention rows — show every sub-skill below the parent,
-      // with a coloured dot only if the most recent mock test logged a fault
-      // here. Sub-skills with no faults stay quiet (muted, no dot).
-      if (sk.subs && sk.subs.length > 0) {
-        for (var ss = 0; ss < sk.subs.length; ss++) {
-          var sub = sk.subs[ss];
-          var subFault = subFaultMap[sk.key] && subFaultMap[sk.key][sub.key];
-          var attentionDot = '';
-          var rowClass = 'sub-skill-row';
-          if (subFault) {
-            // Red = serious or dangerous fault (would fail the test)
-            // Amber = driving fault only (minor)
-            var attentionColour = (subFault.serious > 0 || subFault.dangerous > 0)
-              ? 'var(--red)'
-              : 'var(--amber)';
-            attentionDot = '<span class="sub-skill-dot" style="background:' + attentionColour + '" title="Fault noted on most recent mock test"></span>';
-            rowClass += ' has-attention';
-          } else {
-            attentionDot = '<span class="sub-skill-dot sub-skill-dot-quiet"></span>';
-          }
-          html += '<div class="' + rowClass + '">';
-          html += '<span class="sub-skill-name">' + sub.label + '</span>';
-          html += attentionDot;
-          html += '</div>';
-        }
+        html += '<div class="' + rowClass + '">';
+        html += '<span class="sub-skill-name">' + sub.label + '</span>';
+        html += attentionDot;
+        html += '</div>';
       }
     }
 
