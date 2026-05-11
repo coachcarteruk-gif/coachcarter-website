@@ -255,6 +255,42 @@
       .skill-name { font-size: 0.84rem; }
     }
 
+    /* Sub-skill rows — quieter than the parent skill row. Each shows just the
+       name + an attention dot (red/amber if the most recent mock test logged
+       a fault here, neutral grey otherwise). */
+    .sub-skill-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center; gap: 10px;
+      padding: 7px 18px 7px 36px;
+      border-bottom: 1px dashed var(--border);
+      font-size: 0.82rem;
+    }
+    .sub-skill-row:last-child { border-bottom: none; }
+    .sub-skill-row.has-attention { color: var(--primary); }
+    .sub-skill-row:not(.has-attention) .sub-skill-name { color: var(--muted); }
+    .sub-skill-name {
+      font-family: var(--font-body);
+      font-weight: 500;
+    }
+    .sub-skill-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: transparent;
+    }
+    .sub-skill-dot-quiet {
+      background: var(--border);
+      opacity: 0.5;
+    }
+
+    @media (max-width: 520px) {
+      .sub-skill-row {
+        padding: 6px 14px 6px 28px;
+        font-size: 0.78rem;
+      }
+    }
+
     /* ── MOCK TEST HISTORY ── */
     .mock-section { margin-bottom: 36px; }
     .mock-card {
@@ -509,7 +545,7 @@
   <!-- Loading state (skeleton) -->
   <div id="loading">
     <div class="page-header">
-      <div class="page-eyebrow">Test readiness</div>
+      <div class="page-eyebrow">Practice tracker</div>
       <h1>My <em>progress</em>.</h1>
       <p><span class="skeleton skeleton-text w-80" style="display:inline-block;height:1em">&nbsp;</span></p>
     </div>
@@ -539,7 +575,7 @@
   <!-- Main content -->
   <div id="main-content" class="hidden">
     <div class="page-header">
-      <div class="page-eyebrow">Test readiness</div>
+      <div class="page-eyebrow">Practice tracker</div>
       <h1>My <em>progress</em>.</h1>
       <p>Your full competency profile across lessons, quizzes, and mock tests.</p>
     </div>

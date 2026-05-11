@@ -9,6 +9,7 @@ let lessonMap = {};   // skillKey -> [{score, date}] sorted newest first
 let quizMap = {};     // skillKey -> {attempts, correct}
 let mockFaultMap = {}; // skillKey -> {driving, serious, dangerous}
 let skillScores = {}; // skillKey -> readiness 0-100
+let subFaultMap = {}; // skillKey -> { subKey -> {driving, serious, dangerous} } from most recent mock
 
 // ── Auth ──
 window.addEventListener('DOMContentLoaded', function() {
@@ -88,6 +89,23 @@ function processData() {
       mockFaultMap[mfKey].driving += (mf.total_driving || 0);
       mockFaultMap[mfKey].serious += (mf.total_serious || 0);
       mockFaultMap[mfKey].dangerous += (mf.total_dangerous || 0);
+    }
+  }
+
+  // Build sub-skill faults map — only from most recent mock test. Used to
+  // surface "attention dots" on sub-skill rows in the breakdown.
+  subFaultMap = {};
+  if (DATA.recent_sub_faults) {
+    for (var sf = 0; sf < DATA.recent_sub_faults.length; sf++) {
+      var rsf = DATA.recent_sub_faults[sf];
+      var sfKey = CC.mapLegacySkill(rsf.skill_key);
+      if (!sfKey || !rsf.sub_key) continue;
+      if (!subFaultMap[sfKey]) subFaultMap[sfKey] = {};
+      subFaultMap[sfKey][rsf.sub_key] = {
+        driving: rsf.driving || 0,
+        serious: rsf.serious || 0,
+        dangerous: rsf.dangerous || 0
+      };
     }
   }
 
@@ -185,7 +203,7 @@ function renderStats() {
     '<div class="stat-card"><div class="stat-value">' + (ss.total_sessions || 0) + '</div><div class="stat-label">Sessions</div></div>' +
     '<div class="stat-card"><div class="stat-value">' + hours + '</div><div class="stat-label">Hours</div></div>' +
     '<div class="stat-card"><div class="stat-value">' + mockText + '</div><div class="stat-label">Mock Tests Passed</div></div>' +
-    '<div class="stat-card"><div class="stat-value accent">' + readiness + '%</div><div class="stat-label">Readiness</div></div>';
+    '<div class="stat-card"><div class="stat-value accent">' + readiness + '%</div><div class="stat-label">Practice level</div></div>';
 }
 
 // ── Section 2: Radar Chart ──
@@ -407,6 +425,33 @@ function renderSkillBreakdown() {
       html += '<div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:' + score + '%;background:' + barCol + '"></div></div>';
       html += trendHtml;
       html += '</div>';
+
+      // Sub-skill attention rows — show every sub-skill below the parent,
+      // with a coloured dot only if the most recent mock test logged a fault
+      // here. Sub-skills with no faults stay quiet (muted, no dot).
+      if (sk.subs && sk.subs.length > 0) {
+        for (var ss = 0; ss < sk.subs.length; ss++) {
+          var sub = sk.subs[ss];
+          var subFault = subFaultMap[sk.key] && subFaultMap[sk.key][sub.key];
+          var attentionDot = '';
+          var rowClass = 'sub-skill-row';
+          if (subFault) {
+            // Red = serious or dangerous fault (would fail the test)
+            // Amber = driving fault only (minor)
+            var attentionColour = (subFault.serious > 0 || subFault.dangerous > 0)
+              ? 'var(--red)'
+              : 'var(--amber)';
+            attentionDot = '<span class="sub-skill-dot" style="background:' + attentionColour + '" title="Fault noted on most recent mock test"></span>';
+            rowClass += ' has-attention';
+          } else {
+            attentionDot = '<span class="sub-skill-dot sub-skill-dot-quiet"></span>';
+          }
+          html += '<div class="' + rowClass + '">';
+          html += '<span class="sub-skill-name">' + sub.label + '</span>';
+          html += attentionDot;
+          html += '</div>';
+        }
+      }
     }
 
     html += '</div></div>';

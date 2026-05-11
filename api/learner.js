@@ -634,6 +634,25 @@ async function handleCompetency(req, res) {
       WHERE mt.learner_id = ${user.id} AND mt.school_id = ${schoolId}
       GROUP BY f.skill_key`;
 
+    // Recent sub-skill faults — drawn from the most recent completed mock only,
+    // so the "attention dots" reflect what's *currently* an issue (matching the
+    // readiness scorer's "most recent mock" philosophy).
+    const recentSubFaults = await sql`
+      SELECT f.skill_key, f.sub_key,
+        SUM(f.driving_faults)::int AS driving,
+        SUM(f.serious_faults)::int AS serious,
+        SUM(f.dangerous_faults)::int AS dangerous
+      FROM mock_test_faults f
+      WHERE f.sub_key IS NOT NULL
+        AND f.mock_test_id = (
+          SELECT id FROM mock_tests
+          WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+            AND completed_at IS NOT NULL
+          ORDER BY completed_at DESC
+          LIMIT 1
+        )
+      GROUP BY f.skill_key, f.sub_key`;
+
     // Session stats
     const stats = await sql`
       SELECT COUNT(*)::int as total_sessions,
@@ -651,6 +670,7 @@ async function handleCompetency(req, res) {
       quiz_accuracy: quizData,
       mock_summary: mockData[0] || { total_tests: 0, passes: 0, fails: 0 },
       mock_faults: mockFaults,
+      recent_sub_faults: recentSubFaults,
       session_stats: stats[0] || { total_sessions: 0, total_minutes: 0 },
       focused_practice_count: (fpStats[0] || {}).total_sessions || 0
     });
