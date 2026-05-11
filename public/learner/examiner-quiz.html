@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <link rel="manifest" href="/manifest.json">
@@ -27,235 +27,786 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* â”€â”€ MAIN â”€â”€ */
-    main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; }
+    /* ── EXAMINER QUIZ — DL25 marking-sheet dossier ───
+       Visual concept: an official examiner marking sheet you fill out
+       yourself. Tabular numerals, mono labels, document framing.
+       Built for dark mode primarily (learner hub auto-enables it). */
 
-    /* â”€â”€ START SCREEN â”€â”€ */
-    .start-screen { text-align: center; padding: 40px 0 20px; }
-    .start-screen h1 { font-family: var(--font-head); font-size: 1.8rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 12px; line-height: 1.2; }
-    .start-screen h1 em { font-style: normal; color: var(--accent); }
-    .start-screen p { color: var(--muted); font-size: 0.95rem; line-height: 1.6; max-width: 520px; margin: 0 auto 28px; }
-    .start-info { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 28px; text-align: left; }
-    .start-info h3 { font-family: var(--font-head); font-size: 0.95rem; margin-bottom: 10px; }
-    .start-info ul { list-style: none; padding: 0; }
-    .start-info li { padding: 6px 0; font-size: 0.88rem; color: var(--muted); display: flex; align-items: center; gap: 8px; }
-    .start-info li::before { content: ''; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .start-info li:nth-child(1)::before { background: var(--border); }
-    .start-info li:nth-child(2)::before { background: var(--accent); }
-    .start-info li:nth-child(3)::before { background: var(--red); }
-    .start-info li:nth-child(4)::before { background: #7c3aed; }
-
-    .tier-filters { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
-    .tier-btn {
-      padding: 8px 18px; border-radius: 100px; border: 1px solid var(--border);
-      background: var(--white); font-family: var(--font-body); font-size: 0.82rem;
-      font-weight: 600; color: var(--muted); cursor: pointer; transition: all 0.18s;
+    :root {
+      --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+      --fault-grey: #9ca3af;
+      --fault-orange: var(--accent);
+      --fault-red: var(--red);
+      --fault-crimson: #7f1d1d;
     }
-    .tier-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .tier-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-
-    .shuffle-toggle { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px; font-size: 0.85rem; color: var(--muted); }
-    .shuffle-toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
-
-    .btn-start {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: var(--accent); color: #fff; border: none; border-radius: 100px;
-      padding: 14px 36px; font-size: 1rem; font-weight: 700; cursor: pointer;
-      font-family: var(--font-body); transition: all 0.18s;
+    @media (prefers-color-scheme: dark) {
+      :root:not(.light-mode) body.cc-has-sidebar {
+        --fault-crimson: #b91c1c;
+      }
     }
-    .btn-start:hover { background: var(--accent-dk); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.35); }
+    :root.dark-mode body.cc-has-sidebar { --fault-crimson: #b91c1c; }
 
-    /* â”€â”€ QUIZ SCREEN â”€â”€ */
-    .quiz-screen { display: none; }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 24px 120px; }
 
-    .progress-bar-wrap { height: 6px; background: var(--surface); border-radius: 3px; margin-bottom: 16px; overflow: hidden; }
-    .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s ease; width: 0; }
+    .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
-    .quiz-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .quiz-counter { font-family: var(--font-head); font-size: 0.85rem; font-weight: 700; color: var(--muted); }
-    .quiz-score { font-family: var(--font-head); font-size: 0.85rem; font-weight: 700; color: var(--green); }
+    /* ── START SCREEN ── */
+    .start-screen { display: block; }
 
-    .quiz-category {
-      display: inline-block; padding: 4px 12px; border-radius: 100px;
-      background: var(--accent-lt); color: var(--accent); font-size: 0.75rem;
-      font-weight: 700; font-family: var(--font-head); margin-bottom: 14px;
-      text-transform: uppercase; letter-spacing: 0.03em;
+    .doc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
+      margin-bottom: 28px;
     }
-    .quiz-dl25 { font-size: 0.72rem; color: var(--muted); margin-bottom: 16px; }
+    .doc-header-left { display: flex; align-items: center; gap: 10px; }
+    .doc-stamp {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 9px; border-radius: 3px;
+      background: var(--accent); color: #fff; font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
 
-    .quiz-scenario {
-      font-size: 1.05rem; line-height: 1.65; margin-bottom: 24px;
-      padding: 20px; background: var(--surface); border-radius: var(--radius);
-      border: 1px solid var(--border);
+    .start-hero { margin-bottom: 36px; }
+    .start-eyebrow {
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .start-title {
+      font-family: var(--font-head);
+      font-size: clamp(2rem, 6.5vw, 3rem);
+      font-weight: 800; line-height: 0.96;
+      letter-spacing: -0.045em;
+      margin-bottom: 14px;
+      text-wrap: balance;
+    }
+    .start-title em { font-style: italic; color: var(--accent); font-weight: 700; }
+    .start-deck {
+      font-size: 1.02rem; line-height: 1.6; color: var(--muted);
+      max-width: 56ch;
     }
 
-    .answer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-    @media (max-width: 480px) { .answer-grid { grid-template-columns: 1fr; } }
+    /* ── FAULT LEGEND — vertical numbered ledger ── */
+    .fault-ledger {
+      margin-bottom: 36px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .fault-row {
+      display: grid;
+      grid-template-columns: 36px 1fr auto;
+      align-items: center; gap: 16px;
+      padding: 16px 4px;
+      border-bottom: 1px dashed var(--border);
+      position: relative;
+    }
+    .fault-row:last-child { border-bottom: none; }
+    .fault-row::before {
+      content: ''; position: absolute;
+      left: -8px; top: 50%; transform: translateY(-50%);
+      width: 4px; height: 60%;
+      background: var(--fault-c, var(--border));
+      border-radius: 2px;
+    }
+    .fault-row.r1 { --fault-c: var(--fault-grey); }
+    .fault-row.r2 { --fault-c: var(--fault-orange); }
+    .fault-row.r3 { --fault-c: var(--fault-red); }
+    .fault-row.r4 { --fault-c: var(--fault-crimson); }
 
-    .answer-btn {
-      padding: 14px 16px; border-radius: 12px; border: 2px solid var(--border);
-      background: var(--white); font-family: var(--font-body); font-size: 0.9rem;
-      font-weight: 600; color: var(--primary); cursor: pointer; transition: all 0.18s;
+    .fault-code {
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--fault-c);
       text-align: center;
     }
-    .answer-btn:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
-    .answer-btn:disabled { cursor: default; opacity: 0.85; }
-    .answer-btn.correct { border-color: var(--green); background: var(--green-lt); color: #166534; }
-    .answer-btn.incorrect { border-color: var(--red); background: var(--red-lt); color: #991b1b; }
-    .answer-btn.correct-highlight { border-color: var(--green); background: var(--green-lt); color: #166534; }
+    .fault-text { display: flex; flex-direction: column; gap: 3px; }
+    .fault-name {
+      font-family: var(--font-head); font-size: 1rem; font-weight: 700;
+      letter-spacing: -0.01em; color: var(--primary);
+    }
+    .fault-desc { font-size: 0.84rem; color: var(--muted); line-height: 1.4; }
+    .fault-outcome {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--fault-c);
+      padding: 4px 10px;
+      border: 1px solid var(--fault-c);
+      border-radius: 4px;
+      white-space: nowrap;
+    }
 
+    /* ── CONFIG SECTION ── */
+    .config-section { margin-bottom: 32px; }
+    .config-label {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .config-label::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    .tier-grid { display: grid; grid-template-columns: 1fr; gap: 6px; margin-bottom: 24px; }
+    @media (min-width: 520px) { .tier-grid { grid-template-columns: 1fr 1fr; } }
+    .tier-btn {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: var(--font-body); font-size: 0.92rem;
+      font-weight: 500; color: var(--primary); cursor: pointer;
+      text-align: left;
+      transition: border-color 0.2s, background 0.2s, transform 0.15s;
+    }
+    .tier-btn:hover { border-color: var(--accent); }
+    .tier-btn:active { transform: scale(0.99); }
+    .tier-btn.active {
+      border-color: var(--accent); background: var(--accent-mid);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+    .tier-btn-num {
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      min-width: 28px; padding: 4px 6px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; text-align: center;
+    }
+    .tier-btn.active .tier-btn-num { color: var(--accent); border-color: var(--accent); }
+    .tier-btn-content { display: flex; flex-direction: column; gap: 2px; }
+    .tier-btn-name { font-weight: 600; line-height: 1.2; }
+    .tier-btn-meta {
+      font-family: var(--font-mono); font-size: 0.68rem;
+      color: var(--muted); letter-spacing: 0.06em;
+    }
+
+    .shuffle-toggle {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .shuffle-toggle:hover { border-color: var(--accent); }
+    .shuffle-toggle input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+    .shuffle-toggle label {
+      font-size: 0.9rem; color: var(--primary); cursor: pointer;
+      display: flex; flex-direction: column; gap: 2px; flex: 1;
+    }
+    .shuffle-toggle label small {
+      font-family: var(--font-mono); font-size: 0.68rem;
+      color: var(--muted); letter-spacing: 0.05em;
+    }
+
+    /* ── BIG CTA ── */
+    .btn-start {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      width: 100%;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 12px;
+      padding: 18px 28px;
+      font-family: var(--font-head);
+      font-size: 1.08rem; font-weight: 700; letter-spacing: -0.01em;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 6px 22px rgba(245,131,33,0.32);
+      position: relative; overflow: hidden;
+    }
+    .btn-start::after {
+      content: '→';
+      font-family: var(--font-body);
+      font-weight: 400;
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .btn-start:hover {
+      background: var(--accent-dk);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(245,131,33,0.48);
+    }
+    .btn-start:hover::after { transform: translateX(4px); }
+    .btn-start:active { transform: translateY(0) scale(0.99); }
+
+    /* ── QUIZ SCREEN ── */
+    .quiz-screen { display: none; }
+
+    .quiz-topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px dashed var(--border);
+      margin-bottom: 20px;
+    }
+    .quiz-progress {
+      flex: 1; height: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .quiz-progress-fill {
+      height: 100%; width: 0;
+      background: var(--accent);
+      transition: width 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
+      box-shadow: 0 0 12px rgba(245,131,33,0.5);
+    }
+    .quiz-counter {
+      font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+    .quiz-counter strong { color: var(--primary); font-weight: 700; }
+
+    .quiz-stats {
+      display: flex; gap: 14px; align-items: center;
+      margin-bottom: 24px;
+      font-family: var(--font-mono); font-size: 0.7rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .quiz-stat { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+    .quiz-stat strong { color: var(--primary); font-weight: 700; }
+    .quiz-stat-correct { color: var(--green); }
+    .quiz-stat-correct strong { color: var(--green); }
+
+    .quiz-meta-block {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 18px;
+      font-family: var(--font-mono); font-size: 0.66rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .quiz-category {
+      padding: 4px 10px; border-radius: 3px;
+      background: var(--accent); color: #fff; font-weight: 700;
+    }
+    .quiz-dl25 { color: var(--muted); }
+
+    .quiz-scenario {
+      font-family: var(--font-head);
+      font-size: clamp(1.15rem, 3.5vw, 1.4rem);
+      line-height: 1.4; font-weight: 500;
+      letter-spacing: -0.01em;
+      margin-bottom: 32px;
+      padding: 24px;
+      background: var(--surface);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 12px 12px 0;
+      animation: scenarioIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    @keyframes scenarioIn {
+      from { opacity: 0; transform: translateX(-6px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .answer-grid {
+      display: flex; flex-direction: column; gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .answer-btn {
+      display: grid;
+      grid-template-columns: 36px 1fr auto;
+      align-items: center; gap: 14px;
+      padding: 16px 18px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      font-family: var(--font-body); font-size: 0.96rem; font-weight: 500;
+      color: var(--primary); cursor: pointer;
+      text-align: left;
+      transition: border-color 0.2s, background 0.2s, transform 0.15s, padding-left 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .answer-btn-marker {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--ab-c, var(--border));
+      border-radius: 5px;
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+      color: var(--ab-c, var(--muted));
+      background: var(--bg);
+      flex-shrink: 0;
+      transition: background 0.2s, color 0.2s;
+    }
+    .answer-btn-label { font-weight: 500; }
+    .answer-btn-tag {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--ab-c, var(--muted));
+      opacity: 0.7;
+    }
+
+    .answer-btn[data-answer="no_fault"] { --ab-c: var(--fault-grey); }
+    .answer-btn[data-answer="driving_fault"] { --ab-c: var(--fault-orange); }
+    .answer-btn[data-answer="serious"] { --ab-c: var(--fault-red); }
+    .answer-btn[data-answer="dangerous"] { --ab-c: var(--fault-crimson); }
+
+    .answer-btn:hover:not(:disabled) {
+      border-color: var(--ab-c);
+      background: color-mix(in srgb, var(--ab-c) 8%, var(--surface));
+      padding-left: 22px;
+    }
+    .answer-btn:hover:not(:disabled) .answer-btn-marker {
+      background: var(--ab-c); color: #fff;
+    }
+    .answer-btn:hover:not(:disabled) .answer-btn-tag { opacity: 1; }
+    .answer-btn:active:not(:disabled) { transform: scale(0.99); }
+    .answer-btn:disabled { cursor: default; }
+
+    .answer-btn.correct,
+    .answer-btn.correct-highlight {
+      border-color: var(--green); background: var(--green-lt);
+      color: var(--green);
+    }
+    .answer-btn.correct .answer-btn-marker,
+    .answer-btn.correct-highlight .answer-btn-marker {
+      background: var(--green); border-color: var(--green); color: #fff;
+    }
+    .answer-btn.incorrect {
+      border-color: var(--red); background: var(--red-lt);
+      color: var(--red);
+    }
+    .answer-btn.incorrect .answer-btn-marker {
+      background: var(--red); border-color: var(--red); color: #fff;
+    }
+    .answer-btn.correct .answer-btn-tag,
+    .answer-btn.correct-highlight .answer-btn-tag { color: var(--green); opacity: 1; }
+    .answer-btn.incorrect .answer-btn-tag { color: var(--red); opacity: 1; }
+
+    /* ── FEEDBACK ── verdict-style document */
     .feedback-panel {
-      display: none; padding: 20px; border-radius: var(--radius);
-      border: 1px solid var(--border); margin-bottom: 20px;
-      animation: slideUp 0.3s ease;
+      display: none;
+      margin-bottom: 20px;
+      animation: feedbackIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
     }
     .feedback-panel.show { display: block; }
-    .feedback-panel.is-correct { background: var(--green-lt); border-color: #bbf7d0; }
-    .feedback-panel.is-wrong { background: var(--red-lt); border-color: #fecaca; }
-
-    .feedback-result { font-family: var(--font-head); font-size: 1rem; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
-    .feedback-result .icon { font-size: 1.2rem; }
-    .feedback-explanation { font-size: 0.88rem; line-height: 1.6; color: #444; margin-bottom: 12px; }
-    .feedback-examiner {
-      font-size: 0.82rem; line-height: 1.5; color: var(--muted);
-      padding: 12px; background: rgba(255,255,255,0.6); border-radius: 8px;
-      border-left: 3px solid var(--accent);
+    @keyframes feedbackIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    .feedback-examiner strong { color: var(--primary); }
+
+    .feedback-verdict {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .feedback-verdict-stamp {
+      padding: 4px 10px; border-radius: 3px;
+      color: #fff;
+    }
+    .feedback-panel.is-correct .feedback-verdict-stamp { background: var(--green); }
+    .feedback-panel.is-wrong .feedback-verdict-stamp { background: var(--red); }
+    .feedback-verdict-line {
+      flex: 1; height: 1px;
+    }
+    .feedback-panel.is-correct .feedback-verdict-line { background: var(--green); opacity: 0.4; }
+    .feedback-panel.is-wrong .feedback-verdict-line { background: var(--red); opacity: 0.4; }
+
+    .feedback-explanation {
+      font-size: 1rem; line-height: 1.65; font-weight: 500;
+      color: var(--primary);
+      margin-bottom: 18px;
+      padding-left: 16px;
+      border-left: 2px solid var(--border);
+    }
+
+    .feedback-examiner {
+      padding: 16px 18px;
+      background: var(--surface);
+      border-radius: 10px;
+      font-size: 0.92rem; line-height: 1.6;
+      color: var(--muted);
+      position: relative;
+    }
+    .feedback-examiner::before {
+      content: 'Examiner note';
+      position: absolute; top: -8px; left: 14px;
+      padding: 2px 8px;
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      background: var(--bg); color: var(--accent);
+      border-radius: 3px;
+    }
+    .feedback-examiner strong { color: var(--primary); font-weight: 700; }
 
     .btn-next {
-      display: block; width: 100%; padding: 14px; border-radius: 12px; border: none;
-      background: var(--primary); color: #fff; font-family: var(--font-body);
-      font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.18s;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 16px;
+      background: var(--primary); color: var(--bg);
+      border: none; border-radius: 12px;
+      font-family: var(--font-head); font-size: 1rem; font-weight: 700;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.2s;
     }
-    .btn-next:hover { background: #333; transform: translateY(-1px); }
-
-    @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-
-    /* â”€â”€ RESULTS SCREEN â”€â”€ */
-    .results-screen { display: none; text-align: center; padding: 30px 0 20px; }
-    .results-score-circle {
-      width: 140px; height: 140px; border-radius: 50%; margin: 0 auto 20px;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      border: 4px solid var(--accent); background: var(--accent-lt);
+    .btn-next::after {
+      content: '→';
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
-    .results-score-num { font-family: var(--font-head); font-size: 2.2rem; font-weight: 800; color: var(--accent); line-height: 1; }
-    .results-score-pct { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
-    .results-msg { font-family: var(--font-head); font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; }
-    .results-submsg { color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; line-height: 1.5; }
+    .btn-next:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .btn-next:hover::after { transform: translateX(4px); }
+    .btn-next:active { transform: translateY(0) scale(0.99); }
+    @media (prefers-color-scheme: dark) {
+      :root:not(.light-mode) body.cc-has-sidebar .btn-next {
+        background: var(--accent); color: #fff;
+      }
+    }
+    :root.dark-mode body.cc-has-sidebar .btn-next {
+      background: var(--accent); color: #fff;
+    }
 
-    .results-breakdown { text-align: left; margin-bottom: 28px; }
-    .results-breakdown h3 { font-family: var(--font-head); font-size: 0.9rem; margin-bottom: 12px; }
-    .breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    /* ── RESULTS SCREEN ── */
+    .results-screen { display: none; }
+
+    .results-stamp {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 14px;
+      border-bottom: 1px dashed var(--border);
+      margin-bottom: 32px;
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .results-stamp-tag {
+      padding: 4px 10px;
+      background: var(--accent); color: #fff; font-weight: 700;
+      border-radius: 3px;
+    }
+
+    .results-headline {
+      margin-bottom: 36px;
+    }
+    .results-msg {
+      font-family: var(--font-head);
+      font-size: clamp(1.85rem, 5.5vw, 2.5rem);
+      font-weight: 800; line-height: 1.05;
+      letter-spacing: -0.04em;
+      margin-bottom: 12px;
+      text-wrap: balance;
+    }
+    .results-msg em { font-style: italic; color: var(--accent); font-weight: 700; }
+    .results-submsg {
+      color: var(--muted); font-size: 1rem; line-height: 1.55;
+      max-width: 56ch;
+    }
+
+    /* Score readout — three columns of stats, no circles */
+    .results-stats {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      margin-bottom: 36px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .results-stat {
+      padding: 18px 16px;
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .results-stat:last-child { border-right: none; }
+    .results-stat-label {
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .results-stat-value {
+      font-family: var(--font-head);
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      font-weight: 800; line-height: 1;
+      letter-spacing: -0.04em;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
+    .results-stat-value em { font-style: normal; color: var(--accent); }
+    .results-stat-sub {
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--muted); letter-spacing: 0.06em;
+    }
+
+    .results-breakdown { margin-bottom: 36px; }
+    .results-breakdown h3 {
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .results-breakdown h3::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .breakdown-row {
+      display: grid;
+      grid-template-columns: 1fr auto 60px;
+      align-items: center; gap: 14px;
+      padding: 12px 4px;
+      border-bottom: 1px dashed var(--border);
+    }
     .breakdown-row:last-child { border-bottom: none; }
-    .breakdown-cat { color: var(--primary); font-weight: 600; }
-    .breakdown-score { font-weight: 700; }
-    .breakdown-score.perfect { color: var(--green); }
-    .breakdown-score.partial { color: var(--accent); }
-    .breakdown-score.poor { color: var(--red); }
+    .breakdown-cat {
+      color: var(--primary); font-weight: 500; font-size: 0.94rem;
+    }
+    .breakdown-bar {
+      width: 110px; height: 6px;
+      background: var(--border); border-radius: 3px; overflow: hidden;
+    }
+    @media (max-width: 480px) { .breakdown-bar { width: 70px; } }
+    .breakdown-bar-fill {
+      height: 100%; background: var(--bf-c, var(--accent));
+      transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .breakdown-score {
+      font-family: var(--font-mono); font-size: 0.9rem; font-weight: 700;
+      letter-spacing: 0.04em;
+      text-align: right;
+      color: var(--bf-c, var(--primary));
+      font-variant-numeric: tabular-nums;
+    }
+    .breakdown-row.perfect { --bf-c: var(--green); }
+    .breakdown-row.partial { --bf-c: var(--accent); }
+    .breakdown-row.poor { --bf-c: var(--red); }
 
-    .results-actions { display: flex; flex-direction: column; gap: 10px; }
+    .results-actions { display: flex; flex-direction: column; gap: 8px; }
     .btn-primary {
-      display: block; width: 100%; padding: 14px; border-radius: 12px; border: none;
-      background: var(--accent); color: #fff; font-family: var(--font-body);
-      font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.18s; text-decoration: none; text-align: center;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 16px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 12px;
+      font-family: var(--font-head); font-size: 1rem; font-weight: 700;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      text-decoration: none;
+      box-shadow: 0 6px 22px rgba(245,131,33,0.28);
     }
-    .btn-primary:hover { background: var(--accent-dk); transform: translateY(-1px); }
+    .btn-primary:hover {
+      background: var(--accent-dk);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(245,131,33,0.4);
+    }
+    .btn-primary:active { transform: translateY(0) scale(0.99); }
+
     .btn-secondary {
-      display: block; width: 100%; padding: 14px; border-radius: 12px;
-      border: 1px solid var(--border); background: var(--white); color: var(--primary);
-      font-family: var(--font-body); font-size: 0.95rem; font-weight: 700;
-      cursor: pointer; transition: all 0.18s; text-decoration: none; text-align: center;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 14px;
+      background: transparent; color: var(--primary);
+      border: 1.5px solid var(--border); border-radius: 12px;
+      font-family: var(--font-body); font-size: 0.95rem; font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      text-decoration: none;
     }
-    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-mid); }
+
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
 
 <main>
-  <!-- â”€â”€ START SCREEN â”€â”€ -->
-  <div id="start-screen" class="start-screen">
-    <h1>What Would the <em>Examiner</em> Mark?</h1>
-    <p>Think you know the difference between a minor and a serious? Test yourself against real DVSA examiner marking criteria. 50 scenarios, straight from the DL25 marking sheet.</p>
-
-    <div class="start-info">
-      <h3>How the driving test is marked</h3>
-      <ul>
-        <li><strong>No fault</strong> — Nothing worth recording</li>
-        <li><strong>Driving fault (minor)</strong> — Not potentially dangerous. 15 or fewer = still pass</li>
-        <li><strong>Serious fault</strong> — Potentially dangerous. Immediate fail</li>
-        <li><strong>Dangerous fault</strong> — Actual danger to someone. Immediate fail</li>
-      </ul>
+  <!-- ── START SCREEN ── -->
+  <section id="start-screen" class="start-screen" aria-label="Quiz introduction">
+    <div class="doc-header">
+      <div class="doc-header-left">
+        <span class="doc-stamp">DL25</span>
+        <span>Marking sheet<span class="doc-meta-dot">·</span>Practice mode</span>
+      </div>
+      <span>50 scenarios</span>
     </div>
 
-    <div class="tier-filters">
-      <button class="tier-btn active" data-tier="0">All Tiers</button>
-      <button class=”tier-btn” data-tier=”1”>Tier 1 — Fundamentals</button>
-      <button class=”tier-btn” data-tier=”2”>Tier 2 — Confidence</button>
-      <button class=”tier-btn” data-tier=”3”>Tier 3 — Independence</button>
+    <header class="start-hero">
+      <div class="start-eyebrow">Think you can mark a test?</div>
+      <h1 class="start-title">What would the <em>examiner</em> mark?</h1>
+      <p class="start-deck">Real scenarios from the DL25 marking sheet. Pick the verdict an examiner would write down — then read what they were actually looking for.</p>
+    </header>
+
+    <section class="fault-ledger" aria-label="Fault classifications">
+      <div class="fault-row r1">
+        <div class="fault-code">01</div>
+        <div class="fault-text">
+          <div class="fault-name">No fault</div>
+          <div class="fault-desc">Nothing worth recording on the sheet.</div>
+        </div>
+        <div class="fault-outcome">Clean</div>
+      </div>
+      <div class="fault-row r2">
+        <div class="fault-code">02</div>
+        <div class="fault-text">
+          <div class="fault-name">Driving fault</div>
+          <div class="fault-desc">A minor. Up to 15 of these and you still pass.</div>
+        </div>
+        <div class="fault-outcome">Minor</div>
+      </div>
+      <div class="fault-row r3">
+        <div class="fault-code">03</div>
+        <div class="fault-text">
+          <div class="fault-name">Serious fault</div>
+          <div class="fault-desc">Potentially dangerous. One ends the test.</div>
+        </div>
+        <div class="fault-outcome">Fail</div>
+      </div>
+      <div class="fault-row r4">
+        <div class="fault-code">04</div>
+        <div class="fault-text">
+          <div class="fault-name">Dangerous fault</div>
+          <div class="fault-desc">Actual danger to someone. Test stops immediately.</div>
+        </div>
+        <div class="fault-outcome">Fail</div>
+      </div>
+    </section>
+
+    <section class="config-section" aria-label="Quiz settings">
+      <div class="config-label">Difficulty</div>
+      <div class="tier-grid" role="radiogroup" aria-label="Tier filter">
+        <button class="tier-btn active" data-tier="0" type="button">
+          <span class="tier-btn-num">All</span>
+          <span class="tier-btn-content">
+            <span class="tier-btn-name">Every scenario</span>
+            <span class="tier-btn-meta">Tiers 1–3 mixed</span>
+          </span>
+        </button>
+        <button class="tier-btn" data-tier="1" type="button">
+          <span class="tier-btn-num">T1</span>
+          <span class="tier-btn-content">
+            <span class="tier-btn-name">Fundamentals</span>
+            <span class="tier-btn-meta">Pre-test essentials</span>
+          </span>
+        </button>
+        <button class="tier-btn" data-tier="2" type="button">
+          <span class="tier-btn-num">T2</span>
+          <span class="tier-btn-content">
+            <span class="tier-btn-name">Confidence</span>
+            <span class="tier-btn-meta">Real-world judgement</span>
+          </span>
+        </button>
+        <button class="tier-btn" data-tier="3" type="button">
+          <span class="tier-btn-num">T3</span>
+          <span class="tier-btn-content">
+            <span class="tier-btn-name">Independence</span>
+            <span class="tier-btn-meta">Test-day reasoning</span>
+          </span>
+        </button>
+      </div>
+
+      <label class="shuffle-toggle" for="shuffle-check">
+        <input type="checkbox" id="shuffle-check" checked>
+        <span>
+          Randomise question order
+          <small>Recommended — keeps the order from being memorised</small>
+        </span>
+      </label>
+    </section>
+
+    <button class="btn-start" id="btn-start-quiz" type="button">
+      Begin marking
+    </button>
+  </section>
+
+  <!-- ── QUIZ SCREEN ── -->
+  <section id="quiz-screen" class="quiz-screen" aria-label="Quiz question">
+    <div class="quiz-topbar">
+      <div class="quiz-progress" role="progressbar" aria-label="Quiz progress">
+        <div class="quiz-progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="quiz-counter" id="quiz-counter">Q.<strong>01</strong> / 50</div>
     </div>
 
-    <div class="shuffle-toggle">
-      <input type="checkbox" id="shuffle-check" checked>
-      <label for="shuffle-check">Randomise question order</label>
+    <div class="quiz-stats">
+      <span class="quiz-stat quiz-stat-correct">
+        <span>Score</span>
+        <strong id="quiz-score">0</strong>
+      </span>
     </div>
 
-    <button class="btn-start" id="btn-start-quiz">Start the Quiz</button>
-  </div>
-
-  <!-- â”€â”€ QUIZ SCREEN â”€â”€ -->
-  <div id="quiz-screen" class="quiz-screen">
-    <div class="progress-bar-wrap">
-      <div class="progress-bar-fill" id="progress-fill"></div>
+    <div class="quiz-meta-block">
+      <span class="quiz-category" id="quiz-category"></span>
+      <span class="quiz-dl25" id="quiz-dl25"></span>
     </div>
-
-    <div class="quiz-meta">
-      <span class="quiz-counter" id="quiz-counter">Question 1 of 50</span>
-      <span class="quiz-score" id="quiz-score">Score: 0</span>
-    </div>
-
-    <div class="quiz-category" id="quiz-category"></div>
-    <div class="quiz-dl25" id="quiz-dl25"></div>
 
     <div class="quiz-scenario" id="quiz-scenario"></div>
 
-    <div class="answer-grid" id="answer-grid">
-      <button class="answer-btn" data-answer="no_fault">No fault</button>
-      <button class="answer-btn" data-answer="driving_fault">Driving fault</button>
-      <button class="answer-btn" data-answer="serious">Serious fault</button>
-      <button class="answer-btn" data-answer="dangerous">Dangerous fault</button>
+    <div class="answer-grid" id="answer-grid" role="radiogroup" aria-label="Possible verdicts">
+      <button class="answer-btn" data-answer="no_fault" type="button">
+        <span class="answer-btn-marker">A</span>
+        <span class="answer-btn-label">No fault</span>
+        <span class="answer-btn-tag">Clean</span>
+      </button>
+      <button class="answer-btn" data-answer="driving_fault" type="button">
+        <span class="answer-btn-marker">B</span>
+        <span class="answer-btn-label">Driving fault</span>
+        <span class="answer-btn-tag">Minor</span>
+      </button>
+      <button class="answer-btn" data-answer="serious" type="button">
+        <span class="answer-btn-marker">C</span>
+        <span class="answer-btn-label">Serious fault</span>
+        <span class="answer-btn-tag">Fail</span>
+      </button>
+      <button class="answer-btn" data-answer="dangerous" type="button">
+        <span class="answer-btn-marker">D</span>
+        <span class="answer-btn-label">Dangerous fault</span>
+        <span class="answer-btn-tag">Fail</span>
+      </button>
     </div>
 
     <div class="feedback-panel" id="feedback-panel">
-      <div class="feedback-result" id="feedback-result"></div>
+      <div class="feedback-verdict" id="feedback-result"></div>
       <div class="feedback-explanation" id="feedback-explanation"></div>
       <div class="feedback-examiner" id="feedback-examiner"></div>
     </div>
 
-    <button class="btn-next hidden" id="btn-next">Next Question</button>
-  </div>
+    <button class="btn-next hidden" id="btn-next" type="button">Next scenario</button>
+  </section>
 
-  <!-- â”€â”€ RESULTS SCREEN â”€â”€ -->
-  <div id="results-screen" class="results-screen">
-    <div class="results-score-circle">
-      <span class="results-score-num" id="results-num"></span>
-      <span class="results-score-pct" id="results-pct"></span>
+  <!-- ── RESULTS SCREEN ── -->
+  <section id="results-screen" class="results-screen" aria-label="Quiz results">
+    <div class="results-stamp">
+      <span><span class="results-stamp-tag">Verdict</span></span>
+      <span id="results-stamp-date"></span>
     </div>
-    <div class="results-msg" id="results-msg"></div>
-    <div class="results-submsg" id="results-submsg"></div>
 
-    <div class="results-breakdown" id="results-breakdown">
-      <h3>Your performance by category</h3>
+    <header class="results-headline">
+      <h2 class="results-msg" id="results-msg"></h2>
+      <p class="results-submsg" id="results-submsg"></p>
+    </header>
+
+    <div class="results-stats">
+      <div class="results-stat">
+        <div class="results-stat-label">Correct</div>
+        <div class="results-stat-value"><em id="results-num">0</em></div>
+        <div class="results-stat-sub" id="results-denom">out of 50</div>
+      </div>
+      <div class="results-stat">
+        <div class="results-stat-label">Accuracy</div>
+        <div class="results-stat-value" id="results-pct">0%</div>
+        <div class="results-stat-sub">overall</div>
+      </div>
+      <div class="results-stat">
+        <div class="results-stat-label">Time</div>
+        <div class="results-stat-value" id="results-time">0:00</div>
+        <div class="results-stat-sub">elapsed</div>
+      </div>
+    </div>
+
+    <section class="results-breakdown" id="results-breakdown" aria-label="Category breakdown">
+      <h3>Performance by category</h3>
       <div id="breakdown-rows"></div>
-    </div>
+    </section>
 
     <div class="results-actions">
-      <button class="btn-primary" id="btn-share-result">Share Your Result</button>
+      <button class="btn-primary" id="btn-share-result" type="button">Share your verdict</button>
       <a href="/learner/ask-examiner.html" class="btn-secondary">Ask the Examiner AI</a>
-      <button class="btn-secondary" id="btn-restart-quiz">Try Again</button>
-      <a href="/learner/" class="btn-secondary">Back to Dashboard</a>
+      <button class="btn-secondary" id="btn-restart-quiz" type="button">Take another pass</button>
+      <a href="/learner/" class="btn-secondary">Back to dashboard</a>
     </div>
-  </div>
+  </section>
 </main>
 
 <script src="/learner/examiner-quiz.js"></script>

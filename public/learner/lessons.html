@@ -23,44 +23,104 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    .page { max-width: 640px; margin: 0 auto; padding: 20px 16px 100px; }
-    .page-title {
-      font-family: var(--font-head); font-size: clamp(1.5rem, 4vw, 1.9rem); font-weight: 800;
-      color: var(--primary); margin-bottom: 16px; letter-spacing: -0.03em;
+    /* ── MY LESSONS — booking log ───
+       Same DL25 vocabulary as the rest of the Lessons tab. Tab bar adopts
+       the mono ledger style. Lesson cards: tabular time, mono labels,
+       hairline date dividers. Past lessons treated subtly (no strikethrough,
+       no global opacity dimmer — just a muted tone). */
+
+    :root {
+      --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
     }
 
-    /* ── Tab bar ── */
+    .page { max-width: 760px; margin: 0 auto; padding: 28px 24px 100px; }
+
+    /* ── DOC HEADER ── */
+    .doc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
+      margin-bottom: 24px;
+    }
+    .doc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .doc-stamp {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 9px; border-radius: 3px;
+      background: var(--accent); color: #fff; font-weight: 700;
+      letter-spacing: 0.1em; flex-shrink: 0;
+    }
+    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
+
+    /* ── HERO ── */
+    .lessons-hero { margin-bottom: 24px; }
+    .hero-eyebrow {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .page-title {
+      font-family: var(--font-head);
+      font-size: clamp(1.65rem, 5vw, 2.1rem);
+      font-weight: 800; line-height: 1.02;
+      letter-spacing: -0.04em;
+      margin-bottom: 8px;
+      color: var(--primary);
+    }
+    .page-title em { font-style: italic; color: var(--accent); font-weight: 700; }
+    .lessons-subtitle {
+      color: var(--muted); font-size: 0.92rem; line-height: 1.5;
+      max-width: 52ch;
+    }
+
+    /* ── TAB BAR — mono ledger style ── */
     .tab-bar {
-      display: flex; gap: 0; margin-bottom: 16px;
-      border-bottom: 2px solid var(--border);
+      display: flex; gap: 0;
+      margin-bottom: 24px;
+      border-bottom: 1px dashed var(--border);
     }
     .tab-btn {
-      flex: 1; padding: 10px 0; text-align: center;
-      font-family: var(--font-head); font-size: 0.85rem; font-weight: 700;
+      position: relative;
+      padding: 12px 0;
+      margin-right: 28px;
+      font-family: var(--font-mono); font-size: 0.74rem; font-weight: 700;
       color: var(--muted); background: none; border: none;
-      cursor: pointer; position: relative; transition: color 0.15s;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.15s;
     }
     .tab-btn::after {
-      content: ''; position: absolute; bottom: -2px; left: 0; right: 0;
-      height: 2px; background: transparent; transition: background 0.15s;
+      content: ''; position: absolute;
+      bottom: -1px; left: 0; right: 0;
+      height: 2px; background: transparent;
+      transition: background 0.2s;
     }
-    .tab-btn.active { color: var(--primary); }
+    .tab-btn:hover { color: var(--primary); }
+    .tab-btn.active { color: var(--accent); }
     .tab-btn.active::after { background: var(--accent); }
 
-    /* ── Date headers ── */
+    /* ── DATE HEADERS — match book.html ── */
     .date-header {
-      font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
-      color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
-      padding: 18px 0 6px;
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 20px 0 8px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .date-header::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
     }
     .date-header:first-child { padding-top: 4px; }
 
-    /* ── Lesson card ── */
+    /* ── LESSON CARD ── */
     .lesson-card {
-      display: flex; align-items: stretch; gap: 0;
-      background: var(--white); border: 1.5px solid var(--border);
-      border-radius: var(--radius); overflow: hidden;
-      margin-bottom: 8px; transition: border-color 0.15s;
+      display: flex; align-items: stretch;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 8px;
+      transition: border-color 0.2s, background 0.2s;
     }
     .lesson-card:hover { border-color: var(--muted); }
     .lesson-accent {
@@ -68,99 +128,184 @@
       background: var(--lt-colour, var(--accent));
     }
     .lesson-body {
-      flex: 1; min-width: 0; padding: 14px 16px;
-      display: flex; flex-direction: column; gap: 4px;
+      flex: 1; min-width: 0;
+      padding: 14px 18px;
+      display: flex; flex-direction: column; gap: 6px;
     }
     .lesson-time {
-      font-family: var(--font-head); font-size: 1rem; font-weight: 800;
+      font-family: var(--font-head); font-size: 1.1rem; font-weight: 800;
       color: var(--primary);
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
     }
     .lesson-meta {
-      font-size: 0.8rem; color: var(--muted);
-      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--muted); letter-spacing: 0.04em;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
     }
-    .lesson-meta-dot::before { content: '\00B7'; }
+    .lesson-meta-dot::before {
+      content: '·'; color: var(--accent); margin: 0 -2px;
+    }
     .lesson-type-badge {
-      font-size: 0.7rem; font-weight: 700; padding: 2px 8px;
-      border-radius: 4px; display: inline-block;
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      display: inline-block;
     }
     .lesson-address {
-      font-size: 0.78rem; color: var(--muted); margin-top: 2px;
+      font-family: var(--font-body); font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 2px;
     }
     .lesson-actions {
-      display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;
+      display: flex; gap: 6px;
+      margin-top: 10px;
+      flex-wrap: wrap;
     }
     .btn-lesson {
-      font-size: 0.78rem; font-weight: 600; padding: 6px 14px;
-      border-radius: 7px; cursor: pointer; transition: all 0.15s;
-      border: 1px solid var(--border); background: none; color: var(--primary);
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      padding: 7px 14px;
+      border-radius: 7px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--primary);
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
     }
-    .btn-lesson:hover { background: var(--surface); }
+    .btn-lesson:hover { border-color: var(--muted); background: var(--bg); }
     .btn-lesson.cancel { color: var(--red); }
-    .btn-lesson.cancel:hover { border-color: var(--red); background: var(--red-lt, #fef2f2); }
+    .btn-lesson.cancel:hover { border-color: var(--red); background: var(--red-lt); }
     .btn-lesson.reschedule { color: var(--accent); }
-    .btn-lesson.reschedule:hover { border-color: var(--accent); background: var(--accent-lt); }
+    .btn-lesson.reschedule:hover { border-color: var(--accent); background: var(--accent-mid); }
     .btn-lesson.calendar { color: var(--accent); }
-    .btn-lesson.calendar:hover { border-color: var(--accent); background: var(--accent-lt); }
+    .btn-lesson.calendar:hover { border-color: var(--accent); background: var(--accent-mid); }
 
-    /* ── Series group ── */
+    /* ── SERIES GROUP — quieter (no nested-card look) ── */
     .series-group {
-      background: var(--surface); border-radius: var(--radius);
-      padding: 10px; margin-bottom: 8px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 12px 12px 6px;
+      margin-bottom: 8px;
     }
     .series-header {
       display: flex; align-items: center; justify-content: space-between;
-      font-size: 0.78rem; font-weight: 700; color: var(--muted);
-      padding: 4px 6px 8px; text-transform: uppercase; letter-spacing: 0.03em;
+      padding: 0 4px 12px;
+      margin-bottom: 4px;
+      border-bottom: 1px dashed var(--border);
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .series-header > span:first-child {
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .series-header > span:first-child::before {
+      content: 'SRS';
+      padding: 3px 8px;
+      background: var(--accent); color: #fff;
+      border-radius: 3px;
+      letter-spacing: 0.1em;
     }
     .series-header button {
-      font-size: 0.72rem; font-weight: 600; padding: 4px 12px;
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      padding: 4px 10px;
       border: 1px solid var(--red); border-radius: 6px;
-      background: none; color: var(--red); cursor: pointer;
+      background: transparent; color: var(--red);
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s;
     }
-    .series-header button:hover { background: var(--red-lt, #fef2f2); }
+    .series-header button:hover { background: var(--red-lt); }
     .series-group .lesson-card { margin-bottom: 6px; }
     .series-group .lesson-card:last-child { margin-bottom: 0; }
+    /* Series-grouped lesson cards: lighter background since they're inside a group */
+    .series-group .lesson-card { background: var(--bg); }
 
-    /* ── Past lesson card adjustments ── */
-    .lesson-card.past { opacity: 0.6; }
-    .lesson-card.past .lesson-time { text-decoration: line-through; }
-    .lesson-status {
-      font-size: 0.7rem; font-weight: 700; padding: 2px 8px;
-      border-radius: 4px; text-transform: uppercase; letter-spacing: 0.03em;
+    /* ── PAST LESSONS — subtle, no strikethrough ── */
+    .lesson-card.past {
+      background: transparent;
+      border-color: var(--border);
     }
-    .status-completed { background: var(--surface); color: var(--muted); }
-    .status-cancelled { background: var(--red-lt, #fef2f2); color: var(--red, #ef4444); }
-    .status-awaiting { background: var(--accent-lt, #fff4ec); color: var(--accent); }
+    .lesson-card.past .lesson-time { color: var(--muted); }
+    .lesson-card.past .lesson-accent { opacity: 0.4; }
+    /* No strikethrough — that reads as "cancelled". Past time is just muted. */
 
-    /* ── Loading / Empty ── */
-    .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .lesson-status {
+      font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .status-completed { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+    .status-cancelled { background: var(--red-lt); color: var(--red); }
+    .status-awaiting { background: var(--accent-lt); color: var(--accent); }
+
+    /* ── LOADING / EMPTY ── */
+    .loading {
+      text-align: center; padding: 60px 20px;
+      font-family: var(--font-mono); font-size: 0.72rem;
+      color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase;
+    }
     .spinner {
-      width: 32px; height: 32px; border: 3px solid var(--border);
-      border-top-color: var(--accent); border-radius: 50%;
-      animation: spin 0.7s linear infinite; margin: 0 auto 12px;
+      width: 28px; height: 28px;
+      border: 2.5px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 14px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .empty-state {
-      text-align: center; padding: 48px 20px; color: var(--muted);
-    }
-    .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
-    .empty-state h3 {
-      font-family: var(--font-head); font-size: 1.1rem; font-weight: 700;
-      color: var(--primary); margin-bottom: 6px;
-    }
-    .empty-state p { font-size: 0.85rem; margin-bottom: 16px; }
-    .btn-book-link {
-      display: inline-block; padding: 12px 28px; border-radius: 10px;
-      background: var(--accent); color: white; text-decoration: none;
-      font-family: var(--font-head); font-size: 0.9rem; font-weight: 700;
-      transition: background 0.15s;
-    }
-    .btn-book-link:hover { background: var(--accent-dk); }
 
-    /* ── Modals ── */
+    .empty-state {
+      text-align: center;
+      padding: 56px 24px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      color: var(--muted);
+    }
+    .empty-icon {
+      font-size: 2rem;
+      margin-bottom: 14px;
+      opacity: 0.7;
+    }
+    .empty-state h3 {
+      font-family: var(--font-head); font-size: 1.15rem; font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+    .empty-state p {
+      font-size: 0.9rem; line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .btn-book-link {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px;
+      background: var(--accent); color: #fff;
+      border-radius: 10px;
+      text-decoration: none;
+      font-family: var(--font-head); font-size: 0.92rem; font-weight: 700;
+      letter-spacing: -0.01em;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 16px rgba(245,131,33,0.25);
+    }
+    .btn-book-link::after {
+      content: '→';
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .btn-book-link:hover {
+      background: var(--accent-dk);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(245,131,33,0.4);
+    }
+    .btn-book-link:hover::after { transform: translateX(4px); }
+
+    /* ── MODALS (kept compatible — slightly tuned for dark mode) ── */
     .modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      position: fixed; inset: 0; background: rgba(0,0,0,0.55);
       display: flex; align-items: center; justify-content: center;
       z-index: 500; padding: 20px;
       opacity: 0; pointer-events: none; transition: opacity 0.2s;
@@ -170,11 +315,14 @@
       background: var(--white); border-radius: var(--radius);
       padding: 28px; max-width: 420px; width: 100%;
       transform: translateY(20px); transition: transform 0.2s;
+      border: 1px solid var(--border);
     }
     .modal-overlay.open .modal { transform: translateY(0); }
     .modal h2 {
-      font-family: var(--font-head); font-size: 1.2rem; font-weight: 800;
+      font-family: var(--font-head); font-size: 1.25rem; font-weight: 800;
       margin-bottom: 16px;
+      letter-spacing: -0.02em;
+      color: var(--primary);
     }
     .cancel-modal h2 { color: var(--red); }
     .modal-detail {
@@ -183,62 +331,110 @@
       display: flex; flex-direction: column; gap: 6px;
     }
     .modal-detail-row { display: flex; justify-content: space-between; }
-    .modal-detail-row span:first-child { color: var(--muted); }
-    .modal-detail-row span:last-child { font-weight: 700; }
+    .modal-detail-row span:first-child {
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .modal-detail-row span:last-child {
+      font-weight: 700; color: var(--primary);
+      font-variant-numeric: tabular-nums;
+    }
     .cancel-policy {
-      font-size: 0.82rem; padding: 10px 14px; border-radius: 8px;
+      font-size: 0.85rem; padding: 12px 14px;
+      border-radius: 8px;
       margin-bottom: 14px; line-height: 1.5;
+      background: var(--red-lt); color: var(--red);
+      border-left: 3px solid var(--red);
     }
-    .cancel-policy { background: var(--red-lt, #fef2f2); color: var(--red); }
-    .cancel-policy.safe { background: rgba(34,197,94,0.08); color: #15803d; }
+    .cancel-policy.safe {
+      background: var(--green-lt); color: var(--green);
+      border-left-color: var(--green);
+    }
     .cancel-ack {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 0.82rem; margin-bottom: 14px; cursor: pointer;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.85rem; color: var(--primary);
+      margin-bottom: 14px; cursor: pointer;
+      line-height: 1.4;
     }
-    .cancel-ack input { width: 16px; height: 16px; accent-color: var(--accent); }
+    .cancel-ack input {
+      width: 18px; height: 18px; accent-color: var(--accent);
+      flex-shrink: 0; cursor: pointer;
+    }
     .modal-actions { display: flex; gap: 10px; }
     .btn-modal-cancel {
-      padding: 12px 20px; background: none; border: 1px solid var(--border);
-      border-radius: 10px; font-size: 0.88rem; cursor: pointer; color: var(--muted);
+      padding: 12px 18px;
+      background: transparent;
+      border: 1px solid var(--border); border-radius: 10px;
+      font-family: var(--font-body); font-size: 0.88rem; font-weight: 600;
+      color: var(--primary);
+      cursor: pointer;
+      transition: background 0.15s;
     }
     .btn-modal-cancel:hover { background: var(--surface); }
     .btn-confirm-cancel {
-      flex: 1; padding: 12px; background: var(--red); color: white; border: none;
-      border-radius: 10px; font-family: var(--font-head); font-size: 0.88rem;
-      font-weight: 700; cursor: pointer; transition: background 0.15s;
+      flex: 1; padding: 12px;
+      background: var(--red); color: white; border: none;
+      border-radius: 10px;
+      font-family: var(--font-head); font-size: 0.92rem; font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+      letter-spacing: -0.01em;
     }
-    .btn-confirm-cancel:hover { background: #dc2626; }
-    .btn-confirm-cancel:disabled { background: var(--border); cursor: not-allowed; }
+    .btn-confirm-cancel:hover { background: #dc2626; transform: translateY(-1px); }
+    .btn-confirm-cancel:active { transform: scale(0.99); }
+    .btn-confirm-cancel:disabled {
+      background: var(--border); cursor: not-allowed;
+      transform: none;
+    }
     .modal-credit-note {
-      font-size: 0.82rem; color: var(--muted); margin-bottom: 16px; line-height: 1.5;
+      font-size: 0.88rem; color: var(--muted);
+      margin-bottom: 16px; line-height: 1.5;
     }
     .btn-confirm {
-      flex: 1; padding: 12px; background: var(--accent); color: white; border: none;
-      border-radius: 10px; font-family: var(--font-head); font-size: 0.88rem;
-      font-weight: 700; cursor: pointer; display: flex; align-items: center;
-      justify-content: center; gap: 8px;
+      flex: 1; padding: 12px;
+      background: var(--accent); color: white;
+      border: none; border-radius: 10px;
+      font-family: var(--font-head); font-size: 0.92rem; font-weight: 700;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
     }
-    .btn-confirm:hover { background: var(--accent-dk); }
-    .btn-confirm:disabled { background: var(--border); cursor: not-allowed; }
+    .btn-confirm:hover { background: var(--accent-dk); transform: translateY(-1px); }
+    .btn-confirm:active { transform: scale(0.99); }
+    .btn-confirm:disabled { background: var(--border); cursor: not-allowed; transform: none; }
     .modal-spinner {
-      width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.4);
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
       border-top-color: white; border-radius: 50%;
       animation: spin 0.7s linear infinite;
     }
 
-    /* ── Toast ── */
+    /* ── TOAST ── */
     .toast {
       position: fixed; bottom: 72px; left: 50%;
       transform: translateX(-50%) translateY(120px);
-      background: var(--primary); color: white;
+      background: var(--primary); color: var(--bg);
       padding: 14px 24px; border-radius: 10px;
       font-size: 0.9rem; font-weight: 600;
-      transition: transform 0.3s, opacity 0.3s; z-index: 9999; max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
+      transition: transform 0.3s, opacity 0.3s; z-index: 9999;
+      max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
       opacity: 0; pointer-events: none;
     }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
-    .toast.success { background: #16a34a; }
-    .toast.error { background: var(--red); }
+    .toast.success { background: #16a34a; color: #fff; }
+    .toast.error { background: var(--red); color: #fff; }
+    @media (prefers-color-scheme: dark) {
+      :root:not(.light-mode) body.cc-has-sidebar .toast { background: var(--white); color: var(--primary); }
+    }
+    :root.dark-mode body.cc-has-sidebar .toast { background: var(--white); color: var(--primary); }
+
+    @media (max-width: 500px) {
+      .page { padding: 24px 18px 100px; }
+      .tab-btn { margin-right: 22px; padding: 10px 0; }
+      .lesson-body { padding: 12px 14px; }
+      .lesson-time { font-size: 1.05rem; }
+    }
   </style>
   <script src="/sidebar.js"></script>
   <script src="/shared/learner-auth.js"></script>
@@ -247,17 +443,29 @@
 <body>
 
 <div class="page">
-  <div class="page-title">My Lessons</div>
+  <header class="doc-header">
+    <div class="doc-header-left">
+      <span class="doc-stamp">CC</span>
+      <span>Booking log<span class="doc-meta-dot">·</span>Your driving record</span>
+    </div>
+    <span id="docHeaderRight">All lessons</span>
+  </header>
+
+  <section class="lessons-hero">
+    <div class="hero-eyebrow">Your schedule</div>
+    <h1 class="page-title">My <em>lessons</em>.</h1>
+    <p class="lessons-subtitle">Everything you've booked with us. Switch tabs to see what's coming up or look back at past lessons — cancel or reschedule from any upcoming row.</p>
+  </section>
 
   <!-- Tab bar: Upcoming / Past -->
-  <div class="tab-bar">
-    <button class="tab-btn active" id="tabUpcoming">Upcoming</button>
-    <button class="tab-btn" id="tabPast">Past</button>
+  <div class="tab-bar" role="tablist">
+    <button class="tab-btn active" id="tabUpcoming" role="tab">Upcoming</button>
+    <button class="tab-btn" id="tabPast" role="tab">Past</button>
   </div>
 
   <!-- Content area -->
   <div id="lessonContent">
-    <div class="loading"><div class="spinner"></div><p>Loading lessons...</p></div>
+    <div class="loading"><div class="spinner"></div><p>Loading lessons…</p></div>
   </div>
 </div>
 
@@ -272,7 +480,7 @@
     </div>
     <div class="cancel-policy" id="cancelPolicyNote"></div>
     <div id="cancelSeriesOption" style="display:none;margin:10px 0;padding:10px;background:var(--surface);border-radius:8px;">
-      <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;font-weight:600;cursor:pointer;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;font-weight:600;cursor:pointer;color:var(--primary);">
         <input type="checkbox" id="cancelSeriesCheck" style="width:16px;height:16px;accent-color:var(--accent);">
         <span>Cancel all remaining lessons in this series</span>
       </label>

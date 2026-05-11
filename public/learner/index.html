@@ -23,174 +23,569 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    main { max-width: 640px; margin: 0 auto; padding: 28px 16px 100px; margin-top: 64px; }
-    @media (min-width: 960px) { main { margin-top: 0; padding-top: 32px; } }
+    /* ── LEARNER DASHBOARD — overview document ───
+       Same DL25 vocabulary as the rest of the Lessons tab. Greeting replaces
+       eyebrow/title. Balance + readiness as twin stat panels at the top.
+       One orange hero (next-lesson) — referral demoted to a ledger row.
+       JS hooks preserved: welcome-msg, greeting-sub, credit-balance-line,
+       dashboard-skeleton, next-lesson-card / .show / nl-when / nl-time /
+       nl-instructor, next-lesson-empty / .show, readiness-ring / ring-fill /
+       readiness-value, profile-card / .show / profile-bar-fill / profile-pct /
+       profile-steps / profile-cta / btn-dismiss-profile, referral-card / .show
+       / ref-count / ref-earned, unlogged-banner / .show / unlogged-title /
+       unlogged-sub / unlogged-btn, credit-toast / .show. */
 
-    /* CREDIT VERIFICATION TOAST */
-    .credit-toast {
-      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
-      background: var(--green, #22c55e); color: #fff; padding: 14px 24px; border-radius: 12px;
-      font-weight: 600; font-size: 0.95rem; z-index: 1000; opacity: 0;
-      transition: opacity 0.3s, transform 0.3s; pointer-events: none;
-      box-shadow: 0 4px 16px rgba(0,0,0,.15); text-align: center; max-width: 90vw;
+    :root {
+      --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
     }
-    .credit-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
 
-    /* GREETING */
-    .greeting-block { margin-bottom: 24px; }
+    /* Use both `main` and `.page` so the sidebar.js
+       `body.cc-has-sidebar main { padding-top: 0 !important }` rule is
+       superseded by its own `.page` rule that allows top padding. */
+    main, .page {
+      max-width: 760px; margin: 0 auto;
+      padding: 28px 24px 100px;
+    }
+    main { margin-top: 64px; }
+    @media (min-width: 960px) {
+      main { margin-top: 0; }
+    }
+    /* Ensure top padding is honoured even when sidebar.js forces it to 0
+       on the raw `main` selector. */
+    body.cc-has-sidebar main.page { padding-top: 32px !important; }
+
+    /* ── DOC HEADER ── */
+    .doc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
+      margin-bottom: 20px;
+    }
+    .doc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .doc-stamp {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 9px; border-radius: 3px;
+      background: var(--accent); color: #fff; font-weight: 700;
+      letter-spacing: 0.1em; flex-shrink: 0;
+    }
+    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
+
+    /* ── GREETING ── */
+    .greeting-block { margin-bottom: 22px; }
+    .greeting-eyebrow {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase;
+      margin-bottom: 10px;
+    }
     .greeting {
-      font-size: clamp(1.7rem, 5vw, 2.1rem); font-weight: 800;
-      font-family: var(--font-head); color: var(--primary);
-      letter-spacing: -0.03em; line-height: 1.15; margin: 0 0 6px;
+      font-family: var(--font-head);
+      font-size: clamp(1.65rem, 5vw, 2.1rem);
+      font-weight: 800; line-height: 1.02;
+      letter-spacing: -0.04em;
+      margin: 0 0 8px;
+      color: var(--primary);
     }
+    .greeting em { font-style: italic; color: var(--accent); font-weight: 700; }
     .greeting-sub {
-      font-size: 0.88rem; color: var(--muted); font-family: var(--font-body);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .credit-badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      background: var(--accent-mid); color: var(--accent);
-      border-radius: 100px; padding: 2px 10px;
-      font-size: 0.8rem; font-weight: 700; font-family: var(--font-head);
+      font-family: var(--font-body); font-size: 0.92rem;
+      color: var(--muted); line-height: 1.5;
+      max-width: 52ch;
     }
 
-    /* NEXT LESSON HERO CARD */
+    /* ── TWIN STAT PANELS — Balance + Readiness ── */
+    .stat-row {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 0;
+      margin-bottom: 22px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .stat-cell {
+      display: block;
+      padding: 16px 18px;
+      text-decoration: none;
+      color: var(--primary);
+      border-right: 1px solid var(--border);
+      transition: background 0.2s;
+      position: relative;
+    }
+    .stat-cell:last-child { border-right: none; }
+    .stat-cell:hover { background: var(--accent-mid); }
+    .stat-cell-label {
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      margin-bottom: 4px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .stat-cell-value {
+      font-family: var(--font-head);
+      font-size: clamp(1.4rem, 4.5vw, 1.8rem);
+      font-weight: 800; line-height: 1;
+      letter-spacing: -0.03em;
+      color: var(--primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-cell-value em { font-style: normal; color: var(--accent); }
+    .stat-cell-sub {
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--muted); letter-spacing: 0.06em;
+      margin-top: 4px;
+    }
+    .stat-cell-arrow {
+      position: absolute; top: 14px; right: 14px;
+      width: 16px; height: 16px;
+      color: var(--muted);
+      opacity: 0.5;
+      transition: opacity 0.2s, transform 0.2s, color 0.2s;
+    }
+    .stat-cell:hover .stat-cell-arrow {
+      opacity: 1; color: var(--accent);
+      transform: translateX(2px) translateY(-2px);
+    }
+    .stat-cell-arrow svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; }
+
+    /* Legacy hooks — keep so JS doesn't choke */
+    .credit-badge { display: none; }
+
+    /* ── NEXT LESSON HERO CARD (the one allowed gradient) ── */
     .next-lesson-card {
-      background: linear-gradient(135deg, #f58321 0%, #ff9a3c 100%);
-      border-radius: var(--radius); padding: 22px 20px;
-      display: none; align-items: center; justify-content: space-between; gap: 16px;
+      background: linear-gradient(135deg, #f58321 0%, #e07518 100%);
+      border-radius: 16px;
+      padding: 24px 24px 22px;
+      display: none;
+      gap: 16px;
       margin-bottom: 20px; color: #fff;
-      box-shadow: 0 4px 20px rgba(245,131,33,0.3);
+      box-shadow: 0 8px 30px rgba(245,131,33,0.30);
+      position: relative; overflow: hidden;
     }
-    .next-lesson-card.show { display: flex; }
-    .nl-info { flex: 1; min-width: 0; }
-    .nl-when { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.85; margin-bottom: 5px; }
-    .nl-time { font-family: var(--font-head); font-size: 1.35rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
-    .nl-instructor { font-size: 0.85rem; opacity: 0.9; margin-top: 4px; }
-    .nl-actions { margin-top: 12px; display: flex; gap: 8px; }
-    .nl-btn { display: inline-block; background: rgba(255,255,255,0.22); color: #fff; border-radius: 100px; padding: 7px 18px; font-size: 0.78rem; font-weight: 700; text-decoration: none; transition: background 0.15s; backdrop-filter: blur(4px); }
-    .nl-btn:hover { background: rgba(255,255,255,0.38); }
+    .next-lesson-card::before {
+      content: 'NEXT LESSON';
+      position: absolute; top: 16px; right: 18px;
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      letter-spacing: 0.14em;
+      color: rgba(255,255,255,0.55);
+    }
+    .next-lesson-card.show { display: flex; flex-direction: column; }
+    .nl-info { flex: 1; min-width: 0; padding-right: 80px; }
+    .nl-when {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      opacity: 0.85; margin-bottom: 8px;
+      display: inline-flex; align-items: center;
+      padding: 3px 8px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 4px;
+    }
+    .nl-time {
+      font-family: var(--font-head); font-size: clamp(1.4rem, 4.5vw, 1.7rem);
+      font-weight: 800; line-height: 1.05;
+      letter-spacing: -0.025em;
+      font-variant-numeric: tabular-nums;
+    }
+    .nl-instructor {
+      font-family: var(--font-mono); font-size: 0.74rem;
+      letter-spacing: 0.04em;
+      opacity: 0.85;
+      margin-top: 6px;
+    }
+    .nl-actions { margin-top: 16px; display: flex; gap: 8px; align-items: center; }
+    .nl-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+      border-radius: 8px;
+      padding: 9px 16px;
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      text-decoration: none;
+      transition: background 0.2s;
+      backdrop-filter: blur(4px);
+    }
+    .nl-btn:hover { background: rgba(255,255,255,0.28); }
 
-    /* Readiness ring */
-    .readiness-ring { position: relative; width: 60px; height: 60px; flex-shrink: 0; cursor: pointer; text-decoration: none; }
-    .readiness-ring svg { width: 60px; height: 60px; transform: rotate(-90deg); }
-    .readiness-ring .ring-bg { fill: none; stroke: rgba(255,255,255,0.25); stroke-width: 4.5; }
-    .readiness-ring .ring-fill { fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; transition: stroke-dashoffset 1s ease, stroke 0.3s; }
+    /* Readiness ring — kept inside hero for now, smaller + cleaner */
+    .readiness-ring {
+      position: absolute;
+      top: 18px; right: 18px;
+      width: 58px; height: 58px;
+      cursor: pointer;
+      text-decoration: none;
+      display: none !important; /* hidden — duplicate exists in stat row above */
+    }
+    .readiness-ring svg { width: 58px; height: 58px; transform: rotate(-90deg); }
+    .readiness-ring .ring-bg { fill: none; stroke: rgba(255,255,255,0.25); stroke-width: 4; }
+    .readiness-ring .ring-fill { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 1s ease, stroke 0.3s; }
     .readiness-pct {
       position: absolute; inset: 0; display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      font-family: var(--font-head); font-weight: 800; font-size: 0.88rem;
+      font-family: var(--font-head); font-weight: 800;
       color: #fff; line-height: 1;
     }
-    .readiness-label { font-size: 0.4rem; font-weight: 700; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+    .readiness-pct #readiness-value {
+      font-size: 0.92rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .readiness-label {
+      font-family: var(--font-mono); font-size: 0.5rem; font-weight: 700;
+      color: rgba(255,255,255,0.75);
+      letter-spacing: 0.08em; text-transform: uppercase;
+      margin-top: 2px;
+    }
 
     /* Next lesson empty state */
     .next-lesson-empty {
-      background: var(--surface); border-radius: var(--radius);
-      padding: 28px 24px; text-align: center; margin-bottom: 20px; display: none;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      display: none;
+      padding: 36px 28px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 22px;
     }
     .next-lesson-empty.show { display: block; }
-    .nle-icon { font-size: 2rem; margin-bottom: 10px; }
-    .next-lesson-empty p { font-size: 0.92rem; color: var(--muted); margin-bottom: 16px; font-weight: 500; }
-    .nle-btn {
-      display: inline-block; background: var(--accent); color: #fff; border-radius: 100px;
-      padding: 11px 28px; font-size: 0.88rem; font-weight: 700; text-decoration: none;
-      font-family: var(--font-head); transition: all 0.18s;
-      box-shadow: 0 2px 12px rgba(245,131,33,0.3);
+    .nle-icon { font-size: 1.8rem; margin-bottom: 12px; opacity: 0.65; }
+    .next-lesson-empty p {
+      font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 18px;
     }
-    .nle-btn:hover { background: var(--accent-dk); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,131,33,0.4); }
+    .nle-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--accent); color: #fff;
+      border-radius: 10px;
+      padding: 12px 22px;
+      font-family: var(--font-head); font-size: 0.92rem; font-weight: 700;
+      letter-spacing: -0.01em;
+      text-decoration: none;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 16px rgba(245,131,33,0.25);
+    }
+    .nle-btn::after {
+      content: '→';
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .nle-btn:hover {
+      background: var(--accent-dk);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(245,131,33,0.4);
+    }
+    .nle-btn:hover::after { transform: translateX(4px); }
 
-    /* PROFILE COMPLETION CARD */
+    /* ── PROFILE COMPLETION CARD ── */
     .profile-card {
-      background: var(--surface); border: 1px solid rgba(245,131,33,0.2);
-      border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
-      display: none; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      display: none;
+      padding: 18px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 12px;
+      margin-bottom: 20px;
     }
     .profile-card.show { display: block; }
-    .profile-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .profile-card-title { font-family: var(--font-head); font-weight: 700; font-size: 0.95rem; }
-    .profile-card-dismiss { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.8rem; padding: 4px 8px; }
-    .profile-bar-bg { height: 6px; background: var(--accent-mid); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
-    .profile-bar-fill { height: 100%; background: var(--accent); border-radius: 8px; transition: width 0.6s ease; }
-    .profile-pct { font-size: 0.78rem; font-weight: 600; color: var(--accent); margin-bottom: 12px; }
-    .profile-steps { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-    .profile-step { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--muted); }
-    .profile-step.done { color: var(--primary); }
-    .profile-step-icon { width: 18px; text-align: center; }
+    .profile-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+      gap: 8px;
+    }
+    .profile-card-title {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .profile-card-dismiss {
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      background: none; border: none;
+      color: var(--muted);
+      cursor: pointer;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 4px 6px;
+      transition: color 0.15s;
+    }
+    .profile-card-dismiss:hover { color: var(--primary); }
+    .profile-bar-bg {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .profile-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .profile-pct {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.08em;
+      margin-bottom: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+    .profile-steps {
+      display: flex; flex-direction: column;
+      gap: 2px;
+      margin-bottom: 16px;
+    }
+    .profile-step {
+      display: grid;
+      grid-template-columns: 22px 1fr;
+      align-items: center; gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px dashed var(--border);
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+    .profile-step:last-child { border-bottom: none; }
+    .profile-step.done {
+      color: var(--primary);
+    }
+    .profile-step.done .profile-step-icon { color: var(--green); }
+    .profile-step-icon {
+      width: 22px;
+      font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700;
+      text-align: center;
+      color: var(--muted);
+    }
     .profile-card .btn-complete {
-      display: inline-block; background: var(--accent); color: #fff;
-      border-radius: 100px; padding: 10px 24px; font-size: 0.85rem;
-      font-weight: 700; text-decoration: none; transition: all 0.18s;
-      font-family: var(--font-head);
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--accent); color: #fff;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-family: var(--font-head); font-size: 0.88rem; font-weight: 700;
+      text-decoration: none;
+      letter-spacing: -0.01em;
+      transition: background 0.2s, transform 0.15s;
     }
-    .profile-card .btn-complete:hover { background: var(--accent-dk); }
+    .profile-card .btn-complete::after {
+      content: '→';
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .profile-card .btn-complete:hover {
+      background: var(--accent-dk);
+      transform: translateY(-1px);
+    }
+    .profile-card .btn-complete:hover::after { transform: translateX(3px); }
 
-    /* UNLOGGED BANNER */
+    /* ── UNLOGGED BANNER — status-strip row style ── */
     .unlogged-banner {
-      background: var(--surface); border: 1px solid rgba(245,131,33,0.25);
-      border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;
-      display: none; align-items: center; gap: 14px; flex-wrap: wrap;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      display: none;
+      grid-template-columns: 32px 1fr auto;
+      align-items: center; gap: 14px;
+      padding: 14px 16px;
+      background: var(--accent-mid);
+      border: 1px solid var(--accent);
+      border-radius: 12px;
+      margin-bottom: 20px;
     }
-    .unlogged-banner.show { display: flex; }
-    .unlogged-banner-icon { font-size: 1.4rem; flex-shrink: 0; }
-    .unlogged-banner-text { flex: 1; min-width: 160px; }
-    .unlogged-banner-title { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
-    .unlogged-banner-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+    .unlogged-banner.show { display: grid; }
+    .unlogged-banner-icon {
+      width: 28px; height: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--accent); color: #fff;
+      border-radius: 4px;
+      font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
+      letter-spacing: 0.06em;
+      flex-shrink: 0;
+    }
+    /* Override emoji content with mono tag */
+    .unlogged-banner-icon { font-size: 0; }
+    .unlogged-banner-icon::before {
+      content: 'LOG';
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+    }
+    .unlogged-banner-text { min-width: 0; }
+    .unlogged-banner-title {
+      font-size: 0.92rem; font-weight: 700;
+      color: var(--primary);
+      line-height: 1.3;
+    }
+    .unlogged-banner-sub {
+      font-size: 0.82rem; color: var(--muted);
+      margin-top: 2px; line-height: 1.4;
+    }
     .btn-log-now {
-      background: var(--accent); color: #fff; border: none; border-radius: 10px;
-      padding: 10px 20px; font-family: var(--font-head); font-size: 0.85rem;
-      font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap;
-      transition: background 0.2s;
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 8px;
+      padding: 8px 14px;
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer; text-decoration: none;
+      white-space: nowrap;
+      transition: background 0.2s, transform 0.15s;
     }
-    .btn-log-now:hover { background: var(--accent-dk); }
+    .btn-log-now:hover {
+      background: var(--accent-dk);
+      transform: translateY(-1px);
+    }
 
-    /* REFERRAL TEASER — links to /learner/refer.html for the full page */
+    /* ── SECTION LABEL ── */
+    .section-label {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      margin: 8px 0 12px;
+    }
+    .section-label::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* ── REFERRAL CARD — demoted to a ledger row, no second gradient ── */
     .referral-card {
-      background: linear-gradient(135deg, var(--accent), var(--accent-dk));
-      border-radius: var(--radius); padding: 20px;
-      display: none; color: #fff; margin-bottom: 20px;
-      text-decoration: none; transition: transform 0.15s, box-shadow 0.15s;
+      display: none;
+      grid-template-columns: 32px 1fr auto;
+      align-items: center; gap: 14px;
+      padding: 14px 16px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      margin-bottom: 20px;
+      text-decoration: none;
+      color: var(--primary);
+      transition: border-color 0.2s, background 0.2s;
     }
-    .referral-card.show { display: block; }
-    .referral-card:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
-    .referral-card h3 { font-family: var(--font-head); font-size: 1rem; font-weight: 700; margin: 0 0 6px; color: #fff; }
-    .referral-card .ref-sub { font-size: 0.85rem; opacity: 0.9; margin-bottom: 16px; line-height: 1.4; }
-    .referral-stats-row { display: flex; gap: 20px; margin-bottom: 14px; }
-    .referral-stat { text-align: center; flex: 1; }
-    .referral-stat strong { display: block; font-size: 1.3rem; font-family: var(--font-head); font-variant-numeric: tabular-nums; }
-    .referral-stat span { font-size: 0.72rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .referral-card.show { display: grid; }
+    .referral-card:hover {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+    }
+    .referral-card::before {
+      content: 'REF';
+      width: 28px; height: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--accent); color: #fff;
+      border-radius: 4px;
+      font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
+      letter-spacing: 0.08em;
+      flex-shrink: 0;
+    }
+    .referral-card h3 {
+      font-family: var(--font-head); font-size: 0.98rem; font-weight: 700;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+      margin: 0 0 4px;
+    }
+    .ref-sub {
+      font-family: var(--font-body); font-size: 0.82rem;
+      color: var(--muted); line-height: 1.45;
+      margin: 0 0 8px;
+    }
+    .referral-stats-row {
+      display: flex; gap: 16px;
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.06em;
+      margin: 0;
+    }
+    .referral-stat strong {
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
+    }
+    .referral-stat span {
+      font-size: 0.66rem; text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
     .ref-cta {
-      font-size: 0.82rem; font-weight: 700; opacity: 0.95;
-      text-align: right; font-family: var(--font-head);
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase;
+      white-space: nowrap;
+      align-self: center;
     }
 
-    /* ACTION STRIP */
+    /* ── ACTION STRIP ── */
     .action-strip {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
       margin-bottom: 0;
     }
     .action-btn {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 8px; padding: 16px 8px;
-      background: var(--surface); border-radius: var(--radius);
-      text-decoration: none; color: var(--primary);
-      transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
-      text-align: center;
+      display: flex; flex-direction: column; align-items: flex-start;
+      gap: 14px;
+      padding: 18px 16px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      text-decoration: none;
+      color: var(--primary);
+      transition: border-color 0.2s, background 0.2s, transform 0.15s;
+      position: relative;
     }
-    .action-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
-    .action-btn:active { transform: translateY(0); }
+    .action-btn::after {
+      content: '→';
+      position: absolute;
+      top: 18px; right: 16px;
+      font-family: var(--font-body);
+      color: var(--muted);
+      opacity: 0.5;
+      transition: opacity 0.2s, transform 0.2s, color 0.2s;
+    }
+    .action-btn:hover {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+      transform: translateY(-2px);
+    }
+    .action-btn:hover::after {
+      opacity: 1; color: var(--accent);
+      transform: translateX(2px);
+    }
     .action-btn-icon {
-      width: 44px; height: 44px; border-radius: 12px;
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
     }
-    .action-btn-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .action-btn-icon.lessons { background: rgba(245,131,33,0.12); color: #f58321; }
-    .action-btn-icon.practice { background: rgba(59,130,246,0.12); color: #3b82f6; }
-    .action-btn-icon.learn { background: rgba(34,197,94,0.12); color: #22c55e; }
-    .action-btn-label { font-family: var(--font-head); font-size: 0.82rem; font-weight: 700; color: var(--primary); line-height: 1.2; }
+    .action-btn-icon svg {
+      width: 18px; height: 18px;
+      stroke: currentColor; fill: none;
+      stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .action-btn-icon.lessons { color: var(--accent); border-color: var(--accent); }
+    .action-btn-icon.practice { color: #3b82f6; border-color: #3b82f6; }
+    .action-btn-icon.learn { color: #22c55e; border-color: #22c55e; }
+    .action-btn-label {
+      font-family: var(--font-head); font-size: 0.92rem; font-weight: 700;
+      color: var(--primary); line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+    .action-btn-sub {
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.08em;
+      margin-top: 2px;
+    }
+
+    /* ── CREDIT VERIFICATION TOAST ── */
+    .credit-toast {
+      position: fixed; bottom: 90px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--green, #22c55e); color: #fff;
+      padding: 14px 24px; border-radius: 12px;
+      font-weight: 600; font-size: 0.95rem; z-index: 1000;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s, transform 0.3s;
+      box-shadow: 0 8px 24px rgba(34,197,94,0.32);
+      text-align: center; max-width: 90vw;
+    }
+    .credit-toast.show {
+      opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
+    }
+
+    @media (max-width: 500px) {
+      main { padding: 24px 18px 100px; }
+      .stat-row { grid-template-columns: 1fr; }
+      .stat-cell { border-right: none; border-bottom: 1px solid var(--border); }
+      .stat-cell:last-child { border-bottom: none; }
+      .action-strip { grid-template-columns: 1fr; }
+      .action-btn { flex-direction: row; align-items: center; gap: 14px; padding: 14px 16px; }
+      .action-btn::after { top: 50%; transform: translateY(-50%); }
+      .action-btn:hover::after { transform: translateY(-50%) translateX(2px); }
+      .nl-info { padding-right: 0; }
+    }
   </style>
 <script src="/sidebar.js"></script>
 <script src="/competency-config.js"></script>
@@ -199,13 +594,38 @@
 </head>
 <body>
 
-<main>
+<main class="page">
+  <header class="doc-header">
+    <div class="doc-header-left">
+      <span class="doc-stamp">CC</span>
+      <span>Dashboard<span class="doc-meta-dot">·</span>Your driving record</span>
+    </div>
+    <span id="docHeaderRight">Logged in</span>
+  </header>
+
   <!-- GREETING -->
-  <div class="greeting-block">
+  <section class="greeting-block">
+    <div class="greeting-eyebrow">Today</div>
     <h1 class="greeting" id="welcome-msg"><span class="skeleton skeleton-text w-40" style="display:inline-block;height:1.1em">&nbsp;</span></h1>
     <div class="greeting-sub" id="greeting-sub" style="display:none">
       <span id="credit-balance-line"></span>
     </div>
+  </section>
+
+  <!-- TWIN STAT PANELS — Balance + Readiness -->
+  <div class="stat-row">
+    <a href="/learner/buy-credits.html" class="stat-cell" id="stat-balance">
+      <div class="stat-cell-label">Hours on account</div>
+      <div class="stat-cell-value" id="stat-balance-value">—</div>
+      <div class="stat-cell-sub" id="stat-balance-sub">hours</div>
+      <span class="stat-cell-arrow"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5H8M19 5v11"/></svg></span>
+    </a>
+    <a href="/learner/progress.html" class="stat-cell" id="stat-readiness">
+      <div class="stat-cell-label">Test readiness</div>
+      <div class="stat-cell-value" id="stat-readiness-value">—</div>
+      <div class="stat-cell-sub" id="stat-readiness-sub">overall</div>
+      <span class="stat-cell-arrow"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5H8M19 5v11"/></svg></span>
+    </a>
   </div>
 
   <!-- SKELETON -->
@@ -221,9 +641,10 @@
       <div class="nl-time" id="nl-time"></div>
       <div class="nl-instructor" id="nl-instructor"></div>
       <div class="nl-actions">
-        <a href="/learner/lessons.html" class="nl-btn">View Lessons</a>
+        <a href="/learner/lessons.html" class="nl-btn">View lessons</a>
       </div>
     </div>
+    <!-- Legacy readiness ring (hidden — replaced by stat-readiness above) -->
     <a href="/learner/progress.html" class="readiness-ring" id="readiness-ring" style="display:none" title="View full progress">
       <svg viewBox="0 0 52 52">
         <circle class="ring-bg" cx="26" cy="26" r="21"/>
@@ -240,38 +661,9 @@
   <!-- NEXT LESSON EMPTY STATE -->
   <div class="next-lesson-empty" id="next-lesson-empty">
     <div class="nle-icon">🗓</div>
-    <p>No upcoming lessons yet</p>
-    <a href="/learner/book.html" class="nle-btn">Book a Lesson</a>
+    <p>No upcoming lessons</p>
+    <a href="/learner/book.html" class="nle-btn">Book a lesson</a>
   </div>
-
-  <!-- PROFILE COMPLETION -->
-  <div class="profile-card" id="profile-card">
-    <div class="profile-card-header">
-      <div class="profile-card-title">Build Your Driving Profile</div>
-      <button class="profile-card-dismiss" id="btn-dismiss-profile">Dismiss</button>
-    </div>
-    <div class="profile-bar-bg"><div class="profile-bar-fill" id="profile-bar-fill" style="width:0%"></div></div>
-    <div class="profile-pct" id="profile-pct">0% complete</div>
-    <div class="profile-steps" id="profile-steps"></div>
-    <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete Next Step</a>
-  </div>
-
-  <!-- REFERRAL TEASER — full details live at /learner/refer.html -->
-  <a class="referral-card referral-teaser" id="referral-card" href="/learner/refer.html">
-    <h3>Refer a friend</h3>
-    <div class="ref-sub">Free lesson for them. Driving time for you on every lesson they take.</div>
-    <div class="referral-stats-row">
-      <div class="referral-stat">
-        <strong id="ref-count">0</strong>
-        <span>Friends referred</span>
-      </div>
-      <div class="referral-stat">
-        <strong id="ref-earned">0 min</strong>
-        <span>Time earned</span>
-      </div>
-    </div>
-    <div class="ref-cta">View &amp; share &rsaquo;</div>
-  </a>
 
   <!-- UNLOGGED BOOKING BANNER -->
   <div class="unlogged-banner" id="unlogged-banner">
@@ -283,25 +675,66 @@
     <a class="btn-log-now" id="unlogged-btn" href="#">Log now</a>
   </div>
 
+  <!-- PROFILE COMPLETION -->
+  <div class="profile-card" id="profile-card">
+    <div class="profile-card-header">
+      <div class="profile-card-title">Build your driving profile</div>
+      <button class="profile-card-dismiss" id="btn-dismiss-profile">Dismiss</button>
+    </div>
+    <div class="profile-bar-bg"><div class="profile-bar-fill" id="profile-bar-fill" style="width:0%"></div></div>
+    <div class="profile-pct" id="profile-pct">0% complete</div>
+    <div class="profile-steps" id="profile-steps"></div>
+    <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete next step</a>
+  </div>
+
+  <!-- REFERRAL TEASER — demoted to a ledger row -->
+  <a class="referral-card referral-teaser" id="referral-card" href="/learner/refer.html">
+    <div>
+      <h3>Refer a friend</h3>
+      <div class="ref-sub">Free lesson for them. Driving time for you on every lesson they take.</div>
+      <div class="referral-stats-row">
+        <div class="referral-stat">
+          <strong id="ref-count">0</strong> <span>referred</span>
+        </div>
+        <div class="referral-stat">
+          <strong id="ref-earned">0 min</strong> <span>earned</span>
+        </div>
+      </div>
+    </div>
+    <div class="ref-cta">View &rsaquo;</div>
+  </a>
+
+  <!-- SHORTCUTS -->
+  <div class="section-label">Shortcuts</div>
+
   <!-- ACTION STRIP -->
   <div class="action-strip">
     <a href="/learner/book.html" class="action-btn">
       <div class="action-btn-icon lessons">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
       </div>
-      <span class="action-btn-label">Book</span>
+      <div>
+        <div class="action-btn-label">Book</div>
+        <div class="action-btn-sub">Pick a slot</div>
+      </div>
     </a>
     <a href="/learner/practice.html" class="action-btn">
       <div class="action-btn-icon practice">
         <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
       </div>
-      <span class="action-btn-label">Practice</span>
+      <div>
+        <div class="action-btn-label">Practice</div>
+        <div class="action-btn-sub">Log a session</div>
+      </div>
     </a>
     <a href="/learner/ask-examiner.html" class="action-btn">
       <div class="action-btn-icon learn">
         <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </div>
-      <span class="action-btn-label">Learn</span>
+      <div>
+        <div class="action-btn-label">Learn</div>
+        <div class="action-btn-sub">Ask the examiner</div>
+      </div>
     </a>
   </div>
 </main>
@@ -309,6 +742,49 @@
 <div class="credit-toast" id="credit-toast"></div>
 
 <script src="/learner/index.js"></script>
+
+<script>
+// Mirror balance and readiness into the new twin stat panels.
+// Watches the legacy DOM nodes (#credit-balance-line and #readiness-value) and
+// copies their content into the new #stat-balance-value / #stat-readiness-value
+// — so index.js continues to work unmodified.
+(function () {
+  function mirror() {
+    // Balance: read the credit-balance-line text, extract the hours number.
+    var line = document.getElementById('credit-balance-line');
+    var balVal = document.getElementById('stat-balance-value');
+    var balSub = document.getElementById('stat-balance-sub');
+    if (line && balVal) {
+      // The legacy markup is `<span class="credit-badge">3.5 hrs remaining</span>` or
+      // `<span class="credit-badge">3 hrs remaining</span>` — pull out the number.
+      var raw = (line.textContent || '').trim();
+      var m = raw.match(/([\d.]+)\s*hrs?/i);
+      if (m) {
+        balVal.textContent = m[1];
+        balSub.textContent = (m[1] === '1' ? 'hour remaining' : 'hours remaining');
+      } else if (raw) {
+        balVal.textContent = raw;
+        balSub.textContent = '';
+      }
+    }
+    // Readiness: read #readiness-value text.
+    var rv = document.getElementById('readiness-value');
+    var sv = document.getElementById('stat-readiness-value');
+    if (rv && sv && rv.textContent && rv.textContent !== '0%') {
+      sv.innerHTML = '<em>' + rv.textContent + '</em>';
+    }
+  }
+  // Run once after DOMContentLoaded and again after a short delay (index.js
+  // populates these asynchronously after fetching auth+bookings).
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mirror);
+  } else {
+    mirror();
+  }
+  setTimeout(mirror, 600);
+  setTimeout(mirror, 1500);
+})();
+</script>
 
 <script>
 // Post-checkout credit verification fallback

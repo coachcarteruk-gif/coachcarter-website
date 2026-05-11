@@ -84,22 +84,24 @@ function startQuiz() {
 }
 
 // ── Render question ──
+function pad2(n) { return String(n).padStart(2, '0'); }
+
 function renderQuestion() {
   const s = quizScenarios[currentIndex];
   const total = quizScenarios.length;
 
   document.getElementById('progress-fill').style.width = ((currentIndex / total) * 100) + '%';
-  document.getElementById('quiz-counter').textContent = `Question ${currentIndex + 1} of ${total}`;
-  document.getElementById('quiz-score').textContent = `Score: ${score}`;
+  document.getElementById('quiz-counter').innerHTML = `Q.<strong>${pad2(currentIndex + 1)}</strong> / ${pad2(total)}`;
+  document.getElementById('quiz-score').textContent = score;
   document.getElementById('quiz-category').textContent = s.category;
-  document.getElementById('quiz-dl25').textContent = `DL25: ${s.dl25_ref}`;
+  document.getElementById('quiz-dl25').textContent = `DL25 · ${s.dl25_ref}`;
   document.getElementById('quiz-scenario').textContent = s.scenario;
 
-  // Reset answer buttons
+  // Reset answer buttons — keep data-answer attribute so CSS variables stay applied
   const btns = document.querySelectorAll('.answer-btn');
   btns.forEach(btn => {
     btn.disabled = false;
-    btn.className = 'answer-btn';
+    btn.classList.remove('correct', 'correct-highlight', 'incorrect');
   });
 
   // Hide feedback and next button
@@ -116,7 +118,11 @@ function selectAnswer(answer) {
 
   const s = quizScenarios[currentIndex];
   const correct = s.correct_answer === answer;
-  if (correct) score++;
+  if (correct) {
+    score++;
+    const scoreEl = document.getElementById('quiz-score');
+    if (scoreEl) scoreEl.textContent = score;
+  }
 
   answers.push({ id: s.id, category: s.category, selected: answer, correct_answer: s.correct_answer, is_correct: correct });
 
@@ -138,17 +144,22 @@ function selectAnswer(answer) {
   panel.classList.add('show');
   panel.classList.add(correct ? 'is-correct' : 'is-wrong');
 
-  document.getElementById('feedback-result').innerHTML = correct
-    ? '<span class="icon">&#10003;</span> Correct!'
-    : `<span class="icon">&#10007;</span> The answer is: ${ANSWER_LABELS[s.correct_answer]}`;
+  // Verdict stamp + line
+  const verdictEl = document.getElementById('feedback-result');
+  if (correct) {
+    verdictEl.innerHTML = '<span class="feedback-verdict-stamp">Marked correct</span><span class="feedback-verdict-line"></span>';
+  } else {
+    const correctLabel = (ANSWER_LABELS[s.correct_answer] || '').toUpperCase();
+    verdictEl.innerHTML = `<span class="feedback-verdict-stamp">${correctLabel}</span><span class="feedback-verdict-line"></span>`;
+  }
 
   document.getElementById('feedback-explanation').textContent = s.explanation;
-  document.getElementById('feedback-examiner').innerHTML = `<strong>Examiner insight:</strong> ${s.examiner_note}`;
+  document.getElementById('feedback-examiner').innerHTML = s.examiner_note;
 
   // Show next button
   const nextBtn = document.getElementById('btn-next');
   nextBtn.classList.remove('hidden');
-  nextBtn.textContent = currentIndex < quizScenarios.length - 1 ? 'Next Question' : 'See Results';
+  nextBtn.textContent = currentIndex < quizScenarios.length - 1 ? 'Next scenario' : 'See your verdict';
 
   // Scroll to feedback
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -179,24 +190,39 @@ function showResults() {
   document.getElementById('results-screen').style.display = 'block';
   document.getElementById('progress-fill').style.width = '100%';
 
-  document.getElementById('results-num').textContent = `${score}/${total}`;
+  document.getElementById('results-num').textContent = score;
+  const denomEl = document.getElementById('results-denom');
+  if (denomEl) denomEl.textContent = `out of ${total}`;
   document.getElementById('results-pct').textContent = `${pct}%`;
+
+  // Format elapsed time as m:ss
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  const timeEl = document.getElementById('results-time');
+  if (timeEl) timeEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+
+  // Stamp the verdict with a believable date
+  const stampEl = document.getElementById('results-stamp-date');
+  if (stampEl) {
+    const d = new Date();
+    stampEl.textContent = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+  }
 
   let msg, submsg;
   if (pct >= 90) {
-    msg = 'You think like an examiner.';
+    msg = 'You think like an <em>examiner</em>.';
     submsg = "You've got a solid grasp of the marking scheme. You're ready.";
   } else if (pct >= 70) {
-    msg = 'Solid understanding.';
+    msg = 'Solid <em>understanding</em>.';
     submsg = 'A few gaps to work on. Review the categories you missed and try again.';
   } else if (pct >= 50) {
-    msg = 'Getting there.';
+    msg = 'Getting <em>there</em>.';
     submsg = 'Book a mock test with Coach Carter to sharpen up your understanding of how faults are assessed.';
   } else {
-    msg = 'Time to study the marking scheme.';
+    msg = 'Time to study the <em>marking scheme</em>.';
     submsg = "Let's work on this together. Understanding how examiners mark is half the battle.";
   }
-  document.getElementById('results-msg').textContent = msg;
+  document.getElementById('results-msg').innerHTML = msg;
   document.getElementById('results-submsg').textContent = submsg;
 
   // Category breakdown
@@ -212,7 +238,11 @@ function showResults() {
     .map(([cat, data]) => {
       const catPct = Math.round((data.correct / data.total) * 100);
       const cls = catPct === 100 ? 'perfect' : catPct >= 50 ? 'partial' : 'poor';
-      return `<div class="breakdown-row"><span class="breakdown-cat">${cat}</span><span class="breakdown-score ${cls}">${data.correct}/${data.total}</span></div>`;
+      return `<div class="breakdown-row ${cls}">
+        <span class="breakdown-cat">${cat}</span>
+        <span class="breakdown-bar"><span class="breakdown-bar-fill" style="width:${catPct}%"></span></span>
+        <span class="breakdown-score">${data.correct}/${data.total}</span>
+      </div>`;
     }).join('');
 
   document.getElementById('breakdown-rows').innerHTML = rowsHtml;
@@ -259,7 +289,7 @@ async function shareResult() {
   } else {
     try {
       await navigator.clipboard.writeText(text + '\n' + window.location.href);
-      alert('Result copied to clipboard!');
+      alert('Verdict copied to clipboard.');
     } catch {
       alert(text);
     }
@@ -273,7 +303,7 @@ async function shareResult() {
 // ── Restart ──
 function restartQuiz() {
   document.getElementById('results-screen').style.display = 'none';
-  document.getElementById('start-screen').style.display = 'block';
+  document.getElementById('start-screen').style.display = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 

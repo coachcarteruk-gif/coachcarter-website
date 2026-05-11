@@ -19,8 +19,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ── Starter chip click ──
 function askChip(btn) {
-  const text = btn.textContent;
-  document.getElementById('starter-chips').remove();
+  const textNode = btn.querySelector('.briefing-prompt-text');
+  const text = (textNode ? textNode.textContent : btn.textContent).trim();
+  const briefing = document.getElementById('starter-chips');
+  if (briefing) briefing.remove();
   sendMessage(text);
 
   if (typeof posthog !== 'undefined') {
@@ -147,25 +149,36 @@ function renderMarkdown(text) {
 }
 
 // ── Append message to chat ──
+// Each turn = rail header (You / Examiner + sequence number) + body.
+// Sequence number is shared per role for a document-log feel.
+let userTurn = 0;
+let examinerTurn = 0;
+
 function appendMessage(role, text) {
   const messages = document.getElementById('chat-messages');
   const div = document.createElement('div');
   div.className = `msg ${role}`;
 
-  const avatar = document.createElement('div');
-  avatar.className = 'msg-avatar';
-  avatar.textContent = role === 'assistant' ? 'CC' : (AUTH?.user?.name?.[0]?.toUpperCase() || 'U');
+  const seq = role === 'assistant' ? ++examinerTurn : ++userTurn;
+  const label = role === 'assistant' ? 'Examiner' : 'You';
 
-  const bubble = document.createElement('div');
-  bubble.className = 'msg-bubble';
+  const rail = document.createElement('div');
+  rail.className = 'msg-rail';
+  rail.innerHTML =
+    '<span class="msg-rail-num">' + String(seq).padStart(2, '0') + '</span>' +
+    '<span class="msg-rail-label">' + label + '</span>' +
+    '<span class="msg-rail-divider"></span>';
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
   if (role === 'assistant') {
-    bubble.innerHTML = renderMarkdown(text);
+    body.innerHTML = renderMarkdown(text);
   } else {
-    bubble.textContent = text;
+    body.textContent = text;
   }
 
-  div.appendChild(avatar);
-  div.appendChild(bubble);
+  div.appendChild(rail);
+  div.appendChild(body);
   messages.appendChild(div);
 
   scrollToBottom();

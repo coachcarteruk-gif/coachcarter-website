@@ -23,134 +23,358 @@
   <script src="/shared/dark-mode.js" defer></script>
   <script src="/shared/font-swap.js" defer></script>
   <style>
-    /* â”€â”€ Toolbar (sticky: pills + filter) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    .cal-toolbar {
-      position: sticky; top: 0; z-index: 50;
-      background: var(--white); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 16px; margin: 0 -16px;
-      width: calc(100% + 32px); flex-wrap: wrap;
+    /* ── BOOK A LESSON — slot feed dossier ───
+       Same DL25 vocabulary as Examiner + buy-credits. Slot feed cards
+       restyled with mono instructor labels, tabular times, accent
+       border-on-hover. Chrome around them: doc header, compact masthead,
+       status strip replacing the banner stack, postcode prompt promoted
+       to a proper missing-info card.
+
+       JS-touched class names preserved: feed-card, feed-card-accent,
+       feed-card-body, feed-card-time, feed-card-instructor, feed-card-chevron,
+       feed-date-header, overflow-section, overflow-heading, slot-avatar,
+       cal-toolbar, banner / banner-welcome / banner-credits, banner-dismiss,
+       next-lesson-card / next-lesson-label / next-lesson-detail / next-lesson-link,
+       reschedule-banner, postcode-prompt + child classes,
+       travel-hidden-banner, feed-footer, btn-load-more, all #mdX modal IDs. */
+
+    :root {
+      --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
     }
 
-    /* â”€â”€ Slot Feed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── PAGE ── */
+    .page { max-width: 760px; margin: 0 auto; padding: 28px 24px 64px; }
+
+    /* ── DOC HEADER ── */
+    .doc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
+      margin-bottom: 24px;
+    }
+    .doc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .doc-header-left > span:not(.doc-stamp) {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .doc-stamp {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 9px; border-radius: 3px;
+      background: var(--accent); color: #fff; font-weight: 700;
+      letter-spacing: 0.1em; flex-shrink: 0;
+    }
+    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
+
+    /* ── HERO (compact — this page is task-first) ── */
+    .book-hero { margin-bottom: 24px; }
+    .hero-eyebrow {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .book-title {
+      font-family: var(--font-head);
+      font-size: clamp(1.65rem, 5vw, 2.1rem);
+      font-weight: 800; line-height: 1.02;
+      letter-spacing: -0.04em;
+      margin-bottom: 8px;
+    }
+    .book-title em { font-style: italic; color: var(--accent); font-weight: 700; }
+    .book-subtitle {
+      color: var(--muted); font-size: 0.92rem; line-height: 1.5;
+      max-width: 52ch;
+    }
+
+    /* ── STATUS STRIP — banners collapse here as document rows ── */
+    .banner, .next-lesson-card, .reschedule-banner {
+      display: none;
+      align-items: center; gap: 14px;
+      padding: 12px 4px;
+      background: transparent;
+      border: none;
+      border-bottom: 1px dashed var(--border);
+      border-radius: 0;
+      font-size: 0.9rem; line-height: 1.45;
+      color: var(--primary);
+      margin: 0;
+    }
+    /* When JS sets style="display:flex" inline, render as our grid layout */
+    .banner[style*="display:flex"],
+    .banner[style*="display: flex"],
+    .next-lesson-card[style*="display:flex"],
+    .next-lesson-card[style*="display: flex"],
+    .reschedule-banner[style*="display:flex"],
+    .reschedule-banner[style*="display: flex"] {
+      display: grid !important;
+      grid-template-columns: 32px 1fr auto;
+    }
+
+    .banner p { margin: 0; }
+    .banner strong { color: var(--primary); font-weight: 700; }
+    .banner a, .next-lesson-detail + a, .reschedule-banner a {
+      color: var(--accent); font-weight: 700; text-decoration: none;
+    }
+    .banner a:hover { text-decoration: underline; }
+
+    /* Auto-inject a leading status icon for each banner type using ::before */
+    .banner::before,
+    .next-lesson-card::before,
+    .reschedule-banner::before {
+      content: attr(data-tag);
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 22px;
+      font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
+      letter-spacing: 0.06em;
+      border-radius: 4px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .banner-welcome::before { background: var(--accent); }
+    .banner-credits::before { background: var(--accent); }
+    .reschedule-banner::before { background: var(--accent); }
+    .next-lesson-card::before { background: var(--green); }
+
+    .banner-dismiss {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 28px; height: 28px;
+      font-size: 0.9rem; line-height: 1; cursor: pointer;
+      color: var(--muted); padding: 0;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .banner-dismiss:hover { border-color: var(--muted); color: var(--primary); }
+
+    /* Reschedule "Cancel" button — mono pill */
+    .reschedule-banner button:not(.banner-dismiss) {
+      background: transparent; border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 5px 12px; cursor: pointer;
+      color: var(--accent);
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .reschedule-banner button:not(.banner-dismiss):hover { background: var(--accent-mid); }
+
+    .next-lesson-label { display: none; }
+    .next-lesson-detail { font-weight: 600; color: var(--primary); }
+    .next-lesson-link {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase;
+      text-decoration: none; white-space: nowrap;
+    }
+    .next-lesson-link:hover { text-decoration: underline; }
+
+    /* ── POSTCODE PROMPT ── */
+    .postcode-prompt {
+      display: none;
+      padding: 14px 16px;
+      background: var(--accent-mid);
+      border: 1px solid var(--accent);
+      border-radius: 12px;
+      margin-bottom: 20px;
+      width: 100%;
+    }
+    .postcode-prompt-hint {
+      display: flex; align-items: flex-start; gap: 10px;
+      margin: 0 0 12px;
+      font-size: 0.88rem; line-height: 1.45;
+      color: var(--primary);
+    }
+    .postcode-prompt-hint::before {
+      content: 'ⓘ';
+      flex-shrink: 0;
+      width: 22px; height: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--accent); color: #fff;
+      border-radius: 50%;
+      font-size: 0.78rem; font-weight: 700;
+      font-family: var(--font-body);
+    }
+    .postcode-prompt-row {
+      display: flex; gap: 8px; align-items: stretch;
+      padding-left: 32px;
+    }
+    .postcode-prompt-row input {
+      flex: 1; padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
+      border-radius: 8px;
+      font-family: var(--font-mono); font-size: 0.92rem;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      color: var(--primary);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .postcode-prompt-row input:focus { border-color: var(--accent); }
+    #btnSavePostcode {
+      padding: 10px 18px !important;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 8px;
+      font-family: var(--font-mono) !important; font-size: 0.7rem !important; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+    }
+    #btnSavePostcode:hover { background: var(--accent-dk); }
+    #btnSavePostcode:active { transform: scale(0.98); }
+    .postcode-prompt-error {
+      display: none;
+      margin: 6px 0 0 32px;
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--red); letter-spacing: 0.04em;
+    }
+
+    /* ── TOOLBAR (sticky mono filter strip) ── */
+    .cal-toolbar {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0;
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      backdrop-filter: blur(16px) saturate(140%);
+      -webkit-backdrop-filter: blur(16px) saturate(140%);
+      border-bottom: 1px dashed var(--border);
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .cal-toolbar::before {
+      content: 'Filter';
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .filter-select {
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      color: var(--primary);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-family: var(--font-mono); font-size: 0.78rem; font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .filter-select:hover, .filter-select:focus { border-color: var(--accent); outline: none; }
+
+    /* Travel-hidden banner */
+    .travel-hidden-banner {
+      display: none;
+      align-items: center; gap: 10px;
+      padding: 10px 14px;
+      background: var(--surface);
+      border-left: 2px solid var(--muted);
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 14px;
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--muted); letter-spacing: 0.04em;
+    }
+
+    /* ── SLOT FEED ── */
     .slot-feed { display: flex; flex-direction: column; gap: 6px; }
-    /* Overflow lead routing (plan item 1.2) — heading shown when chosen
-       instructor has zero slots in the next 12 weeks and we surface alternatives. */
-    .overflow-section { display: block; }
+    .overflow-section { display: block; margin-top: 12px; }
     .overflow-heading {
       font-family: var(--font-head); font-size: 1.05rem; font-weight: 700;
-      color: var(--primary); margin: 8px 0 4px; line-height: 1.3;
+      color: var(--primary); margin: 14px 0 4px; line-height: 1.3;
+      letter-spacing: -0.02em;
     }
     .overflow-subhead {
-      font-size: 0.85rem; color: var(--muted); margin: 0 0 14px; line-height: 1.4;
+      font-size: 0.88rem; color: var(--muted);
+      margin: 0 0 16px; line-height: 1.45;
     }
     .feed-date-header {
-      font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
-      color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
-      padding: 18px 0 6px;
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 20px 0 8px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .feed-date-header::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
     }
     .feed-date-header:first-child { padding-top: 4px; }
+
     .feed-card {
       display: flex; align-items: center; gap: 14px;
-      background: var(--white); border: 1.5px solid var(--border);
-      border-radius: var(--radius); padding: 14px 16px;
-      cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.1s;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.15s;
       -webkit-tap-highlight-color: transparent;
     }
-    .feed-card:hover { border-color: var(--muted); background: var(--surface); transform: translateY(-1px); }
-    .feed-card:active { transform: scale(0.99); }
+    .feed-card:hover {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+      transform: translateY(-1px);
+    }
+    .feed-card:active { transform: translateY(0) scale(0.99); }
     .feed-card-accent {
       width: 4px; align-self: stretch; border-radius: 2px; flex-shrink: 0;
       background: var(--lt-colour, var(--accent));
     }
     .feed-card-body { flex: 1; min-width: 0; }
     .feed-card-time {
-      font-family: var(--font-head); font-size: 1.05rem; font-weight: 800;
+      font-family: var(--font-head); font-size: 1.1rem; font-weight: 800;
       color: var(--primary); margin-bottom: 3px;
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
     }
     .feed-card-instructor {
-      font-size: 0.8rem; color: var(--muted);
-      display: flex; align-items: center; gap: 6px;
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--muted); letter-spacing: 0.04em;
+      display: flex; align-items: center; gap: 8px;
     }
     .feed-card-chevron {
-      flex-shrink: 0; width: 20px; height: 20px; color: var(--border);
-      transition: color 0.15s;
+      flex-shrink: 0; width: 18px; height: 18px; color: var(--border);
+      transition: color 0.2s, transform 0.2s;
     }
-    .feed-card:hover .feed-card-chevron { color: var(--primary); }
+    .feed-card:hover .feed-card-chevron {
+      color: var(--accent); transform: translateX(2px);
+    }
+
+    /* Slot avatar (rendered by JS — circle in old code, squircle now) */
+    .slot-avatar {
+      width: 22px; height: 22px; border-radius: 6px;
+      background: var(--accent-mid);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+      color: var(--accent); flex-shrink: 0; overflow: hidden;
+    }
+    .slot-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
     /* Feed footer */
-    .feed-footer { text-align: center; padding: 20px 0 8px; }
-    .feed-status { font-size: 0.82rem; color: var(--muted); margin-bottom: 12px; }
-    .btn-load-more {
-      display: inline-block; padding: 12px 32px; border-radius: 10px;
-      border: 1.5px solid var(--border); background: transparent;
-      color: var(--primary); font-family: var(--font-head);
-      font-size: 0.88rem; font-weight: 700; cursor: pointer;
-      transition: all 0.15s;
+    .feed-footer { text-align: center; padding: 24px 0 8px; }
+    .feed-status {
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase;
+      margin-bottom: 14px;
     }
-    .btn-load-more:hover { background: var(--surface); }
+    .btn-load-more {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      color: var(--primary);
+      font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+    .btn-load-more:hover {
+      border-color: var(--accent); color: var(--accent);
+      background: var(--accent-mid);
+    }
     .btn-load-more:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    .page { max-width: 960px; margin: 0 auto; padding: 24px 16px 24px; }
-
-    /* â”€â”€ Welcome / no-credits banners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    .banner {
-      border-radius: var(--radius); padding: 14px 20px;
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 14px; margin-bottom: 12px; font-size: 0.85rem;
-    }
-    .banner-welcome { background: var(--surface); border: 1.5px solid var(--border); }
-    .banner-credits { background: var(--surface); border: 1.5px solid var(--border); }
-    .banner strong { color: var(--primary); }
-    .banner-dismiss { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--muted); padding: 4px; }
-
-    /* â”€â”€ Next lesson card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    .next-lesson-card {
-      display: flex; align-items: center; justify-content: space-between;
-      background: var(--white); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 12px 16px;
-      margin-bottom: 12px; font-size: 0.85rem;
-    }
-    .next-lesson-label {
-      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.04em; color: var(--muted); display: block; margin-bottom: 2px;
-    }
-    .next-lesson-detail { font-weight: 600; color: var(--primary); }
-    .next-lesson-link {
-      font-size: 0.82rem; color: var(--accent); font-weight: 600;
-      text-decoration: none; white-space: nowrap;
-    }
-    .next-lesson-link:hover { text-decoration: underline; }
-
-    .reschedule-banner {
-      background: var(--accent-lt); border: 1px solid var(--accent); border-radius: 10px;
-      padding: 12px 20px; margin-bottom: 16px; display: flex; align-items: center;
-      justify-content: space-between; gap: 12px; font-size: 0.85rem;
-    }
-    .reschedule-banner strong { color: var(--accent); }
-    .reschedule-banner button {
-      background: none; border: 1px solid var(--accent); border-radius: 7px;
-      padding: 5px 14px; cursor: pointer; color: var(--accent); font-size: 0.78rem;
-      white-space: nowrap;
-    }
-    .reschedule-banner button:hover { background: var(--white); }
-    .upcoming-cal-btn {
-      background: none; border: 1px solid var(--border);
-      border-radius: 7px; padding: 5px 10px; cursor: pointer;
-      color: var(--accent); font-size: 0.8rem; transition: all 0.15s;
-      display: inline-flex; align-items: center; gap: 4px;
-    }
-    .upcoming-cal-btn:hover { border-color: var(--accent); background: var(--accent-lt); }
-
-    /* â”€â”€ Repeat/recurring booking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    .repeat-section { margin: 12px 0; padding: 12px; background: var(--page-bg); border-radius: 10px; }
+    /* ── Repeat/recurring booking ── */
+    .repeat-section { margin: 12px 0; padding: 12px; background: var(--surface); border-radius: 10px; }
     .repeat-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
     .repeat-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
     .repeat-options { margin-top: 10px; display: none; }
     .repeat-options.open { display: block; }
-    .repeat-weeks-select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; }
+    .repeat-weeks-select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: var(--white); color: var(--primary); }
     .repeat-dates { margin-top: 10px; }
     .repeat-date-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.82rem; border-bottom: 1px solid var(--border); }
     .repeat-date-item:last-child { border-bottom: none; }
@@ -160,13 +384,7 @@
     .repeat-total { margin-top: 10px; font-size: 0.82rem; font-weight: 600; color: var(--muted); padding: 8px 10px; background: var(--white); border-radius: 8px; border: 1px solid var(--border); }
     .repeat-conflict-warning { margin-top: 8px; padding: 8px 10px; background: var(--red-lt); border: 1px solid var(--red); border-radius: 8px; font-size: 0.8rem; color: var(--red); }
 
-    .filter-select {
-      border: 1px solid var(--border); border-radius: 8px;
-      padding: 7px 12px; font-size: 0.82rem; background: var(--white);
-      color: var(--primary); cursor: pointer; font-family: var(--font-body);
-    }
-
-    /* â”€â”€ Loading / Empty â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Loading / Empty ── */
     .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
     .spinner {
       width: 32px; height: 32px; border: 3px solid var(--border);
@@ -176,16 +394,9 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); font-size: 0.875rem; }
     .empty-icon  { font-size: 2.5rem; margin-bottom: 12px; }
-    .empty-state h3 { font-family: var(--font-head); font-size: 1.1rem; margin-bottom: 6px; color: var(--primary); }
-    /* â”€â”€ Slot avatar (reused in feed cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    .slot-avatar {
-      width: 22px; height: 22px; border-radius: 50%;
-      background: var(--accent-mid); display: flex; align-items: center; justify-content: center;
-      font-size: 0.7rem; font-weight: 700; color: var(--accent); flex-shrink: 0; overflow: hidden;
-    }
-    .slot-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .empty-state h3 { font-family: var(--font-head); font-size: 1.1rem; margin-bottom: 6px; color: var(--primary); letter-spacing: -0.01em; }
 
-    /* â”€â”€ Modals (shared) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Modals (unchanged — complex booking flow lives here) ── */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.5);
       display: flex; align-items: center; justify-content: center;
@@ -200,7 +411,7 @@
       transform: translateY(20px); transition: transform 0.2s;
     }
     .modal-overlay.open .modal { transform: translateY(0); }
-    .modal h2 { font-family: var(--font-head); font-size: 1.3rem; font-weight: 800; margin-bottom: 20px; }
+    .modal h2 { font-family: var(--font-head); font-size: 1.3rem; font-weight: 800; margin-bottom: 20px; letter-spacing: -0.02em; }
     .modal-detail {
       background: var(--bg); border-radius: 10px; padding: 16px;
       margin-bottom: 20px; font-size: 0.9rem;
@@ -225,6 +436,7 @@
     .btn-modal-cancel {
       padding: 14px 20px; background: none; border: 1px solid var(--border);
       border-radius: 10px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s;
+      color: var(--primary);
     }
     .btn-modal-cancel:hover { background: var(--bg); }
     .modal-spinner {
@@ -269,6 +481,7 @@
       background: var(--red-lt); border: 1px solid #fca5a5;
       border-radius: 10px; padding: 14px 16px;
       font-size: 0.85rem; line-height: 1.5; margin-bottom: 20px;
+      color: var(--primary);
     }
     .cancel-policy.safe { background: var(--green-lt); border-color: #86efac; }
     .cancel-ack {
@@ -289,53 +502,36 @@
     .btn-confirm-cancel:hover { background: #dc2626; }
     .btn-confirm-cancel:disabled { background: var(--border); cursor: not-allowed; }
 
-    /* â”€â”€ Inline field errors â”€â”€ */
+    /* Inline field errors */
     .field-error-msg {
       display: none; font-size: 0.75rem; color: var(--red); margin-top: 3px;
     }
     .field-error-msg.show { display: block; }
     .input-error { border-color: var(--red) !important; }
 
-    /* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Toast ── */
     .toast {
       position: fixed; bottom: 72px; left: 50%;
       transform: translateX(-50%) translateY(120px);
-      background: var(--primary); color: white;
+      background: var(--primary); color: var(--bg);
       padding: 14px 24px; border-radius: 10px;
       font-size: 0.9rem; font-weight: 600;
-      transition: transform 0.3s, opacity 0.3s; z-index: 9999; max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
+      transition: transform 0.3s, opacity 0.3s; z-index: 9999;
+      max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
       opacity: 0; pointer-events: none;
     }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
-    .toast.success { background: #16a34a; }
-    .toast.error   { background: var(--red); }
-
-    /* â”€â”€ Postcode prompt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    .postcode-prompt {
-      width: 100%; display: none;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 14px; font-size: 0.82rem;
-      color: var(--primary); margin-top: 8px;
+    .toast.success { background: #16a34a; color: #fff; }
+    .toast.error   { background: var(--red); color: #fff; }
+    @media (prefers-color-scheme: dark) {
+      :root:not(.light-mode) body.cc-has-sidebar .toast { background: var(--white); color: var(--primary); }
     }
-    .postcode-prompt-hint { margin: 0 0 6px; color: var(--muted); font-size: 0.78rem; }
-    .postcode-prompt-row { display: flex; gap: 8px; align-items: center; }
-    .postcode-prompt-row input {
-      flex: 1; padding: 8px 10px; border: 1px solid var(--border);
-      border-radius: 8px; font-size: 0.85rem; text-transform: uppercase;
-    }
-    .postcode-prompt-error { display: none; color: #e74c3c; font-size: 0.75rem; margin: 6px 0 0; }
+    :root.dark-mode body.cc-has-sidebar .toast { background: var(--white); color: var(--primary); }
 
-    /* â”€â”€ Travel-hidden banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    .travel-hidden-banner {
-      display: none; align-items: center; gap: 8px;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;
-      font-size: 0.82rem; color: var(--muted);
-    }
-
-    /* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Responsive ── */
     @media (max-width: 700px) {
-      .cal-toolbar { flex-direction: column; align-items: stretch; }
+      .cal-toolbar { gap: 10px; }
+      .page { padding: 24px 18px 48px; }
     }
   </style>
 <script src="/sidebar.js"></script>
@@ -347,24 +543,40 @@
 <main class="page">
   <h1 class="visually-hidden" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Book a driving lesson</h1>
 
+  <header class="doc-header">
+    <div class="doc-header-left">
+      <span class="doc-stamp">CC</span>
+      <span>Slot feed<span class="doc-meta-dot">·</span>Next available</span>
+    </div>
+    <span>12 weeks ahead</span>
+  </header>
+
+  <section class="book-hero">
+    <div class="hero-eyebrow">Pick a slot</div>
+    <h2 class="book-title">Book a <em>lesson</em>.</h2>
+    <p class="book-subtitle">Browse open slots from your instructor. Tap any time to confirm — use hours from your balance or pay for it as a one-off.</p>
+  </section>
+
   <!-- Welcome banner -->
-  <div class="banner banner-welcome" id="welcomeBanner" style="display:none">
-    <span><strong>Welcome!</strong> Buy hours and pick any slot below to book your first lesson.</span>
-    <button class="banner-dismiss">&#x2715;</button>
+  <div class="banner banner-welcome" id="welcomeBanner" data-tag="NEW" style="display:none">
+    <span><strong>Welcome.</strong> Buy hours and pick any slot below to book your first lesson.</span>
+    <button class="banner-dismiss" aria-label="Dismiss">&#x2715;</button>
   </div>
 
   <!-- No credits banner -->
-  <div class="banner banner-credits" id="noCreditsBanner" style="display:none">
-    <p>No hours on your account. <a href="/learner/buy-credits.html" style="color:var(--accent);font-weight:700">Buy hours</a> or pay when you book.</p>
+  <div class="banner banner-credits" id="noCreditsBanner" data-tag="£" style="display:none">
+    <p>No hours on your account. <a href="/learner/buy-credits.html">Buy hours</a> or pay when you book.</p>
+    <span></span>
   </div>
 
-  <!-- Guest banner (shown only to non-logged-in visitors) -->
-  <div class="banner banner-credits" id="guestBanner" style="display:none">
-    <p>Browsing as a guest — pick any slot to pay &amp; book, or <a href="/learner/login.html?redirect=/learner/book.html" style="color:var(--accent);font-weight:700">sign in</a> to use lesson hours.</p>
+  <!-- Guest banner -->
+  <div class="banner banner-credits" id="guestBanner" data-tag="GST" style="display:none">
+    <p>Browsing as a guest — pick any slot to pay &amp; book, or <a href="/learner/login.html?redirect=/learner/book.html">sign in</a> to use lesson hours.</p>
+    <span></span>
   </div>
 
-  <!-- Next lesson card (replaces full upcoming strip) -->
-  <div class="next-lesson-card" id="nextLessonCard" style="display:none">
+  <!-- Next lesson card -->
+  <div class="next-lesson-card" id="nextLessonCard" data-tag="NXT" style="display:none">
     <div>
       <span class="next-lesson-label">Next lesson</span>
       <span class="next-lesson-detail" id="nextLessonDetail"></span>
@@ -372,27 +584,29 @@
     <a href="/learner/lessons.html" class="next-lesson-link">View all &rarr;</a>
   </div>
 
-  <!-- Reschedule banner (visible when in reschedule mode) -->
-  <div class="reschedule-banner" id="rescheduleBanner" style="display:none">
+  <!-- Reschedule banner -->
+  <div class="reschedule-banner" id="rescheduleBanner" data-tag="MV" style="display:none">
     <span>Rescheduling: <strong id="rescheduleBannerText">—</strong>. Pick a new slot below.</span>
     <button id="rescheduleCancelBtn">Cancel</button>
   </div>
 
-  <!-- Toolbar: lesson type pills + instructor filter -->
+  <!-- Postcode prompt (shown only when learner has no address on file) -->
+  <div class="postcode-prompt" id="postcodePrompt">
+    <p class="postcode-prompt-hint">Enter your postcode so we only show times your instructor can reach. You can change this anytime in your profile.</p>
+    <div class="postcode-prompt-row">
+      <input type="text" id="postcodeInput" placeholder="e.g. SW1A 1AA" maxlength="10">
+      <button id="btnSavePostcode" class="btn-primary">Save</button>
+    </div>
+    <p class="postcode-prompt-error" id="postcodeError"></p>
+  </div>
+
+  <!-- Toolbar: instructor filter -->
   <div class="cal-toolbar" id="calToolbar">
     <select class="filter-select" id="instructorFilter">
       <option value="">All instructors</option>
     </select>
-    <!-- Postcode prompt (shown when learner has no address) -->
-    <div class="postcode-prompt" id="postcodePrompt">
-      <p class="postcode-prompt-hint">Enter your postcode so we only show times your instructor can reach. You can change this anytime in your profile.</p>
-      <div class="postcode-prompt-row">
-        <input type="text" id="postcodeInput" placeholder="e.g. SW1A 1AA" maxlength="10">
-        <button id="btnSavePostcode" class="btn-primary" style="padding:8px 16px;font-size:0.82rem;white-space:nowrap;">Save</button>
-      </div>
-      <p class="postcode-prompt-error" id="postcodeError"></p>
-    </div>
   </div>
+
   <!-- Travel-filtered slots notice -->
   <div class="travel-hidden-banner" id="travelHiddenBanner">
     <span id="travelHiddenText"></span>
@@ -417,7 +631,7 @@
 
 </main>
 
-<!-- â”€â”€ Book confirmation modal â”€â”€ -->
+<!-- ── Book confirmation modal ── -->
 <div class="modal-overlay" id="bookModal">
   <div class="modal">
     <div id="bookConfirmStep">
@@ -429,10 +643,9 @@
         <div class="modal-detail-row"><span>Date</span><span id="mdDate">—</span></div>
         <div class="modal-detail-row"><span>Time</span><span id="mdTime">—</span></div>
         <div class="modal-detail-row"><span>Instructor</span><span id="mdInstructor">—</span></div>
-        <!-- Slot-first duration picker. Hidden when only one option fits — replaced by mdSingleTypeRow which shows the locked-in option as a confirmation row so the user still sees price before paying. -->
         <div class="modal-detail-row" id="mdDurationPicker" style="display:none">
           <span>Lesson</span>
-          <select id="mdLessonTypeSelect" style="border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:0.9rem;background:white;font-weight:600;max-width:60%"></select>
+          <select id="mdLessonTypeSelect" style="border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:0.9rem;background:var(--white);color:var(--primary);font-weight:600;max-width:60%"></select>
         </div>
         <div id="mdUsualHint" style="display:none;font-size:0.75rem;color:var(--muted);text-align:right;margin-top:-4px">Using your usual length</div>
         <div class="modal-detail-row" id="mdSingleTypeRow" style="display:none">
@@ -492,7 +705,7 @@
           <span>I agree to the <a href="/terms.html" target="_blank" style="color:var(--accent)">terms</a> and <a href="/privacy.html" target="_blank" style="color:var(--accent)">privacy policy</a></span>
         </label>
         <div class="field-error-msg" id="errGuestTerms">You must accept the terms and privacy policy</div>
-        <div id="claimTrialCta" style="display:none;margin-top:14px;padding:12px;border:1px dashed var(--border);border-radius:8px;background:var(--surface,#fafafa);font-size:0.85rem;text-align:center">
+        <div id="claimTrialCta" style="display:none;margin-top:14px;padding:12px;border:1px dashed var(--border);border-radius:8px;background:var(--surface);font-size:0.85rem;text-align:center">
           Never had a lesson with us before?
           <a href="#" id="claimTrialLink" style="color:var(--accent);font-weight:700;display:inline-block;margin-top:4px">Claim this as your free trial &rarr;</a>
         </div>
@@ -557,8 +770,8 @@
       </div>
     </div>
     <div id="bookSuccessStep" class="modal-success" style="display:none">
-      <div class="modal-success-icon">âœ“</div>
-      <h2>Lesson booked!</h2>
+      <div class="modal-success-icon">✓</div>
+      <h2>Lesson booked.</h2>
       <p>Your lesson on <strong id="successDate">—</strong> at <strong id="successTime">—</strong> with <strong id="successInstructor">—</strong> is confirmed. Check your email for details.</p>
       <p id="successBalance" style="display:none;font-size:0.875rem;color:var(--muted);margin-top:-8px"></p>
       <!-- First-time: prompt to sync calendar -->
@@ -581,7 +794,7 @@
   </div>
 </div>
 
-<!-- â”€â”€ Cancel confirmation modal â”€â”€ -->
+<!-- ── Cancel confirmation modal ── -->
 <div class="modal-overlay" id="cancelModal">
   <div class="modal cancel-modal">
     <div class="modal-header">
@@ -594,7 +807,7 @@
       <div class="modal-detail-row"><span>Instructor</span><span id="cmInstructor">—</span></div>
     </div>
     <div class="cancel-policy" id="cancelPolicyNote"></div>
-    <div id="cancelSeriesOption" style="display:none;margin:10px 0;padding:10px;background:var(--page-bg);border-radius:8px;">
+    <div id="cancelSeriesOption" style="display:none;margin:10px 0;padding:10px;background:var(--surface);border-radius:8px;">
       <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;font-weight:600;cursor:pointer;">
         <input type="checkbox" id="cancelSeriesCheck" style="width:16px;height:16px;accent-color:var(--accent);">
         <span>Cancel all remaining lessons in this series</span>
@@ -614,7 +827,7 @@
   </div>
 </div>
 
-<!-- â”€â”€ Reschedule confirmation modal â”€â”€ -->
+<!-- ── Reschedule confirmation modal ── -->
 <div class="modal-overlay" id="rescheduleModal">
   <div class="modal">
     <div class="modal-header">

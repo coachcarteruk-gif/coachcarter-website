@@ -22,361 +22,482 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* ── Page layout ── */
+    /* ── BUY HOURS — credit-purchase document ───
+       Same DL25 dossier vocabulary as the Examiner pages: mono labels,
+       dashed-rule dividers, tabular numerals, italic accent title.
+       Class names preserved so buy-credits.js continues to work. */
+
+    :root {
+      --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+    }
+
     main {
       max-width: 680px;
       margin: 0 auto;
-      padding: 24px 20px 24px;
+      padding: 28px 24px 64px;
     }
 
+    /* ── DOC HEADER (matches Examiner pages) ── */
+    .doc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
+      margin-bottom: 28px;
+    }
+    .doc-header-left { display: flex; align-items: center; gap: 10px; }
+    .doc-stamp {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 9px; border-radius: 3px;
+      background: var(--accent); color: #fff; font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
+
+    /* ── HERO ── */
+    .credits-hero { margin-bottom: 32px; }
+    .hero-eyebrow {
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase;
+      margin-bottom: 14px;
+    }
     h1 {
       font-family: var(--font-head);
-      font-size: clamp(1.7rem, 5vw, 2.1rem);
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      margin-bottom: 8px;
+      font-size: clamp(2rem, 6vw, 2.6rem);
+      font-weight: 800; line-height: 0.98;
+      letter-spacing: -0.045em;
+      margin-bottom: 14px;
+      text-wrap: balance;
     }
+    h1 em { font-style: italic; color: var(--accent); font-weight: 700; }
     .subtitle {
-      color: var(--muted);
-      font-size: 1rem;
-      margin-bottom: 40px;
-      line-height: 1.5;
+      color: var(--muted); font-size: 1rem; line-height: 1.55;
+      max-width: 52ch;
     }
+    .subtitle a { color: var(--accent); font-weight: 700; text-decoration: none; }
+    .subtitle a:hover { text-decoration: underline; }
 
-    /* ── Current balance card ── */
+    /* ── BALANCE CARD — quieter, stat-panel style ── */
     .balance-card {
-      background: var(--accent-lt);
-      border: 1.5px solid var(--accent);
-      border-radius: var(--radius);
-      padding: 20px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 32px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center; gap: 16px;
+      padding: 16px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 12px;
+      margin-bottom: 36px;
     }
-    .balance-label { font-size: 0.85rem; color: var(--muted); }
+    .balance-label {
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      font-weight: 700;
+    }
     .balance-value {
       font-family: var(--font-head);
-      font-size: 2rem;
-      font-weight: 800;
-      color: var(--accent);
+      font-size: 1.9rem; font-weight: 800;
+      color: var(--primary); line-height: 1;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
     }
-    .balance-unit { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+    .balance-unit {
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--muted); letter-spacing: 0.06em;
+      margin-top: 4px;
+    }
+    .balance-icon {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent); opacity: 0.7;
+    }
+    .balance-icon svg { width: 100%; height: 100%; }
 
-    /* ── Package cards ── */
-    .packages {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 24px;
+    /* ── SECTION LABEL ── */
+    .section-label {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      margin-bottom: 14px;
     }
-
-    .pkg-card {
-      background: var(--white);
-      border: 2px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px 24px;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s, box-shadow 0.2s, transform 0.15s;
-      user-select: none;
-      position: relative;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      align-items: center;
-      gap: 16px;
-    }
-    .pkg-card:hover {
-      border-color: var(--accent);
-      background: var(--accent-lt);
-    }
-    .pkg-card.active {
-      border-color: var(--accent);
-      background: var(--accent-lt);
-      box-shadow: 0 0 0 2px var(--accent);
+    .section-label::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
     }
 
-    .pkg-left { display: flex; flex-direction: column; gap: 4px; }
-
-    .pkg-title {
-      font-family: var(--font-head);
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: var(--primary);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .pkg-detail {
-      font-size: 0.85rem;
-      color: var(--muted);
-      line-height: 1.4;
-    }
-    .pkg-save {
-      display: inline-block;
-      background: var(--green-lt);
-      color: var(--green);
-      font-size: 0.72rem;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 20px;
-      white-space: nowrap;
-    }
-
-    .pkg-right {
-      text-align: right;
-      min-width: 90px;
-    }
-    .pkg-price {
-      font-family: var(--font-head);
-      font-size: 1.3rem;
-      font-weight: 800;
-      color: var(--primary);
-    }
-    .pkg-per {
-      font-size: 0.75rem;
-      color: var(--muted);
-    }
-    .pkg-was {
-      font-size: 0.75rem;
-      color: var(--muted);
-      text-decoration: line-through;
-    }
-
-    .popular-badge {
-      position: absolute;
-      top: -10px;
-      left: 24px;
-      background: var(--accent);
-      color: white;
-      font-size: 0.65rem;
-      font-weight: 700;
-      padding: 3px 10px;
-      border-radius: 10px;
-      white-space: nowrap;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    /* Single lesson cards */
-    .single-lessons-section { margin-bottom: 28px; }
-    .single-lessons-title {
-      font-family: var(--font-head); font-size: 1rem; font-weight: 700;
-      color: var(--primary); margin-bottom: 12px;
-    }
+    /* ── SINGLE LESSON CARDS ── */
+    .single-lessons-section { margin-bottom: 32px; }
+    /* Hide the legacy in-section title — replaced by .section-label below */
+    .single-lessons-title { display: none; }
     .single-lessons-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
       gap: 10px;
     }
     .single-lesson-card {
-      background: var(--white); border: 2px solid var(--border); border-radius: var(--radius);
-      padding: 16px; text-align: center; cursor: pointer;
-      transition: border-color 0.15s, background 0.15s, box-shadow 0.2s, transform 0.15s;
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 16px 18px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      text-align: left;
+      transition: border-color 0.2s, background 0.2s, transform 0.15s;
+      position: relative;
+      cursor: default;
     }
     .single-lesson-card:hover {
-      border-color: var(--lt-colour, var(--accent)); background: color-mix(in srgb, var(--lt-colour, var(--accent)) 10%, var(--white));
+      border-color: var(--lt-colour, var(--accent));
+      transform: translateY(-2px);
     }
-    .sl-name { font-family: var(--font-head); font-size: 0.9rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
-    .sl-duration { font-size: 0.78rem; color: var(--muted); margin-bottom: 8px; }
-    .sl-price { font-family: var(--font-head); font-size: 1.1rem; font-weight: 800; color: var(--primary); margin-bottom: 10px; }
+    .sl-name {
+      font-family: var(--font-head); font-size: 0.95rem; font-weight: 700;
+      color: var(--primary); letter-spacing: -0.01em;
+    }
+    .sl-duration {
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .sl-price {
+      font-family: var(--font-head); font-size: 1.25rem; font-weight: 800;
+      color: var(--primary); letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 10px;
+    }
     .sl-buy-btn {
-      display: inline-block; padding: 8px 20px; border-radius: 20px;
-      background: var(--lt-colour, var(--accent)); color: white;
-      font-size: 0.78rem; font-weight: 700; border: none; cursor: pointer;
-      transition: opacity 0.15s;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: transparent !important;
+      color: var(--lt-colour, var(--accent)) !important;
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      align-self: flex-start;
     }
-    .sl-buy-btn:hover { opacity: 0.85; }
+    .sl-buy-btn:hover:not(:disabled) {
+      border-color: var(--lt-colour, var(--accent));
+      background: color-mix(in srgb, var(--lt-colour, var(--accent)) 12%, transparent) !important;
+    }
     .sl-buy-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+    /* ── PACKAGE CARDS ── */
+    .packages {
+      display: flex; flex-direction: column; gap: 8px;
+      margin-bottom: 28px;
+    }
+    .pkg-card {
+      display: grid;
+      grid-template-columns: 32px 1fr auto;
+      align-items: center; gap: 16px;
+      padding: 18px 20px 18px 16px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.15s;
+      user-select: none;
+      position: relative;
+    }
+    .pkg-card::before {
+      content: '';
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      background: var(--bg);
+      transition: border-color 0.2s, background 0.2s;
+      flex-shrink: 0;
+    }
+    .pkg-card:hover { border-color: var(--accent); }
+    .pkg-card:hover::before { border-color: var(--accent); }
+    .pkg-card.active {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+    }
+    .pkg-card.active::before {
+      border-color: var(--accent);
+      background: var(--accent);
+      box-shadow: inset 0 0 0 3px var(--bg);
+    }
+
+    .pkg-left { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .pkg-title {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-head);
+      font-size: 1.05rem; font-weight: 700;
+      color: var(--primary); letter-spacing: -0.01em;
+    }
+    .pkg-detail {
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--muted); letter-spacing: 0.06em;
+    }
+    .pkg-save {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px;
+      background: transparent;
+      border: 1px solid var(--green);
+      color: var(--green);
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    .pkg-right { text-align: right; min-width: 100px; }
+    .pkg-price {
+      font-family: var(--font-head);
+      font-size: 1.4rem; font-weight: 800;
+      color: var(--primary); letter-spacing: -0.025em; line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+    .pkg-was {
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--muted); text-decoration: line-through;
+      letter-spacing: 0.04em; margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .popular-badge {
+      position: absolute;
+      top: -8px; right: 16px;
+      padding: 3px 8px;
+      background: var(--accent); color: #fff;
+      font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      border-radius: 3px;
+    }
+
+    /* Legacy section divider — JS still emits .section-divider in the markup
+       between single-lesson cards and packages. Style as another section label. */
     .section-divider {
-      display: flex; align-items: center; gap: 14px;
-      margin: 4px 0 20px; color: var(--muted); font-size: 0.82rem;
+      display: flex; align-items: center; gap: 10px;
+      margin: 32px 0 14px;
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
     }
     .section-divider-line { flex: 1; height: 1px; background: var(--border); }
+    .section-divider span:not(.section-divider-line) {
+      padding: 0 4px;
+    }
+    /* When the single-lessons divider is visible (lesson types loaded), the
+       divider IS the section header — hide the standalone label to avoid
+       two consecutive headers stacking. */
+    main:has(#packagesDivider[style*="display:flex"]) #packagesLabel,
+    main:has(#packagesDivider[style*="display: flex"]) #packagesLabel {
+      display: none;
+    }
 
-    /* Legacy single-lesson link (hidden, replaced by cards) */
+    /* Legacy single-lesson link container (hidden — kept for JS compatibility) */
     .single-lesson { display: none; }
     .single-lesson-link {
-      font-size: 0.88rem;
-      color: var(--muted);
-      cursor: pointer;
-      background: none;
-      border: none;
-      font-family: var(--font-body);
+      font-family: var(--font-mono); font-size: 0.72rem;
+      color: var(--muted); cursor: pointer; background: none; border: none;
+      letter-spacing: 0.05em;
+      text-decoration: underline; text-underline-offset: 3px;
       transition: color 0.15s;
-      text-decoration: underline;
-      text-underline-offset: 3px;
     }
     .single-lesson-link:hover { color: var(--accent); }
 
-    /* ── Price summary ── */
+    /* ── PRICE SUMMARY — receipt strip ── */
     .price-summary {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px 24px;
-      margin-bottom: 20px;
+      padding: 18px 20px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      margin-bottom: 16px;
     }
     .price-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.9rem;
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-family: var(--font-body); font-size: 0.92rem;
       color: var(--muted);
-      padding: 4px 0;
+      padding: 5px 0;
+      font-variant-numeric: tabular-nums;
     }
-    .price-row.discount {
-      color: var(--green);
-      font-weight: 700;
-    }
+    .price-row.discount { color: var(--green); font-weight: 700; }
     .price-row.total {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--primary);
-      border-top: 1px solid var(--border);
+      font-family: var(--font-head);
+      font-size: 1.15rem; font-weight: 800;
+      color: var(--primary); letter-spacing: -0.02em;
+      border-top: 1px dashed var(--border);
       margin-top: 8px;
       padding-top: 12px;
     }
 
-    /* ── Checkout button ── */
+    /* ── CHECKOUT BUTTON ── */
     .btn-checkout {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
       width: 100%;
-      padding: 16px;
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 10px;
-      font-family: var(--font-head);
-      font-size: 1.05rem;
-      font-weight: 700;
+      padding: 18px 28px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 12px;
+      font-family: var(--font-head); font-size: 1.05rem; font-weight: 700;
+      letter-spacing: -0.01em;
       cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 6px 22px rgba(245,131,33,0.32);
+      font-variant-numeric: tabular-nums;
     }
-    .btn-checkout:hover { background: var(--accent-dk); }
-    .btn-checkout:active { transform: scale(0.98); }
+    .btn-checkout::after {
+      content: '→';
+      font-family: var(--font-body); font-weight: 400;
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .btn-checkout:hover {
+      background: var(--accent-dk);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(245,131,33,0.48);
+    }
+    .btn-checkout:hover::after { transform: translateX(4px); }
+    .btn-checkout:active { transform: translateY(0) scale(0.99); }
     .btn-checkout:disabled {
-      background: var(--border);
-      cursor: not-allowed;
+      background: var(--border); cursor: not-allowed;
+      box-shadow: none; opacity: 0.7;
     }
+    .btn-checkout:disabled::after { display: none; }
 
-    /* ── Klarna note ── */
-    .klarna-note {
-      text-align: center;
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-top: 12px;
-      margin-bottom: 28px;
+    /* Payment methods — pulled up from loose Klarna footer */
+    .payment-methods {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      margin-top: 14px; margin-bottom: 32px;
+      flex-wrap: wrap;
     }
-    .klarna-note strong { color: var(--primary); }
-
-    /* ── Policy card ── */
-    .policy-card {
+    .pm-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 10px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
+      border-radius: 6px;
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .pm-badge strong { color: var(--primary); font-weight: 700; }
+    .pm-dot { color: var(--accent); }
+
+    /* Legacy single Klarna-note element — kept for backward-compat but blanked
+       so the JS doesn't need touching */
+    .klarna-note { display: none; }
+
+    /* ── POLICY CARD — ledger style ── */
+    .policy-card {
+      padding: 20px 0 0;
+      border-top: 1px dashed var(--border);
     }
     .policy-card h3 {
-      font-family: var(--font-head);
-      font-size: 1rem;
-      font-weight: 700;
-      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .policy-card h3::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
     }
     .policy-card ul {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+      list-style: none; display: flex; flex-direction: column; gap: 2px;
     }
     .policy-card li {
-      font-size: 0.875rem;
-      color: var(--muted);
-      display: flex;
-      gap: 10px;
-      line-height: 1.4;
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      align-items: start; gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px dashed var(--border);
+      font-size: 0.9rem; line-height: 1.5;
+      color: var(--primary);
     }
+    .policy-card li:last-child { border-bottom: none; }
     .policy-card li::before {
       content: '✓';
-      color: var(--green);
-      font-weight: 700;
-      flex-shrink: 0;
+      color: var(--green); font-weight: 700;
+      font-family: var(--font-mono); font-size: 0.8rem;
+      padding-top: 1px;
     }
 
-    /* ── Toast ── */
+    /* ── TOAST ── */
     .toast {
       position: fixed;
-      bottom: 24px;
-      left: 50%;
+      bottom: 24px; left: 50%;
       transform: translateX(-50%) translateY(120px);
-      background: var(--primary);
-      color: white;
-      padding: 14px 24px;
-      border-radius: 10px;
-      font-size: 0.9rem;
-      font-weight: 600;
+      background: var(--primary); color: var(--bg);
+      padding: 14px 24px; border-radius: 10px;
+      font-size: 0.9rem; font-weight: 600;
       transition: transform 0.3s ease, opacity 0.3s ease;
       z-index: 999;
       max-width: calc(100vw - 32px); word-wrap: break-word; text-align: center;
       opacity: 0; pointer-events: none;
     }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
-    .toast.error { background: var(--red); }
-    .toast.cancelled { background: var(--muted); }
+    .toast.error { background: var(--red); color: #fff; }
+    .toast.cancelled { background: var(--muted); color: #fff; }
+    /* Dark mode: invert toast so primary text reads */
+    @media (prefers-color-scheme: dark) {
+      :root:not(.light-mode) body.cc-has-sidebar .toast {
+        background: var(--white); color: var(--primary);
+      }
+    }
+    :root.dark-mode body.cc-has-sidebar .toast { background: var(--white); color: var(--primary); }
 
-    /* ── Test Ready Guarantee section ── */
+    /* ── TEST READY GUARANTEE PROGRAMME CARD ──
+       Currently hidden in production. Bug fix applied: background previously
+       was var(--primary), which in dark mode is #e8e8e8 (text colour) — making
+       the card invisible against the dark page bg. Switched to a hard-coded
+       dark surface that works in both themes. */
     .programme-divider {
-      display: flex; align-items: center; gap: 16px;
-      margin: 40px 0 32px;
+      display: flex; align-items: center; gap: 12px;
+      margin: 40px 0 24px;
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
     }
-    .programme-divider-line {
-      flex: 1; height: 1px; background: var(--border);
-    }
-    .programme-divider-text {
-      font-family: var(--font-head); font-size: 0.85rem;
-      font-weight: 700; color: var(--muted); white-space: nowrap;
-    }
+    .programme-divider-line { flex: 1; height: 1px; background: var(--border); }
+    .programme-divider-text { font-weight: 700; white-space: nowrap; }
 
     .programme-card {
-      background: var(--primary); color: #fff;
-      border-radius: var(--radius); padding: 32px 28px;
+      background: #1a1a1a; color: #fff;
+      border: 1px solid #2a2a2a;
+      border-radius: var(--radius);
+      padding: 32px 28px;
       margin-bottom: 28px;
     }
     .programme-badge {
-      display: inline-block; background: var(--accent); color: #fff;
-      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.05em; padding: 4px 12px; border-radius: 20px;
+      display: inline-flex; align-items: center;
+      padding: 4px 10px;
+      background: var(--accent); color: #fff;
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      border-radius: 3px;
       margin-bottom: 16px;
     }
     .programme-title {
-      font-family: var(--font-head); font-size: 1.4rem;
-      font-weight: 800; color: #fff; margin-bottom: 6px;
+      font-family: var(--font-head);
+      font-size: 1.5rem; font-weight: 800; color: #fff;
+      letter-spacing: -0.03em; line-height: 1.05;
+      margin-bottom: 8px;
     }
     .programme-sub {
-      font-size: 0.88rem; color: rgba(255,255,255,0.5);
-      margin-bottom: 24px; line-height: 1.5;
+      font-size: 0.92rem; color: rgba(255,255,255,0.6);
+      line-height: 1.5; margin-bottom: 24px;
     }
-    .programme-price-row {
-      display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;
-    }
+    .programme-price-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
     .programme-price {
-      font-family: var(--font-head); font-size: 2.4rem;
-      font-weight: 800; color: var(--accent); letter-spacing: -0.03em;
+      font-family: var(--font-head); font-size: 2.6rem; font-weight: 800;
+      color: var(--accent); letter-spacing: -0.04em;
+      font-variant-numeric: tabular-nums;
     }
     .programme-price-unit {
-      font-size: 0.82rem; color: rgba(255,255,255,0.35);
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: rgba(255,255,255,0.4); letter-spacing: 0.08em; text-transform: uppercase;
     }
     .programme-urgency {
       display: flex; align-items: flex-start; gap: 8px;
-      background: rgba(245,131,33,0.08); border-radius: 8px;
-      padding: 10px 14px; margin-bottom: 16px;
-      font-size: 0.75rem; color: rgba(255,255,255,0.5);
+      padding: 10px 14px;
+      background: rgba(245,131,33,0.08);
+      border-left: 2px solid var(--accent);
+      border-radius: 0 6px 6px 0;
+      font-size: 0.78rem; color: rgba(255,255,255,0.65);
+      margin-bottom: 18px;
     }
     .programme-urgency strong { color: var(--accent); }
     .programme-urgency-dot {
       width: 6px; height: 6px; border-radius: 50%;
-      background: var(--accent); margin-top: 4px; flex-shrink: 0;
+      background: var(--accent); margin-top: 6px; flex-shrink: 0;
       animation: pulse-dot 2s ease infinite;
     }
     @keyframes pulse-dot {
@@ -395,33 +516,37 @@
     }
     .programme-progress-labels {
       display: flex; justify-content: space-between;
-      margin-top: 6px; font-size: 0.65rem; color: rgba(255,255,255,0.3);
+      margin-top: 8px;
+      font-family: var(--font-mono); font-size: 0.62rem;
+      color: rgba(255,255,255,0.35); letter-spacing: 0.06em;
     }
-    .programme-progress-labels strong { color: rgba(255,255,255,0.5); }
+    .programme-progress-labels strong { color: rgba(255,255,255,0.55); }
     .programme-benefits {
-      list-style: none; display: flex; flex-direction: column;
-      gap: 10px; margin-bottom: 28px;
+      list-style: none; display: flex; flex-direction: column; gap: 10px;
+      margin-bottom: 24px;
     }
     .programme-benefits li {
-      display: flex; gap: 10px; font-size: 0.85rem;
-      color: rgba(255,255,255,0.6); line-height: 1.4;
+      display: grid; grid-template-columns: 24px 1fr; align-items: start; gap: 10px;
+      font-size: 0.88rem; color: rgba(255,255,255,0.65); line-height: 1.5;
     }
     .programme-benefits li::before {
       content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0;
     }
     .btn-programme {
       width: 100%; padding: 16px;
-      background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.3);
-      border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
-      font-family: var(--font-head); font-size: 1.05rem; font-weight: 700;
+      background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.35);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+      font-family: var(--font-head); font-size: 1rem; font-weight: 700;
       cursor: not-allowed;
     }
     .programme-cta-note {
-      text-align: center; font-size: 0.75rem;
-      color: rgba(255,255,255,0.25); margin-top: 10px;
+      text-align: center;
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: rgba(255,255,255,0.3); letter-spacing: 0.08em;
+      margin-top: 10px;
     }
 
-    /* ── Loading spinner ── */
+    /* ── LOADING SPINNER ── */
     .spinner {
       width: 18px; height: 18px;
       border: 2.5px solid rgba(255,255,255,0.4);
@@ -433,12 +558,15 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     @media (max-width: 500px) {
-      .pkg-card { padding: 16px 18px; gap: 12px; }
+      main { padding: 24px 18px 48px; }
+      .balance-card { padding: 14px 16px; gap: 12px; }
+      .balance-value { font-size: 1.6rem; }
+      .pkg-card { padding: 16px 18px 16px 14px; gap: 12px; grid-template-columns: 24px 1fr auto; }
       .pkg-title { font-size: 1rem; }
-      .pkg-price { font-size: 1.15rem; }
+      .pkg-price { font-size: 1.2rem; }
       .programme-card { padding: 24px 20px; }
-      .programme-title { font-size: 1.2rem; }
-      .programme-price { font-size: 2rem; }
+      .programme-title { font-size: 1.25rem; }
+      .programme-price { font-size: 2.1rem; }
     }
   </style>
 <script src="/sidebar.js"></script>
@@ -448,23 +576,38 @@
 <body>
 
 <main>
-  <h1>Buy Hours</h1>
-  <p class="subtitle">Buy hours and book any lesson type. The more you buy, the more you save.</p>
+  <header class="doc-header">
+    <div class="doc-header-left">
+      <span class="doc-stamp">CC</span>
+      <span>Lesson credits<span class="doc-meta-dot">·</span>Top up your account</span>
+    </div>
+    <span>Klarna ready</span>
+  </header>
+
+  <section class="credits-hero">
+    <div class="hero-eyebrow">Pay-as-you-learn</div>
+    <h1>Buy <em>hours</em>. Save as you go.</h1>
+    <p class="subtitle">Stock up on lesson hours and book any time. Bigger bundles unlock bigger savings — every package comes off the same hourly rate.</p>
+  </section>
 
   <!-- Current balance -->
   <div class="balance-card">
+    <div class="balance-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+      </svg>
+    </div>
     <div>
-      <div class="balance-label">Hours remaining</div>
+      <div class="balance-label">Hours on account</div>
       <div class="balance-value" id="balanceValue">—</div>
       <div class="balance-unit" id="balanceUnit">hours</div>
     </div>
-    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-    </svg>
+    <div style="width: 1px;"></div>
   </div>
 
   <!-- Single lesson cards (dynamically rendered) -->
   <div class="single-lessons-section" id="singleLessonsSection" style="display:none">
+    <div class="section-label">Buy a single lesson</div>
     <div class="single-lessons-title">Buy a single lesson</div>
     <div class="single-lessons-grid" id="singleLessonsGrid"></div>
   </div>
@@ -474,6 +617,11 @@
     <span>Or save with hour packages</span>
     <span class="section-divider-line"></span>
   </div>
+
+  <!-- If no single-lesson section is shown, still label the packages.
+       When the divider above IS shown (i.e. lesson types loaded), we hide
+       this label via CSS to avoid two consecutive section headers. -->
+  <div class="section-label" id="packagesLabel">Choose a package</div>
 
   <!-- Package cards (rendered dynamically from API prices) -->
   <div class="packages" id="packages"></div>
@@ -500,6 +648,14 @@
     <span id="btnLabel">Buy 12 hours — £594.00</span>
     <div class="spinner" id="btnSpinner"></div>
   </button>
+
+  <!-- Payment methods strip -->
+  <div class="payment-methods" aria-label="Payment methods">
+    <span class="pm-badge"><strong>Klarna</strong><span class="pm-dot">·</span>Pay in 3, interest-free</span>
+    <span class="pm-badge">Card<span class="pm-dot">·</span>Apple Pay<span class="pm-dot">·</span>Google Pay</span>
+  </div>
+
+  <!-- Klarna note (hidden — kept for JS compat) -->
   <p class="klarna-note">
     <strong>Pay in 3 with Klarna</strong> available at checkout — split the cost interest-free.
   </p>
