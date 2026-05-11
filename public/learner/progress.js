@@ -421,25 +421,30 @@ function renderSkillBreakdown() {
     html += '</div>';
     html += '<div class="area-body">';
 
-    // ── Sub-skill rows with mock-test attention dots ──
+    // ── Sub-skill rows with mock-test fault detail ──
+    // Each sub-skill row gets a single "Mock" cell showing the fault
+    // breakdown when present (e.g. D2 S1). Sub-skills with no mock-test
+    // fault data stay quiet (muted "—"). Lesson and Quiz data don't exist
+    // at sub-skill level today — that's a Log Session UX project for later.
     if (parentSkill && parentSkill.subs && parentSkill.subs.length > 0) {
       for (var ss = 0; ss < parentSkill.subs.length; ss++) {
         var sub = parentSkill.subs[ss];
         var subFault = subFaultMap[parentSkill.key] && subFaultMap[parentSkill.key][sub.key];
-        var attentionDot;
         var rowClass = 'sub-skill-row';
-        if (subFault) {
-          var attentionColour = (subFault.serious > 0 || subFault.dangerous > 0)
-            ? 'var(--red)'
-            : 'var(--amber)';
-          attentionDot = '<span class="sub-skill-dot" style="background:' + attentionColour + '" title="Fault noted on most recent mock test"></span>';
+        var mockCellHtml;
+        if (subFault && (subFault.driving > 0 || subFault.serious > 0 || subFault.dangerous > 0)) {
+          var parts = [];
+          if (subFault.driving > 0)   parts.push('<span class="sub-skill-fault sub-skill-fault-d">D' + subFault.driving + '</span>');
+          if (subFault.serious > 0)   parts.push('<span class="sub-skill-fault sub-skill-fault-s">S' + subFault.serious + '</span>');
+          if (subFault.dangerous > 0) parts.push('<span class="sub-skill-fault sub-skill-fault-x">×' + subFault.dangerous + '</span>');
+          mockCellHtml = '<div class="sub-skill-mock" title="Faults on most recent mock test (Driving / Serious / Dangerous)">' + parts.join(' ') + '</div>';
           rowClass += ' has-attention';
         } else {
-          attentionDot = '<span class="sub-skill-dot sub-skill-dot-quiet"></span>';
+          mockCellHtml = '<div class="sub-skill-mock sub-skill-mock-empty" title="No mock-test faults logged for this sub-skill">—</div>';
         }
         html += '<div class="' + rowClass + '">';
         html += '<span class="sub-skill-name">' + sub.label + '</span>';
-        html += attentionDot;
+        html += mockCellHtml;
         html += '</div>';
       }
     }

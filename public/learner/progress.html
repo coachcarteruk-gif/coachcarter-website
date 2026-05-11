@@ -299,14 +299,15 @@
       .skill-name { font-size: 0.84rem; }
     }
 
-    /* Sub-skill rows — quieter than the parent skill row. Each shows just the
-       name + an attention dot (red/amber if the most recent mock test logged
-       a fault here, neutral grey otherwise). */
+    /* Sub-skill rows — quieter than the parent skill row. Each shows the
+       sub-skill name + a Mock-test fault breakdown when present. Lesson and
+       Quiz data don't exist at sub-skill level today, so this single Mock
+       column carries the only per-sub-skill signal we have. */
     .sub-skill-row {
       display: grid;
       grid-template-columns: 1fr auto;
-      align-items: center; gap: 10px;
-      padding: 7px 18px 7px 36px;
+      align-items: center; gap: 14px;
+      padding: 8px 18px 8px 36px;
       border-bottom: 1px dashed var(--border);
       font-size: 0.82rem;
     }
@@ -317,22 +318,36 @@
       font-family: var(--font-body);
       font-weight: 500;
     }
-    .sub-skill-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      background: transparent;
+    .sub-skill-mock {
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.04em;
+      display: flex; align-items: center; gap: 4px;
+      min-width: 56px;
+      justify-content: flex-end;
+      font-variant-numeric: tabular-nums;
     }
-    .sub-skill-dot-quiet {
-      background: var(--border);
+    .sub-skill-mock-empty {
+      color: var(--muted);
       opacity: 0.5;
+      font-weight: 500;
     }
+    .sub-skill-fault {
+      display: inline-flex; align-items: center;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.66rem;
+    }
+    .sub-skill-fault-d { color: var(--amber); border: 1px solid var(--amber); }
+    .sub-skill-fault-s { color: var(--red); border: 1px solid var(--red); }
+    .sub-skill-fault-x { color: #b91c1c; border: 1px solid #b91c1c; }
 
     @media (max-width: 520px) {
       .sub-skill-row {
-        padding: 6px 14px 6px 28px;
+        padding: 7px 14px 7px 28px;
         font-size: 0.78rem;
+        gap: 10px;
       }
+      .sub-skill-mock { min-width: 48px; }
     }
 
     /* ── MOCK TEST HISTORY ── */
