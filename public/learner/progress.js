@@ -356,13 +356,13 @@ function renderRadar() {
 
 // ── Section 3: Skill Breakdown ──
 //
-// Progressive disclosure: the closed card shows category + score. Opening
-// reveals the three data sources that built that score (Mock / Lesson / Quiz)
-// followed by the DL25 sub-skill list with mock-test attention dots.
-//
-// The header used to carry an inline summary (dot + quiz + bar + trend), but
-// that was redundant with the source-row inside. Now the header is clean —
-// all data lives in the open view.
+// Progressive disclosure: each area's row carries the full at-a-glance
+// summary (latest lesson rating dot, quiz accuracy, score bar, trend), so
+// a scan of the closed list tells you what's going on in every category.
+// Expanding the row reveals the DL25 sub-skill list with attention dots —
+// red/amber dots flag sub-skills where the most recent mock test logged a
+// fault. (Lesson and quiz data only exist at parent-skill level today, so
+// the sub-skill rows only show mock-test attention.)
 function renderSkillBreakdown() {
   var CC = window.CC_COMPETENCY;
   var container = document.getElementById('skill-breakdown');
@@ -376,72 +376,50 @@ function renderSkillBreakdown() {
     var parentSkill = skills[0];
     var pLessons = parentSkill ? (lessonMap[parentSkill.key] || []) : [];
     var pQuiz = parentSkill ? quizMap[parentSkill.key] : null;
-    var pMock = parentSkill ? mockFaultMap[parentSkill.key] : null;
+    var hasParentData = pLessons.length > 0 || (pQuiz && pQuiz.attempts > 0);
 
-    // ── Header (clean — no inline summary) ──
+    // ── Header summary: rating dot, quiz progress, score bar, trend ──
+    var summaryDotHtml = '<span class="area-summary-dot" style="background:var(--border)"></span>';
+    if (pLessons.length > 0) {
+      var latestRating = pLessons[0].rating;
+      var dotCol = latestRating === 'nailed' ? 'var(--green)' : latestRating === 'ok' ? 'var(--amber)' : 'var(--red)';
+      summaryDotHtml = '<span class="area-summary-dot" style="background:' + dotCol + '" title="Latest lesson rating"></span>';
+    }
+
+    var summaryQuizText = '—';
+    if (pQuiz && pQuiz.attempts > 0) {
+      summaryQuizText = pQuiz.correct + '/' + pQuiz.attempts;
+    }
+
+    var summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--muted)">—</span>';
+    if (pLessons.length >= 2) {
+      var newest = pLessons[0].score;
+      var oldest = pLessons[pLessons.length - 1].score;
+      if (newest > oldest) {
+        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--green)" title="Improving">&uarr;</span>';
+      } else if (newest < oldest) {
+        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--red)" title="Declining">&darr;</span>';
+      } else {
+        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--muted)" title="Stable">&rarr;</span>';
+      }
+    }
+
     html += '<div class="area-card">';
     html += '<div class="area-header" data-action="toggle-area">';
     html += '<span class="area-icon">' + area.icon + '</span>';
     html += '<span class="area-name">' + area.label + '</span>';
+    if (hasParentData) {
+      html += '<div class="area-summary">';
+      html += summaryDotHtml;
+      html += '<span class="area-summary-quiz" title="Quiz: correct / attempts">' + summaryQuizText + '</span>';
+      html += '<div class="area-summary-bar"><div class="area-summary-bar-fill" style="width:' + avg + '%;background:' + bgColour + '"></div></div>';
+      html += summaryTrendHtml;
+      html += '</div>';
+    }
     html += '<span class="area-badge" style="background:' + bgColour + '">' + avg + '%</span>';
     html += '<span class="area-toggle">&#9660;</span>';
     html += '</div>';
     html += '<div class="area-body">';
-
-    // ── Source row: Mock / Lesson / Quiz ──
-    html += '<div class="source-row">';
-
-    // Mock cell — parent-level fault totals from all mock tests (instructor mode)
-    html += '<div class="source-cell">';
-    html += '<div class="source-label">Mock</div>';
-    if (pMock && (pMock.driving > 0 || pMock.serious > 0 || pMock.dangerous > 0)) {
-      var parts = [];
-      if (pMock.driving > 0)   parts.push('<span class="source-fault source-fault-d">D' + pMock.driving + '</span>');
-      if (pMock.serious > 0)   parts.push('<span class="source-fault source-fault-s">S' + pMock.serious + '</span>');
-      if (pMock.dangerous > 0) parts.push('<span class="source-fault source-fault-x">×' + pMock.dangerous + '</span>');
-      html += '<div class="source-value" title="Driving / Serious / Dangerous faults across all mock tests">' + parts.join(' ') + '</div>';
-    } else if (pMock) {
-      html += '<div class="source-value source-clean" title="No faults logged in mock tests">Clean</div>';
-    } else {
-      html += '<div class="source-value source-empty" title="No mock test recorded for this area yet">—</div>';
-    }
-    html += '</div>';
-
-    // Lesson cell — latest lesson rating
-    html += '<div class="source-cell">';
-    html += '<div class="source-label">Lesson</div>';
-    if (pLessons.length > 0) {
-      var latestRating = pLessons[0].rating;
-      var ratingLabel = 'Getting there';
-      var ratingColour = 'var(--amber)';
-      if (latestRating === 'nailed')    { ratingLabel = 'Confident';   ratingColour = 'var(--green)'; }
-      if (latestRating === 'struggled') { ratingLabel = 'Needs work';  ratingColour = 'var(--red)'; }
-      var titleAttr = 'Latest rating across ' + pLessons.length + ' session' + (pLessons.length === 1 ? '' : 's');
-      html += '<div class="source-value" title="' + titleAttr + '">';
-      html += '<span class="source-dot" style="background:' + ratingColour + '"></span>';
-      html += '<span style="color:' + ratingColour + '">' + ratingLabel + '</span>';
-      html += '</div>';
-    } else {
-      html += '<div class="source-value source-empty" title="Not rated in any logged session yet">—</div>';
-    }
-    html += '</div>';
-
-    // Quiz cell — lifetime correct/attempts
-    html += '<div class="source-cell">';
-    html += '<div class="source-label">Quiz</div>';
-    if (pQuiz && pQuiz.attempts > 0) {
-      var pct = Math.round((pQuiz.correct / pQuiz.attempts) * 100);
-      var pctColour = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--red)';
-      html += '<div class="source-value" title="Examiner Quiz: ' + pQuiz.correct + ' correct out of ' + pQuiz.attempts + '">';
-      html += '<span>' + pQuiz.correct + '/' + pQuiz.attempts + '</span>';
-      html += '<span class="source-quiz-pct" style="color:' + pctColour + '">' + pct + '%</span>';
-      html += '</div>';
-    } else {
-      html += '<div class="source-value source-empty" title="No examiner quiz attempts mapped to this area yet">—</div>';
-    }
-    html += '</div>';
-
-    html += '</div>';
 
     // ── Sub-skill rows with mock-test attention dots ──
     if (parentSkill && parentSkill.subs && parentSkill.subs.length > 0) {
