@@ -7,8 +7,10 @@ let DATA = null;
 // Computed maps: skillKey -> aggregated data
 let lessonMap = {};   // skillKey -> [{score, date}] sorted newest first
 let quizMap = {};     // skillKey -> {attempts, correct}
-let mockFaultMap = {}; // skillKey -> {driving, serious, dangerous}
+let mockFaultMap = {}; // skillKey -> {driving, serious, dangerous} — all-time totals
 let skillScores = {}; // skillKey -> readiness 0-100
+let recentMockMeta = null; // { id, completed_at, result } | null
+let recentSkillFaultMap = {}; // skillKey -> {driving, serious, dangerous} from most recent mock
 let subFaultMap = {}; // skillKey -> { subKey -> {driving, serious, dangerous} } from most recent mock
 
 // ── Auth ──
@@ -92,8 +94,27 @@ function processData() {
     }
   }
 
-  // Build sub-skill faults map — only from most recent mock test. Used to
-  // surface "attention dots" on sub-skill rows in the breakdown.
+  // Most recent mock test metadata (date + pass/fail) — used as the source of
+  // truth for the "Most recent mock test" breakdown section.
+  recentMockMeta = DATA.recent_mock || null;
+
+  // Per-skill parent-level faults from the most recent mock test
+  recentSkillFaultMap = {};
+  if (DATA.recent_skill_faults) {
+    for (var rk = 0; rk < DATA.recent_skill_faults.length; rk++) {
+      var rkf = DATA.recent_skill_faults[rk];
+      var rkKey = CC.mapLegacySkill(rkf.skill_key);
+      if (!rkKey) continue;
+      if (!recentSkillFaultMap[rkKey]) {
+        recentSkillFaultMap[rkKey] = { driving: 0, serious: 0, dangerous: 0 };
+      }
+      recentSkillFaultMap[rkKey].driving += (rkf.driving || 0);
+      recentSkillFaultMap[rkKey].serious += (rkf.serious || 0);
+      recentSkillFaultMap[rkKey].dangerous += (rkf.dangerous || 0);
+    }
+  }
+
+  // Build sub-skill faults map — only from most recent mock test.
   subFaultMap = {};
   if (DATA.recent_sub_faults) {
     for (var sf = 0; sf < DATA.recent_sub_faults.length; sf++) {
@@ -354,78 +375,102 @@ function renderRadar() {
   }
 }
 
-// ── Section 3: Skill Breakdown ──
+// ── Section 3: Most Recent Mock Test ──
 //
-// Progressive disclosure: each area's row carries the full at-a-glance
-// summary (latest lesson rating dot, quiz accuracy, score bar, trend), so
-// a scan of the closed list tells you what's going on in every category.
-// Expanding the row reveals the DL25 sub-skill list with attention dots —
-// red/amber dots flag sub-skills where the most recent mock test logged a
-// fault. (Lesson and quiz data only exist at parent-skill level today, so
-// the sub-skill rows only show mock-test attention.)
+// This section is scoped to a single mock test — the most recent one. Each
+// area card shows what that mock recorded for that area: total fault count
+// in the header, per-sub-skill breakdown when opened. Lesson / quiz data
+// don't appear here — those belong to the blended Practice level above.
+//
+// When no mock test has been completed yet, we show a single empty-state
+// prompt with a link to the mock-test page.
 function renderSkillBreakdown() {
   var CC = window.CC_COMPETENCY;
   var container = document.getElementById('skill-breakdown');
-  var html = '';
+  var metaEl = document.getElementById('recent-mock-meta');
 
+  // Empty state — no mock test yet
+  if (!recentMockMeta) {
+    if (metaEl) metaEl.textContent = '';
+    container.innerHTML =
+      '<div class="mock-empty">' +
+        '<p class="mock-empty-msg">You haven’t completed a mock test yet.</p>' +
+        '<p class="mock-empty-sub">Run one to see a skill-by-skill breakdown of where you’d pick up faults on test day.</p>' +
+        '<a href="/learner/mock-test.html" class="btn-primary">Run a mock test</a>' +
+      '</div>';
+    return;
+  }
+
+  // Date stamp in the section heading
+  if (metaEl) {
+    var d = new Date(recentMockMeta.completed_at);
+    var now = new Date();
+    var diffMs = now - d;
+    var diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    var dateLabel;
+    if (diffDays === 0) dateLabel = 'Today';
+    else if (diffDays === 1) dateLabel = 'Yesterday';
+    else if (diffDays < 7) dateLabel = diffDays + ' days ago';
+    else if (diffDays < 14) dateLabel = 'Last week';
+    else dateLabel = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase();
+    var resultLabel = recentMockMeta.result === 'pass' ? 'Passed' : recentMockMeta.result === 'fail' ? 'Failed' : '';
+    metaEl.textContent = dateLabel + (resultLabel ? ' · ' + resultLabel : '');
+  }
+
+  var html = '';
   for (var a = 0; a < CC.AREAS.length; a++) {
     var area = CC.AREAS[a];
     var skills = CC.getSkillsByArea(area.id);
-    var avg = areaAvg(area.id);
-    var bgColour = scoreColour(avg);
     var parentSkill = skills[0];
-    var pLessons = parentSkill ? (lessonMap[parentSkill.key] || []) : [];
-    var pQuiz = parentSkill ? quizMap[parentSkill.key] : null;
-    var hasParentData = pLessons.length > 0 || (pQuiz && pQuiz.attempts > 0);
 
-    // ── Header summary: rating dot, quiz progress, score bar, trend ──
-    var summaryDotHtml = '<span class="area-summary-dot" style="background:var(--border)"></span>';
-    if (pLessons.length > 0) {
-      var latestRating = pLessons[0].rating;
-      var dotCol = latestRating === 'nailed' ? 'var(--green)' : latestRating === 'ok' ? 'var(--amber)' : 'var(--red)';
-      summaryDotHtml = '<span class="area-summary-dot" style="background:' + dotCol + '" title="Latest lesson rating"></span>';
+    // Total faults for this area on the most recent mock = parent-level totals
+    // PLUS the sum of any per-sub-skill faults attached under it.
+    var headlineFaults = { driving: 0, serious: 0, dangerous: 0 };
+    if (parentSkill && recentSkillFaultMap[parentSkill.key]) {
+      var rsf = recentSkillFaultMap[parentSkill.key];
+      headlineFaults.driving   += rsf.driving;
+      headlineFaults.serious   += rsf.serious;
+      headlineFaults.dangerous += rsf.dangerous;
     }
-
-    var summaryQuizText = '—';
-    if (pQuiz && pQuiz.attempts > 0) {
-      summaryQuizText = pQuiz.correct + '/' + pQuiz.attempts;
-    }
-
-    var summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--muted)">—</span>';
-    if (pLessons.length >= 2) {
-      var newest = pLessons[0].score;
-      var oldest = pLessons[pLessons.length - 1].score;
-      if (newest > oldest) {
-        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--green)" title="Improving">&uarr;</span>';
-      } else if (newest < oldest) {
-        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--red)" title="Declining">&darr;</span>';
-      } else {
-        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--muted)" title="Stable">&rarr;</span>';
+    if (parentSkill && subFaultMap[parentSkill.key]) {
+      var subKeys = Object.keys(subFaultMap[parentSkill.key]);
+      for (var sk = 0; sk < subKeys.length; sk++) {
+        var sfd = subFaultMap[parentSkill.key][subKeys[sk]];
+        headlineFaults.driving   += sfd.driving;
+        headlineFaults.serious   += sfd.serious;
+        headlineFaults.dangerous += sfd.dangerous;
       }
     }
+    var totalFaults = headlineFaults.driving + headlineFaults.serious + headlineFaults.dangerous;
+    var areaStatus;  // 'clean' | 'fail-light' | 'fail-heavy'
+    if (totalFaults === 0) {
+      areaStatus = 'clean';
+    } else if (headlineFaults.serious > 0 || headlineFaults.dangerous > 0) {
+      areaStatus = 'fail-heavy';
+    } else {
+      areaStatus = 'fail-light';
+    }
 
-    html += '<div class="area-card">';
+    // ── Header ──
+    html += '<div class="area-card mock-area-' + areaStatus + '">';
     html += '<div class="area-header" data-action="toggle-area">';
     html += '<span class="area-icon">' + area.icon + '</span>';
     html += '<span class="area-name">' + area.label + '</span>';
-    if (hasParentData) {
-      html += '<div class="area-summary">';
-      html += summaryDotHtml;
-      html += '<span class="area-summary-quiz" title="Quiz: correct / attempts">' + summaryQuizText + '</span>';
-      html += '<div class="area-summary-bar"><div class="area-summary-bar-fill" style="width:' + avg + '%;background:' + bgColour + '"></div></div>';
-      html += summaryTrendHtml;
-      html += '</div>';
+    // Headline summary on the right — fault breakdown or "Clean"
+    if (totalFaults > 0) {
+      var parts = [];
+      if (headlineFaults.driving > 0)   parts.push('<span class="area-fault area-fault-d">D' + headlineFaults.driving + '</span>');
+      if (headlineFaults.serious > 0)   parts.push('<span class="area-fault area-fault-s">S' + headlineFaults.serious + '</span>');
+      if (headlineFaults.dangerous > 0) parts.push('<span class="area-fault area-fault-x">×' + headlineFaults.dangerous + '</span>');
+      html += '<span class="area-headline">' + parts.join(' ') + '</span>';
+    } else {
+      html += '<span class="area-headline area-headline-clean">Clean</span>';
     }
-    html += '<span class="area-badge" style="background:' + bgColour + '">' + avg + '%</span>';
     html += '<span class="area-toggle">&#9660;</span>';
     html += '</div>';
     html += '<div class="area-body">';
 
-    // ── Sub-skill rows with mock-test fault detail ──
-    // Each sub-skill row gets a single "Mock" cell showing the fault
-    // breakdown when present (e.g. D2 S1). Sub-skills with no mock-test
-    // fault data stay quiet (muted "—"). Lesson and Quiz data don't exist
-    // at sub-skill level today — that's a Log Session UX project for later.
+    // ── Sub-skill rows ──
     if (parentSkill && parentSkill.subs && parentSkill.subs.length > 0) {
       for (var ss = 0; ss < parentSkill.subs.length; ss++) {
         var sub = parentSkill.subs[ss];
@@ -433,14 +478,14 @@ function renderSkillBreakdown() {
         var rowClass = 'sub-skill-row';
         var mockCellHtml;
         if (subFault && (subFault.driving > 0 || subFault.serious > 0 || subFault.dangerous > 0)) {
-          var parts = [];
-          if (subFault.driving > 0)   parts.push('<span class="sub-skill-fault sub-skill-fault-d">D' + subFault.driving + '</span>');
-          if (subFault.serious > 0)   parts.push('<span class="sub-skill-fault sub-skill-fault-s">S' + subFault.serious + '</span>');
-          if (subFault.dangerous > 0) parts.push('<span class="sub-skill-fault sub-skill-fault-x">×' + subFault.dangerous + '</span>');
-          mockCellHtml = '<div class="sub-skill-mock" title="Faults on most recent mock test (Driving / Serious / Dangerous)">' + parts.join(' ') + '</div>';
+          var subParts = [];
+          if (subFault.driving > 0)   subParts.push('<span class="sub-skill-fault sub-skill-fault-d">D' + subFault.driving + '</span>');
+          if (subFault.serious > 0)   subParts.push('<span class="sub-skill-fault sub-skill-fault-s">S' + subFault.serious + '</span>');
+          if (subFault.dangerous > 0) subParts.push('<span class="sub-skill-fault sub-skill-fault-x">×' + subFault.dangerous + '</span>');
+          mockCellHtml = '<div class="sub-skill-mock" title="Faults on this mock test (Driving / Serious / Dangerous)">' + subParts.join(' ') + '</div>';
           rowClass += ' has-attention';
         } else {
-          mockCellHtml = '<div class="sub-skill-mock sub-skill-mock-empty" title="No mock-test faults logged for this sub-skill">—</div>';
+          mockCellHtml = '<div class="sub-skill-mock sub-skill-mock-empty" title="No fault on this sub-skill">—</div>';
         }
         html += '<div class="' + rowClass + '">';
         html += '<span class="sub-skill-name">' + sub.label + '</span>';

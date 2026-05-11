@@ -135,7 +135,17 @@
     }
     .section-title::after {
       content: ''; flex: 1; height: 1px; background: var(--border);
+      order: 99;
     }
+    .section-title-meta {
+      font-family: var(--font-mono); font-size: 0.64rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.1em;
+      padding: 3px 8px;
+      background: var(--accent-mid);
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .section-title-meta:empty { display: none; }
 
     /* ── RADAR CHART ── */
     .radar-section { margin-bottom: 36px; }
@@ -208,6 +218,64 @@
     @media (max-width: 620px) {
       .area-header { grid-template-columns: 28px 1fr auto auto; }
       .area-summary { display: none; }
+    }
+
+    /* Headline fault summary on each area header — sits in the same slot
+       the score badge used to occupy (the area is now scoped to mock-test
+       data only, so the headline shows the area's fault counts from the
+       most recent mock). */
+    .area-headline {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.04em;
+      font-variant-numeric: tabular-nums;
+    }
+    .area-headline-clean {
+      padding: 3px 9px;
+      background: var(--green); color: #fff;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-size: 0.62rem;
+    }
+    .area-fault {
+      display: inline-flex; align-items: center;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+    .area-fault-d { color: var(--amber); border: 1px solid var(--amber); }
+    .area-fault-s { color: var(--red); border: 1px solid var(--red); }
+    .area-fault-x { color: #b91c1c; border: 1px solid #b91c1c; }
+
+    /* Subtle accent on the card itself based on the area's status. Clean
+       areas get a green left-rail; serious/dangerous get a red one; minor
+       faults get amber. Lets a scan of the closed list show pass-blocking
+       areas without expanding. */
+    .area-card.mock-area-clean       { border-left: 3px solid var(--green); }
+    .area-card.mock-area-fail-light  { border-left: 3px solid var(--amber); }
+    .area-card.mock-area-fail-heavy  { border-left: 3px solid var(--red); }
+
+    /* Empty state — no mock test completed yet */
+    .mock-empty {
+      text-align: center;
+      padding: 32px 24px;
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+    }
+    .mock-empty-msg {
+      font-family: var(--font-head); font-size: 1.05rem; font-weight: 700;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+      margin-bottom: 6px;
+    }
+    .mock-empty-sub {
+      font-family: var(--font-body); font-size: 0.88rem;
+      color: var(--muted); line-height: 1.5;
+      max-width: 44ch;
+      margin: 0 auto 18px;
     }
     .area-icon {
       font-size: 1.05rem;
@@ -651,7 +719,7 @@
     </div>
 
     <!-- Section 3: Skill Breakdown -->
-    <h2 class="section-title">Skill breakdown</h2>
+    <h2 class="section-title">Most recent mock test <span id="recent-mock-meta" class="section-title-meta"></span></h2>
     <div id="skill-breakdown"></div>
 
     <!-- Section 4: Mock Test History -->
