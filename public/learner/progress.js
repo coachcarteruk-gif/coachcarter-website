@@ -214,6 +214,12 @@ function renderRadar() {
 
   ctx.clearRect(0, 0, size, size);
 
+  // Read CSS tokens so the radar adapts to light/dark mode automatically.
+  var rootStyle = getComputedStyle(document.body);
+  var gridColour = rootStyle.getPropertyValue('--border').trim() || '#e0e0e0';
+  var labelColour = rootStyle.getPropertyValue('--primary').trim() || '#262626';
+  var bgColour = rootStyle.getPropertyValue('--bg').trim() || '#fff';
+
   // Draw grid lines at 25, 50, 75, 100
   var levels = [25, 50, 75, 100];
   for (var li = 0; li < levels.length; li++) {
@@ -225,7 +231,7 @@ function renderRadar() {
       else ctx.lineTo(pt.x, pt.y);
     }
     ctx.closePath();
-    ctx.strokeStyle = '#e0e0e0';
+    ctx.strokeStyle = gridColour;
     ctx.lineWidth = 1;
     ctx.stroke();
   }
@@ -236,7 +242,7 @@ function renderRadar() {
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(ep.x, ep.y);
-    ctx.strokeStyle = '#e0e0e0';
+    ctx.strokeStyle = gridColour;
     ctx.lineWidth = 1;
     ctx.stroke();
   }
@@ -264,7 +270,8 @@ function renderRadar() {
     ctx.arc(pp.x, pp.y, 4, 0, Math.PI * 2);
     ctx.fillStyle = '#f58321';
     ctx.fill();
-    ctx.strokeStyle = '#fff';
+    // Point outline matches page bg so it reads in both light + dark
+    ctx.strokeStyle = bgColour;
     ctx.lineWidth = 2;
     ctx.stroke();
   }
@@ -282,7 +289,7 @@ function renderRadar() {
     else ctx.textAlign = 'center';
 
     ctx.font = '600 12px Lato, sans-serif';
-    ctx.fillStyle = '#262626';
+    ctx.fillStyle = labelColour;
     ctx.fillText(areas[ti].label, lp.x, lp.y - 8);
     ctx.font = '700 13px "Bricolage Grotesque", sans-serif';
     ctx.fillStyle = scoreColour(scores[ti]);
