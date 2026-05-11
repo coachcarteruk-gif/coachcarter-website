@@ -193,17 +193,55 @@ function renderRadar() {
   var CC = window.CC_COMPETENCY;
   var canvas = document.getElementById('radar-canvas');
   var wrap = canvas.parentElement;
-  var size = Math.min(wrap.clientWidth - 32, 400);
+  var size = Math.min(wrap.clientWidth - 32, 440);
   canvas.width = size;
   canvas.height = size;
   var ctx = canvas.getContext('2d');
   var cx = size / 2;
   var cy = size / 2;
-  var maxR = size / 2 - 50;
   var areas = CC.AREAS;
   var n = areas.length;
   var scores = [];
   for (var i = 0; i < n; i++) scores.push(areaAvg(areas[i].id));
+
+  // Build short labels for the radar — full names like "Response to Signs /
+  // Signals" don't fit on a 400px-wide canvas at 3/9 o'clock. The full label
+  // remains used everywhere else (skill breakdown, examiner quiz, etc.).
+  // Map full labels to compact forms for the radar only. Area IDs from
+  // competency-config.js AREAS list. The longer the label, the more padding
+  // it forces, shrinking the chart — so shorten the two longest.
+  var SHORT_LABEL = {
+    'signs_signals': 'Signs',
+    'mirrors': 'Mirrors'
+  };
+  function shortLabelFor(area) {
+    if (SHORT_LABEL[area.id]) return SHORT_LABEL[area.id];
+    if (area.label.length > 14) {
+      // Auto-shorten any label still too long
+      return area.label.split(' ').slice(0, 2).join(' ');
+    }
+    return area.label;
+  }
+  var radarLabels = areas.map(shortLabelFor);
+
+  // Compute the widest *radar* label so we can pad maxR enough to keep
+  // horizontal labels fully visible. At 3/9 o'clock the label is anchored at
+  // cx ± (maxR + 32) with text aligned away from centre — so the full label
+  // width must fit between the anchor and the canvas edge.
+  ctx.font = '600 12px Lato, sans-serif';
+  var widestLabel = 0;
+  for (var w = 0; w < n; w++) {
+    var tw = ctx.measureText(radarLabels[w]).width;
+    if (tw > widestLabel) widestLabel = tw;
+  }
+  // pad needs to cover the worst case: a horizontal label at 3/9 o'clock,
+  // which sits at cx ± (maxR + 32) — text extending widestLabel away from
+  // anchor. Required: cx - (maxR + 32) ≥ widestLabel → maxR ≤ cx - 32 - W.
+  // We use widestLabel + 20 as a soft pad — 20px for the labelR offset and a
+  // bit of breathing room — relying on the fact that the widest labels are
+  // diagonal (not at 3/9 exactly) so they have a bit more room than worst case.
+  var pad = Math.min(Math.max(50, widestLabel + 20), size / 2 * 0.5);
+  var maxR = size / 2 - pad;
 
   // Angle for each vertex (start from top)
   function angle(idx) { return (Math.PI * 2 * idx / n) - Math.PI / 2; }
@@ -290,7 +328,7 @@ function renderRadar() {
 
     ctx.font = '600 12px Lato, sans-serif';
     ctx.fillStyle = labelColour;
-    ctx.fillText(areas[ti].label, lp.x, lp.y - 8);
+    ctx.fillText(radarLabels[ti], lp.x, lp.y - 8);
     ctx.font = '700 13px "Bricolage Grotesque", sans-serif';
     ctx.fillStyle = scoreColour(scores[ti]);
     ctx.fillText(scores[ti] + '%', lp.x, lp.y + 8);
