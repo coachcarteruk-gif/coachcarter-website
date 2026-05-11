@@ -158,7 +158,7 @@
     }
     .area-header {
       display: grid;
-      grid-template-columns: 28px auto 1fr auto auto;
+      grid-template-columns: 28px 1fr auto auto;
       align-items: center; gap: 12px;
       padding: 14px 18px;
       cursor: pointer; user-select: none;
@@ -166,47 +166,70 @@
     }
     .area-header:hover { background: var(--accent-mid); }
 
-    /* At-a-glance summary block on the area header itself.
-       Sits between the area name and the score badge — gives parents /
-       instructors the full picture without expanding the card. */
-    .area-summary {
-      display: flex; align-items: center; gap: 10px;
-      justify-content: flex-end;
+    /* Source row — the three data-source cells (Mock / Lesson / Quiz) shown
+       at the top of the open body. Each cell makes explicit *which* input
+       contributed to the area's score, so silence reads as "no data here"
+       rather than the user wondering. */
+    .source-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      padding: 12px 18px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .source-cell {
+      display: flex; flex-direction: column;
+      gap: 4px;
+      padding: 8px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
       min-width: 0;
     }
-    .area-summary-dot {
-      width: 9px; height: 9px; border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .area-summary-quiz {
-      font-family: var(--font-mono); font-size: 0.7rem;
+    .source-label {
+      font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
       color: var(--muted);
-      letter-spacing: 0.04em;
-      font-variant-numeric: tabular-nums;
-      min-width: 32px;
-      text-align: right;
+      letter-spacing: 0.12em; text-transform: uppercase;
     }
-    .area-summary-bar {
-      width: 70px;
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-      overflow: hidden;
+    .source-value {
+      font-family: var(--font-mono); font-size: 0.82rem; font-weight: 700;
+      color: var(--primary);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+      display: flex; align-items: center; gap: 6px;
+      min-height: 18px;
+      flex-wrap: wrap;
+    }
+    .source-value.source-empty {
+      color: var(--muted);
+      font-weight: 500;
+      opacity: 0.7;
+    }
+    .source-value.source-clean {
+      color: var(--green);
+    }
+    .source-fault {
+      display: inline-flex; align-items: center;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.72rem; font-weight: 700;
+    }
+    .source-fault-d { color: var(--amber); border: 1px solid var(--amber); }
+    .source-fault-s { color: var(--red); border: 1px solid var(--red); }
+    .source-fault-x { color: #b91c1c; border: 1px solid #b91c1c; }
+    .source-dot {
+      width: 8px; height: 8px; border-radius: 50%;
       flex-shrink: 0;
     }
-    .area-summary-bar-fill {
-      height: 100%; border-radius: 2px;
-      transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+    .source-quiz-pct {
+      font-size: 0.7rem; font-weight: 700;
+      margin-left: auto;
     }
-    .area-summary-trend {
-      font-family: var(--font-mono); font-size: 0.82rem;
-      min-width: 14px; text-align: center;
-    }
-    /* Hide summary on narrow screens — the score badge alone is enough on
-       mobile, the sub-skill rows under the open card carry the detail. */
-    @media (max-width: 620px) {
-      .area-header { grid-template-columns: 28px 1fr auto auto; }
-      .area-summary { display: none; }
+
+    /* Compact on narrow screens — stack the three cells if they don't fit
+       comfortably. */
+    @media (max-width: 520px) {
+      .source-row { grid-template-columns: 1fr; }
     }
     .area-icon {
       font-size: 1.05rem;
@@ -296,15 +319,6 @@
         gap: 8px; padding: 10px 14px;
       }
       .skill-name { font-size: 0.84rem; }
-    }
-
-    /* Empty state when an area has no lesson ratings or quiz attempts yet. */
-    .area-empty {
-      padding: 12px 18px;
-      font-family: var(--font-mono); font-size: 0.7rem;
-      color: var(--muted);
-      letter-spacing: 0.04em;
-      border-bottom: 1px dashed var(--border);
     }
 
     /* Sub-skill rows — quieter than the parent skill row. Each shows just the

@@ -356,16 +356,13 @@ function renderRadar() {
 
 // ── Section 3: Skill Breakdown ──
 //
-// Progressive disclosure: each area's row carries the full at-a-glance
-// summary (rating dot, quiz progress, score bar, trend), so a scan of the
-// closed list tells the learner / parent / instructor what's going on in
-// every category. Expanding the row reveals the DL25 sub-skills with their
-// attention dots — the "what specifically went wrong" detail layer.
+// Progressive disclosure: the closed card shows category + score. Opening
+// reveals the three data sources that built that score (Mock / Lesson / Quiz)
+// followed by the DL25 sub-skill list with mock-test attention dots.
 //
-// We deliberately don't render a duplicate parent-skill row inside the
-// expanded body: today every area has exactly one parent skill with the same
-// key + label as the area itself, so its data IS the area's data and lives
-// on the area header. Sub-skills are the only content inside the open body.
+// The header used to carry an inline summary (dot + quiz + bar + trend), but
+// that was redundant with the source-row inside. Now the header is clean —
+// all data lives in the open view.
 function renderSkillBreakdown() {
   var CC = window.CC_COMPETENCY;
   var container = document.getElementById('skill-breakdown');
@@ -376,67 +373,77 @@ function renderSkillBreakdown() {
     var skills = CC.getSkillsByArea(area.id);
     var avg = areaAvg(area.id);
     var bgColour = scoreColour(avg);
-
-    // Every area has exactly one parent skill — its data is the area's
-    // headline data, surfaced on the area header itself.
     var parentSkill = skills[0];
     var pLessons = parentSkill ? (lessonMap[parentSkill.key] || []) : [];
     var pQuiz = parentSkill ? quizMap[parentSkill.key] : null;
-    var hasParentData = pLessons.length > 0 || (pQuiz && pQuiz.attempts > 0);
+    var pMock = parentSkill ? mockFaultMap[parentSkill.key] : null;
 
-    // Rating dot (latest lesson rating for this area's parent skill)
-    var summaryDotHtml = '<span class="area-summary-dot" style="background:var(--border)"></span>';
-    if (pLessons.length > 0) {
-      var latestRating = pLessons[0].rating;
-      var dotCol = latestRating === 'nailed' ? 'var(--green)' : latestRating === 'ok' ? 'var(--amber)' : 'var(--red)';
-      summaryDotHtml = '<span class="area-summary-dot" style="background:' + dotCol + '" title="Latest lesson rating"></span>';
-    }
-
-    // Quiz accuracy summary
-    var summaryQuizText = '—';
-    if (pQuiz && pQuiz.attempts > 0) {
-      summaryQuizText = pQuiz.correct + '/' + pQuiz.attempts;
-    }
-
-    // Trend indicator across lesson ratings
-    var summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--muted)">—</span>';
-    if (pLessons.length >= 2) {
-      var newest = pLessons[0].score;
-      var oldest = pLessons[pLessons.length - 1].score;
-      if (newest > oldest) {
-        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--green)" title="Improving">&uarr;</span>';
-      } else if (newest < oldest) {
-        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--red)" title="Declining">&darr;</span>';
-      } else {
-        summaryTrendHtml = '<span class="area-summary-trend" style="color:var(--muted)" title="Stable">&rarr;</span>';
-      }
-    }
-
+    // ── Header (clean — no inline summary) ──
     html += '<div class="area-card">';
     html += '<div class="area-header" data-action="toggle-area">';
     html += '<span class="area-icon">' + area.icon + '</span>';
     html += '<span class="area-name">' + area.label + '</span>';
-    if (hasParentData) {
-      html += '<div class="area-summary">';
-      html += summaryDotHtml;
-      html += '<span class="area-summary-quiz" title="Quiz: correct / attempts">' + summaryQuizText + '</span>';
-      html += '<div class="area-summary-bar"><div class="area-summary-bar-fill" style="width:' + avg + '%;background:' + bgColour + '"></div></div>';
-      html += summaryTrendHtml;
-      html += '</div>';
-    }
     html += '<span class="area-badge" style="background:' + bgColour + '">' + avg + '%</span>';
     html += '<span class="area-toggle">&#9660;</span>';
     html += '</div>';
     html += '<div class="area-body">';
 
-    // No-data state: surface that we're tracking this area but have nothing yet
-    if (!hasParentData) {
-      html += '<div class="area-empty">No lesson ratings or quiz attempts yet for this area.</div>';
-    }
+    // ── Source row: Mock / Lesson / Quiz ──
+    html += '<div class="source-row">';
 
-    // Sub-skill rows — every DL25 sub-skill listed under the area, with a
-    // coloured attention dot only if the most recent mock test logged a fault
-    // here. Sub-skills with no fault stay quiet (muted text, faint dot).
+    // Mock cell — parent-level fault totals from all mock tests (instructor mode)
+    html += '<div class="source-cell">';
+    html += '<div class="source-label">Mock</div>';
+    if (pMock && (pMock.driving > 0 || pMock.serious > 0 || pMock.dangerous > 0)) {
+      var parts = [];
+      if (pMock.driving > 0)   parts.push('<span class="source-fault source-fault-d">D' + pMock.driving + '</span>');
+      if (pMock.serious > 0)   parts.push('<span class="source-fault source-fault-s">S' + pMock.serious + '</span>');
+      if (pMock.dangerous > 0) parts.push('<span class="source-fault source-fault-x">×' + pMock.dangerous + '</span>');
+      html += '<div class="source-value" title="Driving / Serious / Dangerous faults across all mock tests">' + parts.join(' ') + '</div>';
+    } else if (pMock) {
+      html += '<div class="source-value source-clean" title="No faults logged in mock tests">Clean</div>';
+    } else {
+      html += '<div class="source-value source-empty" title="No mock test recorded for this area yet">—</div>';
+    }
+    html += '</div>';
+
+    // Lesson cell — latest lesson rating
+    html += '<div class="source-cell">';
+    html += '<div class="source-label">Lesson</div>';
+    if (pLessons.length > 0) {
+      var latestRating = pLessons[0].rating;
+      var ratingLabel = 'Getting there';
+      var ratingColour = 'var(--amber)';
+      if (latestRating === 'nailed')    { ratingLabel = 'Confident';   ratingColour = 'var(--green)'; }
+      if (latestRating === 'struggled') { ratingLabel = 'Needs work';  ratingColour = 'var(--red)'; }
+      var titleAttr = 'Latest rating across ' + pLessons.length + ' session' + (pLessons.length === 1 ? '' : 's');
+      html += '<div class="source-value" title="' + titleAttr + '">';
+      html += '<span class="source-dot" style="background:' + ratingColour + '"></span>';
+      html += '<span style="color:' + ratingColour + '">' + ratingLabel + '</span>';
+      html += '</div>';
+    } else {
+      html += '<div class="source-value source-empty" title="Not rated in any logged session yet">—</div>';
+    }
+    html += '</div>';
+
+    // Quiz cell — lifetime correct/attempts
+    html += '<div class="source-cell">';
+    html += '<div class="source-label">Quiz</div>';
+    if (pQuiz && pQuiz.attempts > 0) {
+      var pct = Math.round((pQuiz.correct / pQuiz.attempts) * 100);
+      var pctColour = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--red)';
+      html += '<div class="source-value" title="Examiner Quiz: ' + pQuiz.correct + ' correct out of ' + pQuiz.attempts + '">';
+      html += '<span>' + pQuiz.correct + '/' + pQuiz.attempts + '</span>';
+      html += '<span class="source-quiz-pct" style="color:' + pctColour + '">' + pct + '%</span>';
+      html += '</div>';
+    } else {
+      html += '<div class="source-value source-empty" title="No examiner quiz attempts mapped to this area yet">—</div>';
+    }
+    html += '</div>';
+
+    html += '</div>';
+
+    // ── Sub-skill rows with mock-test attention dots ──
     if (parentSkill && parentSkill.subs && parentSkill.subs.length > 0) {
       for (var ss = 0; ss < parentSkill.subs.length; ss++) {
         var sub = parentSkill.subs[ss];
@@ -444,8 +451,6 @@ function renderSkillBreakdown() {
         var attentionDot;
         var rowClass = 'sub-skill-row';
         if (subFault) {
-          // Red = serious or dangerous fault (would fail the test)
-          // Amber = driving fault only (minor)
           var attentionColour = (subFault.serious > 0 || subFault.dangerous > 0)
             ? 'var(--red)'
             : 'var(--amber)';
