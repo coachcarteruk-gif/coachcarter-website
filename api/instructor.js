@@ -1849,6 +1849,7 @@ async function handleMyLearners(req, res) {
       SELECT
         lu.id, lu.name, lu.email, lu.phone,
         lu.current_tier, lu.pickup_address, lu.prefer_contact_before,
+        lu.credit_balance, lu.balance_minutes,
         COUNT(lb.id)::int AS total_lessons,
         COUNT(lb.id) FILTER (WHERE lb.status = 'completed')::int AS completed_lessons,
         COUNT(lb.id) FILTER (WHERE lb.status = 'confirmed' AND lb.scheduled_date >= CURRENT_DATE)::int AS upcoming_lessons,
