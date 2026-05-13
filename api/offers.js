@@ -272,7 +272,9 @@ async function handleGetOffer(req, res) {
       // Minimal payload for the offer-success.html post-payment auth gate
       // (a guest who just paid needs the learner_email to set a password).
       // Leaves status at 410 + code=ALREADY_ACCEPTED so existing callers that
-      // only check `code` keep working unchanged.
+      // only check `code` keep working unchanged. Slot details included so the
+      // success page can render the confirmation card for slot-pinned offers
+      // (free or paid) without an extra round-trip.
       return res.status(410).json({
         error: true,
         code: 'ALREADY_ACCEPTED',
@@ -283,6 +285,9 @@ async function handleGetOffer(req, res) {
           instructor_name: offer.instructor_name,
           duration_minutes: offer.duration_minutes || 90,
           is_flexible: !offer.scheduled_date && !offer.start_time,
+          scheduled_date: offer.scheduled_date || null,
+          start_time: offer.start_time || null,
+          end_time: offer.end_time || null,
         }
       });
     }
@@ -692,10 +697,11 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
     console.error('Free offer email failed:', emailErr);
   }
 
-  // Redirect to success page
+  // Redirect to success page. `free=1` tells the page this was a £0 lesson
+  // (skipped Stripe) so it can drop the "payment successful" wording.
   return res.json({
     ok: true,
-    url: `${baseUrl}/offer-success.html?token=${token}`,
+    url: `${baseUrl}/offer-success.html?token=${token}&free=1`,
     learner_session: { id: learnerId, name: learnerDetails.name, email: resolvedEmail, school_id: schoolId }
   });
 }

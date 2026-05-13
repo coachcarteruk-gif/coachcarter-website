@@ -4,6 +4,7 @@
   var API = '/api/offers';
   var params = new URLSearchParams(location.search);
   var isFlexible = params.get('flexible') === '1';
+  var isFree = params.get('free') === '1';
 
   // Slot picker state (populated from URL params for flexible offers)
   var instructorId = params.get('iid');
@@ -61,12 +62,11 @@
         offerLearnerEmail = data.offer.learner_email;
       }
 
-      if (data.code === 'ALREADY_ACCEPTED' || (data.ok && data.offer)) {
-        if (data.ok && data.offer) {
-          renderDetails(data.offer);
-        } else {
-          showSuccess();
-        }
+      // Both the pending-offer payload (data.ok + data.offer) and the
+      // ALREADY_ACCEPTED payload (410 + data.offer) carry the offer details
+      // we need to render the confirmation card. Treat them the same.
+      if (data.offer) {
+        renderDetails(data.offer);
       } else {
         showSuccess();
       }
@@ -101,6 +101,10 @@
       document.getElementById('s-date').textContent = dateStr;
       document.getElementById('s-time').textContent =
         offer.start_time.slice(0, 5) + ' \u2013 ' + offer.end_time.slice(0, 5);
+      if (isFree) {
+        document.getElementById('s-subtitle').textContent =
+          'Your free lesson is booked. We\u2019ll see you then.';
+      }
     }
 
     document.getElementById('s-instructor').textContent = offer.instructor_name;
