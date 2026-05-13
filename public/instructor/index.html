@@ -444,6 +444,31 @@
     .agenda-empty { text-align: center; padding: 48px 20px; color: var(--muted); }
     .agenda-empty .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
 
+    /* Pending-offer card — pencilled-in slot, dashed border, cancellable */
+    .agenda-card-offer {
+      cursor: default;
+      background: #fffaf2;
+      border-style: dashed;
+    }
+    .agenda-card-offer .agenda-learner { white-space: normal; }
+    .offer-pending-badge {
+      display: inline-block; margin-left: 6px;
+      font-size: 0.65rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 100px;
+      background: #fff4ec; color: #b65300;
+      border: 1px solid #ffd59a;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .offer-cancel-btn {
+      padding: 6px 12px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--white);
+      color: var(--primary); font-size: 0.78rem; font-weight: 600;
+      cursor: pointer; font-family: var(--font-body);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .offer-cancel-btn:hover { background: #fee; border-color: #f5a3a3; color: #b00; }
+    .offer-cancel-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
     /* â”€â”€ Add Availability Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.45);

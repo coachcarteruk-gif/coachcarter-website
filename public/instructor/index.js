@@ -14,6 +14,7 @@ let currentView = 'agenda'; // 'monthly' | 'weekly' | 'agenda'
 let cursor     = new Date(); // current date driving the view
 cursor.setHours(0,0,0,0);
 let bookingCache = {}; // dateStr -> [booking, ...]
+let pendingOfferCache = {}; // dateStr -> [pending offer, ...]
 let availCache   = []; // availability windows [{day_of_week, start_time, end_time}]
 let calendarStartHour = 7; // from instructor profile
 let instructorSlug = null; // from profile, used for shareable booking links
@@ -173,10 +174,15 @@ async function fetchNeededData() {
     const rangeEnd = new Date(to + 'T00:00:00');
     for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
       delete bookingCache[dateStr(d)];
+      delete pendingOfferCache[dateStr(d)];
     }
     for (const b of (data.bookings || [])) {
       if (!bookingCache[b.scheduled_date]) bookingCache[b.scheduled_date] = [];
       bookingCache[b.scheduled_date].push(b);
+    }
+    for (const o of (data.pending_offers || [])) {
+      if (!pendingOfferCache[o.scheduled_date]) pendingOfferCache[o.scheduled_date] = [];
+      pendingOfferCache[o.scheduled_date].push(o);
     }
     loadedRanges.push({ from, to });
   } catch (err) {
@@ -404,15 +410,19 @@ function renderAgenda() {
   const rangeStart = new Date(cursor);
   const rangeEnd   = addDays(cursor, 13);
 
-  // Collect all bookings in date range, sorted chronologically
+  // Collect bookings + pending offers in the range. Pending offers carry
+  // _kind:'offer' so the renderer can give them a distinct card style and
+  // a cancel button.
   const allBookings = [];
   let d = new Date(rangeStart);
   while (d <= rangeEnd) {
     const ds = dateStr(d);
-    const dayBookings = bookingCache[ds] || [];
-    for (const b of dayBookings) {
+    for (const b of (bookingCache[ds] || [])) {
       if (b.status === 'cancelled' || b.status === 'rescheduled') continue;
-      allBookings.push(b);
+      allBookings.push({ ...b, _kind: 'booking' });
+    }
+    for (const o of (pendingOfferCache[ds] || [])) {
+      allBookings.push({ ...o, _kind: 'offer' });
     }
     d = addDays(d, 1);
   }
@@ -445,14 +455,53 @@ function renderAgenda() {
     const isToday = ds === dateStr(today);
     const dayLabel = `${DAY_FULL[dayDate.getDay()]}, ${dayDate.getDate()} ${MON_FULL[dayDate.getMonth()]}`;
 
+    const dayLessonCount = groups[ds].filter(x => x._kind === 'booking').length;
+    const dayOfferCount = groups[ds].length - dayLessonCount;
+    const countLabel = dayOfferCount > 0
+      ? `${dayLessonCount} lesson${dayLessonCount !== 1 ? 's' : ''}, ${dayOfferCount} pending`
+      : `${dayLessonCount} lesson${dayLessonCount !== 1 ? 's' : ''}`;
+
     html += `<div class="agenda-date-header${isToday ? ' today' : ''}">
       <span>${dayLabel}</span>
-      <span class="agenda-date-count">${groups[ds].length} lesson${groups[ds].length !== 1 ? 's' : ''}</span>
+      <span class="agenda-date-count">${countLabel}</span>
     </div>`;
 
     const daySlots = groups[ds];
     for (let i = 0; i < daySlots.length; i++) {
       const b = daySlots[i];
+
+      // Pending offer card — "pencilled in", cancellable, distinct styling.
+      if (b._kind === 'offer') {
+        const ltColour = b.lesson_type_colour || 'var(--accent)';
+        const ltName   = b.lesson_type_name || 'Standard Lesson';
+        const learnerLabel = b.learner_name || b.offer_learner_name || b.learner_email || 'Learner';
+        const priceP = b.offer_price_pence != null
+          ? b.offer_price_pence
+          : Math.round((b.lesson_type_price_pence || 8250) * (100 - (b.discount_pct || 0)) / 100);
+        const priceStr = priceP === 0 ? 'Free' : `£${(priceP / 100).toFixed(2)}`;
+        const expiresAt = new Date(b.expires_at);
+        const minsLeft = Math.max(0, Math.round((expiresAt - new Date()) / 60000));
+        const expiresStr = minsLeft >= 60
+          ? `expires in ${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m`
+          : `expires in ${minsLeft}m`;
+
+        html += `
+          <div class="agenda-card agenda-card-offer" style="border-left-color:${ltColour}" data-offer-id="${b.id}">
+            <div class="agenda-card-left">
+              <div class="agenda-time">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
+              <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span>
+            </div>
+            <div class="agenda-card-mid">
+              <div class="agenda-learner">${esc(learnerLabel)} <span class="offer-pending-badge">Pending offer</span></div>
+              <div class="agenda-address" style="color:var(--muted)">${priceStr} · ${esc(expiresStr)}</div>
+            </div>
+            <div class="agenda-card-right">
+              <button class="offer-cancel-btn" data-action="cancel-pending-offer" data-id="${b.id}" title="Cancel this pending offer and free up the slot">Cancel</button>
+            </div>
+          </div>`;
+        continue;
+      }
+
       const ltColour = b.lesson_type_colour || 'var(--accent)';
       const ltName   = b.lesson_type_name || 'Standard Lesson';
       const isCancelled = b.status === 'cancelled' || b.status === 'rescheduled';
@@ -462,12 +511,14 @@ function renderAgenda() {
       const waUrl = whatsappUrl(b.learner_phone);
       const thisAddr = b.booking_pickup_address || b.learner_pickup_address || '';
 
-      // Travel indicator between consecutive bookings
+      // Travel indicator between consecutive bookings (skip offers)
       if (i > 0 && !isCancelled) {
         const prev = daySlots[i - 1];
-        const prevAddr = prev.booking_pickup_address || prev.learner_pickup_address || '';
-        if (prevAddr && thisAddr && prev.status !== 'cancelled' && prev.status !== 'rescheduled') {
-          html += `<div class="travel-indicator" data-travel-from="${esc(prevAddr)}" data-travel-to="${esc(thisAddr)}" style="text-align:center;padding:2px 0"></div>`;
+        if (prev._kind === 'booking') {
+          const prevAddr = prev.booking_pickup_address || prev.learner_pickup_address || '';
+          if (prevAddr && thisAddr && prev.status !== 'cancelled' && prev.status !== 'rescheduled') {
+            html += `<div class="travel-indicator" data-travel-from="${esc(prevAddr)}" data-travel-to="${esc(thisAddr)}" style="text-align:center;padding:2px 0"></div>`;
+          }
         }
       }
 
@@ -836,6 +887,32 @@ async function injectTravelIndicators() {
   });
 }
 
+// ─── Cancel a pending offer ──────────────────────────────────────────────────
+async function cancelPendingOffer(offerId, btnEl) {
+  if (!offerId) return;
+  if (!confirm('Cancel this pending offer? The slot will be freed up immediately.')) return;
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Cancelling…'; }
+  try {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=cancel-offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ offer_id: offerId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to cancel offer');
+
+    // Remove the offer from cache locally for a snappy update, then re-render.
+    for (const ds in pendingOfferCache) {
+      pendingOfferCache[ds] = pendingOfferCache[ds].filter(o => o.id !== offerId);
+    }
+    renderCurrentView();
+    showToast('Offer cancelled — slot is free again', 'success');
+  } catch (err) {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Cancel'; }
+    showToast(err.message || 'Failed to cancel offer', 'error');
+  }
+}
+
 // ─── Refresh schedule ────────────────────────────────────────────────────────
 async function refreshSchedule(silent) {
   const btn = document.getElementById('refreshBtn');
@@ -844,6 +921,7 @@ async function refreshSchedule(silent) {
   // renderCurrentView calls fetchNeededData (which awaits) before rendering,
   // so the calendar shows fresh data directly without flashing empty.
   bookingCache = {};
+  pendingOfferCache = {};
   loadedRanges = [];
   await renderCurrentView();
   if (btn) btn.textContent = '↻';
@@ -1956,6 +2034,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'retry-booking-history') renderBookingHistory();
   else if (a === 'retry-current-view') renderCurrentView();
   else if (a === 'select-learner') selectLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.phone, parseInt(t.dataset.balance, 10));
+  else if (a === 'cancel-pending-offer') cancelPendingOffer(parseInt(t.dataset.id, 10), t);
 });
 document.addEventListener('change', function (e) {
   var t = e.target.closest('[data-action]');

@@ -422,7 +422,52 @@ async function handleScheduleRange(req, res) {
       LIMIT 500
     `;
 
-    return res.json({ bookings });
+    // Pending offers in the same window — slot-pinned only (flexible offers
+    // don't block any specific time). Surfaced on the calendar so the
+    // instructor can see slots currently held by pending offers and cancel
+    // them if needed. Lazy-expire stale ones first so they fall out.
+    let pendingOffers = [];
+    try {
+      await sql`
+        UPDATE lesson_offers SET status = 'expired'
+        WHERE status = 'pending' AND expires_at <= NOW()
+      `;
+      pendingOffers = await sql`
+        SELECT
+          o.id,
+          o.token,
+          o.scheduled_date::text,
+          o.start_time::text,
+          o.end_time::text,
+          o.learner_email,
+          o.learner_name AS offer_learner_name,
+          o.offer_price_pence,
+          o.discount_pct,
+          o.expires_at,
+          o.kind,
+          lt.id    AS lesson_type_id,
+          lt.name  AS lesson_type_name,
+          lt.colour AS lesson_type_colour,
+          COALESCE(lt.duration_minutes, 90) AS duration_minutes,
+          COALESCE(lt.price_pence, 8250)    AS lesson_type_price_pence,
+          lu.name  AS learner_name
+        FROM lesson_offers o
+        LEFT JOIN lesson_types lt ON lt.id = o.lesson_type_id
+        LEFT JOIN learner_users lu ON lu.id = o.learner_id
+        WHERE o.instructor_id = ${instructor.id}
+          AND o.school_id = ${schoolId}
+          AND o.status = 'pending'
+          AND o.scheduled_date IS NOT NULL
+          AND o.scheduled_date >= ${from}::date
+          AND o.scheduled_date <= ${to}::date
+        ORDER BY o.scheduled_date ASC, o.start_time ASC
+        LIMIT 200
+      `;
+    } catch (e) {
+      // lesson_offers table missing in some environments — fail silently
+    }
+
+    return res.json({ bookings, pending_offers: pendingOffers });
 
   } catch (err) {
     console.error('schedule-range err:', err.message);
