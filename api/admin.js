@@ -1023,13 +1023,13 @@ async function handleAdjustCredits(req, res) {
     if (newMinutes < 0)
       return res.status(400).json({ error: 'Cannot reduce below 0. Current balance: ' + Math.round((learner.balance_minutes || 0) / 60 * 10) / 10 + ' hours' });
 
-    // Update both balance_minutes (primary) and credit_balance (legacy dual-write)
+    // Update balance_minutes (primary) and derive credit_balance (legacy) from the
+    // new minutes total so the two columns can never drift on fractional adjustments.
     const creditsDelta    = Math.round(hoursFloat);
-    const newCreditBal    = Math.max(0, (learner.credit_balance || 0) + creditsDelta);
     const [updated] = await sql`
       UPDATE learner_users
       SET balance_minutes = balance_minutes + ${minutesDelta},
-          credit_balance  = ${newCreditBal}
+          credit_balance  = GREATEST(0, ROUND((balance_minutes + ${minutesDelta}) / 60.0))
       WHERE id = ${learner_id}
       RETURNING balance_minutes, credit_balance
     `;
