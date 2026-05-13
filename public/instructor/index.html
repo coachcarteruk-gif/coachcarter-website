@@ -444,19 +444,23 @@
     .agenda-empty { text-align: center; padding: 48px 20px; color: var(--muted); }
     .agenda-empty .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
 
-    /* Pending-offer card — pencilled-in slot, dashed border, cancellable */
+    /* Pending-offer card — pencilled-in slot, dashed border, cancellable.
+       Uses the accent-lt token so light and dark themes both work: it's a
+       warm cream in light mode and a dark amber-tinted surface in dark mode
+       (defined alongside the rest of the theme palette in instructor.css). */
     .agenda-card-offer {
       cursor: default;
-      background: #fffaf2;
+      background: var(--accent-lt);
       border-style: dashed;
     }
-    .agenda-card-offer .agenda-learner { white-space: normal; }
+    .agenda-card-offer .agenda-learner { white-space: normal; color: var(--primary); }
+    .agenda-card-offer .agenda-address { color: var(--muted); }
     .offer-pending-badge {
       display: inline-block; margin-left: 6px;
       font-size: 0.65rem; font-weight: 700;
       padding: 2px 8px; border-radius: 100px;
-      background: #fff4ec; color: #b65300;
-      border: 1px solid #ffd59a;
+      background: var(--white); color: var(--accent);
+      border: 1px solid var(--accent);
       text-transform: uppercase; letter-spacing: 0.04em;
     }
     .offer-cancel-btn {
@@ -466,7 +470,7 @@
       cursor: pointer; font-family: var(--font-body);
       transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
-    .offer-cancel-btn:hover { background: #fee; border-color: #f5a3a3; color: #b00; }
+    .offer-cancel-btn:hover { background: var(--red-lt, #fee); border-color: var(--red, #f5a3a3); color: var(--red, #b00); }
     .offer-cancel-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
     /* â”€â”€ Add Availability Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
