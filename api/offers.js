@@ -299,7 +299,7 @@ async function handleGetOffer(req, res) {
     const resolvedName = offer.offer_learner_name || offer.learner_name || '';
     const needsDetails = !resolvedName || !offer.learner_phone || !offer.learner_pickup_address;
     const isFlexible = !offer.scheduled_date && !offer.start_time;
-    const originalPricePence = offer.price_pence || 8250;
+    const originalPricePence = offer.price_pence ?? 8250;
 
     // offer_price_pence (custom price) takes precedence over discount_pct
     let finalPricePence;
@@ -398,7 +398,7 @@ async function handleAcceptOffer(req, res) {
     const schoolId = instrRow?.school_id || 1;
 
     const isFlexible = !offer.scheduled_date && !offer.start_time;
-    const originalPricePence = offer.price_pence || 8250;
+    const originalPricePence = offer.price_pence ?? 8250;
 
     // Resolve weekly-repeat count. The offer's max_repeat_weeks is the ceiling
     // the instructor set (null/1 = single lesson only). Learner-supplied count
