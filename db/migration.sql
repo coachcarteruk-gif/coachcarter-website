@@ -1404,13 +1404,12 @@ CREATE INDEX IF NOT EXISTS idx_referral_clicks_school ON referral_clicks(school_
 CREATE INDEX IF NOT EXISTS idx_referral_clicks_clicked_at ON referral_clicks(clicked_at);
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- BULK CREDIT PRICING (April 2026)
+-- BULK CREDIT PRICING (April 2026, tiers revised May 2026)
 -- Per-school config moved from a hardcoded constant in api/credits.js to
 -- schools.config.pricing.bulk_hourly_pence + bulk_discount_tiers. This seed
--- preserves CoachCarter's existing behaviour exactly: £55/hr with the
--- previous 12hr/24hr/36hr → 5%/10%/15% tier structure. Idempotent: only sets
--- the keys if they're not already present, so any admin edit via the editor
--- persists across migration re-runs.
+-- sets CoachCarter's bulk-credit pricing: £55/hr with 12hr/24hr/36hr →
+-- 2.5%/5%/7.5%. Idempotent: only sets the keys if they're not already present,
+-- so any admin edit via the editor persists across migration re-runs.
 --
 -- New schools onboarding via InstructorBook get NO bulk pricing seeded. They
 -- fall back to their standard 90-min lesson type's hourly rate (= no bulk
@@ -1431,13 +1430,28 @@ UPDATE schools
          '{pricing,bulk_discount_tiers}',
          COALESCE(
            config->'pricing'->'bulk_discount_tiers',
-           '[{"min_hours":12,"discount_pct":4},{"min_hours":24,"discount_pct":8},{"min_hours":36,"discount_pct":12}]'::jsonb
+           '[{"min_hours":12,"discount_pct":2.5},{"min_hours":24,"discount_pct":5},{"min_hours":36,"discount_pct":7.5}]'::jsonb
          ),
          true
        )
  WHERE id = 1
    AND (config->'pricing'->'bulk_hourly_pence' IS NULL
         OR config->'pricing'->'bulk_discount_tiers' IS NULL);
+
+-- One-time correction (May 2026): replace the original 4/8/12 seed for
+-- CoachCarter (school_id=1) with the intended 2.5/5/7.5 tiers. Gated on the
+-- exact old values so it only runs once and never clobbers a later admin
+-- edit. After the first successful run this is a no-op.
+UPDATE schools
+   SET config = jsonb_set(
+         config,
+         '{pricing,bulk_discount_tiers}',
+         '[{"min_hours":12,"discount_pct":2.5},{"min_hours":24,"discount_pct":5},{"min_hours":36,"discount_pct":7.5}]'::jsonb,
+         true
+       )
+ WHERE id = 1
+   AND config->'pricing'->'bulk_discount_tiers'
+       = '[{"min_hours":12,"discount_pct":4},{"min_hours":24,"discount_pct":8},{"min_hours":36,"discount_pct":12}]'::jsonb;
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- PASSWORD AUTH (May 2026)
