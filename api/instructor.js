@@ -3228,12 +3228,12 @@ async function handleNextPayoutPreview(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const [instructor] = await sql`
-      SELECT commission_rate, weekly_franchise_fee_pence, stripe_onboarding_complete, payouts_paused
+      SELECT commission_rate, weekly_franchise_fee_pence, stripe_onboarding_complete, payouts_paused, payouts_start_date
         FROM instructors WHERE id = ${user.id}
     `;
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
 
-    const bookings = await getEligibleBookings(sql, user.id);
+    const bookings = await getEligibleBookings(sql, user.id, instructor.payouts_start_date || null);
     const rate = parseFloat(instructor.commission_rate) || 0.85;
     const franchiseFee = instructor.weekly_franchise_fee_pence != null ? parseInt(instructor.weekly_franchise_fee_pence) : null;
     const feeModel = franchiseFee != null ? 'franchise' : 'commission';

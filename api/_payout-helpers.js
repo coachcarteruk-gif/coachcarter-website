@@ -7,8 +7,9 @@
 
 /**
  * Get unpaid eligible bookings for an instructor.
+ * `payoutsStartDate` is a date floor — bookings before it are excluded. NULL/undefined = no floor.
  */
-async function getEligibleBookings(sql, instructorId) {
+async function getEligibleBookings(sql, instructorId, payoutsStartDate = null) {
   return sql`
     SELECT lb.id AS booking_id,
            lb.scheduled_date,
@@ -27,6 +28,7 @@ async function getEligibleBookings(sql, instructorId) {
       LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
      WHERE lb.instructor_id = ${instructorId}
        AND pli.id IS NULL
+       AND (${payoutsStartDate}::date IS NULL OR lb.scheduled_date >= ${payoutsStartDate}::date)
        AND (
          lb.status = 'completed'
          OR (lb.status = 'confirmed' AND lb.scheduled_date <= CURRENT_DATE - INTERVAL '3 days')
@@ -39,7 +41,7 @@ async function getEligibleBookings(sql, instructorId) {
  * Process payout for a single instructor. Returns payout summary or null if nothing to pay.
  */
 async function processPayoutForInstructor(sql, stripe, instructor) {
-  const bookings = await getEligibleBookings(sql, instructor.id);
+  const bookings = await getEligibleBookings(sql, instructor.id, instructor.payouts_start_date || null);
   if (!bookings.length) return null;
 
   const franchiseFee = instructor.weekly_franchise_fee_pence != null
@@ -255,7 +257,7 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
  */
 async function processAllPayouts(sql, stripe) {
   const instructors = await sql`
-    SELECT id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id
+    SELECT id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id, payouts_start_date
       FROM instructors
      WHERE active = TRUE
        AND stripe_onboarding_complete = TRUE
