@@ -1220,7 +1220,7 @@ async function handlePayoutOverview(req, res) {
     // Instructor connect statuses
     const instructors = await sql`
       SELECT id, name, email, active, commission_rate, weekly_franchise_fee_pence,
-             stripe_account_id, stripe_onboarding_complete, payouts_paused
+             stripe_account_id, stripe_onboarding_complete, payouts_paused, payouts_start_date
         FROM instructors WHERE school_id = ${schoolId} ORDER BY name ASC
     `;
 
@@ -1228,7 +1228,7 @@ async function handlePayoutOverview(req, res) {
     const estimates = [];
     for (const inst of instructors) {
       if (!inst.active || !inst.stripe_onboarding_complete) continue;
-      const bookings = await getEligibleBookings(sql, inst.id);
+      const bookings = await getEligibleBookings(sql, inst.id, inst.payouts_start_date || null);
       if (!bookings.length) continue;
 
       const franchiseFee = inst.weekly_franchise_fee_pence != null ? parseInt(inst.weekly_franchise_fee_pence) : null;

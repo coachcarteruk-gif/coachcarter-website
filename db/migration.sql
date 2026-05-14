@@ -695,6 +695,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_offer_slot
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS stripe_account_id TEXT;
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS stripe_onboarding_complete BOOLEAN DEFAULT FALSE;
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS payouts_paused BOOLEAN DEFAULT FALSE;
+-- Date floor for auto-payouts. NULL = no floor (legacy behaviour). When set, only bookings on
+-- or after this date are swept by the Friday cron — protects against backfilled bookings being
+-- paid out in bulk the moment an instructor completes Stripe Connect onboarding.
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS payouts_start_date DATE DEFAULT NULL;
 
 CREATE TABLE IF NOT EXISTS instructor_payouts (
   id                  SERIAL PRIMARY KEY,
