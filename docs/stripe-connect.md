@@ -6,7 +6,7 @@ Instructors are paid via Stripe Connect Express accounts. Money flows: learner p
 
 ## Files
 
-- `api/connect.js` — onboarding, status, dashboard link, admin invite, dismiss
+- `api/connect.js` — onboarding, status, dashboard link, admin invite
 - `api/cron-payouts.js` — Vercel cron every Friday 9am UTC
 - `api/_payout-helpers.js` — shared payout calculation logic
 
@@ -14,7 +14,7 @@ Instructors are paid via Stripe Connect Express accounts. Money flows: learner p
 
 - Eligible bookings: `lesson_bookings.status = 'chargeable'` (the hourly `cron-auto-complete` flip applies a 1-hour buffer past `end_time`; no extra grace is needed — see `docs/booking-statuses.md`)
 - `instructor_payouts` + `payout_line_items` tables (UNIQUE on booking_id prevents double-payment)
-- Platform owner (Fraser) has payouts dismissed — revenue stays in platform account
+- Platform owner (Fraser) has `payouts_paused = TRUE` and `stripe_account_id = NULL` — revenue stays in platform account, paid out to bank via Stripe's normal payout schedule. Set by a historical "Dismiss banner" click that wiped the row; the dismiss UI was removed 2026-05-16 (see Step 0 in INSTRUCTOR-PAYMENTS-PLAN.md for the planned platform-sweep cron that will keep this state coherent post-instructor-#2).
 - Admin can pause/resume individual instructor payouts from admin portal
 
 ## Fee models
@@ -32,7 +32,7 @@ Two fee models per instructor (set via admin portal):
 |---|---|---|
 | `has_account` | DB | `instructors.stripe_account_id IS NOT NULL` |
 | `onboarding_complete` | DB (live-updated) | `stripe_onboarding_complete`. Flipped to `TRUE` the first time Stripe reports `charges_enabled && payouts_enabled`. Never flipped back. |
-| `payouts_paused` | DB | `payouts_paused`. Set by admin or by instructor dismissing the banner. |
+| `payouts_paused` | DB | `payouts_paused`. Set by admin (no instructor-facing UI; the dismiss button was removed 2026-05-16). |
 | `charges_enabled` | Stripe live | Can the account currently accept charges? |
 | `payouts_enabled` | Stripe live | Can the account currently receive payouts? |
 | `requirements_pending` | Stripe live | Count of `account.requirements.currently_due` items |
@@ -45,7 +45,7 @@ The admin instructor-list Payments badge is DB-only and won't flag a re-blocked 
 
 | State | Trigger | Visual |
 |---|---|---|
-| 1. Hidden | `!has_account && payouts_paused` (platform-owner dismiss) | — |
+| 1. Hidden | `!has_account && payouts_paused` (legacy platform-owner state) | — |
 | 2. Red "Set Up Direct Payouts" | `!has_account` | `.connect-banner.not-started` |
 | 3. Amber "Finish Setting Up Payouts" | DB onboarding not yet complete | `.connect-banner.pending` |
 | 4. Amber "Action required" *(NEW)* | DB complete, but Stripe live state is unhealthy | `.connect-banner.pending` + red count badge |
