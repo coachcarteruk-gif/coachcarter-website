@@ -221,10 +221,7 @@
             <div class="connect-banner-title">Set Up Direct Payouts</div>
             <div class="connect-banner-desc">Get paid automatically every Friday. Connect your bank account to start receiving payouts.</div>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="connect-btn" data-action="start-connect">Set Up Payouts</button>
-            <button class="connect-btn secondary" data-action="dismiss-connect" style="font-size:0.78rem;">Not needed</button>
-          </div>
+          <button class="connect-btn" data-action="start-connect">Set Up Payouts</button>
         </div>
       `;
     }
@@ -235,10 +232,7 @@
             <div class="connect-banner-title">Finish Setting Up Payouts</div>
             <div class="connect-banner-desc">You've started the process — just a few more steps to connect your bank account.</div>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="connect-btn" data-action="continue-connect">Continue Setup</button>
-            <button class="connect-btn secondary" data-action="dismiss-connect" style="font-size:0.78rem;">Not needed</button>
-          </div>
+          <button class="connect-btn" data-action="continue-connect">Continue Setup</button>
         </div>
       `;
     }
@@ -385,33 +379,6 @@
     }
   }
 
-  let pendingDismissResolve = null;
-  async function dismissConnect() {
-    // Show confirmation modal instead of window.confirm()
-    const confirmed = await new Promise(resolve => {
-      pendingDismissResolve = resolve;
-      document.getElementById('dismissConfirmModal').classList.add('open');
-    });
-    if (!confirmed) return;
-    try {
-      const res = await ccAuth.fetchAuthed('/api/connect?action=dismiss-connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await res.json();
-      if (data.ok) {
-        document.querySelector('.connect-banner')?.remove();
-      } else {
-        showToast(data.message || 'Failed to dismiss.', 'error');
-      }
-    } catch (err) {
-      showToast('Something went wrong. Please try again.', 'error');
-    }
-  }
-  function closeDismissModal(result) {
-    document.getElementById('dismissConfirmModal').classList.remove('open');
-    if (pendingDismissResolve) { pendingDismissResolve(result); pendingDismissResolve = null; }
-  }
 
   async function openStripeDashboard() {
     try {
@@ -525,17 +492,8 @@ document.addEventListener('click', function (e) {
   if (a === 'shift-week') shiftWeek(parseInt(t.dataset.delta, 10));
   else if (a === 'load-more-history') loadMoreHistory();
   else if (a === 'start-connect') startConnectOnboarding();
-  else if (a === 'dismiss-connect') dismissConnect();
   else if (a === 'continue-connect') continueConnectOnboarding();
   else if (a === 'open-stripe') openStripeDashboard();
   else if (a === 'retry-init') init();
 });
-(function wire() {
-  var modal = document.getElementById('dismissConfirmModal');
-  if (modal) modal.addEventListener('click', function (e) { if (e.target === modal) closeDismissModal(false); });
-  var cancel = document.getElementById('btn-dismiss-cancel');
-  if (cancel) cancel.addEventListener('click', function () { closeDismissModal(false); });
-  var confirm = document.getElementById('btn-dismiss-confirm');
-  if (confirm) confirm.addEventListener('click', function () { closeDismissModal(true); });
-})();
 })();
