@@ -95,7 +95,7 @@
               ${formatDate(l.date)}
               <span class="status-badge status-${l.status}">${l.status}</span>
             </div>
-            <div class="lesson-learner">${l.learner_name} &middot; ${l.lesson_type_name}</div>
+            <div class="lesson-learner">${l.learner_name || '(Deleted learner)'} &middot; ${l.lesson_type_name}</div>
             <div class="lesson-time">${formatTime(l.start_time)} \u2013 ${formatTime(l.end_time)} (${l.duration_minutes} min)</div>
           </div>
           <div class="lesson-pay">${formatPence(l.instructor_pay_pence)}</div>
