@@ -1112,6 +1112,60 @@ Major UX declutter across 8 pages, removing 1,123 lines of duplicate navigation,
 
 ---
 
+### 2.68 — Booking-Status 3-State Restructure ✅ Complete (15 May 2026)
+
+**What:** Collapsed `lesson_bookings.status` from seven states (`confirmed`, `awaiting_confirmation`, `completed`, `no_show`, `disputed`, `cancelled`, `rescheduled`) to three: `scheduled`, `chargeable`, `refunded`. Deleted the entire dual-confirmation email flow that was meant to resolve "did the lesson happen?" disputes — in practice it fired on every lesson and had near-zero useful signal.
+
+**Load-bearing principle (now explicit in CLAUDE.md):** the instructor is paid for every lesson on their calendar unless the learner gave 48h+ notice that it wouldn't happen. Late-cancel under 48h now sets `lesson_bookings.credit_forfeited = TRUE` and leaves the booking `scheduled`; the hourly cron then flips it to `chargeable` at `end_time + 1 hour` so the instructor is still paid. No more "did you turn up?" prompt.
+
+**State semantics:**
+- `scheduled` — live, not yet resolved. Blocks slot. Instructor not yet paid.
+- `chargeable` — past lesson, instructor will be paid. Blocks slot (historical-overlap detection).
+- `refunded` — killed booking, credit returned to learner. Does not block slot. Terminal.
+
+**Why:** the seven-state model was carrying machinery (`lesson_confirmations` table, `_confirmation-resolver.js`, prompt-confirmations + auto-confirm crons, admin `resolve-dispute` endpoint, learner-side `confirm-lesson.html`) for a behaviour Fraser never used. The new model is closer to how he actually runs the business — payout follows the calendar, not a confirmation step.
+
+**Single source of truth:** `api/_booking-status.js` exports `SCHEDULED`/`CHARGEABLE`/`REFUNDED` constants, `BLOCKING_STATUSES` / `PAYABLE_STATUSES` sets, and `isLive` / `isChargeable` / `blocksSlot` / `isTerminal` predicates. Per CLAUDE.md, backend code must import these — no inline string literals on `lesson_bookings.status`. Frontend display code may read the strings directly (untrusted display data).
+
+**Payout filter rewrite:** `api/_payout-helpers.js` `getEligibleBookings` and `getEligibleSchoolBookings` now filter on `lb.status = 'chargeable'` only. The previous two-branch `completed OR (confirmed AND ≥3-day grace)` is gone — the new model's 1-hour buffer on `scheduled → chargeable` already absorbs clock skew and last-minute reschedule races, and there is no confirmation step to stall. Risk window: a Thursday-evening lesson is flipped to `chargeable` at the 20:30 cron run, leaving ~12 hours for admin to manually flip to `refunded` before the Friday 09:00 UTC payout cron picks it up. Documented in `docs/booking-statuses.md`.
+
+**Migration:**
+```sql
+ALTER TABLE lesson_bookings DROP CONSTRAINT lesson_bookings_status_check;
+
+UPDATE lesson_bookings SET status = CASE status
+  WHEN 'confirmed'             THEN 'scheduled'
+  WHEN 'awaiting_confirmation' THEN 'scheduled'
+  WHEN 'completed'             THEN 'chargeable'
+  WHEN 'no_show'               THEN 'chargeable'
+  WHEN 'disputed'              THEN 'chargeable'
+  WHEN 'cancelled'             THEN 'refunded'
+  WHEN 'rescheduled'           THEN 'refunded'
+END;
+
+ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_status_check
+  CHECK (status IN ('scheduled', 'chargeable', 'refunded'));
+
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS credit_forfeited BOOLEAN NOT NULL DEFAULT FALSE;
+```
+
+**Files changed (PR #125, six commits):**
+1. `api/_booking-status.js` (new), `docs/booking-statuses.md` (new), `CLAUDE.md` (load-bearing principle + status-string rule).
+2. `db/migration.sql` — state collapse + CHECK constraint + `credit_forfeited` column.
+3. Backend rename across every file that read/wrote `lesson_bookings.status`. Deleted: `api/_confirmation-resolver.js`, `public/learner/confirm-lesson.html` + `.js`, `learner.js` confirm handlers, `instructor.js handleComplete` + `handleConfirmLesson`, `admin.js handleResolveDispute`, `reminders.js handlePromptConfirmations` + `handleAutoConfirm`, two `vercel.json` cron entries.
+4. `api/cron-auto-complete.js` rewritten as the hourly `scheduled → chargeable` flip with the 1-hour buffer.
+5. `api/_payout-helpers.js` — payout filter swapped to `status = 'chargeable'` (3-day grace removed).
+6. `tests/booking-status.spec.js` (new constants/predicate contract test); `PROJECT.md`, `DEVELOPMENT-ROADMAP.md`, `MIGRATION-PLAN.md` doc updates.
+
+**Out of scope (deliberately deferred):**
+- Drop `lesson_confirmations` table (kept dormant for one release cycle as rollback safety — follow-up migration ~2 weeks later).
+- DB-seeded Playwright E2E for the late-cancel → cron-flip → chargeable flow (current suite has no DB fixture; tracked as a separate task).
+- `payouts_start_date` floor on `getEligibleSchoolBookings` (the instructor-side floor exists; the school-side asymmetry is a separate concern).
+
+**Refs:** `BOOKING-STATUS-RESTRUCTURE-PLAN.md`, [`docs/booking-statuses.md`](docs/booking-statuses.md), PR #125.
+
+---
+
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
 - ~~**T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.~~ ✅ Done (2.54)

@@ -12,7 +12,7 @@ Instructors are paid via Stripe Connect Express accounts. Money flows: learner p
 
 ## Rules
 
-- Eligible bookings: status='completed' OR (status='confirmed' AND 3+ days old)
+- Eligible bookings: `lesson_bookings.status = 'chargeable'` (the hourly `cron-auto-complete` flip applies a 1-hour buffer past `end_time`; no extra grace is needed — see `docs/booking-statuses.md`)
 - `instructor_payouts` + `payout_line_items` tables (UNIQUE on booking_id prevents double-payment)
 - Platform owner (Fraser) has payouts dismissed — revenue stays in platform account
 - Admin can pause/resume individual instructor payouts from admin portal

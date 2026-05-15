@@ -8,7 +8,7 @@ I'm working on Stripe Connect / payouts: **$ARGUMENTS**
 Before writing any code, read `CLAUDE.md` and `docs/stripe-connect.md`, then confirm you understand these rules:
 
 1. **Money flow**: learner pays → platform Stripe account → weekly Friday cron transfers to instructor's Connect account.
-2. **Eligibility**: bookings are payable when `status='completed'` OR (`status='confirmed'` AND 3+ days old).
+2. **Eligibility**: bookings are payable when `lesson_bookings.status = 'chargeable'`. The hourly `cron-auto-complete` flips `scheduled → chargeable` at `end_time + 1 hour`. Import `CHARGEABLE` / `PAYABLE_STATUSES` from `api/_booking-status.js` — never inline the literal.
 3. **No double-payment**: `payout_line_items` has a UNIQUE constraint on `booking_id`. Never bypass this.
 4. **Fraser's payouts are dismissed** — platform owner's revenue stays in the platform account. Never re-enable without explicit instruction.
 5. **Pause/resume** per instructor is an admin feature. Respect the `payouts_paused` flag.

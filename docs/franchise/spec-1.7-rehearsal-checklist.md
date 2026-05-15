@@ -76,7 +76,7 @@ Note the inserted instructor's `id` — you'll need it.
 - Decide your week 1 scenario before the session starts. From the earnings projection (`docs/franchise/sample-earnings-projection.md`):
   - **Best case rehearsal**: 4 lessons in week 1 → revenue £330 → with £250 deposit + £160 effective fee + Stripe fees = £85.76 shortfall.
   - **Worst case rehearsal**: 1 lesson in week 1 → revenue £82.50 → £337.94 shortfall.
-- Insert these bookings into the dev DB with `status='completed'`, `scheduled_date < CURRENT_DATE - INTERVAL '3 days'`, `instructor_id = <your test instructor>`.
+- Insert these bookings into the dev DB with `status='chargeable'`, `scheduled_date <= CURRENT_DATE`, `instructor_id = <your test instructor>`. (May 2026: payout filter is now `chargeable`-only; the old three-day grace on `confirmed` is gone — see `docs/booking-statuses.md`.)
 
 ### 8. Clear any prior test payouts
 ```sql
