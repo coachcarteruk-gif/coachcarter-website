@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { sendWhatsApp } = require('./_whatsapp');
 const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
+const { SCHEDULED } = require('./_booking-status');
 
 
 // In-memory storage for legacy booking flow (pass guarantee / packages)
@@ -263,7 +264,7 @@ async function handleSlotBooking(session) {
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            lesson_type_id, minutes_deducted, school_id)
         VALUES
-          (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, 'confirmed',
+          (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
            ${lessonTypeId}, ${durationMins}, ${schoolId})
         RETURNING id, scheduled_date, start_time::text, end_time::text
       `;

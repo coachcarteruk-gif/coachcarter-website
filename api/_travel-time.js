@@ -6,6 +6,8 @@
 // 2. PRECISE (booking warning): OpenRouteService driving directions
 //    Used by handleBook() for post-booking warnings. Needs ORS API key.
 
+const { BLOCKING_STATUSES } = require('./_booking-status');
+
 const DEFAULT_MAX_TRAVEL_MINUTES = 30;
 const TRAVEL_BUFFER_MINUTES = 10; // extra buffer on top of estimated drive time
 
@@ -167,7 +169,7 @@ async function checkAdjacentTravelTime(sql, instructorId, date, startTime, endTi
     FROM lesson_bookings
     WHERE instructor_id = ${instructorId}
       AND scheduled_date = ${date}
-      AND status = 'confirmed'
+      AND status = ANY(${BLOCKING_STATUSES}::text[])
       AND pickup_address IS NOT NULL
     ORDER BY start_time
   `;

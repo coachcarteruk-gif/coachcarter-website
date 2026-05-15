@@ -9,6 +9,7 @@
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
+const { SCHEDULED, REFUNDED } = require('./_booking-status');
 
 // ── Setmore service → real lesson duration (minus built-in buffer) ───────────
 
@@ -202,12 +203,12 @@ module.exports = async (req, res) => {
       if (appt.status === 'Cancelled' || appt.status === 'canceled') {
         const [existing] = await sql`
           SELECT id, status FROM lesson_bookings
-          WHERE setmore_key = ${appt.key} AND status = 'confirmed'
+          WHERE setmore_key = ${appt.key} AND status = ${SCHEDULED}
         `;
         if (existing) {
           await sql`
             UPDATE lesson_bookings
-            SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Cancelled in Setmore'
+            SET status = ${REFUNDED}, cancelled_at = NOW(), cancel_reason = 'Cancelled in Setmore'
             WHERE id = ${existing.id}
           `;
           cancelled++;
@@ -290,7 +291,7 @@ module.exports = async (req, res) => {
              pickup_address)
           VALUES
             (${learnerId}, ${resolvedInstructorId}, ${start.date}, ${start.time}, ${realEndTime},
-             'confirmed', ${lessonTypeId}, 0, ${appt.key}, 'setmore_sync',
+             ${SCHEDULED}, ${lessonTypeId}, 0, ${appt.key}, 'setmore_sync',
              ${pickupAddress})
         `;
         imported++;
@@ -309,7 +310,7 @@ module.exports = async (req, res) => {
         SELECT id, setmore_key FROM lesson_bookings
         WHERE instructor_id = ${instructor.id}
           AND setmore_key IS NOT NULL
-          AND status = 'confirmed'
+          AND status = ${SCHEDULED}
           AND scheduled_date >= CURRENT_DATE
       `;
 
@@ -317,7 +318,7 @@ module.exports = async (req, res) => {
         if (!activeSetmoreKeys.has(booking.setmore_key)) {
           await sql`
             UPDATE lesson_bookings
-            SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Removed from Setmore'
+            SET status = ${REFUNDED}, cancelled_at = NOW(), cancel_reason = 'Removed from Setmore'
             WHERE id = ${booking.id}
           `;
           cancelled++;

@@ -33,6 +33,7 @@ const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
 const { notifyAvailableLearners, supersedeBroadcastSiblings } = require('./_notify-availability');
 const { checkAdjacentTravelTime, extractPostcode, bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES } = require('./_travel-time');
+const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
@@ -236,7 +237,7 @@ async function handleAvailable(req, res) {
                  pickup_address
           FROM lesson_bookings
           WHERE scheduled_date BETWEEN ${from} AND ${to}
-            AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+            AND status = ANY(${BLOCKING_STATUSES}::text[])
             AND instructor_id = ${instructor_id}
             AND school_id = ${schoolId}
         `
@@ -248,7 +249,7 @@ async function handleAvailable(req, res) {
                  pickup_address
           FROM lesson_bookings
           WHERE scheduled_date BETWEEN ${from} AND ${to}
-            AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+            AND status = ANY(${BLOCKING_STATUSES}::text[])
             AND school_id = ${schoolId}
         `;
 
@@ -694,7 +695,7 @@ async function handleDurationsForSlot(req, res) {
       SELECT start_time::text AS start_time, end_time::text AS end_time, pickup_address
       FROM lesson_bookings
       WHERE scheduled_date = ${date}
-        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND status = ANY(${BLOCKING_STATUSES}::text[])
         AND instructor_id = ${instructorId}
         AND school_id = ${schoolId}
     `;
@@ -945,7 +946,7 @@ async function handleBook(req, res) {
         WHERE instructor_id = ${instructor_id}
           AND scheduled_date = ANY(${dateStrings})
           AND start_time = ${start_time}
-          AND status = 'confirmed'
+          AND status = ${SCHEDULED}
       `;
       // Also check slot reservations (Stripe checkout holds)
       const reservations = await sql`
@@ -1013,7 +1014,7 @@ async function handleBook(req, res) {
             (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
              pickup_address, dropoff_address, lesson_type_id, minutes_deducted, series_id, school_id)
           VALUES
-            (${user.id}, ${instructor_id}, ${bd.date}, ${start_time}, ${end_time}, 'confirmed',
+            (${user.id}, ${instructor_id}, ${bd.date}, ${start_time}, ${end_time}, ${SCHEDULED},
              ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${minsPerBooking}, ${seriesId}, ${schoolId})
           RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at
         `;
@@ -1034,7 +1035,7 @@ async function handleBook(req, res) {
       if (createdBookings.length > 0) {
         const createdIds = createdBookings.map(b => b.id);
         await sql`
-          UPDATE lesson_bookings SET status = 'cancelled', cancelled_at = NOW()
+          UPDATE lesson_bookings SET status = ${REFUNDED}, cancelled_at = NOW()
           WHERE id = ANY(${createdIds})
         `;
       }
@@ -1318,7 +1319,7 @@ async function handleCheckoutSlot(req, res) {
       WHERE instructor_id = ${instructor_id}
         AND scheduled_date = ${date}
         AND start_time = ${start_time}::time
-        AND status = 'confirmed'
+        AND status = ${SCHEDULED}
     `;
     if (existingBooking)
       return res.status(409).json({ error: 'Sorry, that slot is already booked.' });
@@ -1504,7 +1505,7 @@ async function handleCheckoutSlotGuest(req, res) {
       WHERE instructor_id = ${instructor_id}
         AND scheduled_date = ${date}
         AND start_time = ${start_time}::time
-        AND status = 'confirmed'
+        AND status = ${SCHEDULED}
     `;
     if (existingBooking)
       return res.status(409).json({ error: 'Sorry, that slot is already booked.' });
@@ -1797,7 +1798,7 @@ async function handleBookFreeTrial(req, res) {
       WHERE instructor_id = ${instructor_id}
         AND scheduled_date = ${date}
         AND start_time = ${start_time}::time
-        AND status = 'confirmed'
+        AND status = ${SCHEDULED}
     `;
     if (existingBooking)
       return res.status(409).json({ error: 'Sorry, that slot is already booked.' });
@@ -1899,7 +1900,7 @@ async function handleBookFreeTrial(req, res) {
            created_by, payment_method, lesson_type_id, minutes_deducted,
            pickup_address, school_id, guest_phone)
         VALUES
-          (${learnerId}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, 'confirmed',
+          (${learnerId}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, ${SCHEDULED},
            'free_trial_self_serve', 'free', ${trialType.id}, 0,
            ${cleanAddr}, ${schoolId}, ${cleanPhone})
         RETURNING id, scheduled_date::text, start_time::text, end_time::text
@@ -2052,7 +2053,7 @@ async function handleCancel(req, res) {
 
     if (!booking)
       return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== 'confirmed')
+    if (booking.status !== SCHEDULED)
       return res.status(400).json({ error: `Cannot cancel a booking with status "${booking.status}"` });
 
     const isDemoBooking = booking.instructor_email === 'demo@coachcarter.uk';
@@ -2065,7 +2066,7 @@ async function handleCancel(req, res) {
         FROM lesson_bookings
         WHERE series_id = ${booking.series_id}
           AND learner_id = ${user.id}
-          AND status = 'confirmed'
+          AND status = ${SCHEDULED}
           AND scheduled_date >= CURRENT_DATE
         ORDER BY scheduled_date
       `;
@@ -2084,11 +2085,19 @@ async function handleCancel(req, res) {
         const mins = sb.minutes_deducted != null ? sb.minutes_deducted : DEFAULT_SLOT_MINUTES;
         const eligible = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF && mins > 0;
 
-        await sql`
-          UPDATE lesson_bookings
-          SET status = 'cancelled', cancelled_at = NOW(), credit_returned = ${eligible}
-          WHERE id = ${sb.id}
-        `;
+        if (eligible) {
+          await sql`
+            UPDATE lesson_bookings
+            SET status = ${REFUNDED}, cancelled_at = NOW(), credit_returned = TRUE
+            WHERE id = ${sb.id}
+          `;
+        } else {
+          await sql`
+            UPDATE lesson_bookings
+            SET cancelled_at = NOW(), credit_returned = FALSE, credit_forfeited = TRUE
+            WHERE id = ${sb.id}
+          `;
+        }
 
         cancelled.push(sb.id);
         if (eligible) {
@@ -2203,12 +2212,22 @@ async function handleCancel(req, res) {
     const minsToReturn   = booking.minutes_deducted != null ? booking.minutes_deducted : DEFAULT_SLOT_MINUTES;
     const creditReturned = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF && minsToReturn > 0;
 
-    // Cancel the booking
-    await sql`
-      UPDATE lesson_bookings
-      SET status = 'cancelled', cancelled_at = NOW(), credit_returned = ${creditReturned}
-      WHERE id = ${booking_id}
-    `;
+    // Cancel the booking. Late-cancel (<48h) keeps status=scheduled and
+    // forfeits the credit; the hourly cron flips it to chargeable so the
+    // instructor is still paid. ≥48h flips straight to refunded.
+    if (creditReturned) {
+      await sql`
+        UPDATE lesson_bookings
+        SET status = ${REFUNDED}, cancelled_at = NOW(), credit_returned = TRUE
+        WHERE id = ${booking_id}
+      `;
+    } else {
+      await sql`
+        UPDATE lesson_bookings
+        SET cancelled_at = NOW(), credit_returned = FALSE, credit_forfeited = TRUE
+        WHERE id = ${booking_id}
+      `;
+    }
 
     // Return hours if eligible (not for demo bookings)
     if (creditReturned) {
@@ -2389,7 +2408,7 @@ async function handleReschedule(req, res) {
     const bookingDuration = parseInt(booking.type_duration_minutes) || DEFAULT_SLOT_MINUTES;
     const newEndMins   = newStartMins + bookingDuration;
     const new_end_time = minutesToTime(newEndMins);
-    if (booking.status !== 'confirmed')
+    if (booking.status !== SCHEDULED)
       return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
 
     // Check 48-hour reschedule window (same as cancellation policy)
@@ -2419,7 +2438,7 @@ async function handleReschedule(req, res) {
       WHERE instructor_id = ${booking.instructor_id}
         AND scheduled_date = ${new_date}
         AND start_time = ${new_start_time}::time
-        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND status = ANY(${BLOCKING_STATUSES}::text[])
         AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (existingBooking)
@@ -2435,11 +2454,11 @@ async function handleReschedule(req, res) {
     if (existingReservation)
       return res.status(409).json({ error: 'Someone is currently booking that slot. Try another or wait a few minutes.' });
 
-    // Atomically: mark old booking as rescheduled, create new one
-    // 1. Mark old booking as rescheduled
+    // Atomically: mark old booking as refunded, create new one
+    // 1. Mark old booking as refunded
     await sql`
       UPDATE lesson_bookings
-      SET status = 'rescheduled', cancelled_at = NOW()
+      SET status = ${REFUNDED}, cancelled_at = NOW()
       WHERE id = ${booking_id}
     `;
 
@@ -2453,7 +2472,7 @@ async function handleReschedule(req, res) {
            lesson_type_id, minutes_deducted, school_id)
         VALUES
           (${user.id}, ${booking.instructor_id}, ${new_date}, ${new_start_time}, ${new_end_time},
-           'confirmed', ${booking_id}, ${booking.reschedule_count + 1},
+           ${SCHEDULED}, ${booking_id}, ${booking.reschedule_count + 1},
            ${booking.pickup_address || null}, ${booking.dropoff_address || null},
            ${booking.lesson_type_id || null}, ${booking.minutes_deducted != null ? booking.minutes_deducted : null},
            ${schoolId})
@@ -2465,7 +2484,7 @@ async function handleReschedule(req, res) {
       // Rollback: restore old booking
       await sql`
         UPDATE lesson_bookings
-        SET status = 'confirmed', cancelled_at = NULL
+        SET status = ${SCHEDULED}, cancelled_at = NULL
         WHERE id = ${booking_id}
       `;
       if (insertErr.message?.includes('uq_booking_slot') || insertErr.code === '23505') {
@@ -2606,7 +2625,7 @@ async function handleMyBookings(req, res) {
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.learner_id = ${user.id}
         AND COALESCE(lb.school_id, 1) = ${schoolId}
-        AND lb.status = 'confirmed'
+        AND lb.status = ${SCHEDULED}
         AND lb.scheduled_date >= ${nowISO}
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
     `;
@@ -2627,7 +2646,7 @@ async function handleMyBookings(req, res) {
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.learner_id = ${user.id}
         AND COALESCE(lb.school_id, 1) = ${schoolId}
-        AND NOT (lb.status = 'confirmed' AND lb.scheduled_date >= ${nowISO})
+        AND NOT (lb.status = ${SCHEDULED} AND lb.scheduled_date >= ${nowISO})
       ORDER BY lb.scheduled_date DESC, lb.start_time DESC
       LIMIT ${pastLimit + 1}
       OFFSET ${pastOffset}
@@ -2694,7 +2713,7 @@ async function handleSeriesInfo(req, res) {
       ORDER BY lb.scheduled_date, lb.start_time
     `;
 
-    const confirmed = bookings.filter(b => b.status === 'confirmed');
+    const confirmed = bookings.filter(b => b.status === SCHEDULED);
     const future = confirmed.filter(b => new Date(`${b.scheduled_date}T${b.start_time}Z`) > new Date());
 
     return res.json({

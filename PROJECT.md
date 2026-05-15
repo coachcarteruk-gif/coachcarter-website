@@ -84,6 +84,9 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── cron-referral-rewards.js    # Daily 04:00 UTC. Issues per-lesson referrer rewards (floor(duration/3) min) after a 7-day grace
 │   ├── r.js                        # Bound to /r/:code via vercel.json. Logs click + redirects to login with ?ref=CODE
 │   ├── _audit.js                   # GDPR audit logging utility (logAudit)
+│   ├── _booking-status.js          # Three-state booking lifecycle constants + predicates (scheduled / chargeable / refunded). See docs/booking-statuses.md
+│   ├── _payout-helpers.js          # Shared payout logic used by cron-payouts.js and admin manual trigger
+│   ├── cron-auto-complete.js       # Hourly cron — flips scheduled → chargeable at end_time + 1 hour
 │   ├── seed-test-data.js           # Test data seed/reset (3 test learner accounts, protected by MIGRATION_SECRET)
 │   ├── reviews.js                  # Google Reviews API
 │   ├── status.js                   # Health check endpoint
@@ -338,7 +341,7 @@ Kept for SMS code login, password-reset emails, and the migration code flow. Mag
 | `update-profile` | POST | Yes | Update phone and pickup_address |
 | `contact-pref` | GET | Yes | Returns prefer_contact_before flag |
 | `set-contact-pref` | POST | Yes | Toggle prefer_contact_before. Body: `{ prefer_contact_before: boolean }` |
-| `unlogged-bookings` | GET | Yes | Returns completed bookings that haven't been logged yet |
+| `unlogged-bookings` | GET | Yes | Returns past chargeable bookings that haven't been logged yet |
 | `mock-tests` | GET/POST | Yes | Create and list mock tests |
 | `mock-test-faults` | GET/POST | Yes | Record/retrieve per-skill faults for mock test parts |
 | `quiz-results` | GET/POST | Yes | Persist per-question examiner quiz results |
@@ -408,9 +411,9 @@ Bound to `/r/:code` via a `vercel.json` rewrite. No `?action=` routing — this 
 | `book` | POST | Yes | Book a slot — deducts `duration_minutes` from `balance_minutes`. Body includes `lesson_type_id` |
 | `checkout-slot` | POST | Yes | Pay-per-slot: reserves slot, creates Stripe Checkout at lesson type's price |
 | `checkout-slot-guest` | POST | No | Guest checkout: validates guest fields (name, email, phone, pickup), finds-or-creates learner account, reserves slot, creates Stripe Checkout. Rate limited: 10/IP/hr + 5/phone/hr |
-| `book-free-trial` | POST | No | Self-serve free trial booking. No Stripe. Body matches `checkout-slot-guest` plus optional `referral_code`. Resolves the `trial` lesson type (id 37, school 1), runs a one-trial-per-learner guard (email OR phone, any status), creates a `confirmed` booking with `payment_method='free'`, generates a 7-day magic-link token, emails learner + instructor. Rate limited: 10/IP/hr + 3/phone/hr |
-| `cancel` | POST | Yes | Cancel a booking (returns `minutes_deducted` to balance if 48hr+ policy met) |
-| `reschedule` | POST | Yes | Move a confirmed booking to a new slot (48hr+ notice, max 2 per chain, no balance change) |
+| `book-free-trial` | POST | No | Self-serve free trial booking. No Stripe. Body matches `checkout-slot-guest` plus optional `referral_code`. Resolves the `trial` lesson type (id 37, school 1), runs a one-trial-per-learner guard (email OR phone, any status), creates a `scheduled` booking with `payment_method='free'`, generates a 7-day magic-link token, emails learner + instructor. Rate limited: 10/IP/hr + 3/phone/hr |
+| `cancel` | POST | Yes | Cancel a booking. 48h+ notice → status flips to `refunded` and `minutes_deducted` returned to balance. <48h notice → status stays `scheduled` with `credit_forfeited = TRUE` so the hourly cron later flips it to `chargeable` and the instructor is still paid. See `docs/booking-statuses.md`. |
+| `reschedule` | POST | Yes | Move a scheduled booking to a new slot (48hr+ notice, max 2 per chain, no balance change) |
 | `my-bookings` | GET | Yes | Learner's bookings with lesson type info (name, colour, duration) |
 
 ### API — `api/calendar.js`
@@ -554,8 +557,9 @@ instructor_id INTEGER
 scheduled_date DATE
 start_time TIME
 end_time TIME
-status TEXT             -- 'confirmed', 'completed', 'cancelled', 'rescheduled'
+status TEXT             -- 'scheduled', 'chargeable', 'refunded' (CHECK constraint enforced; see api/_booking-status.js)
 credit_returned BOOLEAN DEFAULT FALSE
+credit_forfeited BOOLEAN NOT NULL DEFAULT FALSE  -- set when learner late-cancels under 48h; instructor still paid
 stripe_session_id TEXT  -- idempotency key for pay-per-slot bookings
 rescheduled_from INTEGER  -- links to the booking this one replaced (NULL for original bookings)
 reschedule_count INTEGER DEFAULT 0  -- how many times this booking chain has been rescheduled (max 2)
@@ -640,16 +644,15 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `request-login` | POST | No | (Legacy) Send magic link to instructor email — retained, not used by UI. |
 | `validate-token` | GET | No | (Legacy) Lightweight token check |
 | `verify-token` | POST | No | (Legacy) Consume token, return JWT. Body: `{ token }` |
-| `schedule` | GET | JWT | Instructor's upcoming confirmed bookings |
+| `schedule` | GET | JWT | Instructor's upcoming scheduled bookings |
 | `schedule-range` | GET | JWT | Bookings in date range for calendar views. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
-| `complete` | POST | JWT | Mark a lesson as completed |
 | `availability` | GET | JWT | Current weekly availability windows |
 | `set-availability` | POST | JWT | Update weekly availability windows |
 | `profile` | GET | JWT | Profile details |
 | `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages, ical_feed_url |
 | `ical-test` | POST | JWT | Test-fetch an iCal feed URL, returns event count |
 | `ical-status` | GET | JWT | Returns iCal sync status (url, last_synced, error, event_count) |
-| `cancel-booking` | POST | JWT | Cancel a confirmed booking (always refunds learner credit). Body: `{ booking_id, reason?, notify? }` — `notify: false` skips learner email |
+| `cancel-booking` | POST | JWT | Cancel a scheduled booking (always refunds learner credit — instructor-initiated cancellations bypass the 48h rule). Body: `{ booking_id, reason?, notify? }` — `notify: false` skips learner email |
 | `reschedule-booking` | POST | JWT | Move a booking to a new slot (no time restriction, no count limit) |
 | `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type. Body: `{ booking_id, scheduled_date?, start_time?, lesson_type_id?, force?, notify? }`. Adjusts learner balance if duration changes. Returns conflict details if overlapping (with `can_force: true`). Sets `edited_at`, Setmore sync skips edited bookings |
 | `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/free payment) |
@@ -657,7 +660,7 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `set-blackout-dates` | POST | JWT | Replace all future blackout ranges. Body: `{ ranges: [{ start_date, end_date, reason? }] }`. Validates no overlaps, max 365-day span |
 | `payout-history` | GET | JWT | Paginated payout records for the instructor |
 | `next-payout-preview` | GET | JWT | Estimated next Friday payout amount + eligible lesson count |
-| `running-late` | POST | JWT | Notify all remaining learners today that instructor is running late. Body: `{ delay_minutes }` (1-120). Sends WhatsApp + email to each learner with upcoming confirmed lessons. Returns `{ ok, notified }` |
+| `running-late` | POST | JWT | Notify all remaining learners today that instructor is running late. Body: `{ delay_minutes }` (1-120). Sends WhatsApp + email to each learner with upcoming scheduled lessons. Returns `{ ok, notified }` |
 
 ### API — `api/connect.js` (Stripe Connect)
 
@@ -673,9 +676,9 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 ### API — `api/cron-payouts.js` (Vercel Cron — Fridays 09:00 UTC)
 
 Processes weekly payouts for all onboarded instructors. Auth: CRON_SECRET or Admin JWT.
-Eligible bookings: status='completed' OR (status='confirmed' AND scheduled_date <= NOW() - 3 days).
+Eligible bookings: `status = 'chargeable'`. The 1-hour buffer on the `scheduled → chargeable` flip in `cron-auto-complete.js` absorbs clock skew and last-minute reschedule races; no extra grace period is applied.
 Creates Stripe transfers to instructor Express accounts. Sends email notifications.
-Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment.
+Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment. See `docs/booking-statuses.md` for the risk-window analysis.
 
 ### Database tables
 
@@ -877,7 +880,7 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 | `/api/config?action=record-consent` | POST | None | Records cookie consent decision to DB |
 | `/api/cron-retention` | GET | Vercel cron / CRON_SECRET | Weekly data retention enforcement |
 | `/api/cron-reconcile-payments` | GET | Vercel cron / CRON_SECRET | Hourly check that completed Stripe sessions have matching `credit_transactions` rows; alerts on mismatches |
-| `/api/cron-referral-rewards` | GET | Vercel cron / CRON_SECRET | Daily (04:00 UTC). For every completed paid lesson by a referred learner past a 7-day grace window, credits the referrer with `floor(duration_minutes / 3)` minutes. Per-booking idempotency via `lesson_bookings.referral_rewarded_at` |
+| `/api/cron-referral-rewards` | GET | Vercel cron / CRON_SECRET | Daily (04:00 UTC). For every chargeable paid lesson by a referred learner past a 7-day grace window, credits the referrer with `floor(duration_minutes / 3)` minutes. Per-booking idempotency via `lesson_bookings.referral_rewarded_at` |
 
 ### Database tables
 

@@ -121,13 +121,10 @@ function formatTime(str) { return str ? str.slice(0, 5) : ''; }
 
 function statusBadge(status) {
   const map = {
-    confirmed: 'badge-green', completed: 'badge-blue',
-    cancelled: 'badge-red', active: 'badge-green', inactive: 'badge-gray',
-    awaiting_confirmation: 'badge-amber', disputed: 'badge-red', no_show: 'badge-gray',
-    rescheduled: 'badge-gray'
+    scheduled: 'badge-blue', chargeable: 'badge-green', refunded: 'badge-gray',
+    active: 'badge-green', inactive: 'badge-gray'
   };
-  const labels = { awaiting_confirmation: 'awaiting', no_show: 'no show' };
-  return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + (labels[status] || status) + '</span>';
+  return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + status + '</span>';
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -676,8 +673,8 @@ function renderBookings() {
   }
 
   body.innerHTML = filtered.map(b => {
-    const canEdit = b.status === 'confirmed' || b.status === 'awaiting_confirmation';
-    const canComplete = b.status === 'confirmed';
+    const canEdit = b.status === 'scheduled';
+    const canComplete = b.status === 'scheduled';
     const typeLabel = b.lesson_type_name ? '<br><span style="font-size:0.78rem;color:var(--muted)">' + esc(b.lesson_type_name) + '</span>' : '';
     return '<tr>' +
       '<td>' + formatDate(b.scheduled_date) + '</td>' +

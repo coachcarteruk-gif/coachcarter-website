@@ -16,6 +16,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin } = require('./_auth');
 const { reportError } = require('./_error-alert');
+const { BLOCKING_STATUSES } = require('./_booking-status');
 
 function setCors(res) {
 }
@@ -68,7 +69,7 @@ async function handleList(req, res) {
       SELECT s.*,
         (SELECT COUNT(*) FROM learner_users WHERE school_id = s.id) AS learner_count,
         (SELECT COUNT(*) FROM instructors WHERE school_id = s.id AND active = true) AS instructor_count,
-        (SELECT COUNT(*) FROM lesson_bookings WHERE school_id = s.id AND status IN ('confirmed','completed')) AS booking_count
+        (SELECT COUNT(*) FROM lesson_bookings WHERE school_id = s.id AND status = ANY(${BLOCKING_STATUSES}::text[])) AS booking_count
       FROM schools s ORDER BY s.id`;
 
     return res.json({ ok: true, schools });
@@ -105,7 +106,7 @@ async function handleGet(req, res) {
       SELECT
         (SELECT COUNT(*) FROM learner_users WHERE school_id = ${schoolId}) AS learner_count,
         (SELECT COUNT(*) FROM instructors WHERE school_id = ${schoolId} AND active = true) AS instructor_count,
-        (SELECT COUNT(*) FROM lesson_bookings WHERE school_id = ${schoolId} AND status IN ('confirmed','completed')) AS booking_count`;
+        (SELECT COUNT(*) FROM lesson_bookings WHERE school_id = ${schoolId} AND status = ANY(${BLOCKING_STATUSES}::text[])) AS booking_count`;
 
     return res.json({ ok: true, school: { ...school, ...stats } });
   } catch (err) {
@@ -307,7 +308,7 @@ async function handlePlatformStats(req, res) {
         (SELECT COUNT(*) FROM schools WHERE active = true) AS active_schools,
         (SELECT COUNT(*) FROM learner_users) AS total_learners,
         (SELECT COUNT(*) FROM instructors WHERE active = true) AS total_instructors,
-        (SELECT COUNT(*) FROM lesson_bookings WHERE status IN ('confirmed','completed')) AS total_bookings,
+        (SELECT COUNT(*) FROM lesson_bookings WHERE status = ANY(${BLOCKING_STATUSES}::text[])) AS total_bookings,
         (SELECT COALESCE(SUM(amount_pence), 0) FROM credit_transactions WHERE created_at >= NOW() - INTERVAL '30 days') AS revenue_30d`;
 
     return res.json({ ok: true, stats });
@@ -334,7 +335,7 @@ async function handleSchoolStats(req, res) {
       SELECT
         (SELECT COUNT(*) FROM learner_users WHERE school_id = ${schoolId}) AS total_learners,
         (SELECT COUNT(*) FROM instructors WHERE school_id = ${schoolId} AND active = true) AS total_instructors,
-        (SELECT COUNT(*) FROM lesson_bookings WHERE school_id = ${schoolId} AND status IN ('confirmed','completed')) AS total_bookings,
+        (SELECT COUNT(*) FROM lesson_bookings WHERE school_id = ${schoolId} AND status = ANY(${BLOCKING_STATUSES}::text[])) AS total_bookings,
         (SELECT COALESCE(SUM(amount_pence), 0) FROM credit_transactions ct
           JOIN learner_users lu ON lu.id = ct.learner_id
           WHERE lu.school_id = ${schoolId} AND ct.created_at >= NOW() - INTERVAL '30 days') AS revenue_30d`;

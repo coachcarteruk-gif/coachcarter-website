@@ -101,13 +101,13 @@ module.exports = async (req, res) => {
     const [lessonType] = await sql`SELECT id FROM lesson_types WHERE school_id = ${schoolId} LIMIT 1`;
     const lessonTypeId = lessonType?.id || 1;
 
-    // Bookings (past confirmed, upcoming, one completed)
+    // Bookings (past chargeable, upcoming scheduled)
     const today = new Date();
     const bookingDates = [
-      { offset: -14, status: 'completed' },
-      { offset: -7, status: 'completed' },
-      { offset: 3, status: 'confirmed' },
-      { offset: 10, status: 'confirmed' },
+      { offset: -14, status: 'chargeable' },
+      { offset: -7,  status: 'chargeable' },
+      { offset: 3,   status: 'scheduled' },
+      { offset: 10,  status: 'scheduled' },
     ];
 
     for (const bd of bookingDates) {
@@ -155,7 +155,7 @@ module.exports = async (req, res) => {
     const deleteDate = new Date(today); deleteDate.setDate(deleteDate.getDate() - 3);
     await sql`
       INSERT INTO lesson_bookings (learner_id, instructor_id, scheduled_date, start_time, end_time, status, lesson_type_id, minutes_deducted, school_id)
-      VALUES (${deleteLearner.id}, ${instructorId}, ${deleteDate.toISOString().slice(0, 10)}, '14:00', '15:30', 'completed', ${lessonTypeId}, 90, ${schoolId})`;
+      VALUES (${deleteLearner.id}, ${instructorId}, ${deleteDate.toISOString().slice(0, 10)}, '14:00', '15:30', 'chargeable', ${lessonTypeId}, 90, ${schoolId})`;
     await sql`
       INSERT INTO credit_transactions (learner_id, type, credits, minutes, amount_pence, payment_method, school_id)
       VALUES (${deleteLearner.id}, 'purchase', 2, 180, 16500, 'stripe', ${schoolId})`;

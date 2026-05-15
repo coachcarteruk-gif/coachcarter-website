@@ -55,6 +55,7 @@ const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } 
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { logAudit } = require('./_audit');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
+const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
@@ -96,7 +97,6 @@ module.exports = async (req, res) => {
   if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
   if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
-  if (action === 'resolve-dispute')      return handleResolveDispute(req, res);
   if (action === 'toggle-payout-pause')  return handleTogglePayoutPause(req, res);
   if (action === 'payout-overview')      return handlePayoutOverview(req, res);
   if (action === 'process-payouts')      return handleProcessPayouts(req, res);
@@ -258,13 +258,10 @@ async function handleDashboardStats(req, res) {
     const bookingStats = await sql`
       SELECT
         COUNT(*)::int AS total_bookings,
-        COUNT(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
-        COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
-        COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled,
-        COUNT(*) FILTER (WHERE status = 'confirmed' AND scheduled_date >= CURRENT_DATE)::int AS upcoming,
-        COUNT(*) FILTER (WHERE status = 'awaiting_confirmation')::int AS awaiting_confirmation,
-        COUNT(*) FILTER (WHERE status = 'disputed')::int AS disputed,
-        COUNT(*) FILTER (WHERE status = 'no_show')::int AS no_show
+        COUNT(*) FILTER (WHERE status = ${SCHEDULED})::int AS confirmed,
+        COUNT(*) FILTER (WHERE status = ${CHARGEABLE})::int AS completed,
+        COUNT(*) FILTER (WHERE status = ${REFUNDED})::int AS cancelled,
+        COUNT(*) FILTER (WHERE status = ${SCHEDULED} AND scheduled_date >= CURRENT_DATE)::int AS upcoming
       FROM lesson_bookings
       WHERE school_id = ${schoolId}
     `;
@@ -301,7 +298,7 @@ async function handleDashboardStats(req, res) {
       SELECT COUNT(*)::int AS today
       FROM lesson_bookings
       WHERE school_id = ${schoolId}
-        AND scheduled_date = CURRENT_DATE AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND scheduled_date = CURRENT_DATE AND status = ANY(${BLOCKING_STATUSES}::text[])
     `;
 
     // This week's bookings
@@ -310,7 +307,7 @@ async function handleDashboardStats(req, res) {
       FROM lesson_bookings
       WHERE school_id = ${schoolId}
         AND scheduled_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')
-        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND status = ANY(${BLOCKING_STATUSES}::text[])
     `;
 
     return res.json({
@@ -422,7 +419,7 @@ async function handleEditBooking(req, res) {
       WHERE lb.id = ${booking_id} AND lb.school_id = ${schoolId}
     `;
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== 'confirmed' && booking.status !== 'awaiting_confirmation')
+    if (booking.status !== SCHEDULED)
       return res.status(400).json({ error: `Cannot edit a booking with status "${booking.status}"` });
 
     // Block lesson type change if already paid out
@@ -457,7 +454,7 @@ async function handleEditBooking(req, res) {
       WHERE lb.instructor_id = ${booking.instructor_id}
         AND lb.scheduled_date = ${newDate}
         AND lb.id != ${booking_id}
-        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
         AND ${newStartTime}::time < (lb.end_time + (${buffer} || ' minutes')::interval)
         AND ${newEndTime}::time > lb.start_time
       ORDER BY lb.start_time
@@ -567,11 +564,11 @@ async function handleMarkComplete(req, res) {
       SELECT id, status FROM lesson_bookings WHERE id = ${booking_id} AND school_id = ${schoolId}
     `;
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (!['confirmed', 'awaiting_confirmation', 'disputed'].includes(booking.status))
+    if (booking.status !== SCHEDULED)
       return res.status(400).json({ error: `Cannot mark a "${booking.status}" booking as complete` });
 
     await sql`
-      UPDATE lesson_bookings SET status = 'completed' WHERE id = ${booking_id}
+      UPDATE lesson_bookings SET status = ${CHARGEABLE} WHERE id = ${booking_id}
     `;
 
     await logAudit(sql, { adminId: admin.id, adminEmail: admin.email, action: 'mark-complete', targetType: 'booking', targetId: booking_id, details: { previous_status: booking.status }, schoolId, req });
@@ -605,10 +602,10 @@ async function handleAllInstructors(req, res) {
         i.weekly_franchise_fee_pence,
         (i.password_hash IS NOT NULL) AS has_password,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
-         WHERE lb.instructor_id = i.id AND lb.status = 'confirmed'
+         WHERE lb.instructor_id = i.id AND lb.status = ${SCHEDULED}
            AND lb.scheduled_date >= CURRENT_DATE AND lb.school_id = ${schoolId}) AS upcoming_bookings,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
-         WHERE lb.instructor_id = i.id AND lb.status = 'completed' AND lb.school_id = ${schoolId}) AS completed_lessons
+         WHERE lb.instructor_id = i.id AND lb.status = ${CHARGEABLE} AND lb.school_id = ${schoolId}) AS completed_lessons
       FROM instructors i
       WHERE i.school_id = ${schoolId}
       ORDER BY i.active DESC, i.name ASC
@@ -836,7 +833,7 @@ async function handleAllLearners(req, res) {
         (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.learner_id = lu.id AND lb.school_id = ${schoolId}) AS total_bookings,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
-         WHERE lb.learner_id = lu.id AND lb.status = 'confirmed'
+         WHERE lb.learner_id = lu.id AND lb.status = ${SCHEDULED}
            AND lb.scheduled_date >= CURRENT_DATE AND lb.school_id = ${schoolId}) AS upcoming_bookings,
         (SELECT MAX(lb.scheduled_date)::text FROM lesson_bookings lb
          WHERE lb.learner_id = lu.id AND lb.school_id = ${schoolId}) AS last_booking_date,
@@ -1141,43 +1138,6 @@ async function handleConfirmationDetails(req, res) {
     console.error('admin confirmation-details error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load confirmation details' });
-  }
-}
-
-// ── POST /api/admin?action=resolve-dispute ───────────────────────────────────
-// Body: { booking_id, resolution } where resolution is 'completed', 'no_show', or 'cancelled'
-// Admin manually overrides the status of a disputed or awaiting_confirmation booking.
-async function handleResolveDispute(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const admin = verifyAdminJWT(req);
-  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
-  const schoolId = getAdminSchoolId(admin, req);
-
-  const { booking_id, resolution } = req.body;
-  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
-  if (!['completed', 'no_show', 'cancelled'].includes(resolution))
-    return res.status(400).json({ error: 'resolution must be completed, no_show, or cancelled' });
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-
-    const [booking] = await sql`
-      SELECT id, status FROM lesson_bookings WHERE id = ${booking_id} AND school_id = ${schoolId}
-    `;
-    if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (!['disputed', 'awaiting_confirmation', 'no_show'].includes(booking.status))
-      return res.status(400).json({ error: `Cannot resolve a booking with status "${booking.status}"` });
-
-    await sql`
-      UPDATE lesson_bookings SET status = ${resolution} WHERE id = ${booking_id}
-    `;
-
-    return res.json({ success: true, booking_id, previous_status: booking.status, new_status: resolution });
-  } catch (err) {
-    console.error('admin resolve-dispute error:', err);
-    reportError('/api/admin', err);
-    return res.status(500).json({ error: 'Failed to resolve dispute' });
   }
 }
 

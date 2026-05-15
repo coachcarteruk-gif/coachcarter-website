@@ -1673,3 +1673,38 @@ DROP TRIGGER IF EXISTS balance_audit_trigger ON learner_users;
 CREATE TRIGGER balance_audit_trigger
   AFTER INSERT OR UPDATE OR DELETE ON learner_users
   FOR EACH ROW EXECUTE FUNCTION trg_balance_audit();
+
+-- ── Collapse booking statuses from 7 to 3 (May 2026) ────────────────────
+-- See BOOKING-STATUS-RESTRUCTURE-PLAN.md and docs/booking-statuses.md.
+-- Pre-migration audit (2026-05-15): 17 → scheduled, 52 → chargeable,
+-- 46 → refunded, 0 unmapped, 0 NULLs, 0 disputed rows requiring review.
+--
+-- Mapping:
+--   confirmed, awaiting_confirmation       → scheduled
+--   completed, no_show, disputed           → chargeable
+--   cancelled, rescheduled                 → refunded
+--
+-- Idempotent: the DROP CONSTRAINT and CASE are safe to re-run. The CASE's
+-- ELSE clause preserves any value that already matches the new vocabulary,
+-- so running this block twice is a no-op on the second run.
+ALTER TABLE lesson_bookings DROP CONSTRAINT IF EXISTS lesson_bookings_status_check;
+
+UPDATE lesson_bookings SET status = CASE status
+  WHEN 'confirmed'             THEN 'scheduled'
+  WHEN 'awaiting_confirmation' THEN 'scheduled'
+  WHEN 'completed'             THEN 'chargeable'
+  WHEN 'no_show'               THEN 'chargeable'
+  WHEN 'disputed'              THEN 'chargeable'
+  WHEN 'cancelled'             THEN 'refunded'
+  WHEN 'rescheduled'           THEN 'refunded'
+  ELSE status
+END
+WHERE status IN ('confirmed','awaiting_confirmation','completed','no_show','disputed','cancelled','rescheduled');
+
+ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_status_check
+  CHECK (status IN ('scheduled', 'chargeable', 'refunded'));
+
+-- Late-cancel-under-48h flag. See docs/booking-statuses.md.
+-- TRUE means: learner cancelled inside the 48h window, credit was forfeited,
+-- booking stays `scheduled` until the cron flips it to `chargeable`.
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS credit_forfeited BOOLEAN NOT NULL DEFAULT FALSE;

@@ -227,9 +227,8 @@
     var ltColour = b.lesson_type_colour || 'var(--accent)';
     var ltName = b.lesson_type_name || '';
     var addr = b.pickup_address || '';
-    var isCancelled = b.status === 'cancelled';
-    var isCompleted = b.status === 'completed';
-    var isAwaiting = b.status === 'awaiting_confirmation';
+    var isCancelled = b.status === 'refunded';
+    var isCompleted = b.status === 'chargeable';
 
     var lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
     var hoursUntil = (lessonMs - Date.now()) / 3600000;
@@ -249,8 +248,6 @@
       html += '<span class="lesson-status status-cancelled">Cancelled</span>';
     } else if (isCompleted) {
       html += '<span class="lesson-status status-completed">Completed</span>';
-    } else if (isAwaiting) {
-      html += '<span class="lesson-status status-awaiting">Pending</span>';
     }
 
     html += '</div>' +

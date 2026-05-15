@@ -22,7 +22,7 @@
 ### Verified Page Inventory
 
 **Learner portal (22 pages):**
-- index (dashboard), book, buy-credits, lessons, lessons-hub, log-session, progress, mock-test, examiner-quiz, ask-examiner, advisor (hidden), videos, profile, onboarding, login, learn, practice, focused-practice, refer, my-data, confirm-deletion, confirm-lesson
+- index (dashboard), book, buy-credits, lessons, lessons-hub, log-session, progress, mock-test, examiner-quiz, ask-examiner, advisor (hidden), videos, profile, onboarding, login, learn, practice, focused-practice, refer, my-data, confirm-deletion
 
 **Instructor portal (8 pages):**
 - index (calendar/dashboard), dashboard, availability, learners, profile, earnings, onboarding, login
@@ -87,10 +87,11 @@
 - `_shared.js` — Legacy `verifyAuth()`, AI context builder, skill labels
 - `_password.js` — Hash/verify/validate/lockout for password auth (May 2026)
 - `_audit.js` — Audit log writer for admin/auth mutations
+- `_booking-status.js` — Three-state booking lifecycle: `SCHEDULED`/`CHARGEABLE`/`REFUNDED` constants, `BLOCKING_STATUSES`/`PAYABLE_STATUSES` sets, `isLive`/`isChargeable`/`blocksSlot`/`isTerminal` predicates (May 2026). Port to TS for the app — these strings are also the DB enum values. See `docs/booking-statuses.md`.
 - `_csrf.js` — CSRF token mint + cookie helpers
 - `_error-alert.js` — Email alerts on 500 errors
 - `_notify-availability.js` — Cancellation → learner_availability fan-out, broadcast-offer minting, sibling supersession on booking
-- `_payout-helpers.js` — Payout calculation and Stripe transfer logic
+- `_payout-helpers.js` — Weekly payout calculation + Stripe transfers. Eligible bookings filter is `lb.status = 'chargeable'` (May 2026 — was `completed` + 3-day grace on `confirmed`).
 - `_travel-time.js` — postcodes.io geocoding + OpenRouteService drive-time estimates for slot fit checks
 - `_whatsapp.js` — WhatsApp Business API send wrapper
 
@@ -113,7 +114,7 @@
 **Multi-tenancy:** `schools`, `school_payouts`
 **Users:** `learner_users`, `instructors`, `admin_users`
 **Auth (legacy magic-link, kept for SMS / password-reset codes):** `magic_link_tokens`, `instructor_login_tokens`
-**Scheduling:** `instructor_availability`, `instructor_blackout_dates`, `instructor_external_events`, `lesson_bookings`, `slot_reservations`, `learner_availability`, `lesson_confirmations`
+**Scheduling:** `instructor_availability`, `instructor_blackout_dates`, `instructor_external_events`, `lesson_bookings`, `slot_reservations`, `learner_availability`, ~~`lesson_confirmations`~~ *(dormant May 2026 — drop scheduled in follow-up migration once the rollback window has elapsed)*
 **Lesson catalogue:** `lesson_types`, `lesson_offers` (manual + broadcast, with `max_repeat_weeks` for recurring series)
 **Notifications:** `sent_reminders`
 **Payments:** `credit_transactions`, `instructor_payouts`, `payout_line_items`, `guarantee_pricing`
@@ -128,7 +129,7 @@
 **Notable columns added (March 2026):**
 - `lesson_bookings.rescheduled_from` — FK to previous booking in reschedule chain
 - `lesson_bookings.reschedule_count` — tracks reschedules per chain (max 2 for learners)
-- `lesson_bookings.status` now includes `'rescheduled'` value
+- ~~`lesson_bookings.status` now includes `'rescheduled'` value~~ *(superseded May 2026 — status collapsed to `scheduled`/`chargeable`/`refunded`; rescheduled bookings now map to `refunded` with `rescheduled_from` set on the replacement row)*
 - `instructors.min_booking_notice_hours` — minimum hours before a slot can be booked (default 24)
 - `lesson_bookings.created_by` — who initiated the booking: 'learner', 'instructor', 'admin'
 - `lesson_bookings.payment_method` — how it was paid: 'credit', 'stripe', 'cash', 'free'
@@ -176,6 +177,7 @@
 - **Free trial flow** — `free-trial.html` + `?action=book-free-trial` on `slots.js`. Tied to schools with `slug='trial'`.
 - **Klarna BNPL** — webhook handles `async_payment_succeeded` for Klarna's deferred-confirmation flow.
 - **Setmore sync (ongoing)** — every 15 min cron pulls Fraser's Setmore bookings as real `lesson_bookings` rows with `created_by='setmore_sync'`, `setmore_key` for idempotency. Edits protected via `edited_at`. Service mapping hardcoded.
+- **Booking-status three-state restructure (15 May 2026)** — `lesson_bookings.status` collapsed from seven values to three: `scheduled` / `chargeable` / `refunded` (CHECK constraint enforced). New shared module `api/_booking-status.js` holds the constants + predicates. New column `lesson_bookings.credit_forfeited` records "no credit returned, instructor still paid" for sub-48h cancellations. Dual-confirmation flow deleted (`_confirmation-resolver.js`, `confirm-lesson.html`, prompt-confirmations + auto-confirm crons, admin `resolve-dispute`). New cron `api/cron-auto-complete.js` flips `scheduled → chargeable` at `end_time + 1 hour`. Payout filter (`api/_payout-helpers.js`) now `lb.status = 'chargeable'` only. **App port implication:** the status strings are part of the API contract — any TS port must use the same three literal values; reuse the constants module verbatim. See `BOOKING-STATUS-RESTRUCTURE-PLAN.md`, `docs/booking-statuses.md`.
 
 ### Critical Design Decisions Already Made
 

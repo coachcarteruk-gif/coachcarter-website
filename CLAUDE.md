@@ -19,6 +19,8 @@ Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel wi
 - Phone numbers stored as UK format (07xxx), converted to +447xxx at send time
 - Always `await` async operations before `res.json()` — Vercel kills functions after response
 - **Every SQL query on tenant-scoped tables MUST filter by `school_id`**
+- **Don't inline booking-status string literals.** Use the constants and predicates in `api/_booking-status.js` (`SCHEDULED`, `CHARGEABLE`, `REFUNDED`, `BLOCKING_STATUSES`, `isChargeable()`, …). Frontend display code may read the strings directly since they're untrusted display data, not control flow. See [`docs/booking-statuses.md`](docs/booking-statuses.md).
+- **Instructor is paid for every lesson on their calendar unless the learner gave 48h+ notice.** This is the load-bearing principle behind the three-state booking model. Late-cancel under 48h sets `lesson_bookings.credit_forfeited = TRUE` and leaves the booking `scheduled` until the cron flips it to `chargeable`. Don't reintroduce a "did the lesson happen?" prompt — the dual-confirmation flow was deleted in May 2026.
 
 ## Password auth (May 2026)
 
@@ -91,7 +93,7 @@ All three roles use email + password sign-in. Magic-link login was retired entir
 
 - Do NOT delete or modify the `setmore_key` column or `idx_bookings_setmore_key` index
 - Do NOT add CHECK constraints on lesson_bookings duration — multiple lesson types exist (60, 90, 120, 165 min). A `chk_booking_90_min` constraint was removed in April 2026 because it blocked non-standard durations.
-- **Valid booking statuses:** `confirmed`, `completed`, `cancelled`, `rescheduled`, `awaiting_confirmation`, `disputed`, `no_show`. The `lesson_bookings_status_check` CHECK constraint enforces this. If adding a new status, update the constraint in `db/migration.sql`.
+- **Valid booking statuses:** `scheduled`, `chargeable`, `refunded`. The `lesson_bookings_status_check` CHECK constraint enforces this. Collapsed from seven states in May 2026 — see [`docs/booking-statuses.md`](docs/booking-statuses.md) and `BOOKING-STATUS-RESTRUCTURE-PLAN.md`. If adding a new status, update the constraint in `db/migration.sql` AND the constants in `api/_booking-status.js`.
 - Do NOT send notifications for imported bookings (the sync deliberately skips this)
 - Imported bookings block slots automatically — no changes needed in `slots.js`
 - The service mapping in `setmore-sync.js` is hardcoded to Fraser's Setmore account — update if services change
@@ -218,6 +220,7 @@ When making structural changes (new tables, new API routes, new shared modules, 
 - [`docs/security.md`](docs/security.md) — headers, CORS, rate limiting, DB performance & indexes
 - [`docs/stripe-connect.md`](docs/stripe-connect.md) — payouts, cron, fee models (commission / franchise)
 - [`docs/setmore-sync.md`](docs/setmore-sync.md) — sync flow, service mapping, email mismatches, cancellation, welcome emails, transition plan
+- [`docs/booking-statuses.md`](docs/booking-statuses.md) — three-state booking lifecycle (`scheduled`/`chargeable`/`refunded`), transitions, late-cancel rule, payout implications
 - [`docs/travel-time.md`](docs/travel-time.md) — postcodes.io slot filter, OpenRouteService booking warnings
 - [`docs/navigation.md`](docs/navigation.md) — learner/instructor sidebar + bottom tabs, booking page structure
 - [`docs/franchise-benefits.md`](docs/franchise-benefits.md) — CoachCarter franchise pack: live + pipeline benefits, CoachCarter-vs-InstructorBook split
