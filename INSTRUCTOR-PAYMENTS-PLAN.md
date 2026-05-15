@@ -39,64 +39,100 @@ This works with one instructor because everyone implicitly belongs to Fraser. It
 
 ## Steps
 
-### Step 0 — Platform-sweep cron + Stripe schedule cutover (~1–2 hours) — **prerequisite for Step 4**
+### Step 0 — Symmetric Connect onboarding + Stripe schedule cutover (~1–2 hours) — **prerequisite for Step 4**
+
+> **History note:** the original Step 0 (drafted 2026-05-16, PR #129) specced a `cron-platform-sweep.js` that paid the full platform Stripe balance to Fraser's bank every Friday at 09:30. That approach was **rejected on 2026-05-15** after a follow-up discussion. The reasoning is preserved at the end of this section under "Why the sweep cron was rejected"; the rest of this section is the replacement plan.
 
 **Why this exists.** Discovered 2026-05-16 during Step 1's audit. The Friday payout cron architecture (`api/cron-payouts.js` → `_payout-helpers.js`) assumes the platform Stripe balance is escrow between purchase and lesson delivery. The platform account is currently configured **Stripe Dashboard → Business → Payouts → Schedule: Automatic Daily**, which empties the balance every day. By the time the cron tries `stripe.transfers.create({ destination: instructor.stripe_account_id })`, the funds have already been auto-paid to Fraser's bank. The transfer would fail with `insufficient_funds`.
+
+Additionally, Fraser's instructor row has `stripe_account_id = NULL` and `payouts_paused = TRUE` (a historical dismiss-button artefact, dismiss UI removed in PR #130). This means his row is currently *invisible* to the Friday payouts cron. Once instructor #2 onboards, this asymmetry becomes a maintenance liability — Fraser-the-special-case vs everyone-else-symmetric.
 
 **Data confirming the failure mode:**
 - 49 unpaid chargeable bookings on Fraser's row, total £3,842.50 (May 2026)
 - April 2026 payout reconciliation: £676.50 in, £645.07 out, ending balance £0.00
 - Platform balance has been £0 at end-of-period for the entire trading history
 
-**Without Step 0, Step 4 cannot ship.** Instructor #2's first Friday cron run would fail silently. This is a financial-plumbing prerequisite, not an optional polish step.
+**Without Step 0, Step 4 cannot ship.** Instructor #2's first Friday cron run would fail silently because the Stripe balance is empty. This is a financial-plumbing prerequisite, not an optional polish step.
 
-**0a. Switch Stripe platform payout schedule from Automatic Daily → Manual.**
+**The architecture in one sentence.** Fraser becomes a normal instructor on the existing payouts cron, paid via his own Connect account for delivered lessons. The platform Stripe account stops auto-paying-out, keeps both escrow for undelivered credit *and* platform revenue commingled, and Fraser triggers manual Stripe payouts to his sole-trader bank when he wants to draw down cashflow.
 
-One click in the Stripe Dashboard (Settings → Business → Payouts → Schedule). Reversible. No code change. Effect: Stripe stops auto-paying-out the platform balance — it accumulates until something triggers a payout.
+**0a. Pre-flight check — verify Stripe supports the shape.**
 
-**0b. New `api/cron-platform-sweep.js`.**
+Before any code, confirm via Stripe docs or Stripe Dashboard support chat that:
+1. A sole trader can be both the platform account holder *and* hold a Connect Express account under the same legal identity (same name, DOB, UTR). Read is "yes, common pattern" but Step 0 depends on it.
+2. "Separate charges and transfers" remains the supported architecture — money lands in the platform balance, sits there until `stripe.transfers.create({ destination })` moves it. (This is what `_payout-helpers.js` already does; just confirming nothing in Stripe's current model breaks the assumption.)
 
-A scheduled function that runs every Friday at 09:30 UTC (30 minutes after the existing `cron-payouts.js` at 09:00) — long enough for the instructor-payouts cron to finish writing `payout_line_items` rows and completing Stripe transfers. The sweep:
+If either comes back "no" or "requires manual KYC review", **stop and replan** before continuing.
 
-1. Calls `stripe.balance.retrieve()` to read the platform account's available balance.
-2. If balance > 0, calls `stripe.payouts.create({ amount: available_pence, currency: 'gbp' })` to pay it out to Fraser's bank.
-3. Logs the result. Sends email alert on failure via `_error-alert.js`.
-4. If balance is 0, no-op silently.
+**0b. Switch Stripe platform payout schedule from Automatic Daily → Manual.**
 
-**0c. Vercel cron config.**
+One click in the Stripe Dashboard (Settings → Business → Payouts → Schedule). Reversible. No code change. Effect: Stripe stops auto-paying-out the platform balance — it accumulates until *Fraser* manually triggers a payout in the Stripe Dashboard when he wants cashflow.
 
-Add the new cron entry to `vercel.json` (or wherever the existing payout cron is registered) at `30 9 * * 5` (Friday 09:30 UTC).
+**0c. Onboard Fraser through `api/connect.js` as a normal instructor.**
 
-**0d. Restore Fraser's row.**
+Fraser walks through Stripe Connect Express onboarding under his sole-trader identity, identically to how instructor #2 will onboard later. This creates a *new* Connect account (separate from the platform account `acct_1QUssNIqhTSdZedS`) and populates `instructors.stripe_account_id` on his row (id=4).
 
-Since Fraser's `stripe_account_id` is currently NULL (dismiss-button artefact), he doesn't need to be on the instructor payouts cron — the platform-sweep handles his entire share. The row stays as-is: `stripe_account_id = NULL`, `payouts_paused = TRUE`. The "platform-owner dismissed" State 1 banner remains correct under this architecture.
+**0d. Restore Fraser's row — with `payouts_start_date` defence.**
+
+After onboarding, update Fraser's instructor row:
+- `stripe_account_id` ← his new Connect account ID (populated by 0c)
+- `payouts_paused` ← `FALSE`
+- `stripe_onboarding_complete` ← `TRUE` (once Stripe confirms `charges_enabled && payouts_enabled`)
+- **`payouts_start_date` ← `<go-live date>`** — load-bearing. Per `_payout-helpers.js`, the cron has no built-in date floor; without `payouts_start_date`, the first Friday cron run will sweep his entire historical chargeable backlog (49 bookings, £3,842.50 as of 2026-05-16) in one transfer. The `payouts_start_date` column is the braces; `payouts_paused` was the belt. (Lesson from PR #124, captured in `feedback_payout_date_floor.md`.) **Test on staging or a single instructor before flipping the production switch.**
+
+**0e. Confirm State 6 "Payouts Active" on the earnings banner.**
+
+After 0c + 0d, Fraser visits `earnings.html` and the connect-status banner should resolve to State 6 (green "Payouts Active"). State 1 (hidden, legacy platform-owner) no longer applies and that branch of `renderConnectBanner` in `public/instructor/earnings.js` may eventually be deleted — but leave it in place for Step 0 so a rollback is clean. Removal is a separate small PR after Step 0 settles.
+
+**0f. Update docs.**
+
+- `docs/stripe-connect.md` Rules section: remove "Platform owner (Fraser) has `payouts_paused = TRUE` and `stripe_account_id = NULL` — revenue stays in platform account, paid out to bank via Stripe's normal payout schedule." Replace with a note that Fraser is symmetric with other instructors post-Step-0; the platform Stripe account is on Manual schedule and serves as escrow + platform-revenue holding pot.
+- `CLAUDE.md` if any references to the platform-owner-special-case need updating.
 
 **Acceptance:**
-- Stripe Dashboard schedule confirmed Manual.
-- First Friday after deploy: platform-sweep cron fires at 09:30, transfers full available balance to Fraser's bank, logs success. Email alert wired but doesn't fire.
-- Fraser's bank receives one weekly STRIPE deposit instead of daily auto-deposits. Same total over a 7-day period.
-- After instructor #2 onboards (post-Step-4): existing instructor-payouts cron transfers their share at 09:00, platform-sweep cron transfers the residue (platform's franchise-fee/commission share) at 09:30. Both succeed. Fraser does nothing.
+- Stripe Dashboard schedule confirmed Manual on `acct_1QUssNIqhTSdZedS`.
+- Fraser's instructor row has populated `stripe_account_id`, `payouts_paused = FALSE`, `payouts_start_date` set to deploy date.
+- First Friday after deploy: `cron-payouts.js` runs at 09:00, picks up Fraser as it would any instructor, transfers only his share of lessons delivered *since `payouts_start_date`* — not the £3,842.50 backlog — to his new Connect account. His Connect account then pays out to his sole-trader bank on its own schedule.
+- Platform Stripe balance no longer empties to zero — it accumulates undelivered-credit escrow + platform revenue. Fraser triggers Stripe Dashboard payouts manually when he wants cashflow.
+- After instructor #2 onboards (post-Step-4): the same Friday cron pays both of them via the same code path. No special cases.
 
 **Risks:**
 
 | Risk | Mitigation |
 |---|---|
-| Sweep cron fails silently on a Friday → Fraser's weekly deposit doesn't land | `_error-alert.js` email on `stripe.payouts.create` failure; Fraser also has Stripe Dashboard visibility of the balance |
-| Sweep runs *before* instructor-payouts finishes → transfers fail because platform balance is being drained from under them | 30-minute gap (09:00 vs 09:30) is conservative; instructor-payouts cron typically completes in <60 seconds even at 10+ instructors. Monitor in early weeks. |
-| Insufficient platform balance when sweep runs (e.g. refund spike) | `stripe.payouts.create` will fail; alert fires; balance recovers next week. No corruption. |
-| Stripe schedule accidentally flipped back to Automatic Daily | Document in `docs/stripe-connect.md` that Manual is load-bearing; add a check to the sweep cron that reads the schedule via Stripe API and alerts if it's not Manual |
+| Stripe rejects the same-legal-entity-as-platform-and-Connect onboarding | Step 0a pre-flight; replan before code if needed |
+| First Friday cron picks up £3,842.50 backlog and transfers it all to Fraser's new Connect account | `payouts_start_date` is the defence; verify the eligibility filter in `_payout-helpers.js` honours it; test on a single instructor first |
+| Stripe schedule accidentally flipped back to Automatic Daily | Document in `docs/stripe-connect.md` that Manual is load-bearing; consider a small admin-dashboard health check that reads the schedule via Stripe API |
+| Fraser forgets the platform Stripe balance is now refundable-credit + platform-revenue commingled and over-draws | Out of scope for Step 0; addressed by the post-Step-0 "outstanding credit liability vs platform balance" admin dashboard (see "Operational follow-on" below) |
 
-**Trade-offs Fraser explicitly accepts** (recorded so future-Claude doesn't reopen the question):
-- Daily STRIPE bank deposits become weekly. Same total amount, lumpier rhythm.
-- Bank balance still commingles prepayments with earned revenue (same as Automatic Daily). Option B is a "hands-off" choice, not a "cashflow-hygiene" choice. If true earned-vs-prepaid separation is wanted later, that's a separate piece of work (true Manual + Fraser-discipline, or destination charges).
+**Trade-offs Fraser explicitly accepts** (quoted for the record):
+- **Refundable-credit money commingles with platform revenue in the platform Stripe account, by design.** "I've thought about it and the cashflow is genuinely worth more to me than the structural refund-safety." Refund-safety becomes a discipline-and-visibility problem (see operational follow-on), not an architectural guarantee.
+- **No separate platform-revenue Connect account.** Considered and rejected — the existing platform Stripe account does both jobs (escrow + platform revenue), Fraser draws cashflow manually when he wants to. Don't re-propose splitting these unless Fraser raises it.
+- **Stripe payouts to Fraser's sole-trader bank are now manual, not automatic.** Fraser presses "Pay out" in Stripe Dashboard when he wants money out. The trade-off is real because earlier he flagged "things should run without my manual involvement" — but the manual press is now the *deliberate decision moment* where he chooses how much cashflow to take vs. leave as refundable escrow. That's a feature, not friction.
+
+**Operational follow-on (not in Step 0's scope, but load-bearing soon after):**
+
+A small admin-dashboard widget that displays, in real time:
+- Platform Stripe balance (`stripe.balance.retrieve()`)
+- Total outstanding learner-credit liability (sum of `learner_users.balance_minutes` × rate paid, or per-instructor equivalent post-Step-4)
+- Headroom between them (cashflow safely available to draw)
+
+Under the old architecture this would have been nice-to-have. Under this one it's the safety net for refund-safety. Spec: ~50-line admin page or banner. Plan as a small standalone PR after Step 0 settles, before instructor #2 onboards.
+
+**Why the sweep cron was rejected** (preserved for posterity):
+
+The original Step 0 (PR #129) added `cron-platform-sweep.js` to fire every Friday at 09:30, calling `stripe.payouts.create` for the full available platform balance. Two problems surfaced in the 2026-05-15 follow-up discussion:
+
+1. **Wrong abstraction.** "Fraser is a special case paid via balance sweep" is harder to maintain than "Fraser is just another instructor row." The dismiss-button artefact (`stripe_account_id = NULL`) was the bug, not the architecture. Restoring his row + onboarding a Connect account uses the same code path that already serves instructor #2 — net negative complexity vs. adding a new cron.
+2. **Sweep takes everything, including escrow.** A naive full-balance sweep also drains money for undelivered credit into Fraser's bank, commingling it with personal spend. The PR #129 plan acknowledged this on line 91 ("Bank balance still commingles prepayments with earned revenue") but treated it as an accepted trade-off. In the follow-up discussion, the cleaner shape (escrow stays in Stripe, Fraser manually draws cashflow when he wants) won out.
 
 **Why not destination charges instead** (the Outsider's Option C from the Council deliberation): destination charges split funds at *purchase* time. That conflicts with refundable credits (we'd have to claw back from the instructor's Connect account on refund) and with the planned per-instructor FIFO credit model (Step 4g). Defer until a concrete reason to revisit appears.
 
-**Why not pure Manual + Fraser-discipline**: Fraser's stated preference is "things should run without my manual involvement." Pure Manual relies on him clicking "Pay out" on a schedule; honest self-assessment is he won't action that reliably. The sweep cron makes the discipline happen automatically.
+**Why not a third "platform-revenue" Connect account.** Briefly considered in the 2026-05-15 discussion — keep `acct_1QUssNIqhTSdZedS` as pure escrow, add a third Connect account for franchise fees / commission cuts. Fraser rejected on cashflow grounds: the prepaid-credit cashflow is genuinely useful to the business and ringfencing it removes a working-capital lever he wants to keep. Recorded so the question doesn't get reopened automatically.
 
-**Deferred:** the dismiss-button UX fix (one click silently wipes `stripe_account_id` with no confirmation). Separate small PR; not in Step 0's scope. Tracked as an open item.
+**Deferred:** none specific to Step 0 — the dismiss-button UI was removed in PR #130 (separate from this plan). The `handleDismissConnect` API handler still exists in `api/connect.js` but is no longer called from any UI; safe to leave or remove in a future cleanup PR.
 
-**Related memory:** `project_platform_owner_payout_model.md` captures the discovery + decision tree in more detail.
+**Related memory:** `project_platform_owner_payout_model.md` — current decision + architectural rationale, supersedes the original 2026-05-16 sweep-cron framing.
 
 ---
 
