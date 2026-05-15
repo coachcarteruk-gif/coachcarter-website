@@ -1907,7 +1907,7 @@ async function handleEarningsWeek(req, res) {
         END AS price_pence,
         COALESCE(lt.duration_minutes, 90) AS duration_minutes
       FROM lesson_bookings lb
-      JOIN learner_users lu ON lu.id = lb.learner_id
+      LEFT JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
       WHERE lb.instructor_id = ${instructor.id}
