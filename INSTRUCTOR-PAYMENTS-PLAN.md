@@ -39,6 +39,67 @@ This works with one instructor because everyone implicitly belongs to Fraser. It
 
 ## Steps
 
+### Step 0 — Platform-sweep cron + Stripe schedule cutover (~1–2 hours) — **prerequisite for Step 4**
+
+**Why this exists.** Discovered 2026-05-16 during Step 1's audit. The Friday payout cron architecture (`api/cron-payouts.js` → `_payout-helpers.js`) assumes the platform Stripe balance is escrow between purchase and lesson delivery. The platform account is currently configured **Stripe Dashboard → Business → Payouts → Schedule: Automatic Daily**, which empties the balance every day. By the time the cron tries `stripe.transfers.create({ destination: instructor.stripe_account_id })`, the funds have already been auto-paid to Fraser's bank. The transfer would fail with `insufficient_funds`.
+
+**Data confirming the failure mode:**
+- 49 unpaid chargeable bookings on Fraser's row, total £3,842.50 (May 2026)
+- April 2026 payout reconciliation: £676.50 in, £645.07 out, ending balance £0.00
+- Platform balance has been £0 at end-of-period for the entire trading history
+
+**Without Step 0, Step 4 cannot ship.** Instructor #2's first Friday cron run would fail silently. This is a financial-plumbing prerequisite, not an optional polish step.
+
+**0a. Switch Stripe platform payout schedule from Automatic Daily → Manual.**
+
+One click in the Stripe Dashboard (Settings → Business → Payouts → Schedule). Reversible. No code change. Effect: Stripe stops auto-paying-out the platform balance — it accumulates until something triggers a payout.
+
+**0b. New `api/cron-platform-sweep.js`.**
+
+A scheduled function that runs every Friday at 09:30 UTC (30 minutes after the existing `cron-payouts.js` at 09:00) — long enough for the instructor-payouts cron to finish writing `payout_line_items` rows and completing Stripe transfers. The sweep:
+
+1. Calls `stripe.balance.retrieve()` to read the platform account's available balance.
+2. If balance > 0, calls `stripe.payouts.create({ amount: available_pence, currency: 'gbp' })` to pay it out to Fraser's bank.
+3. Logs the result. Sends email alert on failure via `_error-alert.js`.
+4. If balance is 0, no-op silently.
+
+**0c. Vercel cron config.**
+
+Add the new cron entry to `vercel.json` (or wherever the existing payout cron is registered) at `30 9 * * 5` (Friday 09:30 UTC).
+
+**0d. Restore Fraser's row.**
+
+Since Fraser's `stripe_account_id` is currently NULL (dismiss-button artefact), he doesn't need to be on the instructor payouts cron — the platform-sweep handles his entire share. The row stays as-is: `stripe_account_id = NULL`, `payouts_paused = TRUE`. The "platform-owner dismissed" State 1 banner remains correct under this architecture.
+
+**Acceptance:**
+- Stripe Dashboard schedule confirmed Manual.
+- First Friday after deploy: platform-sweep cron fires at 09:30, transfers full available balance to Fraser's bank, logs success. Email alert wired but doesn't fire.
+- Fraser's bank receives one weekly STRIPE deposit instead of daily auto-deposits. Same total over a 7-day period.
+- After instructor #2 onboards (post-Step-4): existing instructor-payouts cron transfers their share at 09:00, platform-sweep cron transfers the residue (platform's franchise-fee/commission share) at 09:30. Both succeed. Fraser does nothing.
+
+**Risks:**
+
+| Risk | Mitigation |
+|---|---|
+| Sweep cron fails silently on a Friday → Fraser's weekly deposit doesn't land | `_error-alert.js` email on `stripe.payouts.create` failure; Fraser also has Stripe Dashboard visibility of the balance |
+| Sweep runs *before* instructor-payouts finishes → transfers fail because platform balance is being drained from under them | 30-minute gap (09:00 vs 09:30) is conservative; instructor-payouts cron typically completes in <60 seconds even at 10+ instructors. Monitor in early weeks. |
+| Insufficient platform balance when sweep runs (e.g. refund spike) | `stripe.payouts.create` will fail; alert fires; balance recovers next week. No corruption. |
+| Stripe schedule accidentally flipped back to Automatic Daily | Document in `docs/stripe-connect.md` that Manual is load-bearing; add a check to the sweep cron that reads the schedule via Stripe API and alerts if it's not Manual |
+
+**Trade-offs Fraser explicitly accepts** (recorded so future-Claude doesn't reopen the question):
+- Daily STRIPE bank deposits become weekly. Same total amount, lumpier rhythm.
+- Bank balance still commingles prepayments with earned revenue (same as Automatic Daily). Option B is a "hands-off" choice, not a "cashflow-hygiene" choice. If true earned-vs-prepaid separation is wanted later, that's a separate piece of work (true Manual + Fraser-discipline, or destination charges).
+
+**Why not destination charges instead** (the Outsider's Option C from the Council deliberation): destination charges split funds at *purchase* time. That conflicts with refundable credits (we'd have to claw back from the instructor's Connect account on refund) and with the planned per-instructor FIFO credit model (Step 4g). Defer until a concrete reason to revisit appears.
+
+**Why not pure Manual + Fraser-discipline**: Fraser's stated preference is "things should run without my manual involvement." Pure Manual relies on him clicking "Pay out" on a schedule; honest self-assessment is he won't action that reliably. The sweep cron makes the discipline happen automatically.
+
+**Deferred:** the dismiss-button UX fix (one click silently wipes `stripe_account_id` with no confirmation). Separate small PR; not in Step 0's scope. Tracked as an open item.
+
+**Related memory:** `project_platform_owner_payout_model.md` captures the discovery + decision tree in more detail.
+
+---
+
 ### Step 1 — Stripe Connect health check + banner (~2–3 hours) ✅ Shipped 2026-05-16
 
 **Health check (1a) finding:** Fraser's own Connect account had three past-due requirements (external account, representative, ToS) silently blocking payouts. Stripe Dashboard remediation in-progress; the banner work proceeds independently since the new UI is designed to render the exact failure state Fraser is currently in.

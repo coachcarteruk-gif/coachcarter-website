@@ -2079,6 +2079,34 @@ Step 1 of `INSTRUCTOR-PAYMENTS-PLAN.md`. The first slice of the instructor-payme
 
 ---
 
+## 2.100 — Discovery: platform Stripe schedule blocks the Friday payout cron architecture (16 May 2026)
+
+Same-session follow-on to 2.99. While auditing Fraser's own Connect account post-deploy, ran a multi-perspective deliberation on whether he should reconnect his row to the Friday cron. The deliberation surfaced a deeper question — and the answer changed the franchise model's MVP scope.
+
+**The discovery:** the platform Stripe account is configured for "Automatic Daily" payouts (Stripe Dashboard → Business → Payouts → Schedule). Every day, Stripe pays out the full available balance to Fraser's bank. The platform balance is consistently £0 at end-of-period.
+
+**Why this matters:** the Friday cron (`api/cron-payouts.js`) assumes the platform balance acts as escrow between purchase and lesson delivery. By the time `stripe.transfers.create` runs, the funds have already been auto-paid to Fraser's bank. The transfer would fail with `insufficient_funds`. **This means the instructor payout cron cannot pay anyone in the current configuration, including instructor #2 when they onboard.**
+
+**Confirmed by data:**
+
+- Fraser's row has 49 unpaid chargeable bookings totalling £3,842.50 (all blocked from cron by `payouts_paused=TRUE`)
+- April 2026 payout reconciliation report: £676.50 charges in, £645.07 paid out, ending balance £0.00
+
+**The fix (documented as Step 0 in `INSTRUCTOR-PAYMENTS-PLAN.md`, build deferred to next session):**
+
+- Switch Stripe Dashboard payout schedule from "Automatic Daily" → "Manual"
+- New `api/cron-platform-sweep.js` scheduled at Friday 09:30 UTC (30 min after instructor-payouts cron) — calls `stripe.payouts.create` for whatever's left in the platform balance, sending it to Fraser's bank
+
+**End state:**
+- Today (one instructor): platform balance accumulates Mon-Thu, sweep cron pays it out Friday → Fraser receives one weekly STRIPE deposit instead of daily
+- After instructor #2: instructor-payouts cron transfers their share at 09:00, sweep cron transfers Fraser's residue (his share + franchise fee component) at 09:30 → Fraser still receives one weekly deposit, instructor #2 receives theirs separately, all hands-off
+
+**Why this is documented as a discovery now rather than fixed:** building a money-moving cron at the end of a long session is when subtle bugs slip in. Captured as a prerequisite to Step 4 instead; will ship before instructor #2's onboarding. See memory `project_platform_owner_payout_model.md` for the decision-tree detail.
+
+**Files changed:** `INSTRUCTOR-PAYMENTS-PLAN.md` (Step 0 added), `DEVELOPMENT-ROADMAP.md`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
