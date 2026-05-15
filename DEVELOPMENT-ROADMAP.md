@@ -2059,6 +2059,26 @@ The webhook insert was the most visible failure — it's not in a try/catch, so 
 
 ---
 
+## 2.99 — Stripe Connect health surface: instructor banner upgrade + admin Payments column (16 May 2026)
+
+Step 1 of `INSTRUCTOR-PAYMENTS-PLAN.md`. The first slice of the instructor-payments work — gets the Connect onboarding flow visible to instructors and at-a-glance to admins, without touching credit scoping or schema. Triggered by an audit of Fraser's own Connect account that found three past-due requirements (external account, representative, ToS) silently blocking payouts — Stripe was rejecting transfers while the existing earnings-page banner rendered green.
+
+**Root cause of the silent state:** `renderConnectBanner` in `earnings.js` branched only on `has_account` and `onboarding_complete` (DB flags). Once `stripe_onboarding_complete = TRUE` was written (which happens the first time charges and payouts are enabled), the banner stayed green forever — even if Stripe later raised new `currently_due` requirements (re-verification, expired ID, missing bank details) or disabled capabilities.
+
+**What changed:**
+
+- `api/connect.js` — `?action=connect-status` now returns `charges_enabled`, `payouts_enabled`, and `requirements_pending` (count of `account.requirements.currently_due` items) whenever `has_account=true`. Previously these were checked internally but never surfaced. Mirrors the existing `school-connect-status` pattern.
+- `public/instructor/earnings.js` — `renderConnectBanner` gained a fourth state: amber "Action required" with a red count badge, slotted between "DB onboarding incomplete" and "fully healthy". Triggered when `onboarding_complete=true` but `!charges_enabled || !payouts_enabled || requirements_pending > 0`. Copy adapts to the failure mode (count of items vs. capability disabled). Legacy API responses without the new fields fall through to the old green branch for back-compat during deploy.
+- `public/instructor/dashboard.html` + `dashboard.js` — one-line clickable Connect-health alert above today's lessons. Hidden when account is healthy; amber when there's something to act on; red when no Connect account exists. Click navigates to the earnings page where the full banner with action buttons lives. Fire-and-forget — a Connect API hiccup doesn't block dashboard load.
+- `api/admin.js` — `?action=all-instructors` returns three new DB columns: `connect_has_account`, `connect_onboarding_complete`, `connect_payouts_paused`. No live Stripe lookup (avoiding N+1 round-trips on every admin pageload).
+- `public/admin/portal.js` — Payments badge on each instructor card: ✅ (active), ⚠️ (in-progress or paused), ❌ (no account). DB-only triage view; live state lives on the instructor's own earnings page.
+
+**Deliberately out of scope:** Step 2 (public instructor profile pages), Step 3 (schema migration for credits + tiers), Steps 4 / 4f / 4g (per-instructor credit scoping, Stripe-fee pass-through, FIFO consumption). Those are gated on the signed franchise agreement and ship together when instructor #2 onboards.
+
+**Files changed:** `api/connect.js`, `public/instructor/earnings.js`, `public/instructor/dashboard.html`, `public/instructor/dashboard.js`, `api/admin.js`, `public/admin/portal.js`, `docs/stripe-connect.md`, `INSTRUCTOR-PAYMENTS-PLAN.md`
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email
