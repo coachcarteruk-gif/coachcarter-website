@@ -225,6 +225,336 @@ Each of these writes to credits today. Each needs `instructor_id` plumbed throug
 
 ---
 
+### Step 4g — FIFO credit consumption + cross-source booking attribution (~4–6 hours, lands as part of Step 4)
+
+A learner can hold multiple `credit_transactions` rows for the same `(learner_id, instructor_id)` pair at different `effective_rate_pence_per_minute` values. Example: a 12-hour pack bought at the 2.5% bulk-tier (89p/min) followed two weeks later by a 24-hour top-up at the 5% tier (87p/min). When the learner books a lesson, which row drains? When they cancel, which rate refunds? The plan as written doesn't say, so Step 4g locks the rule in.
+
+**The rule: FIFO by `credit_transactions.created_at` ascending.**
+
+Older credits drain first. Refunds (cancel ≥48h) return minutes to the *same source row(s)* they were drawn from, at the source row's `effective_rate_pence_per_minute`. The booking carries an audit trail of which row(s) funded it.
+
+**Why FIFO and not the alternatives** (recorded so future-Claude doesn't reopen this):
+
+- **FIFO (chronological)** — Chosen. Matches the learner's mental model ("use my older credits before my newer ones"). Preserves a 1:1-ish mapping between a booking and its funding credit row, which Step 4f's Stripe-fee attribution relies on. Audit-friendly: every booking points at exactly which purchase paid for it.
+- **LIFO (newest first)** — Rejected. Creates a perverse incentive where every top-up defers the older credits; if the learner leaves or the credits expire, they lose the more expensive ones. Feels generous in the moment, hostile on aggregate.
+- **Weighted-average blended rate** — Rejected. Recomputing a blended `balance_minutes`-rate on every top-up dilutes the discount tier the learner paid for, loses the per-purchase audit trail, and breaks Step 4f (Stripe-fee attribution needs to point at *a* charge, not a blend of charges).
+
+**Cross-source bookings (decided: split attribution).**
+
+A booking can straddle two credit_transactions rows when the older row has fewer minutes left than the booking duration. With both 60- and 90-min lessons legal, splits *will* happen routinely. The booking's funding is split across two (or rarely more) source rows, each contribution recorded with its own rate snapshot.
+
+**Why split rather than promote-to-newest or auto-refund stranded minutes** (recorded):
+
+- **Split attribution** — Chosen. Correct accounting: the learner used some of pack A and some of pack B, and that's exactly what the data says. Refunds are exact. Generalises cleanly to Stripe-fee attribution (each source contributes proportionally). Small schema cost (one join table).
+- **Promote-to-newest** — Rejected. Creates "orphan minutes" stranded on the older pack that the UI has to explain ("you have 60 min left at the older rate" — confusing). Pushes the awkwardness onto the learner.
+- **Auto-refund stranded minutes** — Rejected. Adds Stripe refund volume for tiny amounts, complicates GDPR retention on credit_transactions, and surprises the learner ("why did I get 60p back?").
+
+**4g.a. Schema.**
+
+New join table — the audit trail of which credit_transactions row(s) funded each booking:
+
+```sql
+CREATE TABLE IF NOT EXISTS booking_credit_sources (
+  id SERIAL PRIMARY KEY,
+  booking_id INTEGER NOT NULL REFERENCES lesson_bookings(id) ON DELETE CASCADE,
+  credit_transaction_id INTEGER NOT NULL REFERENCES credit_transactions(id),
+  minutes_drawn INTEGER NOT NULL CHECK (minutes_drawn > 0),
+  rate_pence_per_minute INTEGER NOT NULL,         -- snapshotted from credit_transactions at draw time
+  contribution_pence INTEGER NOT NULL,            -- = minutes_drawn × rate_pence_per_minute (with rounding rule)
+  stripe_fee_pence INTEGER NOT NULL DEFAULT 0,    -- Step 4f: proportional share of source row's Stripe fee
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_bcs_booking ON booking_credit_sources(booking_id);
+CREATE INDEX IF NOT EXISTS idx_bcs_credit_tx ON booking_credit_sources(credit_transaction_id);
+```
+
+`lesson_bookings.list_price_pence` (from Step 4) becomes the **sum** of `booking_credit_sources.contribution_pence` across the booking's sources. Likewise `lesson_bookings.stripe_fee_pence` (Step 4f) becomes the sum of `booking_credit_sources.stripe_fee_pence`. The join table is the source of truth; the booking columns are denormalised summaries kept for query performance.
+
+**4g.b. Booking-time draw logic** in `api/slots.js?action=book`:
+
+```javascript
+async function drawFifo(sql, learnerId, instructorId, bookingId, minutesNeeded) {
+  // Lock the rows we're about to mutate (FOR UPDATE) inside a transaction
+  const sources = await sql`
+    SELECT id, effective_rate_pence_per_minute, stripe_fee_pence, minutes,
+           remaining_minutes  -- materialised view OR computed via subtraction below
+      FROM credit_transactions
+     WHERE learner_id = ${learnerId}
+       AND instructor_id = ${instructorId}
+       AND remaining_minutes > 0
+     ORDER BY created_at ASC
+     FOR UPDATE
+  `;
+
+  let remaining = minutesNeeded;
+  const draws = [];
+  for (const src of sources) {
+    if (remaining === 0) break;
+    const take = Math.min(remaining, src.remaining_minutes);
+    const rate = src.effective_rate_pence_per_minute;
+    const contributionPence = Math.round(take * rate);
+    const feeShare = src.stripe_fee_pence != null
+      ? Math.round(src.stripe_fee_pence * take / src.minutes)  // banker's rounding in real impl
+      : 0;
+    draws.push({ creditTxId: src.id, take, rate, contributionPence, feeShare });
+    remaining -= take;
+  }
+  if (remaining > 0) throw insufficientCreditsError(...);  // instructor-aware message from Step 4b
+
+  // Persist
+  for (const d of draws) {
+    await sql`INSERT INTO booking_credit_sources (booking_id, credit_transaction_id, minutes_drawn, rate_pence_per_minute, contribution_pence, stripe_fee_pence)
+              VALUES (${bookingId}, ${d.creditTxId}, ${d.take}, ${d.rate}, ${d.contributionPence}, ${d.feeShare})`;
+  }
+  // Denormalise onto booking
+  const totalContribution = draws.reduce((a, d) => a + d.contributionPence, 0);
+  const totalFee = draws.reduce((a, d) => a + d.feeShare, 0);
+  await sql`UPDATE lesson_bookings
+               SET list_price_pence = ${totalContribution},
+                   stripe_fee_pence = ${totalFee}
+             WHERE id = ${bookingId}`;
+  // Decrement learner_credit_balances
+  await sql`UPDATE learner_credit_balances
+               SET balance_minutes = balance_minutes - ${minutesNeeded}
+             WHERE learner_id = ${learnerId} AND instructor_id = ${instructorId}`;
+}
+```
+
+`credit_transactions.remaining_minutes` is `credit_transactions.minutes − SUM(booking_credit_sources.minutes_drawn WHERE NOT refunded)`. Either store it as a denormalised column maintained by triggers, or compute it on demand — pick at implementation time based on read frequency. Recommend denormalised + trigger for performance, with a daily reconcile cron that catches drift.
+
+**4g.c. Cancellation refund logic** in `api/slots.js?action=cancel`:
+
+≥48h cancellation:
+
+```javascript
+// Find every credit_transactions row that funded this booking, return minutes at original rate
+const sources = await sql`SELECT * FROM booking_credit_sources WHERE booking_id = ${bookingId}`;
+for (const src of sources) {
+  await sql`UPDATE credit_transactions
+               SET remaining_minutes = remaining_minutes + ${src.minutes_drawn}
+             WHERE id = ${src.credit_transaction_id}`;
+}
+await sql`UPDATE learner_credit_balances
+             SET balance_minutes = balance_minutes + ${totalMinutesRefunded}
+           WHERE learner_id = ${learnerId} AND instructor_id = ${instructorId}`;
+// Mark the booking_credit_sources rows as refunded for audit (don't delete — keep history)
+await sql`UPDATE booking_credit_sources SET refunded_at = NOW() WHERE booking_id = ${bookingId}`;
+```
+
+(Adds a `refunded_at TIMESTAMPTZ` column to `booking_credit_sources`. NULL = active draw, non-NULL = reversed by a refund.)
+
+<48h cancellation: `credit_forfeited = TRUE` on `lesson_bookings` (booking-status restructure), `booking_credit_sources` rows untouched (the learner used those credits, even though the lesson didn't happen). Instructor still paid via the booking's snapshotted `list_price_pence`. Aligned with the "instructor paid unless 48h+ notice" principle.
+
+**4g.d. Concurrency.**
+
+Two bookings happening simultaneously for the same learner must serialise around the credit draw. Wrap the booking transaction in `SELECT ... FOR UPDATE` on the relevant `credit_transactions` rows (shown in 4g.b). Without this lock, two concurrent bookings could both observe `remaining_minutes = 90` on the same row and both draw 90 minutes, overdrafting. Postgres row locks are sufficient; no need for a Redis mutex.
+
+**4g.e. Migration of in-flight balances.**
+
+Existing learners with `learner_users.balance_minutes` (the legacy pooled column) already get a backfill in Step 3 that creates one `learner_credit_balances` row per learner with `instructor_id = Fraser`. Step 4g adds: backfill one synthetic `booking_credit_sources` row *per existing chargeable booking*, pointing at the closest-matching `credit_transactions` row by date. For bookings that pre-date any credit purchase (free-trial, referral reward, admin-granted), insert a `booking_credit_sources` row with `credit_transaction_id = NULL` and `rate_pence_per_minute = list_price_pence / duration_minutes`. NULL credit_tx_id means "not refundable to a specific purchase" — the booking still has a known rate, just no source row.
+
+Schema tweak to allow this:
+
+```sql
+ALTER TABLE booking_credit_sources ALTER COLUMN credit_transaction_id DROP NOT NULL;
+-- credit_transaction_id IS NULL = booking funded by a non-Stripe source (free trial, referral, admin grant)
+```
+
+**4g.f. Refund-a-purchase (out of scope, but flagged).**
+
+Distinct from refund-a-booking: a learner might ask for a cash refund of an unused (or partially-used) top-up purchase, regardless of FIFO. This is handled via Stripe's original-charge refund mechanism and only the *unused* portion is refundable in cash. The remaining_minutes on the credit_transactions row must reach zero before the Stripe refund settles, otherwise the learner has both the money back and unbookable credits. Deferred to a follow-up plan when first requested — manual admin SQL until then.
+
+**Acceptance criteria:**
+
+1. **Single-source booking**: learner has only credit_tx #1 with 720 min at 89p/min → books a 90-min lesson → one `booking_credit_sources` row, 90 min @ 89p, contribution_pence = 8010p. `lesson_bookings.list_price_pence` = 8010p.
+2. **Cross-source split**: learner has credit_tx #1 with 60 min remaining at 89p, credit_tx #2 with 1440 min at 87p → books a 90-min lesson → two `booking_credit_sources` rows (60 min @ 89p = 5340p, 30 min @ 87p = 2610p). `lesson_bookings.list_price_pence` = 7950p, sum matches.
+3. **FIFO order verified**: same learner books five more 90-min lessons → credit_tx #1 fully drained (remaining_minutes = 0), credit_tx #2 partially drawn. No booking touches #2 while #1 still has minutes.
+4. **Refund returns to source**: cancel cross-source booking from (2) ≥48h → credit_tx #1.remaining_minutes += 60, credit_tx #2.remaining_minutes += 30. `learner_credit_balances.balance_minutes` += 90. `booking_credit_sources.refunded_at` set on both rows.
+5. **Late-cancel does not refund**: same booking cancelled <48h → `credit_forfeited = TRUE`, no credit_tx rows touched, `booking_credit_sources.refunded_at` stays NULL, instructor still paid `list_price_pence = 7950p` at the next payout.
+6. **Concurrency**: two parallel `?action=book` requests for the same learner with exactly enough minutes for one booking → exactly one succeeds, the other returns insufficient-credits.
+7. **Step 4f integration**: a 24-hour pack with `stripe_fee_pence = 220p` drained over 16× 90-min bookings → `SUM(booking_credit_sources.stripe_fee_pence WHERE credit_transaction_id = X) = 220p` exactly (with banker's rounding + carry-the-remainder).
+8. **Backfill**: post-migration, every existing chargeable booking has at least one `booking_credit_sources` row; `SUM(booking_credit_sources.contribution_pence) = lesson_bookings.list_price_pence` for every booking; `SUM(booking_credit_sources.minutes_drawn) = lesson_bookings.duration_minutes` for every booking.
+
+**Risks:**
+
+| Risk | Mitigation |
+|---|---|
+| `remaining_minutes` denormalisation drifts from the truth (`minutes − SUM(non-refunded draws)`) | Daily reconcile cron compares the two; alerts on any mismatch; nightly job, low traffic window |
+| Concurrent booking double-spend | `SELECT ... FOR UPDATE` on the credit_transactions row inside the booking transaction |
+| Backfill picks the wrong source row for a historical booking | The pre-Step-4 world had a single pooled balance; any "wrong" attribution is internally consistent within the pre-migration period. Pence sums still reconcile. Document the heuristic in the migration commit message. |
+| UI for "credits remaining" needs to surface multiple rates | `api/credits.js?action=balance` returns array of per-credit-tx remaining rows (count, rate, expiry if any); learner profile shows the aggregate; a "show breakdown" link expands |
+| Stranded sub-lesson-length minutes on an older pack | Will happen rarely once FIFO is fully active (the next booking just draws across both rows). For the truly stranded edge case (one min left on an old pack, learner never books again), the remainder ages out with the row — no special handling |
+| Refund returns minutes to a credit_tx row whose source charge has since been Stripe-refunded | Edge case (would require a refund-a-purchase to have run first). Guardrail: `?action=cancel` refuses to credit-back to a `credit_transactions` row where the underlying charge is fully refunded — the booking cancellation still proceeds but credits don't restore. Logged for admin follow-up. |
+
+**Open questions:**
+
+1. **Should `booking_credit_sources` rows be GDPR-anonymised when a learner is deleted?** Yes — cascade via `lesson_bookings.learner_id` anonymisation. Add to the cascade list in `handleConfirmDeletion()` and `cron-retention.js` (CLAUDE.md rule).
+2. **Credit expiry** — not in scope today. If introduced, FIFO order naturally favours draining nearly-expired credits first, which is the right behaviour with no code change needed.
+3. **Cross-instructor admin override** (open question 1 from Step 4) — a one-off SQL conversion from Sarah-credits to Mark-credits would create new `credit_transactions` rows for Mark and zero out Sarah's. The `booking_credit_sources` history on past bookings stays intact (those rows already drew from the Sarah-charge); the converted-forward balance is a fresh purchase from Mark's perspective. No mechanic change.
+
+---
+
+### Step 4f — Stripe-fee pass-through (~6–10 hours, lands after Step 4)
+
+The instructor — not the platform — absorbs the Stripe processing fee on each payment they receive. Under the franchise model, the franchise fee is sized to cover platform costs (servers, support, marketing); under the commission model, the platform's commission percentage already accounts for its own operating costs. Either way, payment-processing cost is a *per-transaction* cost incurred by the instructor's revenue line — it should reduce *their* take-home, not eat into the platform's margin.
+
+This step implements **A3: net-of-Stripe at the booking level**. Stripe's fee is snapshotted on each booking row at the moment Stripe reports it, and the payout pipeline reads `list_price_pence − stripe_fee_pence` as the instructor's contribution from that booking. There is no separate "fee debt" ledger and no interaction with the franchise shortfall column.
+
+**Why A3 and not the alternatives** (recorded so future-Claude doesn't reopen this):
+
+- **A1 (platform absorbs)** — Rejected. Stripe fees on UK domestic cards (~1.5% + 20p) compound across volume; on £55/hour bookings that's ~£1.03/lesson. With instructor #2 at 20 lessons/week that's £20/week the platform eats forever. The franchise fee was not sized for this; the commission rate was not sized for this.
+- **A2 (booking-level surcharge to learner)** — Rejected. Surfacing a "card-processing surcharge" line item at checkout is friction the competitive set doesn't have. CoachCarter pricing is round-pound deliberately.
+- **A3 (net-of-Stripe at booking)** — Chosen. Clean per-booking accounting, no separate ledgers, snapshot survives refunds, identical mechanic across franchise and commission models, instructor's earnings report explains exactly where the difference between list and take-home came from.
+- **A4 (weekly aggregate fee deduction)** — Rejected. Works for franchise (deduct alongside the weekly franchise fee) but doesn't generalise to commission cleanly, and obscures per-booking traceability.
+
+**Three decisions are locked in** (from prior session, do not re-litigate):
+
+1. **Commission model uses Option A**: commission applied to **gross** (i.e. `list_price_pence × commission_rate`), Stripe fee deducted from the instructor's share as a *separate line*. This means the mechanic is identical across franchise and commission models — both subtract the booking's `stripe_fee_pence` from the instructor contribution after gross is established. The instructor's payout summary shows three lines: gross from bookings → minus Stripe fees → minus franchise fee (or × commission) → net.
+
+2. **Stripe-fee handling uses A3**: net-of-Stripe at the booking level via a new column `lesson_bookings.stripe_fee_pence INTEGER` (nullable; NULL = unknown/not-yet-reported, treated as zero by payout code). The instructor contribution for the booking is `list_price_pence - COALESCE(stripe_fee_pence, 0)`. No special "fee debt" tracking, no shortfall interactions, no separate fee ledger.
+
+3. **Refund-orphaned Stripe fees** (cancellation ≥48h, Stripe keeps the fee since the September 2022 policy change): **platform absorbs.** Documented as expected cost of doing business — typical volume is low enough that a per-week orphan-fee tally is fine as a watchlist metric, not an action item. **Chargebacks: out of scope for Step 4f**, separate problem to be handled if/when one occurs.
+
+**4f.a. Schema migration.**
+
+```sql
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS stripe_fee_pence INTEGER;
+ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS stripe_fee_pence INTEGER;
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS stripe_fee_source TEXT;
+-- stripe_fee_source: 'balance_transaction' (canonical, from Stripe API) | 'estimated' (computed at book time, awaiting reconciliation) | NULL (no fee, e.g. credit-redemption with no fresh charge)
+```
+
+`stripe_fee_pence` on `credit_transactions` is the **canonical** source-of-truth row for a Stripe payment. `lesson_bookings.stripe_fee_pence` is the *attributed share* — for single-lesson bookings it equals the credit_transaction's fee; for bulk-pack purchases the fee is split across the booked lessons as they're consumed (see 4f.c).
+
+**4f.b. Capture the fee at webhook time.**
+
+`api/webhook.js` already receives `payment_intent.succeeded` / `checkout.session.completed`. Augment each handler to fetch the associated `balance_transaction` and extract `balance_transaction.fee` (always in pence for GBP):
+
+```javascript
+// In handleCreditPurchase, handleSlotBooking, handleOfferBooking, handleFreeOffer
+const charge = await stripe.charges.retrieve(paymentIntent.latest_charge, {
+  expand: ['balance_transaction']
+});
+const stripeFeePence = charge.balance_transaction?.fee ?? null;
+```
+
+Store on `credit_transactions.stripe_fee_pence`. The `balance_transaction` is typically available within seconds of `payment_intent.succeeded` but isn't guaranteed; if `null`, write NULL and reconcile in 4f.e.
+
+**4f.c. Attribute the fee to bookings — defers to Step 4g.**
+
+Step 4g (FIFO consumption + cross-source attribution) owns the booking-to-credit-tx mapping via `booking_credit_sources`. Step 4f's job is just to snapshot the *source row's* Stripe fee at webhook time; the per-booking attribution falls out of 4g's draw logic for free.
+
+Two cases:
+
+- **Direct slot booking** (`handleSlotBooking`, `handleOfferBooking`, `handleFreeOffer`): one charge → one credit_transactions row → one booking, drawn immediately. The 4g draw logic creates a single `booking_credit_sources` row with `stripe_fee_pence` equal to the full source-row fee. `lesson_bookings.stripe_fee_pence` (denormalised summary) = same value. Set `stripe_fee_source = 'balance_transaction'`.
+- **Bulk credit pack** (`handleCreditPurchase`): one charge → N future bookings drawn over time. The fee is split *pro-rata by minutes* by 4g's draw logic: for each draw, `booking_credit_sources.stripe_fee_pence = ROUND(credit_tx.stripe_fee_pence × minutes_drawn / credit_tx.minutes)`. Cross-source bookings (4g) accumulate fees from each source naturally — `lesson_bookings.stripe_fee_pence` is the SUM across source rows.
+
+**Rounding rule** (lives in 4g's draw logic, repeated here for the fee accounting context): banker's rounding (half-to-even) at each snapshot. Any sub-penny drift accumulates onto the *final* draw from a credit_transactions row — when that row's `remaining_minutes` hits zero, the last `booking_credit_sources.stripe_fee_pence` row receives the leftover pence so that `SUM(booking_credit_sources.stripe_fee_pence WHERE credit_transaction_id = X)` exactly equals `credit_transactions.stripe_fee_pence`. Pence-exact, no orphan pence.
+
+**4f.d. Payout helper change.**
+
+`api/_payout-helpers.js getEligibleBookings`: change the price column from `price_pence` to `contribution_pence`:
+
+```sql
+COALESCE(lb.list_price_pence, <existing live-compute fallback>) - COALESCE(lb.stripe_fee_pence, 0) AS contribution_pence
+```
+
+Then in `processPayoutForInstructor`:
+
+```javascript
+let totalGrossPence = 0;
+let totalStripeFeesPence = 0;
+for (const b of bookings) {
+  totalGrossPence += parseInt(b.list_price_pence);  // new column from Step 4
+  totalStripeFeesPence += parseInt(b.stripe_fee_pence || 0);
+}
+const totalNetOfStripe = totalGrossPence - totalStripeFeesPence;
+
+// Franchise model:
+// payout = totalNetOfStripe - franchiseFee - depositDeducted - priorShortfallPence
+//
+// Commission model:
+// instructorShare = totalGrossPence × commissionRate    // commission on gross, per locked-in Decision 1
+// payout = instructorShare - totalStripeFeesPence       // Stripe fees deducted from instructor's share
+```
+
+Persist `stripe_fees_pence` on `instructor_payouts` as a new column so the breakdown is queryable historically. Add to migration:
+
+```sql
+ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS stripe_fees_pence INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payout_line_items ADD COLUMN IF NOT EXISTS stripe_fee_pence INTEGER NOT NULL DEFAULT 0;
+```
+
+**4f.e. Reconciliation cron for late `balance_transaction` data.**
+
+A small daily cron (`api/cron-reconcile-stripe-fees.js`, runs 04:00 UTC) finds any `credit_transactions` row from the last 7 days where `stripe_fee_pence IS NULL`, re-fetches the `balance_transaction`, and backfills. If the row has already been partially drawn (some bookings have NULL `stripe_fee_pence` from this row), it updates those bookings using the same pro-rata rule. Hardens against transient webhook race conditions where `balance_transaction` wasn't ready at `payment_intent.succeeded` time.
+
+If a booking flips to `chargeable` (post booking-status restructure) before its `stripe_fee_pence` is reconciled, the payout cron treats NULL as zero — instructor is overpaid by the fee amount for that one booking. The reconcile cron must catch this *before* Friday 09:00 UTC payout. A guardrail check in `_payout-helpers.js`: if any eligible booking has `stripe_fee_pence IS NULL` and `created_at > NOW() - 48h`, log a warning and either (a) include with fee=0 + alert, or (b) hold the booking until next week. Default: (a) — getting the instructor paid on time outweighs a one-week pence drift that future payouts will swallow.
+
+**4f.f. Instructor earnings UI.**
+
+`public/instructor/earnings.html` payout breakdown:
+
+```
+Gross from lessons:    £550.00
+Stripe fees:           − £10.34
+Franchise fee:         − £195.00
+Prior shortfall:       − £0.00
+─────────────────────────────
+Net payout:            £344.66
+```
+
+Tooltip on the Stripe fees row: *"Card-processing fee charged by Stripe on payments your learners made. Typically 1.5% + 20p per UK card payment."*
+
+**4f.g. Refund-orphaned fees — watchlist metric.**
+
+Add a one-line admin dashboard counter: "Orphan Stripe fees this month: £X.XX" — sum of `credit_transactions.stripe_fee_pence` for transactions where the corresponding bookings have all been refunded with no instructor payout drawn from them. Pure information, no action. If this number gets uncomfortable (target: <£20/month at instructor #2 scale; >£50/month sustained is a flag), revisit the absorption decision.
+
+**4f.h. Backfill historical data.**
+
+For all `credit_transactions` rows with non-null `stripe_payment_intent_id` and null `stripe_fee_pence`: one-shot script that paginates through and back-fills via `stripe.charges.retrieve(..., {expand: ['balance_transaction']})`. Set `stripe_fee_source = 'balance_transaction'`. Then attribute to existing bookings using the same pro-rata rule.
+
+For very-old rows where the charge has been archived past Stripe's retrieval window: leave `stripe_fee_pence = NULL`. The payout pipeline treats NULL as zero — historical payouts already happened with the old model, so this only matters if Fraser does a retroactive payout for a stale booking, which is an edge case handled manually.
+
+**Acceptance criteria:**
+
+1. **Live webhook captures fees**: a fresh £55 GBP card payment via webhook end-to-end → `credit_transactions.stripe_fee_pence` populated within 60s, value matches Stripe Dashboard's reported fee to the penny.
+2. **Single-lesson booking attribution**: book → `lesson_bookings.stripe_fee_pence` equals the credit_transaction's fee (pence-exact).
+3. **Bulk-pack attribution sums correctly**: buy a 12-hour pack → book six 90-min lessons → cancel two with ≥48h notice → `SUM(lesson_bookings.stripe_fee_pence)` across the four remaining bookings + any refund-reversed amounts equals the original `credit_transactions.stripe_fee_pence` exactly.
+4. **Franchise payout maths**: dry-run the payout for an instructor with mixed bookings → manually compute `gross − stripe_fees − franchise_fee − prior_shortfall` → pence-exact match against the cron's `instructor_payouts.amount_pence`.
+5. **Commission payout maths**: same exercise on a commission-model test instructor → `gross × commission_rate − stripe_fees` → pence-exact match.
+6. **Reconciliation cron catches gaps**: simulate a webhook race (NULL `stripe_fee_pence`) → next-day cron backfills correctly → if any bookings funded by that transaction already chargeable, their `stripe_fee_pence` is also corrected.
+7. **Refund-orphan tally renders**: cancel ≥48h on a paid booking → orphan-fees counter increments by that booking's `stripe_fee_pence`.
+8. **Earnings UI shows the breakdown**: instructor earnings page renders the four-line breakdown with the Stripe-fees row populated.
+9. **Backfill script reconciles to Stripe Dashboard**: post-backfill, total `SUM(credit_transactions.stripe_fee_pence)` for the last calendar month matches Stripe Dashboard "Fees" report for the same period within 0.01%.
+
+**What this interacts with:**
+
+- **`BOOKING-STATUS-RESTRUCTURE-PLAN.md`** — prerequisite. The `chargeable` status is the signal that a booking is eligible for payout, and the 1-hour buffer after `end_time` is the window in which the reconcile cron must have fired. If status restructure isn't done, the eligibility filter is fuzzier and the reconcile timing harder to reason about.
+- **Step 4 (per-instructor credit scoping)** — prerequisite. `list_price_pence` is the gross-contribution column added in Step 4; Step 4f layers `stripe_fee_pence` on top.
+- **Step 4g (FIFO + cross-source attribution)** — prerequisite. The `booking_credit_sources` join table is where Stripe fees are split across source rows; 4f's webhook capture writes the *source-row* fee, and 4g's draw logic distributes it. If 4g isn't done, 4f can't correctly attribute fees on bulk-pack purchases.
+- **`FRANCHISE-MODEL-PLAN.md` shortfall column** — explicitly does *not* interact. `stripe_fee_pence` is a per-booking deduction, not a debt; a low-fee week doesn't accumulate into a future high-fee week.
+- **`docs/stripe-connect.md`** — needs a new section: "Fee attribution model (Step 4f)" documenting A3, the pro-rata rule, and the reconciliation cron.
+
+**Risks:**
+
+| Risk | Mitigation |
+|---|---|
+| `balance_transaction` is NULL at webhook time and reconcile cron hasn't fired before Friday payout | Guardrail in `_payout-helpers.js` treats NULL as zero with a logged warning; instructor paid on time, fee absorbed for that one booking (rare, low-£) |
+| Stripe pricing changes (currently ~1.5% + 20p) and historical bookings have stale rates baked in | We snapshot the actual fee, not a rate, so changes are transparent — historical bookings reflect what was actually charged |
+| Bulk-pack pro-rata splitting creates fractional pence drift | Banker's rounding + carry-the-remainder-to-final-booking rule guarantees pence-exact reconciliation per credit_transactions row |
+| Instructor confusion when Stripe-fee line appears on their first payout | Earnings UI tooltip explains it; one-time email at rollout for existing instructors before the first post-deploy Friday payout |
+| Refund-orphan tally creeps higher than expected and erodes platform margin | Watchlist metric; revisit absorption decision (move to A4 weekly aggregate or A2 learner surcharge) if sustained >£50/month |
+| Backfill script can't retrieve very-old charges from Stripe | Leave NULL; documented as historical-only, no behavioural impact going forward |
+
+**Open questions:**
+
+1. **3D Secure / Klarna / non-card payment fees** — Stripe's `balance_transaction.fee` is the canonical figure regardless of payment method, so the mechanic generalises. But fee structures differ (Klarna ~5%+). No code change needed; just be aware that the per-booking fee may be larger than the typical 1.5%+20p on those rare bookings.
+2. **VAT on Stripe fees** — Stripe issues a VAT invoice monthly. We're snapshotting the gross fee (inc. VAT). When CoachCarter Ltd is VAT-registered, the reclaim is at the company level, not per-booking — no code change.
+3. **International cards (~2.5% + 20p)** — same mechanic; the snapshot captures the actual fee. Instructor takes the hit on those bookings. If complaints arise, consider a small platform absorption for international-card-flagged bookings, but defer until pain shows up.
+
+---
+
 ## Suggested sequencing
 
 ### Today (this session)
@@ -239,7 +569,10 @@ End-of-session artefact: Fraser has a public profile page with a Book Now button
 
 ### When instructor #2 signs the agreement
 5. **Merge Step 3.**
-6. **Step 4** — Phase 2 Thread A. Ship within the same week instructor #2 onboards, so backfill happens once for a known signed-spec.
+6. **Step 4 + Step 4g** — Phase 2 Thread A, shipped together. Step 4g (FIFO + `booking_credit_sources`) is the consumption-side counterpart of Step 4's purchase-side scoping; splitting them across PRs would leave the schema half-wired. Ship within the same week instructor #2 onboards so backfill happens once for a known signed-spec.
+
+### After Step 4/4g lands and BOOKING-STATUS-RESTRUCTURE has merged
+7. **Step 4f** — Stripe-fee pass-through (A3: net-of-Stripe at booking level). Depends on `lesson_bookings.list_price_pence` (Step 4), `booking_credit_sources` (Step 4g), and the `chargeable` status (booking-status restructure). Migrate, deploy, backfill historical fees, then enable the new payout maths in a follow-up PR so the cron change is isolated from the schema change.
 
 ## Why this order
 
