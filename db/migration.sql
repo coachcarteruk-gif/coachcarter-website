@@ -1687,6 +1687,19 @@ CREATE TRIGGER balance_audit_trigger
 -- Idempotent: the DROP CONSTRAINT and CASE are safe to re-run. The CASE's
 -- ELSE clause preserves any value that already matches the new vocabulary,
 -- so running this block twice is a no-op on the second run.
+--
+-- Slot-uniqueness predicate swap: the legacy partial index
+-- `uq_instructor_slot` (db/migrations/001_booking_system.sql) had
+-- `WHERE status != 'cancelled'`, which kept multi-cancel and
+-- cancel-then-rebook history rows out of the uniqueness check. With the
+-- collapse, `cancelled` AND `rescheduled` both map to `refunded` — under
+-- the old predicate the rebook-row + the renamed cancellation row would
+-- both be visible to the index and trigger a duplicate-key error during
+-- the UPDATE below. Drop the index before the UPDATE and recreate it
+-- with the new vocabulary predicate (`!= 'refunded'`) afterwards.
+DROP INDEX IF EXISTS uq_instructor_slot;
+ALTER TABLE lesson_bookings DROP CONSTRAINT IF EXISTS uq_booking_slot;
+
 ALTER TABLE lesson_bookings DROP CONSTRAINT IF EXISTS lesson_bookings_status_check;
 
 UPDATE lesson_bookings SET status = CASE status
@@ -1703,6 +1716,12 @@ WHERE status IN ('confirmed','awaiting_confirmation','completed','no_show','disp
 
 ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_status_check
   CHECK (status IN ('scheduled', 'chargeable', 'refunded'));
+
+-- Re-create the slot-uniqueness partial index with the new vocabulary.
+-- Semantic preserved: a refunded slot is free for someone else to take.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_instructor_slot
+  ON lesson_bookings(instructor_id, scheduled_date, start_time)
+  WHERE status != 'refunded';
 
 -- Late-cancel-under-48h flag. See docs/booking-statuses.md.
 -- TRUE means: learner cancelled inside the 48h window, credit was forfeited,
