@@ -1,9 +1,12 @@
 /**
  * Shared payout logic used by cron-payouts.js and admin manual trigger.
  *
- * Eligible bookings: status='completed' OR (status='confirmed' AND scheduled_date <= NOW() - 3 days)
+ * Eligible bookings: status = 'chargeable'. The 1-hour buffer on the
+ * scheduled → chargeable flip (see api/cron-auto-complete.js) absorbs clock
+ * skew and last-minute reschedule races, so no extra grace period is needed.
  * Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment.
  */
+const { CHARGEABLE } = require('./_booking-status');
 
 /**
  * Get unpaid eligible bookings for an instructor.
@@ -29,10 +32,7 @@ async function getEligibleBookings(sql, instructorId, payoutsStartDate = null) {
      WHERE lb.instructor_id = ${instructorId}
        AND pli.id IS NULL
        AND (${payoutsStartDate}::date IS NULL OR lb.scheduled_date >= ${payoutsStartDate}::date)
-       AND (
-         lb.status = 'completed'
-         OR (lb.status = 'confirmed' AND lb.scheduled_date <= CURRENT_DATE - INTERVAL '3 days')
-       )
+       AND lb.status = ${CHARGEABLE}
      ORDER BY lb.scheduled_date ASC
   `;
 }
@@ -313,10 +313,7 @@ async function getEligibleSchoolBookings(sql, schoolId) {
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
      WHERE lb.school_id = ${schoolId}
-       AND (
-         lb.status = 'completed'
-         OR (lb.status = 'confirmed' AND lb.scheduled_date <= CURRENT_DATE - INTERVAL '3 days')
-       )
+       AND lb.status = ${CHARGEABLE}
        AND lb.id NOT IN (
          SELECT unnest(booking_ids) FROM school_payouts WHERE school_id = ${schoolId} AND status = 'completed'
        )
