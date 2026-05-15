@@ -144,6 +144,18 @@ async function handleOnboardingLink(req, res) {
 }
 
 // ── Instructor: Check Connect status ──
+//
+// Returns:
+//   has_account          — instructors.stripe_account_id set?
+//   onboarding_complete  — DB flag (updated live if Stripe says complete)
+//   payouts_paused       — DB flag (Fraser dismissed banner or admin paused)
+//   charges_enabled      — Stripe-live: can the account accept payments?
+//   payouts_enabled      — Stripe-live: can the account receive payouts?
+//   requirements_pending — Stripe-live: count of currently_due items
+//
+// charges/payouts/requirements fields are present only when has_account=true.
+// Banner UI uses them to distinguish "red (no account)" from "amber (account
+// exists but Stripe needs more info)" from "green (all set)".
 async function handleConnectStatus(req, res) {
   const user = verifyInstructorAuth(req);
   if (!user) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Not authenticated' });
@@ -164,10 +176,13 @@ async function handleConnectStatus(req, res) {
       payouts_paused: !!instructor.payouts_paused
     };
 
-    // If they have an account but onboarding not marked complete, check with Stripe
-    if (instructor.stripe_account_id && !instructor.stripe_onboarding_complete) {
+    if (instructor.stripe_account_id) {
       const account = await stripe.accounts.retrieve(instructor.stripe_account_id);
-      if (account.charges_enabled && account.payouts_enabled) {
+      result.charges_enabled = !!account.charges_enabled;
+      result.payouts_enabled = !!account.payouts_enabled;
+      result.requirements_pending = (account.requirements?.currently_due || []).length;
+
+      if (!instructor.stripe_onboarding_complete && account.charges_enabled && account.payouts_enabled) {
         await sql`UPDATE instructors SET stripe_onboarding_complete = TRUE WHERE id = ${user.id}`;
         result.onboarding_complete = true;
       }
