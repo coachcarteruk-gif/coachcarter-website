@@ -601,6 +601,9 @@ async function handleAllInstructors(req, res) {
         COALESCE(i.commission_rate, 0.85) AS commission_rate,
         i.weekly_franchise_fee_pence,
         (i.password_hash IS NOT NULL) AS has_password,
+        (i.stripe_account_id IS NOT NULL) AS connect_has_account,
+        COALESCE(i.stripe_onboarding_complete, FALSE) AS connect_onboarding_complete,
+        COALESCE(i.payouts_paused, FALSE) AS connect_payouts_paused,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.instructor_id = i.id AND lb.status = ${SCHEDULED}
            AND lb.scheduled_date >= CURRENT_DATE AND lb.school_id = ${schoolId}) AS upcoming_bookings,
