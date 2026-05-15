@@ -39,7 +39,20 @@ This works with one instructor because everyone implicitly belongs to Fraser. It
 
 ## Steps
 
-### Step 1 — Stripe Connect health check + banner (~2–3 hours)
+### Step 1 — Stripe Connect health check + banner (~2–3 hours) ✅ Shipped 2026-05-16
+
+**Health check (1a) finding:** Fraser's own Connect account had three past-due requirements (external account, representative, ToS) silently blocking payouts. Stripe Dashboard remediation in-progress; the banner work proceeds independently since the new UI is designed to render the exact failure state Fraser is currently in.
+
+**Shipped slice differs from the plan as written in two ways** (both safer):
+
+1. **No banner on `profile.html`.** A banner already existed on `earnings.html` (the natural home for payouts UI). Adding a second renderer on `profile.html` would have meant two divergent state machines for the same data. Instead, the existing earnings banner was *upgraded* to surface the new state, and `dashboard.html` got a one-line clickable alert that links to the earnings page when there's a problem.
+2. **Admin Payments column is DB-only.** Original plan implied per-row live Stripe state. The shipped version reads three DB columns (`stripe_account_id IS NOT NULL`, `stripe_onboarding_complete`, `payouts_paused`) — accurate enough for the "who's set up at all" triage view, avoids N+1 Stripe round-trips on admin pageload, and self-heals when each instructor next visits their own earnings page. See `docs/stripe-connect.md` for the trade-off note.
+
+See DEVELOPMENT-ROADMAP entry 2.99 for the shipped commit history.
+
+---
+
+### Step 1 — Stripe Connect health check + banner (~2–3 hours) [original spec]
 
 **1a. Verify Fraser's own Connect account is healthy.**
 Run `connect-status` against Fraser's instructor row. Confirm `charges_enabled = true`, `payouts_enabled = true`, and `requirements.currently_due` is empty. If any of those are off, fix that *first* — nothing downstream matters if the platform's own payout pipeline is broken.

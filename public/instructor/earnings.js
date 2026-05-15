@@ -195,8 +195,22 @@
 
   // ── Connect & Payout renders ──────────────────────────────────────────────────
 
+  // Five states, in priority order:
+  //   1. Platform-owner dismiss   → render nothing
+  //   2. No Stripe account        → red, "Set Up Direct Payouts"
+  //   3. Account, DB-incomplete   → amber, "Finish Setting Up Payouts"
+  //   4. DB-complete but Stripe   → amber, "Action required" (this is the
+  //      reports !charges_enabled, !  state that used to silently render
+  //      payouts_enabled, or        green, blocking payouts without the
+  //      requirements_pending > 0   instructor knowing)
+  //   5. Paused by admin          → amber, "Payouts Paused"
+  //   6. Fully healthy            → green, "Payouts Active"
+  //
+  // charges_enabled / payouts_enabled / requirements_pending are populated by
+  // /api/connect?action=connect-status whenever has_account=true. Older API
+  // responses without these fields fall through state 4 (they're treated as
+  // healthy, matching pre-upgrade behaviour).
   function renderConnectBanner(status) {
-    // Dismissed: no account + payouts paused = platform owner, hide banner entirely
     if (!status.has_account && status.payouts_paused) {
       return '';
     }
@@ -224,6 +238,37 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="connect-btn" data-action="continue-connect">Continue Setup</button>
             <button class="connect-btn secondary" data-action="dismiss-connect" style="font-size:0.78rem;">Not needed</button>
+          </div>
+        </div>
+      `;
+    }
+    // State 4: DB says complete, but Stripe is currently blocking transfers.
+    // Either capabilities are off (charges_enabled/payouts_enabled false), or
+    // Stripe has currently_due requirements (re-verification, expired ID,
+    // missing bank details, etc.). Treat as amber — instructor needs to act.
+    const stripeHealthKnown = status.charges_enabled !== undefined; // older API responses lack these
+    const stripeUnhealthy = stripeHealthKnown && (
+      !status.charges_enabled ||
+      !status.payouts_enabled ||
+      (status.requirements_pending || 0) > 0
+    );
+    if (stripeUnhealthy) {
+      const reqCount = status.requirements_pending || 0;
+      const badge = reqCount > 0
+        ? `<span style="display:inline-block;background:#dc2626;color:#fff;font-size:0.7rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle;">${reqCount}</span>`
+        : '';
+      const reason = reqCount > 0
+        ? `Stripe needs ${reqCount === 1 ? 'one more piece' : reqCount + ' more pieces'} of information before payouts can resume.`
+        : `Stripe has paused ${!status.payouts_enabled ? 'payouts' : 'payments'} to your account. Continue setup to resolve.`;
+      return `
+        <div class="connect-banner pending">
+          <div class="connect-banner-text">
+            <div class="connect-banner-title">Action required${badge}</div>
+            <div class="connect-banner-desc">${reason}</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="connect-btn" data-action="continue-connect">Finish Stripe setup</button>
+            <button class="connect-btn secondary" data-action="open-stripe">Stripe Dashboard</button>
           </div>
         </div>
       `;

@@ -127,6 +127,24 @@ function statusBadge(status) {
   return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + status + '</span>';
 }
 
+// At-a-glance Stripe Connect status for an instructor row.
+// DB-only — three columns from all-instructors. Live Stripe state
+// (charges_enabled / requirements) is not fetched here to avoid N+1 round-
+// trips on admin pageload; instructors see their own live status on their
+// earnings page, which writes stripe_onboarding_complete back to the DB.
+function paymentsBadge(i) {
+  if (!i.connect_has_account) {
+    return '<span class="badge badge-gray" title="No Stripe Connect account">Payments: ❌</span>';
+  }
+  if (!i.connect_onboarding_complete) {
+    return '<span class="badge badge-amber" title="Connect account started, onboarding incomplete">Payments: ⚠️</span>';
+  }
+  if (i.connect_payouts_paused) {
+    return '<span class="badge badge-amber" title="Payouts paused (admin or instructor dismiss)">Payments: paused</span>';
+  }
+  return '<span class="badge badge-green" title="Payouts active">Payments: ✅</span>';
+}
+
 // ══════════════════════════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════════
@@ -210,9 +228,10 @@ function renderInstructors() {
     return '<div class="panel-card" style="margin-bottom: 16px;">' +
       '<div style="padding: 20px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">' +
         '<div style="flex: 1; min-width: 200px;">' +
-          '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">' +
+          '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">' +
             '<strong style="font-size: 1.1rem; font-family: var(--font-head);">' + esc(i.name) + '</strong>' +
             statusBadge(i.active ? 'active' : 'inactive') +
+            paymentsBadge(i) +
           '</div>' +
           '<div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 4px;">' + esc(i.email) + (i.phone ? ' &middot; ' + esc(i.phone) : '') + '</div>' +
           (i.bio ? '<div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 8px;">' + esc(i.bio) + '</div>' : '') +

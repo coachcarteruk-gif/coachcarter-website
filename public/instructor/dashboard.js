@@ -76,6 +76,9 @@ async function loadDashboard() {
     // Pending broadcast offers (fire-and-forget — failure to load this card
     // shouldn't block the rest of the dashboard).
     loadBroadcasts().catch(function(e) { console.warn('broadcasts load failed:', e.message); });
+
+    // Connect health alert (fire-and-forget — same rationale).
+    loadConnectAlert().catch(function(e) { console.warn('connect-alert load failed:', e.message); });
   } catch (err) {
     document.getElementById('dashLessons').innerHTML =
       '<div class="dash-empty"><div class="dash-empty-icon">&#x26A0;&#xFE0F;</div><p>' + (err.message || 'Failed to load') + '</p><button data-action="retry-load" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>';
@@ -553,6 +556,44 @@ async function loadBroadcasts() {
     console.warn('loadBroadcasts:', err.message);
     container.style.display = 'none';
   }
+}
+
+// One-line nudge that surfaces a payouts problem at the page the instructor
+// lands on. Click → /instructor/earnings.html where the full banner with
+// actionable buttons lives. Stays hidden when account is healthy or when
+// it's a platform-owner dismissed state (no account + payouts_paused).
+async function loadConnectAlert() {
+  var el = document.getElementById('dashConnectAlert');
+  if (!el) return;
+  var res = await ccAuth.fetchAuthed('/api/connect?action=connect-status');
+  if (!res.ok) { el.style.display = 'none'; return; }
+  var s = await res.json();
+
+  // Dismissed platform-owner: no banner anywhere.
+  if (!s.has_account && s.payouts_paused) { el.style.display = 'none'; return; }
+
+  var red = false, message = null;
+  if (!s.has_account) {
+    red = true;
+    message = 'Set up payouts to receive learner payments.';
+  } else if (!s.onboarding_complete) {
+    message = 'Finish setting up your payouts.';
+  } else if (s.charges_enabled !== undefined && (!s.charges_enabled || !s.payouts_enabled || (s.requirements_pending || 0) > 0)) {
+    var n = s.requirements_pending || 0;
+    message = n > 0
+      ? 'Stripe needs ' + n + ' more item' + (n === 1 ? '' : 's') + ' before your payouts can resume.'
+      : 'Stripe has paused your payouts — action needed.';
+  } else if (s.payouts_paused) {
+    message = 'Your payouts are paused.';
+  }
+
+  if (!message) { el.style.display = 'none'; return; }
+  el.classList.toggle('red', red);
+  el.innerHTML =
+    '<span class="dash-connect-alert-icon">⚠️</span>' +
+    '<span class="dash-connect-alert-text">' + esc(message) + '</span>' +
+    '<span class="dash-connect-alert-arrow">›</span>';
+  el.style.display = '';
 }
 
 async function closeBroadcastBatch(batchId, btn) {
