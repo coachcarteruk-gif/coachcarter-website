@@ -13,6 +13,7 @@
 
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
+const { REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 const crypto   = require('crypto');
 const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
@@ -125,7 +126,7 @@ async function handleFeed(req, res) {
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.learner_id = ${learner.id}
-        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '7 days')
       ORDER BY lb.scheduled_date, lb.start_time
     `;
@@ -224,7 +225,7 @@ async function handleInstructorFeed(req, res) {
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.school_id = ${instSchoolId}
-        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '7 days')
       ORDER BY lb.scheduled_date, lb.start_time
     `;
@@ -295,7 +296,7 @@ function generateICS(booking) {
   const uid     = `booking-${booking.id}@coachcarter.uk`;
   const now     = toICSTimestamp(new Date());
 
-  const status = booking.status === 'cancelled' ? 'CANCELLED' : 'CONFIRMED';
+  const status = booking.status === REFUNDED ? 'CANCELLED' : 'CONFIRMED';
 
   return [
     'BEGIN:VCALENDAR',
@@ -334,7 +335,7 @@ function generateFeedICS(bookings, learnerName) {
     const dtStart = toICSDate(b.scheduled_date, b.start_time);
     const dtEnd   = toICSDate(b.scheduled_date, b.end_time);
     const uid     = `booking-${b.id}@coachcarter.uk`;
-    const status  = b.status === 'cancelled' ? 'CANCELLED' : 'CONFIRMED';
+    const status  = b.status === REFUNDED ? 'CANCELLED' : 'CONFIRMED';
 
     return [
       'BEGIN:VEVENT',
@@ -382,7 +383,7 @@ function generateInstructorFeedICS(bookings, instructorName) {
     const dtStart = toICSDate(b.scheduled_date, b.start_time);
     const dtEnd   = toICSDate(b.scheduled_date, b.end_time);
     const uid     = `booking-${b.id}-instructor@coachcarter.uk`;
-    const status  = b.status === 'cancelled' ? 'CANCELLED' : 'CONFIRMED';
+    const status  = b.status === REFUNDED ? 'CANCELLED' : 'CONFIRMED';
 
     return [
       'BEGIN:VEVENT',

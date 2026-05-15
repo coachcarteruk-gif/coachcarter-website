@@ -3,8 +3,8 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
-const { resolveConfirmations } = require('./_confirmation-resolver');
 const { checkRateLimit } = require('./_rate-limit');
+const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 // Delegates to shared requireAuth for cookie-first reads. No role filter is
@@ -52,8 +52,6 @@ module.exports = async (req, res) => {
   if (action === 'competency')       return handleCompetency(req, res);
   if (action === 'onboarding')       return handleOnboarding(req, res);
   if (action === 'profile-completeness') return handleProfileCompleteness(req, res);
-  if (action === 'confirm-lesson')        return handleConfirmLesson(req, res);
-  if (action === 'pending-confirmations') return handlePendingConfirmations(req, res);
   if (action === 'my-availability')       return handleMyAvailability(req, res);
   if (action === 'set-availability')      return handleSetAvailability(req, res);
   if (action === 'accept-terms')          return handleAcceptTerms(req, res);
@@ -123,7 +121,7 @@ async function handleSessions(req, res) {
       if (booking_id) {
         const [booking] = await sql`
           SELECT id FROM lesson_bookings
-          WHERE id = ${booking_id} AND learner_id = ${user.id} AND school_id = ${schoolId} AND status = 'completed'`;
+          WHERE id = ${booking_id} AND learner_id = ${user.id} AND school_id = ${schoolId} AND status = ${CHARGEABLE}`;
         if (!booking) return res.status(400).json({ error: 'Invalid or incomplete booking' });
 
         const [existing] = await sql`
@@ -273,7 +271,7 @@ async function handleUnloggedBookings(req, res) {
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
       WHERE lb.learner_id = ${user.id}
-        AND lb.status = 'completed'
+        AND lb.status = ${CHARGEABLE}
         AND ds.id IS NULL
         AND lb.school_id = ${schoolId}
       ORDER BY lb.scheduled_date DESC
@@ -809,107 +807,6 @@ async function handleProfileCompleteness(req, res) {
   }
 }
 
-// ── POST /api/learner?action=confirm-lesson ──────────────────────────────────
-// Body: { booking_id, lesson_happened, late_party, late_minutes, notes }
-// Learner submits their confirmation of whether the lesson took place.
-async function handleConfirmLesson(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const user = verifyAuth(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorised' });
-  const schoolId = user.school_id || 1;
-
-  const { booking_id, lesson_happened, late_party, late_minutes, notes } = req.body;
-  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
-  if (typeof lesson_happened !== 'boolean') return res.status(400).json({ error: 'lesson_happened must be true or false' });
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-
-    const [booking] = await sql`
-      SELECT lb.id, lb.status, lb.scheduled_date, lb.start_time, lb.end_time
-      FROM lesson_bookings lb
-      WHERE lb.id = ${booking_id} AND lb.learner_id = ${user.id} AND lb.school_id = ${schoolId}
-    `;
-
-    if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (['completed', 'no_show', 'disputed', 'cancelled'].includes(booking.status))
-      return res.status(400).json({ error: `Booking already resolved with status "${booking.status}"` });
-
-    // Must be in the past
-    const lessonEnd = new Date(`${booking.scheduled_date}T${booking.end_time || booking.start_time}Z`);
-    if (lessonEnd > new Date())
-      return res.status(400).json({ error: 'Cannot confirm a lesson that hasn\'t ended yet' });
-
-    // Validate late_party
-    const validLateParty = late_party && ['instructor', 'learner'].includes(late_party) ? late_party : null;
-    const validLateMinutes = validLateParty && late_minutes > 0 ? parseInt(late_minutes) : null;
-
-    // Insert confirmation
-    await sql`
-      INSERT INTO lesson_confirmations (booking_id, confirmed_by_role, lesson_happened, late_party, late_minutes, notes)
-      VALUES (${booking_id}, 'learner', ${lesson_happened}, ${validLateParty}, ${validLateMinutes}, ${notes ? notes.trim() : null})
-      ON CONFLICT (booking_id, confirmed_by_role) DO NOTHING
-    `;
-
-    // If booking was still 'confirmed', transition to 'awaiting_confirmation'
-    if (booking.status === 'confirmed') {
-      await sql`
-        UPDATE lesson_bookings SET status = 'awaiting_confirmation'
-        WHERE id = ${booking_id} AND status = 'confirmed'
-      `;
-    }
-
-    // Try to resolve
-    const result = await resolveConfirmations(sql, booking_id);
-
-    return res.json({
-      success: true,
-      status: result.resolved ? result.newStatus : 'awaiting_confirmation'
-    });
-
-  } catch (err) {
-    console.error('learner confirm-lesson error:', err);
-    reportError('/api/learner', err);
-    return res.status(500).json({ error: 'Failed to confirm lesson' });
-  }
-}
-
-// ── GET /api/learner?action=pending-confirmations ────────────────────────────
-// Returns bookings awaiting this learner's confirmation.
-async function handlePendingConfirmations(req, res) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-
-  const user = verifyAuth(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorised' });
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-    const schoolId = user.school_id || 1;
-
-    const bookings = await sql`
-      SELECT lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
-             i.name AS instructor_name
-      FROM lesson_bookings lb
-      JOIN instructors i ON i.id = lb.instructor_id
-      LEFT JOIN lesson_confirmations lc
-        ON lc.booking_id = lb.id AND lc.confirmed_by_role = 'learner'
-      WHERE lb.learner_id = ${user.id}
-        AND lb.status = 'awaiting_confirmation'
-        AND lc.id IS NULL
-        AND lb.school_id = ${schoolId}
-      ORDER BY lb.scheduled_date DESC, lb.start_time DESC
-      LIMIT 20
-    `;
-
-    return res.json({ bookings });
-  } catch (err) {
-    console.error('pending-confirmations error:', err);
-    reportError('/api/learner', err);
-    return res.status(500).json({ error: 'Failed to load pending confirmations' });
-  }
-}
-
 // ── Learner Availability — GET ─────────────────────────────────────────────
 async function handleMyAvailability(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -1123,13 +1020,13 @@ async function handleReferralStats(req, res) {
         EXISTS (
           SELECT 1 FROM lesson_bookings b
            WHERE b.learner_id = lu.id
-             AND b.status = 'completed'
+             AND b.status = ${CHARGEABLE}
              AND b.payment_method <> 'free'
         ) AS has_completed_paid,
         EXISTS (
           SELECT 1 FROM lesson_bookings b
            WHERE b.learner_id = lu.id
-             AND b.status IN ('confirmed','completed','awaiting_confirmation','rescheduled')
+             AND b.status IN (${SCHEDULED}, ${CHARGEABLE}, ${REFUNDED})
         ) AS has_any_booking
       FROM learner_users lu
       WHERE lu.referred_by = ${user.id} AND lu.school_id = ${schoolId}

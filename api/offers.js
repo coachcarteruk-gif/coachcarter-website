@@ -17,6 +17,7 @@ const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { safeEqual, verifyCronAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, buildSessionCookie } = require('./_auth');
 const { buildCsrfCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
+const { SCHEDULED, BLOCKING_STATUSES } = require('./_booking-status');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Series fan-out for offer-driven weekly repeats (May 2026)
@@ -105,7 +106,7 @@ async function bookOfferSeries(sql, {
         WHERE instructor_id = ${instructorId}
           AND scheduled_date = ${candidateStr}
           AND start_time = ${startTime}::time
-          AND status IN ('confirmed','completed','awaiting_confirmation')
+          AND status = ANY(${BLOCKING_STATUSES}::text[])
       `;
       if (existing) { skipped.push({ date: candidateStr, reason: 'already_booked' }); weekOffset++; continue; }
 
@@ -120,7 +121,7 @@ async function bookOfferSeries(sql, {
              created_by, payment_method, lesson_type_id, minutes_deducted,
              pickup_address, series_id, school_id)
           VALUES
-            (${learnerId}, ${instructorId}, ${candidateStr}, ${startTime}, ${endTime}, 'confirmed',
+            (${learnerId}, ${instructorId}, ${candidateStr}, ${startTime}, ${endTime}, ${SCHEDULED},
              'instructor_offer', ${paymentMethod}, ${lessonTypeId}, ${durationMins},
              ${pickupAddress || null}, ${seriesId}, ${schoolId})
           RETURNING id

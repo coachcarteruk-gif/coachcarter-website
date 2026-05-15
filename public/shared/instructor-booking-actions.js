@@ -213,7 +213,7 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to cancel');
-      if (_onCacheUpdate) _onCacheUpdate(cancelBookingId, 'status', 'cancelled');
+      if (_onCacheUpdate) _onCacheUpdate(cancelBookingId, 'status', 'refunded');
       closeCancel();
       _showToast('Lesson cancelled "” learner notified', 'success');
       _onRefresh();
@@ -275,7 +275,7 @@
       const bookings = data.bookings || [];
       const conflict = bookings.find(function (b) {
         if (b.id === rescheduleBooking.id) return false;
-        if (b.status === 'cancelled') return false;
+        if (b.status === 'refunded') return false;
         const bStart = b.start_time.slice(0, 5);
         const bEnd = b.end_time.slice(0, 5);
         return newTime < bEnd && endStr > bStart;
@@ -312,7 +312,7 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to reschedule');
-      if (_onCacheUpdate) _onCacheUpdate(rescheduleBooking.id, 'status', 'rescheduled');
+      if (_onCacheUpdate) _onCacheUpdate(rescheduleBooking.id, 'status', 'refunded');
       closeReschedule();
       _showToast('Lesson rescheduled "” learner notified', 'success');
       _onRefresh();

@@ -13,9 +13,6 @@
 //   GET  /api/instructor?action=schedule        (JWT auth required)
 //     → returns the instructor's upcoming + recent bookings
 //
-//   POST /api/instructor?action=complete        (JWT auth required)
-//     → marks a booking as completed
-//
 //   GET  /api/instructor?action=availability    (JWT auth required)
 //     → returns the instructor's current availability windows
 //
@@ -46,8 +43,8 @@ const { requireAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { reportError } = require('./_error-alert');
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
-const { resolveConfirmations } = require('./_confirmation-resolver');
 const { getEligibleBookings }  = require('./_payout-helpers');
+const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 
 
 const TOKEN_EXPIRY_MINUTES = 30;
@@ -71,8 +68,6 @@ module.exports = async (req, res) => {
   if (action === 'logout')           return handleLogout(req, res);
   if (action === 'schedule')         return handleSchedule(req, res);
   if (action === 'schedule-range')   return handleScheduleRange(req, res);
-  if (action === 'complete')         return handleComplete(req, res);
-  if (action === 'confirm-lesson')   return handleConfirmLesson(req, res);
   if (action === 'availability')     return handleAvailability(req, res);
   if (action === 'set-availability') return handleSetAvailability(req, res);
   if (action === 'profile')          return handleProfile(req, res);
@@ -317,7 +312,7 @@ async function handleSchedule(req, res) {
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.school_id = ${schoolId}
-        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
         AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '14 days')
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
       LIMIT 60
@@ -348,7 +343,7 @@ async function handleSchedule(req, res) {
         b.learner_ratings = ratingsMap[b.session_log_id] || [];
       }
       const lessonTime = new Date(`${b.scheduled_date}T${b.start_time}Z`);
-      if (b.status === 'confirmed' && lessonTime > now) {
+      if (b.status === SCHEDULED && lessonTime > now) {
         upcoming.push(b);
       } else {
         past.push(b);
@@ -415,7 +410,7 @@ async function handleScheduleRange(req, res) {
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.school_id = ${schoolId}
-        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
         AND lb.scheduled_date >= ${from}::date
         AND lb.scheduled_date <= ${to}::date
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
@@ -473,222 +468,6 @@ async function handleScheduleRange(req, res) {
     console.error('schedule-range err:', err.message);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load schedule', details: 'Internal server error' });
-  }
-}
-
-// ── POST /api/instructor?action=complete ──────────────────────────────────────
-// Body: { booking_id }
-// Marks a booking as completed.
-async function handleComplete(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const instructor = verifyInstructorAuth(req);
-  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
-
-  const { booking_id, instructor_notes } = req.body;
-  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-
-    const [booking] = await sql`
-      SELECT lb.id, lb.status, lb.scheduled_date, lb.start_time, lb.end_time,
-             lu.email AS learner_email, lu.name AS learner_name, lu.phone AS learner_phone,
-             i.name AS instructor_name, i.email AS instructor_email
-      FROM lesson_bookings lb
-      JOIN learner_users lu ON lu.id = lb.learner_id
-      JOIN instructors i ON i.id = lb.instructor_id
-      WHERE lb.id = ${booking_id} AND lb.instructor_id = ${instructor.id}
-    `;
-
-    if (!booking)
-      return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status === 'completed')
-      return res.status(400).json({ error: 'Booking is already marked as completed' });
-    if (!['confirmed', 'awaiting_confirmation'].includes(booking.status))
-      return res.status(400).json({ error: `Cannot complete a booking with status "${booking.status}"` });
-
-    // Only allow completing bookings that are in the past
-    const dateStr = typeof booking.scheduled_date === 'string'
-      ? booking.scheduled_date.slice(0, 10)
-      : new Date(booking.scheduled_date).toISOString().slice(0, 10);
-    const timeStr = booking.end_time || booking.start_time || '23:59:59';
-    const lessonEnd = new Date(`${dateStr}T${timeStr}Z`);
-    if (lessonEnd > new Date())
-      return res.status(400).json({ error: 'Cannot mark a future lesson as complete' });
-
-    // Store instructor notes if provided
-    if (instructor_notes) {
-      await sql`
-        UPDATE lesson_bookings SET instructor_notes = ${instructor_notes.trim()}
-        WHERE id = ${booking_id}
-      `;
-    }
-
-    // Submit instructor confirmation (lesson happened = true, via legacy complete flow)
-    await sql`
-      INSERT INTO lesson_confirmations (booking_id, confirmed_by_role, lesson_happened, notes)
-      VALUES (${booking_id}, 'instructor', true, ${instructor_notes ? instructor_notes.trim() : null})
-      ON CONFLICT (booking_id, confirmed_by_role) DO NOTHING
-    `;
-
-    // If booking was still 'confirmed', transition to 'awaiting_confirmation'
-    if (booking.status === 'confirmed') {
-      await sql`
-        UPDATE lesson_bookings SET status = 'awaiting_confirmation'
-        WHERE id = ${booking_id} AND status = 'confirmed'
-      `;
-    }
-
-    // Try to resolve (in case learner already confirmed)
-    const result = await resolveConfirmations(sql, booking_id);
-
-    // Send confirmation prompt email to learner
-    const isDemoInstructor = booking.instructor_email === 'demo@coachcarter.uk';
-    if (!isDemoInstructor && booking.learner_email) {
-      try {
-        const mailer = createTransporter();
-        const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
-        const isoDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
-        const dateStr = new Date(isoDate + 'T00:00:00Z')
-          .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-        const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
-        const confirmUrl = `${baseUrl}/learner/confirm-lesson.html?booking_id=${booking_id}`;
-
-        await mailer.sendMail({
-          from: 'CoachCarter <system@coachcarter.uk>',
-          to: booking.learner_email,
-          subject: 'How did your lesson go? Please confirm',
-          html: `
-            <h2>Hey ${firstName}!</h2>
-            <p>Your lesson on <strong>${dateStr}</strong> with ${booking.instructor_name} has ended.</p>
-            <p>Please take a moment to confirm how it went — it only takes 30 seconds.</p>
-            <p style="margin:28px 0">
-              <a href="${confirmUrl}"
-                 style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
-                        border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
-                Confirm my lesson →
-              </a>
-            </p>
-            <p style="color:#888;font-size:0.85rem;">
-              You can also confirm from your dashboard at any time.
-            </p>
-          `
-        });
-      } catch (emailErr) {
-        console.error('Failed to send confirmation email:', emailErr);
-      }
-    }
-
-    return res.json({ success: true, status: result.resolved ? result.newStatus : 'awaiting_confirmation' });
-
-  } catch (err) {
-    console.error('instructor complete error:', err);
-    reportError('/api/instructor', err);
-    return res.status(500).json({ error: 'Failed to mark booking as complete' });
-  }
-}
-
-// ── POST /api/instructor?action=confirm-lesson ─────────────────────────────────
-// Body: { booking_id, lesson_happened, late_party, late_minutes, notes }
-// Instructor submits their confirmation of whether the lesson took place.
-async function handleConfirmLesson(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const instructor = verifyInstructorAuth(req);
-  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
-
-  const { booking_id, lesson_happened, late_party, late_minutes, notes } = req.body;
-  if (!booking_id) return res.status(400).json({ error: 'booking_id required' });
-  if (typeof lesson_happened !== 'boolean') return res.status(400).json({ error: 'lesson_happened must be true or false' });
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-
-    const [booking] = await sql`
-      SELECT lb.id, lb.status, lb.scheduled_date, lb.start_time, lb.end_time,
-             lu.email AS learner_email, lu.name AS learner_name, lu.phone AS learner_phone,
-             i.name AS instructor_name, i.email AS instructor_email
-      FROM lesson_bookings lb
-      JOIN learner_users lu ON lu.id = lb.learner_id
-      JOIN instructors i ON i.id = lb.instructor_id
-      WHERE lb.id = ${booking_id} AND lb.instructor_id = ${instructor.id}
-    `;
-
-    if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (['completed', 'no_show', 'disputed', 'cancelled'].includes(booking.status))
-      return res.status(400).json({ error: `Booking already resolved with status "${booking.status}"` });
-
-    // Must be in the past
-    const lessonEnd = new Date(`${booking.scheduled_date}T${booking.end_time || booking.start_time}Z`);
-    if (lessonEnd > new Date())
-      return res.status(400).json({ error: 'Cannot confirm a lesson that hasn\'t ended yet' });
-
-    // Validate late_party
-    const validLateParty = late_party && ['instructor', 'learner'].includes(late_party) ? late_party : null;
-    const validLateMinutes = validLateParty && late_minutes > 0 ? parseInt(late_minutes) : null;
-
-    // Insert confirmation
-    await sql`
-      INSERT INTO lesson_confirmations (booking_id, confirmed_by_role, lesson_happened, late_party, late_minutes, notes)
-      VALUES (${booking_id}, 'instructor', ${lesson_happened}, ${validLateParty}, ${validLateMinutes}, ${notes ? notes.trim() : null})
-      ON CONFLICT (booking_id, confirmed_by_role) DO NOTHING
-    `;
-
-    // If booking was still 'confirmed', transition to 'awaiting_confirmation' and prompt learner
-    if (booking.status === 'confirmed') {
-      await sql`
-        UPDATE lesson_bookings SET status = 'awaiting_confirmation'
-        WHERE id = ${booking_id} AND status = 'confirmed'
-      `;
-
-      // Send learner confirmation prompt
-      const isDemoInstructor = booking.instructor_email === 'demo@coachcarter.uk';
-      if (!isDemoInstructor && booking.learner_email) {
-        try {
-          const mailer = createTransporter();
-          const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
-          const isoDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
-          const dateStr = new Date(isoDate + 'T00:00:00Z')
-            .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-          const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
-          const confirmUrl = `${baseUrl}/learner/confirm-lesson.html?booking_id=${booking_id}`;
-
-          await mailer.sendMail({
-            from: 'CoachCarter <system@coachcarter.uk>',
-            to: booking.learner_email,
-            subject: 'How did your lesson go? Please confirm',
-            html: `
-              <h2>Hey ${firstName}!</h2>
-              <p>Your lesson on <strong>${dateStr}</strong> with ${booking.instructor_name} has ended.</p>
-              <p>Please take a moment to confirm how it went — it only takes 30 seconds.</p>
-              <p style="margin:28px 0">
-                <a href="${confirmUrl}"
-                   style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
-                          border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
-                  Confirm my lesson →
-                </a>
-              </p>
-            `
-          });
-        } catch (emailErr) {
-          console.error('Failed to send learner confirmation email:', emailErr);
-        }
-      }
-    }
-
-    // Try to resolve
-    const result = await resolveConfirmations(sql, booking_id);
-
-    return res.json({
-      success: true,
-      status: result.resolved ? result.newStatus : 'awaiting_confirmation'
-    });
-
-  } catch (err) {
-    console.error('instructor confirm-lesson error:', err);
-    reportError('/api/instructor', err);
-    return res.status(500).json({ error: 'Failed to confirm lesson' });
   }
 }
 
@@ -1135,7 +914,7 @@ async function handleLearnerHistory(req, res) {
       LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.learner_id = ${learnerId}
-        AND lb.status IN ('confirmed', 'completed', 'cancelled')
+        AND lb.status IN (${SCHEDULED}, ${CHARGEABLE}, ${REFUNDED})
       ORDER BY lb.scheduled_date DESC, lb.start_time DESC
       LIMIT 100
     `;
@@ -1156,7 +935,7 @@ async function handleLearnerHistory(req, res) {
       if (b.session_log_id) b.learner_ratings = ratingsMap[b.session_log_id] || [];
     }
 
-    const totalLessons = bookings.filter(b => b.status === 'completed').length;
+    const totalLessons = bookings.filter(b => b.status === CHARGEABLE).length;
 
     return res.json({ learner, bookings, totalLessons });
   } catch (err) {
@@ -1192,14 +971,14 @@ async function handleCancelBooking(req, res) {
     `;
 
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== 'confirmed')
+    if (booking.status !== SCHEDULED)
       return res.status(400).json({ error: `Cannot cancel a booking with status "${booking.status}"` });
 
     const minsToReturn = booking.minutes_deducted || 90;
 
     // Cancel the booking
     await sql`
-      UPDATE lesson_bookings SET status = 'cancelled',
+      UPDATE lesson_bookings SET status = ${REFUNDED},
         credit_returned = true, cancelled_at = NOW(),
         instructor_notes = ${reason ? 'Cancelled: ' + reason.trim() : 'Cancelled by instructor'}
       WHERE id = ${booking_id}
@@ -1286,7 +1065,7 @@ async function handleRescheduleBooking(req, res) {
     `;
 
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== 'confirmed')
+    if (booking.status !== SCHEDULED)
       return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
 
     // Calculate new end time using booking's lesson type duration
@@ -1302,7 +1081,7 @@ async function handleRescheduleBooking(req, res) {
       WHERE instructor_id = ${booking.instructor_id}
         AND scheduled_date = ${new_date}
         AND start_time = ${new_start_time}::time
-        AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND status = ANY(${BLOCKING_STATUSES}::text[])
         AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (existingBooking)
@@ -1311,7 +1090,7 @@ async function handleRescheduleBooking(req, res) {
     // Mark old booking as rescheduled
     await sql`
       UPDATE lesson_bookings
-      SET status = 'rescheduled', cancelled_at = NOW()
+      SET status = ${REFUNDED}, cancelled_at = NOW()
       WHERE id = ${booking_id}
     `;
 
@@ -1325,7 +1104,7 @@ async function handleRescheduleBooking(req, res) {
            pickup_address, dropoff_address, school_id)
         VALUES
           (${booking.learner_id}, ${booking.instructor_id}, ${new_date}, ${new_start_time},
-           ${new_end_time}, 'confirmed', ${booking_id}, ${booking.reschedule_count + 1},
+           ${new_end_time}, ${SCHEDULED}, ${booking_id}, ${booking.reschedule_count + 1},
            ${booking.lesson_type_id || null}, ${booking.minutes_deducted != null ? booking.minutes_deducted : null},
            ${booking.pickup_address || null}, ${booking.dropoff_address || null}, ${schoolId})
         RETURNING id, scheduled_date, start_time::text, end_time::text, reschedule_count
@@ -1334,7 +1113,7 @@ async function handleRescheduleBooking(req, res) {
     } catch (insertErr) {
       // Rollback: restore old booking
       await sql`
-        UPDATE lesson_bookings SET status = 'confirmed', cancelled_at = NULL
+        UPDATE lesson_bookings SET status = ${SCHEDULED}, cancelled_at = NULL
         WHERE id = ${booking_id}
       `;
       if (insertErr.message?.includes('uq_booking_slot') || insertErr.code === '23505') {
@@ -1429,7 +1208,7 @@ async function handleEditBooking(req, res) {
         AND COALESCE(lb.school_id, 1) = ${schoolId}
     `;
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== 'confirmed' && booking.status !== 'awaiting_confirmation')
+    if (booking.status !== SCHEDULED)
       return res.status(400).json({ error: `Cannot edit a booking with status "${booking.status}"` });
 
     // Check if already paid out (block lesson type changes)
@@ -1467,7 +1246,7 @@ async function handleEditBooking(req, res) {
       WHERE lb.instructor_id = ${booking.instructor_id}
         AND lb.scheduled_date = ${newDate}
         AND lb.id != ${booking_id}
-        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
         AND ${newStartTime}::time < (lb.end_time + (${buffer} || ' minutes')::interval)
         AND ${newEndTime}::time > lb.start_time
       ORDER BY lb.start_time
@@ -1690,7 +1469,7 @@ async function handleCreateBooking(req, res) {
            lesson_type_id, minutes_deducted, school_id)
         VALUES
           (${learner_id}, ${instructor.id}, ${scheduled_date}, ${start_time}, ${end_time},
-           'confirmed', 'instructor', ${payMethod}, ${notes || null},
+           ${SCHEDULED}, 'instructor', ${payMethod}, ${notes || null},
            ${bookingPickup}, ${bookingDropoff},
            ${lessonType.id}, ${payMethod === 'credit' ? durationMins : 0}, ${schoolId})
         RETURNING id, scheduled_date, start_time::text, end_time::text, status
@@ -1786,14 +1565,14 @@ async function handleStats(req, res) {
     // Today's lessons
     const [todayStats] = await sql`
       SELECT COUNT(*)::int AS count FROM lesson_bookings
-      WHERE instructor_id = ${instructor.id} AND status IN ('confirmed','completed')
+      WHERE instructor_id = ${instructor.id} AND status = ANY(${BLOCKING_STATUSES}::text[])
         AND scheduled_date = CURRENT_DATE
     `;
 
     // This week (Mon-Sun)
     const [weekStats] = await sql`
       SELECT COUNT(*)::int AS count FROM lesson_bookings
-      WHERE instructor_id = ${instructor.id} AND status IN ('confirmed','completed')
+      WHERE instructor_id = ${instructor.id} AND status = ANY(${BLOCKING_STATUSES}::text[])
         AND scheduled_date >= date_trunc('week', CURRENT_DATE)
         AND scheduled_date < date_trunc('week', CURRENT_DATE) + INTERVAL '7 days'
     `;
@@ -1801,9 +1580,9 @@ async function handleStats(req, res) {
     // This month
     const [monthStats] = await sql`
       SELECT
-        COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
-        COUNT(*) FILTER (WHERE status = 'confirmed')::int AS upcoming,
-        COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled
+        COUNT(*) FILTER (WHERE status = ${CHARGEABLE})::int AS completed,
+        COUNT(*) FILTER (WHERE status = ${SCHEDULED})::int AS upcoming,
+        COUNT(*) FILTER (WHERE status = ${REFUNDED})::int AS cancelled
       FROM lesson_bookings
       WHERE instructor_id = ${instructor.id}
         AND scheduled_date >= date_trunc('month', CURRENT_DATE)
@@ -1813,20 +1592,20 @@ async function handleStats(req, res) {
     // Total all-time
     const [allTime] = await sql`
       SELECT COUNT(*)::int AS total_completed FROM lesson_bookings
-      WHERE instructor_id = ${instructor.id} AND status = 'completed'
+      WHERE instructor_id = ${instructor.id} AND status = ${CHARGEABLE}
     `;
 
     // Unique learners this month
     const [learnerCount] = await sql`
       SELECT COUNT(DISTINCT learner_id)::int AS count FROM lesson_bookings
-      WHERE instructor_id = ${instructor.id} AND status IN ('confirmed','completed')
+      WHERE instructor_id = ${instructor.id} AND status = ANY(${BLOCKING_STATUSES}::text[])
         AND scheduled_date >= date_trunc('month', CURRENT_DATE)
     `;
 
     // New bookings since last visit (last 24h)
     const [newBookings] = await sql`
       SELECT COUNT(*)::int AS count FROM lesson_bookings
-      WHERE instructor_id = ${instructor.id} AND status = 'confirmed'
+      WHERE instructor_id = ${instructor.id} AND status = ${SCHEDULED}
         AND created_at >= NOW() - INTERVAL '24 hours'
     `;
 
@@ -1896,8 +1675,8 @@ async function handleMyLearners(req, res) {
         lu.current_tier, lu.pickup_address, lu.prefer_contact_before,
         lu.credit_balance, lu.balance_minutes,
         COUNT(lb.id)::int AS total_lessons,
-        COUNT(lb.id) FILTER (WHERE lb.status = 'completed')::int AS completed_lessons,
-        COUNT(lb.id) FILTER (WHERE lb.status = 'confirmed' AND lb.scheduled_date >= CURRENT_DATE)::int AS upcoming_lessons,
+        COUNT(lb.id) FILTER (WHERE lb.status = ${CHARGEABLE})::int AS completed_lessons,
+        COUNT(lb.id) FILTER (WHERE lb.status = ${SCHEDULED} AND lb.scheduled_date >= CURRENT_DATE)::int AS upcoming_lessons,
         MAX(lb.scheduled_date)::text AS last_lesson_date,
         MIN(lb.scheduled_date)::text AS first_lesson_date,
         iln.notes AS instructor_notes,
@@ -1969,7 +1748,7 @@ async function handleUpdateNotes(req, res) {
     `;
 
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (!['confirmed', 'completed'].includes(booking.status))
+    if (![SCHEDULED, CHARGEABLE].includes(booking.status))
       return res.status(400).json({ error: 'Can only edit notes on confirmed or completed lessons' });
 
     await sql`
@@ -2132,7 +1911,7 @@ async function handleEarningsWeek(req, res) {
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
       WHERE lb.instructor_id = ${instructor.id}
-        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
         AND lb.scheduled_date >= ${weekRow.week_start}
         AND lb.scheduled_date <= ${weekRow.week_end}
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
@@ -2144,7 +1923,7 @@ async function handleEarningsWeek(req, res) {
     const mapped = lessons.map(l => {
       const pricePence = parseInt(l.price_pence);
       grossPence += pricePence;
-      if (l.status === 'completed') completedCount++;
+      if (l.status === CHARGEABLE) completedCount++;
       else confirmedCount++;
       return {
         id: l.id,
@@ -2222,7 +2001,7 @@ async function handleEarningsHistory(req, res) {
       FROM lesson_bookings lb
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
-        AND lb.status = 'completed'
+        AND lb.status = ${CHARGEABLE}
       GROUP BY date_trunc('week', lb.scheduled_date)
       ORDER BY week_start DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -2285,7 +2064,7 @@ async function handleEarningsSummary(req, res) {
       FROM lesson_bookings lb
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
-        AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
         AND lb.scheduled_date >= date_trunc('month', CURRENT_DATE)
         AND lb.scheduled_date < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
     `;
@@ -2299,14 +2078,14 @@ async function handleEarningsSummary(req, res) {
       FROM lesson_bookings lb
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
-        AND lb.status = 'completed'
+        AND lb.status = ${CHARGEABLE}
     `;
 
     // Distinct weeks with completed lessons (for average)
     const [weeksActive] = await sql`
       SELECT COUNT(DISTINCT date_trunc('week', scheduled_date))::int AS count
       FROM lesson_bookings
-      WHERE instructor_id = ${instructor.id} AND status = 'completed'
+      WHERE instructor_id = ${instructor.id} AND status = ${CHARGEABLE}
     `;
 
     // Calculate earnings based on fee model
@@ -2318,7 +2097,7 @@ async function handleEarningsSummary(req, res) {
         SELECT COUNT(DISTINCT date_trunc('week', lb.scheduled_date))::int AS count
         FROM lesson_bookings lb
         WHERE lb.instructor_id = ${instructor.id}
-          AND lb.status IN ('confirmed', 'completed', 'awaiting_confirmation')
+          AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
           AND lb.scheduled_date >= date_trunc('month', CURRENT_DATE)
           AND lb.scheduled_date < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
       `;
@@ -2549,7 +2328,7 @@ async function handleCreateOffer(req, res) {
         WHERE instructor_id = ${instructor.id}
           AND scheduled_date = ${scheduled_date}
           AND start_time = ${start_time}::time
-          AND status IN ('confirmed', 'completed', 'awaiting_confirmation')
+          AND status = ANY(${BLOCKING_STATUSES}::text[])
       `;
       if (existingBooking)
         return res.status(409).json({ error: 'That slot is already booked.' });
@@ -2922,7 +2701,7 @@ async function handleCreateBroadcastOffer(req, res) {
       WHERE instructor_id = ${instructor.id}
         AND scheduled_date = ${scheduled_date}
         AND start_time = ${start_time}::time
-        AND status IN ('confirmed','completed','awaiting_confirmation')
+        AND status = ANY(${BLOCKING_STATUSES}::text[])
         AND school_id = ${schoolId}
     `;
     if (existingBooking)
@@ -3206,7 +2985,7 @@ async function handlePayoutHistory(req, res) {
       SELECT COALESCE(SUM(shortfall_pence), 0)::int AS outstanding_shortfall_pence
         FROM instructor_payouts
        WHERE instructor_id = ${user.id}
-         AND status = 'completed'
+         AND status = ${CHARGEABLE}
          AND shortfall_pence > 0
          AND shortfall_recovered_from_payout_id IS NULL
     `;
@@ -3366,7 +3145,7 @@ async function handleRunningLate(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       WHERE lb.instructor_id = ${auth.id}
         AND lb.scheduled_date = ${today}
-        AND lb.status = 'confirmed'
+        AND lb.status = ${SCHEDULED}
         AND lb.start_time > ${currentTime}
       ORDER BY lb.start_time ASC
     `;

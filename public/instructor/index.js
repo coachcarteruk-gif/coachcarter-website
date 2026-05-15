@@ -242,7 +242,7 @@ function renderMonthly() {
   for (const day of filteredCells) {
     const ds        = dateStr(day);
     const allBookings = bookingCache[ds] || [];
-    const bookings  = allBookings.filter(b => b.status !== 'cancelled');
+    const bookings  = allBookings.filter(b => b.status !== 'refunded');
     const inMonth   = day.getMonth() === cursor.getMonth();
     const isToday   = ds === dateStr(today);
     const hasBook   = bookings.length > 0;
@@ -260,9 +260,9 @@ function renderMonthly() {
     // Show up to 2 bookings as pills
     const visible = bookings.slice(0, 2);
     for (const b of visible) {
-      const pillCls = b.status === 'completed' ? 'month-booking-pill completed' : b.status === 'cancelled' ? 'month-booking-pill cancelled' : 'month-booking-pill';
+      const pillCls = b.status === 'chargeable' ? 'month-booking-pill completed' : b.status === 'refunded' ? 'month-booking-pill cancelled' : 'month-booking-pill';
       const pillColour = b.lesson_type_colour || 'var(--accent)';
-      const pillStyle = b.status === 'cancelled' ? '' : `style="background:${pillColour}"`;
+      const pillStyle = b.status === 'refunded' ? '' : `style="background:${pillColour}"`;
       html += `<div class="${pillCls}" ${pillStyle}>${b.start_time.slice(0,5)} ${esc(b.learner_name.split(' ')[0])}</div>`;
     }
     if (bookings.length > 2) {
@@ -287,7 +287,7 @@ function renderWeekly() {
   for (const day of days) {
     const ds        = dateStr(day);
     const allBk     = bookingCache[ds] || [];
-    const bookings  = allBk.filter(b => b.status !== 'cancelled' && b.status !== 'rescheduled');
+    const bookings  = allBk.filter(b => b.status !== 'refunded');
     const isToday   = ds === dateStr(today);
 
     html += `<div class="tp-day${isToday ? ' is-today' : ''}">`;
@@ -306,8 +306,8 @@ function renderWeekly() {
       for (const b of bookings) {
         const ltColour    = b.lesson_type_colour || 'var(--accent)';
         const ltName      = b.lesson_type_name || 'Standard Lesson';
-        const isCancelled = b.status === 'cancelled' || b.status === 'rescheduled';
-        const isCompleted = b.status === 'completed';
+        const isCancelled = b.status === 'refunded';
+        const isCompleted = b.status === 'chargeable';
         const cls         = isCancelled ? 'tp-lesson cancelled' : isCompleted ? 'tp-lesson completed' : 'tp-lesson';
         const borderCol   = isCancelled ? 'var(--muted)' : ltColour;
         const address     = b.booking_pickup_address || b.learner_pickup_address || '';
@@ -335,7 +335,7 @@ function renderDaily() {
   const today    = new Date(); today.setHours(0,0,0,0);
   const ds       = dateStr(cursor);
   const allBookings = bookingCache[ds] || [];
-  const bookings = allBookings.filter(b => b.status !== 'cancelled');
+  const bookings = allBookings.filter(b => b.status !== 'refunded');
   const isToday  = ds === dateStr(today);
 
   // Get availability windows for this day of week
@@ -360,25 +360,25 @@ function renderDaily() {
   if (bookings.length > 0) {
     for (let i = 0; i < bookings.length; i++) {
       const b = bookings[i];
-      const isCompleted = b.status === 'completed';
+      const isCompleted = b.status === 'chargeable';
       const waUrl = whatsappUrl(b.learner_phone);
       const ltColour = b.lesson_type_colour || 'var(--accent)';
       const ltName   = b.lesson_type_name || 'Standard Lesson';
       const thisAddr = b.booking_pickup_address || b.learner_pickup_address || '';
 
       // Travel indicator between consecutive bookings
-      if (i > 0 && b.status !== 'cancelled' && b.status !== 'rescheduled') {
+      if (i > 0 && b.status !== 'refunded') {
         const prev = bookings[i - 1];
         const prevAddr = prev.booking_pickup_address || prev.learner_pickup_address || '';
-        if (prevAddr && thisAddr && prev.status !== 'cancelled' && prev.status !== 'rescheduled') {
+        if (prevAddr && thisAddr && prev.status !== 'refunded') {
           html += `<div class="travel-indicator" data-travel-from="${esc(prevAddr)}" data-travel-to="${esc(thisAddr)}" style="text-align:center;padding:2px 0"></div>`;
         }
       }
 
-      const cardStyle = b.status === 'cancelled' ? '' :
+      const cardStyle = b.status === 'refunded' ? '' :
         `style="border-left-color:${ltColour};${isCompleted ? `background:${ltColour}08;border-color:${ltColour}40;` : `background:${ltColour}12;border-color:${ltColour}50;`}"`;
       html += `
-        <div class="daily-booking-card ${isCompleted ? 'completed' : b.status === 'cancelled' ? 'cancelled' : ''}" ${cardStyle}>
+        <div class="daily-booking-card ${isCompleted ? 'completed' : b.status === 'refunded' ? 'cancelled' : ''}" ${cardStyle}>
           <div class="daily-booking-time">${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)} <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span></div>
           <div>
             <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before their first lesson">📞 Contact first</span>' : ''}</div>
@@ -388,8 +388,6 @@ function renderDaily() {
             ${b.booking_dropoff_address ? `<div class="daily-booking-email">📍 ${esc(b.booking_dropoff_address)}</div>` : ''}
           </div>
           <span class="daily-booking-status status-${b.status}">${statusLabel(b.status)}</span>
-          ${b.status === 'awaiting_confirmation' ? `<button class="btn-confirm-sm" data-action="toggle-confirm-form" data-id="${b.id}">Confirm lesson</button><div id="confirm-form-${b.id}" style="display:none">${renderConfirmForm(b.id)}</div>` : ''}
-          ${b.status === 'confirmed' && !isCompleted ? `<button class="btn-complete-sm" id="complete-${b.id}" data-action="mark-complete" data-id="${b.id}">Mark complete</button>` : ''}
           ${isCompleted ? renderInlineNotes(b) : ''}
           ${isCompleted ? renderFeedbackHTML(b) : ''}
         </div>`;
@@ -418,7 +416,7 @@ function renderAgenda() {
   while (d <= rangeEnd) {
     const ds = dateStr(d);
     for (const b of (bookingCache[ds] || [])) {
-      if (b.status === 'cancelled' || b.status === 'rescheduled') continue;
+      if (b.status === 'refunded') continue;
       allBookings.push({ ...b, _kind: 'booking' });
     }
     for (const o of (pendingOfferCache[ds] || [])) {
@@ -504,10 +502,9 @@ function renderAgenda() {
 
       const ltColour = b.lesson_type_colour || 'var(--accent)';
       const ltName   = b.lesson_type_name || 'Standard Lesson';
-      const isCancelled = b.status === 'cancelled' || b.status === 'rescheduled';
-      const isCompleted = b.status === 'completed';
-      const isAwaiting = b.status === 'awaiting_confirmation';
-      const cardCls = isCancelled ? 'agenda-card cancelled' : isCompleted ? 'agenda-card completed' : isAwaiting ? 'agenda-card' : 'agenda-card';
+      const isCancelled = b.status === 'refunded';
+      const isCompleted = b.status === 'chargeable';
+      const cardCls = isCancelled ? 'agenda-card cancelled' : isCompleted ? 'agenda-card completed' : 'agenda-card';
       const waUrl = whatsappUrl(b.learner_phone);
       const thisAddr = b.booking_pickup_address || b.learner_pickup_address || '';
 
@@ -516,7 +513,7 @@ function renderAgenda() {
         const prev = daySlots[i - 1];
         if (prev._kind === 'booking') {
           const prevAddr = prev.booking_pickup_address || prev.learner_pickup_address || '';
-          if (prevAddr && thisAddr && prev.status !== 'cancelled' && prev.status !== 'rescheduled') {
+          if (prevAddr && thisAddr && prev.status !== 'refunded') {
             html += `<div class="travel-indicator" data-travel-from="${esc(prevAddr)}" data-travel-to="${esc(thisAddr)}" style="text-align:center;padding:2px 0"></div>`;
           }
         }
@@ -554,84 +551,12 @@ function drillToDay(ds) {
 // â”€â”€â”€ Status helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function statusLabel(status) {
   switch (status) {
-    case 'completed': return '✓ Completed';
-    case 'cancelled': return '✕ Cancelled';
-    case 'rescheduled': return '↻ Rescheduled';
-    case 'awaiting_confirmation': return '⏳ Awaiting confirmation';
-    case 'disputed': return '⚠  Disputed';
-    case 'no_show': return '✕ No show';
-    default: return 'Confirmed';
+    case 'chargeable': return '✓ Completed';
+    case 'refunded':   return '✕ Cancelled';
+    default:           return 'Scheduled';
   }
 }
 
-function renderConfirmForm(bookingId) {
-  return `
-    <div class="confirm-form">
-      <label>Did this lesson take place?</label>
-      <select id="cf-happened-${bookingId}">
-        <option value="true">Yes</option>
-        <option value="false">No</option>
-      </select>
-      <label>Was anyone late?</label>
-      <select id="cf-late-${bookingId}" data-action="cf-late-change" data-booking-id="${bookingId}">
-        <option value="">No one was late</option>
-        <option value="instructor">I was late</option>
-        <option value="learner">Learner was late</option>
-      </select>
-      <div id="cf-mins-row-${bookingId}" style="display:none">
-        <label>How many minutes late?</label>
-        <select id="cf-mins-${bookingId}">
-          <option value="5">5 minutes</option>
-          <option value="10">10 minutes</option>
-          <option value="15">15 minutes</option>
-          <option value="20">20 minutes</option>
-          <option value="30">30 minutes</option>
-          <option value="45">45 minutes</option>
-          <option value="60">60 minutes</option>
-        </select>
-      </div>
-      <label>Notes (optional)</label>
-      <textarea id="cf-notes-${bookingId}" placeholder="Any notes about this lesson..."></textarea>
-      <button class="btn-submit-confirm" data-action="submit-confirmation" data-booking-id="${bookingId}">Submit confirmation</button>
-    </div>`;
-}
-
-function toggleConfirmForm(bookingId) {
-  const el = document.getElementById('confirm-form-' + bookingId);
-  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
-}
-
-async function submitConfirmation(bookingId) {
-  const happened = document.getElementById('cf-happened-' + bookingId).value === 'true';
-  const lateParty = document.getElementById('cf-late-' + bookingId).value || null;
-  const lateMinutes = lateParty ? parseInt(document.getElementById('cf-mins-' + bookingId).value) : null;
-  const notes = document.getElementById('cf-notes-' + bookingId).value.trim() || null;
-
-  try {
-    const res = await ccAuth.fetchAuthed('/api/instructor?action=confirm-lesson', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ booking_id: bookingId, lesson_happened: happened, late_party: lateParty, late_minutes: lateMinutes, notes })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed');
-    // Refresh the calendar view
-    loadView();
-  } catch (err) {
-    showToast('Failed to submit confirmation: ' + err.message, 'error');
-  }
-}
-
-// â”€â”€â”€ Mark complete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-async function markComplete(bookingId) {
-  const btn = document.getElementById(`complete-${bookingId}`);
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  try {
-    await markCompleteWithNotes(bookingId, null);
-  } catch (err) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Mark complete'; }
-  }
-}
 
 function closeBookingModal() {
   document.getElementById('bookingModal').classList.remove('open');
@@ -994,11 +919,11 @@ function openBookingDetail(bookingId) {
     <div class="booking-detail-row"><span class="booking-detail-label">Status</span><span class="booking-detail-val"><span class="daily-booking-status status-${b.status}">${statusLabel(b.status)}</span></span></div>
     ${b.prefer_contact_before ? `<div class="booking-detail-row"><span class="booking-detail-label">Note</span><span class="booking-detail-val" style="color:var(--accent);">📞 Learner would like a call or message before their first lesson</span></div>` : ''}
     ${b.instructor_notes ? `<div class="booking-detail-row"><span class="booking-detail-label">Your notes</span><span class="booking-detail-val" style="font-style:italic">${esc(b.instructor_notes)}</span></div>` : ''}
-    ${b.status !== 'completed' ? `
+    ${b.status !== 'chargeable' ? `
       <div class="notes-label">Lesson notes (saved when you mark complete)</div>
       <textarea class="notes-field" id="detailNotes" placeholder="e.g. Worked on roundabouts, needs more mirror checks…"></textarea>
     ` : ''}
-    ${b.status === 'completed' && b.learner_ratings && b.learner_ratings.length > 0 ? `
+    ${b.status === 'chargeable' && b.learner_ratings && b.learner_ratings.length > 0 ? `
       <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
         <div style="font-size:0.78rem; font-weight:700; color:var(--muted); margin-bottom:8px;">Learner Self-Assessment</div>
         <div class="feedback-skills">${b.learner_ratings.map(r => {
@@ -1011,48 +936,17 @@ function openBookingDetail(bookingId) {
   `;
 
   const actions = document.getElementById('bookingModalActions');
-  if (b.status === 'confirmed') {
+  if (b.status === 'scheduled') {
     actions.innerHTML = `
       <button class="btn-modal-cancel" style="color:var(--red)" data-action="open-cancel-modal" data-id="${b.id}">Cancel lesson</button>
       <button class="btn-modal-cancel" style="color:var(--accent)" data-action="open-reschedule-modal" data-id="${b.id}" data-date="${b.scheduled_date}" data-start="${b.start_time.slice(0,5)}" data-end="${b.end_time.slice(0,5)}" data-name="${esc(b.learner_name)}">Reschedule</button>
       <button class="btn-modal-cancel" data-action="open-edit-booking-modal" data-id="${b.id}">Edit</button>
-      <button class="btn-modal-cancel" data-action="close-booking-modal">Close</button>
-      <button class="btn-modal-save" id="detailCompleteBtn" data-action="mark-complete-from-modal" data-id="${b.id}">Mark complete</button>`;
+      <button class="btn-modal-cancel" data-action="close-booking-modal">Close</button>`;
   } else {
     actions.innerHTML = `<button class="btn-modal-cancel" data-action="close-booking-modal">Close</button>`;
   }
 
   document.getElementById('bookingModal').classList.add('open');
-}
-
-async function markCompleteFromModal(bookingId) {
-  const btn = document.getElementById('detailCompleteBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  const notesEl = document.getElementById('detailNotes');
-  const notes = notesEl ? notesEl.value.trim() : '';
-  await markCompleteWithNotes(bookingId, notes);
-  closeBookingModal();
-}
-
-async function markCompleteWithNotes(bookingId, instructorNotes) {
-  try {
-    const res = await ccAuth.fetchAuthed('/api/instructor?action=complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ booking_id: bookingId, instructor_notes: instructorNotes || null })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-
-    for (const ds in bookingCache) {
-      const bk = bookingCache[ds].find(b => b.id === bookingId);
-      if (bk) { bk.status = 'completed'; bk.instructor_notes = instructorNotes; break; }
-    }
-    showToast('Lesson marked as complete ✓', 'success');
-    renderCurrentView();
-  } catch (err) {
-    showToast(err.message || 'Failed to mark as complete', 'error');
-  }
 }
 
 // â”€â”€â”€ Learner History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1094,8 +988,8 @@ async function openLearnerHistory(learnerId) {
     for (const b of data.bookings) {
       const d = new Date(b.scheduled_date + 'T00:00:00');
       const dateLabel = `${d.getDate()} ${MON_SHORT[d.getMonth()]} ${d.getFullYear()}`;
-      const statusBadge = b.status === 'completed' ? '<span style="color:var(--green);font-size:0.75rem">✓</span>'
-        : b.status === 'cancelled' ? '<span style="color:var(--red);font-size:0.75rem">✕ cancelled</span>'
+      const statusBadge = b.status === 'chargeable' ? '<span style="color:var(--green);font-size:0.75rem">✓</span>'
+        : b.status === 'refunded' ? '<span style="color:var(--red);font-size:0.75rem">✕ cancelled</span>'
         : '<span style="color:var(--blue);font-size:0.75rem">upcoming</span>';
 
       html += `<div class="history-item">
@@ -2012,9 +1906,6 @@ document.addEventListener('click', function (e) {
   else if (a === 'cursor-to-agenda') { cursor = new Date(t.dataset.day + 'T00:00:00'); setView('agenda'); }
   else if (a === 'open-booking-detail') openBookingDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-avail-modal') openAvailModal();
-  else if (a === 'toggle-confirm-form') toggleConfirmForm(parseInt(t.dataset.id, 10));
-  else if (a === 'mark-complete') markComplete(parseInt(t.dataset.id, 10));
-  else if (a === 'submit-confirmation') submitConfirmation(parseInt(t.dataset.bookingId, 10));
   else if (a === 'toggle-feedback') {
     var target = document.getElementById(t.dataset.target);
     if (target) target.classList.toggle('open');
@@ -2029,7 +1920,6 @@ document.addEventListener('click', function (e) {
   else if (a === 'open-reschedule-modal') openRescheduleModal(parseInt(t.dataset.id, 10), t.dataset.date, t.dataset.start, t.dataset.end, t.dataset.name);
   else if (a === 'open-edit-booking-modal') openEditBookingModal(parseInt(t.dataset.id, 10));
   else if (a === 'close-booking-modal') closeBookingModal();
-  else if (a === 'mark-complete-from-modal') markCompleteFromModal(parseInt(t.dataset.id, 10));
   else if (a === 'history-book-lesson') { closeHistoryModal(); openAddLessonModal(); }
   else if (a === 'retry-booking-history') renderBookingHistory();
   else if (a === 'retry-current-view') renderCurrentView();

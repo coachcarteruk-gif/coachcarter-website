@@ -16,6 +16,7 @@
 // referrer. parent_referral_id chains are not followed.
 
 const { neon } = require('@neondatabase/serverless');
+const { CHARGEABLE } = require('./_booking-status');
 const { reportError } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
 
@@ -48,7 +49,7 @@ module.exports = async (req, res) => {
       FROM lesson_bookings lb
       JOIN learner_users referee  ON referee.id  = lb.learner_id
       JOIN learner_users referrer ON referrer.id = referee.referred_by
-      WHERE lb.status              = 'completed'
+      WHERE lb.status              = ${CHARGEABLE}
         AND lb.payment_method     <> 'free'
         AND lb.referral_rewarded_at IS NULL
         AND (lb.scheduled_date + lb.end_time) < NOW() - INTERVAL '7 days'

@@ -84,7 +84,7 @@ async function loadDashboard() {
 
 function renderLessons() {
   var container = document.getElementById('dashLessons');
-  var confirmed = todayBookings.filter(function(b) { return b.status !== 'cancelled'; });
+  var confirmed = todayBookings.filter(function(b) { return b.status !== 'refunded'; });
 
   if (confirmed.length === 0) {
     container.innerHTML =
@@ -102,7 +102,7 @@ function renderLessons() {
   var nextId = null;
   for (var i = 0; i < confirmed.length; i++) {
     var b = confirmed[i];
-    if (b.status !== 'confirmed') continue;
+    if (b.status !== 'scheduled') continue;
     var parts = b.start_time.split(':');
     var lessonTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(parts[0]), parseInt(parts[1]));
     if (lessonTime > now) { nextId = b.id; break; }
@@ -112,8 +112,8 @@ function renderLessons() {
   for (var i = 0; i < todayBookings.length; i++) {
     var b = todayBookings[i];
     var isNext = b.id === nextId;
-    var isCompleted = b.status === 'completed';
-    var isCancelled = b.status === 'cancelled';
+    var isCompleted = b.status === 'chargeable';
+    var isCancelled = b.status === 'refunded';
 
     var cls = 'dash-lesson';
     if (isNext) cls += ' is-next';
@@ -132,7 +132,6 @@ function renderLessons() {
     var badgeText = '';
     if (isCancelled) { badgeCls = 'badge-cancelled'; badgeText = 'Cancelled'; }
     else if (isCompleted) { badgeCls = 'badge-completed'; badgeText = 'Done'; }
-    else if (b.status === 'awaiting_confirmation') { badgeCls = 'badge-awaiting'; badgeText = 'Pending'; }
 
     html += '<div class="' + cls + '" data-action="open-detail" data-detail-idx="' + i + '">' +
       '<div class="dash-lesson-time">' + time + '</div>' +
@@ -356,9 +355,7 @@ function openDetail(idx) {
   var lessonEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(endParts[0]), parseInt(endParts[1]));
   var isPast = lessonEnd <= now;
 
-  if (b.status === 'confirmed' && isPast) {
-    actions += '<button class="btn-detail complete" id="btnComplete" data-action="complete-lesson">Mark Complete</button>';
-  } else if (b.status === 'confirmed' && !isPast) {
+  if (b.status === 'scheduled' && !isPast) {
     actions += '<button class="btn-detail cancel-btn" data-action="cancel-from-detail">Cancel Lesson</button>';
   }
 
@@ -380,33 +377,6 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
 }
 
-async function completeLesson() {
-  if (!detailBooking) return;
-  var btn = document.getElementById('btnComplete');
-  if (btn) { btn.disabled = true; btn.textContent = 'Completing...'; }
-
-  try {
-    var body = { booking_id: detailBooking.id };
-    var notes = document.getElementById('detailNotes').value.trim();
-    if (notes) body.instructor_notes = notes;
-
-    var res = await ccAuth.fetchAuthed('/api/instructor?action=complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to complete');
-
-    closeDetail();
-    showToast('Lesson marked as complete', 'success');
-    loadDashboard();
-  } catch (err) {
-    showToast(err.message || 'Failed to complete lesson', 'error');
-    if (btn) { btn.disabled = false; btn.textContent = 'Mark Complete'; }
-  }
-}
-
 function cancelFromDetail() {
   if (!detailBooking) return;
   closeDetail();
@@ -423,7 +393,7 @@ var selectedDelay = 10;
 function getUpcomingCount() {
   var now = new Date();
   return todayBookings.filter(function(b) {
-    if (b.status !== 'confirmed') return false;
+    if (b.status !== 'scheduled') return false;
     var parts = b.start_time.split(':');
     var t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(parts[0]), parseInt(parts[1]));
     return t > now;
@@ -539,7 +509,6 @@ document.addEventListener('click', function (e) {
   else if (a === 'open-book-modal') openBookModal();
   else if (a === 'open-detail') openDetail(parseInt(t.dataset.detailIdx, 10));
   else if (a === 'select-learner') selectLearner(parseInt(t.dataset.learnerId, 10), t.dataset.name, t.dataset.det, parseInt(t.dataset.balance, 10));
-  else if (a === 'complete-lesson') completeLesson();
   else if (a === 'cancel-from-detail') cancelFromDetail();
   else if (a === 'close-broadcast-batch') closeBroadcastBatch(t.dataset.batchId, t);
 });
