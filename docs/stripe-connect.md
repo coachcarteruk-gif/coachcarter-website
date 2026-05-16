@@ -14,7 +14,8 @@ Instructors are paid via Stripe Connect Express accounts. Money flows: learner p
 
 - Eligible bookings: `lesson_bookings.status = 'chargeable'` (the hourly `cron-auto-complete` flip applies a 1-hour buffer past `end_time`; no extra grace is needed — see `docs/booking-statuses.md`)
 - `instructor_payouts` + `payout_line_items` tables (UNIQUE on booking_id prevents double-payment)
-- Platform owner (Fraser) has `payouts_paused = TRUE` and `stripe_account_id = NULL` — revenue stays in platform account, paid out to bank via Stripe's normal payout schedule. Set by a historical "Dismiss banner" click that wiped the row; the dismiss UI was removed 2026-05-16 (see Step 0 in INSTRUCTOR-PAYMENTS-PLAN.md for the planned platform-sweep cron that will keep this state coherent post-instructor-#2).
+- `getEligibleBookings` honours `instructors.payouts_start_date` — bookings before that date are invisible to the cron. NULL = no floor (legacy behaviour). Set it on every onboarding to prevent the first Friday cron from sweeping the instructor's entire historical chargeable backlog in one transfer. See `feedback_payout_date_floor.md` for the failure mode.
+- Platform owner (Fraser) is a normal instructor row — has his own Connect Express account (`acct_1THXFyIAf6hvFTx9`) and is paid via the Friday cron on the same code path as every other instructor. The platform Stripe account (`acct_1QUssNIqhTSdZedS`) holds both escrow for undelivered learner credit and platform revenue (commission cuts / franchise margin); its payout schedule is **Manual**, drained to the sole-trader bank by Fraser when cashflow is needed. This is a deliberate cashflow-over-structural-refund-safety trade-off; refund-safety becomes a discipline-and-visibility problem (see the platform-balance-vs-credit-liability admin widget). Do not re-propose a platform-sweep cron or a separate Connect account for platform revenue.
 - Admin can pause/resume individual instructor payouts from admin portal
 
 ## Fee models
@@ -45,7 +46,7 @@ The admin instructor-list Payments badge is DB-only and won't flag a re-blocked 
 
 | State | Trigger | Visual |
 |---|---|---|
-| 1. Hidden | `!has_account && payouts_paused` (legacy platform-owner state) | — |
+| 1. Hidden | `!has_account && payouts_paused` (admin paused an instructor before they onboarded; previously also the platform-owner state until 2026-05-15) | — |
 | 2. Red "Set Up Direct Payouts" | `!has_account` | `.connect-banner.not-started` |
 | 3. Amber "Finish Setting Up Payouts" | DB onboarding not yet complete | `.connect-banner.pending` |
 | 4. Amber "Action required" *(NEW)* | DB complete, but Stripe live state is unhealthy | `.connect-banner.pending` + red count badge |
