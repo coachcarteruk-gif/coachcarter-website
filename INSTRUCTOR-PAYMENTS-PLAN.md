@@ -504,6 +504,47 @@ Distinct from refund-a-booking: a learner might ask for a cash refund of an unus
 
 ---
 
+### Step 4f.0 — Payment-data completeness audit (~3–4 hours, **prerequisite for 4f**)
+
+> **Naming note:** numbered `4f.0` to flag it as a gate on Step 4f specifically, not a peer-level step. The unrelated bullet `**4e. Other entry points to audit (Architect's seams list)**` already exists inside Step 4 (around line 314) — different concept entirely (per-instructor credit-scoping seams, not payment-data reconciliation). Don't conflate.
+
+**Why this exists.** Discovered 2026-05-15 (same session as Step 0). A spot check on `credit_transactions` for the last 60–90 days returned only **4 rows with `stripe_session_id IS NOT NULL`** totalling £1,451.40. Stripe Dashboard shows ~£3,200+ across 5 large payouts in the same window. **There is a >£1,750 gap between Stripe-recorded charges and `credit_transactions` rows.** Step 4f's per-booking fee snapshot reads from `credit_transactions.stripe_fee_pence` (the canonical source-of-truth row); if half the platform's real Stripe charges never wrote a `credit_transactions` row in the first place, the snapshot has no row to attach the fee to.
+
+This step doesn't change any code — it audits the data, identifies which webhook handlers (or which payment flows) are charging via Stripe without writing to `credit_transactions`, and decides for each gap whether the fix is (a) backfill historical rows, (b) patch the webhook handler to write the missing row going forward, or (c) document the path as deliberately outside the credit_transactions ledger (and design 4f around that).
+
+**Candidate missing-write paths to investigate** (from session 2026-05-15 reasoning, not yet verified):
+
+1. Free-trial deposit / `handleFreeOffer` — does a paid free-trial deposit write a `credit_transactions` row?
+2. Offer acceptance via `handleOfferBooking` — broadcast and manual offers both go through Stripe Checkout. Does the webhook write to `credit_transactions` or only to `lesson_bookings`?
+3. Guest checkout for single slot (`checkout-slot-guest` → `handleSlotBooking` for unauthenticated learner) — does this skip the credit_transactions write because the learner has no account at charge time?
+4. Recurring weekly series funded by one offer charge — `bookOfferSeries()` may write one `credit_transactions` row but spawn N bookings; verify the row exists and 4f's pro-rata attribution (per 4f.c) covers this case.
+
+**Audit shape:**
+
+1. **Pull every successful `payment_intent` from Stripe** for the last 90 days (Stripe Dashboard CSV export, or `stripe.paymentIntents.list({ limit: 100, created: { gte: ... } })`). Capture id, amount, customer email/metadata, created timestamp.
+2. **For each Stripe charge, try to find a matching row** in `credit_transactions` by `stripe_session_id` or in `lesson_bookings` via webhook metadata. Build a reconciliation table: `stripe_id | gbp | matched_table | matched_id`.
+3. **Classify every unmatched charge by suspected webhook handler** (e.g. by amount: trial deposits cluster around £25–£35, slot purchases at £55/£82.50/£110/£165, bulk packs at multi-hundreds).
+4. **For each gap pattern, read the webhook handler** that should have processed it, identify the missing INSERT, and decide whether to fix forward (patch the handler) or also backfill (write a script that re-emits `credit_transactions` rows for historical charges using the Stripe API as source-of-truth).
+
+**Exit criteria for 4e** — before Step 4f can start:
+
+- Every Stripe payout in the dashboard for a recent 60-day window reconciles 1:1 to a `credit_transactions` row, OR to a deliberate exclusion documented in this plan.
+- Every webhook handler that processes a Stripe charge writes a `credit_transactions` row going forward (the row may be backfilled later with `stripe_fee_pence` if 4f's webhook augmentation isn't shipped yet, but the row must exist).
+
+**Why audit-then-design, not design-then-audit.** 4f's principle — "the cron transfers exactly `(gross − stripe_fee) × commission_rate`, never more than the platform balance received for that booking" — is only enforceable if every Stripe charge has a database row with a fee attached. Designing the per-booking math on top of incomplete payment data would propagate the gap into the payout calculation: instructors would be paid as if Stripe charged £0 fee on charges the database doesn't know about. That's the same shape of failure as the £3,842.50 historical-backlog sweep Step 0 defended against — silent gap between Stripe reality and database belief.
+
+**Sample-size sanity check.** The 2026-05-15 spot-check also revealed that `type = 'purchase'` in `credit_transactions` is a heterogeneous bucket: of 43 rows in 90 days, only 2 were real Stripe charges; the other 41 were free lessons, admin grants, and (likely) migrations. Any audit query must filter on `stripe_session_id IS NOT NULL` to isolate real Stripe activity from grants/migrations. The Stripe Dashboard is the only authoritative source for "what Stripe actually processed."
+
+**Outcome (2026-05-16). Step 4f.0 closed.** The 90-day audit was run via `scripts/audit-stripe-charges.js`. Both halves of the exit criterion met:
+
+- **Going-forward**: structurally met. The gap was fully explained by two distinct bugs, both already fixed on 2026-05-10: (a) the Stripe webhook URL was set to `coachcarter.uk/api/webhook` (apex), which Vercel 307-redirects to `www.coachcarter.uk`; Stripe doesn't follow webhook redirects by design, so every `checkout.session.completed` event was lost silently for weeks. Fixed by updating the Stripe Dashboard URL. (b) `credit_transactions_type_check` only allowed `('purchase','refund')`; INSERTs for `slot_purchase`, `admin_add`, `admin_remove`, etc. were silently failing inside try/catch blocks. Fixed by commit 853f31c widening the constraint. Every charge after 2026-05-10 has a clean `credit_transactions` row (verified by audit). The hourly reconcile cron (`api/cron-reconcile-payments.js`) continues to act as the going-forward safety net.
+
+- **Historical**: 3 cases documented as out-of-scope. The 90-day audit surfaced exactly three suspicious gaps (£1,890.90 total): Hicksy 2026-04-10 £594.00 (307 redirect), Elena 2026-04-26 £82.50 (CHECK constraint blocked `slot_purchase`), Maisie 2026-05-07 £1,214.40 (307 redirect). The instructor side for these past lessons was already settled manually between Fraser-as-platform and Fraser-as-instructor pre-Connect-onboarding. Step 4f governs the *future* Friday cron, which will only process bookings funded by charges from after the 2026-05-10 fixes — all of which have clean ledger rows. The 3 historical charges are not Step 4f inputs and need no backfill.
+
+**Step 4f's gate is open.** The audit also confirmed Stripe fee data via `latest_charge.balance_transaction.fee` is reliable (144p on £82.50 = exactly 1.5% + 20p, matching documented UK domestic rates) — Step 4f.b can use it directly.
+
+---
+
 ### Step 4f — Stripe-fee pass-through (~6–10 hours, lands after Step 4)
 
 The instructor — not the platform — absorbs the Stripe processing fee on each payment they receive. Under the franchise model, the franchise fee is sized to cover platform costs (servers, support, marketing); under the commission model, the platform's commission percentage already accounts for its own operating costs. Either way, payment-processing cost is a *per-transaction* cost incurred by the instructor's revenue line — it should reduce *their* take-home, not eat into the platform's margin.

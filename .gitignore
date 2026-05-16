@@ -41,3 +41,7 @@ nimbalyst-local/
 playwright-report/
 test-results/
 screenshots/
+
+# Audit script outputs — contain live learner emails
+audit-*.tsv
+audit-*.summary.txt
