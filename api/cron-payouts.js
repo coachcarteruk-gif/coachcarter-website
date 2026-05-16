@@ -13,6 +13,7 @@ const { neon } = require('@neondatabase/serverless');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 const { processAllPayouts, processSchoolPayouts } = require('./_payout-helpers');
+const { sendPayoutSummary } = require('./_payout-email');
 const { verifyCronAuth, requireAuth } = require('./_auth');
 
 function isAuthorized(req) {
@@ -33,6 +34,16 @@ module.exports = async (req, res) => {
 
     // 1. Instructor payouts (existing)
     const results = await processAllPayouts(sql, stripe);
+
+    // Weekly summary email to platform owner — gross / fees / payout totals
+    // + per-instructor breakdown + NULL-fee tracker for the Step 4f rollout.
+    // Fire-and-forget: a digest failure must not block per-instructor emails.
+    try {
+      const summaryTransporter = createTransporter();
+      await sendPayoutSummary(sql, results, summaryTransporter);
+    } catch (summaryErr) {
+      reportError('/api/cron-payouts (summary email)', summaryErr);
+    }
 
     // Send notification emails to instructors who received a payout
     const completedPayouts = results.details.filter(d => d.status === 'completed');
