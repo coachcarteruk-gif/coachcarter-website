@@ -35,7 +35,8 @@ const { SCHEDULED, BLOCKING_STATUSES } = require('./_booking-status');
 // week is bookable (it's been held by the offer until now).
 async function bookOfferSeries(sql, {
   instructorId, learnerId, firstDate, startTime, endTime, lessonTypeId,
-  durationMins, pickupAddress, schoolId, repeatWeeks, paymentMethod
+  durationMins, pickupAddress, schoolId, repeatWeeks, paymentMethod,
+  totalStripeFeePence = null
 }) {
   const SERIES_LOOKAHEAD_WEEKS = 18;
   const seriesId = repeatWeeks > 1 ? crypto.randomUUID() : null;
@@ -142,6 +143,35 @@ async function bookOfferSeries(sql, {
     }
 
     weekOffset++;
+  }
+
+  // Step 4f.c — attribute the charge's Stripe fee across the booked lessons.
+  // The fee was on the FULL charge (amountPence × repeatWeeks). Per-week share
+  // is totalFee / repeatWeeks. We attribute that share to each *booked* lesson;
+  // the share that would have gone to unbooked weeks is orphan fee (Stripe kept
+  // its cut on the partial refund — platform-absorbs per Decision 3).
+  //
+  // Math: per-week fee = floor(totalFee / repeatWeeks). Remainder goes onto the
+  // LAST booked lesson so per-booked-week sum is exact (no orphan pence drift
+  // on top of the already-orphaned unbooked-weeks share).
+  if (totalStripeFeePence != null && booked.length > 0) {
+    const perWeekFee = Math.floor(totalStripeFeePence / repeatWeeks);
+    const bookedShare = perWeekFee * booked.length;
+    const remainder = bookedShare === 0 ? 0
+      : (totalStripeFeePence - perWeekFee * repeatWeeks); // pence drift on the original split
+    // Each booked lesson gets perWeekFee; the LAST one absorbs any remainder
+    // (so booked.length × perWeekFee + remainder accounts for the booked share
+    // of the original fee — unbooked weeks' share is platform-absorbed orphan).
+    for (let i = 0; i < booked.length; i++) {
+      const isLast = i === booked.length - 1;
+      const feeForThis = perWeekFee + (isLast ? remainder : 0);
+      await sql`
+        UPDATE lesson_bookings
+           SET stripe_fee_pence = ${feeForThis},
+               stripe_fee_source = 'balance_transaction'
+         WHERE id = ${booked[i].booking_id}
+      `;
+    }
   }
 
   return { booked, skipped, series_id: seriesId };

@@ -2462,20 +2462,25 @@ async function handleReschedule(req, res) {
       WHERE id = ${booking_id}
     `;
 
-    // 2. Create new booking
+    // 2. Create new booking. Carry the Stripe fee snapshot forward — it was
+    // paid on the original charge and the lesson is still happening, just at
+    // a different time. (Step 4f.c.)
     let newBooking;
     try {
       const [b] = await sql`
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            rescheduled_from, reschedule_count, pickup_address, dropoff_address,
-           lesson_type_id, minutes_deducted, school_id)
+           lesson_type_id, minutes_deducted, school_id,
+           stripe_fee_pence, stripe_fee_source)
         VALUES
           (${user.id}, ${booking.instructor_id}, ${new_date}, ${new_start_time}, ${new_end_time},
            ${SCHEDULED}, ${booking_id}, ${booking.reschedule_count + 1},
            ${booking.pickup_address || null}, ${booking.dropoff_address || null},
            ${booking.lesson_type_id || null}, ${booking.minutes_deducted != null ? booking.minutes_deducted : null},
-           ${schoolId})
+           ${schoolId},
+           ${booking.stripe_fee_pence != null ? booking.stripe_fee_pence : null},
+           ${booking.stripe_fee_source || null})
         RETURNING id, scheduled_date, start_time::text, end_time::text, status,
                   rescheduled_from, reschedule_count
       `;
