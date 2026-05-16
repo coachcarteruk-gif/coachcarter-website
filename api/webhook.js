@@ -5,6 +5,7 @@ const { sendWhatsApp } = require('./_whatsapp');
 const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
 const { SCHEDULED } = require('./_booking-status');
+const { fetchSessionFeePence } = require('./_stripe-fee');
 
 
 // In-memory storage for legacy booking flow (pass guarantee / packages)
@@ -146,12 +147,17 @@ async function handleCreditPurchase(session) {
     const minutes = parseInt(metadata.minutes_purchased, 10) || (credits * 90);
     const hoursStr = (minutes / 60) % 1 === 0 ? `${minutes / 60}` : (minutes / 60).toFixed(1);
 
+    // Snapshot the Stripe processing fee (Step 4f.b). NULL on failure; the
+    // reconcile cron (4f.e) backfills, and the payout pipeline treats NULL
+    // as zero in the meantime.
+    const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
+
     // 1. Record the transaction
     await sql`
       INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id)
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
       VALUES
-        (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${session.id}, ${minutes}, ${schoolId})
+        (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${session.id}, ${minutes}, ${schoolId}, ${stripeFeePence})
     `;
 
     // 2. Increment the learner's balance atomically (both columns for transition)
@@ -226,12 +232,17 @@ async function handleSlotBooking(session) {
       return;
     }
 
+    // Snapshot the Stripe processing fee (Step 4f.b). NULL on failure; the
+    // reconcile cron (4f.e) backfills, and the payout pipeline treats NULL
+    // as zero in the meantime.
+    const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
+
     // 1. Record the transaction
     await sql`
       INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id)
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
       VALUES
-        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId})
+        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId}, ${stripeFeePence})
     `;
 
     // 2. Add hours to balance (net zero — add then deduct)
@@ -789,11 +800,19 @@ async function handleOfferBooking(session) {
     const totalAmountPence = amountPence * repeatWeeks;
     const totalMinutes     = durationMins * repeatWeeks;
     const totalCredits     = repeatWeeks;
+
+    // Snapshot the Stripe processing fee (Step 4f.b). NULL on failure; the
+    // reconcile cron (4f.e) backfills, and the payout pipeline treats NULL
+    // as zero in the meantime. For repeat-weeks series this is the fee on
+    // the FULL charge (totalAmountPence) — Step 4g splits it pro-rata across
+    // the N bookings via booking_credit_sources.
+    const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
+
     await sql`
       INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id)
+        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
       VALUES
-        (${learnerId}, 'slot_purchase', ${totalCredits}, ${totalAmountPence}, 'card', ${session.id}, ${totalMinutes}, ${schoolId})
+        (${learnerId}, 'slot_purchase', ${totalCredits}, ${totalAmountPence}, 'card', ${session.id}, ${totalMinutes}, ${schoolId}, ${stripeFeePence})
     `;
 
     await sql`
