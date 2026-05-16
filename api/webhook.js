@@ -267,16 +267,21 @@ async function handleSlotBooking(session) {
       return;
     }
 
-    // 4. Create the booking
+    // 4. Create the booking. stripe_fee_pence + 'balance_transaction' source —
+    // one charge funds exactly one booking on this path, so the full fee
+    // attributes directly. NULL stays NULL if the fee fetch failed at webhook
+    // time; the reconcile cron (4f.e) backfills.
     let booking;
     try {
       const [b] = await sql`
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           lesson_type_id, minutes_deducted, school_id)
+           lesson_type_id, minutes_deducted, school_id,
+           stripe_fee_pence, stripe_fee_source)
         VALUES
           (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
-           ${lessonTypeId}, ${durationMins}, ${schoolId})
+           ${lessonTypeId}, ${durationMins}, ${schoolId},
+           ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null})
         RETURNING id, scheduled_date, start_time::text, end_time::text
       `;
       booking = b;
@@ -907,7 +912,8 @@ async function handleOfferBooking(session) {
         pickupAddress: pickupAddress || null,
         schoolId,
         repeatWeeks,
-        paymentMethod: 'card'
+        paymentMethod: 'card',
+        totalStripeFeePence: stripeFeePence
       });
       booking = { id: seriesResult.booked[0].booking_id, scheduled_date: scheduledDate, start_time: startTime, end_time: endTime };
     } catch (insertErr) {
