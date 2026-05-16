@@ -535,6 +535,14 @@ This step doesn't change any code — it audits the data, identifies which webho
 
 **Sample-size sanity check.** The 2026-05-15 spot-check also revealed that `type = 'purchase'` in `credit_transactions` is a heterogeneous bucket: of 43 rows in 90 days, only 2 were real Stripe charges; the other 41 were free lessons, admin grants, and (likely) migrations. Any audit query must filter on `stripe_session_id IS NOT NULL` to isolate real Stripe activity from grants/migrations. The Stripe Dashboard is the only authoritative source for "what Stripe actually processed."
 
+**Outcome (2026-05-16). Step 4f.0 closed.** The 90-day audit was run via `scripts/audit-stripe-charges.js`. Both halves of the exit criterion met:
+
+- **Going-forward**: structurally met. The gap was fully explained by two distinct bugs, both already fixed on 2026-05-10: (a) the Stripe webhook URL was set to `coachcarter.uk/api/webhook` (apex), which Vercel 307-redirects to `www.coachcarter.uk`; Stripe doesn't follow webhook redirects by design, so every `checkout.session.completed` event was lost silently for weeks. Fixed by updating the Stripe Dashboard URL. (b) `credit_transactions_type_check` only allowed `('purchase','refund')`; INSERTs for `slot_purchase`, `admin_add`, `admin_remove`, etc. were silently failing inside try/catch blocks. Fixed by commit 853f31c widening the constraint. Every charge after 2026-05-10 has a clean `credit_transactions` row (verified by audit). The hourly reconcile cron (`api/cron-reconcile-payments.js`) continues to act as the going-forward safety net.
+
+- **Historical**: 3 cases documented as out-of-scope. The 90-day audit surfaced exactly three suspicious gaps (£1,890.90 total): Hicksy 2026-04-10 £594.00 (307 redirect), Elena 2026-04-26 £82.50 (CHECK constraint blocked `slot_purchase`), Maisie 2026-05-07 £1,214.40 (307 redirect). The instructor side for these past lessons was already settled manually between Fraser-as-platform and Fraser-as-instructor pre-Connect-onboarding. Step 4f governs the *future* Friday cron, which will only process bookings funded by charges from after the 2026-05-10 fixes — all of which have clean ledger rows. The 3 historical charges are not Step 4f inputs and need no backfill.
+
+**Step 4f's gate is open.** The audit also confirmed Stripe fee data via `latest_charge.balance_transaction.fee` is reliable (144p on £82.50 = exactly 1.5% + 20p, matching documented UK domestic rates) — Step 4f.b can use it directly.
+
 ---
 
 ### Step 4f — Stripe-fee pass-through (~6–10 hours, lands after Step 4)
