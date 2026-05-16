@@ -1166,6 +1166,35 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS credit_forfeited BOOLEAN NO
 
 ---
 
+### 2.69 — Stripe-Fee Pass-Through (Step 4f) ✅ Complete (16 May 2026)
+
+**What:** Instructors now absorb the Stripe processing fee on each payment they receive, rather than the platform silently eating it from the commingled balance. Schema captures the fee at webhook time (`credit_transactions.stripe_fee_pence`, `lesson_bookings.stripe_fee_pence`) and the Friday payout cron subtracts it per booking (`payout_line_items.stripe_fee_pence`, `instructor_payouts.stripe_fees_pence`).
+
+**Maths (locked-in Decision 1):**
+- **Franchise model:** `payout = (gross − stripe_fees) − franchise_fee − deposit − prior_shortfall`. Stripe fees come off totalGross BEFORE the deductions math runs — never enter the carry-forward shortfall ledger.
+- **Commission model:** `payout = (gross × commission_rate) − stripe_fees`. Commission on gross, fees deducted from instructor share.
+
+**Pro-rata attribution (offer series):** one N-week charge → N bookings. Per-booking share = `floor(totalFee / repeatWeeks)`, remainder onto LAST booked lesson. Unbooked-weeks share when clashes hit lookahead is orphan fee → platform absorbs (Decision 3: Stripe kept its cut on the partial refund, Sept 2022 policy).
+
+**Reschedule:** new booking inherits old booking's `stripe_fee_pence` + source. Old booking flips to REFUNDED so no double-attribution.
+
+**PRs:** #134 (4f.a schema + 4f.b webhook capture), #135 (4f.d cron deduction), #136 (4f.c writer onto lesson_bookings).
+
+**Weekly summary email** (this PR): platform owner receives a Friday-evening digest after each payout cron with gross / Stripe fees deducted / payout sent + per-instructor breakdown + NULL-fee tracker for the rollout window. Recipient: `coachcarteruk@gmail.com`. Lives at `api/_payout-email.js`.
+
+**Out of scope (deferred):**
+- Step 4f.c for credit-funded bookings (`?action=book` + flexible offers) — requires Step 4g's `booking_credit_sources` for cross-source pro-rata.
+- Step 4f.e — daily reconcile cron that backfills NULL fees from Stripe API.
+- Step 4f.f — instructor earnings UI 4-line breakdown.
+- Step 4f.g — admin orphan-fee watchlist widget.
+- Step 4f.h — historical backfill script.
+
+Until 4g lands, credit-funded bookings keep `lesson_bookings.stripe_fee_pence = NULL` → cron treats as zero → platform absorbs. Acceptable interim since current traffic is mostly guest-checkout via `handleSlotBooking` (covered).
+
+**Refs:** `INSTRUCTOR-PAYMENTS-PLAN.md` Step 4f, `memory/project_stripe_fee_passthrough.md`.
+
+---
+
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
 - ~~**T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.~~ ✅ Done (2.54)
