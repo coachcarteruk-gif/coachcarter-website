@@ -23,6 +23,7 @@ async function getEligibleBookings(sql, instructorId, payoutsStartDate = null) {
              THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
              ELSE COALESCE(lt.price_pence, 8250)
            END AS price_pence,
+           COALESCE(lb.stripe_fee_pence, 0) AS stripe_fee_pence,
            COALESCE(lt.duration_minutes, 90) AS duration_minutes,
            COALESCE(lt.name, 'Standard Lesson') AS lesson_type_name
       FROM lesson_bookings lb
@@ -49,7 +50,18 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
   const commissionRate = parseFloat(instructor.commission_rate) || 0.85;
 
   let totalGrossPence = 0;
-  for (const b of bookings) totalGrossPence += parseInt(b.price_pence);
+  let totalStripeFeesPence = 0;
+  for (const b of bookings) {
+    totalGrossPence += parseInt(b.price_pence);
+    totalStripeFeesPence += parseInt(b.stripe_fee_pence || 0);
+  }
+
+  // Step 4f.d — Stripe fees come off totalGross BEFORE the franchise math runs.
+  // They are a pass-through cost, never enter the shortfall ledger.
+  // For franchise model: deductions math uses netOfStripeGross.
+  // For commission model: commission × gross, then subtract Stripe fees separately
+  // (per locked-in Decision 1 — commission on gross, not net).
+  const netOfStripeGross = totalGrossPence - totalStripeFeesPence;
 
   let totalInstructorPence;
   let actualFranchiseFee = null;
@@ -92,48 +104,64 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
 
     const totalDeductionPence = franchiseFee + depositAmount + priorShortfallPence;
 
-    if (totalGrossPence >= totalDeductionPence) {
+    // netOfStripeGross is the budget the franchise math gets to work with —
+    // Stripe already took its cut before money landed on the platform.
+    if (netOfStripeGross >= totalDeductionPence) {
       // Positive payout — all deductions applied.
-      totalInstructorPence = totalGrossPence - totalDeductionPence;
+      totalInstructorPence = netOfStripeGross - totalDeductionPence;
       actualFranchiseFee = franchiseFee;
       depositDeducted = depositAmount;
       if (priorShortfallPence > 0) shortfallRecoveryId = priorShortfallId;
     } else {
       // Cannot cover all deductions — payout is zero.
-      // Cover fee first (always — bounded by gross), then deposit (partial allowed),
+      // Cover fee first (always — bounded by net gross), then deposit (partial allowed),
       // then prior shortfall (full-or-nothing — rolls forward unchanged unless fully covered).
       totalInstructorPence = 0;
-      actualFranchiseFee = Math.min(franchiseFee, totalGrossPence);
-      const coveredAfterFee = Math.max(0, totalGrossPence - franchiseFee);
+      actualFranchiseFee = Math.min(franchiseFee, netOfStripeGross);
+      const coveredAfterFee = Math.max(0, netOfStripeGross - franchiseFee);
       depositDeducted = Math.min(depositAmount, coveredAfterFee);
       const coveredAfterDeposit = coveredAfterFee - depositDeducted;
       if (priorShortfallPence > 0 && coveredAfterDeposit >= priorShortfallPence) {
         shortfallRecoveryId = priorShortfallId;
       }
       // This week's shortfall = uncovered fee + uncovered deposit (+ prior shortfall only if NOT being recovered).
+      // Stripe fees are NEVER in shortfall — they were a pass-through cost, already paid to Stripe.
       const uncoveredFee = franchiseFee - actualFranchiseFee;
       const uncoveredDeposit = depositAmount - depositDeducted;
       const carriedPrior = (priorShortfallPence > 0 && shortfallRecoveryId === null) ? priorShortfallPence : 0;
       shortfallThisWeek = uncoveredFee + uncoveredDeposit + carriedPrior;
     }
   } else {
-    // Commission model: instructor gets commission_rate of each lesson
+    // Commission model: instructor gets commission_rate of gross, MINUS Stripe fees
+    // (per locked-in Decision 1 — commission on gross, fees subtracted from share).
     totalInstructorPence = 0;
   }
 
-  // Build line items
+  // Build line items. Each line item records:
+  //   price_pence              — gross lesson price (unchanged)
+  //   stripe_fee_pence         — Stripe's cut on that booking's funding charge
+  //   instructor_amount_pence  — what the instructor actually takes home for that booking
+  //                              (already net of Stripe fee and commission/franchise share)
+  // The sum of instructor_amount_pence across line items must equal totalInstructorPence
+  // exactly; the largest-line-item rounding fix below absorbs any pence drift.
   const effectiveRate = franchiseFee != null
-    ? (totalGrossPence > 0 ? totalInstructorPence / totalGrossPence : 1)
+    ? (netOfStripeGross > 0 ? totalInstructorPence / netOfStripeGross : 1)
     : commissionRate;
 
   let lineItemSum = 0;
   const lineItems = bookings.map(b => {
     const pricePence = parseInt(b.price_pence);
-    const instructorPence = Math.round(pricePence * effectiveRate);
+    const stripeFeePence = parseInt(b.stripe_fee_pence || 0);
+    // For franchise: per-booking share is (price − fee) × effectiveRate.
+    // For commission: per-booking share is (price × rate) − fee.
+    const instructorPence = franchiseFee != null
+      ? Math.round((pricePence - stripeFeePence) * effectiveRate)
+      : Math.round(pricePence * effectiveRate) - stripeFeePence;
     lineItemSum += instructorPence;
     return {
       booking_id: b.booking_id,
       price_pence: pricePence,
+      stripe_fee_pence: stripeFeePence,
       instructor_amount_pence: instructorPence,
       commission_rate: Math.round(effectiveRate * 1000) / 1000
     };
@@ -154,17 +182,18 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
   const periodStart = bookings[0].scheduled_date;
   const periodEnd = bookings[bookings.length - 1].scheduled_date;
 
-  // Create payout record (now also writes shortfall + deposit columns — plan items 1.3 + 2.10).
+  // Create payout record (now also writes shortfall + deposit columns — plan items 1.3 + 2.10,
+  // plus stripe_fees_pence for the historical 4-line earnings breakdown — Step 4f.d).
   const [payout] = await sql`
     INSERT INTO instructor_payouts (
       instructor_id, amount_pence, platform_fee_pence, franchise_fee_pence,
       period_start, period_end, status,
-      shortfall_pence, deposit_deducted_pence
+      shortfall_pence, deposit_deducted_pence, stripe_fees_pence
     )
     VALUES (
       ${instructor.id}, ${totalInstructorPence}, ${totalGrossPence - totalInstructorPence}, ${actualFranchiseFee},
       ${periodStart}, ${periodEnd}, 'processing',
-      ${shortfallThisWeek}, ${depositDeducted}
+      ${shortfallThisWeek}, ${depositDeducted}, ${totalStripeFeesPence}
     )
     RETURNING id
   `;
@@ -172,8 +201,8 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
   // Insert line items (UNIQUE(booking_id) prevents doubles)
   for (const li of lineItems) {
     await sql`
-      INSERT INTO payout_line_items (payout_id, booking_id, price_pence, instructor_amount_pence, commission_rate)
-      VALUES (${payout.id}, ${li.booking_id}, ${li.price_pence}, ${li.instructor_amount_pence}, ${li.commission_rate})
+      INSERT INTO payout_line_items (payout_id, booking_id, price_pence, instructor_amount_pence, commission_rate, stripe_fee_pence)
+      VALUES (${payout.id}, ${li.booking_id}, ${li.price_pence}, ${li.instructor_amount_pence}, ${li.commission_rate}, ${li.stripe_fee_pence})
     `;
   }
 
@@ -184,6 +213,8 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
     instructor_name: instructor.name,
     instructor_email: instructor.email,
     amount_pence: totalInstructorPence,
+    gross_pence: totalGrossPence,
+    stripe_fees_pence: totalStripeFeesPence,
     lesson_count: bookings.length,
     shortfall_pence: shortfallThisWeek,
     deposit_deducted_pence: depositDeducted,
