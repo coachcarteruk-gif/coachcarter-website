@@ -48,6 +48,7 @@ const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
 const { processAllPayouts, getEligibleBookings } = require('./_payout-helpers');
+const { sendPayoutSummary } = require('./_payout-email');
 const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin,
         SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
@@ -1275,6 +1276,16 @@ async function handleProcessPayouts(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const results = await processAllPayouts(sql, stripe, { schoolId });
+
+    // Send the same weekly summary email that the Friday cron sends so the
+    // admin trigger and the cron produce identical artefacts. Fire-and-forget:
+    // a digest failure must not fail the admin response.
+    try {
+      const summaryTransporter = createTransporter();
+      await sendPayoutSummary(sql, results, summaryTransporter);
+    } catch (summaryErr) {
+      reportError('/api/admin (process-payouts summary email)', summaryErr);
+    }
 
     return res.json({
       ok: true,
