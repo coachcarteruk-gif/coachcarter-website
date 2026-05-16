@@ -504,7 +504,9 @@ Distinct from refund-a-booking: a learner might ask for a cash refund of an unus
 
 ---
 
-### Step 4e — Payment-data completeness audit (~3–4 hours, **prerequisite for 4f**)
+### Step 4f.0 — Payment-data completeness audit (~3–4 hours, **prerequisite for 4f**)
+
+> **Naming note:** numbered `4f.0` to flag it as a gate on Step 4f specifically, not a peer-level step. The unrelated bullet `**4e. Other entry points to audit (Architect's seams list)**` already exists inside Step 4 (around line 314) — different concept entirely (per-instructor credit-scoping seams, not payment-data reconciliation). Don't conflate.
 
 **Why this exists.** Discovered 2026-05-15 (same session as Step 0). A spot check on `credit_transactions` for the last 60–90 days returned only **4 rows with `stripe_session_id IS NOT NULL`** totalling £1,451.40. Stripe Dashboard shows ~£3,200+ across 5 large payouts in the same window. **There is a >£1,750 gap between Stripe-recorded charges and `credit_transactions` rows.** Step 4f's per-booking fee snapshot reads from `credit_transactions.stripe_fee_pence` (the canonical source-of-truth row); if half the platform's real Stripe charges never wrote a `credit_transactions` row in the first place, the snapshot has no row to attach the fee to.
 
