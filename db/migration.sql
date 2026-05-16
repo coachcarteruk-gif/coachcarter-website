@@ -1727,3 +1727,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_instructor_slot
 -- TRUE means: learner cancelled inside the 48h window, credit was forfeited,
 -- booking stays `scheduled` until the cron flips it to `chargeable`.
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS credit_forfeited BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- STRIPE-FEE PASS-THROUGH (Step 4f.a of INSTRUCTOR-PAYMENTS-PLAN.md)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- The instructor absorbs the Stripe processing fee on each payment they receive
+-- (decision A3: net-of-Stripe at the booking level). We snapshot the fee that
+-- Stripe actually charged at webhook time, then subtract it from the instructor
+-- contribution at payout time.
+--
+-- credit_transactions.stripe_fee_pence is the CANONICAL source-of-truth row:
+-- it's the fee Stripe reported for the underlying charge.
+--
+-- lesson_bookings.stripe_fee_pence is the ATTRIBUTED SHARE for that booking.
+-- For single-lesson bookings it equals the credit_transaction's fee. For bulk
+-- packs it's the pro-rata share by minutes drawn (Step 4g's draw logic owns
+-- the split via booking_credit_sources).
+--
+-- All three columns are nullable. NULL is treated as zero by the payout code.
+--
+-- stripe_fee_source records provenance:
+--   'balance_transaction' — canonical, from Stripe API at webhook time
+--   'estimated'           — computed locally, awaiting reconciliation
+--   NULL                  — no fee (e.g. credit-redemption with no fresh charge)
+ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS stripe_fee_pence INTEGER;
+ALTER TABLE lesson_bookings    ADD COLUMN IF NOT EXISTS stripe_fee_pence INTEGER;
+ALTER TABLE lesson_bookings    ADD COLUMN IF NOT EXISTS stripe_fee_source TEXT;
