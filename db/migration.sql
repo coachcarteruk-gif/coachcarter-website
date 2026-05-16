@@ -1753,3 +1753,16 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS credit_forfeited BOOLEAN NO
 ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS stripe_fee_pence INTEGER;
 ALTER TABLE lesson_bookings    ADD COLUMN IF NOT EXISTS stripe_fee_pence INTEGER;
 ALTER TABLE lesson_bookings    ADD COLUMN IF NOT EXISTS stripe_fee_source TEXT;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- STRIPE-FEE PASS-THROUGH — payout historical breakdown (Step 4f.d)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Capture the Stripe fees that were subtracted from each weekly payout so the
+-- breakdown is queryable historically (matches the 4-line earnings UI:
+-- gross → Stripe fees → franchise fee / commission → net).
+--
+-- Stripe fees come off totalGross BEFORE the franchise/deposit/shortfall math
+-- runs. They never enter the carry-forward shortfall ledger — they're a
+-- pass-through cost, not a debt to the platform.
+ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS stripe_fees_pence INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payout_line_items  ADD COLUMN IF NOT EXISTS stripe_fee_pence  INTEGER NOT NULL DEFAULT 0;
