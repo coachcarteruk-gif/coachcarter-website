@@ -47,7 +47,7 @@ const { neon }   = require('@neondatabase/serverless');
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
-const { processAllPayouts, getEligibleBookings } = require('./_payout-helpers');
+const { processAllPayouts, getEligibleBookings, simulatePayoutForInstructor } = require('./_payout-helpers');
 const { sendPayoutSummary } = require('./_payout-email');
 const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin,
         SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
@@ -1267,29 +1267,26 @@ async function handlePayoutOverview(req, res) {
 }
 
 // ── GET /api/admin?action=platform-balance ──
-// Visibility safety net for the commingled-account architecture (see
-// memory/project_platform_owner_payout_model.md). Returns the platform
-// Stripe balance vs. ALL outstanding commitments so the admin can see
-// whether there's enough cash to cover what's owed to instructors AND
-// learners.
+// Dry-run preview of the next Friday payout cron. Answers the only question
+// the commingled-account architecture forces us to keep asking: "will the
+// next payout run actually succeed against the available Stripe balance?"
 //
-// Commitment legs (all three must be covered by AVAILABLE Stripe balance):
+// Builds per-instructor results using simulatePayoutForInstructor — same
+// math as the real Friday path, no INSERT/UPDATE, no Stripe transfer.
+// Filter MUST match processAllPayouts exactly (active + onboarded + not
+// paused + has stripe_account_id) so the headline number === what Friday
+// would actually transfer.
 //
-//   A. Learner credit balance        — minutes on learner_users.balance_minutes,
-//                                      priced at the school's list rate
-//   B. Scheduled-booking float       — bookings the learner could still
-//                                      cancel for a refund (≥48h notice)
-//   C. Instructor payout backlog     — instructor_payouts rows already
-//                                      created with status pending/processing
+// status:
+//   red    — balance_after_payout < 0 (Friday would fail)
+//   green  — balance_after_payout >= 0 (Friday would succeed)
 //
-// Headroom = available_pence − (A + B + C). Stripe `pending` (in-flight
-// charges still settling) is reported separately but NOT counted as
-// headroom — Connect transfers in flight to instructors live in pending
-// too, and counting them as "ours" would double-promise the money.
-//
-// Liability uses each school's list rate (bulk_hourly_pence) — slightly
-// conservative since some learners paid a discounted rate, but better
-// to over-warn than under-warn.
+// Advisory section (separate, does NOT affect headline status):
+//   - excluded_instructors: instructors with chargeable lessons who would
+//     NOT be paid this Friday (paused / no Connect / onboarding incomplete).
+//   - refund_exposure_pence: rough "if everyone refunded today" worst case,
+//     using net cash inflow (purchases - refunds) capped at the live
+//     learner_credit valuation. Test accounts excluded.
 async function handlePlatformBalance(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
@@ -1306,79 +1303,101 @@ async function handlePlatformBalance(req, res) {
     const availablePence = pickGbp(balance.available);
     const pendingPence   = pickGbp(balance.pending);
 
-    // 2a. Learner credit balance — escrow for un-booked, refundable credit.
-    // Per-school list rate ÷ 60 = per-minute valuation. Excludes test accounts
-    // (learner_users.is_test_account = TRUE) — Fraser's own test rows were
-    // inflating the figure by ~£4,872 / ~60%.
-    const [learnerCreditRow] = await sql`
-      SELECT COALESCE(SUM(
-        lu.balance_minutes
-        * COALESCE((s.config -> 'pricing' ->> 'bulk_hourly_pence')::int, 5500)
-        / 60.0
-      ), 0)::bigint AS pence
+    // 2. Per-instructor payout dry-run. Filter MUST match processAllPayouts.
+    const eligibleInstructors = await sql`
+      SELECT id, name, email, commission_rate, weekly_franchise_fee_pence,
+             stripe_account_id, payouts_start_date
+        FROM instructors
+       WHERE active = TRUE
+         AND stripe_onboarding_complete = TRUE
+         AND payouts_paused = FALSE
+         AND stripe_account_id IS NOT NULL
+    `;
+
+    const payoutPreview = [];
+    let totalPayoutPence = 0;
+    for (const inst of eligibleInstructors) {
+      const sim = await simulatePayoutForInstructor(sql, inst);
+      if (!sim) continue;
+      payoutPreview.push(sim);
+      totalPayoutPence += sim.amount_pence;
+    }
+    payoutPreview.sort((a, b) => b.amount_pence - a.amount_pence);
+
+    const balanceAfterPayoutPence = availablePence - totalPayoutPence;
+
+    // 3. Advisory — instructors with chargeable lessons who would NOT be paid
+    // this Friday. Helps Fraser see what's stuck without affecting the headline.
+    const blockedRows = await sql`
+      SELECT i.id, i.name,
+             i.active, i.stripe_onboarding_complete, i.payouts_paused,
+             i.stripe_account_id,
+             COUNT(lb.id)::int AS chargeable_lessons
+        FROM instructors i
+        JOIN lesson_bookings lb ON lb.instructor_id = i.id AND lb.status = 'chargeable'
+        LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
+       WHERE pli.id IS NULL
+         AND NOT (i.active = TRUE AND i.stripe_onboarding_complete = TRUE
+                  AND i.payouts_paused = FALSE AND i.stripe_account_id IS NOT NULL)
+       GROUP BY i.id, i.name, i.active, i.stripe_onboarding_complete,
+                i.payouts_paused, i.stripe_account_id
+       ORDER BY chargeable_lessons DESC
+    `;
+    const excludedInstructors = blockedRows.map(r => ({
+      instructor_id: r.id,
+      name: r.name,
+      chargeable_lessons: r.chargeable_lessons,
+      reason: !r.active                       ? 'inactive'
+            : !r.stripe_account_id            ? 'no_connect'
+            : !r.stripe_onboarding_complete   ? 'onboarding_incomplete'
+            : r.payouts_paused                ? 'paused'
+            : 'unknown'
+    }));
+
+    // 4. Advisory — "if learners refunded today" worst case. Simplest
+    // possible valuation per Fraser's pseudocode: net cash inflow per
+    // non-test learner (purchases + slot_purchases minus refunds), summed
+    // and capped at the live learner_credit valuation. Anything spent on
+    // lessons isn't refundable, so the live balance is the natural ceiling.
+    const [refundExposureRow] = await sql`
+      SELECT
+        COALESCE(SUM(
+          lu.balance_minutes
+          * COALESCE((s.config -> 'pricing' ->> 'bulk_hourly_pence')::int, 5500)
+          / 60.0
+        ), 0)::bigint AS live_credit_pence,
+        COALESCE((
+          SELECT SUM(
+            CASE WHEN ct.type IN ('purchase', 'slot_purchase') THEN ct.amount_pence
+                 WHEN ct.type = 'refund' THEN -ct.amount_pence
+                 ELSE 0 END
+          )
+          FROM credit_transactions ct
+          JOIN learner_users lu2 ON lu2.id = ct.learner_id
+          WHERE ct.payment_method = 'stripe'
+            AND lu2.is_test_account = FALSE
+        ), 0)::bigint AS net_cash_in_pence
       FROM learner_users lu
       JOIN schools s ON s.id = lu.school_id
       WHERE lu.balance_minutes > 0
         AND lu.is_test_account = FALSE
     `;
-    const learnerCreditPence = parseInt(learnerCreditRow.pence) || 0;
+    const liveCreditPence = parseInt(refundExposureRow.live_credit_pence) || 0;
+    const netCashInPence  = Math.max(0, parseInt(refundExposureRow.net_cash_in_pence) || 0);
+    const refundExposurePence = Math.min(liveCreditPence, netCashInPence);
 
-    // 2b. Scheduled-booking float — bookings the learner could still cancel
-    // for a credit refund. Uses lesson_types.price_pence when present
-    // (canonical per-booking price); falls back to duration × school rate.
-    // Test-account bookings excluded for the same reason as 2a.
-    const [bookingFloatRow] = await sql`
-      SELECT COALESCE(SUM(
-        COALESCE(
-          lt.price_pence,
-          COALESCE(lb.minutes_deducted, COALESCE(lt.duration_minutes, 90))
-            * COALESCE((s.config -> 'pricing' ->> 'bulk_hourly_pence')::int, 5500)
-            / 60.0
-        )
-      ), 0)::bigint AS pence
-      FROM lesson_bookings lb
-      JOIN schools s ON s.id = lb.school_id
-      JOIN learner_users lu ON lu.id = lb.learner_id
-      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
-      WHERE lb.status = 'scheduled'
-        AND lu.is_test_account = FALSE
-    `;
-    const bookingFloatPence = parseInt(bookingFloatRow.pence) || 0;
-
-    // 2c. Instructor payout backlog — payouts already created but not yet
-    // landed. Excludes 'failed' (their line items are deleted, so the
-    // bookings will re-enter the queue and be re-counted via 'chargeable'
-    // when next processed — counting failed rows here would double-count).
-    const [payoutBacklogRow] = await sql`
-      SELECT COALESCE(SUM(amount_pence), 0)::bigint AS pence
-      FROM instructor_payouts
-      WHERE status IN ('pending', 'processing')
-    `;
-    const instructorBacklogPence = parseInt(payoutBacklogRow.pence) || 0;
-
-    // 3. Total commitments and headroom.
-    const totalCommitmentsPence = learnerCreditPence + bookingFloatPence + instructorBacklogPence;
-    const headroomPence         = availablePence - totalCommitmentsPence;
-
-    // 4. Traffic-light. Amber threshold = MAX(£500 absolute, 10% of
-    // commitments) — absolute floor catches small-scale ops; percentage
-    // catches scale where £500 is rounding noise. Negative is always red.
-    const amberFloor = Math.max(50000, Math.round(totalCommitmentsPence * 0.1));
-    let status;
-    if (headroomPence < 0)                status = 'red';
-    else if (headroomPence < amberFloor)  status = 'amber';
-    else                                  status = 'green';
+    // 5. Status — strictly binary. Friday either works or it doesn't.
+    const status = balanceAfterPayoutPence >= 0 ? 'green' : 'red';
 
     return res.json({
       ok: true,
       available_pence: availablePence,
       pending_pence:   pendingPence,
-      learner_credit_pence:     learnerCreditPence,
-      scheduled_float_pence:    bookingFloatPence,
-      instructor_backlog_pence: instructorBacklogPence,
-      total_commitments_pence:  totalCommitmentsPence,
-      headroom_pence:           headroomPence,
-      amber_threshold_pence:    amberFloor,
+      payout_preview: payoutPreview,
+      total_payout_pence: totalPayoutPence,
+      balance_after_payout_pence: balanceAfterPayoutPence,
+      excluded_instructors: excludedInstructors,
+      refund_exposure_pence: refundExposurePence,
       status
     });
   } catch (err) {

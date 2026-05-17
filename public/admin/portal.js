@@ -1740,24 +1740,68 @@ async function loadPlatformBalance() {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
 
-    const colours = { green: '#166534', amber: '#b45309', red: '#991b1b' };
-    const labels  = { green: 'Healthy', amber: 'Low headroom', red: 'Negative headroom 🚨' };
-    const colour = colours[data.status] || '#6b7280';
-
-    statusEl.textContent = labels[data.status] || '';
+    const colour = data.status === 'red' ? '#991b1b' : '#166534';
+    const label  = data.status === 'red'
+      ? 'Next payout would fail 🚨'
+      : 'Next payout would succeed';
+    statusEl.textContent = label;
     statusEl.style.color = colour;
 
-    const headroomBg = data.status === 'red' ? '#fef2f2'
-      : data.status === 'amber' ? '#fef3c7'
-      : '#f0fdf4';
-    const headroomFg = data.status === 'red' ? '#991b1b'
-      : data.status === 'amber' ? '#b45309'
-      : '#166534';
+    const afterBg = data.status === 'red' ? '#fef2f2' : '#f0fdf4';
+    const afterFg = data.status === 'red' ? '#991b1b' : '#166534';
+
+    // Per-instructor rows. Empty state = nothing chargeable yet this week.
+    const preview = data.payout_preview || [];
+    const rowsHtml = preview.length === 0
+      ? `<div style="color:#6b7280;font-style:italic;padding:8px 0;">No instructors have chargeable lessons to pay right now.</div>`
+      : preview.map(p => {
+          const breakdown = p.fee_model === 'franchise'
+            ? `gross ${fmtPence(p.gross_pence)} − fee ${fmtPence(p.franchise_fee_pence || 0)}` +
+              (p.stripe_fees_pence ? ` − Stripe ${fmtPence(p.stripe_fees_pence)}` : '') +
+              (p.deposit_deducted_pence ? ` − deposit ${fmtPence(p.deposit_deducted_pence)}` : '') +
+              (p.prior_shortfall_recovered_pence ? ` − prior shortfall ${fmtPence(p.prior_shortfall_recovered_pence)}` : '')
+            : `${Math.round((p.amount_pence + (p.stripe_fees_pence || 0)) / p.gross_pence * 100)}% commission of ${fmtPence(p.gross_pence)}` +
+              (p.stripe_fees_pence ? ` − Stripe ${fmtPence(p.stripe_fees_pence)}` : '');
+          const shortfallNote = p.shortfall_pence
+            ? `<div style="font-size:0.72rem;color:#b45309;margin-top:2px;">Shortfall ${fmtPence(p.shortfall_pence)} carries forward</div>`
+            : '';
+          return `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:8px 0;border-top:1px solid #eee;">
+              <div style="min-width:0;">
+                <div style="font-weight:600;">${escapeHtml(p.instructor_name)}</div>
+                <div style="font-size:0.78rem;color:#6b7280;">${p.lesson_count} lesson${p.lesson_count === 1 ? '' : 's'} · ${breakdown}</div>
+                ${shortfallNote}
+              </div>
+              <div style="font-weight:700;white-space:nowrap;">${fmtPence(p.amount_pence)}</div>
+            </div>
+          `;
+        }).join('');
+
+    // Advisory — instructors stuck with chargeable lessons but no payout.
+    const excluded = data.excluded_instructors || [];
+    const reasonLabel = {
+      paused: 'payouts paused',
+      no_connect: 'no Connect account',
+      onboarding_incomplete: 'onboarding incomplete',
+      inactive: 'inactive',
+      unknown: 'blocked'
+    };
+    const excludedHtml = excluded.length === 0 ? '' : `
+      <div style="margin-top:14px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;">
+        <div style="font-size:0.74rem;color:#92400e;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Not paid this Friday</div>
+        ${excluded.map(e => `
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:#78350f;padding:2px 0;">
+            <span>${escapeHtml(e.name)} <span style="color:#a16207;">— ${reasonLabel[e.reason] || e.reason}</span></span>
+            <span>${e.chargeable_lessons} chargeable lesson${e.chargeable_lessons === 1 ? '' : 's'}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
 
     body.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
         <div style="padding:12px;background:#f9fafb;border-radius:6px;">
-          <div style="font-size:0.74rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Available</div>
+          <div style="font-size:0.74rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Stripe available</div>
           <div style="font-size:1.3rem;font-weight:700;margin-top:4px;">${fmtPence(data.available_pence)}</div>
         </div>
         <div style="padding:12px;background:#f9fafb;border-radius:6px;">
@@ -1767,34 +1811,43 @@ async function loadPlatformBalance() {
       </div>
 
       <div style="margin-top:14px;padding:12px;background:#fafafa;border-radius:6px;">
-        <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">Commitments (must be covered by Available)</div>
-        <div style="display:grid;grid-template-columns:1fr auto;gap:6px 16px;font-size:0.9rem;">
-          <div>Learner credit balance</div><div style="text-align:right;font-weight:600;">${fmtPence(data.learner_credit_pence)}</div>
-          <div>Scheduled bookings (refundable)</div><div style="text-align:right;font-weight:600;">${fmtPence(data.scheduled_float_pence)}</div>
-          <div>Instructor payout backlog</div><div style="text-align:right;font-weight:600;">${fmtPence(data.instructor_backlog_pence)}</div>
-          <div style="border-top:1px solid #ddd;padding-top:6px;font-weight:700;">Total commitments</div>
-          <div style="border-top:1px solid #ddd;padding-top:6px;text-align:right;font-weight:700;">${fmtPence(data.total_commitments_pence)}</div>
+        <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">If the cron ran right now, Stripe would transfer:</div>
+        ${rowsHtml}
+        <div style="display:flex;justify-content:space-between;padding:8px 0 0;margin-top:6px;border-top:2px solid #ddd;font-weight:700;">
+          <span>Total transferred</span>
+          <span>${fmtPence(data.total_payout_pence)}</span>
         </div>
       </div>
 
-      <div style="margin-top:14px;padding:14px;background:${headroomBg};border-radius:6px;">
+      <div style="margin-top:14px;padding:14px;background:${afterBg};border-radius:6px;">
         <div style="display:flex;justify-content:space-between;align-items:baseline;">
-          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Headroom (Available − Commitments)</div>
-          <div style="font-size:1.5rem;font-weight:800;color:${headroomFg};">${fmtPence(data.headroom_pence)}</div>
+          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Stripe balance after payout</div>
+          <div style="font-size:1.5rem;font-weight:800;color:${afterFg};">${fmtPence(data.balance_after_payout_pence)}</div>
         </div>
+      </div>
+
+      ${excludedHtml}
+
+      <div style="margin-top:14px;padding:10px 12px;background:#f9fafb;border-left:3px solid #d1d5db;border-radius:4px;font-size:0.82rem;color:#4b5563;">
+        <strong style="color:#374151;">Advisory:</strong> if every learner refunded today,
+        additional cash needed ≈ <strong>${fmtPence(data.refund_exposure_pence)}</strong>.
+        Informational only — not part of payout viability above.
       </div>
 
       <p style="margin:12px 0 0;color:#6b7280;font-size:0.78rem;">
-        Pending Stripe funds are shown but excluded from Headroom — Connect transfers
-        to instructors live in Pending too. Liability uses each school's list rate
-        (£55/h default) so it errs slightly high. Amber triggers at the larger of
-        £500 or 10% of commitments.
+        Mirrors Friday's cron exactly (active + onboarded + not paused + has Connect account).
+        Per-instructor numbers use the same franchise / commission math as <code>processPayoutForInstructor</code>,
+        in dry-run — no payout rows or Stripe transfers are created.
       </p>
     `;
   } catch (err) {
-    body.innerHTML = '<span style="color:#991b1b;">Failed to load platform balance.</span>';
+    body.innerHTML = '<span style="color:#991b1b;">Failed to load next payout preview.</span>';
     statusEl.textContent = '';
   }
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 async function loadPayouts() {
