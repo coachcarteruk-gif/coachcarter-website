@@ -1752,12 +1752,10 @@ async function loadPlatformBalance() {
 
     // Per-instructor rows. Empty state = nothing chargeable yet this week.
     const preview = data.payout_preview || [];
-    let anyFeeFreeRow = false;
     const rowsHtml = preview.length === 0
       ? `<div style="color:#6b7280;font-style:italic;padding:8px 0;">No instructors have chargeable lessons to pay right now.</div>`
       : preview.map(p => {
           const hasStripeFee = (p.stripe_fees_pence || 0) > 0;
-          if (!hasStripeFee) anyFeeFreeRow = true;
           const commissionPct = p.gross_pence > 0
             ? Math.round((p.amount_pence + (p.stripe_fees_pence || 0)) / p.gross_pence * 100)
             : 0;
@@ -1767,7 +1765,7 @@ async function loadPlatformBalance() {
               (p.deposit_deducted_pence ? ` − deposit ${fmtPence(p.deposit_deducted_pence)}` : '') +
               (p.prior_shortfall_recovered_pence ? ` − prior shortfall ${fmtPence(p.prior_shortfall_recovered_pence)}` : '')
             : `${commissionPct}% commission of ${fmtPence(p.gross_pence)}` +
-              (hasStripeFee ? ` − Stripe ${fmtPence(p.stripe_fees_pence)}` : `<sup style="color:#9ca3af;">*</sup>`);
+              (hasStripeFee ? ` − Stripe ${fmtPence(p.stripe_fees_pence)}` : '');
           const shortfallNote = p.shortfall_pence
             ? `<div style="font-size:0.72rem;color:#b45309;margin-top:2px;">Shortfall ${fmtPence(p.shortfall_pence)} carries forward</div>`
             : '';
@@ -1782,10 +1780,6 @@ async function loadPlatformBalance() {
             </div>
           `;
         }).join('');
-
-    const feeFootnote = anyFeeFreeRow
-      ? `<p style="margin:6px 0 0;color:#6b7280;font-size:0.74rem;"><sup>*</sup>No per-booking Stripe fee on this lesson. Either pre-Step-4f (no fee snapshotted at webhook time) or credit-funded (the Stripe fee was already taken when the learner bought the credit pack, on a separate <code>credit_transactions</code> row).</p>`
-      : '';
 
     // Advisory — instructors stuck with chargeable lessons but no payout.
     const excluded = data.excluded_instructors || [];
@@ -1827,7 +1821,6 @@ async function loadPlatformBalance() {
           <span>Total transferred</span>
           <span>${fmtPence(data.total_payout_pence)}</span>
         </div>
-        ${feeFootnote}
       </div>
 
       <div style="margin-top:14px;padding:14px;background:${afterBg};border-radius:6px;">
@@ -1847,8 +1840,14 @@ async function loadPlatformBalance() {
 
       <p style="margin:12px 0 0;color:#6b7280;font-size:0.78rem;">
         Mirrors Friday's cron exactly (active + onboarded + not paused + has Connect account).
-        Per-instructor numbers use the same franchise / commission math as <code>processPayoutForInstructor</code>,
-        in dry-run — no payout rows or Stripe transfers are created.
+        Same franchise / commission math as <code>processPayoutForInstructor</code>, in dry-run — no payout rows or Stripe transfers are created.
+      </p>
+      <p style="margin:6px 0 0;color:#9ca3af;font-size:0.74rem;">
+        Lesson gross uses <code>lesson_types.price_pence</code> (list rate). Most lessons are credit-funded —
+        the Stripe fee was taken at credit-purchase time on a <code>credit_transactions</code> row, not on the booking.
+        Per-booking effective price + proportional Stripe-fee attribution wire through in the Step 4 / 4g keystone work
+        (see <code>project_next_session_priority.md</code>). Until then, the headline succeed / fail status is
+        reliable but per-row amounts can be slightly higher than what the platform actually nets for bulk-pack lessons.
       </p>
     `;
   } catch (err) {
