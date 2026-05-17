@@ -1269,15 +1269,27 @@ async function handlePayoutOverview(req, res) {
 // ── GET /api/admin?action=platform-balance ──
 // Visibility safety net for the commingled-account architecture (see
 // memory/project_platform_owner_payout_model.md). Returns the platform
-// Stripe balance vs. outstanding learner-credit liability so the admin
-// can see at a glance whether there's enough headroom to cover what's
-// owed to instructors and learners.
+// Stripe balance vs. ALL outstanding commitments so the admin can see
+// whether there's enough cash to cover what's owed to instructors AND
+// learners.
 //
-// Liability estimation: SUM(learner_users.balance_minutes) × school
-// bulk_hourly_pence / 60. Uses list rate (not the discounted rate the
-// learner actually paid) — slightly conservative on purpose: better an
-// over-warning than an under-warning. Across all schools, since the
-// platform Stripe account covers escrow for all tenants.
+// Commitment legs (all three must be covered by AVAILABLE Stripe balance):
+//
+//   A. Learner credit balance        — minutes on learner_users.balance_minutes,
+//                                      priced at the school's list rate
+//   B. Scheduled-booking float       — bookings the learner could still
+//                                      cancel for a refund (≥48h notice)
+//   C. Instructor payout backlog     — instructor_payouts rows already
+//                                      created with status pending/processing
+//
+// Headroom = available_pence − (A + B + C). Stripe `pending` (in-flight
+// charges still settling) is reported separately but NOT counted as
+// headroom — Connect transfers in flight to instructors live in pending
+// too, and counting them as "ours" would double-promise the money.
+//
+// Liability uses each school's list rate (bulk_hourly_pence) — slightly
+// conservative since some learners paid a discounted rate, but better
+// to over-warn than under-warn.
 async function handlePlatformBalance(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
@@ -1285,7 +1297,7 @@ async function handlePlatformBalance(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // 1. Stripe balance (GBP only; ignore other currencies for now).
+    // 1. Stripe balance (GBP only).
     const balance = await stripe.balance.retrieve();
     const pickGbp = (arr) => {
       const row = (arr || []).find(b => b.currency === 'gbp');
@@ -1293,40 +1305,74 @@ async function handlePlatformBalance(req, res) {
     };
     const availablePence = pickGbp(balance.available);
     const pendingPence   = pickGbp(balance.pending);
-    const totalBalancePence = availablePence + pendingPence;
 
-    // 2. Outstanding learner-credit liability across all schools.
-    // Uses each school's bulk_hourly_pence as the per-minute valuation
-    // (price ÷ 60). Falls back to 5500p (£55/h) if a school has no
-    // pricing config set.
-    const [liabilityRow] = await sql`
+    // 2a. Learner credit balance — escrow for un-booked, refundable credit.
+    // Per-school list rate ÷ 60 = per-minute valuation.
+    const [learnerCreditRow] = await sql`
       SELECT COALESCE(SUM(
         lu.balance_minutes
         * COALESCE((s.config -> 'pricing' ->> 'bulk_hourly_pence')::int, 5500)
         / 60.0
-      ), 0)::bigint AS liability_pence
+      ), 0)::bigint AS pence
       FROM learner_users lu
       JOIN schools s ON s.id = lu.school_id
-      WHERE COALESCE(lu.archived_at, NULL) IS NULL
-        AND lu.balance_minutes > 0
+      WHERE lu.balance_minutes > 0
     `;
-    const liabilityPence = parseInt(liabilityRow.liability_pence) || 0;
-    const headroomPence  = totalBalancePence - liabilityPence;
+    const learnerCreditPence = parseInt(learnerCreditRow.pence) || 0;
 
-    // 3. Status traffic-light. Thresholds picked for instructor-#2-scale
-    // ops; adjust in code when InstructorBook expands.
+    // 2b. Scheduled-booking float — bookings the learner could still cancel
+    // for a credit refund. Uses lesson_types.price_pence when present
+    // (canonical per-booking price); falls back to duration × school rate.
+    const [bookingFloatRow] = await sql`
+      SELECT COALESCE(SUM(
+        COALESCE(
+          lt.price_pence,
+          COALESCE(lb.minutes_deducted, COALESCE(lt.duration_minutes, 90))
+            * COALESCE((s.config -> 'pricing' ->> 'bulk_hourly_pence')::int, 5500)
+            / 60.0
+        )
+      ), 0)::bigint AS pence
+      FROM lesson_bookings lb
+      JOIN schools s ON s.id = lb.school_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      WHERE lb.status = 'scheduled'
+    `;
+    const bookingFloatPence = parseInt(bookingFloatRow.pence) || 0;
+
+    // 2c. Instructor payout backlog — payouts already created but not yet
+    // landed. Excludes 'failed' (their line items are deleted, so the
+    // bookings will re-enter the queue and be re-counted via 'chargeable'
+    // when next processed — counting failed rows here would double-count).
+    const [payoutBacklogRow] = await sql`
+      SELECT COALESCE(SUM(amount_pence), 0)::bigint AS pence
+      FROM instructor_payouts
+      WHERE status IN ('pending', 'processing')
+    `;
+    const instructorBacklogPence = parseInt(payoutBacklogRow.pence) || 0;
+
+    // 3. Total commitments and headroom.
+    const totalCommitmentsPence = learnerCreditPence + bookingFloatPence + instructorBacklogPence;
+    const headroomPence         = availablePence - totalCommitmentsPence;
+
+    // 4. Traffic-light. Amber threshold = MAX(£500 absolute, 10% of
+    // commitments) — absolute floor catches small-scale ops; percentage
+    // catches scale where £500 is rounding noise. Negative is always red.
+    const amberFloor = Math.max(50000, Math.round(totalCommitmentsPence * 0.1));
     let status;
-    if (headroomPence < 0)            status = 'red';
-    else if (headroomPence < 50000)   status = 'amber'; // <£500 headroom
-    else                              status = 'green';
+    if (headroomPence < 0)                status = 'red';
+    else if (headroomPence < amberFloor)  status = 'amber';
+    else                                  status = 'green';
 
     return res.json({
       ok: true,
       available_pence: availablePence,
       pending_pence:   pendingPence,
-      total_balance_pence: totalBalancePence,
-      liability_pence: liabilityPence,
-      headroom_pence:  headroomPence,
+      learner_credit_pence:     learnerCreditPence,
+      scheduled_float_pence:    bookingFloatPence,
+      instructor_backlog_pence: instructorBacklogPence,
+      total_commitments_pence:  totalCommitmentsPence,
+      headroom_pence:           headroomPence,
+      amber_threshold_pence:    amberFloor,
       status
     });
   } catch (err) {

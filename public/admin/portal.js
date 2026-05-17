@@ -1747,33 +1747,48 @@ async function loadPlatformBalance() {
     statusEl.textContent = labels[data.status] || '';
     statusEl.style.color = colour;
 
-    const headroomColour = data.headroom_pence < 0 ? '#991b1b'
-      : data.headroom_pence < 50000 ? '#b45309'
+    const headroomBg = data.status === 'red' ? '#fef2f2'
+      : data.status === 'amber' ? '#fef3c7'
+      : '#f0fdf4';
+    const headroomFg = data.status === 'red' ? '#991b1b'
+      : data.status === 'amber' ? '#b45309'
       : '#166534';
 
     body.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
         <div style="padding:12px;background:#f9fafb;border-radius:6px;">
-          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Available now</div>
-          <div style="font-size:1.4rem;font-weight:700;margin-top:4px;">${fmtPence(data.available_pence)}</div>
+          <div style="font-size:0.74rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Available</div>
+          <div style="font-size:1.3rem;font-weight:700;margin-top:4px;">${fmtPence(data.available_pence)}</div>
         </div>
         <div style="padding:12px;background:#f9fafb;border-radius:6px;">
-          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Pending (in flight)</div>
-          <div style="font-size:1.4rem;font-weight:700;margin-top:4px;">${fmtPence(data.pending_pence)}</div>
-        </div>
-        <div style="padding:12px;background:#f9fafb;border-radius:6px;">
-          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Owed to learners</div>
-          <div style="font-size:1.4rem;font-weight:700;margin-top:4px;">${fmtPence(data.liability_pence)}</div>
-        </div>
-        <div style="padding:12px;background:${data.status === 'red' ? '#fef2f2' : data.status === 'amber' ? '#fef3c7' : '#f0fdf4'};border-radius:6px;">
-          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Headroom</div>
-          <div style="font-size:1.4rem;font-weight:700;margin-top:4px;color:${headroomColour};">${fmtPence(data.headroom_pence)}</div>
+          <div style="font-size:0.74rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Pending <span style="text-transform:none;font-weight:400;color:#9ca3af;">(not counted)</span></div>
+          <div style="font-size:1.3rem;font-weight:700;margin-top:4px;color:#6b7280;">${fmtPence(data.pending_pence)}</div>
         </div>
       </div>
+
+      <div style="margin-top:14px;padding:12px;background:#fafafa;border-radius:6px;">
+        <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">Commitments (must be covered by Available)</div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:6px 16px;font-size:0.9rem;">
+          <div>Learner credit balance</div><div style="text-align:right;font-weight:600;">${fmtPence(data.learner_credit_pence)}</div>
+          <div>Scheduled bookings (refundable)</div><div style="text-align:right;font-weight:600;">${fmtPence(data.scheduled_float_pence)}</div>
+          <div>Instructor payout backlog</div><div style="text-align:right;font-weight:600;">${fmtPence(data.instructor_backlog_pence)}</div>
+          <div style="border-top:1px solid #ddd;padding-top:6px;font-weight:700;">Total commitments</div>
+          <div style="border-top:1px solid #ddd;padding-top:6px;text-align:right;font-weight:700;">${fmtPence(data.total_commitments_pence)}</div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;padding:14px;background:${headroomBg};border-radius:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Headroom (Available − Commitments)</div>
+          <div style="font-size:1.5rem;font-weight:800;color:${headroomFg};">${fmtPence(data.headroom_pence)}</div>
+        </div>
+      </div>
+
       <p style="margin:12px 0 0;color:#6b7280;font-size:0.78rem;">
-        Headroom = total balance − outstanding learner-credit liability.
-        Negative means the platform has commitments it cannot currently cover.
-        Liability uses each school's list rate (£55/h default) so it errs slightly high.
+        Pending Stripe funds are shown but excluded from Headroom — Connect transfers
+        to instructors live in Pending too. Liability uses each school's list rate
+        (£55/h default) so it errs slightly high. Amber triggers at the larger of
+        £500 or 10% of commitments.
       </p>
     `;
   } catch (err) {
