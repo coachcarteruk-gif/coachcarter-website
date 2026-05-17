@@ -11,6 +11,8 @@ const { CHARGEABLE } = require('./_booking-status');
 /**
  * Get unpaid eligible bookings for an instructor.
  * `payoutsStartDate` is a date floor — bookings before it are excluded. NULL/undefined = no floor.
+ * Test-account bookings (learner_users.is_test_account = TRUE) are excluded — they
+ * are dev/QA noise, not real revenue, and must never trigger an instructor payout.
  */
 async function getEligibleBookings(sql, instructorId, payoutsStartDate = null) {
   return sql`
@@ -28,12 +30,14 @@ async function getEligibleBookings(sql, instructorId, payoutsStartDate = null) {
            COALESCE(lt.name, 'Standard Lesson') AS lesson_type_name
       FROM lesson_bookings lb
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      LEFT JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
       LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
      WHERE lb.instructor_id = ${instructorId}
        AND pli.id IS NULL
        AND (${payoutsStartDate}::date IS NULL OR lb.scheduled_date >= ${payoutsStartDate}::date)
        AND lb.status = ${CHARGEABLE}
+       AND COALESCE(lu.is_test_account, FALSE) = FALSE
      ORDER BY lb.scheduled_date ASC
   `;
 }
