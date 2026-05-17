@@ -1731,7 +1731,60 @@ function fmtDateShort(d) {
   return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+async function loadPlatformBalance() {
+  const body = document.getElementById('platform-balance-body');
+  const statusEl = document.getElementById('platform-balance-status');
+  if (!body) return;
+  try {
+    const res = await fetchAdmin('/api/admin?action=platform-balance');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    const colours = { green: '#166534', amber: '#b45309', red: '#991b1b' };
+    const labels  = { green: 'Healthy', amber: 'Low headroom', red: 'Negative headroom 🚨' };
+    const colour = colours[data.status] || '#6b7280';
+
+    statusEl.textContent = labels[data.status] || '';
+    statusEl.style.color = colour;
+
+    const headroomColour = data.headroom_pence < 0 ? '#991b1b'
+      : data.headroom_pence < 50000 ? '#b45309'
+      : '#166534';
+
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+        <div style="padding:12px;background:#f9fafb;border-radius:6px;">
+          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Available now</div>
+          <div style="font-size:1.4rem;font-weight:700;margin-top:4px;">${fmtPence(data.available_pence)}</div>
+        </div>
+        <div style="padding:12px;background:#f9fafb;border-radius:6px;">
+          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Pending (in flight)</div>
+          <div style="font-size:1.4rem;font-weight:700;margin-top:4px;">${fmtPence(data.pending_pence)}</div>
+        </div>
+        <div style="padding:12px;background:#f9fafb;border-radius:6px;">
+          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Owed to learners</div>
+          <div style="font-size:1.4rem;font-weight:700;margin-top:4px;">${fmtPence(data.liability_pence)}</div>
+        </div>
+        <div style="padding:12px;background:${data.status === 'red' ? '#fef2f2' : data.status === 'amber' ? '#fef3c7' : '#f0fdf4'};border-radius:6px;">
+          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Headroom</div>
+          <div style="font-size:1.4rem;font-weight:700;margin-top:4px;color:${headroomColour};">${fmtPence(data.headroom_pence)}</div>
+        </div>
+      </div>
+      <p style="margin:12px 0 0;color:#6b7280;font-size:0.78rem;">
+        Headroom = total balance − outstanding learner-credit liability.
+        Negative means the platform has commitments it cannot currently cover.
+        Liability uses each school's list rate (£55/h default) so it errs slightly high.
+      </p>
+    `;
+  } catch (err) {
+    body.innerHTML = '<span style="color:#991b1b;">Failed to load platform balance.</span>';
+    statusEl.textContent = '';
+  }
+}
+
 async function loadPayouts() {
+  // Fire the balance fetch in parallel — independent network call, no need to chain.
+  loadPlatformBalance();
   try {
     const res = await fetchAdmin('/api/admin?action=payout-overview');
     const data = await res.json();
