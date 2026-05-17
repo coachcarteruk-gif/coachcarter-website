@@ -1799,3 +1799,34 @@ UPDATE learner_users SET is_test_account = TRUE WHERE id IN (
 );
 -- NOT flagged: id=42 Phil Carter — almost certainly a real family member
 -- with a real booking pattern. Leave as live liability.
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- PLATFORM BALANCE SNAPSHOTS (widget alert layer, 2026-05-17)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Daily snapshot of the Next Payout Preview widget's state plus trailing-30d
+-- cash flow. Two purposes:
+--   1. Trigger A — if a real payout fails inside the next 24h despite the most
+--      recent snapshot reporting status='green', the widget was lying. Alert.
+--   2. Trigger B — coarse Option A bias check: if trailing-30d payout outflow
+--      exceeds trailing-30d Stripe inflow by more than a calibrated floor, the
+--      cron is bleeding the float (likely the bulk-pack list-rate overpay bias
+--      tracked in project_credit_funded_default.md). Alert.
+-- Written daily by api/cron-balance-snapshot.js (Vercel cron). Read by the
+-- failure-path branch in api/_payout-helpers.js (Trigger A) and at the end of
+-- the snapshot cron itself (Trigger B).
+CREATE TABLE IF NOT EXISTS platform_balance_snapshots (
+  id                                   SERIAL PRIMARY KEY,
+  captured_at                          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  status                               TEXT NOT NULL CHECK (status IN ('green','red')),
+  available_pence                      INTEGER NOT NULL,
+  pending_pence                        INTEGER NOT NULL,
+  total_payout_pence                   INTEGER NOT NULL,
+  balance_after_payout_pence           INTEGER NOT NULL,
+  refund_exposure_pence                INTEGER NOT NULL,
+  payout_preview_json                  JSONB,
+  trailing_30d_stripe_inflow_pence     INTEGER NOT NULL DEFAULT 0,
+  trailing_30d_payout_outflow_pence    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_pbs_captured_at
+  ON platform_balance_snapshots(captured_at DESC);

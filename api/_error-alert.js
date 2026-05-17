@@ -111,4 +111,27 @@ function reportError(endpoint, err) {
   } catch (_) {} // don't let alert failures break anything
 }
 
-module.exports = { reportError };
+/**
+ * Send a non-error operational alert email to ERROR_ALERT_EMAIL.
+ * Used for the widget-falsifiability alarms in cron-balance-snapshot.js and
+ * _payout-helpers.js — these are not 500 errors, they're "the dashboard is
+ * lying" diagnostics that need to land in Fraser's inbox.
+ *
+ * Fire-and-forget. Failures to send must not break the calling code path.
+ */
+function sendAlertEmail({ subject, html, text }) {
+  const to = process.env.ERROR_ALERT_EMAIL;
+  if (!to) return;
+  try {
+    const transporter = createTransporter();
+    transporter.sendMail({
+      from: process.env.SMTP_USER,
+      to,
+      subject,
+      text: text || '',
+      html: html || ''
+    }).catch(() => {});
+  } catch (_) {}
+}
+
+module.exports = { reportError, sendAlertEmail };

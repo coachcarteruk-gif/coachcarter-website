@@ -680,6 +680,14 @@ Eligible bookings: `status = 'chargeable'`. The 1-hour buffer on the `scheduled 
 Creates Stripe transfers to instructor Express accounts. Sends email notifications.
 Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment. See `docs/booking-statuses.md` for the risk-window analysis.
 
+### API — `api/cron-balance-snapshot.js` (Vercel Cron — daily 08:00 UTC)
+
+Captures a daily snapshot of the Next Payout Preview widget's state into `platform_balance_snapshots`. Auth: CRON_SECRET. Reuses the widget's compute logic via the shared `api/_platform-balance.js` so the snapshot and the dashboard always show identical numbers.
+
+Two alarm triggers:
+- **Trigger A** (in `_payout-helpers.js`) — after a Stripe `transfers.create` failure, looks back at the last 24h of snapshots; if any reported `status='green'`, emails `ERROR_ALERT_EMAIL` with both the snapshot and the Stripe error so a "widget said green, reality was red" mismatch is never silent.
+- **Trigger B** (in this cron) — after writing the snapshot, compares trailing-30d Stripe inflow (`credit_transactions WHERE stripe_session_id IS NOT NULL`) vs trailing-30d payout outflow (`instructor_payouts.amount_pence + stripe_fees_pence WHERE status='completed'`). If outflow > inflow + £100, emails the gap with the five most recent driving payouts. £100 floor exists to suppress noise on quiet weeks.
+
 ### Database tables
 
 **`instructors`** — name, email, phone, bio, photo_url, active flag, slug (unique, auto-generated from first name — used for clean booking URLs like `/book/fraser`), buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error, stripe_account_id, stripe_onboarding_complete, payouts_paused, weekly_franchise_fee_pence (NULL = commission model, non-NULL = fixed weekly fee)
@@ -699,6 +707,8 @@ Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment. See `do
 **`instructor_payouts`** — id, instructor_id, amount_pence, platform_fee_pence, franchise_fee_pence (audit trail, NULL for commission model), stripe_transfer_id, period_start, period_end, status ('pending'/'processing'/'completed'/'failed'/'skipped'), failure_reason, created_at, completed_at, shortfall_pence (amount instructor owes CCL from this period; rolls forward to next positive payout), shortfall_recovered_from_payout_id (NULL until cleared by a later payout), deposit_deducted_pence (£250 vehicle deposit deducted on week-1 Full-Franchise payouts; partial-amount tolerant)
 
 **`payout_line_items`** — id, payout_id, booking_id (UNIQUE — prevents double-payment), price_pence, instructor_amount_pence, commission_rate
+
+**`platform_balance_snapshots`** — id, captured_at, status ('green'/'red'), available_pence, pending_pence, total_payout_pence, balance_after_payout_pence, refund_exposure_pence, payout_preview_json (per-instructor breakdown of the dry-run), trailing_30d_stripe_inflow_pence, trailing_30d_payout_outflow_pence. Written daily by `cron-balance-snapshot.js`. Index on `captured_at DESC` for the Trigger A 24h lookup. Read by `_payout-helpers.js` (Trigger A) and the cron itself (Trigger B). The widget compute lives in `api/_platform-balance.js` and is the single source of truth for both the dashboard and the snapshot.
 
 ---
 

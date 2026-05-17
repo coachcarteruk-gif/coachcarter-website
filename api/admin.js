@@ -48,6 +48,7 @@ const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
 const { processAllPayouts, getEligibleBookings, simulatePayoutForInstructor } = require('./_payout-helpers');
+const { computePlatformBalance } = require('./_platform-balance');
 const { sendPayoutSummary } = require('./_payout-email');
 const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin,
         SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
@@ -1293,115 +1294,8 @@ async function handlePlatformBalance(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-
-    // 1. Stripe balance (GBP only).
-    const balance = await stripe.balance.retrieve();
-    const pickGbp = (arr) => {
-      const row = (arr || []).find(b => b.currency === 'gbp');
-      return row ? parseInt(row.amount) : 0;
-    };
-    const availablePence = pickGbp(balance.available);
-    const pendingPence   = pickGbp(balance.pending);
-
-    // 2. Per-instructor payout dry-run. Filter MUST match processAllPayouts.
-    const eligibleInstructors = await sql`
-      SELECT id, name, email, commission_rate, weekly_franchise_fee_pence,
-             stripe_account_id, payouts_start_date
-        FROM instructors
-       WHERE active = TRUE
-         AND stripe_onboarding_complete = TRUE
-         AND payouts_paused = FALSE
-         AND stripe_account_id IS NOT NULL
-    `;
-
-    const payoutPreview = [];
-    let totalPayoutPence = 0;
-    for (const inst of eligibleInstructors) {
-      const sim = await simulatePayoutForInstructor(sql, inst);
-      if (!sim) continue;
-      payoutPreview.push(sim);
-      totalPayoutPence += sim.amount_pence;
-    }
-    payoutPreview.sort((a, b) => b.amount_pence - a.amount_pence);
-
-    const balanceAfterPayoutPence = availablePence - totalPayoutPence;
-
-    // 3. Advisory — instructors with chargeable lessons who would NOT be paid
-    // this Friday. Helps Fraser see what's stuck without affecting the headline.
-    const blockedRows = await sql`
-      SELECT i.id, i.name,
-             i.active, i.stripe_onboarding_complete, i.payouts_paused,
-             i.stripe_account_id,
-             COUNT(lb.id)::int AS chargeable_lessons
-        FROM instructors i
-        JOIN lesson_bookings lb ON lb.instructor_id = i.id AND lb.status = 'chargeable'
-        LEFT JOIN learner_users lu ON lu.id = lb.learner_id
-        LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
-       WHERE pli.id IS NULL
-         AND COALESCE(lu.is_test_account, FALSE) = FALSE
-         AND NOT (i.active = TRUE AND i.stripe_onboarding_complete = TRUE
-                  AND i.payouts_paused = FALSE AND i.stripe_account_id IS NOT NULL)
-       GROUP BY i.id, i.name, i.active, i.stripe_onboarding_complete,
-                i.payouts_paused, i.stripe_account_id
-       ORDER BY chargeable_lessons DESC
-    `;
-    const excludedInstructors = blockedRows.map(r => ({
-      instructor_id: r.id,
-      name: r.name,
-      chargeable_lessons: r.chargeable_lessons,
-      reason: !r.active                       ? 'inactive'
-            : !r.stripe_account_id            ? 'no_connect'
-            : !r.stripe_onboarding_complete   ? 'onboarding_incomplete'
-            : r.payouts_paused                ? 'paused'
-            : 'unknown'
-    }));
-
-    // 4. Advisory — "if learners refunded today" worst case. Simplest
-    // possible valuation per Fraser's pseudocode: net cash inflow per
-    // non-test learner (purchases + slot_purchases minus refunds), summed
-    // and capped at the live learner_credit valuation. Anything spent on
-    // lessons isn't refundable, so the live balance is the natural ceiling.
-    const [refundExposureRow] = await sql`
-      SELECT
-        COALESCE(SUM(
-          lu.balance_minutes
-          * COALESCE((s.config -> 'pricing' ->> 'bulk_hourly_pence')::int, 5500)
-          / 60.0
-        ), 0)::bigint AS live_credit_pence,
-        COALESCE((
-          SELECT SUM(
-            CASE WHEN ct.type IN ('purchase', 'slot_purchase') THEN ct.amount_pence
-                 WHEN ct.type = 'refund' THEN -ct.amount_pence
-                 ELSE 0 END
-          )
-          FROM credit_transactions ct
-          JOIN learner_users lu2 ON lu2.id = ct.learner_id
-          WHERE ct.payment_method = 'stripe'
-            AND lu2.is_test_account = FALSE
-        ), 0)::bigint AS net_cash_in_pence
-      FROM learner_users lu
-      JOIN schools s ON s.id = lu.school_id
-      WHERE lu.balance_minutes > 0
-        AND lu.is_test_account = FALSE
-    `;
-    const liveCreditPence = parseInt(refundExposureRow.live_credit_pence) || 0;
-    const netCashInPence  = Math.max(0, parseInt(refundExposureRow.net_cash_in_pence) || 0);
-    const refundExposurePence = Math.min(liveCreditPence, netCashInPence);
-
-    // 5. Status — strictly binary. Friday either works or it doesn't.
-    const status = balanceAfterPayoutPence >= 0 ? 'green' : 'red';
-
-    return res.json({
-      ok: true,
-      available_pence: availablePence,
-      pending_pence:   pendingPence,
-      payout_preview: payoutPreview,
-      total_payout_pence: totalPayoutPence,
-      balance_after_payout_pence: balanceAfterPayoutPence,
-      excluded_instructors: excludedInstructors,
-      refund_exposure_pence: refundExposurePence,
-      status
-    });
+    const result = await computePlatformBalance(sql, stripe);
+    return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('platform-balance error:', err);
     reportError('/api/admin (platform-balance)', err);

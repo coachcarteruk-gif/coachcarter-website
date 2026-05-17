@@ -11,7 +11,8 @@
     { "path": "/api/cron-retention", "schedule": "0 3 * * 0" },
     { "path": "/api/cron-auto-complete", "schedule": "15 * * * *" },
     { "path": "/api/cron-reconcile-payments", "schedule": "30 * * * *" },
-    { "path": "/api/cron-referral-rewards", "schedule": "0 4 * * *" }
+    { "path": "/api/cron-referral-rewards", "schedule": "0 4 * * *" },
+    { "path": "/api/cron-balance-snapshot", "schedule": "0 8 * * *" }
   ],
   "redirects": [
     {

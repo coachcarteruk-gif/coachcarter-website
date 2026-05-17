@@ -1195,6 +1195,32 @@ Until 4g lands, credit-funded bookings keep `lesson_bookings.stripe_fee_pence = 
 
 ---
 
+### 2.70 — Widget Falsifiability Alert Layer ✅ Complete (17 May 2026)
+
+**What:** Daily snapshot of the Next Payout Preview widget (#143) plus two email triggers that fire when the widget is silently lying. The widget is a passive gauge of "would Friday's cron succeed?"; without an alert layer, a green dashboard could hide a real failure or a slow bleed of the platform float.
+
+**Triggers:**
+- **A — Failure despite green.** Wired into `_payout-helpers.js processPayoutForInstructor` failure branch. After a Stripe transfer for a payout fails (`stripe.transfers.create` rejects), look back at the last 24h of `platform_balance_snapshots`. If the most recent one reported `status='green'`, send `🚨 Payout #N failed despite green widget` to `ERROR_ALERT_EMAIL` with the snapshot id, captured timestamp, the snapshot's `balance_after_payout_pence`, and the Stripe error.
+- **B — Aggregate bias.** Wired into the snapshot cron itself. After writing the daily row, compare trailing-30d Stripe inflow vs trailing-30d payout outflow. If outflow exceeds inflow by more than £100, send `⚠️ Trailing 30d payouts exceed Stripe inflow by £X` with both totals and the last 5 completed payouts driving the gap. The floor exists to suppress noise on quiet weeks; tune in a follow-up PR if it fires spuriously once meaningful outflow accrues.
+
+**Schema:** `platform_balance_snapshots` — captures `status`, all four widget pence totals, `payout_preview_json`, and the two trailing-30d aggregates. Index on `captured_at DESC` for the 24h lookup.
+
+**Cron:** `api/cron-balance-snapshot.js`, daily at `0 8 * * *` UTC. Reuses the widget's compute logic via the new shared `api/_platform-balance.js` (`handlePlatformBalance` in `api/admin.js` was refactored down to a thin wrapper at the same time — both surfaces now produce identical numbers by construction).
+
+**Helpers:** `api/_error-alert.js` gained `sendAlertEmail({subject, html, text})` for non-error operational alerts. The two triggers share that helper.
+
+**Validation:** `scripts/validate-widget-alert-layer.mjs` is the read-only assertion harness — runs `computePlatformBalance`, both trailing-30d queries, and the Trigger-A snapshot lookup query against the configured DB. `scripts/validate-alert-email-builders.mjs` exercises the email-build paths (with `ERROR_ALERT_EMAIL` unset to prevent real sends) to confirm templates don't throw on apostrophes / £-formatting / Stripe error strings.
+
+**Why now:** Step 0 (PR #132) flipped the platform Stripe schedule to Manual on 2026-05-15, and Step 4f.d (#135 + #136) reshaped the Friday cron's payout math. The first cron under the new regime fires 2026-05-22. The alert layer goes live the week before so any production-only failure mode is caught immediately.
+
+**Bundled fix — refund_exposure filter.** The widget's `refund_exposure_pence` advisory had been silently reading £0 in prod since v2 (#142) because the SQL filtered `credit_transactions.payment_method = 'stripe'`, but the webhook (`api/webhook.js` line 143) writes `session.payment_method_types?.[0] || 'card'` — never the literal `'stripe'`. Filter changed to `stripe_session_id IS NOT NULL` (intent-based, captures every Stripe-originated row regardless of which card/wallet type Stripe reports). Verified read-only against prod: the new filter returns £1,451.40 where the old filter returned £0.00. The trailing-30d-inflow query in `cron-balance-snapshot.js` was written with the same intent-based filter from the start, so no further work was needed there.
+
+**Files:** `db/migration.sql` (new table + index), `vercel.json` (new cron schedule), `api/cron-balance-snapshot.js` (new), `api/_platform-balance.js` (new shared compute + refund_exposure filter fix), `api/admin.js` (refactor to use shared helper), `api/_payout-helpers.js` (Trigger A wiring), `api/_error-alert.js` (sendAlertEmail helper).
+
+**Refs:** `memory/project_next_session_priority.md` (locked-in plan), `memory/project_credit_funded_default.md` (the bias Trigger B exists to surface).
+
+---
+
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
 - ~~**T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.~~ ✅ Done (2.54)

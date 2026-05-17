@@ -7,6 +7,76 @@
  * Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment.
  */
 const { CHARGEABLE } = require('./_booking-status');
+const { sendAlertEmail } = require('./_error-alert');
+
+/**
+ * Trigger A — widget-falsifiability alert. After a Stripe transfer fails for a
+ * payout, look back at the last 24h of platform_balance_snapshots. If the most
+ * recent one reported status='green', the widget was lying about Friday-payout
+ * safety. Email Fraser so the dashboard's trust isn't silently eroded.
+ *
+ * Fire-and-forget — must not throw out of the failure path.
+ */
+async function alertIfWidgetLied(sql, { payout, instructor, error }) {
+  try {
+    const [snap] = await sql`
+      SELECT id, captured_at, status, balance_after_payout_pence, total_payout_pence
+        FROM platform_balance_snapshots
+       WHERE captured_at > NOW() - INTERVAL '24 hours'
+         AND status = 'green'
+       ORDER BY captured_at DESC
+       LIMIT 1
+    `;
+    if (!snap) return;
+
+    const fmt = p => `£${(p/100).toFixed(2)}`;
+    const txt = [
+      `A Stripe transfer for payout #${payout.id} just failed, but the most recent`,
+      `daily snapshot (within the last 24h) reported status='green'. The`,
+      `Next Payout Preview widget is lying.`,
+      ``,
+      `Payout:`,
+      `  id              ${payout.id}`,
+      `  instructor      ${instructor.name} (id=${instructor.id}, ${instructor.email || 'no email'})`,
+      `  Stripe error    ${error && error.message ? error.message : String(error)}`,
+      ``,
+      `Most recent green snapshot:`,
+      `  snapshot id     ${snap.id}`,
+      `  captured        ${new Date(snap.captured_at).toISOString()}`,
+      `  status          ${snap.status}`,
+      `  balance_after_payout_pence  ${fmt(snap.balance_after_payout_pence)}`,
+      `  total_payout_pence          ${fmt(snap.total_payout_pence)}`,
+    ].join('\n');
+    const html = `
+      <h3 style="color:#dc2626;">🚨 Payout failed despite green widget</h3>
+      <p>A Stripe transfer for payout <code>#${payout.id}</code> just failed, but the most
+         recent platform_balance_snapshot (within the last 24h) reported
+         <code>status='green'</code>. The Next Payout Preview widget is lying.</p>
+      <h4>Payout</h4>
+      <ul>
+        <li><b>id:</b> ${payout.id}</li>
+        <li><b>instructor:</b> ${instructor.name} (id=${instructor.id})</li>
+        <li><b>email:</b> ${instructor.email || '(none)'}</li>
+        <li><b>Stripe error:</b> <code>${error && error.message ? error.message : String(error)}</code></li>
+      </ul>
+      <h4>Most recent green snapshot</h4>
+      <ul>
+        <li><b>snapshot id:</b> ${snap.id}</li>
+        <li><b>captured:</b> ${new Date(snap.captured_at).toISOString()}</li>
+        <li><b>status:</b> ${snap.status}</li>
+        <li><b>balance_after_payout:</b> ${fmt(snap.balance_after_payout_pence)}</li>
+        <li><b>total_payout:</b> ${fmt(snap.total_payout_pence)}</li>
+      </ul>
+    `;
+    sendAlertEmail({
+      subject: `🚨 Payout #${payout.id} failed despite green widget — ${instructor.name}`,
+      text: txt,
+      html
+    });
+  } catch (_) {
+    // Best-effort. Never let alert plumbing break the cron's failure handling.
+  }
+}
 
 /**
  * Get unpaid eligible bookings for an instructor.
@@ -283,6 +353,8 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
     await sql`
       DELETE FROM payout_line_items WHERE payout_id = ${payout.id}
     `;
+    // Trigger A — alert if the widget said green within the last 24h.
+    await alertIfWidgetLied(sql, { payout, instructor, error: err });
     return buildResult({ status: 'failed', error: err.message });
   }
 }
