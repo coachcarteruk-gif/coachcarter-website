@@ -4,6 +4,59 @@ The plan for getting CoachCarter ready to take learner payments and assign them 
 
 > **Companion document**: [`FRANCHISE-MODEL-PLAN.md`](FRANCHISE-MODEL-PLAN.md) — the full franchise architecture. This document is the **sequenced, near-term execution plan** for the payments/credits portion of that work, plus the Stripe Connect onboarding banner and public instructor profile pages.
 
+---
+
+## 🎯 Next session priority (added 2026-05-16 after council deliberation)
+
+**Step 4f shipped today.** Six PRs: schema (#134) → webhook capture (#134) → cron deduction (#135) → booking-row writer (#136) → weekly summary email (#137) → admin trigger gets the email too (#138) → platform-balance widget (#139 + fixes in #140). The full Stripe-fee pass-through arc is live on prod.
+
+A consciousness-council deliberation (6 voices: Pragmatist, Strategist, Contrarian, Fraser-the-Instructor, Prospective Instructor #2, Learner) was run on "what is the single most important thing to do next?" The council split 2-2-2 in absolute terms but resolved by sequencing:
+
+### This week (≤2 hours): widget falsifiability
+
+**Build the alert layer for the platform-balance widget.** Daily snapshot of widget state; if a payout fails with "Insufficient funds" within 24h of a snapshot that showed `status='green'`, send an email alert.
+
+Why this wins the immediate slot:
+- The platform-balance widget shipped today (#139 + #140) but is currently a passive gauge. Fraser still had to check Stripe manually at 11pm on 2026-05-16 to notice tonight's £82.50 payout failed.
+- Without the alert layer, the widget is decoration on a dashboard you don't fully trust.
+- It's the cheapest insurance you'll ever buy against a recurring class of bug (widget says green, reality is red).
+- Scope: cron job that calls `?action=platform-balance` daily and writes the snapshot to a new `platform_balance_snapshots` table; modify the existing failure-path in `_payout-helpers.js` (line 246-251) to look back at the last 24h of snapshots and email if any showed green.
+
+### Next (~4 hours): Step 4 — `lesson_bookings.list_price_pence` keystone column
+
+After D, immediately pivot to **Step 4** (per-instructor credit scoping schema), specifically the `list_price_pence` column on `lesson_bookings`. NOT the full Step 4 rewrite — just the keystone column that unblocks everything else.
+
+Why C beats A (4f.e reconcile cron), B (4f.f earnings UI), and the rest of the 4f deferred backlog:
+- B (instructor earnings 4-line UI breakdown) reads from columns that Step 4 creates. Building B first means rebuilding it.
+- A (reconcile cron for NULL Stripe fees) prevents ~£1.44/lesson silent overpay on rare webhook races — one-tenth the magnitude of the failure modes Step 4 unblocks (per-instructor credit scoping, content-deal 5% discount, franchise pricing fallback, Step 4g).
+- Instructor #2 needs the 4-line earnings breakdown as a signing-day deliverable (agreement clause AGT 4.6 promises it). That chain starts at Step 4.
+
+### Caveat the Contrarian raised (resolved by sequencing, not dismissed)
+
+The Contrarian's argument was: **"You've spent six weeks de-risking a payout for an instructor who doesn't exist. The platform is over-built relative to commercial traction."** Solicitor review hasn't returned, no candidate named, no signed agreement.
+
+This is genuinely uncomfortable and not wrong. The mitigation:
+- After Step 4 (`list_price_pence` migration) ships and BEFORE building 4g or the bulk-tier UI on top, **explicitly check whether instructor #2 is 30 days out**.
+- If not, pivot to non-code work: instructor #2 recruitment, signing-day mechanics, InstructorBook landing page (Phase 4 backlog items E and F).
+- The schema migration itself is cheap insurance even if the human doesn't materialise — it formalises a column the live-compute path already produces.
+
+### What ISN'T next (council ranked but didn't pick)
+
+| Option | Why it didn't win |
+|---|---|
+| 4f.e — daily reconcile cron | Real but small failure mode (£1.44 silent overpay per missed webhook race); self-resolves when 4f.h backfill ships |
+| 4f.f — instructor earnings UI 4-line breakdown | Needs Step 4's `list_price_pence` to render the gross line correctly; building first means rebuilding |
+| 4f.h — historical backfill script | Useful but cosmetic — historical payouts already happened under the old model |
+| Step 4g (full per-instructor credit scoping) | Right thing in 1–2 months; too big without instructor #2 actually signed |
+| InstructorBook landing / waitlist | Strategically valuable, but Fraser explicitly said today he's not ready to promote |
+
+### Reference
+
+- Council deliberation transcript: was held in-session 2026-05-16 via `/consciousness-council`. Not saved to disk; this section is the load-bearing summary.
+- Originating insight: Fraser asking "what would /consciousness-council say is the next most important thing to do" after Step 4f arc completed.
+
+---
+
 ## Goal in one sentence
 
 A learner lands on an instructor's public profile → pays for credits with that specific instructor → those credits can only be spent with that instructor → the instructor sees a "set up payments" banner if they haven't connected Stripe yet → payout cron pays each instructor for the lessons they delivered.
