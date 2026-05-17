@@ -1766,3 +1766,36 @@ ALTER TABLE lesson_bookings    ADD COLUMN IF NOT EXISTS stripe_fee_source TEXT;
 -- pass-through cost, not a debt to the platform.
 ALTER TABLE instructor_payouts ADD COLUMN IF NOT EXISTS stripe_fees_pence INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE payout_line_items  ADD COLUMN IF NOT EXISTS stripe_fee_pence  INTEGER NOT NULL DEFAULT 0;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- TEST-ACCOUNT FLAG (for liability accuracy on the platform-balance widget)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Phantom liability discovered 2026-05-16: 7 of 20 learner rows with positive
+-- balance were Fraser's own test accounts (~£4,872.50 of false credit liability),
+-- inflating the platform-balance widget's "owed to learners" figure by ~60%.
+--
+-- New explicit flag — heuristics on email/name would bite when a real learner
+-- happens to have "test" in their name. Default FALSE keeps live learners untouched.
+-- Excluded from BOTH the learner_credit_pence and scheduled_float_pence
+-- calculations in api/admin.js handlePlatformBalance.
+--
+-- To flag new test accounts going forward, set the column via SQL:
+--   UPDATE learner_users SET is_test_account = TRUE WHERE id = <X>;
+-- (Admin UI deferred until pain shows up — manual SQL is fine while only Fraser
+-- creates test accounts.)
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS is_test_account BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- One-time flag of the 7 known test rows identified in the 2026-05-16 audit.
+-- ON CONFLICT DO NOTHING isn't applicable here; using id-based UPDATE which is
+-- safely idempotent (flagging an already-flagged row is a no-op).
+UPDATE learner_users SET is_test_account = TRUE WHERE id IN (
+  15,  -- fraser carter / coachcarteruk@gmail.com (admin account, 1860min / £1705)
+  14,  -- Fraser Learner Test / frasercarter95@gmail.com (1710min / £1567.50)
+  24,  -- Fraser / no email (orphan, 1650min / £1512.50)
+  52,  -- Test Learner / coachcarteruk+testlearner@gmail.com (630min / £577.50)
+  53,  -- Test Delete / coachcarteruk+testdelete@gmail.com (450min / £412.50)
+  54,  -- Test Empty / coachcarteruk+testempty@gmail.com (450min / £412.50)
+  10   -- fraser@coachcarter.uk (90min / £82.50)
+);
+-- NOT flagged: id=42 Phil Carter — almost certainly a real family member
+-- with a real booking pattern. Leave as live liability.
