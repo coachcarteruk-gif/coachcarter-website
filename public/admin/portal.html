@@ -634,11 +634,12 @@ body {
       <button class="btn" id="btn-process-payouts">Process Payouts Now</button>
     </div>
 
-    <!-- Platform balance vs. learner-credit liability (visibility safety net
-         for the commingled-account architecture). -->
+    <!-- Next-payout dry-run preview (same math as Friday's cron, no writes).
+         Tells the admin whether the next payout will succeed against the
+         current Stripe balance. -->
     <div class="card" style="margin-bottom:24px;" id="platform-balance-card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin:0;">Platform Stripe Balance</h3>
+        <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin:0;">Next Payout Preview</h3>
         <span id="platform-balance-status" style="font-size:0.8rem;font-weight:600;"></span>
       </div>
       <div id="platform-balance-body" style="color:#888;font-size:0.9rem;">Loading...</div>

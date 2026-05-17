@@ -463,4 +463,113 @@ async function processSchoolPayouts(sql, stripe) {
   return results;
 }
 
-module.exports = { getEligibleBookings, processPayoutForInstructor, processAllPayouts, processSchoolPayouts };
+/**
+ * Read-only dry-run of processPayoutForInstructor — same math, no INSERT/UPDATE,
+ * no Stripe call. Used by the platform-balance widget to preview Friday's
+ * payout. Mirrors the franchise/commission branch and Stripe-fee handling in
+ * processPayoutForInstructor exactly; the two must stay in lockstep.
+ *
+ * Returns null when the instructor has no eligible lessons (matches the
+ * "skipped" branch in processAllPayouts). Otherwise returns the same shape
+ * processPayoutForInstructor returns via buildResult — minus payout_id /
+ * transfer_id (none created) and status.
+ */
+async function simulatePayoutForInstructor(sql, instructor) {
+  const bookings = await getEligibleBookings(sql, instructor.id, instructor.payouts_start_date || null);
+  if (!bookings.length) return null;
+
+  const franchiseFee = instructor.weekly_franchise_fee_pence != null
+    ? parseInt(instructor.weekly_franchise_fee_pence) : null;
+  const commissionRate = parseFloat(instructor.commission_rate) || 0.85;
+
+  let totalGrossPence = 0;
+  let totalStripeFeesPence = 0;
+  for (const b of bookings) {
+    totalGrossPence += parseInt(b.price_pence);
+    totalStripeFeesPence += parseInt(b.stripe_fee_pence || 0);
+  }
+  const netOfStripeGross = totalGrossPence - totalStripeFeesPence;
+
+  let totalInstructorPence;
+  let actualFranchiseFee = null;
+  let shortfallThisWeek = 0;
+  let depositDeducted = 0;
+  let priorShortfallPence = 0;
+  let priorShortfallId = null;
+  let shortfallRecoveryId = null;
+
+  if (franchiseFee != null) {
+    const priorRows = await sql`
+      SELECT id, shortfall_pence
+        FROM instructor_payouts
+       WHERE instructor_id = ${instructor.id}
+         AND status = 'completed'
+         AND shortfall_pence > 0
+         AND shortfall_recovered_from_payout_id IS NULL
+       ORDER BY period_end DESC
+       LIMIT 1
+    `;
+    if (priorRows.length) {
+      priorShortfallPence = parseInt(priorRows[0].shortfall_pence);
+      priorShortfallId = priorRows[0].id;
+    }
+
+    const priorCompleted = await sql`
+      SELECT 1 FROM instructor_payouts
+       WHERE instructor_id = ${instructor.id}
+         AND status = 'completed'
+       LIMIT 1
+    `;
+    const isWeekOne = priorCompleted.length === 0;
+    const isFullFranchise = franchiseFee === 19500;
+    const depositAmount = (isWeekOne && isFullFranchise) ? 25000 : 0;
+
+    const totalDeductionPence = franchiseFee + depositAmount + priorShortfallPence;
+
+    if (netOfStripeGross >= totalDeductionPence) {
+      totalInstructorPence = netOfStripeGross - totalDeductionPence;
+      actualFranchiseFee = franchiseFee;
+      depositDeducted = depositAmount;
+      if (priorShortfallPence > 0) shortfallRecoveryId = priorShortfallId;
+    } else {
+      totalInstructorPence = 0;
+      actualFranchiseFee = Math.min(franchiseFee, netOfStripeGross);
+      const coveredAfterFee = Math.max(0, netOfStripeGross - franchiseFee);
+      depositDeducted = Math.min(depositAmount, coveredAfterFee);
+      const coveredAfterDeposit = coveredAfterFee - depositDeducted;
+      if (priorShortfallPence > 0 && coveredAfterDeposit >= priorShortfallPence) {
+        shortfallRecoveryId = priorShortfallId;
+      }
+      const uncoveredFee = franchiseFee - actualFranchiseFee;
+      const uncoveredDeposit = depositAmount - depositDeducted;
+      const carriedPrior = (priorShortfallPence > 0 && shortfallRecoveryId === null) ? priorShortfallPence : 0;
+      shortfallThisWeek = uncoveredFee + uncoveredDeposit + carriedPrior;
+    }
+  } else {
+    // Commission model — per-booking math then sum (matches real path)
+    let lineSum = 0;
+    for (const b of bookings) {
+      const pricePence = parseInt(b.price_pence);
+      const stripeFeePence = parseInt(b.stripe_fee_pence || 0);
+      lineSum += Math.round(pricePence * commissionRate) - stripeFeePence;
+    }
+    totalInstructorPence = lineSum;
+  }
+
+  return {
+    instructor_id: instructor.id,
+    instructor_name: instructor.name,
+    instructor_email: instructor.email,
+    fee_model: franchiseFee != null ? 'franchise' : 'commission',
+    amount_pence: totalInstructorPence,
+    gross_pence: totalGrossPence,
+    stripe_fees_pence: totalStripeFeesPence,
+    lesson_count: bookings.length,
+    franchise_fee_pence: actualFranchiseFee,
+    shortfall_pence: shortfallThisWeek,
+    deposit_deducted_pence: depositDeducted,
+    prior_shortfall_recovered_pence: shortfallRecoveryId !== null ? priorShortfallPence : 0
+  };
+}
+
+module.exports = { getEligibleBookings, processPayoutForInstructor, processAllPayouts, processSchoolPayouts, simulatePayoutForInstructor };
