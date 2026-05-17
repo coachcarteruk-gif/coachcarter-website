@@ -634,6 +634,16 @@ body {
       <button class="btn" id="btn-process-payouts">Process Payouts Now</button>
     </div>
 
+    <!-- Platform balance vs. learner-credit liability (visibility safety net
+         for the commingled-account architecture). -->
+    <div class="card" style="margin-bottom:24px;" id="platform-balance-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin:0;">Platform Stripe Balance</h3>
+        <span id="platform-balance-status" style="font-size:0.8rem;font-weight:600;"></span>
+      </div>
+      <div id="platform-balance-body" style="color:#888;font-size:0.9rem;">Loading...</div>
+    </div>
+
     <!-- Stats row -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;" id="payout-stats">
     </div>

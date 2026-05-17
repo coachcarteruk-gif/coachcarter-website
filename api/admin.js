@@ -100,6 +100,7 @@ module.exports = async (req, res) => {
   if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
   if (action === 'toggle-payout-pause')  return handleTogglePayoutPause(req, res);
   if (action === 'payout-overview')      return handlePayoutOverview(req, res);
+  if (action === 'platform-balance')     return handlePlatformBalance(req, res);
   if (action === 'process-payouts')      return handleProcessPayouts(req, res);
   if (action === 'instructor-payout-history') return handleInstructorPayoutHistory(req, res);
   if (action === 'invite-learner')           return handleInviteLearner(req, res);
@@ -1262,6 +1263,76 @@ async function handlePayoutOverview(req, res) {
     console.error('payout-overview error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load payout overview' });
+  }
+}
+
+// ── GET /api/admin?action=platform-balance ──
+// Visibility safety net for the commingled-account architecture (see
+// memory/project_platform_owner_payout_model.md). Returns the platform
+// Stripe balance vs. outstanding learner-credit liability so the admin
+// can see at a glance whether there's enough headroom to cover what's
+// owed to instructors and learners.
+//
+// Liability estimation: SUM(learner_users.balance_minutes) × school
+// bulk_hourly_pence / 60. Uses list rate (not the discounted rate the
+// learner actually paid) — slightly conservative on purpose: better an
+// over-warning than an under-warning. Across all schools, since the
+// platform Stripe account covers escrow for all tenants.
+async function handlePlatformBalance(req, res) {
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // 1. Stripe balance (GBP only; ignore other currencies for now).
+    const balance = await stripe.balance.retrieve();
+    const pickGbp = (arr) => {
+      const row = (arr || []).find(b => b.currency === 'gbp');
+      return row ? parseInt(row.amount) : 0;
+    };
+    const availablePence = pickGbp(balance.available);
+    const pendingPence   = pickGbp(balance.pending);
+    const totalBalancePence = availablePence + pendingPence;
+
+    // 2. Outstanding learner-credit liability across all schools.
+    // Uses each school's bulk_hourly_pence as the per-minute valuation
+    // (price ÷ 60). Falls back to 5500p (£55/h) if a school has no
+    // pricing config set.
+    const [liabilityRow] = await sql`
+      SELECT COALESCE(SUM(
+        lu.balance_minutes
+        * COALESCE((s.config -> 'pricing' ->> 'bulk_hourly_pence')::int, 5500)
+        / 60.0
+      ), 0)::bigint AS liability_pence
+      FROM learner_users lu
+      JOIN schools s ON s.id = lu.school_id
+      WHERE COALESCE(lu.archived_at, NULL) IS NULL
+        AND lu.balance_minutes > 0
+    `;
+    const liabilityPence = parseInt(liabilityRow.liability_pence) || 0;
+    const headroomPence  = totalBalancePence - liabilityPence;
+
+    // 3. Status traffic-light. Thresholds picked for instructor-#2-scale
+    // ops; adjust in code when InstructorBook expands.
+    let status;
+    if (headroomPence < 0)            status = 'red';
+    else if (headroomPence < 50000)   status = 'amber'; // <£500 headroom
+    else                              status = 'green';
+
+    return res.json({
+      ok: true,
+      available_pence: availablePence,
+      pending_pence:   pendingPence,
+      total_balance_pence: totalBalancePence,
+      liability_pence: liabilityPence,
+      headroom_pence:  headroomPence,
+      status
+    });
+  } catch (err) {
+    console.error('platform-balance error:', err);
+    reportError('/api/admin (platform-balance)', err);
+    return res.status(500).json({ error: 'Failed to load platform balance' });
   }
 }
 
