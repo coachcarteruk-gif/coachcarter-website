@@ -1335,8 +1335,10 @@ async function handlePlatformBalance(req, res) {
              COUNT(lb.id)::int AS chargeable_lessons
         FROM instructors i
         JOIN lesson_bookings lb ON lb.instructor_id = i.id AND lb.status = 'chargeable'
+        LEFT JOIN learner_users lu ON lu.id = lb.learner_id
         LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
        WHERE pli.id IS NULL
+         AND COALESCE(lu.is_test_account, FALSE) = FALSE
          AND NOT (i.active = TRUE AND i.stripe_onboarding_complete = TRUE
                   AND i.payouts_paused = FALSE AND i.stripe_account_id IS NOT NULL)
        GROUP BY i.id, i.name, i.active, i.stripe_onboarding_complete,
