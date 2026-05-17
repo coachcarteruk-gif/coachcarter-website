@@ -1307,7 +1307,9 @@ async function handlePlatformBalance(req, res) {
     const pendingPence   = pickGbp(balance.pending);
 
     // 2a. Learner credit balance — escrow for un-booked, refundable credit.
-    // Per-school list rate ÷ 60 = per-minute valuation.
+    // Per-school list rate ÷ 60 = per-minute valuation. Excludes test accounts
+    // (learner_users.is_test_account = TRUE) — Fraser's own test rows were
+    // inflating the figure by ~£4,872 / ~60%.
     const [learnerCreditRow] = await sql`
       SELECT COALESCE(SUM(
         lu.balance_minutes
@@ -1317,12 +1319,14 @@ async function handlePlatformBalance(req, res) {
       FROM learner_users lu
       JOIN schools s ON s.id = lu.school_id
       WHERE lu.balance_minutes > 0
+        AND lu.is_test_account = FALSE
     `;
     const learnerCreditPence = parseInt(learnerCreditRow.pence) || 0;
 
     // 2b. Scheduled-booking float — bookings the learner could still cancel
     // for a credit refund. Uses lesson_types.price_pence when present
     // (canonical per-booking price); falls back to duration × school rate.
+    // Test-account bookings excluded for the same reason as 2a.
     const [bookingFloatRow] = await sql`
       SELECT COALESCE(SUM(
         COALESCE(
@@ -1334,8 +1338,10 @@ async function handlePlatformBalance(req, res) {
       ), 0)::bigint AS pence
       FROM lesson_bookings lb
       JOIN schools s ON s.id = lb.school_id
+      JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.status = 'scheduled'
+        AND lu.is_test_account = FALSE
     `;
     const bookingFloatPence = parseInt(bookingFloatRow.pence) || 0;
 
