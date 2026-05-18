@@ -204,15 +204,22 @@ async function findOrCreateLearner(sql, email, details, schoolId) {
   else if (cleanPhone.startsWith('44') && cleanPhone.length >= 12 && !cleanPhone.startsWith('+')) cleanPhone = '+' + cleanPhone;
   if (!cleanPhone) cleanPhone = null;
 
-  // 1. Try email match
+  // 1. Try email match — scoped to this school. Without the school filter
+  // an offer for fred@example.com would attach to whichever school happened
+  // to have that email first, even if a learner with the same email also
+  // exists under another school.
   let [existing] = await sql`
-    SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${email})
+    SELECT id FROM learner_users
+    WHERE LOWER(email) = LOWER(${email})
+      AND school_id = ${schoolId}
   `;
 
-  // 2. Try phone match (both raw and normalized)
+  // 2. Try phone match (both raw and normalized) — same school
   if (!existing && cleanPhone) {
     [existing] = await sql`
-      SELECT id FROM learner_users WHERE phone = ${cleanPhone} OR phone = ${details.phone}
+      SELECT id FROM learner_users
+      WHERE (phone = ${cleanPhone} OR phone = ${details.phone})
+        AND school_id = ${schoolId}
     `;
   }
 
@@ -241,11 +248,19 @@ async function findOrCreateLearner(sql, email, details, schoolId) {
     if (!err.message?.includes('unique') && !err.message?.includes('duplicate')) throw err;
 
     // Race condition or format mismatch — find whichever account conflicted
-    const [byEmail] = await sql`SELECT id FROM learner_users WHERE LOWER(email) = LOWER(${email})`;
+    // (still scoped to this school — same reasoning as the lookups above)
+    const [byEmail] = await sql`
+      SELECT id FROM learner_users
+      WHERE LOWER(email) = LOWER(${email}) AND school_id = ${schoolId}
+    `;
     if (byEmail) return byEmail.id;
 
     if (cleanPhone) {
-      const [byPhone] = await sql`SELECT id FROM learner_users WHERE phone = ${cleanPhone} OR phone = ${details.phone}`;
+      const [byPhone] = await sql`
+        SELECT id FROM learner_users
+        WHERE (phone = ${cleanPhone} OR phone = ${details.phone})
+          AND school_id = ${schoolId}
+      `;
       if (byPhone) return byPhone.id;
     }
 
