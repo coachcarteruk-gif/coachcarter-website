@@ -573,6 +573,124 @@ The audit cannot verify from repository contents whether production Vercel is ac
 - Stale HTML pages missing cookie consent/PostHog loaders, already identified in Phase 4, unless the ops decision is to retire them rather than update them.
 - User-facing copy and UX for partial operational failures, such as "payment received but booking on hold", Setmore-imported learner welcome failures, and delayed WhatsApp/email delivery.
 
+## Phase 6 Findings
+
+Collected on 18 May 2026 on branch `audit/coachcarter-website-repo-health`. This section is documentation-only audit evidence for the Frontend/PWA Maintainability Pass. No code fixes were made.
+
+### Frontend/PWA Route And Page Inventory
+
+The current static frontend inventory contains 56 HTML pages under `public/`:
+
+- Public/root: `404.html`, `accept-offer.html`, `admin.html`, `availability.html`, `classroom.html`, `free-trial.html`, `free-trial-success.html`, `index.html`, `learner-journey.html`, `lessons.html`, `login.html`, `maintenance.html`, `offer-success.html`, `offline.html`, `privacy.html`, `success.html`, `terms.html`.
+- Learner: `advisor.html`, `ask-examiner.html`, `book.html`, `buy-credits.html`, `confirm-deletion.html`, `examiner-quiz.html`, `focused-practice.html`, `index.html`, `learn.html`, `lessons.html`, `lessons-hub.html`, `log-session.html`, `login.html`, `mock-test.html`, `my-data.html`, `onboarding.html`, `practice.html`, `profile.html`, `progress.html`, `refer.html`, `videos.html`.
+- Instructor: `availability.html`, `dashboard.html`, `earnings.html`, `index.html`, `learners.html`, `login.html`, `onboarding.html`, `profile.html`.
+- Admin: `dashboard.html`, `editor.html`, `franchise-calculator.html`, `franchise-comparison.html`, `login.html`, `portal.html`.
+- Superadmin: `index.html`, `school-detail.html`, `schools.html`.
+- Demo: `demo/book.html`.
+
+The paired JS inventory is broad and mostly one-script-per-page, with shared foundations in `public/sidebar.js`, `public/pwa.js`, `public/sw.js`, `public/cookie-consent.js`, `public/posthog-loader.js`, `public/auth-gate.js`, and `public/shared/{learner-auth,instructor-auth,admin-auth,branding,dark-mode,maintenance-check}.js`.
+
+`vercel.json` rewrites all non-API paths to `public/`, maps `/book/:slug` to `/learner/book.html`, and redirects `/classroom(.html)` to `/`. That means stale pages can still be reachable directly unless deleted, redirected, or deliberately documented.
+
+### Shared Auth And Session Handling Observations
+
+- `middleware.js` has a server-side stale-session guard only for learner pages. It redirects most `/learner/*` requests without a `cc_learner` cookie to `/learner/login.html?expired=1&redirect=...`, while deliberately excluding `login`, `book`, `ask-examiner`, `examiner-quiz`, `confirm-deletion`, and static assets.
+- There is no equivalent middleware gate for `/instructor/*`, `/admin/*`, or `/superadmin/*`. Those pages render based on localStorage display blobs and then depend on API failures or page JS to redirect. APIs still enforce real cookies, but a browser with stale localStorage and no cookie can see shell UI before the first protected fetch fails.
+- `public/shared/learner-auth.js` is the strongest stale-session UX. Its `fetchAuthed()` clears `cc_learner` localStorage and shows a session-expired prompt on 401 responses.
+- `public/shared/instructor-auth.js` and `public/shared/admin-auth.js` attach credentials and CSRF headers but do not have the learner module's shared 401 handling. Instructor/admin pages generally show generic load failures, toasts, alerts, or page-specific logout behavior rather than a consistent "session expired" recovery path.
+- `public/auth-gate.js` is now partly stale copy. It says "No password needed - we'll send you a magic link", while `CLAUDE.md` says magic-link login was retired and all three roles now use email/password sign-in. Several learner pages still load this modal for spectator-mode gating.
+- `public/admin/portal.js` mostly centralizes admin fetches through `window.ccAdminAuth.fetchAuthed`, but at least two protected POST paths still use raw `fetch()` (`/api/instructors?action=create|update` and `/api/videos?action=create|update`). Because raw fetch omits `credentials: include` and `X-CSRF-Token`, those actions can fail unexpectedly under the current httpOnly-cookie/CSRF model unless another legacy authorization path happens to accept them.
+- Superadmin pages perform a localStorage role check before loading, then call protected `/api/schools` endpoints through `ccAdminAuth.fetchAuthed`. This is fine for display gating, but role truth is still only verified once the backend responds; stale localStorage can produce confusing "Error loading..." states rather than a clear re-login prompt.
+
+### Service Worker And Cache Observations
+
+- `public/pwa.js` registers `/sw.js` on most app pages that include it and checks for service-worker updates hourly. Update activation is user-controlled via a banner that posts `SKIP_WAITING`; the page reloads after `controllerchange`.
+- `public/sw.js` uses cache name `cc-v4` and precaches `['/', '/learner/', '/sidebar.js', '/competency-config.js', '/Logo.png', '/logo-dark.png', '/icons/icon-192.png', '/offline.html']`.
+- API calls, Stripe, and PostHog are intentionally skipped by the service worker, which is good for authenticated JSON, payments, and analytics transport.
+- HTML requests are network-first, but every successful HTML response is cached and later used as an offline fallback for that exact request. This can store authenticated shell pages such as `/learner/my-data.html`, `/learner/profile.html`, `/learner/lessons.html`, `/instructor/*`, `/admin/*`, and `/superadmin/*` after a signed-in user visits them. The cached HTML appears to be mostly shell markup rather than API data, but it can still expose page structure, stale user-facing copy, and any static inline content on shared devices.
+- `SHELL_ASSETS` precaches `/learner/`, which is the learner dashboard shell. A logged-out browser offline can receive the cached dashboard shell, although API data is not available offline. This needs a product decision: either accept app-shell offline behavior, or exclude auth-sensitive shells from service-worker caching and reserve offline fallback for public pages.
+- Static assets use cache-first with background revalidation. `vercel.json` gives JS/CSS `max-age=3600, must-revalidate`, but the service worker can still return stale cached JS immediately until background revalidation completes. High-risk shared files (`sidebar.js`, auth modules, `pwa.js`, `cookie-consent.js`, `posthog-loader.js`) therefore need either versioned filenames, deliberate `CACHE_NAME` bumps, or a tighter SW update policy after security/auth changes.
+- The service worker does not set custom cache exclusions for GDPR export pages, success pages, offer pages, admin/superadmin pages, or role-specific portal pages. No live browser cache inspection was performed in this phase.
+
+### CSP And Inline Script/Style Observations
+
+- `middleware.js` enforces a CSP with `script-src` that does not include `'unsafe-inline'`. This matches `CLAUDE.md`'s rule that inline scripts should not be added.
+- Confirmed inline script blocks remain in:
+  - `public/admin/franchise-calculator.html`
+  - `public/admin/franchise-comparison.html`
+  - `public/learner/focused-practice.html`
+  - `public/learner/index.html` (two blocks)
+  - `public/learner/learn.html`
+  - `public/learner/lessons-hub.html`
+  - `public/learner/log-session.html`
+  - `public/learner/mock-test.html`
+- The two learner redirect shims (`learn.html`, `lessons-hub.html`) are especially direct CSP failures because they rely on inline `window.location.replace(...)`. Under production CSP, those redirects can be blocked and leave users on a blank/stale shim page.
+- Inline styles are present across most HTML pages. Current CSP explicitly allows `style-src 'unsafe-inline'`, and `middleware.js` comments note this as a future cleanup area. Removing inline-style allowance would be a larger CSS extraction project.
+- Runtime JS also injects `<style>` tags in `pwa.js`, `sidebar.js`, `cookie-consent.js`, and `auth-gate.js`. This depends on the current inline-style allowance and should be tracked if the CSP is tightened.
+
+### Consent And PostHog Loader Coverage
+
+- Repository scan found 56 HTML pages. All but three include both `cookie-consent.js` and `posthog-loader.js`.
+- Missing both consent and PostHog loaders:
+  - `public/admin/franchise-comparison.html`
+  - `public/learner/learn.html`
+  - `public/learner/lessons-hub.html`
+- The two learner pages are redirect shims and may be better retired/redirected at `vercel.json` level than updated as normal content pages.
+- `public/admin/franchise-comparison.html` also lacks `pwa.js` and has an inline script. It looks like a standalone/legacy planning tool rather than part of the current admin app shell, but it is still reachable as static HTML.
+- Consent is localStorage-based and recorded to `/api/config?action=record-consent`. PostHog only loads through `posthog-loader.js` after analytics consent. No live browser verification of PostHog network requests was performed in this phase.
+
+### Stale Or Legacy UI Surfaces
+
+- `PROJECT.md` is visibly stale in several frontend areas: it still describes magic-link learner/instructor login, older calendar-style learner booking, waitlist/future roadmap items, and "all pages include the PostHog snippet" language. `CLAUDE.md` is more current and should be treated as the stronger rule source.
+- `docs/navigation.md` says learner Learn links to videos and describes accordion behavior, while current `sidebar.js` links Learn to Examiner AI/Quiz and keeps groups flattened. The difference may be intentional, but the docs can mislead future nav edits.
+- `public/learner/learn.html` and `public/learner/lessons-hub.html` are inline-script redirect shims. They are stale and CSP-fragile.
+- `public/classroom.html` exists but `vercel.json` redirects `/classroom(.html)` to `/`; it remains in the static tree and still has JS/assets. This is likely intentional retirement, but it should be documented or deleted in a cleanup PR.
+- `public/admin/franchise-calculator.html` and `public/admin/franchise-comparison.html` look like standalone legacy/planning tools outside the main admin portal. The comparison page is missing consent loaders and contains inline JS; both should be classified as keep-with-maintenance or retire.
+- `public/success.html` supports older `verify-session`/Pass Programme-style success copy, while current booking/offer flows also use `offer-success.html`, `free-trial-success.html`, and learner booking modals. The success-page family should be mapped to active Stripe products before copy fixes are made.
+
+### Operational Failure UX Gaps
+
+- Payment confirmation UX is present but uneven. `public/success.js` tells users that if payment completed, the team has their details and asks them to contact `hello@coachcarter.com`; `public/offer-success.js` renders "Payment received!" for offer/flexible flows and then gates follow-up booking, but booking failure after payment generally becomes "Failed to book. Please try again." or "Connection failed. Please try again." It does not clearly explain "payment received, booking on hold, staff will follow up" for every partial-failure path.
+- Instructor Connect health is comparatively strong on `public/instructor/earnings.js`: it distinguishes no account, onboarding incomplete, Stripe re-verification/action-required, admin pause, and healthy payouts, including currently-due requirement counts when the API supplies them.
+- Admin Connect health in `public/admin/portal.js` is weaker by design. The instructor-row badge is DB-only and comments that live Stripe state is not fetched to avoid N+1 requests. It can show "Payments: active" from stored state even if Stripe later re-blocks payouts until the instructor earnings page refreshes status.
+- Admin payout UX has useful surfaces: platform-balance preview, next payout would succeed/fail, excluded instructors, failed recent payout rows, manual payout results with processed/skipped/failed counts, and pause/resume controls. It still does not expose a dedicated operational queue for orphan payment-without-booking, transaction-without-notification, failed delivery attempts, null Stripe fees, or repeated webhook/reconciliation alerts.
+- iCal sync health is visible to instructors on `public/instructor/profile.js` through `ical_sync_error`, `ical_last_synced_at`, and pending copy. Admin-side repeated sync failure visibility was not found in the reviewed frontend; Setmore sync health also appears to remain backend/log/status-field driven rather than a dashboard queue.
+- Instructor running-late and broadcast flows show local success/failure to the instructor, but Phase 5's delivery-observability gap remains: Twilio/email delivery failures are not surfaced back into a message delivery ledger or admin queue.
+- Learner-facing copy for delayed WhatsApp/email reminders, Setmore-imported welcome-email failure, and partial Stripe/webhook failures is not centralized. Most pages show generic retry/contact copy.
+
+### Live/Browser Items Not Verifiable Locally
+
+- Whether production CSP is exactly the middleware CSP on every deployed path, and whether the confirmed inline scripts are currently blocked in live browsers.
+- Actual service-worker cache contents after signed-in learner, instructor, admin, and superadmin browsing, including whether cached HTML exposes any sensitive static content on shared devices.
+- PWA install/update behavior on iOS/Android/desktop, including whether users receive and accept update banners quickly enough after auth/security JS changes.
+- Real PostHog network behavior and consent state across fresh, returning, rejected, accepted, and consent-version-change sessions.
+- Live admin/superadmin/instructor stale-cookie behavior after cookies expire or are cleared while localStorage display blobs remain.
+- Live operational queue counts for failed payouts, Stripe re-blocked Connect accounts, sync failures, orphan payments, delivery failures, and retention/deletion backlogs.
+
+### Recommended Fix Branches / PR Order
+
+1. `fix/frontend-csp-inline-scripts`: move the remaining inline scripts into external JS files or replace redirect shims with Vercel redirects. Start with `learner/learn.html` and `learner/lessons-hub.html`, then learner pages with inline blocks, then admin standalone tools.
+2. `fix/frontend-session-expiry`: add consistent 401/session-expired handling for instructor, admin, and superadmin shared auth wrappers, and consider middleware cookie gates for `/instructor/*`, `/admin/*`, and `/superadmin/*` with explicit login/asset exclusions.
+3. `fix/pwa-cache-auth-boundaries`: decide and implement cache exclusions for role portals, learner data/privacy pages, success pages, and admin/superadmin pages, or document the intentional app-shell offline model. Include browser cache verification.
+4. `fix/frontend-consent-coverage`: either add consent/PostHog loaders to the three missing pages or retire/redirect those pages so they are no longer reachable HTML surfaces.
+5. `fix/admin-auth-fetch-wrapper`: replace remaining protected raw `fetch()` admin POSTs with `ccAdminAuth.fetchAuthed()` and add a small browser/API smoke test for admin create/update actions.
+6. `fix/ops-frontend-health-queues`: after Phase 5 backend diagnostics exist, add admin queues for orphan payments, failed delivery attempts, repeated sync errors, failed/processing payouts, Stripe Connect re-blocked accounts, and deletion/retention backlogs.
+7. `fix/payment-partial-failure-copy`: standardize success/hold/error copy across `success.js`, `offer-success.js`, learner booking checkout returns, and free-trial flows so paid-but-not-fully-booked states are clear and reassuring.
+8. `docs/frontend-pwa-inventory`: update `PROJECT.md`, `docs/navigation.md`, and related docs to match password auth, slot-first booking, retired pages, current Learn navigation, and PWA/cache behavior.
+
+### Final Cross-Phase Audit Summary And Suggested Next Steps
+
+Across Phases 1-6, the highest-confidence issues are not a single broken page but a pattern: the repo has grown into a real multi-role SaaS surface, while CI, auth/session UX, cron guarantees, payment reconciliation, delivery observability, cache boundaries, and docs have not all caught up evenly.
+
+Recommended next sequence:
+
+1. Land low-risk hygiene first: CI/syntax/audit workflow, lockfile/dependency cleanup if needed, and docs corrections that stop future agents from reintroducing retired flows.
+2. Fix the confirmed auth/cron mismatches: iCal cron fail-open behavior, offer-expiry GET/POST mismatch, protected admin raw fetches, and stale-session UX for instructor/admin/superadmin.
+3. Prioritize money and booking integrity: Stripe webhook caught-failure alerting, reconciliation queries for payment-without-booking and transaction-without-notification, payout overlap guards, and Stripe Connect re-block surfacing.
+4. Tighten GDPR/frontend boundaries: service-worker cache exclusions or an explicit offline-app-shell policy, consent-loader coverage or page retirement, and CSP inline-script cleanup before tightening inline styles.
+5. Add operational visibility after backend diagnostics exist: admin queues for delivery failures, sync health, payout failures, orphan payments, and deletion/retention backlogs.
+6. Only then do broader frontend maintainability refactors, keeping each PR focused on one surface or shared utility.
+
 ## Risk Areas Ranked By Priority
 
 ### P0: Money Movement And Payment Idempotency
