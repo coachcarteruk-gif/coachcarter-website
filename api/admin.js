@@ -94,6 +94,7 @@ module.exports = async (req, res) => {
   if (action === 'update-instructor') return handleUpdateInstructor(req, res);
   if (action === 'toggle-instructor') return handleToggleInstructor(req, res);
   if (action === 'all-learners')      return handleAllLearners(req, res);
+  if (action === 'trace-learner')     return handleTraceLearner(req, res); // TEMP: lookup tool
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
   if (action === 'update-learner')    return handleUpdateLearner(req, res);
   if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
@@ -855,6 +856,124 @@ async function handleAllLearners(req, res) {
     console.error('admin all-learners error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load learners', details: 'Internal server error' });
+  }
+}
+
+// ── GET /api/admin?action=trace-learner ─────────────────────────────────────
+// TEMPORARY DIAGNOSTIC: ?q=<name>&date=YYYY-MM-DD
+// Returns every learner matching the name, every booking on/around that date
+// (including refunded), and recent audit_log entries against them.
+// Remove this handler once the Beatriz lookup is resolved.
+async function handleTraceLearner(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const q = (req.query.q || '').trim();
+  const date = (req.query.date || '').trim();
+  if (!q) return res.status(400).json({ error: 'Missing q' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const pattern = '%' + q + '%';
+
+    const learners = await sql`
+      SELECT id, name, email, phone, school_id, created_at, anonymized, setmore_customer_key
+      FROM learner_users
+      WHERE school_id = ${schoolId}
+        AND (name ILIKE ${pattern} OR email ILIKE ${pattern})
+      ORDER BY created_at DESC
+    `;
+
+    const learnerIds = learners.map(l => l.id);
+
+    let bookingsByName = [];
+    let bookingsOnDate = [];
+    let auditEntries = [];
+
+    if (learnerIds.length > 0) {
+      // Every booking ever for these learners, newest first
+      bookingsByName = await sql`
+        SELECT lb.id, lb.learner_id, lb.instructor_id, lb.status,
+               lb.scheduled_date::text AS scheduled_date,
+               lb.start_time::text AS start_time,
+               lb.end_time::text   AS end_time,
+               lb.payment_method, lb.notes, lb.created_at, lb.updated_at,
+               lb.setmore_key, lb.edited_at, lb.credit_forfeited,
+               i.name AS instructor_name
+        FROM lesson_bookings lb
+        LEFT JOIN instructors i ON i.id = lb.instructor_id
+        WHERE lb.learner_id = ANY(${learnerIds})
+          AND lb.school_id = ${schoolId}
+        ORDER BY lb.scheduled_date DESC, lb.start_time DESC
+        LIMIT 100
+      `;
+
+      // Audit log entries naming any of these learners as the target
+      auditEntries = await sql`
+        SELECT id, admin_email, action, target_type, target_id, details, created_at
+        FROM audit_log
+        WHERE school_id = ${schoolId}
+          AND target_type = 'learner'
+          AND target_id = ANY(${learnerIds})
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
+    }
+
+    // Wider net: any booking on the requested date (±1 day), even if
+    // learner_id doesn't match — catches "wrong learner attached" mistakes.
+    if (date) {
+      bookingsOnDate = await sql`
+        SELECT lb.id, lb.learner_id, lb.instructor_id, lb.status,
+               lb.scheduled_date::text AS scheduled_date,
+               lb.start_time::text AS start_time,
+               lb.end_time::text   AS end_time,
+               lb.payment_method, lb.notes, lb.created_at, lb.updated_at,
+               lb.setmore_key, lb.edited_at,
+               lu.name AS learner_name, lu.email AS learner_email,
+               i.name AS instructor_name
+        FROM lesson_bookings lb
+        LEFT JOIN learner_users lu ON lu.id = lb.learner_id
+        LEFT JOIN instructors    i  ON i.id  = lb.instructor_id
+        WHERE lb.school_id = ${schoolId}
+          AND lb.scheduled_date BETWEEN ${date}::date - 1 AND ${date}::date + 1
+        ORDER BY lb.scheduled_date, lb.start_time
+      `;
+    }
+
+    // Audit log entries naming any of the bookings above as the target
+    const bookingIds = Array.from(new Set([
+      ...bookingsByName.map(b => b.id),
+      ...bookingsOnDate.map(b => b.id),
+    ]));
+    let bookingAudit = [];
+    if (bookingIds.length > 0) {
+      bookingAudit = await sql`
+        SELECT id, admin_email, action, target_type, target_id, details, created_at
+        FROM audit_log
+        WHERE school_id = ${schoolId}
+          AND target_type = 'booking'
+          AND target_id = ANY(${bookingIds})
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
+    }
+
+    return res.json({
+      query: { q, date, schoolId },
+      learners,
+      bookingsByName,
+      bookingsOnDate,
+      auditEntries,
+      bookingAudit
+    });
+  } catch (err) {
+    console.error('admin trace-learner error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to trace learner', details: err.message });
   }
 }
 
