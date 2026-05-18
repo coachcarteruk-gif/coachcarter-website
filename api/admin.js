@@ -892,8 +892,46 @@ async function handleTraceLearner(req, res) {
     let bookingsByName = [];
     let bookingsOnDate = [];
     let auditEntries = [];
+    let creditTxns = [];
+    let slotReservations = [];
+    let offers = [];
 
     if (learnerIds.length > 0) {
+      // Every credit purchase / debit for these learners
+      creditTxns = await sql`
+        SELECT id, learner_id, type, credits, minutes, amount_pence,
+               payment_method, stripe_session_id, stripe_fee_pence, created_at
+        FROM credit_transactions
+        WHERE learner_id = ANY(${learnerIds})
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
+
+      // Slot reservations (in-flight checkouts) — may show abandoned/paid sessions
+      slotReservations = await sql`
+        SELECT id, learner_id, instructor_id,
+               scheduled_date::text AS scheduled_date,
+               start_time::text AS start_time,
+               end_time::text   AS end_time,
+               stripe_session_id, expires_at, created_at
+        FROM slot_reservations
+        WHERE learner_id = ANY(${learnerIds})
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
+
+      // Any lesson offers issued to / accepted by these learners
+      offers = await sql`
+        SELECT id, instructor_id, learner_id, status,
+               scheduled_date::text AS scheduled_date,
+               start_time::text AS start_time,
+               end_time::text   AS end_time,
+               stripe_session_id, booking_id, accepted_at, expires_at, created_at
+        FROM lesson_offers
+        WHERE learner_id = ANY(${learnerIds})
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
       // Every booking ever for these learners, newest first
       bookingsByName = await sql`
         SELECT lb.id, lb.learner_id, lb.instructor_id, lb.status,
@@ -968,7 +1006,10 @@ async function handleTraceLearner(req, res) {
       bookingsByName,
       bookingsOnDate,
       auditEntries,
-      bookingAudit
+      bookingAudit,
+      creditTxns,
+      slotReservations,
+      offers
     });
   } catch (err) {
     console.error('admin trace-learner error:', err);
