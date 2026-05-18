@@ -1327,7 +1327,7 @@ async function openAddLessonModal() {
   // Fetch learners + lesson types in parallel
   try {
     const [learnersRes, typesRes] = await Promise.all([
-      ccAuth.fetchAuthed('/api/instructor?action=my-learners'),
+      ccAuth.fetchAuthed('/api/instructor?action=school-learners'),
       ccAuth.fetchAuthed('/api/lesson-types?action=list')
     ]);
     const learnersData = await learnersRes.json();
@@ -1359,17 +1359,28 @@ function filterAddLessonLearners() {
     (l.name || '').toLowerCase().includes(search) ||
     (l.email || '').toLowerCase().includes(search) ||
     (l.phone || '').toLowerCase().includes(search)
-  ).slice(0, 20);
+  );
+  // "Your learner" first, then alphabetical within each group
+  filtered.sort((a, b) => {
+    if (!!a.is_your_learner !== !!b.is_your_learner) return a.is_your_learner ? -1 : 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  const shown = filtered.slice(0, 20);
 
-  if (filtered.length === 0) {
+  if (shown.length === 0) {
     dropdown.innerHTML = '<div class="learner-option" style="color:var(--muted)">No learners found</div>';
   } else {
-    dropdown.innerHTML = filtered.map(l => `
+    dropdown.innerHTML = shown.map(l => {
+      const tag = l.is_your_learner
+        ? '<span style="font-size:0.7rem;font-weight:600;color:var(--green,#1f8a4c);background:rgba(31,138,76,0.1);padding:1px 6px;border-radius:4px;margin-left:6px">Your learner</span>'
+        : '<span style="font-size:0.7rem;font-weight:600;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px;margin-left:6px">New to you</span>';
+      return `
       <div class="learner-option" data-action="select-learner" data-id="${l.id}" data-name="${esc(l.name)}" data-phone="${esc(l.phone || l.email)}" data-balance="${l.credit_balance || 0}">
-        <div class="learner-opt-name">${esc(l.name)}</div>
+        <div class="learner-opt-name">${esc(l.name)}${tag}</div>
         <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? '·' : ''} ${esc(l.email || '')} · ${l.credit_balance || 0} credit${(l.credit_balance || 0) !== 1 ? 's' : ''}</div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
   dropdown.classList.add('open');
 }

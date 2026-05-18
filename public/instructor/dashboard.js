@@ -176,7 +176,7 @@ async function openBookModal() {
   // Load learners and lesson types
   try {
     var [lRes, tRes] = await Promise.all([
-      ccAuth.fetchAuthed('/api/instructor?action=my-learners'),
+      ccAuth.fetchAuthed('/api/instructor?action=school-learners'),
       ccAuth.fetchAuthed('/api/lesson-types?action=list')
     ]);
     var lData = await lRes.json();
@@ -205,15 +205,24 @@ function filterLearners() {
     return (l.name || '').toLowerCase().includes(q) ||
            (l.email || '').toLowerCase().includes(q) ||
            (l.phone || '').includes(q);
-  }).slice(0, 15);
+  });
+  // "Your learner" first, then alphabetical within each group
+  matches.sort(function (a, b) {
+    if (!!a.is_your_learner !== !!b.is_your_learner) return a.is_your_learner ? -1 : 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  matches = matches.slice(0, 15);
 
   if (matches.length === 0) {
     dd.innerHTML = '<div style="padding:10px 12px;color:var(--muted);font-size:0.85rem;">No learners found</div>';
   } else {
     dd.innerHTML = matches.map(function(l) {
       var det = l.email || l.phone || '';
+      var tag = l.is_your_learner
+        ? '<span style="font-size:0.7rem;font-weight:600;color:var(--green,#1f8a4c);background:rgba(31,138,76,0.1);padding:1px 6px;border-radius:4px;margin-left:6px">Your learner</span>'
+        : '<span style="font-size:0.7rem;font-weight:600;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px;margin-left:6px">New to you</span>';
       return '<div class="learner-option" data-action="select-learner" data-learner-id="' + l.id + '" data-name="' + esc(l.name) + '" data-det="' + esc(det) + '" data-balance="' + (l.credit_balance || 0) + '">' +
-        '<div class="learner-opt-name">' + esc(l.name) + '</div>' +
+        '<div class="learner-opt-name">' + esc(l.name) + tag + '</div>' +
         '<div class="learner-opt-detail">' + esc(det) + '</div>' +
       '</div>';
     }).join('');
