@@ -835,20 +835,24 @@ Audit focus:
 
 - Keep PR #147 and branch `audit/coachcarter-website-repo-health` as the planning and findings home.
 - Do not put code fixes in the audit branch unless they are documentation-only audit updates.
-- For each fix area, create focused branches from latest `main`:
+- For each fix area, create focused branches from latest `origin/main`, even if `main` is not being merged into yet:
   - `fix/auth-tenant-scope-<topic>`
   - `fix/payments-idempotency-<topic>`
   - `fix/booking-race-<topic>`
   - `fix/gdpr-retention-<topic>`
+  - `fix/ops-cron-auth-and-methods`
   - `chore/ci-health-checks`
   - `chore/dependency-maintenance`
+- Open each remediation branch as a focused draft PR into `main`, but leave it unmerged until explicitly approved.
 - Prefer small PRs with one risk class each. Payment/auth fixes should include tests or a written manual verification plan.
+- If combined verification is useful before merging to `main`, create a disposable `integration/audit-fixes-preview` branch and merge or rebase selected draft fix branches into it for testing only. Do not treat the integration preview branch as the source of truth.
 - Merge order should be:
   1. Low-risk CI/test harness improvements.
   2. Documentation corrections that reduce future mistakes.
   3. Auth/tenant/payment fixes, one flow at a time.
   4. Operational cleanup and frontend maintainability work.
-- After each merged fix PR, update `AUDIT.md` in this branch or a follow-up audit PR with status and remaining risk.
+- Track proposed ordering in PR titles, for example `[AUDIT-FIX 01] chore: add CI health checks`, `[AUDIT-FIX 02] fix: harden cron auth and methods`, and so on.
+- After each merged fix PR, update `AUDIT.md` in this branch or a follow-up audit PR with the PR number, status, and remaining risk.
 
 ## Immediate Questions Or Missing Context
 
