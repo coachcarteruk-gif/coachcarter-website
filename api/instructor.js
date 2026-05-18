@@ -82,6 +82,7 @@ module.exports = async (req, res) => {
   if (action === 'stats')              return handleStats(req, res);
   if (action === 'upload-photo')       return handleUploadPhoto(req, res);
   if (action === 'my-learners')        return handleMyLearners(req, res);
+  if (action === 'school-learners')    return handleSchoolLearners(req, res);
   if (action === 'update-notes')       return handleUpdateNotes(req, res);
   if (action === 'learner-notes')      return handleLearnerNotes(req, res);
   if (action === 'learner-mock-tests') return handleLearnerMockTests(req, res);
@@ -1722,6 +1723,45 @@ async function handleMyLearners(req, res) {
     return res.json({ learners });
   } catch (err) {
     console.error('instructor my-learners error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to load learners' });
+  }
+}
+
+// ── GET /api/instructor?action=school-learners ──────────────────────────────
+// Returns every learner in this instructor's school, with a per-instructor
+// `is_your_learner` flag so the booking dropdown can mark "Your learner" vs
+// "New to you". Distinct from my-learners (which restricts to learners who
+// have booked with this instructor) — only used by the Book Lesson modal.
+async function handleSchoolLearners(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const learners = await sql`
+      SELECT
+        lu.id, lu.name, lu.email, lu.phone,
+        lu.credit_balance, lu.balance_minutes,
+        EXISTS (
+          SELECT 1 FROM lesson_bookings lb
+          WHERE lb.learner_id = lu.id
+            AND lb.instructor_id = ${instructor.id}
+            AND lb.school_id = ${schoolId}
+        ) AS is_your_learner
+      FROM learner_users lu
+      WHERE lu.school_id = ${schoolId}
+        AND COALESCE(lu.anonymized, false) = false
+      ORDER BY lu.name ASC
+    `;
+
+    return res.json({ learners });
+  } catch (err) {
+    console.error('instructor school-learners error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to load learners' });
   }

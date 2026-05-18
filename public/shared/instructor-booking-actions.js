@@ -353,7 +353,7 @@
     // Fetch learners + lesson types
     try {
       const [lRes, tRes] = await Promise.all([
-        ccAuth.fetchAuthed('/api/instructor?action=my-learners'),
+        ccAuth.fetchAuthed('/api/instructor?action=school-learners'),
         ccAuth.fetchAuthed('/api/lesson-types?action=list')
       ]);
       const lData = await lRes.json();
@@ -385,20 +385,29 @@
     dd.style.display = 'block';
     dd.classList.add('open');
     var matches = addLessonLearners.filter(function (l) {
-      var name = ((l.first_name || '') + ' ' + (l.last_name || '')).toLowerCase();
+      var name = (l.name || '').toLowerCase();
       return name.includes(q) || (l.email || '').toLowerCase().includes(q) || (l.phone || '').includes(q);
-    }).slice(0, 20);
+    });
+    // "Your learner" first, then alphabetical within each group
+    matches.sort(function (a, b) {
+      if (!!a.is_your_learner !== !!b.is_your_learner) return a.is_your_learner ? -1 : 1;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+    matches = matches.slice(0, 20);
 
     if (matches.length === 0) {
       dd.innerHTML = '<div style="padding:10px;font-size:0.82rem;color:var(--muted)">No learners found</div>';
       return;
     }
     dd.innerHTML = matches.map(function (l) {
-      var name = (l.first_name || '') + ' ' + (l.last_name || '');
+      var name = l.name || '';
       var detail = l.email || l.phone || '';
-      var credits = l.credit_balance_pence || 0;
+      var credits = l.credit_balance_pence || l.credit_balance || 0;
+      var tag = l.is_your_learner
+        ? '<span style="font-size:0.7rem;font-weight:600;color:var(--green,#1f8a4c);background:rgba(31,138,76,0.1);padding:1px 6px;border-radius:4px;margin-left:6px">Your learner</span>'
+        : '<span style="font-size:0.7rem;font-weight:600;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px;margin-left:6px">New to you</span>';
       return '<div class="ba-learner-row" data-id="' + l.id + '" data-name="' + _esc(name) + '" data-detail="' + _esc(detail) + '" data-credits="' + credits + '" style="padding:8px 12px;cursor:pointer;font-size:0.85rem;border-bottom:1px solid var(--border)">' +
-        '<div style="font-weight:600">' + _esc(name) + '</div>' +
+        '<div style="font-weight:600">' + _esc(name) + tag + '</div>' +
         '<div style="font-size:0.78rem;color:var(--muted)">' + _esc(detail) + '</div></div>';
     }).join('');
 
