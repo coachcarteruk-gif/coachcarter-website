@@ -900,7 +900,7 @@ async function handleTraceLearner(req, res) {
                lb.scheduled_date::text AS scheduled_date,
                lb.start_time::text AS start_time,
                lb.end_time::text   AS end_time,
-               lb.payment_method, lb.notes, lb.created_at, lb.updated_at,
+               lb.payment_method, lb.notes, lb.created_at,
                lb.setmore_key, lb.edited_at, lb.credit_forfeited,
                i.name AS instructor_name
         FROM lesson_bookings lb
@@ -931,7 +931,7 @@ async function handleTraceLearner(req, res) {
                lb.scheduled_date::text AS scheduled_date,
                lb.start_time::text AS start_time,
                lb.end_time::text   AS end_time,
-               lb.payment_method, lb.notes, lb.created_at, lb.updated_at,
+               lb.payment_method, lb.notes, lb.created_at,
                lb.setmore_key, lb.edited_at,
                lu.name AS learner_name, lu.email AS learner_email,
                i.name AS instructor_name
