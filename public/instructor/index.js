@@ -201,6 +201,41 @@ function showError(msg) {
   document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p><button data-action="retry-current-view" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>`;
 }
 
+// ─── Outside-availability check (shared by Add Lesson + Send Offer) ─────────
+// Returns true iff [startHHMM, startHHMM+durationMins] fits fully inside at
+// least one of the instructor's weekly availability windows for that date's
+// day-of-week. If availCache hasn't been populated yet, returns true (no
+// warning) — fail-open so we never block a legit booking on a load race.
+function _slotInsideAvailability(dateStr, startHHMM, durationMins) {
+  if (!availCache || availCache.length === 0) return true;
+  if (!dateStr || !startHHMM || !durationMins) return true;
+  // JS getDay(): Sun=0..Sat=6. Our schema uses Mon=1..Sun=7 (Postgres convention).
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return true;
+  const jsDow = d.getDay();
+  const dow = jsDow === 0 ? 7 : jsDow;
+  const [sh, sm] = startHHMM.split(':').map(Number);
+  const startMins = sh * 60 + sm;
+  const endMins = startMins + durationMins;
+  return availCache.some(w => {
+    if (w.day_of_week !== dow) return false;
+    const [wsh, wsm] = w.start_time.split(':').map(Number);
+    const [weh, wem] = w.end_time.split(':').map(Number);
+    const wStart = wsh * 60 + wsm;
+    const wEnd = weh * 60 + wem;
+    return startMins >= wStart && endMins <= wEnd;
+  });
+}
+
+// Look up a lesson type's duration from the cached list. Returns null if the
+// cache is empty (caller should fall back to a sensible default).
+function _lessonTypeMinutes(lessonTypeId) {
+  const types = window._offerLessonTypes || [];
+  if (!lessonTypeId || types.length === 0) return null;
+  const lt = types.find(t => Number(t.id) === Number(lessonTypeId));
+  return lt ? lt.duration_minutes : null;
+}
+
 // â”€â”€â”€ Availability fetching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function loadAvailability() {
   try {
@@ -1299,6 +1334,7 @@ async function openAddLessonModal() {
     addLessonLearners = Array.isArray(learnersData) ? learnersData : (learnersData.learners || []);
     const typesData = await typesRes.json();
     const types = typesData.lesson_types || [];
+    window._offerLessonTypes = types; // shared with offer modal + availability check
     const sel = document.getElementById('addLessonType');
     sel.innerHTML = types.map(lt => {
       const hrs = lt.duration_minutes / 60;
@@ -1395,6 +1431,19 @@ async function confirmCreateBooking() {
 
   const payMethod = document.querySelector('input[name="addLessonPay"]:checked')?.value || 'cash';
   const notes = document.getElementById('addLessonNotes').value.trim();
+
+  // Outside-availability second-confirm (catches the Beatriz-style mistake:
+  // booking a slot the learner can't pay for without seeing it on the calendar).
+  const lessonTypeId = parseInt(document.getElementById('addLessonType').value) || null;
+  const lessonTypeMins = _lessonTypeMinutes(lessonTypeId) || 90;
+  if (!_slotInsideAvailability(newDate, newTime.slice(0, 5), lessonTypeMins)) {
+    const proceed = confirm(
+      "Heads up — this slot is outside your weekly availability for that day.\n\n" +
+      "Booking it will still work, but it won't appear on your normal availability and the learner won't see it in their slot feed.\n\n" +
+      "Continue?"
+    );
+    if (!proceed) return;
+  }
 
   const btn = document.getElementById('addLessonBtn');
   btn.disabled = true; btn.textContent = 'Booking…';
@@ -1789,6 +1838,22 @@ async function sendOffer() {
     const parsed = parseFloat(customPriceStr);
     if (isNaN(parsed) || parsed < 0) { errorEl.textContent = 'Please enter a valid price.'; errorEl.style.display = 'block'; return; }
     offerPricePence = Math.round(parsed * 100);
+  }
+
+  // Outside-availability second-confirm — only for slot-pinned offers
+  // (flexible offers don't have a fixed time to check). Catches the case
+  // where the instructor sends a paid link for a time they're not normally
+  // free, e.g. Beatriz / Simon 2026-05-19.
+  if (!flexible) {
+    const offerMins = _lessonTypeMinutes(lessonTypeId ? parseInt(lessonTypeId) : null) || 90;
+    if (!_slotInsideAvailability(date, time.slice(0, 5), offerMins)) {
+      const proceed = confirm(
+        "Heads up — this slot is outside your weekly availability for that day.\n\n" +
+        "You can still send the offer, but the learner won't see this slot in their normal feed and your other learners may not realise it's now blocked.\n\n" +
+        "Send the offer anyway?"
+      );
+      if (!proceed) return;
+    }
   }
 
   btn.disabled = true;
