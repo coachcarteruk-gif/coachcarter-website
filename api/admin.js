@@ -880,7 +880,7 @@ async function handleTraceLearner(req, res) {
     const pattern = '%' + q + '%';
 
     const learners = await sql`
-      SELECT id, name, email, phone, school_id, created_at, anonymized, setmore_customer_key
+      SELECT id, name, email, phone, school_id, created_at, archived_at, setmore_customer_key
       FROM learner_users
       WHERE school_id = ${schoolId}
         AND (name ILIKE ${pattern} OR email ILIKE ${pattern})
