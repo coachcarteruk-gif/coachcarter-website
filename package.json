@@ -7,7 +7,12 @@
     "start": "vercel dev",
     "deploy": "vercel --prod",
     "test": "playwright test",
-    "test:ui": "playwright test --ui"
+    "test:ui": "playwright test --ui",
+    "check:syntax": "node scripts/check-syntax.js",
+    "check:c1": "node scripts/check-c1-controls.js"
+  },
+  "engines": {
+    "node": "22.x"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1"
