@@ -472,6 +472,107 @@ Financial or accounting tables from `db/migration.sql`:
 - Phase 6 frontend/PWA: review whether service-worker caching could retain auth-sensitive pages or exported data in browser cache, and verify all learner privacy/data UI still matches the backend after any GDPR fixes.
 - Phase 6 frontend/PWA: decide whether stale pages missing consent loaders should be retired from navigation/build output rather than updated.
 
+## Phase 5 Findings
+
+Collected on 18 May 2026 on branch `audit/coachcarter-website-repo-health`. This section is documentation-only audit evidence for Operations, External Integrations, and Observability. No code fixes were made.
+
+### Cron Inventory And Auth Model
+
+`vercel.json` currently defines 12 scheduled paths:
+
+| Path | Schedule | Current code auth | Main side effect |
+|---|---:|---|---|
+| `/api/reminders?action=send-due` | hourly at minute 0 | shared `verifyCronAuth()` | Sends learner email/WhatsApp reminders and records `sent_reminders`. |
+| `/api/reminders?action=daily-schedule` | daily 19:00 UTC | shared `verifyCronAuth()` | Sends next-day schedule emails to instructors. |
+| `/api/ical-sync` | every 15 minutes | local `verifyCronAuth()` | Syncs one instructor iCal feed into `instructor_external_events`. |
+| `/api/offers?action=expire-offers` | hourly at minute 30 | shared `verifyCronAuth()`, but handler requires POST | Expires stale pending `lesson_offers`. |
+| `/api/cron-payouts` | Friday 09:00 UTC | shared `verifyCronAuth()` or admin JWT | Creates instructor/school payout rows and Stripe transfers. |
+| `/api/setmore-sync` | every 15 minutes | shared `verifyCronAuth()` | Imports Setmore appointments into `lesson_bookings`; marks removed/cancelled Setmore bookings `refunded`. |
+| `/api/setmore-welcome` | daily 10:00 UTC | shared `verifyCronAuth()` | Sends one-time welcome/magic-link emails to Setmore-created learners. |
+| `/api/cron-retention` | Sunday 03:00 UTC | shared `verifyCronAuth()` | Archives/deletes learner, enquiry, consent, deletion-request, and anonymized transaction records. |
+| `/api/cron-auto-complete` | hourly at minute 15 | shared `verifyCronAuth()` | Flips past `scheduled` bookings to `chargeable`. |
+| `/api/cron-reconcile-payments` | hourly at minute 30 | shared `verifyCronAuth()` | Lists paid Stripe Checkout sessions and alerts when tracked sessions lack `credit_transactions`. |
+| `/api/cron-referral-rewards` | daily 04:00 UTC | shared `verifyCronAuth()` | Credits referrers for eligible chargeable referred lessons. |
+| `/api/cron-balance-snapshot` | daily 08:00 UTC | shared `verifyCronAuth()` | Captures platform balance snapshots and alerts on trailing outflow/inflow drift. |
+
+Shared cron auth in `api/_auth.js` fails closed when `CRON_SECRET` is absent, accepts `Authorization: Bearer <secret>`, `?key=`, or `?secret=`, and uses `crypto.timingSafeEqual()`. The helper explicitly rejects the spoofable `x-vercel-cron` header as an auth source.
+
+`api/ical-sync.js` is still the auth outlier. It defines a local helper that returns true when `CRON_SECRET` is missing and compares the provided value with plain equality. This confirms the Phase 1/2 deferral: iCal sync can fail open in an environment where `CRON_SECRET` is not configured, unlike every reviewed shared-helper cron.
+
+`api/offers.js?action=expire-offers` remains configured as a Vercel cron path, but `handleExpireOffers()` requires `POST`. Vercel cron invokes configured paths with GET, so pending offer expiry appears unable to run as configured. The handler itself uses the shared cron auth once method passes.
+
+The audit cannot verify from repository contents whether production Vercel is actually attaching the `Authorization: Bearer <CRON_SECRET>` header to cron runs, whether any manual invocations rely on query-string secrets, or whether recent cron runs are succeeding. `docs/operations/credential-rotation.md` states that Vercel cron "automatically uses `CRON_SECRET` from env vars", but that is an operational claim that needs dashboard/log confirmation.
+
+### Idempotency And Overlap Observations
+
+- Reminder sends have a durable per-booking guard: `sent_reminders` has `UNIQUE(booking_id, reminder_type)`, and `api/reminders.js` inserts with `ON CONFLICT DO NOTHING` after sending. If two cron invocations overlap, both can pass the pre-send `NOT EXISTS` query before either inserts, so duplicate messages are still possible in the race window. The row prevents future repeats, not necessarily simultaneous duplicates.
+- Daily instructor schedule emails have no durable idempotency key. A repeated or overlapping `/api/reminders?action=daily-schedule` run can resend the same day's schedule.
+- `api/cron-auto-complete.js` is naturally idempotent because it updates only rows where `status = scheduled`; repeated runs flip zero additional rows.
+- `api/cron-referral-rewards.js` has a strong per-booking guard. It stamps `lesson_bookings.referral_rewarded_at` with `UPDATE ... WHERE referral_rewarded_at IS NULL RETURNING id` before crediting the referrer, so overlapping runs should only award once.
+- `api/setmore-sync.js` imports are idempotent through the unique `lesson_bookings.setmore_key` index and existing-row checks. It also has a guard that skips "removed from Setmore" cancellation detection when Setmore returns zero active appointments, reducing mass-cancel risk during transient API failures.
+- `api/ical-sync.js` upserts on `(instructor_id, uid_hash)` and deletes stale future events for the selected instructor. It processes one oldest/eligible instructor per invocation. There is no explicit lease/lock, so overlapping invocations can choose the same instructor before `ical_last_synced_at` is updated. Upserts reduce duplicate rows, but overlapping delete/upsert cycles could still cause noisy logs or transient stale-event behavior.
+- `api/setmore-sync.js` also has no explicit lease/lock around the "oldest synced instructor" selection. Duplicate imports are constrained by `setmore_key`, but two overlapping runs can still duplicate external API calls and race cancellation/backfill work.
+- `api/cron-payouts.js` delegates to `_payout-helpers.js`. Instructor payout double-payment is guarded by `payout_line_items.booking_id` uniqueness; on Stripe transfer failure the code marks the payout failed and deletes the line items so bookings can retry. School payouts store paid booking ids in `school_payouts.booking_ids` and filter only completed school payouts; there is no equivalent per-booking unique table for school payouts in the reviewed schema, so overlap safety for school-level transfers is weaker than instructor payouts.
+- Stripe webhook handlers check `credit_transactions.stripe_session_id` before processing tracked Checkout sessions. That is useful idempotency evidence, but the reviewed code performs multi-step DB mutation without an explicit transaction. A crash after creating `credit_transactions` but before booking creation or notifications can make later webhook retries return early. `notifyBookingInsertFailed()` improves the known booking-insert failure path, but it does not cover every possible mid-flow failure.
+- `api/cron-reconcile-payments.js` is alert-only and looks for paid tracked Checkout sessions missing from `credit_transactions`. Because it treats the transaction row as the completion marker, it will not catch "payment has a transaction row but no booking" or "transaction row exists but confirmation notifications failed" cases.
+- `api/cron-balance-snapshot.js` writes a new snapshot each run; this is append-only by design. Repeated runs produce extra evidence rows rather than duplicate customer-visible side effects.
+- `api/cron-retention.js` generally applies idempotent archive/delete queries. The per-learner hard-delete cascade catches and swallows individual table deletion failures, increments `hard_deleted` only after deleting the learner row, and does not alert on partial per-table skips unless the whole cron fails.
+
+### Alerting And Error-Reporting Observations
+
+- Shared `api/_error-alert.js` sends sanitized 500/error emails to `ERROR_ALERT_EMAIL` through SMTP and exposes `sendAlertEmail()` for non-500 operational alarms. Alert delivery is fire-and-forget and silently swallowed on failure, so SMTP/`ERROR_ALERT_EMAIL` misconfiguration can blind the alert channel.
+- Hard cron failures in `cron-retention`, `cron-payouts`, `cron-reconcile-payments`, `cron-balance-snapshot`, `cron-auto-complete`, `cron-referral-rewards`, `setmore-sync`, `setmore-welcome`, `ical-sync`, and reminder outer catches call `reportError()`.
+- `cron-payouts` has additional operational alerts for failed instructor payouts, failed school payouts, summary-email failures, and school payout exceptions. `_payout-helpers.js` sends a specific "widget said green but Stripe transfer failed" alert when a recent green platform-balance snapshot exists.
+- `cron-balance-snapshot` sends a Trigger B alert when trailing 30-day payout outflow exceeds Stripe inflow by more than GBP 100.
+- `cron-reconcile-payments` sends an action-required email for paid tracked Stripe Checkout sessions with no matching `credit_transactions` row. The email tells the operator to resend the Stripe event manually from the dashboard.
+- iCal and Setmore sync failures that are expected integration failures, such as HTTP errors, parse failures, token errors, and fetch timeouts, are written into instructor sync-error columns and returned as `{ ok: false }`; they do not call `reportError()` unless the function itself throws. That gives UI/status visibility, but production alerting depends on someone checking those fields or cron logs.
+- WhatsApp/SMS delivery failures in `api/_whatsapp.js` are caught and logged with `console.warn()` only. This matches the free-trial handover deferral: Twilio delivery issues can remain invisible outside Vercel logs/Twilio console.
+- Many email sends in notification fan-out paths are best-effort. Some are awaited and can trip outer catches; others intentionally catch and log locally (`reminders`, `_notify-availability`, `setmore-welcome`, `cron-payouts` instructor emails, multiple booking notification paths). There is no central delivery ledger for email/SMS/WhatsApp attempts or failures.
+- `api/setmore-welcome.js` marks `welcome_email_sent_at` even when the email send fails, explicitly to avoid retry bombing. That protects users from repeated attempts, but it also means delivery failure requires log review to discover and cannot be retried from code without manual DB intervention.
+- `api/enquiries.js` returns success even when database save, N8N forwarding, Resend, or SMTP staff notification fails individually. This is operationally friendly for public form UX, but staff lead loss is not currently elevated through `reportError()` unless the enclosing handler throws.
+- Stripe webhook handler failures inside `handleCreditPurchase`, `handleSlotBooking`, and `handleOfferBooking` are caught and logged but not consistently passed to `reportError()`. Since the top-level webhook returns 200 after awaited handlers complete, these caught failures can prevent Stripe retries and depend on reconciliation/manual log review. The known booking-insert-failed path now alerts and emails the learner, but other caught mid-flow failures still need a runbook and/or alerting.
+
+### External Integration Failure Modes
+
+- Stripe: Webhook signature verification is strict and alerts on signature failure. Tracked Checkout sessions are gated on `payment_status = paid`, and async payment failure events call `reportError()`. Reconciliation checks only tracked `credit_purchase`, `slot_booking`, and `lesson_offer` sessions from the last 25 hours and only checks for missing `credit_transactions`. It does not auto-replay and does not inspect legacy pass-guarantee/package flows.
+- Stripe payouts: Instructor payouts have stronger retry semantics than school payouts because failed instructor transfers delete `payout_line_items`, while failed school transfers clear `school_payouts.booking_ids`. Live Stripe transfer state, failed transfer dashboards, and connected-account disablement histories cannot be verified locally.
+- Stripe fee capture: `api/_stripe-fee.js` returns `NULL` on fee-fetch failure and comments that a future reconciliation cron will backfill later. `api/cron-balance-snapshot.js` and payout math tolerate null/zero fees, but Phase 5 did not find a shipped fee-backfill cron in the scheduled inventory.
+- Setmore: OAuth refresh token absence/failure and appointment fetch failures are captured in `instructors.setmore_sync_error`. The sync imports via `setmore_key`, maps staff by `setmore_staff_key`, and guards against zero-appointment mass cancellation. Learner matching by Setmore customer key, phone, then email is not school-scoped in the reviewed helper; this was not reclassified as an operations fix here, but it is relevant to multi-school rollout risk.
+- iCal: Feed fetch, timeout, over-large response, invalid calendar, and parse failures write `ical_sync_error`. The sync uses a 90-day window, upserts by `(instructor_id, uid_hash)`, and deletes stale events. There is no alert on repeated feed failures beyond status fields/logs.
+- Email: SMTP is the common path for error alerts and many transactional emails. Resend appears as a public enquiry fallback/primary depending on `RESEND_API_KEY`. The repo has no delivery-status webhook ingestion or bounce handling.
+- SMS/WhatsApp: Twilio failures are swallowed after logging. There is no message SID persistence, status callback, bounce/failure dashboard inside the app, or alert when WhatsApp is unconfigured.
+- N8N/Google Sheets-style lead forwarding: `api/enquiries.js` posts to `N8N_WEBHOOK_URL` when configured and logs failures only. The rotation playbook treats `N8N_WEBHOOK_URL` as not a secret, but privacy/processor inventory should still confirm whether it receives PII.
+- Google/OpenRouteService/postcodes-style travel/address integrations, Cloudflare Stream, Anthropic, PostHog, and Google Places/Reviews are present in docs/env/code, but this phase focused on cron/ops files. Their live quotas, provider dashboards, DPA/region settings, and failure history cannot be verified without provider access.
+
+### Live-Environment Items Not Verifiable Locally
+
+- Vercel cron run history, current `Authorization` headers, recent 401/405/500 rates, and whether `/api/offers?action=expire-offers` is currently failing with 405 in production.
+- Production values and rotation dates for `CRON_SECRET`, `MIGRATION_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `JWT_SECRET`, `ADMIN_SECRET`, `POSTGRES_URL`, SMTP, Resend, Twilio, Setmore, Cloudflare, Google, Anthropic, OpenRouteService, PostHog, and optional N8N/Slack-style webhooks.
+- Live row counts/backlogs for archived learners/enquiries, expired/used tokens, old `slot_reservations`, stale pending `lesson_offers`, unsent/duplicate `sent_reminders`, `ical_sync_error`/`setmore_sync_error` rows, pending deletion requests, null Stripe fee rows, failed/processing payouts, and orphan payment-without-booking records.
+- Stripe Dashboard evidence for webhook delivery failures, failed async payments, failed transfers, partial refund failures, connected-account disablement, and payout arrival.
+- Twilio console delivery evidence for WhatsApp/SMS failures and whether `TWILIO_WHATSAPP_FROM` is a valid WhatsApp Business sender.
+- Email provider delivery/bounce evidence for SMTP and Resend.
+- Processor-side DSAR/deletion procedures and DPA/region settings for Stripe, Twilio, Resend/IONOS, Neon, Vercel, Anthropic, PostHog, Cloudflare, Setmore, postcodes.io/getAddress, OpenRouteService, Google, and N8N/Slack if used.
+
+### Recommended Fix Branches / PR Order
+
+1. `fix/ops-cron-auth-and-methods`: move `api/ical-sync.js` to shared `verifyCronAuth()` and make offer expiry compatible with Vercel cron GET, with a small manual verification plan for Vercel cron headers.
+2. `fix/ops-cron-overlap-guards`: add lightweight DB leases or durable idempotency markers for high-impact crons where overlap can duplicate external side effects, starting with daily schedule emails, reminders send-before-insert, iCal/Setmore instructor selection, and school payouts.
+3. `fix/ops-payment-reconciliation-runbook`: document and/or implement checks for payment-without-booking, transaction-without-notification, failed partial refunds, failed transfers, duplicate/missing transactions, and Stripe event replay. Include SQL queries for `credit_transactions` without matching bookings and failed/processing payout rows.
+4. `fix/ops-webhook-alerting`: ensure caught webhook handler failures that could happen after Stripe has paid call `reportError()` or write an operational incident row before returning 200.
+5. `fix/ops-delivery-observability`: add a delivery-attempt ledger or at least structured alerting for WhatsApp/SMS/email failure paths, including Twilio message SIDs/status callbacks where practical.
+6. `fix/ops-sync-health-dashboard`: expose iCal/Setmore repeated-failure status and age of last successful sync in admin/instructor views, with an alert threshold for stale syncs.
+7. `docs/ops-runbooks`: add runbooks for cron failure triage, Stripe webhook replay, Stripe partial-refund failures, payout transfer failures, Setmore/iCal recovery, failed welcome/reminder delivery, and DSAR/deletion requests that require processor-side actions.
+8. `docs/processor-inventory`: reconcile privacy docs, credential rotation docs, and actual env/code references into a third-party processor inventory with owner, data categories, region/DPA notes, rotation cadence, and deletion/export handling.
+9. `chore/ops-row-count-checks`: create read-only SQL scripts or admin-only diagnostic endpoints for retention/backlog counts that can be run against staging/prod with explicit approval.
+
+### Defer To Phase 6 Frontend/PWA
+
+- Service-worker and browser-cache behavior for auth-sensitive pages, data exports, learner privacy screens, offer success pages, and stale offline content.
+- Frontend surfacing of delivery failures, sync health, Connect/account re-blocked states, and admin operational queues after the backend runbooks/diagnostics are defined.
+- Stale HTML pages missing cookie consent/PostHog loaders, already identified in Phase 4, unless the ops decision is to retire them rather than update them.
+- User-facing copy and UX for partial operational failures, such as "payment received but booking on hold", Setmore-imported learner welcome failures, and delayed WhatsApp/email delivery.
+
 ## Risk Areas Ranked By Priority
 
 ### P0: Money Movement And Payment Idempotency
