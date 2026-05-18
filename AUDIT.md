@@ -381,6 +381,97 @@ Collected on 18 May 2026 on branch `audit/coachcarter-website-repo-health`. This
 - Phase 5 operations: verify Vercel cron Authorization headers for payout, reconciliation, and balance snapshot crons; the source code fails closed, but production env wiring was not inspectable here.
 - Phase 5 operations: define manual runbooks for payment-without-booking alerts, partial refund failures, failed Stripe transfers, and Connect account ownership corrections.
 
+## Phase 4 Findings
+
+Collected on 18 May 2026 on branch `audit/coachcarter-website-repo-health`. This section is documentation-only audit evidence for Data Protection And Retention Review. No code fixes were made.
+
+### PII And Financial Table Map
+
+High-confidence PII or account tables from `db/migration.sql`:
+
+- `learner_users`: learner identity and contact data: name, email, phone, pickup address, test date/time, password hash, calendar token, referral link, retention timestamps, school id, and test-account flag.
+- `instructors`: instructor identity/contact/profile data: name, email, phone, bio, photo URL, vehicle/service metadata, iCal feed URL/sync status, Setmore staff key, Stripe account id, password hash, calendar token, onboarding and payout flags.
+- `admin_users`: admin identity, email, password hash, role, active flag, and school id.
+- `lesson_bookings`: learner/instructor schedule history, pickup/dropoff address, guest phone for free trials, Setmore key, payment method, payout/referral/Stripe-fee attribution, status and cancellation metadata.
+- `lesson_offers`: public offer token, learner email/name/id, Stripe session id, booking id, slot and pricing data, broadcast metadata, expiry/accepted timestamps, and school id.
+- `slot_reservations`: temporary checkout holds with learner id, instructor id, slot, Stripe session id, expiry, and school id.
+- `magic_link_tokens` and `instructor_login_tokens`: email/phone/login/reset/migration tokens, short codes, role/purpose, referral code, school id, expiry, used flag.
+- `driving_sessions`, `skill_ratings`, `learner_onboarding`, `quiz_results`, `mock_tests`, `mock_test_faults`, `focused_practice_sessions`, `instructor_learner_notes`, and `learner_availability`: learner progress, notes, preferences, availability, test/practice records, and supervisor/instructor observations.
+- `enquiries` and `availability_submissions`: public lead/contact records with name, email, phone, message/availability data, marketing consent/status, archive timestamp, and school id.
+- `cookie_consents`, `audit_log`, `deletion_requests`, `referrals`, `referral_clicks`, `sent_reminders`, `lesson_confirmations`, and `instructor_external_events`: consent proof, admin action metadata, deletion tokens/status, referral attribution, reminder/confirmation state, and imported external calendar blocks.
+- `waitlist` still exists in the migration even though `CLAUDE.md` says the feature was removed. Its runtime status was not fully reviewed in Phase 4, but it remains a schema-level PII table if present in production.
+
+Financial or accounting tables from `db/migration.sql`:
+
+- `credit_transactions`: learner-linked balance/accounting rows with type, credits/minutes, amount, payment method, Stripe session id, Stripe fee, anonymized flag, school id, and nullable learner id.
+- `instructor_payouts`, `payout_line_items`, and `school_payouts`: instructor/school payout amounts, Stripe transfer ids, booking ids, line items, franchise/shortfall/deposit/Stripe-fee fields, status, failure reason, and school id.
+- `balance_audit` and `platform_balance_snapshots`: balance correction and daily platform-balance evidence. `balance_audit` stores admin id/email, learner id/name, previous/new balances, reason, and school id. `platform_balance_snapshots` stores aggregate Stripe/payout/refund exposure and preview JSON.
+- `guarantee_pricing`, `site_config`, `schools`, `lesson_types`, `google_reviews`, and `google_reviews_meta` are mostly configuration/public content, but `schools` includes owner email and Stripe account fields and `site_config`/`schools.config` can contain operational settings that should not be treated as anonymous by default.
+
+### Export, Deletion, And Anonymization Coverage
+
+- `api/learner.js::handleExportData()` covers profile, onboarding, bookings, credit transactions, driving sessions, skill ratings, quiz results, mock tests, focused practice, referral code, and referrals made. It does not export `mock_test_faults`, `instructor_learner_notes`, `learner_availability`, `sent_reminders`, `lesson_confirmations`, `slot_reservations`, `lesson_offers`, `magic_link_tokens`, `deletion_requests`, `cookie_consents`, `audit_log` entries targeting the learner, `balance_audit`, referral click records, or payout-line/booking-linked financial attribution.
+- `handleExportData()` omits fault-level mock-test detail even though `handleMockTests()` returns joined fault rows elsewhere in the same file. It also omits offer/free-trial data that can contain learner email/name/phone/pickup details before or during account creation.
+- `api/learner.js::handleConfirmDeletion()` anonymizes `credit_transactions` by setting `learner_id = NULL, anonymized = true`, then deletes many learner/progress/booking tables and nullifies `cookie_consents.learner_id` and `learner_users.referred_by`. It deletes `lesson_bookings`, which can break or orphan later financial/payout evidence because `payout_line_items.booking_id`, `instructor_payouts`, `school_payouts.booking_ids`, `balance_audit`, and booking-level Stripe-fee attribution are not explicitly reconciled before booking deletion.
+- `handleConfirmDeletion()` does not explicitly remove or anonymize `lesson_offers` rows where the learner is referenced by `learner_id`, `learner_email`, `learner_name`, `booking_id`, or `stripe_session_id`. It also does not cover `balance_audit`, `instructor_payouts`, `payout_line_items`, `school_payouts`, `availability_submissions`, or audit-log rows that may contain learner names/emails in JSON details.
+- `api/admin.js::handleDeleteLearner()` is materially narrower than learner self-deletion and retention deletion. It only anonymizes `credit_transactions`, deletes `skill_ratings`, `driving_sessions`, and `lesson_bookings`, then deletes `learner_users`. It does not cover quiz/mock/onboarding/focused-practice/reminder/reservation/confirmation/referral/cookie/deletion-request/magic-token/learner-availability tables. Depending on live FK constraints, this may either fail or leave records behind.
+- The deletion paths are not wrapped in an explicit transaction. Several deletes are best-effort `try/catch` blocks that continue after failure, so partial deletion is possible if one table errors. This is especially important because the request is marked completed only near the end.
+- Financial anonymization is currently one-table only. `credit_transactions` has the intended `anonymized` flag and nullable learner id, but booking-linked payout records and balance-audit records do not have an equivalent documented anonymization strategy. A product/legal decision is needed before changing whether paid `lesson_bookings` are hard-deleted, anonymized, or retained with learner references removed.
+
+### Retention Cron Observations
+
+- `api/cron-retention.js` uses the shared fail-closed `verifyCronAuth()` helper and allows only `GET`, matching the Vercel cron shape better than the Phase 3 `offers?action=expire-offers` method mismatch.
+- The cron refreshes `learner_users.last_activity_at` from learner row creation, `lesson_bookings.created_at`, and `driving_sessions.created_at` only. It does not consider login/session activity from password auth, profile updates, credit purchases without bookings, offers, quiz/mock/practice activity, learner availability updates, referral activity, or admin-managed account changes. Some active learners could be archived if they have no recent booking/session rows.
+- Hard deletion in the retention cron mirrors the learner self-deletion cascade more closely than admin deletion, but it still does not cover `lesson_offers`, `balance_audit`, payout tables, `availability_submissions`, `audit_log`, `referral_clicks`, or direct cleanup of old pending/expired `magic_link_tokens` except by matching the deleted learner's email.
+- The cron purges anonymized `credit_transactions` after 7 years, cleans completed deletion requests after 90 days, deletes cookie consent rows after 2 years, deletes stale `rate_limits` after 2 hours, and archives/deletes `enquiries` after the documented 2-year plus 30-day model.
+- There is no general retention policy in code for `lesson_offers`, `slot_reservations` after expiry except lazy cleanup in booking flows, `sent_reminders`, `audit_log`, `referral_clicks`, `instructor_external_events`, `instructor_login_tokens`, expired/used `magic_link_tokens`, `balance_audit`, or `platform_balance_snapshots`.
+- The audit could not verify production Vercel cron headers, recent run history, or live row counts without secrets/live environment access.
+
+### Public Token, Link, Cookie, And Session Observations
+
+- `api/verify-session.js` is a public possession-of-`session_id` endpoint. It retrieves a Stripe Checkout session and returns package type/name, amount, and a booking reference without authenticating the requester or checking that the session belongs to the current user. It does not expose full card data, but it is still payment-derived metadata.
+- `api/offers.js?action=get-offer` is public possession-of-token access. For pending offers it returns learner email, learner name, learner phone, pickup address, slot, price, instructor, and repeat limit when present. For accepted offers it returns learner email and slot details for the success page. This is expected for an offer-link flow, but the token is the only access control.
+- Offer acceptance and free flexible offers can auto-login the learner by setting a learner session cookie. The JWT is signed with `expiresIn: '180d'`, matching `SESSION_MAX_AGE_SEC.learner = 180 days` in `_auth.js`. This is materially longer than admin's 7 days and should be an explicit product/security decision, especially for public token acceptance flows.
+- `api/slots.js?action=book-free-trial` creates a 7-day `magic_link_tokens` row and emails `/learner/login.html?token=...` after public booking. This is documented in `PROJECT.md`. The code says no session cookie is set, but the long link can be used by whoever has the email link until expiry.
+- Admin invite learner flow in `api/admin.js::handleInviteLearner()` also creates a 7-day magic-link token. `api/setmore-welcome.js` is documented as sending 7-day magic links too, but Phase 4 did not fully review that file.
+- Learner and instructor calendar feeds use persistent `calendar_token` values in `learner_users` and `instructors`. `api/calendar.js` creates a token on demand and serves feed data to any holder of the token. There is no expiry, rotation, explicit revocation endpoint, or learner/instructor UI evidence of revocation in the reviewed code.
+- Learner feed tokens are looked up without school id in `handleFeed()` (`SELECT id, name FROM learner_users WHERE calendar_token = ...`), while instructor feed rows include school id after lookup. Tokens are unique, so this is not an immediate cross-school data leak, but revocation/lifetime and school-scoped lookup should be reviewed together.
+
+### Cookie Consent And PostHog Observations
+
+- `public/cookie-consent.js` records consent in `localStorage` under `cc_cookie_consent`, writes a visitor id, reads learner id from the display-only `cc_learner` localStorage blob, and POSTs to `/api/config?action=record-consent`. `api/config.js` stores visitor id, learner id, analytics boolean, hashed IP prefix, user agent, and school id in `cookie_consents`.
+- `public/posthog-loader.js` only initializes PostHog when `window.ccCookieConsent.analyticsAllowed()` is true, listens for `cookie-consent-updated`, and clears `ph_` localStorage keys on opt-out. PostHog custom event calls in page scripts are guarded by `window.posthog` or `typeof posthog !== 'undefined'`, so they are no-ops before consent-based loading.
+- The HTML inventory found three pages missing both `cookie-consent.js` and `posthog-loader.js`: `public/admin/franchise-comparison.html`, `public/learner/learn.html`, and `public/learner/lessons-hub.html`. These may be stale/low-traffic pages, but they violate the current `CLAUDE.md` rule for new pages.
+- The inventory did not find inline PostHog snippets in HTML. PostHog is centralized through `posthog-loader.js`; `posthog-tracking.js` loads only after PostHog is initialized.
+- `public/privacy.html` lists Stripe, Twilio, Resend, IONOS SMTP, Neon, PostHog, Vercel, Anthropic, postcodes.io, OpenRouteService, and social platforms. Runtime code also references Cloudflare Stream (`api/videos.js`), Setmore (`api/setmore-sync.js`/`setmore-welcome.js`), Google Reviews/Places, and optional Slack/N8N-style operational webhooks in env/docs. Those service disclosures should be reconciled in a privacy-policy docs PR.
+
+### Admin Audit Logging Observations
+
+- `api/_audit.js::logAudit()` inserts admin id/email, action, target type/id, JSON details, IP address, school id, and timestamp. Failures are swallowed after logging to server logs, so audit logging is best-effort rather than fail-closed.
+- `api/admin.js` audit-logs `edit-booking`, `mark-complete`, `create-instructor`, `update-instructor`, `toggle-instructor`, `update-learner`, `adjust-credits`, `delete-learner`, `update-referral-config`, and `admin.password_reset`. `api/instructors.js` audit-logs `admin.instructor_password_set`.
+- Mutating admin paths reviewed that appear not audit-logged include `create-admin`, `toggle-payout-pause`, `process-payouts`, `set-instructor-blackouts`, `invite-learner`, and some admin/superadmin mutations outside `api/admin.js` such as `api/config.js` config saves, `api/schools.js` school/admin changes, `api/lesson-types.js`, `api/videos.js`, `api/availability.js`, `api/enquiries.js`, and selected `api/connect.js` actions. Some may be low-risk or operational rather than learner-data mutations, but the coverage is not consistent with the `CLAUDE.md` rule.
+- The privacy page says administrative data access is audit-logged. The current implementation mostly logs administrative data mutations, not reads such as `all-learners`, `learner-detail`, payout overview, or booking lists. If access logging is a compliance requirement, this needs a separate decision because read logging can become high volume.
+
+### Recommended Fix Branches / PR Order
+
+1. `fix/gdpr-delete-shared-cascade`: extract one shared learner deletion/anonymization routine used by learner self-deletion, retention cron, and admin deletion; add a dry-run/report mode and tests for all current learner-linked tables.
+2. `fix/gdpr-financial-anonymization-policy`: decide and implement the financial retention model for paid bookings, payout line items, school payout booking arrays, balance audit, and Stripe/session references; keep tax/accounting evidence while removing direct learner identifiers where legally appropriate.
+3. `fix/gdpr-export-schema-coverage`: update `handleExportData()` to include every learner-linked PII category in the current schema, including mock-test faults, instructor notes, availability, offers, cookie/deletion/audit metadata where appropriate, and documented exclusions.
+4. `fix/gdpr-retention-coverage`: expand `cron-retention.js` last-activity signals and retention cleanup for expired/used tokens, offers, reservations, reminders, referral clicks, audit logs, external events, snapshots, and other tables with defined lifetimes.
+5. `fix/gdpr-token-lifecycle`: add calendar feed token rotation/revocation, review 180-day learner cookies for public offer/free flows, and shorten or split invite/free-trial magic-link lifetimes if product agrees.
+6. `fix/gdpr-public-link-surfaces`: limit public possession-of-link responses for `verify-session`, `get-offer`, `offer-success`, and free-trial/success surfaces to the minimum needed, with tests that prevent accidental extra PII exposure.
+7. `fix/gdpr-cookie-page-coverage`: add the consent/PostHog loader pair to the three missing HTML pages or retire those pages, then add a static test that fails when an HTML page omits the loaders.
+8. `fix/gdpr-audit-logging-coverage`: create an admin mutation audit matrix and add `logAudit()` to agreed mutation paths across admin, schools, config, lesson types, videos, availability, enquiries, connect, and payout/manual operations.
+9. `docs/privacy-service-inventory`: reconcile `public/privacy.html`, `docs/gdpr.md`, and `PROJECT.md` with current processors/integrations and mark which data rights are automated versus manual.
+
+### Defer To Later Phases
+
+- Phase 5 operations: verify live cron headers, retention cron run history, row counts/backlog for archived learners/enquiries/tokens/offers/reservations, and whether production has orphaned payout/booking/credit rows.
+- Phase 5 operations: define manual runbooks for DSAR exports involving dashcam footage, Stripe records, Setmore data, Cloudflare videos, PostHog person/session data, and any processor-side deletion requests.
+- Phase 5 operations: verify third-party data-processing agreements/regions for Stripe, Twilio, Resend/IONOS, Neon, Vercel, Anthropic, PostHog, Cloudflare, Setmore, postcodes.io, OpenRouteService, Google, Slack/N8N if used.
+- Phase 6 frontend/PWA: review whether service-worker caching could retain auth-sensitive pages or exported data in browser cache, and verify all learner privacy/data UI still matches the backend after any GDPR fixes.
+- Phase 6 frontend/PWA: decide whether stale pages missing consent loaders should be retired from navigation/build output rather than updated.
+
 ## Risk Areas Ranked By Priority
 
 ### P0: Money Movement And Payment Idempotency
