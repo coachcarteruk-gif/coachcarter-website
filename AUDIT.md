@@ -1,5 +1,9 @@
 # CoachCarter Website Repo Health Audit
 
+## Read This First: Remediation Merge Strategy
+
+`main` should stay untouched until the user explicitly approves a merge plan. Focused remediation branches should be opened as draft PRs into `main` for review only, and left unmerged. Use `integration/audit-fixes-preview` only as a disposable combined testing branch if the fixes need to be built and tested together before anything lands on `main`.
+
 First-pass orientation for PR #147 on branch `audit/coachcarter-website-repo-health`.
 
 This is an audit plan only. No code fixes are included in this branch.

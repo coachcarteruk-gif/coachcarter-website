@@ -1,5 +1,18 @@
 # Repository Working Rules
 
+## Read This First: Main Stays Untouched Until Approved
+
+For the repo health audit remediation, do not merge anything into `main` just because a focused fix PR is ready.
+
+- `main` remains untouched until the user explicitly approves a merge plan.
+- PR #147 / `audit/coachcarter-website-repo-health` is the audit planning home only.
+- Remediation branches are opened as draft PRs into `main` for review, but they must stay unmerged.
+- If combined testing is needed before touching `main`, use `integration/audit-fixes-preview` as a disposable preview branch.
+- The integration branch is not the source of truth. Focused remediation branches remain the units of review.
+- Do not suggest merging a remediation PR into `main` unless the user has explicitly asked to start merging.
+
+## General Branch Rules
+
 - Never commit directly to `main`.
 - Create a branch for every audit, fix, feature, or chore.
 - Open a pull request for changes intended for `main`.
