@@ -199,6 +199,55 @@ async function handleCreditPurchase(session) {
   }
 }
 
+// ── Booking-insert-failed safety net ────────────────────────────────────────
+// Called from both handleSlotBooking and handleOfferBooking when the DB INSERT
+// throws after we've already taken the learner's money. Previously these paths
+// silently returned (only a console.error), so Beatriz / Simon 2026-05-19
+// happened: payment captured, no booking, no email, no alert. Now:
+//   1. Email Fraser via reportError() with full context
+//   2. Email the learner so they know we have their money and will be in touch
+// The credit_transactions row is intentionally left in place — accounting ties
+// to Stripe, and the orphan can be found with:
+//   WHERE type='slot_purchase' AND NOT EXISTS (matching lesson_booking)
+async function notifyBookingInsertFailed({ session, kind, learnerEmail, instructorName, scheduledDate, startTime, endTime, amountPence, insertErr }) {
+  // 1. Alert email to Fraser
+  try {
+    reportError(`/api/webhook (${kind} insert failed)`, new Error(
+      `Booking insert failed after paid Stripe session ${session.id}. ` +
+      `Learner email: ${learnerEmail || '(unknown)'}, instructor: ${instructorName || '(unknown)'}, ` +
+      `slot: ${scheduledDate} ${startTime}–${endTime}, amount: £${(amountPence / 100).toFixed(2)}. ` +
+      `Underlying error: ${insertErr?.message || insertErr}. ` +
+      `Action required: either book the slot manually (payment_method='credit' deducts the hours already on the learner's account) or refund the learner via Stripe.`
+    ));
+  } catch (e) {
+    console.error('notifyBookingInsertFailed: reportError threw', e);
+  }
+
+  // 2. Email the learner — only if we have an email address
+  if (!learnerEmail) return;
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: 'CoachCarter <bookings@coachcarter.uk>',
+      to: learnerEmail,
+      subject: 'Your payment went through — booking on hold',
+      html: `
+        <h2>We've received your payment</h2>
+        <p>Thanks for booking with CoachCarter. Your payment of <strong>£${(amountPence / 100).toFixed(2)}</strong> was successful and the funds are safely with us.</p>
+        <p>However, we hit a technical snag finalising the booking on our end. Nothing to worry about — your money is safe and the hours are on your account.</p>
+        <p><strong>What happens next:</strong> ${instructorName || 'Your instructor'} or our team will contact you within 24 hours to either confirm the slot manually or arrange a refund if it can't be honoured.</p>
+        <p>If you'd rather not wait, reply to this email or text us and we'll sort it straight away.</p>
+        <p style="color:#888;font-size:0.85rem;margin-top:24px">
+          Reference: ${session.id.slice(-12)}<br>
+          Requested slot: ${scheduledDate} at ${startTime}
+        </p>
+      `
+    });
+  } catch (mailErr) {
+    console.error('notifyBookingInsertFailed: learner email failed', mailErr);
+  }
+}
+
 // ── Slot booking handler (pay-per-slot) ─────────────────────────────────────
 async function handleSlotBooking(session) {
   if (!isPaid(session)) return;
@@ -286,14 +335,22 @@ async function handleSlotBooking(session) {
       `;
       booking = b;
     } catch (insertErr) {
-      // Slot was taken — refund the hours
+      // Booking insert failed (slot taken, FK / CHECK violation, etc.). Refund
+      // the deduction so the learner has the hours on their account, then
+      // alert Fraser + email the learner — see notifyBookingInsertFailed.
       await sql`
         UPDATE learner_users
         SET credit_balance = credit_balance + 1,
             balance_minutes = balance_minutes + ${durationMins}
         WHERE id = ${learnerId}
       `;
-      console.error('❌ slot_booking: slot already taken, hours refunded', insertErr.message);
+      console.error('❌ slot_booking: insert failed, hours refunded to learner balance', insertErr.message);
+      await notifyBookingInsertFailed({
+        session, kind: 'slot_booking',
+        learnerEmail, instructorName,
+        scheduledDate, startTime, endTime,
+        amountPence, insertErr
+      });
       return;
     }
 
@@ -917,15 +974,24 @@ async function handleOfferBooking(session) {
       });
       booking = { id: seriesResult.booked[0].booking_id, scheduled_date: scheduledDate, start_time: startTime, end_time: endTime };
     } catch (insertErr) {
-      // First slot lost the race — refund and cancel offer.
+      // Booking insert failed (slot taken, FK / CHECK violation, etc.). Refund
+      // the deduction so the learner has the hours on their account, mark the
+      // offer cancelled, then alert Fraser + email the learner — see
+      // notifyBookingInsertFailed.
       await sql`
         UPDATE learner_users
         SET credit_balance = credit_balance + ${totalCredits},
             balance_minutes = balance_minutes + ${totalMinutes}
         WHERE id = ${learnerId}
       `;
-      console.error('❌ lesson_offer: first slot already taken, hours refunded', insertErr.message);
+      console.error('❌ lesson_offer: insert failed, hours refunded to learner balance', insertErr.message);
       await sql`UPDATE lesson_offers SET status = 'cancelled' WHERE id = ${offerId}`;
+      await notifyBookingInsertFailed({
+        session, kind: 'lesson_offer',
+        learnerEmail, instructorName,
+        scheduledDate, startTime, endTime,
+        amountPence, insertErr
+      });
       return;
     }
 
