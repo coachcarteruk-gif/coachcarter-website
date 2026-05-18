@@ -184,6 +184,137 @@ CI/deployment checks:
 - Phase 3 payments/booking review: Stripe webhook idempotency; `verify-session` public Stripe session lookup behavior; guest checkout and offer acceptance race windows; slot reservation lifecycle; payout cron/admin parity; balance snapshot and reconciliation coverage.
 - Phase 4 data protection review: confirm `learner.js` export/deletion and `cron-retention.js` cover every PII-bearing table currently in `db/migration.sql`.
 
+## Phase 2 Findings
+
+Collected on 18 May 2026 on branch `audit/coachcarter-website-repo-health`. This section is documentation-only audit evidence for Auth, Tenant, and Endpoint Access Review. No code fixes were made.
+
+### Endpoint Auth Matrix Summary
+
+Legend: public = unauthenticated; learner/instructor/admin/superadmin = `requireAuth()` role gate or equivalent local wrapper; cron = `CRON_SECRET`; legacy secret-protected = `ADMIN_SECRET` or `MIGRATION_SECRET`; token/link protected = high-entropy one-time or calendar/referral/offer token; Stripe webhook = Stripe signature verification.
+
+| Endpoint/action | Method | Current access model | Evidence / notes |
+|---|---:|---|---|
+| `api/address-lookup.js` | GET | learner auth, instructor auth, admin auth | Calls `requireAuth(req, { roles: ['learner', 'instructor', 'admin'] })`; also rate-limits 60/hour per authenticated `user.id`. |
+| `api/admin.js?action=login` | POST | public | Public password login; email and IP rate-limited in `handleLogin()`. |
+| `api/admin.js?action=logout` | POST | public/session cleanup | Clears admin cookie; no privileged data mutation beyond logout. |
+| `api/admin.js?action=request-reset` | POST | public | Sends admin reset code; email/IP rate-limited and enumeration-safe. |
+| `api/admin.js?action=reset-password` | POST | token/link protected | Verifies email code from `magic_link_tokens`, then resets password and issues admin cookie. |
+| `api/admin.js?action=create-admin` | POST | admin auth or legacy secret-protected | `handleCreateAdmin()` accepts either existing admin JWT or `verifyAdminSecret(req)`. |
+| `api/admin.js?action=verify` | GET | admin auth | Uses `verifyAdminJWT()` / shared `requireAuth(req, { roles: ['admin'] })`. |
+| `api/admin.js?action=dashboard-stats`, `all-bookings`, `edit-booking`, `mark-complete`, `all-instructors`, `create-instructor`, `update-instructor`, `toggle-instructor`, `all-learners`, `learner-detail`, `update-learner`, `adjust-credits`, `delete-learner`, `confirmation-details`, `toggle-payout-pause`, `payout-overview`, `platform-balance`, `process-payouts`, `instructor-payout-history`, `invite-learner`, `instructor-blackouts`, `set-instructor-blackouts`, `referral-activity`, `referral-config`, `update-referral-config` | mixed GET/POST | admin auth; superadmin accepted as admin by shared helper | Central wrapper uses `requireAuth(req, { roles: ['admin'] })`; in `_auth.js`, role `admin` also accepts `superadmin` and instructor tokens with `isAdmin === true`. |
+| `api/advisor.js` | POST | public for chat; any valid role for personalised context/checkout trigger | `verifyAuth()` from `_shared.js` calls `requireAuth(req)` with no role filter. Chat is explicitly optional auth; checkout creation only checks that some `user` exists, not that `role === 'learner'`. |
+| `api/ask-examiner.js` | POST | public for chat; any valid role for personalised context | Same `_shared.verifyAuth()` no-role-filter pattern as `advisor.js`. |
+| `api/availability.js` GET | GET | admin auth | `requireAuth(req, { roles: ['admin'] })`; queries filter `availability_submissions.school_id = schoolId`. |
+| `api/availability.js` POST | POST | public | Public availability submission; rate-limited 5/IP/hour; sends staff/customer email when Resend is configured. |
+| `api/calendar.js?action=download` | GET | any valid role, effectively learner-owned booking | `verifyAuth()` calls `requireAuth(req)` with no role filter, then query requires `lb.learner_id = user.id` and `lb.school_id = user.school_id`. |
+| `api/calendar.js?action=feed` | GET | token/link protected | Uses `learner_users.calendar_token`, no JWT; feed token is the bearer secret. |
+| `api/calendar.js?action=feed-url` | GET | any valid role, intended learner | `verifyAuth()` has no role filter and updates `learner_users WHERE id = user.id`; non-learner roles will normally get no learner row but this is not an explicit role gate. |
+| `api/calendar.js?action=instructor-feed` | GET | token/link protected | Uses `instructors.calendar_token`, no JWT. |
+| `api/calendar.js?action=instructor-feed-url` | GET | instructor auth | Calls `requireAuth(req, { roles: ['instructor'] })`. |
+| `api/config.js` GET | GET | public | Reads school config by `?school_id=` or legacy site config. |
+| `api/config.js?action=record-consent` | POST | public | Records consent row; no rate limit observed. |
+| `api/config.js` POST save config | POST | legacy secret-protected | Requires body `password` matching `ADMIN_SECRET`; can update `schools.config` for body `school_id`. |
+| `api/connect.js?action=create-account`, `onboarding-link`, `connect-status`, `dashboard-link` | mixed | instructor auth | Uses `requireAuth(req, { roles: ['instructor'] })` and `user.school_id`. |
+| `api/connect.js?action=admin-create-account`, `admin-send-invite` | POST | admin auth | Uses `requireAuth(req, { roles: ['admin'] })`, scoped to `admin.school_id || 1`. |
+| `api/connect.js?action=school-create-account`, `school-onboarding-link`, `school-connect-status`, `school-dashboard-link` | mixed | admin auth | School Stripe Connect actions use admin auth and `admin.school_id || 1`; no `getSchoolId()` superadmin override observed. |
+| `api/create-checkout-session.js` | POST | learner auth or admin auth | Legacy checkout path accepts `requireAuth(req, { roles: ['learner', 'admin'] })`; creates Stripe Checkout using caller-supplied line items/metadata/URLs. Defer payment semantics to Phase 3. |
+| `api/credits.js?action=bulk-pricing` | GET | public | Public pricing/config data by school. |
+| `api/credits.js?action=balance`, `checkout`, `verify` | mixed | learner auth or admin auth | `verifyAuth()` allows `roles: ['learner', 'admin']`; tenant-scoped by `user.school_id || 1`. |
+| `api/cron-auto-complete.js` | any | cron | Shared `verifyCronAuth()`, fail-closed if `CRON_SECRET` missing. |
+| `api/cron-balance-snapshot.js` | any | cron | Shared `verifyCronAuth()`, fail-closed. |
+| `api/cron-payouts.js` | any | cron or admin auth | `verifyCronAuth(req)` OR `requireAuth(req, { roles: ['admin'] })` for manual trigger. |
+| `api/cron-reconcile-payments.js` | any | cron | Shared `verifyCronAuth()`, fail-closed. |
+| `api/cron-referral-rewards.js` | any | cron | Shared `verifyCronAuth()`, fail-closed. |
+| `api/cron-retention.js` | any | cron | Shared `verifyCronAuth()`, fail-closed. |
+| `api/enquiries.js?action=submit` | POST | public | Public contact/enquiry submission; rate-limited 5/IP/hour; sends staff email if configured. |
+| `api/enquiries.js?action=list`, `get`, `update-status` | mixed | admin auth | Calls `requireAuth(req, { roles: ['admin'] })`; queries use `schoolId`. |
+| `api/guarantee-price.js` GET | GET | public | Reads guarantee pricing. |
+| `api/guarantee-price.js` POST | POST | legacy secret-protected | Requires body `secret` equal to either `STRIPE_WEBHOOK_SECRET` or `ADMIN_SECRET`. |
+| `api/ical-sync.js` | GET | cron intended; fail-open when secret missing | Local `verifyCronAuth()` returns `true` when `CRON_SECRET` is unset and compares with `===`; does not use shared fail-closed helper. |
+| `api/instructor.js?action=request-login`, `validate-token`, `verify-token`, `logout` | mixed | public/token legacy flow | Legacy instructor login-token flow still present in `instructor.js`; current password login lives in `instructor-auth.js`. |
+| `api/instructor.js?action=schedule`, `schedule-range`, `availability`, `set-availability`, `profile`, `update-profile`, `blackout-dates`, `set-blackout-dates`, `learner-history`, `cancel-booking`, `reschedule-booking`, `edit-booking`, `create-booking`, `stats`, `upload-photo`, `my-learners`, `school-learners`, `update-notes`, `learner-notes`, `learner-mock-tests`, `update-learner-notes`, `earnings-week`, `earnings-history`, `earnings-summary`, `ical-test`, `ical-status`, `create-offer`, `list-offers`, `cancel-offer`, `preview-broadcast-audience`, `create-broadcast-offer`, `close-broadcast-offer`, `my-broadcast-batches`, `payout-history`, `next-payout-preview`, `complete-onboarding`, `running-late` | mixed | instructor auth | Shared `requireAuth(req, { roles: ['instructor'] })`. |
+| `api/instructor-auth.js?action=login`, `logout` | POST | public/session cleanup | Password login/logout; login is public. |
+| `api/instructor-auth.js?action=change-password` | POST | instructor auth | Calls `requireAuth(req, { roles: ['instructor'] })`. |
+| `api/instructors.js?action=list`, `availability`, `create`, `update`, `set-availability`, `set-password` | mixed | admin auth | Uses `requireAuth(req, { roles: ['admin'] })`; comments still mention `ADMIN_SECRET` but current code uses admin JWT. |
+| `api/learner.js?action=validate-referral` | GET | public | Public referral-code validation by `code` and `school_id`. |
+| `api/learner.js?action=confirm-deletion` | POST | token/link protected | Uses deletion token from `deletion_requests`, no JWT. |
+| `api/learner.js?action=update-name`, `sessions`, `progress`, `contact-pref`, `set-contact-pref`, `profile`, `update-profile`, `unlogged-bookings`, `mock-tests`, `mock-test-faults`, `focused-practice`, `quiz-results`, `competency`, `onboarding`, `profile-completeness`, `my-availability`, `set-availability`, `accept-terms`, `referral-code`, `referral-stats`, `export-data`, `request-deletion` | mixed | any valid role, intended learner | Local `verifyAuth()` calls `requireAuth(req)` with no role filter. Most queries use `user.id` as learner id and `user.school_id`, but role is not enforced. |
+| `api/learner-auth.js?action=login`, `signup`, `set-password`, `set-password-from-offer`, `request-reset`, `add-email`, `check-account` | mixed | public/token depending action | Public account setup/password endpoints. Reset/password-set actions rely on email codes or password-set tickets; no authenticated role gate. |
+| `api/lesson-types.js?action=list` | GET | public | Public active lesson types by school. |
+| `api/lesson-types.js?action=all`, `create`, `update`, `toggle` | mixed | admin auth | Admin wrapper uses `requireAuth(req, { roles: ['admin'] })`. |
+| `api/magic-link.js?action=send-link`, `verify-code`, `send-email-code`, `verify-email-code`, `logout` | mixed | public/token | Public SMS/email-code support. Send actions have manual rate limits keyed by email/phone. |
+| `api/migrate.js` | GET | legacy secret-protected | Requires `?secret=` matching `MIGRATION_SECRET` via `safeEqual()`. |
+| `api/offers.js?action=get-offer` | GET | token/link protected | Public offer token lookup. No rate limit observed. |
+| `api/offers.js?action=accept-offer` | POST | token/link protected; public side effects | Public offer token acceptance; can create learner/session, create Stripe Checkout, create free bookings, and send emails. No rate limit observed. |
+| `api/offers.js?action=expire-offers` | POST required | cron | Shared `verifyCronAuth()` fail-closed, but handler requires POST while Vercel cron path invokes GET. |
+| `api/r.js` | GET | public token/code redirect | Public referral redirect by code; rate-limited 30/IP+code/hour; logs click best-effort. |
+| `api/reminders.js?action=send-due`, `daily-schedule` | any | cron | Shared `verifyCronAuth()`; comments say POST but handlers do not enforce method, so Vercel GET can run. |
+| `api/reminders.js?action=settings`, `update-settings` | mixed | instructor auth | Uses instructor auth. |
+| `api/reviews.js` GET | GET | public | Serves cached Google reviews and refreshes stale cache. |
+| `api/reviews.js` POST | POST | legacy secret-protected | Requires body password matching `ADMIN_SECRET`. |
+| `api/schools.js?action=branding` | GET | public | Public branding lookup by `school_id` or `slug`. |
+| `api/schools.js?action=list`, `create`, `toggle`, `create-admin`, `platform-stats`, `school-stats` | mixed | superadmin | Handlers call admin auth and then require `isSuperAdmin(admin)` for platform operations. |
+| `api/schools.js?action=get`, `update` | mixed | admin auth for own school or superadmin | Non-superadmin rejected unless `admin.school_id === target school_id`; superadmin may target any school. |
+| `api/seed-test-data.js` | GET | legacy secret-protected | Requires `?secret=` matching `MIGRATION_SECRET`; `action=clean` deletes seeded test data. |
+| `api/setmore-sync.js` | any | cron | Shared `verifyCronAuth()`, fail-closed. |
+| `api/setmore-welcome.js` | any | cron | Shared `verifyCronAuth()`, fail-closed. |
+| `api/slots.js?action=available`, `durations-for-slot` | GET | public | Public slot feed/duration checks by `school_id`; tenant filters are mostly present on reads. |
+| `api/slots.js?action=checkout-slot-guest` | POST | public | Public paid guest checkout; rate-limited 10/IP/hour and 5/phone/hour; creates learner/reservation and Stripe Checkout. |
+| `api/slots.js?action=book-free-trial` | POST | public | Public free-trial booking; rate-limited 10/IP/hour and 3/phone/hour; creates learner, booking, email/login token side effects. |
+| `api/slots.js?action=book`, `checkout-slot`, `cancel`, `reschedule`, `my-bookings`, `series-info` | mixed | learner auth | Uses `requireAuth(req, { roles: ['learner'] })`. |
+| `api/status.js` | GET | public | Public health/status JSON. |
+| `api/update-status.js` | POST | admin auth | Uses `requireAuth(req, { roles: ['admin'] })`. |
+| `api/verify-session.js` | GET | public | Public Stripe session lookup by `session_id`; defer payment/privacy implications to Phase 3/4. |
+| `api/videos.js?action=list`, `categories` | GET | public | Public video listing/category reads. |
+| `api/videos.js?action=create`, `update`, `delete`, `reorder`, `upload-url`, `fetch-meta`, `bulk-update`, `bulk-delete`, `create-category`, `update-category`, `delete-category` | mixed | admin auth | Admin wrapper calls `requireAuth(req, { roles: ['admin'] })`. |
+| `api/webhook.js` | POST | Stripe webhook | Verifies Stripe signature with `STRIPE_WEBHOOK_SECRET`. |
+
+### Confirmed Auth, Cron, And Secret Issues
+
+- `api/ical-sync.js` has a confirmed fail-open cron auth bug. Its local `verifyCronAuth()` returns `true` when `process.env.CRON_SECRET` is missing, while shared `api/_auth.js::verifyCronAuth()` fails closed, accepts `Authorization: Bearer`, `?key=`, or `?secret=`, and uses `crypto.timingSafeEqual()`. It also compares provided secrets with plain equality.
+- `api/offers.js?action=expire-offers` is confirmed incompatible with the Vercel cron path in `vercel.json`. `vercel.json` schedules `/api/offers?action=expire-offers`; the handler only allows POST, while Vercel Cron invokes GET. This means scheduled offer expiry appears unable to run as configured. Manual POST with `CRON_SECRET` would still work.
+- `_shared.verifyAuth()` intentionally calls `requireAuth(req)` without roles. `api/advisor.js` and `api/ask-examiner.js` are public chat endpoints and use the no-role helper only for optional personalisation, but `advisor.js` creates Stripe Checkout when any valid JWT exists. That should become explicit learner auth before checkout creation.
+- `api/learner.js` repeats the no-role `requireAuth(req)` pattern for learner-targeted data and mutation actions. Most handlers use `user.id` as a learner id and therefore tend to fail harmlessly for non-learner ids, but the role boundary is implicit instead of enforced. This should be reviewed as an auth-hardening fix.
+- `api/calendar.js?action=feed-url` also uses no-role auth and writes a learner calendar token by `user.id`; non-learner roles normally will not match a `learner_users` row, but the route should still be explicitly learner-gated.
+- Legacy secret-protected endpoints remain production-sensitive: `config.js` save config and `reviews.js` force refresh use `ADMIN_SECRET`; `guarantee-price.js` POST accepts `STRIPE_WEBHOOK_SECRET` or `ADMIN_SECRET`; `migrate.js` and `seed-test-data.js` use `MIGRATION_SECRET`; `admin.js?action=create-admin` accepts admin JWT or `ADMIN_SECRET`. All use server-side secrets, but they should be inventoried for intended production exposure and rotation ownership.
+- CSRF protection is centralized in `requireAuth()` and enforced for mutating authenticated requests. Public/token/cron/secret endpoints do not use CSRF, which is expected for non-cookie auth, but public POST endpoints need rate limiting and idempotency instead.
+
+### Tenant Isolation Observations
+
+- `api/admin.js` mostly derives `schoolId` through `getAdminSchoolId(admin, req)`, and common high-risk handlers such as all bookings, edit booking, learner detail/update, adjust credits, instructor CRUD, payouts, referrals, and referral config filter by that school. Superadmin targeting is implicit through `getAdminSchoolId()`, which allows a `school_id` override when `admin.school_id` is null.
+- `api/admin.js?action=instructor-blackouts` and `set-instructor-blackouts` are confirmed tenant-scope gaps. Both accept `instructor_id`; the read, delete, insert, and saved-list queries filter only by `instructor_id` and date, with no check that the instructor belongs to the admin's school. A school admin could read or replace another school's instructor blackout dates if they know/guess the id.
+- `api/admin.js?action=delete-learner` first confirms the learner belongs to `schoolId`, then deletes/anonymizes related rows by `learner_id` without `school_id`. Because the learner ownership check precedes the cascade, this is probably functionally safe for the target learner, but it should be revisited in Phase 4 GDPR to ensure all PII/financial cascades include current tables and intended retention semantics.
+- `api/instructor.js` generally scopes schedule, schedule range, booking edit/reschedule, create booking, learner lists, broadcast audience, broadcast creation, and batch close by `instructor.id` plus `schoolId`. This is the strongest sampled area.
+- `api/instructor.js?action=learner-notes` and `update-learner-notes` are tenant/relationship gaps. They read/upsert `instructor_learner_notes` by `instructor_id` and supplied `learner_id`, without confirming the learner is in the same school or has a booking/relationship with that instructor. The instructor id is authenticated, but the learner id is caller-controlled.
+- `api/instructor.js` has additional low-confidence observations where reads/writes are scoped by `instructor.id` but not always by `school_id` (`payout-history`, `next-payout-preview`, some profile/onboarding helpers). Those are likely acceptable because `instructor.id` comes from the JWT, but a later hardening pass could add `school_id` for consistency.
+- `api/slots.js?action=available` and `durations-for-slot` consistently join or filter instructor/availability/bookings/reservations/offers/blackouts/external events by supplied `school_id`. That public `school_id` is intentionally caller-controlled for public booking pages.
+- `api/slots.js?action=checkout-slot` and `checkout-slot-guest` contain tenant-scope gaps in conflict and instructor validation. They derive `schoolId`, but the existing booking/reservation/offer conflict queries filter only by `instructor_id`, date, and time, and the instructor lookup in both flows checks `id` and `active` without `school_id`. The reservation rows are inserted with the caller's `schoolId`. This should be fixed before relying on multi-school public booking flows.
+- `api/slots.js?action=book-free-trial` is better scoped for the final instructor lookup (`id`, `active`, `school_id`) and lesson type, but its prior-trial guard and slot conflict queries do not filter `lb.school_id` / `slot_reservations.school_id` / `lesson_offers.school_id`. Some of this may intentionally prevent cross-school duplicate free trials by email/phone, but the behavior is not documented and should be made explicit.
+- `api/offers.js` derives the school from the offer's instructor for accept/free-offer flows, which is a reasonable token-based model. However, `findOrCreateLearner()` looks up existing learners by email or phone without `school_id`, then updates that matched learner and returns its id. This can attach a cross-school learner to an offer/booking from the instructor's school if email or phone overlaps. That is a confirmed high-risk multi-tenant bug.
+- `api/schools.js` has explicit platform rules: `branding` is public; `get` and `update` allow own-school admin or superadmin; `list`, `create`, `toggle`, `create-admin`, `platform-stats`, and `school-stats` are superadmin-only. This is clearer than the implicit superadmin behavior in `admin.js`.
+- `api/connect.js` consistently uses `user.school_id || 1` or `admin.school_id || 1` for instructor and school Stripe Connect actions. It does not use `getSchoolId()`, so a superadmin without `school_id` appears to default to school 1 rather than being able to target another school. That may be a product limitation rather than a vulnerability, but it should be documented.
+
+### Public Abuse And Rate-Limit Gaps
+
+- Rate-limited public endpoints confirmed: `availability.js` POST (5/IP/hour), `enquiries.js?action=submit` (5/IP/hour), `magic-link.js` send actions (manual email/phone rate limits), `slots.js?action=checkout-slot-guest` (10/IP/hour and 5/phone/hour), `slots.js?action=book-free-trial` (10/IP/hour and 3/phone/hour), `r.js` referral redirect (30/IP+code/hour), admin login/reset flows, and `address-lookup.js` authenticated proxy (60/user/hour).
+- Public/token endpoints with cost or side effects and no rate limit observed: `offers.js?action=get-offer`, `offers.js?action=accept-offer`, `advisor.js`, `ask-examiner.js`, `config.js?action=record-consent`, `reviews.js` GET stale-cache refresh, `credits.js?action=bulk-pricing`, `lesson-types.js?action=list`, `verify-session.js`, and public calendar feed token endpoints. The highest priority among these are `offers?action=accept-offer` because it can create Stripe sessions, free bookings, learner rows, cookies, and emails, and AI endpoints because every request can call Anthropic.
+- `create-checkout-session.js` is authenticated, but it accepts caller-supplied Stripe `line_items`, metadata, success URL, cancel URL, and custom fields. Because it is a legacy money path and accepts admin as well as learner auth, Phase 3 should decide whether it is still used or should be retired/locked down.
+
+### Recommended Fix Branches / PR Order
+
+1. `fix/auth-cron-ical-offers`: replace `api/ical-sync.js` local cron auth with shared `verifyCronAuth()` and make `offers?action=expire-offers` accept Vercel GET cron safely, with tests or manual Vercel cron verification notes.
+2. `fix/auth-learner-role-gates`: add explicit learner role checks to `api/learner.js`, `api/calendar.js` learner actions, and `advisor.js` checkout creation while preserving deliberately public chat behavior.
+3. `fix/tenant-admin-instructor-scope`: add school/relationship validation to admin instructor blackout handlers and instructor learner notes handlers.
+4. `fix/tenant-public-booking-scope`: add school-scoped instructor/conflict checks to `slots.js` guest/auth checkout and clarify the intended cross-school free-trial duplicate policy.
+5. `fix/tenant-offer-learner-lookup`: scope `offers.js` learner lookup/update by school or document and safely handle deliberate cross-school identity reuse.
+6. `fix/abuse-public-ai-offers`: add rate limits/idempotency controls for offer acceptance and AI endpoints, then review public token feed exposure separately.
+
+### Defer To Later Phases
+
+- Phase 3 payments/booking: Stripe webhook idempotency; `verify-session` public session lookup; legacy `create-checkout-session.js`; slot reservation races; offer acceptance races; free-trial duplicate policy; payout cron/manual parity; Connect onboarding/account ownership edge cases.
+- Phase 4 GDPR/data protection: `learner.js` and `admin.js` deletion cascades; retention cron coverage against current schema; calendar feed token lifetime/revocation; cookie consent write volume/rate limits; public token endpoints that expose PII through possession of a link.
+- Phase 5 operations: whether Vercel production actually has `CRON_SECRET` set for Authorization headers; whether any cron/manual triggers still rely on query-string `?key=`; how secret rotation is documented for `ADMIN_SECRET`, `MIGRATION_SECRET`, `CRON_SECRET`, and Stripe webhook secrets.
+
 ## Risk Areas Ranked By Priority
 
 ### P0: Money Movement And Payment Idempotency
