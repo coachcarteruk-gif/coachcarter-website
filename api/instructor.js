@@ -1755,7 +1755,7 @@ async function handleSchoolLearners(req, res) {
         ) AS is_your_learner
       FROM learner_users lu
       WHERE lu.school_id = ${schoolId}
-        AND COALESCE(lu.anonymized, false) = false
+        AND lu.archived_at IS NULL
       ORDER BY lu.name ASC
     `;
 
