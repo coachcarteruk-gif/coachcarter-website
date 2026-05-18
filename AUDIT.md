@@ -73,6 +73,117 @@ Current tests are Playwright-based:
 
 The default Playwright config starts a static `npx serve public` server unless `CC_TEST_BASE_URL` is provided. Live API coverage requires `vercel dev`, database access, and test credentials.
 
+## Phase 1 Findings
+
+Collected on 18 May 2026 on branch `audit/coachcarter-website-repo-health`. This section is inventory and check output only; no code fixes were made.
+
+### Inventory Summary
+
+The route inventory confirms that most backend entry points are Vercel functions in `api/*.js`, with shared helpers kept in underscore-prefixed files. The action-routed public or token-based endpoints are:
+
+- `api/slots.js`: `available`, `durations-for-slot`, `checkout-slot-guest`, and `book-free-trial` are public booking/slot surfaces; `book`, `checkout-slot`, `cancel`, `reschedule`, `my-bookings`, and `series-info` require learner auth.
+- `api/offers.js`: `get-offer` and `accept-offer` are public offer-token flows; `expire-offers` is intended as a cron action.
+- `api/learner-auth.js`: public password auth and account setup actions: `check-account`, `login`, `signup`, `set-password`, `set-password-from-offer`, `request-reset`, `add-email`.
+- `api/instructor-auth.js`: public `login`/`logout`; `change-password` requires instructor auth.
+- `api/magic-link.js`: public SMS/email-code support actions: `send-link`, `verify-code`, `send-email-code`, `verify-email-code`, `logout`.
+- `api/config.js`: public `GET` config and public `record-consent`; config save is protected by `ADMIN_SECRET`.
+- `api/reviews.js`: public cached review `GET`; forced refresh is protected by `ADMIN_SECRET`.
+- `api/guarantee-price.js`: public `GET`; `POST` accepts either `STRIPE_WEBHOOK_SECRET` or `ADMIN_SECRET`.
+- `api/r.js`: public referral redirect, rate-limited per IP/code.
+- `api/status.js`: public maintenance/status JSON.
+- `api/verify-session.js`: public Stripe session lookup by `session_id`.
+- `api/webhook.js`: Stripe webhook only, protected by Stripe signature verification with `STRIPE_WEBHOOK_SECRET`.
+
+Authenticated learner-facing endpoint groups:
+
+- `api/learner.js`: learner auth for profile, progress, sessions, onboarding, GDPR export/deletion, availability, referrals, quizzes/mock tests, practice, and terms/contact actions.
+- `api/credits.js`: learner auth for `balance`, `checkout`, and `verify`; `bulk-pricing` is public config-style pricing.
+- `api/calendar.js`: learner/instructor calendar feed actions with auth-dependent feed URL generation and tokenized feed/download paths.
+- `api/address-lookup.js`: any signed-in learner, instructor, or admin.
+- `api/advisor.js` and `api/ask-examiner.js`: use shared auth/context, currently no role filter in `_shared.verifyAuth()`.
+
+Authenticated instructor/admin endpoint groups:
+
+- `api/instructor.js`: instructor auth for schedule, availability, bookings, offers, broadcasts, learner notes/history, earnings, iCal, onboarding/profile, and running-late actions.
+- `api/admin.js`: admin auth for dashboard, bookings, learners, instructors, payouts, platform balance, referral config/activity, and manual payout processing. Public auth actions are `login`, `logout`, `request-reset`, and `reset-password`. `create-admin` can be authorized by existing admin auth or legacy `ADMIN_SECRET`.
+- `api/instructors.js`: admin auth for list/create/update/availability/password actions; also references `ADMIN_SECRET`.
+- `api/schools.js`: `branding` is public; `list`, `create`, `toggle`, `create-admin`, `platform-stats`, and `school-stats` require superadmin; `get` and `update` allow school admin for own school or superadmin.
+- `api/connect.js`: learner/instructor/admin Stripe Connect actions; school-level actions are admin-oriented.
+- `api/lesson-types.js`, `api/videos.js`, `api/update-status.js`, `api/availability.js`, and admin paths in `api/enquiries.js` require admin or role-specific auth as indicated in code comments.
+
+Secret-protected and cron endpoints:
+
+- Shared cron auth lives in `api/_auth.js::verifyCronAuth()`. It accepts `Authorization: Bearer <CRON_SECRET>`, `?key=`, or `?secret=`, and fails closed when `CRON_SECRET` is absent.
+- `api/reminders.js?action=send-due` hourly and `daily-schedule` daily use shared `verifyCronAuth()`. Comments say POST, but handlers do not enforce method, so Vercel's GET cron can run them.
+- `api/cron-payouts.js`, `api/cron-auto-complete.js`, `api/cron-reconcile-payments.js`, `api/cron-referral-rewards.js`, `api/cron-retention.js`, `api/cron-balance-snapshot.js`, `api/setmore-sync.js`, and `api/setmore-welcome.js` use shared `verifyCronAuth()`. `api/cron-payouts.js` also allows an admin JWT for manual dashboard trigger.
+- `api/ical-sync.js` has a local `verifyCronAuth()` implementation. It returns true if `CRON_SECRET` is missing and compares secrets with plain equality. This differs from the shared fail-closed, timing-safe helper and should move to Phase 2 auth/endpoint review.
+- `api/offers.js?action=expire-offers` is configured in `vercel.json` as a Vercel cron path, but the handler requires POST. Vercel cron invokes GET requests, so this scheduled expiry path appears unable to run as configured. This belongs in Phase 2 or an operations fix branch after approval.
+- `api/migrate.js` and `api/seed-test-data.js` are protected by `MIGRATION_SECRET`.
+
+Vercel cron schedule from `vercel.json`:
+
+- Hourly or sub-hourly: reminders due, iCal sync every 15 minutes, offer expiry at minute 30, Setmore sync every 15 minutes, auto-complete at minute 15, payment reconciliation at minute 30.
+- Daily/weekly: daily schedule email at 19:00 UTC, Setmore welcome at 10:00 UTC, referral rewards at 04:00 UTC, platform balance snapshot at 08:00 UTC, retention weekly Sunday 03:00 UTC, payouts Friday 09:00 UTC.
+- Auth model is mostly shared `CRON_SECRET`, with the two exceptions above: iCal local fail-open behavior and offer expiry GET-vs-POST mismatch.
+
+Environment variables referenced by runtime/test files:
+
+- Core runtime: `POSTGRES_URL` is used by most DB-backed API files; `JWT_SECRET` is used by `_auth.js`, admin/instructor/learner auth, magic-link, offers, and selected instructor flows; `BASE_URL` is used for generated links across admin, learner, instructor, magic-link, offers, Setmore welcome, notifications, and slots.
+- Payment and money movement: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SLACK_WEBHOOK_URL`.
+- Cron/admin secrets: `CRON_SECRET`, `ADMIN_SECRET`, `MIGRATION_SECRET`.
+- Email/alerts: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `STAFF_EMAIL`, `ERROR_ALERT_EMAIL`, `RESEND_API_KEY`.
+- Messaging: `TWILIO_SID`, `TWILIO_AUTH`, `TWILIO_FROM`, `TWILIO_WHATSAPP_FROM`.
+- External integrations: `ANTHROPIC_API_KEY`, `GOOGLE_PLACES_API_KEY`, `GOOGLE_PLACE_ID`, `OPENROUTESERVICE_API_KEY`, `SETMORE_REFRESH_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `N8N_WEBHOOK_URL`.
+- Operational/test flags: `MAINTENANCE_MODE`, `CI`, `CC_TEST_BASE_URL`, `CC_TEST_API`, and the live auth test credential variables described in `tests/fixtures/auth.js`.
+
+Tests present:
+
+- `tests/booking-status.spec.js`: pure Node/Playwright assertions for the three-state booking lifecycle constants and predicates. Runs without live services.
+- `tests/cookie-consent.spec.js`: static browser tests for cookie banner behavior, PostHog consent gating, localStorage persistence, Escape rejection, stale-version prompting, and mocked `/api/config?action=record-consent`.
+- `tests/offer-recurring-series.spec.js`: static browser/API-mocked tests for accept-offer recurring UI and instructor modal markup. Live create-offer validation tests are gated by `CC_TEST_API`.
+- `tests/advance-cap.spec.js`: booking cap tests. The live API block is skipped unless `CC_TEST_API=1`; authenticated variants additionally need `CC_TEST_LEARNER_EMAIL/PASSWORD`, `CC_TEST_INSTRUCTOR_EMAIL/PASSWORD`, and `CC_TEST_ADMIN_EMAIL/PASSWORD`.
+- `tests/fixtures/auth.js`: worker-scoped live login fixtures for learner, instructor, and admin against `CC_TEST_BASE_URL`.
+
+CI/deployment checks:
+
+- No `.github/` directory is present in this checkout, so no GitHub Actions workflow is visible in-repo.
+- `package.json` exposes `npm test`, but there is no lint, format, typecheck, or dedicated syntax-check script.
+- Vercel deployment is configured through `vercel.json`; any external Vercel checks, branch protection, or other CI provider are not represented in this repository.
+
+### Commands Run And Results
+
+- `git pull --ff-only origin audit/coachcarter-website-repo-health`: branch was already up to date.
+- `npm install`: first attempt failed because PowerShell blocks `npm.ps1`; `npm.cmd install` then failed under sandboxed network/cache access. Rerun with approved network access succeeded, installing 156 packages and reporting 0 vulnerabilities during install. It warned that `scmp@2.1.0` and `glob@10.5.0` are deprecated.
+- `npx playwright install chromium`: required after the first test run because Playwright's Chromium binary was missing. Download/install succeeded.
+- `npm test`: after Chromium install, 35 tests discovered, 23 passed, 12 skipped. Skipped tests are the `CC_TEST_API` and authenticated live API tests.
+- `npm audit --omit=dev`: succeeded and reported 0 vulnerabilities.
+- `node --check middleware.js`: passed.
+- `Get-ChildItem api -Filter *.js | ForEach-Object { node --check $_.FullName }`: passed for all API JavaScript files.
+
+### Confirmed Gaps
+
+- No in-repo CI workflow is present.
+- `npm test` is not cold-start complete unless dependencies and Playwright browsers are installed first. A fresh CI runner would need explicit `npm ci` or `npm install` plus `npx playwright install --with-deps chromium` or equivalent.
+- `package-lock.json` did not include the declared Playwright dev dependency metadata before local install. `npm install` generated a lockfile delta; it was reverted because this audit branch should only commit `AUDIT.md`.
+- Live DB/API coverage is intentionally skipped without `CC_TEST_API`, `CC_TEST_BASE_URL`, and role credentials. Current default tests mostly validate static UI/module contracts.
+- No lint/type/static analysis script is defined. The manual `node --check` pass only proves JavaScript parses; it does not catch runtime imports, missing env, SQL/tenant mistakes, or browser regressions.
+- `api/ical-sync.js` cron auth is inconsistent with the shared helper and fails open when `CRON_SECRET` is missing.
+- `api/offers.js?action=expire-offers` appears incompatible with Vercel cron's GET invocation because the handler requires POST.
+
+### Proposed CI/Test Harness Next Steps
+
+- Add a minimal GitHub Actions workflow on PRs with `npm ci`, `npx playwright install --with-deps chromium`, `npm test`, `npm audit --omit=dev`, and a JS syntax check over `api/*.js`, `middleware.js`, and `playwright.config.js`.
+- Add a package script for syntax checks so local and CI commands match.
+- Decide whether the lockfile should be regenerated to include declared dev dependencies, then do that in a separate chore branch rather than the audit branch.
+- Add a second optional CI job for live API smoke tests, gated on explicit staging secrets: `CC_TEST_BASE_URL`, `CC_TEST_API=1`, role test credentials, `CRON_SECRET`, and a non-production Neon database.
+- Define a safe seed/reset story before enabling DB-backed tests for bookings, offers, payments, retention, and tenant isolation.
+
+### Move To Later Audit Phases
+
+- Phase 2 auth/tenant review: full endpoint-by-endpoint auth matrix; `api/ical-sync.js` fail-open cron auth; `api/offers.js?action=expire-offers` cron method mismatch; public cost/email/SMS endpoints and rate-limit coverage; `_shared.verifyAuth()` call sites that accept any valid role; superadmin `school_id` overrides in admin/school routes.
+- Phase 3 payments/booking review: Stripe webhook idempotency; `verify-session` public Stripe session lookup behavior; guest checkout and offer acceptance race windows; slot reservation lifecycle; payout cron/admin parity; balance snapshot and reconciliation coverage.
+- Phase 4 data protection review: confirm `learner.js` export/deletion and `cron-retention.js` cover every PII-bearing table currently in `db/migration.sql`.
+
 ## Risk Areas Ranked By Priority
 
 ### P0: Money Movement And Payment Idempotency
