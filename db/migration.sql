@@ -2013,3 +2013,42 @@ END $$;
 ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS calendar_token_rotated_at TIMESTAMPTZ;
 ALTER TABLE instructors   ADD COLUMN IF NOT EXISTS calendar_token_rotated_at TIMESTAMPTZ;
 
+-- ══════════════════════════════════════════════════════════════════════════════
+-- PR-N: notification_log (May 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Source-of-truth for every email / SMS / WhatsApp attempt the platform makes.
+-- Before this, every send was fire-and-forget: Twilio errors were console.warn'd
+-- and emailer failures were swallowed by per-call-site try/catches that only
+-- forwarded the user-visible error. When a learner says "I never got the
+-- reminder", support had no way to confirm whether we actually tried.
+--
+-- Wrapping at the helper layer (api/_whatsapp.js::sendWhatsApp and
+-- api/_auth-helpers.js::createTransporter's sendMail wrapper) gives blanket
+-- coverage: every send across the codebase is logged automatically. Call sites
+-- may attach _log metadata (purpose / learner_id / instructor_id / school_id)
+-- to enrich the row; if omitted, the wrapper records what it can derive from
+-- the recipient address/number plus a coarse purpose='other'.
+--
+-- Status is 'sent' on success or 'failed' with the error message. Records are
+-- kept for 90 days then purged by cron-retention (operational log, not GDPR
+-- data — purpose strings are coarse, payload_summary is the subject/first
+-- 80 chars, never the full message body).
+-- ══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS notification_log (
+  id                SERIAL PRIMARY KEY,
+  channel           TEXT NOT NULL CHECK (channel IN ('email','sms','whatsapp')),
+  purpose           TEXT NOT NULL,
+  recipient         TEXT NOT NULL,
+  learner_id        INTEGER REFERENCES learner_users(id) ON DELETE SET NULL,
+  instructor_id     INTEGER REFERENCES instructors(id)   ON DELETE SET NULL,
+  payload_summary   TEXT,
+  delivery_status   TEXT NOT NULL CHECK (delivery_status IN ('sent','failed','skipped')),
+  error_message     TEXT,
+  school_id         INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notif_log_school    ON notification_log(school_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notif_log_learner   ON notification_log(learner_id, created_at DESC) WHERE learner_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_notif_log_recipient ON notification_log(recipient, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notif_log_failed    ON notification_log(created_at DESC) WHERE delivery_status = 'failed';
+

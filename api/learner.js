@@ -1302,6 +1302,11 @@ async function handleRequestDeletion(req, res) {
 
     const mailer = createTransporter();
     await mailer.sendMail({
+      _log: {
+        purpose: 'gdpr.deletion_request',
+        learnerId: learner.id,
+        schoolId,
+      },
       from: 'CoachCarter <system@coachcarter.uk>',
       to: learner.email,
       subject: 'Confirm account deletion — CoachCarter',
@@ -1390,6 +1395,12 @@ async function handleConfirmDeletion(req, res) {
         const { createTransporter } = require('./_auth-helpers');
         const mailer = createTransporter();
         await mailer.sendMail({
+          _log: {
+            // Note: no learnerId — the learner has just been hard-deleted at
+            // this point, so the FK would fail. School context only.
+            purpose: 'gdpr.deletion_confirmation',
+            schoolId,
+          },
           from: 'CoachCarter <system@coachcarter.uk>',
           to: learner.email,
           subject: 'Account deleted — CoachCarter',

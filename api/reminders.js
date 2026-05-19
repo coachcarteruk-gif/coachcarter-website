@@ -92,6 +92,8 @@ async function runSendDue(sql, retryAttempt = 0) {
         lb.start_time,
         lb.end_time,
         lb.school_id,
+        lb.learner_id,
+        lb.instructor_id,
         lu.name  AS learner_name,
         lu.email AS learner_email,
         lu.phone AS learner_phone,
@@ -132,6 +134,12 @@ async function runSendDue(sql, retryAttempt = 0) {
       if (b.learner_email) {
         try {
           await mailer.sendMail({
+            _log: {
+              purpose: 'reminder.lesson',
+              learnerId: b.learner_id,
+              instructorId: b.instructor_id,
+              schoolId: b.school_id,
+            },
             from: 'CoachCarter <bookings@coachcarter.uk>',
             to: b.learner_email,
             subject: `Reminder: ${b.lesson_type_name} tomorrow with ${b.instructor_name}`,
@@ -167,7 +175,13 @@ async function runSendDue(sql, retryAttempt = 0) {
         await sendWhatsApp(b.learner_phone,
           `Hey ${firstName}! Just a reminder about your driving lesson:\n\n` +
           `\u{1F4C5} ${dateStr}\n\u23F0 ${timeStr}\n\u{1F697} ${b.lesson_type_name} with ${b.instructor_name}\n\n` +
-          `Need to change anything? Head to https://coachcarter.uk/learner/`
+          `Need to change anything? Head to https://coachcarter.uk/learner/`,
+          {
+            purpose: 'reminder.lesson',
+            learnerId: b.learner_id,
+            instructorId: b.instructor_id,
+            schoolId: b.school_id,
+          }
         );
       }
 
@@ -268,6 +282,11 @@ async function handleDailySchedule(req, res) {
         // Send a "no lessons" email so they know they're free
         try {
           await mailer.sendMail({
+            _log: {
+              purpose: 'reminder.daily_schedule',
+              instructorId: inst.id,
+              schoolId: inst.school_id,
+            },
             from: 'CoachCarter <system@coachcarter.uk>',
             to: inst.email,
             subject: `Tomorrow's schedule: No lessons booked`,
@@ -305,6 +324,11 @@ async function handleDailySchedule(req, res) {
 
       try {
         await mailer.sendMail({
+          _log: {
+            purpose: 'reminder.daily_schedule',
+            instructorId: inst.id,
+            schoolId: inst.school_id,
+          },
           from: 'CoachCarter <system@coachcarter.uk>',
           to: inst.email,
           subject: `Tomorrow's schedule: ${bookings.length} lesson${bookings.length > 1 ? 's' : ''}`,

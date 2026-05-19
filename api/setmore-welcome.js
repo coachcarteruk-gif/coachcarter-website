@@ -68,6 +68,10 @@ module.exports = async (req, res) => {
         const firstName = (learner.name || '').split(' ')[0] || 'there';
 
         await mailer.sendMail({
+          _log: {
+            purpose: 'welcome.setmore_migration',
+            learnerId: learner.id,
+          },
           from: 'CoachCarter <bookings@coachcarter.uk>',
           to: learner.email,
           subject: `${firstName}, your driving lessons are now on CoachCarter`,

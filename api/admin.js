@@ -111,6 +111,7 @@ module.exports = async (req, res) => {
   if (action === 'referral-activity')        return handleReferralActivity(req, res);
   if (action === 'referral-config')          return handleReferralConfig(req, res);
   if (action === 'update-referral-config')   return handleUpdateReferralConfig(req, res);
+  if (action === 'notification-log')         return handleNotificationLog(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -521,6 +522,12 @@ async function handleEditBooking(req, res) {
           ? (newDuration % 60 === 0 ? (newDuration/60) + ' hour' + (newDuration/60 !== 1 ? 's' : '') : (newDuration/60).toFixed(1) + ' hours')
           : newDuration + ' mins';
         await mailer.sendMail({
+          _log: {
+            purpose: 'admin.booking_updated',
+            learnerId: booking.learner_id,
+            instructorId: booking.instructor_id,
+            schoolId,
+          },
           from: 'CoachCarter <system@coachcarter.uk>',
           to: booking.learner_email,
           subject: `Lesson updated — now ${newDateFmt} at ${newStartTime}`,
@@ -715,6 +722,11 @@ async function handleCreateInstructor(req, res) {
       const mailer = createTransporter();
 
       await mailer.sendMail({
+        _log: {
+          purpose: 'admin.instructor_invite',
+          instructorId: instructor.id,
+          schoolId,
+        },
         from:    `${schoolName} <system@coachcarter.uk>`,
         to:      normalised,
         subject: `You've been added as an instructor at ${schoolName}`,
@@ -1475,6 +1487,10 @@ async function handleInviteLearner(req, res) {
     const mailer = createTransporter();
 
     await mailer.sendMail({
+      _log: {
+        purpose: 'admin.learner_invite',
+        schoolId,
+      },
       from:    `${schoolName} <system@coachcarter.uk>`,
       to:      normalised,
       subject: `You've been invited to ${schoolName}`,
@@ -1770,6 +1786,10 @@ async function handleRequestReset(req, res) {
       try {
         const mailer = createTransporter();
         await mailer.sendMail({
+          _log: {
+            purpose: 'auth.admin_password_reset',
+            schoolId: admin.school_id || 1,
+          },
           from: 'CoachCarter <bookings@coachcarter.uk>',
           to: cleanEmail,
           subject: 'Reset your CoachCarter admin password',
@@ -1899,5 +1919,51 @@ async function handleResetPassword(req, res) {
     console.error('admin reset-password error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Could not reset password' });
+  }
+}
+
+// ── GET /api/admin?action=notification-log ─────────────────────────────────────
+// Read-only window over the notification_log table for support triage.
+// Query params:
+//   learner_id   — filter to a single learner
+//   recipient    — filter by email/phone (exact match)
+//   status       — 'sent' | 'failed' | 'skipped'
+//   channel      — 'email' | 'sms' | 'whatsapp'
+//   limit        — default 50, max 200
+async function handleNotificationLog(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const learnerId = req.query.learner_id ? parseInt(req.query.learner_id, 10) : null;
+  const recipient = req.query.recipient ? String(req.query.recipient).trim().toLowerCase() : null;
+  const status    = req.query.status    ? String(req.query.status).trim()    : null;
+  const channel   = req.query.channel   ? String(req.query.channel).trim()   : null;
+  const limit     = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    // Build the WHERE incrementally — sql tagged template literals don't
+    // support dynamic clause composition, so use one query with NULL-tolerant
+    // predicates (well-indexed via idx_notif_log_school + partial indexes).
+    const rows = await sql`
+      SELECT id, channel, purpose, recipient, learner_id, instructor_id,
+             payload_summary, delivery_status, error_message, created_at
+      FROM notification_log
+      WHERE school_id = ${schoolId}
+        AND (${learnerId}::int IS NULL OR learner_id = ${learnerId})
+        AND (${recipient}::text IS NULL OR recipient = ${recipient})
+        AND (${status}::text IS NULL OR delivery_status = ${status})
+        AND (${channel}::text IS NULL OR channel = ${channel})
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+    return res.json({ ok: true, rows });
+  } catch (err) {
+    console.error('notification-log error:', err);
+    reportError('/api/admin?action=notification-log', err);
+    return res.status(500).json({ error: 'Failed to load notification log' });
   }
 }

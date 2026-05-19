@@ -239,6 +239,11 @@ async function handleCreditPurchase(session) {
     const transporter = createTransporter();
 
     await transporter.sendMail({
+      _log: {
+        purpose: 'credit.purchase_confirmation',
+        learnerId,
+        schoolId,
+      },
       from:    'CoachCarter <bookings@coachcarter.uk>',
       to:      learnerEmail,
       subject: `${hoursStr} hours added to your account`,
@@ -298,6 +303,9 @@ async function notifyBookingInsertFailed({ session, kind, learnerEmail, instruct
   try {
     const transporter = createTransporter();
     await transporter.sendMail({
+      _log: {
+        purpose: 'booking.insert_failed_apology',
+      },
       from: 'CoachCarter <bookings@coachcarter.uk>',
       to: learnerEmail,
       subject: 'Your payment went through — booking on hold',
@@ -485,6 +493,12 @@ async function handleSlotBooking(session) {
 
     // Email to learner
     await transporter.sendMail({
+      _log: {
+        purpose: 'booking.slot_confirmation_learner',
+        learnerId,
+        instructorId,
+        schoolId,
+      },
       from:    'CoachCarter <bookings@coachcarter.uk>',
       to:      learnerEmail,
       subject: `Lesson confirmed — ${lessonDate} at ${startTime}`,
@@ -518,6 +532,12 @@ async function handleSlotBooking(session) {
     // Email to instructor
     if (instructor?.email) {
       await transporter.sendMail({
+        _log: {
+          purpose: 'booking.slot_confirmation_instructor',
+          learnerId,
+          instructorId,
+          schoolId,
+        },
         from:    'CoachCarter <system@coachcarter.uk>',
         to:      instructor.email,
         subject: `New booking — ${lessonDate} at ${startTime}`,
@@ -542,10 +562,12 @@ async function handleSlotBooking(session) {
 
     // WhatsApp notifications (non-blocking)
     sendWhatsApp(learner?.phone,
-      `✅ Lesson confirmed!\n\n📅 ${lessonDate}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructorName}\n\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
+      `✅ Lesson confirmed!\n\n📅 ${lessonDate}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructorName}\n\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`,
+      { purpose: 'booking.slot_confirmation_learner', learnerId, instructorId, schoolId }
     );
     sendWhatsApp(instructor?.phone,
-      `📋 New booking!\n\n👤 ${learner?.name || 'Unknown'}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`
+      `📋 New booking!\n\n👤 ${learner?.name || 'Unknown'}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`,
+      { purpose: 'booking.slot_confirmation_instructor', learnerId, instructorId, schoolId }
     );
 
   } catch (err) {
@@ -756,6 +778,12 @@ async function handleOfferBooking(session) {
         : `${durationMins} mins`;
 
       await transporter.sendMail({
+        _log: {
+          purpose: 'offer.flexible_accepted_learner',
+          learnerId,
+          instructorId,
+          schoolId,
+        },
         from:    'CoachCarter <bookings@coachcarter.uk>',
         to:      learnerEmail,
         subject: `Payment received — book your ${durationStr} lesson`,
@@ -774,6 +802,12 @@ async function handleOfferBooking(session) {
 
       if (instructor?.email) {
         await transporter.sendMail({
+          _log: {
+            purpose: 'offer.flexible_accepted_instructor',
+            learnerId,
+            instructorId,
+            schoolId,
+          },
           from:    'CoachCarter <system@coachcarter.uk>',
           to:      instructor.email,
           subject: `Flexible offer accepted — ${learner?.name || learnerEmail} has paid`,
@@ -936,6 +970,12 @@ async function handleOfferBooking(session) {
     const totalChargedPence = amountPence * bookedCount;
 
     await transporter.sendMail({
+      _log: {
+        purpose: 'offer.accepted_learner',
+        learnerId,
+        instructorId,
+        schoolId,
+      },
       from:    'CoachCarter <bookings@coachcarter.uk>',
       to:      learnerEmail,
       subject: isSeries
@@ -971,6 +1011,12 @@ async function handleOfferBooking(session) {
     // Email to instructor
     if (instructor?.email) {
       await transporter.sendMail({
+        _log: {
+          purpose: 'offer.accepted_instructor',
+          learnerId,
+          instructorId,
+          schoolId,
+        },
         from:    'CoachCarter <system@coachcarter.uk>',
         to:      instructor.email,
         subject: isSeries
