@@ -19,6 +19,7 @@ const { withCronLock } = require('./_cron-lock');
 const { safeEqual, verifyCronAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, buildSessionCookie } = require('./_auth');
 const { buildCsrfCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { SCHEDULED, BLOCKING_STATUSES } = require('./_booking-status');
+const { allocate } = require('./_pence-allocator');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Series fan-out for offer-driven weekly repeats (May 2026)
@@ -147,25 +148,20 @@ async function bookOfferSeries(sql, {
   }
 
   // Step 4f.c — attribute the charge's Stripe fee across the booked lessons.
-  // The fee was on the FULL charge (amountPence × repeatWeeks). Per-week share
-  // is totalFee / repeatWeeks. We attribute that share to each *booked* lesson;
-  // the share that would have gone to unbooked weeks is orphan fee (Stripe kept
-  // its cut on the partial refund — platform-absorbs per Decision 3).
+  // The fee was on the FULL charge (amountPence × repeatWeeks). We split it
+  // into `repeatWeeks` equal pence shares via the shared pence allocator
+  // (Hamilton/largest-remainder, lowest-index tie-break) and write the first
+  // `booked.length` shares onto the booked lessons. The remaining shares are
+  // platform-absorbed orphan — Stripe kept its cut on the partial refund
+  // (Decision 3).
   //
-  // Math: per-week fee = floor(totalFee / repeatWeeks). Remainder goes onto the
-  // LAST booked lesson so per-booked-week sum is exact (no orphan pence drift
-  // on top of the already-orphaned unbooked-weeks share).
+  // Why the shared allocator: Step 4g's FIFO fee math uses the same helper,
+  // so the rounding rule has to be identical here. Two allocators in the
+  // same pipeline would not reconcile pence-exactly on cross-source refunds.
   if (totalStripeFeePence != null && booked.length > 0) {
-    const perWeekFee = Math.floor(totalStripeFeePence / repeatWeeks);
-    const bookedShare = perWeekFee * booked.length;
-    const remainder = bookedShare === 0 ? 0
-      : (totalStripeFeePence - perWeekFee * repeatWeeks); // pence drift on the original split
-    // Each booked lesson gets perWeekFee; the LAST one absorbs any remainder
-    // (so booked.length × perWeekFee + remainder accounts for the booked share
-    // of the original fee — unbooked weeks' share is platform-absorbed orphan).
+    const perWeekShares = allocate(totalStripeFeePence, new Array(repeatWeeks).fill(1));
     for (let i = 0; i < booked.length; i++) {
-      const isLast = i === booked.length - 1;
-      const feeForThis = perWeekFee + (isLast ? remainder : 0);
+      const feeForThis = perWeekShares[i];
       await sql`
         UPDATE lesson_bookings
            SET stripe_fee_pence = ${feeForThis},
