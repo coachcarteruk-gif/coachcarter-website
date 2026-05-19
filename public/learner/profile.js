@@ -500,5 +500,52 @@ document.addEventListener('click', function (e) {
   if (cookieLink) cookieLink.addEventListener('click', function (e) { e.preventDefault(); if (window.ccCookieConsent) window.ccCookieConsent.show(); });
   var delBtn = document.getElementById('btn-request-deletion');
   if (delBtn) delBtn.addEventListener('click', function () { requestDeletion(delBtn); });
+
+  // Calendar sync token rotation (PR-L, audit #17). Fetches the current token
+  // status on load and binds the rotate button. The card stays hidden if the
+  // user has never set up calendar sync — no calendar_token = nothing to rotate.
+  var calCard = document.getElementById('calendar-token-card');
+  var calStatus = document.getElementById('cal-token-status');
+  var rotateBtn = document.getElementById('btn-rotate-calendar');
+  if (calCard && calStatus && rotateBtn && window.ccAuth && ccAuth.getAuth()) {
+    (async function loadCalendarTokenStatus() {
+      try {
+        var res = await ccAuth.fetchAuthed('/api/calendar?action=feed-url');
+        if (!res.ok) return;
+        var data = await res.json();
+        if (!data || !data.feed_url) return;
+        calCard.style.display = 'block';
+        if (data.rotated_at) {
+          var ts = new Date(data.rotated_at);
+          calStatus.textContent = 'Subscription link issued ' + ts.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' }) + '.';
+        } else {
+          calStatus.textContent = 'Active subscription link on file (pre-rotation).';
+        }
+      } catch (e) { console.warn('calendar-token status load failed:', e); }
+    })();
+
+    rotateBtn.addEventListener('click', async function () {
+      if (!confirm('Rotate your calendar subscription link?\n\nThe old subscription will stop working. You\'ll need to re-subscribe in your calendar app with the new link.')) return;
+      rotateBtn.disabled = true;
+      try {
+        var res = await ccAuth.fetchAuthed('/api/calendar?action=rotate-token', { method: 'POST' });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) {
+          alert('Failed to rotate: ' + (data.error || res.status));
+          return;
+        }
+        if (data.rotated_at) {
+          var ts = new Date(data.rotated_at);
+          calStatus.textContent = 'Subscription link rotated ' + ts.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' }) + '. Old link is now invalid.';
+        }
+        alert('Done. The old subscription will stop syncing.\n\nNew subscription link:\n' + data.webcal_url);
+      } catch (e) {
+        console.error('rotate-calendar failed:', e);
+        alert('Failed to rotate calendar link. Please try again.');
+      } finally {
+        rotateBtn.disabled = false;
+      }
+    });
+  }
 })();
 })();

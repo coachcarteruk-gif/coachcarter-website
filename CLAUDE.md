@@ -56,7 +56,7 @@ All three roles use email + password sign-in. Magic-link login was retired entir
 
 1. **New pages MUST include cookie consent**: Every HTML page must load `cookie-consent.js` and `posthog-loader.js` instead of inline PostHog. Never add inline PostHog scripts.
 2. **Never load analytics without consent**: PostHog, or any future tracking, must only load after the user accepts analytics cookies. Use the `posthog-loader.js` pattern.
-3. **New PII fields must be included in data export**: If you add a new table or column containing personal data, update `handleExportData()` in `api/learner.js` to include it.
+3. **New PII fields must be included in data export**: If you add a new table or column containing personal data, update `handleExportData()` in `api/learner.js` to include it. Long-lived user-facing secrets (`calendar_token`, similar future tokens) must ship with a rotation endpoint and a `*_rotated_at` timestamp — see `api/calendar.js?action=rotate-token` for the pattern.
 4. **New PII tables must be included in deletion cascade**: If you add a table referencing `learner_users`, add the cleanup to `deleteLearnerCascade()` in `api/_gdpr.js` — the single shared helper used by learner self-delete (`api/learner.js`), admin delete (`api/admin.js`), and retention cron (`api/cron-retention.js`). Do not maintain per-call-site cascade lists.
 5. **New tenant-scoped GDPR tables need school_id**: Cookie consents, audit logs, and deletion requests are all scoped by `school_id`.
 6. **Admin data mutations must be audit-logged**: Any new admin action that creates, modifies, or deletes user data must call `logAudit()` from `api/_audit.js`.

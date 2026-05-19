@@ -37,11 +37,13 @@ function verifyAuth(req) {
 module.exports = async (req, res) => {
   setCors(res);
   const action = req.query.action;
-  if (action === 'download')            return handleDownload(req, res);
-  if (action === 'feed')                return handleFeed(req, res);
-  if (action === 'feed-url')            return handleFeedUrl(req, res);
-  if (action === 'instructor-feed')     return handleInstructorFeed(req, res);
-  if (action === 'instructor-feed-url') return handleInstructorFeedUrl(req, res);
+  if (action === 'download')                return handleDownload(req, res);
+  if (action === 'feed')                    return handleFeed(req, res);
+  if (action === 'feed-url')                return handleFeedUrl(req, res);
+  if (action === 'rotate-token')            return handleRotateLearnerToken(req, res);
+  if (action === 'instructor-feed')         return handleInstructorFeed(req, res);
+  if (action === 'instructor-feed-url')     return handleInstructorFeedUrl(req, res);
+  if (action === 'rotate-instructor-token') return handleRotateInstructorToken(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -162,17 +164,24 @@ async function handleFeedUrl(req, res) {
 
     // Check if learner already has a calendar token
     const [learner] = await sql`
-      SELECT calendar_token FROM learner_users WHERE id = ${user.id}
+      SELECT calendar_token, calendar_token_rotated_at FROM learner_users WHERE id = ${user.id}
     `;
 
     let calToken = learner?.calendar_token;
+    let rotatedAt = learner?.calendar_token_rotated_at || null;
 
-    // Generate one if they don't have one yet
+    // Generate one if they don't have one yet. Stamp rotated_at on first issue
+    // so the profile UI can show "issued on …" / "last rotated …".
     if (!calToken) {
       calToken = crypto.randomBytes(24).toString('hex');
-      await sql`
-        UPDATE learner_users SET calendar_token = ${calToken} WHERE id = ${user.id}
+      const [row] = await sql`
+        UPDATE learner_users
+           SET calendar_token = ${calToken},
+               calendar_token_rotated_at = NOW()
+         WHERE id = ${user.id}
+         RETURNING calendar_token_rotated_at
       `;
+      rotatedAt = row?.calendar_token_rotated_at || null;
     }
 
     const feedUrl = `https://coachcarter.uk/api/calendar?action=feed&token=${calToken}`;
@@ -180,6 +189,7 @@ async function handleFeedUrl(req, res) {
     return res.json({
       feed_url: feedUrl,
       webcal_url: feedUrl.replace('https://', 'webcal://'),
+      rotated_at: rotatedAt,
       instructions: 'Open the webcal:// link on your iPhone to subscribe. Your calendar will update automatically when bookings change.'
     });
 
@@ -260,29 +270,108 @@ async function handleInstructorFeedUrl(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [instructor] = await sql`
-      SELECT calendar_token FROM instructors WHERE id = ${user.id}
+      SELECT calendar_token, calendar_token_rotated_at FROM instructors WHERE id = ${user.id}
     `;
 
     let calToken = instructor?.calendar_token;
+    let rotatedAt = instructor?.calendar_token_rotated_at || null;
 
     if (!calToken) {
       calToken = crypto.randomBytes(24).toString('hex');
-      await sql`
-        UPDATE instructors SET calendar_token = ${calToken} WHERE id = ${user.id}
+      const [row] = await sql`
+        UPDATE instructors
+           SET calendar_token = ${calToken},
+               calendar_token_rotated_at = NOW()
+         WHERE id = ${user.id}
+         RETURNING calendar_token_rotated_at
       `;
+      rotatedAt = row?.calendar_token_rotated_at || null;
     }
 
     const feedUrl = `https://coachcarter.uk/api/calendar?action=instructor-feed&token=${calToken}`;
 
     return res.json({
       feed_url: feedUrl,
-      webcal_url: feedUrl.replace('https://', 'webcal://')
+      webcal_url: feedUrl.replace('https://', 'webcal://'),
+      rotated_at: rotatedAt
     });
 
   } catch (err) {
     console.error('instructor calendar feed-url error:', err);
     reportError('/api/calendar', err);
     return res.status(500).json({ error: 'Failed to generate feed URL' });
+  }
+}
+
+// ── POST /api/calendar?action=rotate-token (learner) ──────────────────────────
+// Issues a fresh calendar_token, invalidating the existing one immediately.
+// Returns the new feed/webcal URLs so the client can update its UI without a
+// second fetch. PR-L (audit #17): mitigates leaked-URL risk on a long-lived
+// secret that has no expiry.
+async function handleRotateLearnerToken(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const newToken = crypto.randomBytes(24).toString('hex');
+
+    const [row] = await sql`
+      UPDATE learner_users
+         SET calendar_token = ${newToken},
+             calendar_token_rotated_at = NOW()
+       WHERE id = ${user.id}
+       RETURNING calendar_token_rotated_at
+    `;
+    if (!row) return res.status(404).json({ error: 'Learner not found' });
+
+    const feedUrl = `https://coachcarter.uk/api/calendar?action=feed&token=${newToken}`;
+    return res.json({
+      ok: true,
+      feed_url: feedUrl,
+      webcal_url: feedUrl.replace('https://', 'webcal://'),
+      rotated_at: row.calendar_token_rotated_at,
+    });
+  } catch (err) {
+    console.error('learner rotate-token error:', err);
+    reportError('/api/calendar', err);
+    return res.status(500).json({ error: 'Failed to rotate calendar token' });
+  }
+}
+
+// ── POST /api/calendar?action=rotate-instructor-token ─────────────────────────
+async function handleRotateInstructorToken(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = verifyInstructorAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const newToken = crypto.randomBytes(24).toString('hex');
+
+    const [row] = await sql`
+      UPDATE instructors
+         SET calendar_token = ${newToken},
+             calendar_token_rotated_at = NOW()
+       WHERE id = ${user.id}
+       RETURNING calendar_token_rotated_at
+    `;
+    if (!row) return res.status(404).json({ error: 'Instructor not found' });
+
+    const feedUrl = `https://coachcarter.uk/api/calendar?action=instructor-feed&token=${newToken}`;
+    return res.json({
+      ok: true,
+      feed_url: feedUrl,
+      webcal_url: feedUrl.replace('https://', 'webcal://'),
+      rotated_at: row.calendar_token_rotated_at,
+    });
+  } catch (err) {
+    console.error('instructor rotate-token error:', err);
+    reportError('/api/calendar', err);
+    return res.status(500).json({ error: 'Failed to rotate calendar token' });
   }
 }
 

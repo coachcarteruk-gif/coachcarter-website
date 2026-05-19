@@ -591,6 +591,17 @@
         <span style="margin:0 6px">·</span>
         <a href="/privacy.html" style="color:#797879;text-decoration:underline">Privacy policy</a>
       </div>
+      <!-- Calendar sync token rotation (PR-L, audit #17) -->
+      <div id="calendar-token-card" style="border-top:1px solid #e5e7eb;margin-top:16px;padding-top:16px;display:none">
+        <div style="font-size:13px;color:#4b5563;line-height:1.5;margin-bottom:10px">
+          <strong style="color:#111">Calendar sync</strong><br>
+          <span id="cal-token-status">Loading&hellip;</span>
+        </div>
+        <button id="btn-rotate-calendar" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f9fafb;border:1px solid #d1d5db;border-radius:10px;font-size:13px;cursor:pointer;font-family:inherit;text-align:left;width:100%;color:#374151">
+          <span>&#x21bb;</span>
+          <span><strong>Rotate calendar sync link</strong><br><span style="font-size:11px;color:#6b7280">Invalidates the old subscription. Re-subscribe in your calendar app afterwards.</span></span>
+        </button>
+      </div>
       <div style="border-top:1px solid #fee2e2;margin-top:12px;padding-top:16px">
         <button id="btn-request-deletion" style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit;text-align:left;width:100%;color:#dc2626">
           <span style="font-size:18px">&#9888;&#65039;</span>

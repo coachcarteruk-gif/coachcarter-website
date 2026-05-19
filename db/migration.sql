@@ -1991,3 +1991,25 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- ══════════════════════════════════════════════════════════════════════════════
+-- PR-L: calendar_token rotation timestamps (May 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- `calendar_token` on learner_users and instructors is a long-lived secret that
+-- grants read access to the user's lesson schedule via the iCal feed. Lazy-
+-- issued on first feed-url request and stored forever. If it leaks (URL
+-- shared / browser history / accidental screen share), there was no way to
+-- invalidate it short of manual DB intervention.
+--
+-- Add a `calendar_token_rotated_at` timestamp so:
+--   1. Users can self-rotate via POST /api/calendar?action=rotate-token (and
+--      the instructor equivalent), invalidating the old token immediately.
+--   2. The profile UI can display "last rotated on …" so users know to rotate
+--      if a leak is suspected.
+--
+-- Nullable: pre-PR-L tokens have no rotation history. The rotate endpoint
+-- writes NOW() when it rotates; the issue path also writes NOW() when it
+-- first generates the token (so freshly-issued tokens have a known birth).
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS calendar_token_rotated_at TIMESTAMPTZ;
+ALTER TABLE instructors   ADD COLUMN IF NOT EXISTS calendar_token_rotated_at TIMESTAMPTZ;
+
