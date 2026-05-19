@@ -796,6 +796,7 @@ async function handleBlackoutDates(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -804,6 +805,7 @@ async function handleBlackoutDates(req, res) {
       SELECT id, blackout_date::text AS start_date, end_date::text, reason
       FROM instructor_blackout_dates
       WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
         AND end_date >= CURRENT_DATE
       ORDER BY blackout_date ASC
     `;
@@ -825,6 +827,7 @@ async function handleSetBlackoutDates(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const { ranges } = req.body;
   if (!Array.isArray(ranges))
@@ -858,14 +861,15 @@ async function handleSetBlackoutDates(req, res) {
     await sql`
       DELETE FROM instructor_blackout_dates
       WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
         AND end_date >= CURRENT_DATE
     `;
 
     // Insert new ranges
     for (const r of ranges) {
       await sql`
-        INSERT INTO instructor_blackout_dates (instructor_id, blackout_date, end_date, reason)
-        VALUES (${instructor.id}, ${r.start_date}, ${r.end_date}, ${r.reason || null})
+        INSERT INTO instructor_blackout_dates (instructor_id, blackout_date, end_date, reason, school_id)
+        VALUES (${instructor.id}, ${r.start_date}, ${r.end_date}, ${r.reason || null}, ${schoolId})
       `;
     }
 
@@ -873,6 +877,7 @@ async function handleSetBlackoutDates(req, res) {
       SELECT id, blackout_date::text AS start_date, end_date::text, reason
       FROM instructor_blackout_dates
       WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
         AND end_date >= CURRENT_DATE
       ORDER BY blackout_date ASC
     `;
@@ -1857,16 +1862,28 @@ async function handleLearnerNotes(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const learner_id = req.query.learner_id;
   if (!learner_id) return res.status(400).json({ error: 'learner_id required' });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    // Tenant relationship check: the learner must belong to this instructor's
+    // school. Without this an instructor could read notes (or create one via
+    // the POST handler) against a learner_id from another school.
+    const [learner] = await sql`
+      SELECT id FROM learner_users WHERE id = ${learner_id} AND school_id = ${schoolId}
+    `;
+    if (!learner) return res.status(404).json({ error: 'Learner not found' });
+
     const [row] = await sql`
       SELECT notes, test_date::text, custom_hourly_rate_pence
       FROM instructor_learner_notes
-      WHERE instructor_id = ${instructor.id} AND learner_id = ${learner_id}
+      WHERE instructor_id = ${instructor.id}
+        AND learner_id = ${learner_id}
+        AND school_id = ${schoolId}
     `;
     return res.json({ notes: row?.notes || '', test_date: row?.test_date || null, custom_hourly_rate_pence: row?.custom_hourly_rate_pence || null });
   } catch (err) {
@@ -1884,6 +1901,7 @@ async function handleUpdateLearnerNotes(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const { learner_id, notes, test_date, custom_hourly_rate_pence } = req.body;
   if (!learner_id) return res.status(400).json({ error: 'learner_id required' });
@@ -1893,9 +1911,20 @@ async function handleUpdateLearnerNotes(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    // Tenant relationship check: the learner must belong to this instructor's
+    // school. Without this an instructor could upsert a note against a
+    // learner_id from another school. The ON CONFLICT clause stops them
+    // overwriting an existing note from another instructor, but does not
+    // stop them from creating a row against an arbitrary learner_id.
+    const [learner] = await sql`
+      SELECT id FROM learner_users WHERE id = ${learner_id} AND school_id = ${schoolId}
+    `;
+    if (!learner) return res.status(404).json({ error: 'Learner not found' });
+
     await sql`
-      INSERT INTO instructor_learner_notes (instructor_id, learner_id, notes, test_date, custom_hourly_rate_pence, updated_at)
-      VALUES (${instructor.id}, ${learner_id}, ${notes || null}, ${test_date || null}, ${ratePence}, NOW())
+      INSERT INTO instructor_learner_notes (instructor_id, learner_id, notes, test_date, custom_hourly_rate_pence, school_id, updated_at)
+      VALUES (${instructor.id}, ${learner_id}, ${notes || null}, ${test_date || null}, ${ratePence}, ${schoolId}, NOW())
       ON CONFLICT (instructor_id, learner_id)
       DO UPDATE SET notes = ${notes || null}, test_date = ${test_date || null}, custom_hourly_rate_pence = ${ratePence}, updated_at = NOW()
     `;
