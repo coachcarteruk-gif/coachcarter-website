@@ -72,9 +72,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── availability.js             # Read/write public availability slots
 │   ├── enquiries.js                # Contact form: submit, list, update status
 │   ├── webhook.js                  # Stripe webhook handler
-│   ├── guarantee-price.js          # Dynamic Pass Programme pricing (read/increment/override)
-│   ├── create-checkout-session.js  # Legacy Stripe checkout (pass programme / packages)
-│   ├── verify-session.js           # Stripe payment verification
+│   ├── guarantee-price.js          # Dynamic Pass Programme pricing (read/override) — Pass Programme is hidden, increment-on-purchase retired with PR-J 2026-05-19
 │   ├── update-status.js            # Booking status update
 │   ├── advisor.js                  # AI Lesson Advisor with Stripe tool_use checkout
 │   ├── ask-examiner.js             # AI examiner chat with personalised learner context
@@ -97,10 +95,9 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── classroom.html              # Video library — grid + reels dual mode (public)
 │   ├── availability.html           # Availability/booking page
 │   ├── learner-journey.html        # Pricing page — tiers, PAYG, and Pass Programme with dynamic pricing
-│   ├── lessons.html                # PAYG + bulk packages (Pass Programme redirects to learner-journey)
+│   ├── lessons.html                # Bulk packages marketing page. Bulk hours buy via /api/credits?action=checkout (login wall, PR-J 2026-05-19). PAYG buttons redirect to /learner/book.html. Pass Programme hidden 2026-04-28.
 │   ├── admin.html                  # Redirect shim → /admin/login.html
 │   ├── admin-availability.html     # Standalone admin availability management
-│   ├── success.html                # Post-payment success page
 │   ├── maintenance.html            # Maintenance mode page
 │   ├── privacy.html
 │   ├── terms.html
@@ -842,8 +839,8 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **DB migrations** — single file `db/migration.sql` covers all tables; run via `GET /api/migrate?secret=MIGRATION_SECRET`. Legacy per-feature files in `db/migrations/` are superseded
 - **Magic link tokens** — two-step flow (validate then verify) prevents email-client link prefetchers from consuming tokens; `verify` is POST-only
 - **Slot reservations** — 10-minute TTL; expired reservations are excluded from availability but cleaned up lazily (on next webhook or when table is queried)
-- **Dynamic pricing table** — `guarantee_pricing` is auto-created and seeded on first call to `/api/guarantee-price`; no manual migration needed. The webhook increments the price atomically after each Pass Programme purchase. Admin can override the price via the editor or direct API call.
-- **Pricing page routing** — all site nav "Pricing" links now point to `/learner-journey.html`, not `/lessons.html`. The old lessons page still works for PAYG/bulk but is no longer the primary entry point.
+- **Dynamic pricing table** — `guarantee_pricing` is auto-created and seeded on first call to `/api/guarantee-price`. The webhook-driven price increment was retired with PR-J (2026-05-19) when the legacy Stripe checkout was deleted. The Pass Programme is hidden on the marketing site; the table now serves as a read-only admin-override source for `current_price` if it's ever re-enabled.
+- **Pricing page routing** — all site nav "Pricing" links point to `/learner-journey.html`, not `/lessons.html`. `/lessons.html` is now a bulk-packages marketing page that funnels into `/api/credits?action=checkout` (login wall required). PAYG buttons redirect to `/learner/book.html` instead of running a Stripe checkout themselves (PR-J 2026-05-19).
 - **PostHog analytics** — all pages include the PostHog snippet for event tracking and session recording
 - **competency-config.js** — shared across 6 pages; changes affect quiz, mock test, log session, progress, onboarding, and AI context
 - **sidebar.js** — used on all 22+ pages; changes affect entire site navigation

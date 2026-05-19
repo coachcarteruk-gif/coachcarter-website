@@ -8,9 +8,13 @@
 //
 //   matched    - session.id found in credit_transactions.stripe_session_id
 //   excluded   - paid session whose metadata.payment_type is NOT in the
-//                tracked set (currently legacy package flow uses none /
-//                pass_guarantee, handled by handleCheckoutComplete which
-//                writes to an in-memory Map by deliberate design)
+//                tracked set. Pre-PR-J this captured the legacy package /
+//                pass_guarantee flow that the retired handleCheckoutComplete
+//                routed to an in-memory Map. Post-PR-J (2026-05-19) every
+//                supported path sets payment_type explicitly, so any
+//                "excluded" row here is from before PR-J shipped, OR a new
+//                untracked Stripe product (e.g. Stripe Dashboard manual
+//                charge) that the webhook never sees a payment_type for.
 //   suspicious - paid session whose metadata.payment_type IS tracked
 //                (credit_purchase, slot_booking, lesson_offer) but no
 //                credit_transactions row exists. These are the real gaps.

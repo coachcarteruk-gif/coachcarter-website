@@ -244,9 +244,10 @@ async function handleVerify(req, res) {
 
     // 6. Record the transaction. The SELECT at step 5 is the fast-path
     // idempotency guard; uq_credit_tx_session is the DB-enforced backstop
-    // for the genuine race — webhook and verify-session can both see no
-    // row, both INSERT, one loses. The loser must NOT proceed to step 7,
-    // otherwise the balance gets double-credited.
+    // for the genuine race — the webhook handler and this verify endpoint
+    // can both see no row, both INSERT, one loses on the unique index. The
+    // loser must NOT proceed to step 7, otherwise the balance gets
+    // double-credited.
     try {
       await sql`
         INSERT INTO credit_transactions

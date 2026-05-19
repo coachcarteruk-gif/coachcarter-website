@@ -59,7 +59,6 @@
 | `advisor.js` | learner | Anthropic lesson advisor (hidden in v1) |
 | `availability.js` | mixed | Public availability submissions + lookups |
 | `connect.js` | instructor/admin | Stripe Connect onboarding, status, dashboard, admin invite, dismiss |
-| `create-checkout-session.js` | learner | Stripe session for credit purchase |
 | `webhook.js` | none (Stripe) | checkout.session.completed (incl. lesson_offer with series fan-out + partial refund), account.updated, async_payment_succeeded (Klarna) |
 | `cron-payouts.js` | cron | Weekly Friday payout processing |
 | `cron-auto-complete.js` | cron | Auto-completes bookings >24h after end_time |
@@ -74,7 +73,6 @@
 | `migrate.js` | secret | One-shot migration runner (`?secret=MIGRATION_SECRET`) |
 | `seed-test-data.js` | secret | Test-data seeder for dev/staging |
 | `update-status.js` | mixed | Generic status updates |
-| `verify-session.js` | none | Session validation endpoint |
 | `address-lookup.js` | mixed | postcodes.io proxy for travel-time fits |
 | `guarantee-price.js` | none | Reads `guarantee_pricing` for the homepage CTA |
 | `reviews.js` | mixed | Google Reviews proxy + cache |
@@ -291,13 +289,13 @@ Create `api/push.js` with actions: `subscribe`, `unsubscribe`. Supports both Web
 The web uses Stripe Checkout (redirect). The app needs a PaymentSheet flow:
 
 ```javascript
-// api/create-checkout-session.js — add new action:
+// api/credits.js — add new action:
 // POST ?action=create-payment-intent
-// Body: { credits, learner_id }
+// Body: { hours }    (learner_id resolved from JWT, same as ?action=checkout)
 // Returns: { clientSecret, ephemeralKey, customerId }
 ```
 
-Keep the existing `create-checkout-session` action working for web.
+Keep the existing `/api/credits?action=checkout` action working for web (it returns a Stripe Checkout URL). The new in-app action shares the same `calcBulkTotal` server-side pricing and same `credit_purchase` webhook metadata.
 
 ---
 
@@ -543,7 +541,7 @@ npx expo install @stripe/stripe-react-native
 ```
 
 Use PaymentSheet flow instead of Checkout redirect:
-1. App calls `POST /api/create-checkout-session?action=create-payment-intent`
+1. App calls `POST /api/credits?action=create-payment-intent`
 2. API returns `{ clientSecret, ephemeralKey, customerId }`
 3. App presents PaymentSheet
 4. On success, credits are added via webhook (same as current flow)
