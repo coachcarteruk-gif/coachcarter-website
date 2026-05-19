@@ -12,6 +12,7 @@
 
 const { verifyCronAuth } = require('./_auth');
 const { withCronLock } = require('./_cron-lock');
+const { deleteLearnerCascade } = require('./_gdpr');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -21,7 +22,7 @@ module.exports = async (req, res) => {
   // delete (up to ~20 cascading DELETEs each). Real-world runs <30s but the
   // floor matters if it ever falls behind on backlog.
   return withCronLock(req, res, 'cron-retention', 600, async (sql) => {
-    const results = { soft_archived: 0, hard_deleted: 0, enquiries_archived: 0, enquiries_deleted: 0, requests_cleaned: 0, transactions_purged: 0 };
+    const results = { soft_archived: 0, hard_deleted: 0, enquiries_archived: 0, enquiries_deleted: 0, requests_cleaned: 0, transactions_purged: 0, bookings_purged: 0 };
 
     // 1. Refresh last_activity_at from most recent activity
     await sql`
@@ -48,32 +49,7 @@ module.exports = async (req, res) => {
 
     for (const learner of toDelete) {
       try {
-        // Anonymize credit_transactions
-        await sql`UPDATE credit_transactions SET learner_id = NULL, anonymized = true WHERE learner_id = ${learner.id}`;
-
-        // Delete related records using parameterized queries (no dynamic identifiers)
-        const lid = learner.id;
-        try { await sql`DELETE FROM skill_ratings WHERE user_id = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM driving_sessions WHERE user_id = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM quiz_results WHERE learner_id = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM mock_test_faults WHERE mock_test_id IN (SELECT id FROM mock_tests WHERE learner_id = ${lid})`; } catch (e) {}
-        try { await sql`DELETE FROM mock_tests WHERE learner_id = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM focused_practice_sessions WHERE learner_id = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM sent_reminders WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${lid})`; } catch (e) {}
-        try { await sql`DELETE FROM slot_reservations WHERE learner_id = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM lesson_confirmations WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${lid})`; } catch (e) {}
-        try { await sql`DELETE FROM lesson_bookings WHERE learner_id = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM learner_onboarding WHERE learner_id = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM instructor_learner_notes WHERE learner_id = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM learner_availability WHERE learner_id = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM deletion_requests WHERE learner_id = ${lid}`; } catch (e) {}
-        try { await sql`UPDATE learner_users SET referred_by = NULL WHERE referred_by = ${lid}`; } catch (e) {}
-        try { await sql`DELETE FROM referrals WHERE learner_id = ${lid}`; } catch (e) {}
-        await sql`UPDATE cookie_consents SET learner_id = NULL WHERE learner_id = ${learner.id}`;
-        if (learner.email) {
-          try { await sql`DELETE FROM magic_link_tokens WHERE email = ${learner.email}`; } catch (e) {}
-        }
-        await sql`DELETE FROM learner_users WHERE id = ${learner.id}`;
+        await deleteLearnerCascade(sql, learner.id, { email: learner.email });
         results.hard_deleted++;
       } catch (e) {
         console.error(`retention: failed to delete learner ${learner.id}:`, e.message);
@@ -111,6 +87,19 @@ module.exports = async (req, res) => {
         AND created_at < NOW() - INTERVAL '7 years'
       RETURNING id`;
     results.transactions_purged = purgedTx.length;
+
+    // 7b. Purge anonymised lesson_bookings >7 years (PR-K, May 2026).
+    //     Mirror credit_transactions retention — financial record, same legal
+    //     basis. After this delete, the payout-line-items / school-payout-line
+    //     items rows that reference these bookings via RESTRICT FK will block
+    //     the delete; in practice payouts older than 7 years would already
+    //     have been archived, but if any block we want the error visible.
+    const purgedBookings = await sql`
+      DELETE FROM lesson_bookings
+      WHERE learner_anonymized = TRUE
+        AND scheduled_date < NOW() - INTERVAL '7 years'
+      RETURNING id`;
+    results.bookings_purged = purgedBookings.length;
 
     // 8. Clean up old cookie consent records >2 years
     await sql`DELETE FROM cookie_consents WHERE consented_at < NOW() - INTERVAL '2 years'`;

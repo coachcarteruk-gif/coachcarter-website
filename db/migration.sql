@@ -1964,3 +1964,30 @@ CREATE TABLE IF NOT EXISTS cron_locks (
 CREATE INDEX IF NOT EXISTS idx_cron_locks_expires_at
   ON cron_locks(expires_at);
 
+-- ══════════════════════════════════════════════════════════════════════════════
+-- PR-K: GDPR — anonymise lesson_bookings instead of cascade-deleting (May 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- lesson_bookings are financial records (paid lessons, payout line items,
+-- credit ledger). CLAUDE.md GDPR rule 7 requires anonymisation, not hard
+-- delete, for 7-year tax retention.
+--
+-- Three deletion paths (learner self-delete, admin delete, retention cron) all
+-- relied on the inline `ON DELETE CASCADE` FK on lesson_bookings.learner_id
+-- to hard-delete bookings when the learner row was deleted. Replace that with
+-- ON DELETE SET NULL, mirroring what credit_transactions does (lines
+-- 1185-1195 above), and add an explicit `learner_anonymized` flag so an
+-- anonymised booking is distinguishable from a never-attached one.
+--
+-- The shared cascade helper lives in api/_gdpr.js — all three call sites
+-- now go through it.
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS learner_anonymized BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE lesson_bookings DROP CONSTRAINT IF EXISTS lesson_bookings_learner_id_fkey;
+ALTER TABLE lesson_bookings ALTER COLUMN learner_id DROP NOT NULL;
+DO $$ BEGIN
+  ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_learner_id_fkey
+    FOREIGN KEY (learner_id) REFERENCES learner_users(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
