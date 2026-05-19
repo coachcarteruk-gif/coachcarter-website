@@ -1413,15 +1413,46 @@ async function handleCheckoutSlot(req, res) {
       cancel_url:  `${origin}/learner/book.html?cancelled=1`
     });
 
-    // Reserve the slot (upsert in case learner retries)
-    await sql`
+    // Reserve the slot. uq_slot_reservation_slot enforces one active
+    // reservation per (instructor, date, start_time) — the DELETE-expired
+    // pass at the top of this handler clears stale rows so a fresh INSERT
+    // only ever races a still-live one. ON CONFLICT returns NULL inserted
+    // rows; we then inspect who currently holds the slot.
+    const insertedRows = await sql`
       INSERT INTO slot_reservations
         (learner_id, instructor_id, scheduled_date, start_time, end_time, stripe_session_id, expires_at, school_id)
       VALUES
         (${user.id}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, ${session.id},
          NOW() + INTERVAL '10 minutes', ${schoolId})
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (instructor_id, scheduled_date, start_time) DO NOTHING
+      RETURNING id
     `;
+
+    if (insertedRows.length === 0) {
+      // Lost the race against a parallel checkout. Expire the orphan Stripe
+      // session so the learner isn't sitting on a payment page for a slot
+      // they can never book. Fire-and-forget — if Stripe is down the
+      // session expires on its own 24h later.
+      stripe.checkout.sessions.expire(session.id).catch((expireErr) => {
+        console.warn('Failed to expire orphan Stripe session', session.id, expireErr.message);
+      });
+
+      // Distinguish "same learner retried" from "different learner won
+      // the race" so the user-facing error makes sense. A retry is
+      // unusual — the DELETE-expired pass + the existingReservation
+      // check should normally catch it — but it can happen on a fast
+      // double-click after the previous session was abandoned.
+      const [holder] = await sql`
+        SELECT learner_id FROM slot_reservations
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ${date}
+          AND start_time = ${start_time}::time
+      `;
+      if (holder?.learner_id === user.id) {
+        return res.status(409).json({ error: 'You already have a checkout in progress for this slot. Wait a moment and try again.' });
+      }
+      return res.status(409).json({ error: 'Someone else just took that slot.' });
+    }
 
     return res.json({ url: session.url });
   } catch (err) {
@@ -1648,15 +1679,34 @@ async function handleCheckoutSlotGuest(req, res) {
       cancel_url:  `${origin}/learner/book.html?cancelled=1`
     });
 
-    // Reserve the slot
-    await sql`
+    // Reserve the slot — see uq_slot_reservation_slot rationale in the
+    // authenticated checkout-slot handler above.
+    const insertedRows = await sql`
       INSERT INTO slot_reservations
         (learner_id, instructor_id, scheduled_date, start_time, end_time, stripe_session_id, expires_at, school_id)
       VALUES
         (${learnerId}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, ${session.id},
          NOW() + INTERVAL '10 minutes', ${schoolId})
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (instructor_id, scheduled_date, start_time) DO NOTHING
+      RETURNING id
     `;
+
+    if (insertedRows.length === 0) {
+      stripe.checkout.sessions.expire(session.id).catch((expireErr) => {
+        console.warn('Failed to expire orphan Stripe session', session.id, expireErr.message);
+      });
+
+      const [holder] = await sql`
+        SELECT learner_id FROM slot_reservations
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ${date}
+          AND start_time = ${start_time}::time
+      `;
+      if (holder?.learner_id === learnerId) {
+        return res.status(409).json({ error: 'You already have a checkout in progress for this slot. Wait a moment and try again.' });
+      }
+      return res.status(409).json({ error: 'Someone else just took that slot.' });
+    }
 
     return res.json({ url: session.url });
   } catch (err) {

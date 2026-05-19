@@ -186,13 +186,25 @@ async function handleCreditPurchase(session) {
     // as zero in the meantime.
     const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
 
-    // 1. Record the transaction
-    await sql`
-      INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
-      VALUES
-        (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${session.id}, ${minutes}, ${schoolId}, ${stripeFeePence})
-    `;
+    // 1. Record the transaction. uq_credit_tx_session catches the
+    // webhook-vs-verify-session race (and Stripe retries on 5xx) by
+    // rejecting a second INSERT with the same session id. Treated as
+    // already-processed — same outcome as the SELECT idempotency guard
+    // above, but DB-enforced rather than app-enforced.
+    try {
+      await sql`
+        INSERT INTO credit_transactions
+          (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
+        VALUES
+          (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${session.id}, ${minutes}, ${schoolId}, ${stripeFeePence})
+      `;
+    } catch (insertErr) {
+      if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
+        console.log(`⏭  credit_purchase ${session.id} — already processed (uq_credit_tx_session)`);
+        return;
+      }
+      throw insertErr;
+    }
 
     // 2. Increment the learner's balance atomically (both columns for transition)
     await sql`
@@ -320,13 +332,22 @@ async function handleSlotBooking(session) {
     // as zero in the meantime.
     const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
 
-    // 1. Record the transaction
-    await sql`
-      INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
-      VALUES
-        (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId}, ${stripeFeePence})
-    `;
+    // 1. Record the transaction. uq_credit_tx_session backstops the
+    // SELECT idempotency check above against concurrent retries.
+    try {
+      await sql`
+        INSERT INTO credit_transactions
+          (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
+        VALUES
+          (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId}, ${stripeFeePence})
+      `;
+    } catch (insertErr) {
+      if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
+        console.log(`⏭  slot_booking ${session.id} — already processed (uq_credit_tx_session)`);
+        return;
+      }
+      throw insertErr;
+    }
 
     // 2. Add hours to balance (net zero — add then deduct)
     await sql`
@@ -904,12 +925,23 @@ async function handleOfferBooking(session) {
     // the N bookings via booking_credit_sources.
     const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
 
-    await sql`
-      INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
-      VALUES
-        (${learnerId}, 'slot_purchase', ${totalCredits}, ${totalAmountPence}, 'card', ${session.id}, ${totalMinutes}, ${schoolId}, ${stripeFeePence})
-    `;
+    // uq_credit_tx_session catches concurrent Stripe retries on the same
+    // offer-acceptance event. SELECT idempotency above is the fast path;
+    // this is the DB-enforced backstop.
+    try {
+      await sql`
+        INSERT INTO credit_transactions
+          (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
+        VALUES
+          (${learnerId}, 'slot_purchase', ${totalCredits}, ${totalAmountPence}, 'card', ${session.id}, ${totalMinutes}, ${schoolId}, ${stripeFeePence})
+      `;
+    } catch (insertErr) {
+      if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
+        console.log(`⏭  lesson_offer ${session.id} — already processed (uq_credit_tx_session)`);
+        return;
+      }
+      throw insertErr;
+    }
 
     await sql`
       UPDATE learner_users
