@@ -157,12 +157,18 @@ async function handleLogin(req, res) {
       WHERE email = ${normalisedEmail} AND active = true
     `;
     if (rows.length === 0)
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({
+        error: 'invalid_credentials',
+        message: 'Email or password is incorrect.',
+      });
 
     const admin = rows[0];
     const match = await bcrypt.compare(password, admin.password_hash);
     if (!match)
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({
+        error: 'invalid_credentials',
+        message: 'Email or password is incorrect.',
+      });
 
     const token = jwt.sign(
       { id: admin.id, email: admin.email, role: admin.role, isAdmin: true, school_id: admin.school_id || null },
