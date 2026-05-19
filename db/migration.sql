@@ -868,6 +868,55 @@ ALTER TABLE school_payouts ADD COLUMN IF NOT EXISTS booking_ids INTEGER[] NOT NU
 CREATE INDEX IF NOT EXISTS idx_school_payouts_school_period
   ON school_payouts(school_id, period_start);
 
+-- ── PR-H (audit #10) ──────────────────────────────────────────────────────────
+-- Normalised line-items table mirroring payout_line_items on the instructor
+-- side. The school_payouts.booking_ids array had no per-booking uniqueness
+-- across rows, so a crash between INSERT (status='processing') and the Stripe
+-- transfer call could leave an orphan 'processing' row holding bookings that
+-- the next cron run also considered eligible (the eligibility filter only
+-- excluded 'completed' rows). Result: same bookings paid twice.
+--
+-- UNIQUE(booking_id) on the line-items table makes the second INSERT fail
+-- regardless of the parent row's status — same shape as uq_payout_booking.
+
+CREATE TABLE IF NOT EXISTS school_payout_line_items (
+  id              SERIAL PRIMARY KEY,
+  school_payout_id INTEGER NOT NULL REFERENCES school_payouts(id) ON DELETE CASCADE,
+  booking_id      INTEGER NOT NULL REFERENCES lesson_bookings(id),
+  price_pence     INTEGER NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_school_payout_booking
+  ON school_payout_line_items(booking_id);
+
+CREATE INDEX IF NOT EXISTS idx_school_payout_lines_payout
+  ON school_payout_line_items(school_payout_id);
+
+-- Backfill from existing school_payouts.booking_ids arrays. Only the
+-- 'completed' rows matter for the eligibility filter — historically-paid
+-- bookings must not be re-eligible after the code switches to reading from
+-- the line-items table. 'processing' and 'failed' rows can be skipped:
+--   - 'processing' will be cleared by the rollout sequence below.
+--   - 'failed' rows have booking_ids = '{}' per the existing catch block.
+-- The ON CONFLICT DO NOTHING keeps the backfill idempotent if /api/migrate
+-- is re-run after partial application.
+INSERT INTO school_payout_line_items (school_payout_id, booking_id, price_pence)
+SELECT sp.id, b_id, 0
+FROM school_payouts sp,
+     unnest(sp.booking_ids) AS b_id
+WHERE sp.status = 'completed'
+  AND array_length(sp.booking_ids, 1) > 0
+ON CONFLICT (booking_id) DO NOTHING;
+
+-- Clear booking_ids on any stale 'processing' rows so the next cron run
+-- doesn't see them as still-held. There is no in-flight payout when
+-- migrate runs (the cron is Friday 09:00 only), so this is safe.
+UPDATE school_payouts
+   SET status = 'failed',
+       failure_reason = COALESCE(failure_reason, 'orphaned processing row cleared by PR-H migration'),
+       booking_ids = '{}'
+ WHERE status = 'processing';
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- MULTI-TENANT: ADD school_id TO ALL TENANT-SCOPED TABLES
 -- ══════════════════════════════════════════════════════════════════════════════

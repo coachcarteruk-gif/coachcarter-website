@@ -422,7 +422,11 @@ async function processAllPayouts(sql, stripe, opts = {}) {
 
 /**
  * Get unpaid eligible bookings for a school (all instructors in that school).
- * Excludes bookings already covered by a school_payouts record.
+ * Excludes bookings already covered by a school_payout_line_items row —
+ * regardless of the parent school_payouts.status. This catches the
+ * crash-between-INSERT-and-Stripe-transfer case the old eligibility filter
+ * missed (only excluded status='completed', leaving orphan 'processing'
+ * rows free to re-pay). See PR-H migration notes.
  */
 async function getEligibleSchoolBookings(sql, schoolId) {
   return sql`
@@ -439,8 +443,8 @@ async function getEligibleSchoolBookings(sql, schoolId) {
       LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
      WHERE lb.school_id = ${schoolId}
        AND lb.status = ${CHARGEABLE}
-       AND lb.id NOT IN (
-         SELECT unnest(booking_ids) FROM school_payouts WHERE school_id = ${schoolId} AND status = 'completed'
+       AND NOT EXISTS (
+         SELECT 1 FROM school_payout_line_items spli WHERE spli.booking_id = lb.id
        )
      ORDER BY lb.scheduled_date ASC
   `;
@@ -495,6 +499,40 @@ async function processSchoolPayouts(sql, stripe) {
         RETURNING id
       `;
 
+      // Write one line-item per booking. uq_school_payout_booking enforces
+      // per-booking uniqueness so a second cron run after a crash (or two
+      // concurrent runs) can't grab the same bookings. If the INSERT here
+      // fails on uq_school_payout_booking, another payout already claimed
+      // them — undo our parent row and skip this school for this run.
+      try {
+        for (const b of bookings) {
+          await sql`
+            INSERT INTO school_payout_line_items (school_payout_id, booking_id, price_pence)
+            VALUES (${payout.id}, ${b.booking_id}, ${parseInt(b.price_pence)})
+          `;
+        }
+      } catch (lineErr) {
+        if (lineErr.message?.includes('uq_school_payout_booking') || lineErr.code === '23505') {
+          await sql`
+            UPDATE school_payouts
+               SET status = 'failed',
+                   failure_reason = 'race: bookings already claimed by another payout',
+                   booking_ids = '{}'
+             WHERE id = ${payout.id}
+          `;
+          results.failed++;
+          results.details.push({
+            payout_id: payout.id,
+            school_id: school.id,
+            school_name: school.name,
+            status: 'failed',
+            error: 'concurrent payout already claimed these bookings'
+          });
+          continue;
+        }
+        throw lineErr;
+      }
+
       // Create Stripe transfer
       try {
         const transfer = await stripe.transfers.create({
@@ -528,7 +566,17 @@ async function processSchoolPayouts(sql, stripe) {
           status: 'completed'
         });
       } catch (err) {
-        // Transfer failed — mark payout as failed and clear booking_ids so they retry next run
+        // Transfer failed — mark payout as failed and release the bookings
+        // so the next cron run picks them up. Must DELETE the line-items
+        // rows too, otherwise uq_school_payout_booking keeps them claimed
+        // and the eligibility filter would skip them forever.
+        //
+        // Caveat: an ambiguous transfer outcome (Stripe accepted the call
+        // but our response was lost) would treat this as 'failed' and
+        // re-pay on the next cron. Proper fix is Stripe idempotency keys
+        // — out of scope here. The audit's #10 specifically calls out
+        // orphan-processing-row double-pay, which this DOES close.
+        await sql`DELETE FROM school_payout_line_items WHERE school_payout_id = ${payout.id}`;
         await sql`
           UPDATE school_payouts SET status = 'failed', failure_reason = ${err.message}, booking_ids = '{}' WHERE id = ${payout.id}
         `;
