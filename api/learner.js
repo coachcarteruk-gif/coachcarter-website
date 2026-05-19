@@ -1137,11 +1137,99 @@ async function handleExportData(req, res) {
       WHERE lu.referred_by = ${user.id} AND lu.school_id = ${schoolId}
       ORDER BY lu.created_at DESC`;
 
+    // ── GDPR Article 15: data subject access. Below tables were added in PR-L
+    // (audit #17). Mostly small per-learner row counts; the email-keyed SELECTs
+    // (cookie_consents, lesson_offers) need OR-with-learner_id because
+    // historical rows may pre-date the learner_id population.
+
+    const availability = await sql`
+      SELECT day_of_week, start_time::text, end_time::text, active, created_at
+      FROM learner_availability
+      WHERE learner_id = ${user.id}
+      ORDER BY day_of_week, start_time`;
+
+    const mockTestFaults = await sql`
+      SELECT mtf.mock_test_id, mtf.part, mtf.skill_key, mtf.sub_key,
+             mtf.driving_faults, mtf.serious_faults, mtf.dangerous_faults
+      FROM mock_test_faults mtf
+      JOIN mock_tests mt ON mt.id = mtf.mock_test_id
+      WHERE mt.learner_id = ${user.id} AND mt.school_id = ${schoolId}
+      ORDER BY mtf.mock_test_id, mtf.part, mtf.skill_key`;
+
+    // instructor_learner_notes: notes instructors keep about this learner
+    // (test date, free-text notes). Article 15 access right to data held about
+    // the data subject. Includes the instructor name so the learner knows who
+    // wrote it.
+    const instructorNotes = await sql`
+      SELECT i.name AS instructor_name, iln.notes, iln.test_date::text,
+             iln.updated_at
+      FROM instructor_learner_notes iln
+      JOIN instructors i ON i.id = iln.instructor_id
+      WHERE iln.learner_id = ${user.id}
+      ORDER BY iln.updated_at DESC`;
+
+    const cookieConsents = await sql`
+      SELECT analytics, consented_at, user_agent
+      FROM cookie_consents
+      WHERE (learner_id = ${user.id} OR visitor_id = ${user.id}::text)
+        AND school_id = ${schoolId}
+      ORDER BY consented_at DESC`;
+
+    const deletionRequests = await sql`
+      SELECT status, requested_at, confirmed_at, completed_at
+      FROM deletion_requests
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY requested_at DESC`;
+
+    // lesson_confirmations: rows where THIS learner submitted the confirmation
+    // (not the instructor's parallel row). Joined to bookings to scope.
+    const lessonConfirmations = await sql`
+      SELECT lc.booking_id, lc.lesson_happened, lc.late_party, lc.late_minutes,
+             lc.notes, lc.auto_confirmed, lc.created_at,
+             lb.scheduled_date::text, lb.start_time::text
+      FROM lesson_confirmations lc
+      JOIN lesson_bookings lb ON lb.id = lc.booking_id
+      WHERE lc.confirmed_by_role = 'learner'
+        AND lb.learner_id = ${user.id}
+        AND lb.school_id = ${schoolId}
+      ORDER BY lc.created_at DESC`;
+
+    // Offers sent to this learner (by learner_id once they signed up, or by
+    // email before signup). Exclude the token itself — it's an active secret.
+    const learnerEmail = profile?.email || null;
+    const offersReceived = learnerEmail
+      ? await sql`
+          SELECT lo.scheduled_date::text, lo.start_time::text, lo.end_time::text,
+                 lo.discount_pct, lo.status, lo.kind, lo.trigger,
+                 lo.created_at, lo.expires_at,
+                 i.name AS instructor_name
+          FROM lesson_offers lo
+          JOIN instructors i ON i.id = lo.instructor_id
+          WHERE (lo.learner_id = ${user.id} OR LOWER(lo.learner_email) = LOWER(${learnerEmail}))
+          ORDER BY lo.created_at DESC`
+      : await sql`
+          SELECT lo.scheduled_date::text, lo.start_time::text, lo.end_time::text,
+                 lo.discount_pct, lo.status, lo.kind, lo.trigger,
+                 lo.created_at, lo.expires_at,
+                 i.name AS instructor_name
+          FROM lesson_offers lo
+          JOIN instructors i ON i.id = lo.instructor_id
+          WHERE lo.learner_id = ${user.id}
+          ORDER BY lo.created_at DESC`;
+
     const exportData = {
       _metadata: {
         exported_at: new Date().toISOString(),
         format: 'json',
-        data_categories: ['profile', 'onboarding', 'bookings', 'transactions', 'driving_sessions', 'skill_ratings', 'quiz_results', 'mock_tests', 'focused_practice', 'referral_code', 'referrals_made']
+        data_categories: [
+          'profile', 'onboarding', 'bookings', 'transactions',
+          'driving_sessions', 'skill_ratings', 'quiz_results',
+          'mock_tests', 'mock_test_faults', 'focused_practice',
+          'referral_code', 'referrals_made',
+          'availability', 'instructor_notes_about_me',
+          'cookie_consents', 'deletion_requests',
+          'lesson_confirmations', 'offers_received'
+        ]
       },
       profile: profile || {},
       onboarding: onboarding[0] || null,
@@ -1151,9 +1239,16 @@ async function handleExportData(req, res) {
       skill_ratings: skills,
       quiz_results: quizzes,
       mock_tests: mockTests,
+      mock_test_faults: mockTestFaults,
       focused_practice: focusedPractice,
       referral_code: referralCode[0] || null,
-      referrals_made: referralsMade
+      referrals_made: referralsMade,
+      availability,
+      instructor_notes_about_me: instructorNotes,
+      cookie_consents: cookieConsents,
+      deletion_requests: deletionRequests,
+      lesson_confirmations: lessonConfirmations,
+      offers_received: offersReceived,
     };
 
     const dateStr = new Date().toISOString().slice(0, 10);

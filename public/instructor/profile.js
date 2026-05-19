@@ -262,6 +262,16 @@
             <p><strong>Apple iCloud:</strong> Calendar app &rarr; right-click your calendar &rarr; Share Calendar &rarr; tick "Public Calendar" &rarr; copy the URL.</p>
           </div>
         </details>
+
+        <div style="border-top:1px solid var(--border);margin-top:18px;padding-top:14px">
+          <div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:6px">Your lesson feed</div>
+          <p class="field-hint" style="margin-bottom:10px">Subscribe to this URL in your calendar app to see all upcoming bookings. If you ever lose track of where this link is, rotate it.</p>
+          <div id="outboundCalStatus" style="font-size:0.82rem;color:var(--muted);margin-bottom:10px">Loading&hellip;</div>
+          <button type="button" id="btnRotateInstructorCal"
+            style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;color:var(--primary)">
+            &#x21bb; Rotate calendar link
+          </button>
+        </div>
       </div>
 
       <button class="btn-save" id="saveBtn">Save changes</button>
@@ -274,6 +284,7 @@
 
     `;
     loadBookingLinks();
+    loadInstructorCalendarTokenStatus();
   }
 
   async function loadBookingLinks() {
@@ -590,7 +601,7 @@
 // All form elements are rendered into innerHTML after fetch, so we use
 // document-level event delegation rather than wiring fixed ids.
 document.addEventListener('click', function (e) {
-  var target = e.target.closest('[data-action], #btn-upload-photo, #icalTestBtn, #saveBtn');
+  var target = e.target.closest('[data-action], #btn-upload-photo, #icalTestBtn, #saveBtn, #btnRotateInstructorCal');
   if (!target) return;
   if (target.id === 'btn-upload-photo') {
     var pf = document.getElementById('inputPhotoFile');
@@ -599,10 +610,53 @@ document.addEventListener('click', function (e) {
   }
   if (target.id === 'icalTestBtn') { testIcalFeed(); return; }
   if (target.id === 'saveBtn') { saveProfile(); return; }
+  if (target.id === 'btnRotateInstructorCal') { rotateInstructorCalendarToken(); return; }
   var action = target.dataset.action;
   if (action === 'toggle-chip') toggleChip(target);
   else if (action === 'copy-booking-link') copyBookingLink(target.dataset.url, target);
 });
+
+// Outbound calendar-feed token status + rotation (PR-L, audit #17). Loaded
+// after the profile renders; the status element is rendered inside the
+// Calendar Sync card. Skipped silently if the elements aren't on the page.
+async function loadInstructorCalendarTokenStatus() {
+  var el = document.getElementById('outboundCalStatus');
+  if (!el) return;
+  try {
+    var res = await ccAuth.fetchAuthed('/api/calendar?action=instructor-feed-url');
+    if (!res.ok) { el.textContent = 'No active link.'; return; }
+    var data = await res.json();
+    if (!data || !data.feed_url) { el.textContent = 'No active link.'; return; }
+    if (data.rotated_at) {
+      var ts = new Date(data.rotated_at);
+      el.textContent = 'Active. Issued ' + ts.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' }) + '.';
+    } else {
+      el.textContent = 'Active (pre-rotation).';
+    }
+  } catch (e) { console.warn('outbound cal status load failed:', e); }
+}
+
+async function rotateInstructorCalendarToken() {
+  if (!confirm('Rotate your calendar feed link?\n\nThe old subscription will stop working. You will need to re-subscribe in your calendar app with the new link.')) return;
+  var btn = document.getElementById('btnRotateInstructorCal');
+  if (btn) btn.disabled = true;
+  try {
+    var res = await ccAuth.fetchAuthed('/api/calendar?action=rotate-instructor-token', { method: 'POST' });
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) { alert('Failed to rotate: ' + (data.error || res.status)); return; }
+    var el = document.getElementById('outboundCalStatus');
+    if (el && data.rotated_at) {
+      var ts = new Date(data.rotated_at);
+      el.textContent = 'Rotated ' + ts.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' }) + '. Old link is now invalid.';
+    }
+    alert('Done. The old subscription will stop syncing.\n\nNew subscription link:\n' + data.webcal_url);
+  } catch (e) {
+    console.error('rotate instructor calendar failed:', e);
+    alert('Failed to rotate calendar link. Please try again.');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
 document.addEventListener('change', function (e) {
   if (e.target && e.target.id === 'inputPhotoFile') handlePhotoUpload(e.target);
 });
