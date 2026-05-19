@@ -91,6 +91,32 @@
 // WHERE clause here MUST be updated to match. The "duplicate Stripe retry"
 // integration test below catches a mismatch — it inserts twice with the
 // same session_id and asserts the second call is alreadyProcessed.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE_2A_IMPLEMENTED — the master switch
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 2 (schema) and Step 4 (Phase 2A code) ship as separate deploys per
+// PER-INSTRUCTOR-CREDITS-PLAN.md L407 ("Schema-only, no behavioural change.
+// Same two-deploy split as Step 1 (schema migration first, then writer code
+// in Step 4)").
+//
+// That means after Step 2's DDL lands, credit_transactions.instructor_id
+// exists, but grantCreditsPhase2A() is still a throwing stub. A naive
+// "auto-promote on schema detection" dispatcher would route every Stripe
+// webhook, verify-session call, and booking deduct through the stub and
+//500 them all until Step 4 ships. Found in PR #166 review.
+//
+// PHASE_2A_IMPLEMENTED encodes "is the Phase 2A *code* deployed?" — distinct
+// from "does the schema support Phase 2A?". The dispatcher short-circuits to
+// Pre-2A whenever this is false, regardless of schema state or env-var
+// override. Step 4's PR is the one that flips this to true AND ships the
+// real implementation in the same commit. Atomic at the source level.
+//
+// Once true, the dispatcher honours the plan-spec OR semantics: env-var
+// override OR schema check. Either signal routes to Phase 2A.
+//
+// Do NOT flip this without also implementing grantCreditsPhase2A.
+let PHASE_2A_IMPLEMENTED = false;
 
 let phase2ACheckPromise;
 
@@ -201,20 +227,49 @@ function _resetPhaseDetectionForTests() {
   phase2ACheckPromise = undefined;
 }
 
+// Test-only override for the PHASE_2A_IMPLEMENTED master switch. Used by
+// the dispatcher-routing test to prove that when the constant is true, the
+// existing env-var / schema-check OR semantics still apply correctly.
+// Production code MUST NOT call this.
+function _setPhase2AImplementedForTests(value) {
+  PHASE_2A_IMPLEMENTED = Boolean(value);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Dispatcher
 // ─────────────────────────────────────────────────────────────────────────────
-// The single entry point callers should use. Two ways to land on the
-// Phase-2A variant:
-//   1. PER_INSTRUCTOR_CREDITS_PHASE_2A=1 env var (eager override). Useful in
-//      the deploy window between Step 2 DDL and Step 4 code if warm Vercel
-//      processes need flipping before a redeploy completes.
-//   2. The lazy DDL check (preferred, automatic).
+// The single entry point callers should use. Three signals decide which
+// variant runs:
 //
-// The OR semantics match PER-INSTRUCTOR-CREDITS-PLAN.md Step 0 L225.
+//   1. PHASE_2A_IMPLEMENTED constant (this file). Necessary condition. If
+//      false, the dispatcher routes to Pre-2A unconditionally — even if
+//      the schema check or env var say Phase 2A is "ready". This blocks
+//      the Step 2 / Step 4 cold-start window where the column exists but
+//      the implementation doesn't.
+//   2. PER_INSTRUCTOR_CREDITS_PHASE_2A=1 env var (eager override). Useful
+//      in the deploy window between Step 4 deploy and full worker recycle
+//      if a specific function needs to be flipped early.
+//   3. The lazy DDL check (automatic detection). Caches per process.
+//
+// Step 4's PR is what flips PHASE_2A_IMPLEMENTED to true AND ships the real
+// grantCreditsPhase2A implementation in the same commit. Until that PR
+// lands, only Pre-2A runs in production.
+//
+// Plan reference: PER-INSTRUCTOR-CREDITS-PLAN.md Step 0 L225 (env-var OR
+// schema check) and L407 (Step 2 is schema-only; Step 4 ships the code).
 
 async function grantCredits(args) {
   const normalized = normalizeGrantArgs(args);
+
+  // Master switch — short-circuit when the Phase 2A code isn't deployed.
+  // This is the load-bearing safety net: without it, applying the Step 2
+  // DDL would break every credit grant in prod (the schema check would
+  // flip true, the dispatcher would route to grantCreditsPhase2A, and the
+  // stub would throw on every webhook + verify + book call).
+  if (!PHASE_2A_IMPLEMENTED) {
+    return grantCreditsPre2A(normalized);
+  }
+
   const phase2A = process.env.PER_INSTRUCTOR_CREDITS_PHASE_2A === '1'
     || await hasPhase2ASchema(normalized.sql);
 
@@ -320,22 +375,23 @@ async function grantCreditsPre2A({
 // ─────────────────────────────────────────────────────────────────────────────
 // PHASE-2A variant (stub — implemented in Step 4)
 // ─────────────────────────────────────────────────────────────────────────────
-// When Step 2's schema ships (learner_credit_balances, instructor_id column
-// on credit_transactions, booking_credit_sources), this becomes the active
-// variant. The dispatcher will pick it automatically once hasPhase2ASchema()
-// sees the new column, or eagerly via PER_INSTRUCTOR_CREDITS_PHASE_2A=1.
+// Throwing stub. The dispatcher's PHASE_2A_IMPLEMENTED short-circuit at the
+// top of this module ensures no production traffic reaches this function
+// until Step 4 lands. If you ARE seeing this throw in production, it means:
+//   - PHASE_2A_IMPLEMENTED was flipped to true without the implementation
+//     being filled in (regression in the Step 4 PR — check the constant);
+//   - OR a test is bypassing the dispatcher (call grantCreditsPre2A directly).
 //
-// Throwing here (rather than silently falling through to pre_2a) is
-// deliberate: if a deploy lands the Step 2 DDL but ships an older bundle of
-// this file, we want a loud failure rather than a silent regression to
-// pooled credits.
+// Step 4's PR replaces this stub with the real (learner_credit_balances,
+// booking_credit_sources, instructor_id) implementation AND flips
+// PHASE_2A_IMPLEMENTED to true in the same commit.
 
 async function grantCreditsPhase2A() {
   throw new Error(
-    'grantCreditsPhase2A is not available until the per-instructor credit ' +
-    'schema ships (Step 2). If you are seeing this in production with Step 2 ' +
-    'already deployed, force a Vercel redeploy — warm workers may be running ' +
-    'an old bundle of this module.'
+    'grantCreditsPhase2A is a stub — Phase 2A (Step 4) has not shipped yet. ' +
+    'The dispatcher should never route here while PHASE_2A_IMPLEMENTED is false. ' +
+    'If you see this in production, the constant was flipped without the ' +
+    'implementation being filled in.'
   );
 }
 
@@ -347,4 +403,5 @@ module.exports = {
   hasPhase2ASchema,
   // Test-only.
   _resetPhaseDetectionForTests,
+  _setPhase2AImplementedForTests,
 };
