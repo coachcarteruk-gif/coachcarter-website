@@ -8,10 +8,9 @@
 //
 // Processes up to 10 learners per invocation to stay within Vercel limits.
 
-const { neon } = require('@neondatabase/serverless');
 const { createTransporter, generateToken } = require('./_auth-helpers');
-const { reportError } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
+const { withCronLock } = require('./_cron-lock');
 
 const BATCH_SIZE = 10;
 const TOKEN_EXPIRY_MINUTES = 60 * 24 * 7; // 7-day magic link for welcome emails
@@ -25,9 +24,11 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  const sql = neon(process.env.POSTGRES_URL);
-
-  try {
+  // Lease 300s — daily cron, BATCH_SIZE=10 learners per run, each one is a
+  // magic-link INSERT + email + UPDATE. Lock closes the gap between SELECT
+  // (welcome_email_sent_at IS NULL) and UPDATE that previously let two
+  // overlapping runs email the same 10 learners twice each.
+  return withCronLock(req, res, 'setmore-welcome', 300, async (sql) => {
     // Find Setmore-created learners who:
     // 1. Have a setmore_customer_key (created by sync)
     // 2. Have an email address (can't send welcome without one)
@@ -45,7 +46,7 @@ module.exports = async (req, res) => {
     `;
 
     if (learners.length === 0) {
-      return res.json({ ok: true, message: 'No welcome emails to send', sent: 0 });
+      return { ok: true, message: 'No welcome emails to send', sent: 0 };
     }
 
     const mailer = createTransporter();
@@ -92,12 +93,8 @@ module.exports = async (req, res) => {
       }
     }
 
-    return res.json({ ok: true, sent, failed, checked: learners.length });
-
-  } catch (err) {
-    reportError('/api/setmore-welcome', err);
-    return res.status(500).json({ error: 'Welcome emails failed' });
-  }
+    return { ok: true, sent, failed, checked: learners.length };
+  });
 };
 
 function buildWelcomeHtml(firstName, magicUrl) {

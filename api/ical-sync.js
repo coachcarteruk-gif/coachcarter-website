@@ -9,8 +9,8 @@
 
 const { neon } = require('@neondatabase/serverless');
 const crypto   = require('crypto');
-const { reportError } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
+const { withCronLock } = require('./_cron-lock');
 
 function setCors(res) {
 }
@@ -34,8 +34,15 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  const sql = neon(process.env.POSTGRES_URL);
+  // Lease 300s — 15-min schedule. Round-robin picks one instructor's feed
+  // per invocation; lock prevents two overlapping runs hitting the same
+  // external iCal URL twice in quick succession.
+  return withCronLock(req, res, 'ical-sync', 300, async (sql) => {
+    return await runIcalSync(sql);
+  });
+};
 
+async function runIcalSync(sql, retryAttempt = 0) {
   try {
     // Pick the instructor whose feed was synced least recently
     const [instructor] = await sql`
@@ -49,7 +56,7 @@ module.exports = async (req, res) => {
     `;
 
     if (!instructor) {
-      return res.json({ ok: true, message: 'No feeds to sync' });
+      return { ok: true, message: 'No feeds to sync' };
     }
 
     // Fetch the iCal feed
@@ -65,24 +72,24 @@ module.exports = async (req, res) => {
 
       if (!resp.ok) {
         await setSyncError(sql, instructor.id, `Feed returned HTTP ${resp.status}`);
-        return res.json({ ok: false, error: `HTTP ${resp.status}` });
+        return { ok: false, error: `HTTP ${resp.status}` };
       }
 
       text = await resp.text();
       if (text.length > 2 * 1024 * 1024) {
         await setSyncError(sql, instructor.id, 'Feed too large (>2MB)');
-        return res.json({ ok: false, error: 'Feed too large' });
+        return { ok: false, error: 'Feed too large' };
       }
     } catch (err) {
       const msg = err.name === 'AbortError' ? 'Feed timed out' : `Fetch failed: ${err.message}`;
       await setSyncError(sql, instructor.id, msg);
-      return res.json({ ok: false, error: msg });
+      return { ok: false, error: msg };
     }
 
     // Parse the iCal feed
     if (!text.includes('BEGIN:VCALENDAR')) {
       await setSyncError(sql, instructor.id, 'Response is not a valid iCal feed');
-      return res.json({ ok: false, error: 'Not iCal' });
+      return { ok: false, error: 'Not iCal' };
     }
 
     const ical = require('node-ical');
@@ -91,7 +98,7 @@ module.exports = async (req, res) => {
       parsed = ical.sync.parseICS(text);
     } catch (err) {
       await setSyncError(sql, instructor.id, 'Failed to parse iCal data');
-      return res.json({ ok: false, error: 'Parse failed' });
+      return { ok: false, error: 'Parse failed' };
     }
 
     // Expand events into individual occurrences within 90-day window
@@ -243,26 +250,21 @@ module.exports = async (req, res) => {
       WHERE id = ${instructor.id}
     `;
 
-    return res.json({ ok: true, instructor_id: instructor.id, events_synced: rows.length });
+    return { ok: true, instructor_id: instructor.id, events_synced: rows.length };
 
   } catch (err) {
-    // Retry once on transient Neon errors (cold start at 3am, control plane blips)
-    if (err.name === 'NeonDbError' && !req._icalSyncRetried) {
-      req._icalSyncRetried = true;
+    // Retry once on transient Neon errors (cold start at 3am, control plane blips).
+    // Stays inside the cron lock — withCronLock holds the lease across the retry.
+    if (err.name === 'NeonDbError' && retryAttempt === 0) {
       console.warn('[ical-sync] Neon transient error, retrying once…', err.message);
       await new Promise(r => setTimeout(r, 1000));
-      try {
-        return await module.exports(req, res);
-      } catch (retryErr) {
-        reportError('/api/ical-sync', retryErr);
-        return res.status(500).json({ error: 'Sync failed after retry' });
-      }
+      return runIcalSync(sql, 1);
     }
     console.error('ical-sync error:', err);
-    reportError('/api/ical-sync', err);
-    return res.status(500).json({ error: 'Sync failed' });
+    // Re-throw — withCronLock catches, reports, and sends a 500.
+    throw err;
   }
-};
+}
 
 async function setSyncError(sql, instructorId, message) {
   try {

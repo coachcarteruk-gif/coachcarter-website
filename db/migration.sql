@@ -1941,3 +1941,26 @@ DO $$ BEGIN
 EXCEPTION WHEN unique_violation THEN
   RAISE EXCEPTION 'uq_slot_reservation_slot: duplicate slot reservations exist. Run the cleanup query in PR-G before retrying.';
 END $$;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- CRON OVERLAP GUARDS (PR-I, audit #15)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Lease-based advisory locking for cron entry points. The Neon HTTP driver
+-- opens a fresh connection per query, so pg_advisory_lock (session-scoped)
+-- can't span the multiple round-trips a cron run makes. App-level lease
+-- table works over HTTP and self-recovers from crashed runs via expires_at.
+--
+-- See api/_cron-lock.js for the acquire/release logic and the per-cron
+-- lock keys + lease lengths. One row per active lock; rows are deleted on
+-- normal completion and otherwise expire on their lease.
+
+CREATE TABLE IF NOT EXISTS cron_locks (
+  lock_key    TEXT PRIMARY KEY,
+  owner       TEXT NOT NULL,                          -- random nonce identifying the holder
+  acquired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at  TIMESTAMPTZ NOT NULL                    -- lease expiry; reclaimable once past
+);
+
+CREATE INDEX IF NOT EXISTS idx_cron_locks_expires_at
+  ON cron_locks(expires_at);
+

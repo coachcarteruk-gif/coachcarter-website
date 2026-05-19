@@ -19,11 +19,11 @@
 //
 // Both triggers email ERROR_ALERT_EMAIL via _error-alert.js sendAlertEmail.
 
-const { neon } = require('@neondatabase/serverless');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { reportError, sendAlertEmail } = require('./_error-alert');
+const { sendAlertEmail } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
 const { computePlatformBalance } = require('./_platform-balance');
+const { withCronLock } = require('./_cron-lock');
 
 // Trigger B floor — outflow allowed to exceed inflow by up to this much
 // before alerting. £100 picked as a round noise floor; revisit if the alarm
@@ -34,9 +34,10 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-
+  // Lease 300s. Stripe.balance.retrieve + a few SELECTs typically <5s; the
+  // floor gives plenty of headroom while still letting a crashed run
+  // recover quickly on the next daily firing.
+  return withCronLock(req, res, 'cron-balance-snapshot', 300, async (sql) => {
     // 1. Compute the widget shape via the shared helper.
     const widget = await computePlatformBalance(sql, stripe);
 
@@ -142,7 +143,7 @@ module.exports = async (req, res) => {
       });
     }
 
-    return res.status(200).json({
+    return {
       ok: true,
       snapshot_id: snapshot.id,
       status: widget.status,
@@ -150,10 +151,6 @@ module.exports = async (req, res) => {
       trailing_30d_stripe_inflow_pence: trailingInflowPence,
       trailing_30d_payout_outflow_pence: trailingOutflowPence,
       trigger_b_fired: triggerBFired
-    });
-  } catch (err) {
-    console.error('cron-balance-snapshot error:', err);
-    reportError('/api/cron-balance-snapshot', err);
-    return res.status(500).json({ error: 'Snapshot failed', details: err.message });
-  }
+    };
+  });
 };

@@ -19,10 +19,9 @@
 // confirmation email. See DEVELOPMENT-ROADMAP.md entry 2.88.
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { neon } = require('@neondatabase/serverless');
-const { reportError } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
+const { withCronLock } = require('./_cron-lock');
 
 // payment_type values that the webhook persists to credit_transactions.
 // The legacy pass_guarantee/calculator flow uses an in-memory Map and is
@@ -39,8 +38,9 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
+  // Lease 540s — paging through Stripe sessions can be slow on busy days.
+  // Hourly schedule means a 9-min lease is well below the next firing.
+  return withCronLock(req, res, 'cron-reconcile-payments', 540, async (sql) => {
     const cutoff = Math.floor(Date.now() / 1000) - LOOKBACK_SECONDS;
 
     // Page through completed sessions in the lookback window.
@@ -65,7 +65,7 @@ module.exports = async (req, res) => {
 
     const checked = candidateSessions.length;
     if (checked === 0) {
-      return res.status(200).json({ ok: true, checked: 0, missing: 0 });
+      return { ok: true, checked: 0, missing: 0 };
     }
 
     // Bulk lookup — single round-trip rather than one query per session.
@@ -83,16 +83,13 @@ module.exports = async (req, res) => {
       await sendAlert(missing);
     }
 
-    return res.status(200).json({
+    return {
       ok: true,
       checked,
       missing: missing.length,
       missing_session_ids: missing.map(s => s.id),
-    });
-  } catch (err) {
-    reportError('/api/cron-reconcile-payments', err);
-    return res.status(500).json({ error: 'Reconciliation failed' });
-  }
+    };
+  });
 };
 
 async function sendAlert(missing) {

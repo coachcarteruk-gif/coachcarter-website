@@ -10,19 +10,18 @@
 // 4. Cleans up completed deletion requests >90 days
 // 5. Purges anonymized credit_transactions >7 years
 
-const { neon } = require('@neondatabase/serverless');
-const { reportError } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
+const { withCronLock } = require('./_cron-lock');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  const results = { soft_archived: 0, hard_deleted: 0, enquiries_archived: 0, enquiries_deleted: 0, requests_cleaned: 0, transactions_purged: 0 };
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
+  // Lease 600s — weekly cron, iterates over learners scheduled for hard
+  // delete (up to ~20 cascading DELETEs each). Real-world runs <30s but the
+  // floor matters if it ever falls behind on backlog.
+  return withCronLock(req, res, 'cron-retention', 600, async (sql) => {
+    const results = { soft_archived: 0, hard_deleted: 0, enquiries_archived: 0, enquiries_deleted: 0, requests_cleaned: 0, transactions_purged: 0 };
 
     // 1. Refresh last_activity_at from most recent activity
     await sql`
@@ -120,10 +119,6 @@ module.exports = async (req, res) => {
     await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '2 hours'`;
 
     console.log('retention cron results:', results);
-    return res.json({ ok: true, results });
-  } catch (err) {
-    console.error('cron-retention error:', err);
-    reportError('/api/cron-retention', err);
-    return res.status(500).json({ error: 'Retention cron failed', details: 'Internal server error' });
-  }
+    return { ok: true, results };
+  });
 };
