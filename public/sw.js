@@ -1,11 +1,18 @@
 // ── CoachCarter Service Worker ────────────────────────────────────────────────
 // Strategy: Cache app shell for instant loads, network-first for API/dynamic content
+//
+// Auth-route exclusion (PR-O, audit #20):
+// Never precache or cache HTML responses for /learner/*, /instructor/*, /admin/*.
+// If a stale SW served a cached /learner/index.html after the user switched
+// accounts, any inline-rendered user data on the shell would leak across
+// sessions. The dynamic data already flows through /api/* (excluded below),
+// but defence-in-depth: keep auth-gated HTML out of the cache entirely.
 
-const CACHE_NAME = 'cc-v4';
+const CACHE_NAME = 'cc-v5';
 const MAX_CACHE_ITEMS = 100;
+const AUTH_PATH_PREFIXES = ['/learner/', '/instructor/', '/admin/'];
 const SHELL_ASSETS = [
   '/',
-  '/learner/',
   '/sidebar.js',
   '/competency-config.js',
   '/Logo.png',
@@ -13,6 +20,10 @@ const SHELL_ASSETS = [
   '/icons/icon-192.png',
   '/offline.html'
 ];
+
+function isAuthPath(pathname) {
+  return AUTH_PATH_PREFIXES.some(prefix => pathname.startsWith(prefix));
+}
 
 // ── Install: cache app shell ─────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
@@ -53,8 +64,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For HTML pages: network first, fall back to cache, then offline page
+  // For HTML pages: network first, fall back to cache, then offline page.
+  // Auth-gated paths (/learner/*, /instructor/*, /admin/*) are network-only —
+  // never cached, never served from cache. Prevents stale per-user shells from
+  // leaking across sessions when a different account signs in.
   if (event.request.headers.get('accept')?.includes('text/html')) {
+    if (isAuthPath(url.pathname)) {
+      event.respondWith(
+        fetch(event.request).catch(() => caches.match('/offline.html'))
+      );
+      return;
+    }
     event.respondWith(
       fetch(event.request)
         .then(response => {
@@ -69,6 +89,11 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
+
+  // Static assets under auth-gated paths (e.g. /learner/foo.js) bypass the
+  // cache entirely. Same defence-in-depth as the HTML branch above — a
+  // per-user JS file shouldn't survive an account switch.
+  if (isAuthPath(url.pathname)) return;
 
   // For static assets (JS, CSS, images): cache first, network fallback
   event.respondWith(
