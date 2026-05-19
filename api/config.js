@@ -2,6 +2,7 @@ const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { safeEqual } = require('./_auth');
 const { validateBulkPricingConfig } = require('./_pricing-helpers');
+const { logAudit } = require('./_audit');
 
 module.exports = async (req, res) => {
   // ── GET: return current config ──────────────────────────────────────────
@@ -99,6 +100,18 @@ module.exports = async (req, res) => {
                 updated_at = NOW()
         `;
       }
+
+      // Audit-log the save. This endpoint authenticates via ADMIN_SECRET (not a
+      // JWT) so there's no admin.id/email — log the action under a synthetic
+      // identity like the learner self-delete pattern.
+      await logAudit(sql, {
+        adminId: null, adminEmail: 'admin-secret',
+        action: 'config.save',
+        targetType: schoolId > 1 || _source === 'school' ? 'school_config' : 'site_config',
+        targetId: schoolId,
+        details: { keys: Object.keys(cleanConfig) },
+        schoolId, req,
+      });
 
       return res.json({ success: true, updated_at: new Date().toISOString() });
 
