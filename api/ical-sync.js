@@ -10,13 +10,7 @@
 const { neon } = require('@neondatabase/serverless');
 const crypto   = require('crypto');
 const { reportError } = require('./_error-alert');
-
-function verifyCronAuth(req) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
-  const provided = req.query.key || req.headers['authorization']?.replace('Bearer ', '');
-  return provided === secret;
-}
+const { verifyCronAuth } = require('./_auth');
 
 function setCors(res) {
 }
