@@ -57,10 +57,10 @@ All three roles use email + password sign-in. Magic-link login was retired entir
 1. **New pages MUST include cookie consent**: Every HTML page must load `cookie-consent.js` and `posthog-loader.js` instead of inline PostHog. Never add inline PostHog scripts.
 2. **Never load analytics without consent**: PostHog, or any future tracking, must only load after the user accepts analytics cookies. Use the `posthog-loader.js` pattern.
 3. **New PII fields must be included in data export**: If you add a new table or column containing personal data, update `handleExportData()` in `api/learner.js` to include it.
-4. **New PII tables must be included in deletion cascade**: If you add a table referencing `learner_users`, add it to the deletion cascade in both `handleConfirmDeletion()` (learner.js) and `cron-retention.js`.
+4. **New PII tables must be included in deletion cascade**: If you add a table referencing `learner_users`, add the cleanup to `deleteLearnerCascade()` in `api/_gdpr.js` — the single shared helper used by learner self-delete (`api/learner.js`), admin delete (`api/admin.js`), and retention cron (`api/cron-retention.js`). Do not maintain per-call-site cascade lists.
 5. **New tenant-scoped GDPR tables need school_id**: Cookie consents, audit logs, and deletion requests are all scoped by `school_id`.
 6. **Admin data mutations must be audit-logged**: Any new admin action that creates, modifies, or deletes user data must call `logAudit()` from `api/_audit.js`.
-7. **Credit/financial records must never be hard-deleted**: Always anonymize (`learner_id = NULL, anonymized = true`) instead. 7-year legal retention.
+7. **Credit/financial records must never be hard-deleted**: Always anonymise instead. `credit_transactions` uses `learner_id = NULL, anonymized = true`; `lesson_bookings` uses `learner_id = NULL, learner_anonymized = true` (FK is `ON DELETE SET NULL`, May 2026). 7-year legal retention.
 8. **New third-party services**: If integrating a new service that processes personal data, update `public/privacy.html` to list it, and consider whether it needs consent.
 9. **Cookie consent categories**: Currently only "Necessary" (login tokens) and "Analytics" (PostHog). If adding marketing cookies or new tracking, add a new category to `cookie-consent.js`.
 10. **Data retention**: New tables with PII should have a retention policy. Add cleanup logic to `api/cron-retention.js` if data has a defined lifetime.

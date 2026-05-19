@@ -5,6 +5,7 @@ const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
 const { checkRateLimit } = require('./_rate-limit');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
+const { deleteLearnerCascade } = require('./_gdpr');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 // Every handler in this file operates on learner-owned data (skill ratings,
@@ -1264,40 +1265,29 @@ async function handleConfirmDeletion(req, res) {
     // Get learner email for confirmation
     const [learner] = await sql`SELECT name, email FROM learner_users WHERE id = ${learnerId}`;
 
-    // Mark request as confirmed
-    await sql`UPDATE deletion_requests SET status = 'confirmed', confirmed_at = NOW() WHERE id = ${request.id}`;
+    // Run the unified GDPR cascade (anonymises financial records, hard-deletes
+    // the rest, wraps in a Neon transaction). See api/_gdpr.js for the full
+    // table list and rationale. The deletion_requests row for this learner is
+    // deleted inside the cascade — the audit trail for the self-delete lives
+    // in the audit_log row written below.
+    await deleteLearnerCascade(sql, learnerId, { email: learner?.email });
 
-    // ── Cascading deletion ──
-    // 1. Anonymize credit_transactions (keep for 7-year tax retention)
-    await sql`UPDATE credit_transactions SET learner_id = NULL, anonymized = true WHERE learner_id = ${learnerId}`;
-
-    // 2. Delete related records (order matters for FK constraints)
-    // Delete related records using parameterized queries (no dynamic identifiers)
-    try { await sql`DELETE FROM skill_ratings WHERE user_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete skill_ratings skipped:', e.message); }
-    try { await sql`DELETE FROM driving_sessions WHERE user_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete driving_sessions skipped:', e.message); }
-    try { await sql`DELETE FROM quiz_results WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete quiz_results skipped:', e.message); }
-    try { await sql`DELETE FROM mock_test_faults WHERE mock_test_id IN (SELECT id FROM mock_tests WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete mock_test_faults skipped:', e.message); }
-    try { await sql`DELETE FROM mock_tests WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete mock_tests skipped:', e.message); }
-    try { await sql`DELETE FROM focused_practice_sessions WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete focused_practice_sessions skipped:', e.message); }
-    try { await sql`DELETE FROM sent_reminders WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete sent_reminders skipped:', e.message); }
-    try { await sql`DELETE FROM slot_reservations WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete slot_reservations skipped:', e.message); }
-    try { await sql`DELETE FROM lesson_confirmations WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})`; } catch (e) { console.warn('gdpr delete lesson_confirmations skipped:', e.message); }
-    try { await sql`DELETE FROM lesson_bookings WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete lesson_bookings skipped:', e.message); }
-    try { await sql`DELETE FROM learner_onboarding WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete learner_onboarding skipped:', e.message); }
-    try { await sql`DELETE FROM instructor_learner_notes WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete instructor_learner_notes skipped:', e.message); }
-    try { await sql`DELETE FROM learner_availability WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete learner_availability skipped:', e.message); }
-    if (learner?.email) { try { await sql`DELETE FROM magic_link_tokens WHERE email = ${learner.email}`; } catch (e) { console.warn('gdpr delete magic_link_tokens skipped:', e.message); } }
-    try { await sql`UPDATE learner_users SET referred_by = NULL WHERE referred_by = ${learnerId}`; } catch (e) { console.warn('gdpr nullify referred_by skipped:', e.message); }
-    try { await sql`DELETE FROM referrals WHERE learner_id = ${learnerId}`; } catch (e) { console.warn('gdpr delete referrals skipped:', e.message); }
-
-    // 3. Nullify cookie consent references
-    try { await sql`UPDATE cookie_consents SET learner_id = NULL WHERE learner_id = ${learnerId}`; } catch (e) {}
-
-    // 4. Delete the learner
-    await sql`DELETE FROM learner_users WHERE id = ${learnerId}`;
-
-    // 5. Mark request completed
-    await sql`UPDATE deletion_requests SET status = 'completed', completed_at = NOW() WHERE id = ${request.id}`;
+    // Audit-log the self-delete. Compensates for the deletion_requests row
+    // being cleared inside the cascade — without this, there would be no
+    // record that the learner ever existed.
+    try {
+      const { logAudit } = require('./_audit');
+      await logAudit(sql, {
+        adminId: null,
+        adminEmail: 'self-service',
+        action: 'learner.self_delete',
+        targetType: 'learner',
+        targetId: learnerId,
+        details: { name: learner?.name || null, email: learner?.email || null },
+        schoolId,
+        req,
+      });
+    } catch (e) { console.warn('audit log for self-delete failed:', e.message); }
 
     // 6. Send confirmation email
     if (learner?.email) {

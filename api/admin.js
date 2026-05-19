@@ -56,6 +56,7 @@ const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin,
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { logAudit } = require('./_audit');
+const { deleteLearnerCascade } = require('./_gdpr');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
@@ -1082,15 +1083,12 @@ async function handleDeleteLearner(req, res) {
     const [learner] = await sql`SELECT id, name, email FROM learner_users WHERE id = ${learner_id} AND school_id = ${schoolId}`;
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
-    // Delete associated data (order matters for foreign keys)
-    // Anonymize credit transactions (7-year tax retention)
-    try { await sql`UPDATE credit_transactions SET learner_id = NULL, anonymized = true WHERE learner_id = ${learner_id}`; } catch (e) { console.warn('anonymize credit_transactions skipped:', e.message); }
-    try { await sql`DELETE FROM skill_ratings WHERE user_id = ${learner_id}`; } catch (e) { console.warn('delete skill_ratings skipped:', e.message); }
-    try { await sql`DELETE FROM driving_sessions WHERE user_id = ${learner_id}`; } catch (e) { console.warn('delete driving_sessions skipped:', e.message); }
-    try { await sql`DELETE FROM lesson_bookings WHERE learner_id = ${learner_id}`; } catch (e) { console.warn('delete lesson_bookings skipped:', e.message); }
-
-    // Delete the learner
-    await sql`DELETE FROM learner_users WHERE id = ${learner_id}`;
+    // Run the unified GDPR cascade. Previously this path only cleaned up 4
+    // tables explicitly and relied on the ON DELETE CASCADE FK on
+    // lesson_bookings.learner_id (and others) to mop up the rest — that
+    // cascade is gone after PR-K's migration (financial records now
+    // anonymise, not delete). See api/_gdpr.js.
+    await deleteLearnerCascade(sql, learner_id, { email: learner.email });
 
     await logAudit(sql, { adminId: admin.id, adminEmail: admin.email, action: 'delete-learner', targetType: 'learner', targetId: learner_id, details: { name: learner.name, email: learner.email }, schoolId, req });
 
