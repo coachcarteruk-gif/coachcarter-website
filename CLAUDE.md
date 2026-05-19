@@ -213,6 +213,7 @@ When making structural changes (new tables, new API routes, new shared modules, 
 - `INSTRUCTORBOOK-PLAN.md` — InstructorBook national SaaS strategy, pricing, competitive analysis, marketplace phasing
 - `FRANCHISE-MODEL-PLAN.md` — multi-instructor franchise expansion: schema, code, configurability, legal-status research, MVP scope, deferred phases with trigger conditions
 - `INSTRUCTOR-EXPERIENCE-PLAN.md` — non-software companion to FRANCHISE-MODEL-PLAN: cold-start lead allocation, three crunch moments, signing-day conversation, 90-day success criteria for instructor #2
+- `PER-INSTRUCTOR-CREDITS-PLAN.md` — revised delivery sequencing (2026-05-19) for per-instructor credit scoping. Supersedes `INSTRUCTOR-PAYMENTS-PLAN.md` Steps 3–4g sequencing; adds transactional refactor (Step 0), in-flight-checkout legacy branch, `list_price_source` honesty tag, and hoists pricing fallback ahead of Phase 2A.
 
 **Area reference (load on demand):**
 - [`docs/multi-tenancy.md`](docs/multi-tenancy.md) — schools, roles, auth module, branding, school onboarding
