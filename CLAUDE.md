@@ -214,6 +214,7 @@ When making structural changes (new tables, new API routes, new shared modules, 
 - `FRANCHISE-MODEL-PLAN.md` — multi-instructor franchise expansion: schema, code, configurability, legal-status research, MVP scope, deferred phases with trigger conditions
 - `INSTRUCTOR-EXPERIENCE-PLAN.md` — non-software companion to FRANCHISE-MODEL-PLAN: cold-start lead allocation, three crunch moments, signing-day conversation, 90-day success criteria for instructor #2
 - `PER-INSTRUCTOR-CREDITS-PLAN.md` — revised delivery sequencing (2026-05-19) for per-instructor credit scoping. Supersedes `INSTRUCTOR-PAYMENTS-PLAN.md` Steps 3–4g sequencing; adds transactional refactor (Step 0), in-flight-checkout legacy branch, `list_price_source` honesty tag, and hoists pricing fallback ahead of Phase 2A.
+- `LEARNER-INSTRUCTOR-SELECTION-PLAN.md` — DRAFT learner-UX plan (2026-05-19) for the multi-instructor front door: `/instructors` index, per-instructor profile pages, retiring `book.html` + `buy-credits.html`. Ships AFTER `PER-INSTRUCTOR-CREDITS-PLAN.md` Steps 0–5. Coupling-impact review against credits plan still outstanding.
 
 **Area reference (load on demand):**
 - [`docs/multi-tenancy.md`](docs/multi-tenancy.md) — schools, roles, auth module, branding, school onboarding
