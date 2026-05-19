@@ -6,6 +6,7 @@ const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
 const { SCHEDULED } = require('./_booking-status');
 const { fetchSessionFeePence } = require('./_stripe-fee');
+const { grantCredits } = require('./_credit-grant');
 
 
 // Resolve school_id from Stripe metadata with a tenant-safe fallback.
@@ -186,14 +187,6 @@ async function handleCreditPurchase(session) {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = await resolveSchoolId(sql, metadata, session.id);
 
-    // Idempotency check — skip if this session was already processed
-    const [existing] = await sql`
-      SELECT id FROM credit_transactions WHERE stripe_session_id = ${session.id}
-    `;
-    if (existing) {
-      return;
-    }
-
     // Determine payment method (card or klarna)
     const paymentMethod = session.payment_method_types?.[0] || 'card';
 
@@ -207,35 +200,30 @@ async function handleCreditPurchase(session) {
     // as zero in the meantime.
     const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
 
-    // 1. Record the transaction. uq_credit_tx_session catches the
-    // webhook-vs-verify-session race (and Stripe retries on 5xx) by
-    // rejecting a second INSERT with the same session id. Treated as
-    // already-processed — same outcome as the SELECT idempotency guard
-    // above, but DB-enforced rather than app-enforced.
-    try {
-      await sql`
-        INSERT INTO credit_transactions
-          (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
-        VALUES
-          (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${session.id}, ${minutes}, ${schoolId}, ${stripeFeePence})
-      `;
-    } catch (insertErr) {
-      if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
-        console.log(`⏭  credit_purchase ${session.id} — already processed (uq_credit_tx_session)`);
-        return;
-      }
-      throw insertErr;
+    // Record the transaction and increment the balance in one statement.
+    // uq_credit_tx_session makes webhook-vs-verify and Stripe retries safe.
+    const grant = await grantCredits({
+      sql,
+      learnerId,
+      schoolId,
+      credits,
+      minutes,
+      amountPence,
+      paymentMethod,
+      sessionId: session.id,
+      stripeFeePence,
+    });
+
+    if (!grant.ok) {
+      throw new Error(`credit_purchase ${session.id}: ${grant.code || 'GRANT_FAILED'}`);
+    }
+    if (grant.alreadyProcessed) {
+      console.log(`credit_purchase ${session.id} already processed`);
+      return;
     }
 
-    // 2. Increment the learner's balance atomically (both columns for transition)
-    await sql`
-      UPDATE learner_users
-      SET credit_balance = credit_balance + ${credits},
-          balance_minutes = balance_minutes + ${minutes}
-      WHERE id = ${learnerId}
-    `;
 
-    // 3. Send confirmation email via nodemailer
+    // Send confirmation email via nodemailer.
     const transporter = createTransporter();
 
     await transporter.sendMail({
