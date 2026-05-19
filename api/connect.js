@@ -37,6 +37,7 @@ const jwt      = require('jsonwebtoken');
 const { requireAuth }       = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
+const { logAudit }          = require('./_audit');
 
 const BASE_URL = process.env.BASE_URL || 'https://coachcarter.uk';
 
@@ -251,6 +252,14 @@ async function handleAdminCreateAccount(req, res) {
       type: 'account_onboarding'
     });
 
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: 'connect.admin_create_account',
+      targetType: 'instructor', targetId: instructor.id,
+      details: { instructor_name: instructor.name, stripe_account_id: accountId },
+      schoolId: adminSchoolId, req,
+    });
+
     return res.json({ ok: true, onboarding_url: link.url, account_id: accountId });
   } catch (err) {
     reportError('/api/connect?action=admin-create-account', err);
@@ -316,6 +325,14 @@ async function handleAdminSendInvite(req, res) {
       `
     });
 
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: 'connect.admin_send_invite',
+      targetType: 'instructor', targetId: instructor.id,
+      details: { instructor_name: instructor.name, instructor_email: instructor.email, stripe_account_id: accountId },
+      schoolId: adminSchoolId, req,
+    });
+
     return res.json({ ok: true, email_sent: true, account_id: accountId });
   } catch (err) {
     reportError('/api/connect?action=admin-send-invite', err);
@@ -352,6 +369,14 @@ async function handleSchoolCreateAccount(req, res) {
     });
 
     await sql`UPDATE schools SET stripe_account_id = ${account.id} WHERE id = ${schoolId}`;
+
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: 'connect.school_create_account',
+      targetType: 'school', targetId: schoolId,
+      details: { school_name: school.name, stripe_account_id: account.id },
+      schoolId, req,
+    });
 
     return res.json({ ok: true, account_id: account.id });
   } catch (err) {
@@ -416,6 +441,18 @@ async function handleSchoolConnectStatus(req, res) {
       if (account.charges_enabled && account.payouts_enabled) {
         await sql`UPDATE schools SET stripe_onboarding_complete = TRUE WHERE id = ${schoolId}`;
         result.onboarding_complete = true;
+
+        // Log the onboarding-complete transition. This is a persistent state
+        // change triggered by Stripe (not the admin clicking a button), so
+        // record it once when the flag flips. Subsequent calls find
+        // stripe_onboarding_complete = TRUE and skip this branch.
+        await logAudit(sql, {
+          adminId: admin.id, adminEmail: admin.email,
+          action: 'connect.school_onboarding_complete',
+          targetType: 'school', targetId: schoolId,
+          details: { stripe_account_id: school.stripe_account_id },
+          schoolId, req,
+        });
       }
     }
 

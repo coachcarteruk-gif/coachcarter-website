@@ -542,6 +542,18 @@ async function handleEditBooking(req, res) {
       } catch (emailErr) { console.error('Failed to send edit email:', emailErr); }
     }
 
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: 'admin.edit_booking',
+      targetType: 'booking', targetId: booking_id,
+      details: {
+        old: { scheduled_date: booking.scheduled_date, start_time: booking.start_time, end_time: booking.end_time, lesson_type_id: booking.lesson_type_id },
+        new: { scheduled_date: newDate, start_time: newStartTime, end_time: newEndTime, lesson_type_id: newLessonTypeId },
+        force: !!force,
+      },
+      schoolId, req,
+    });
+
     return res.json({ ok: true, booking_id });
   } catch (err) {
     console.error('admin edit-booking error:', err);
@@ -987,6 +999,14 @@ async function handleUpdateLearner(req, res) {
       schoolId, req
     });
 
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: 'admin.update_learner',
+      targetType: 'learner', targetId: parseInt(learner_id, 10),
+      details: { fields_changed: Object.keys(req.body || {}).filter(k => k !== 'learner_id') },
+      schoolId, req,
+    });
+
     return res.json({ ok: true, learner: after });
   } catch (err) {
     console.error('admin update-learner error:', err);
@@ -1162,6 +1182,14 @@ async function handleTogglePayoutPause(req, res) {
       UPDATE instructors SET payouts_paused = ${paused} WHERE id = ${instructor_id} AND school_id = ${schoolId} RETURNING id, name
     `;
     if (!updated) return res.status(404).json({ error: 'Instructor not found' });
+
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: paused ? 'admin.payouts_pause' : 'admin.payouts_resume',
+      targetType: 'instructor', targetId: updated.id,
+      details: { instructor_name: updated.name, paused },
+      schoolId, req,
+    });
 
     return res.json({ ok: true, instructor_id: updated.id, name: updated.name, payouts_paused: paused });
   } catch (err) {
@@ -1555,6 +1583,14 @@ async function handleSetInstructorBlackouts(req, res) {
         AND end_date >= CURRENT_DATE
       ORDER BY blackout_date ASC
     `;
+
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: 'admin.set_instructor_blackouts',
+      targetType: 'instructor', targetId: parseInt(instructor_id, 10),
+      details: { ranges_count: saved.length },
+      schoolId, req,
+    });
 
     return res.json({ ok: true, blackout_dates: saved });
   } catch (err) {

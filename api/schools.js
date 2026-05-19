@@ -16,6 +16,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin } = require('./_auth');
 const { reportError } = require('./_error-alert');
+const { logAudit } = require('./_audit');
 const { BLOCKING_STATUSES } = require('./_booking-status');
 
 function setCors(res) {
@@ -147,6 +148,14 @@ async function handleCreate(req, res) {
               ${primary_colour || null}, ${secondary_colour || null}, ${accent_colour || null}, ${website_url || null})
       RETURNING *`;
 
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: 'school.create',
+      targetType: 'school', targetId: school.id,
+      details: { name: school.name, slug: school.slug },
+      schoolId: school.id, req,
+    });
+
     return res.json({ ok: true, school });
   } catch (err) {
     reportError('/api/schools', err);
@@ -214,6 +223,17 @@ async function handleUpdate(req, res) {
       WHERE id = ${targetId}
       RETURNING *`;
 
+    // Capture only the fields the caller asked to change — avoid logging the
+    // entire row twice (full row is in pg history if it's ever needed).
+    const changed = Object.keys(req.body || {}).filter(k => k !== 'school_id');
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: 'school.update',
+      targetType: 'school', targetId: school.id,
+      details: { fields_changed: changed },
+      schoolId: school.id, req,
+    });
+
     return res.json({ ok: true, school });
   } catch (err) {
     reportError('/api/schools', err);
@@ -246,6 +266,14 @@ async function handleToggle(req, res) {
     if (!school) {
       return res.status(404).json({ error: true, code: 'SCHOOL_NOT_FOUND', message: 'School not found' });
     }
+
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: school.active ? 'school.activate' : 'school.deactivate',
+      targetType: 'school', targetId: school.id,
+      details: { name: school.name, active: school.active },
+      schoolId: school.id, req,
+    });
 
     return res.json({ ok: true, school });
   } catch (err) {
@@ -287,6 +315,14 @@ async function handleCreateAdmin(req, res) {
       INSERT INTO admin_users (school_id, name, email, password_hash)
       VALUES (${parseInt(school_id, 10)}, ${name}, ${email.toLowerCase()}, ${password_hash})
       RETURNING id, school_id, name, email, created_at`;
+
+    await logAudit(sql, {
+      adminId: admin.id, adminEmail: admin.email,
+      action: 'admin.create',
+      targetType: 'admin_users', targetId: created.id,
+      details: { name: created.name, email: created.email, school_id: created.school_id },
+      schoolId: created.school_id, req,
+    });
 
     return res.json({ ok: true, admin: created });
   } catch (err) {
