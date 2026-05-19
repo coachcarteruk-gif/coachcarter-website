@@ -7,12 +7,14 @@ const { checkRateLimit } = require('./_rate-limit');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
-// Delegates to shared requireAuth for cookie-first reads. No role filter is
-// applied (matches the pre-consolidation behaviour — any valid JWT). All
-// learner.js handlers are learner-targeted so in practice only cc_learner
-// will authenticate.
+// Every handler in this file operates on learner-owned data (skill ratings,
+// onboarding, deletion requests, profile, etc.) and there is no legitimate
+// cross-role use case. The wrapper gates on role='learner' so a stale
+// instructor or admin cookie cannot reach a learner endpoint and act under
+// the wrong user_id. Legacy learner tokens (pre-multi-tenancy, no `role`
+// field) still pass — requireAuth normalises them to 'learner' at line 178.
 function verifyAuth(req) {
-  return requireAuth(req);
+  return requireAuth(req, { roles: ['learner'] });
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────

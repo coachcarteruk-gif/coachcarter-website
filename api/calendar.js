@@ -23,10 +23,15 @@ const SLOT_MINUTES = 90;
 function setCors(res) {
 }
 
-// Delegates to shared requireAuth for cookie-first reads. No role filter
-// is applied (matches pre-consolidation behaviour).
+// Learner-only auth. The two handlers that use this wrapper
+// (handleDownload, handleFeedUrl) both read learner-scoped data via
+// learner_users.calendar_token, so a stale instructor or admin cookie
+// must not be accepted. handleInstructorFeedUrl has its own
+// verifyInstructorAuth wrapper below; the two public feed handlers
+// (handleFeed, handleInstructorFeed) authenticate via calendar token
+// rather than JWT and do not use this wrapper.
 function verifyAuth(req) {
-  return requireAuth(req);
+  return requireAuth(req, { roles: ['learner'] });
 }
 
 module.exports = async (req, res) => {
