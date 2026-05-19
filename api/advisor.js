@@ -168,7 +168,8 @@ async function handleCreateCheckout(toolInput, user, origin) {
       learner_email:     emailValid ? user.email : '',
       credits_purchased: String(qty),
       discount_pct:      String(price.discountPct),
-      amount_pence:      String(price.totalPence)
+      amount_pence:      String(price.totalPence),
+      school_id:         String(user.school_id || 1)
     },
     ...(emailValid ? { customer_email: user.email } : {}),
     billing_address_collection: 'required',

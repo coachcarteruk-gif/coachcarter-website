@@ -1320,6 +1320,7 @@ async function handleCheckoutSlot(req, res) {
         AND scheduled_date = ${date}
         AND start_time = ${start_time}::time
         AND status = ${SCHEDULED}
+        AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (existingBooking)
       return res.status(409).json({ error: 'Sorry, that slot is already booked.' });
@@ -1332,6 +1333,7 @@ async function handleCheckoutSlot(req, res) {
         AND start_time = ${start_time}::time
         AND expires_at > NOW()
         AND learner_id != ${user.id}
+        AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (existingReservation)
       return res.status(409).json({ error: 'Someone else is currently booking this slot. Try another or wait a few minutes.' });
@@ -1345,14 +1347,18 @@ async function handleCheckoutSlot(req, res) {
           AND start_time = ${start_time}::time
           AND status = 'pending'
           AND expires_at > NOW()
+          AND COALESCE(school_id, 1) = ${schoolId}
       `;
       if (existingOffer)
         return res.status(409).json({ error: 'This slot is currently held for a pending lesson offer.' });
     } catch (e) { /* table may not exist yet */ }
 
-    // Check instructor is valid
+    // Check instructor is valid (and belongs to this school)
     const [instructor] = await sql`
-      SELECT id, name FROM instructors WHERE id = ${instructor_id} AND active = true
+      SELECT id, name FROM instructors
+      WHERE id = ${instructor_id}
+        AND active = true
+        AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found' });
@@ -1397,7 +1403,8 @@ async function handleCheckoutSlot(req, res) {
         end_time,
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
-        amount_pence:    String(pricePence)
+        amount_pence:    String(pricePence),
+        school_id:       String(schoolId)
       },
       ...(emailValid ? { customer_email: learner.email } : {}),
       billing_address_collection: 'required',
@@ -1506,6 +1513,7 @@ async function handleCheckoutSlotGuest(req, res) {
         AND scheduled_date = ${date}
         AND start_time = ${start_time}::time
         AND status = ${SCHEDULED}
+        AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (existingBooking)
       return res.status(409).json({ error: 'Sorry, that slot is already booked.' });
@@ -1516,6 +1524,7 @@ async function handleCheckoutSlotGuest(req, res) {
         AND scheduled_date = ${date}
         AND start_time = ${start_time}::time
         AND expires_at > NOW()
+        AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (existingReservation)
       return res.status(409).json({ error: 'Someone else is currently booking this slot. Try another or wait a few minutes.' });
@@ -1528,13 +1537,17 @@ async function handleCheckoutSlotGuest(req, res) {
           AND start_time = ${start_time}::time
           AND status = 'pending'
           AND expires_at > NOW()
+          AND COALESCE(school_id, 1) = ${schoolId}
       `;
       if (existingOffer)
         return res.status(409).json({ error: 'This slot is currently held for a pending lesson offer.' });
     } catch (e) { /* table may not exist yet */ }
 
     const [instructor] = await sql`
-      SELECT id, name FROM instructors WHERE id = ${instructor_id} AND active = true
+      SELECT id, name FROM instructors
+      WHERE id = ${instructor_id}
+        AND active = true
+        AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found' });

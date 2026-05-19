@@ -13,6 +13,40 @@ const { fetchSessionFeePence } = require('./_stripe-fee');
 // purchase flow writes directly to Neon instead.
 const bookings = new Map();
 
+// Resolve school_id from Stripe metadata with a tenant-safe fallback.
+// Order: metadata.school_id → lookup via instructor_id (instructors are
+// school-unique) → metadata.learner_id → hard fallback to 1 with an alert.
+// The fallback prevents non-school-1 paid bookings from being silently
+// attributed to school 1 if metadata was written before this safety net.
+async function resolveSchoolId(sql, metadata, sessionId) {
+  const fromMeta = parseInt(metadata?.school_id, 10);
+  if (fromMeta) return fromMeta;
+
+  const instructorId = parseInt(metadata?.instructor_id, 10);
+  if (instructorId) {
+    try {
+      const [row] = await sql`SELECT school_id FROM instructors WHERE id = ${instructorId}`;
+      if (row?.school_id) return row.school_id;
+    } catch (_) { /* fall through */ }
+  }
+
+  const learnerId = parseInt(metadata?.learner_id, 10);
+  if (learnerId) {
+    try {
+      const [row] = await sql`SELECT school_id FROM learner_users WHERE id = ${learnerId}`;
+      if (row?.school_id) return row.school_id;
+    } catch (_) { /* fall through */ }
+  }
+
+  console.error('⚠️ webhook: school_id missing from metadata and cannot be derived', {
+    sessionId, payment_type: metadata?.payment_type, instructorId, learnerId
+  });
+  reportError('/api/webhook (school_id fallback)', new Error(
+    `school_id missing in webhook metadata for session ${sessionId}; defaulting to 1`
+  ));
+  return 1;
+}
+
 module.exports = async (req, res) => {
   // Raw body needed for Stripe signature
   if (req.method !== 'POST') {
@@ -121,7 +155,6 @@ async function handleCreditPurchase(session) {
   const credits       = parseInt(metadata.credits_purchased, 10);
   const amountPence   = parseInt(metadata.amount_pence, 10);
   const learnerEmail  = metadata.learner_email || session.customer_email;
-  const schoolId      = parseInt(metadata.school_id, 10) || 1;
 
   if (!learnerId || !credits) {
     console.error('❌ credit_purchase webhook missing learner_id or credits_purchased', metadata);
@@ -130,6 +163,7 @@ async function handleCreditPurchase(session) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = await resolveSchoolId(sql, metadata, session.id);
 
     // Idempotency check — skip if this session was already processed
     const [existing] = await sql`
@@ -263,7 +297,6 @@ async function handleSlotBooking(session) {
   const amountPence   = parseInt(metadata.amount_pence, 10);
   const lessonTypeId  = metadata.lesson_type_id ? parseInt(metadata.lesson_type_id, 10) : null;
   const durationMins  = parseInt(metadata.duration_minutes, 10) || 90;
-  const schoolId      = parseInt(metadata.school_id, 10) || 1;
 
   if (!learnerId || !instructorId || !scheduledDate || !startTime || !endTime) {
     console.error('❌ slot_booking webhook missing required metadata', metadata);
@@ -272,6 +305,7 @@ async function handleSlotBooking(session) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = await resolveSchoolId(sql, metadata, session.id);
 
     // Idempotency check
     const [existing] = await sql`
@@ -783,7 +817,6 @@ async function handleOfferBooking(session) {
   const amountPence    = parseInt(metadata.amount_pence, 10);
   const lessonTypeId   = metadata.lesson_type_id ? parseInt(metadata.lesson_type_id, 10) : null;
   const durationMins   = parseInt(metadata.duration_minutes, 10) || 90;
-  const schoolId       = parseInt(metadata.school_id, 10) || 1;
 
   const isFlexible = metadata.is_flexible === '1';
   const repeatWeeks = Math.max(1, parseInt(metadata.repeat_weeks, 10) || 1);
@@ -794,6 +827,7 @@ async function handleOfferBooking(session) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = await resolveSchoolId(sql, metadata, session.id);
 
     // Idempotency — check offer hasn't already been processed
     const [offer] = await sql`

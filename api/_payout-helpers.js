@@ -361,16 +361,34 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
 
 /**
  * Process payouts for all eligible instructors. Returns summary.
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.schoolId] If set, only instructors at this school are
+ *   processed. Required so a school admin clicking the manual "process
+ *   payouts" button cannot trigger Stripe transfers to instructors at
+ *   another school. The Friday cron passes no opts and processes every
+ *   active school. Superadmin manual triggers similarly omit schoolId.
  */
-async function processAllPayouts(sql, stripe) {
-  const instructors = await sql`
-    SELECT id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id, payouts_start_date
-      FROM instructors
-     WHERE active = TRUE
-       AND stripe_onboarding_complete = TRUE
-       AND payouts_paused = FALSE
-       AND stripe_account_id IS NOT NULL
-  `;
+async function processAllPayouts(sql, stripe, opts = {}) {
+  const { schoolId } = opts;
+  const instructors = schoolId
+    ? await sql`
+        SELECT id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id, payouts_start_date
+          FROM instructors
+         WHERE active = TRUE
+           AND stripe_onboarding_complete = TRUE
+           AND payouts_paused = FALSE
+           AND stripe_account_id IS NOT NULL
+           AND school_id = ${schoolId}
+      `
+    : await sql`
+        SELECT id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id, payouts_start_date
+          FROM instructors
+         WHERE active = TRUE
+           AND stripe_onboarding_complete = TRUE
+           AND payouts_paused = FALSE
+           AND stripe_account_id IS NOT NULL
+      `;
 
   const results = { processed: 0, skipped: 0, failed: 0, total_pence: 0, details: [] };
 

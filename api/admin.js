@@ -1309,11 +1309,20 @@ async function handleProcessPayouts(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
-  const schoolId = getAdminSchoolId(admin, req);
+
+  // School admins always scope to their own school. Superadmins can target
+  // a specific school via ?school_id=, or omit it to mirror the Friday cron
+  // (all active schools). We pass `undefined` rather than 1 in the all-schools
+  // case so processAllPayouts skips its school filter entirely.
+  const isSuperadmin = admin.school_id == null;
+  const querySchoolId = parseInt(req.query?.school_id, 10);
+  const schoolId = isSuperadmin
+    ? (querySchoolId || undefined)
+    : admin.school_id;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const results = await processAllPayouts(sql, stripe, { schoolId });
+    const results = await processAllPayouts(sql, stripe, schoolId ? { schoolId } : {});
 
     // Send the same weekly summary email that the Friday cron sends so the
     // admin trigger and the cron produce identical artefacts. Fire-and-forget:
