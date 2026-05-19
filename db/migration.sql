@@ -1830,3 +1830,65 @@ CREATE TABLE IF NOT EXISTS platform_balance_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_pbs_captured_at
   ON platform_balance_snapshots(captured_at DESC);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- STRIPE SESSION IDEMPOTENCY (PR-G, audit #07 + #11)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Two related races the app-level check-then-insert pattern can't catch:
+--
+--   1. credit_transactions: webhook handler (api/webhook.js) AND verify-session
+--      (api/credits.js) both watch the same Stripe checkout completion event.
+--      Stripe retries on 5xx, and a learner hitting /success while the webhook
+--      is still in flight produces two concurrent INSERTs against the same
+--      stripe_session_id. The SELECT-then-INSERT idempotency check passes on
+--      both. Result: duplicate transactions, doubled credits.
+--
+--   2. slot_reservations: two learners clicking the same slot at the same time
+--      both pass the existence check (no reservation yet), both create Stripe
+--      sessions, both INSERT. The ON CONFLICT DO NOTHING in the existing INSERT
+--      is a no-op because no unique constraint backs it. Result: two paid
+--      learners for one slot — the later booking insert fails on
+--      uq_instructor_slot but the loser has already paid Stripe.
+--
+-- Fix: add the DB-level uniqueness the app code thought it had. Code-side
+-- catches the duplicate-key error and degrades gracefully (already_processed
+-- for credits; 409 + Stripe session expire for reservations).
+--
+-- Both are wrapped in idempotent DO blocks so a re-run is safe.
+
+DO $$ BEGIN
+  -- credit_transactions: stripe_session_id is nullable (non-Stripe transactions
+  -- like referral rewards leave it NULL). Partial unique index keeps NULLs
+  -- unrestricted while enforcing uniqueness on the Stripe-funded rows.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname  = 'uq_credit_tx_session'
+  ) THEN
+    CREATE UNIQUE INDEX uq_credit_tx_session
+      ON credit_transactions(stripe_session_id)
+      WHERE stripe_session_id IS NOT NULL;
+  END IF;
+EXCEPTION WHEN unique_violation THEN
+  -- Existing duplicates block the index. Surfaced as a migration error so
+  -- the operator runs the cleanup query in PR-G's migration notes first.
+  RAISE EXCEPTION 'uq_credit_tx_session: duplicate stripe_session_id values exist. Run the cleanup query in PR-G before retrying.';
+END $$;
+
+DO $$ BEGIN
+  -- slot_reservations: one active reservation per slot. The expires_at
+  -- predicate can't go in the index (NOW() is non-immutable), but the
+  -- existing DELETE-expired pass before INSERT removes stale rows, so a
+  -- fresh INSERT only ever races against a still-live one. The new
+  -- ON CONFLICT clause in api/slots.js relies on this exact name.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname  = 'uq_slot_reservation_slot'
+  ) THEN
+    CREATE UNIQUE INDEX uq_slot_reservation_slot
+      ON slot_reservations(instructor_id, scheduled_date, start_time);
+  END IF;
+EXCEPTION WHEN unique_violation THEN
+  RAISE EXCEPTION 'uq_slot_reservation_slot: duplicate slot reservations exist. Run the cleanup query in PR-G before retrying.';
+END $$;

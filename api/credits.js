@@ -242,13 +242,25 @@ async function handleVerify(req, res) {
       return res.json({ ok: true, already_processed: true });
     }
 
-    // 6. Record the transaction
-    await sql`
-      INSERT INTO credit_transactions
-        (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id)
-      VALUES
-        (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${sessionId}, ${minutes}, ${schoolId})
-    `;
+    // 6. Record the transaction. The SELECT at step 5 is the fast-path
+    // idempotency guard; uq_credit_tx_session is the DB-enforced backstop
+    // for the genuine race — webhook and verify-session can both see no
+    // row, both INSERT, one loses. The loser must NOT proceed to step 7,
+    // otherwise the balance gets double-credited.
+    try {
+      await sql`
+        INSERT INTO credit_transactions
+          (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id)
+        VALUES
+          (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${sessionId}, ${minutes}, ${schoolId})
+      `;
+    } catch (insertErr) {
+      if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
+        // Webhook beat us to it. Same outcome as the recheck branch above.
+        return res.json({ ok: true, already_processed: true });
+      }
+      throw insertErr;
+    }
 
     // 7. Increment the learner's balance atomically
     await sql`
