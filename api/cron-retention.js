@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
   // delete (up to ~20 cascading DELETEs each). Real-world runs <30s but the
   // floor matters if it ever falls behind on backlog.
   return withCronLock(req, res, 'cron-retention', 600, async (sql) => {
-    const results = { soft_archived: 0, hard_deleted: 0, enquiries_archived: 0, enquiries_deleted: 0, requests_cleaned: 0, transactions_purged: 0, bookings_purged: 0 };
+    const results = { soft_archived: 0, hard_deleted: 0, enquiries_archived: 0, enquiries_deleted: 0, requests_cleaned: 0, transactions_purged: 0, bookings_purged: 0, notifications_purged: 0 };
 
     // 1. Refresh last_activity_at from most recent activity
     await sql`
@@ -106,6 +106,16 @@ module.exports = async (req, res) => {
 
     // 9. Clean up expired rate limit entries
     await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '2 hours'`;
+
+    // 10. Purge notification_log entries >90 days (PR-N, May 2026).
+    //     Operational log for support triage, not a GDPR record. 90 days is
+    //     well past the window where "did I get the email?" support tickets
+    //     could plausibly land, and keeps the table from growing unboundedly.
+    const purgedNotifications = await sql`
+      DELETE FROM notification_log
+      WHERE created_at < NOW() - INTERVAL '90 days'
+      RETURNING id`;
+    results.notifications_purged = purgedNotifications.length;
 
     console.log('retention cron results:', results);
     return { ok: true, results };

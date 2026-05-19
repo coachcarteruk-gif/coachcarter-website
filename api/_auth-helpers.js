@@ -1,9 +1,17 @@
 // Shared authentication helpers used by magic-link.js and instructor.js
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const { logNotification } = require('./_notification-log');
 
 /** Create a reusable nodemailer transporter from env vars.
- *  Wraps sendMail to sanitize recipient addresses, preventing 501 SMTP errors. */
+ *  Wraps sendMail to:
+ *    1. Sanitize recipient addresses (preventing 501 SMTP errors).
+ *    2. Record every send attempt to notification_log.
+ *
+ *  Callers may attach a `_log` field to mailOptions to enrich the log row:
+ *    mailOptions._log = { purpose, learnerId, instructorId, schoolId }
+ *  If omitted, the row is recorded with purpose='other' and no foreign keys.
+ *  The `_log` field is stripped before being passed to nodemailer. */
 function createTransporter() {
   const transport = nodemailer.createTransport({
     host:   process.env.SMTP_HOST,
@@ -13,15 +21,57 @@ function createTransporter() {
   });
 
   const origSendMail = transport.sendMail.bind(transport);
-  transport.sendMail = function(mailOptions, ...args) {
+  transport.sendMail = async function(mailOptions, ...args) {
+    const logMeta = (mailOptions && mailOptions._log) || {};
+    if (mailOptions && '_log' in mailOptions) delete mailOptions._log;
+
+    let cleanedTo = null;
     if (mailOptions && mailOptions.to) {
-      const cleaned = sanitizeEmail(mailOptions.to);
-      if (!cleaned) {
-        return Promise.reject(new Error(`Invalid recipient email: ${mailOptions.to}`));
+      cleanedTo = sanitizeEmail(mailOptions.to);
+      if (!cleanedTo) {
+        await logNotification({
+          channel: 'email',
+          purpose: logMeta.purpose || 'other',
+          recipient: String(mailOptions.to),
+          deliveryStatus: 'failed',
+          errorMessage: `Invalid recipient email: ${mailOptions.to}`,
+          payloadSummary: mailOptions.subject || null,
+          learnerId: logMeta.learnerId,
+          instructorId: logMeta.instructorId,
+          schoolId: logMeta.schoolId,
+        });
+        throw new Error(`Invalid recipient email: ${mailOptions.to}`);
       }
-      mailOptions.to = cleaned;
+      mailOptions.to = cleanedTo;
     }
-    return origSendMail(mailOptions, ...args);
+
+    try {
+      const result = await origSendMail(mailOptions, ...args);
+      await logNotification({
+        channel: 'email',
+        purpose: logMeta.purpose || 'other',
+        recipient: cleanedTo || (mailOptions && mailOptions.to) || '',
+        deliveryStatus: 'sent',
+        payloadSummary: mailOptions && mailOptions.subject ? mailOptions.subject : null,
+        learnerId: logMeta.learnerId,
+        instructorId: logMeta.instructorId,
+        schoolId: logMeta.schoolId,
+      });
+      return result;
+    } catch (err) {
+      await logNotification({
+        channel: 'email',
+        purpose: logMeta.purpose || 'other',
+        recipient: cleanedTo || (mailOptions && mailOptions.to) || '',
+        deliveryStatus: 'failed',
+        errorMessage: err.message,
+        payloadSummary: mailOptions && mailOptions.subject ? mailOptions.subject : null,
+        learnerId: logMeta.learnerId,
+        instructorId: logMeta.instructorId,
+        schoolId: logMeta.schoolId,
+      });
+      throw err;
+    }
   };
 
   return transport;
