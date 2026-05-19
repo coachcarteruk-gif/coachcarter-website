@@ -7,7 +7,7 @@
 //   POST /api/offers?action=accept-offer
 //     → collects learner details, creates Stripe checkout, returns URL
 //
-//   POST /api/offers?action=expire-offers
+//   GET  /api/offers?action=expire-offers  (CRON_SECRET auth)
 //     → cron-triggered: bulk-expire stale pending offers
 
 const crypto = require('crypto');
@@ -752,10 +752,14 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   });
 }
 
-// ── POST /api/offers?action=expire-offers ─────────────────────────────────────
-// Cron-triggered: bulk-expire stale pending offers.
+// ── GET /api/offers?action=expire-offers ──────────────────────────────────────
+// Cron-triggered: bulk-expire stale pending offers. Vercel Cron always sends
+// GET (per vercel.json), so this handler accepts GET to match. Previously
+// gated on POST, which meant the cron never actually ran — the `expires_at`
+// check inside handleGetOffer (lazy-expire at view-time) was masking this
+// in prod. Auth gate is verifyCronAuth(), not the HTTP method.
 async function handleExpireOffers(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   // Fail-closed cron auth using the shared helper (Authorization: Bearer
   // or ?key=). Matches cron-retention.js / cron-payouts.js. Previously
