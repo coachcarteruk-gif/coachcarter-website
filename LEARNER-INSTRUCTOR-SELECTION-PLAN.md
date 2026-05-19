@@ -1,6 +1,6 @@
 # Learner Instructor Selection — Delivery Plan (DRAFT)
 
-**Status:** drafted 2026-05-19. **DRAFT — coupling-impact check vs `PER-INSTRUCTOR-CREDITS-PLAN.md` still outstanding.** Do not start implementation until both plans have been walked side-by-side and revised together.
+**Status:** drafted 2026-05-19, revised same day after GPT-5.5 coupling-impact review. **STILL DRAFT** — awaiting joint round-1 external critique (this is the learner-UX plan's first formal review). Do not start implementation until both plans converge through that round.
 
 **Scope:** the learner-facing front door for the multi-instructor era. Replaces the existing `book.html` (slot-first mixed feed) and `buy-credits.html` (pooled credit purchase) with an instructor-first paradigm centred on `/instructors` index and per-instructor pages.
 
@@ -34,6 +34,20 @@ Eight commercial decisions are baked into this plan. They're recorded here so fu
 8. **Cross-instructor honesty:** if a learner with credits at instructor A lands on instructor B's page, B's bundles render normally but a small notice acknowledges the existing credit at A. Upstream honesty before the booking refusal moment.
 
 ---
+
+## Multi-tenant school resolution on public surfaces
+
+Coupling-review surfaced that public APIs currently default to `school_id = 1` silently — fine for CoachCarter, dangerous for InstructorBook as it onboards more schools.
+
+`/instructors` and `/instructor/[slug]` MUST resolve `school_id` from one of three sources (in priority order), NEVER from a silent default:
+
+1. **Host header** — InstructorBook tenants get their own subdomain (e.g. `acmedriving.instructorbook.co.uk`). Middleware maps host → `school_id` using `schools.host` column.
+2. **`?school=<slug>` query param** — fallback when host isn't mapped (development, sharing links).
+3. **Configured default for the host** — if neither resolves, the host has a configured default school (CoachCarter's `coachcarter.uk` defaults to `school_id = 1` *explicitly*, not silently).
+
+If none of the three produce a `school_id`, return 404. **No cross-school listing on `/instructors`.** Each school sees only its own instructors. CoachCarter learners must never see InstructorBook tenants' instructors in their picker, and vice versa.
+
+All new API endpoints (`api/instructors?action=list-public`, `?action=profile`, `?action=instructor-balances`, `api/credits?action=public-rate`) MUST take `school_id` from server-side host resolution (already handled by `middleware.js` / `branding.js`), not from the client.
 
 ## Hard rules
 
@@ -86,12 +100,32 @@ Specialisms: [tag] [tag] [tag]
 - **Single lessons** (if `single_lessons_enabled = TRUE`): cards for 60 / 90 / 120 / 165-min lessons at the instructor's list rate.
 - **Free trial** (if school has `slug = 'trial'` OR the instructor has a free-trial flag enabled — to be decided in the coupling check): CTA to `/free-trial.html?instructor_id=X`.
 
-**Section 3 — slot picker.** The booking surface. Shows the next available slots with this instructor over the next 84 days (existing `?action=available&min_duration_only=1` feed, filtered to one instructor). Click a slot → modal opens with duration picker → checkout flow.
+**Section 3 — slot picker.** The booking surface. Shows the next available slots with this instructor over the next 84 days (existing `?action=available&min_duration_only=1` feed, filtered to one instructor via `instructor_id`). Click a slot → modal opens with duration picker → checkout flow.
+
+**Empty slot state** (coupling-review open question #2): when this instructor has no slots in the next 84 days, the slot section renders an empty state with a CTA: **"No upcoming slots with this instructor. Browse other instructors →"** linking to `/instructors`. The instructor page does NOT render a mixed slot feed of alternative instructors inline — that would dilute the instructor-first model. The existing `book.html` overflow routing (April 2026, DEVELOPMENT-ROADMAP 2.67) stays intact for the legacy page and may be removed in the post-Phase-1 retirement of `book.html`.
 
 **Section 4 — cross-instructor notice (logged-in learners only).** If the learner has credits with other instructor(s):
 > "You have 6 hours of credit with Fraser. Use them with him via [his page]. The bundles below would be new credit attributed to Simon."
 
 Honest, factual, points the learner at the action. No upsell pressure.
+
+**Auth-gating implementation** (coupling-review #3):
+
+The instructor profile HTML/JS is public — no auth required to render. The cross-instructor notice section is hidden by default and populated via a separate authenticated AJAX call:
+
+```http
+GET /api/credits?action=instructor-balances
+Authorization: required (cc_learner cookie)
+Response: [
+  { "instructor_id": 1, "instructor_name": "Fraser", "instructor_slug": "fraser", "balance_minutes": 360 },
+  { "instructor_id": 2, "instructor_name": "Simon", "instructor_slug": "simon", "balance_minutes": 0 }
+]
+```
+
+- The endpoint derives `learner_id` from the `cc_learner` cookie. **It never accepts `learner_id` as a parameter.** This is non-negotiable — accepting `learner_id` from the client would let any visitor query any learner's balances by URL manipulation.
+- 401 for guests. Page JS handles 401 silently — the notice section stays hidden.
+- The notice only renders when the response contains at least one row with `balance_minutes > 0` AND that row's `instructor_id ≠` the currently-viewed instructor.
+- Linkified instructor names use the `instructor_slug` from the response, not a client-side lookup.
 
 **Section 5 — footer / FAQs.** Same on every instructor page. Cancellation policy, what to expect on a first lesson, contact.
 
@@ -107,6 +141,68 @@ Pattern matches existing `?action=checkout-slot-guest`: guest provides email + n
 
 ---
 
+## Trust-signal language rules (resolved in coupling review)
+
+Specific copy decisions for the instructor cards and profile pages. These exist to avoid implying platform-level claims that aren't backed by an actual policy.
+
+- **"Pass rate X%"** renders ONLY when `pass_rate IS NOT NULL` AND `pass_rate_sample IS NOT NULL`. The display includes the sample size: "Pass rate 87% (across last 23 lessons)". Single percentage without a denominator is misleading and is hidden.
+- **When pass-rate cannot render**, fall back to displaying `years_experience` as "Experience" and `specialisms` only. Don't substitute a worse signal.
+- **No "Verified" badge** appears on cards or profile pages. The platform does not currently vet instructor claims (DVSA registration, insurance, vehicle MOT, etc.). Until a verification policy exists with documented criteria and a sustainable verification process, no badge is shown.
+- **Specialisms tags** render from the existing `specialisms` JSONB column. The tag vocabulary is admin-defined and the rendering layer must treat the tag text as user-controlled (see XSS section below).
+- **No fake urgency.** Cards don't render "Booking fast" / "Only 2 slots left this week" without a real query backing it. If we ever add availability indicators, they query real data.
+
+## Lesson history and the `funding_kind` enum (coupling-review #4)
+
+If `/instructor/[slug]` ever shows "your past lessons here" (deferred for Phase 1 but worth specifying now), the history endpoint must distinguish how each lesson was funded:
+
+| `funding_kind` | Meaning | Counts toward "I've taken N lessons here"? | Counts toward instructor revenue signals? |
+|---|---|---|---|
+| `paid` | Funded by a `source = 'stripe'` or `source = 'reconciliation'` credit | Yes | Yes |
+| `free_trial` | Funded by a `source = 'free_trial'` credit | Yes (lesson attendance) | No |
+| `platform_goodwill` | `source = 'goodwill'` AND `absorbed_by = 'platform'` | Yes | No |
+| `instructor_goodwill` | `source = 'goodwill'` AND `absorbed_by = 'instructor'` | Yes | No |
+
+The lesson-history endpoint derives `funding_kind` per booking via a JOIN through `booking_credit_sources` to `credit_transactions`. For bookings that straddle multiple source rows of different kinds (rare), the booking uses the source with the lowest "trust" (`instructor_goodwill < platform_goodwill < free_trial < paid`) to avoid over-claiming revenue.
+
+This isn't built in Phase 1 — the instructor page shows availability, bundles, and slots only — but the column shape is documented here so future history work doesn't get this wrong.
+
+## Bio XSS and image hosting (net-new findings from coupling review)
+
+**Bio fields are user-controlled and rendered on public pages.** The existing `bio` column and the new `bio_short` column both accept admin/instructor-supplied text that ends up on `/instructor/[slug]` and `/instructors` cards respectively. Rules:
+
+- Frontend MUST render via `textContent` (innerHTML is banned for these fields). Plain text only. No formatting.
+- If we later want formatted bios (paragraphs, links), introduce a Markdown layer with a server-side sanitiser. Don't roll a permissive HTML field.
+- Server-side validation: strip control characters (per `feedback_c1_control_chars.md`), reject anything > 2000 chars (`bio`) / 280 chars (`bio_short`).
+
+**Instructor photos** need a storage decision the plan was silent on. Options:
+
+- **Vercel Blob storage** (recommended). Already used elsewhere on the platform, integrates with Vercel deployment. Cheap at this scale.
+- **Cloudinary** if we want server-side image transforms (cropping, format conversion). Adds a vendor.
+- **Direct external URL** (current state — `photo_url` is just a string). Risk: instructor uploads to a free image host that breaks links, or the URL points at content we don't control.
+
+Recommendation: Vercel Blob, with a server-side validation step that:
+- Accepts `image/jpeg`, `image/png`, `image/webp` only
+- Max 5MB, max 2000×2000px
+- Returns a Vercel Blob URL stored in `instructors.photo_url`
+- Rejects URLs from arbitrary hosts (existing `photo_url` values that already point off-platform stay valid but new uploads must go through Blob)
+
+## Hard-delete semantics
+
+No admin endpoint currently hard-deletes instructors (confirmed against `api/admin.js`). This is good. The plan reinforces:
+
+- **Don't add a hard-delete endpoint.** Use `active = FALSE` (existing) for retirement and `publicly_visible = FALSE` (new) for "active but not surfaced publicly." Hard delete would break referential integrity with bookings, payouts, audit logs.
+- **If an instructor must be removed for GDPR reasons** (extremely rare — instructors are business contacts, not data subjects in most cases), the path is anonymisation, not deletion. Define this only when a real request arrives.
+
+## Publicly-visible = FALSE rule
+
+`/instructor/[slug]` for an instructor with `publicly_visible = FALSE`:
+
+- Returns HTTP 404. Not a "Not accepting bookings" page (that would leak the existence of internal/test instructors and create thin pages that Google indexes negatively).
+- Excluded from the sitemap (`/sitemap.xml` generated server-side, filters on `publicly_visible = TRUE`).
+- The `api/instructors?action=profile&slug=X` endpoint returns 404 for the same instructors.
+
+For instructors who WERE public and have been retired, return HTTP 410 GONE rather than 404. Optional 301 redirect to `/instructors` if SEO juice matters. This is a per-retirement admin choice, not a default.
+
 ## Files touched
 
 ### New pages
@@ -117,10 +213,13 @@ Pattern matches existing `?action=checkout-slot-guest`: guest provides email + n
 
 ### Modified pages
 
-- `public/book.html` — replaced. Either deleted entirely (with redirect rules) or repurposed as the free-trial-only spectator surface. Confirm during coupling check.
-- `public/buy-credits.html` — replaced. Redirects to `/instructor/fraser` for 30 days, then `/instructors`.
+Coupling-review surfaced that `book.html` is **deeply referenced** across the codebase (`sidebar.js`, `index.html`, `learner/lessons.js`, `manifest.json`, `webhook.js`) — deleting or repurposing it in Phase 1 would cascade into many other places.
+
+- `public/book.html` — **KEEP during the soft-transition window.** The instructor profile page (`/instructor/[slug]`) becomes the primary booking surface for new learners and any learner clicking through `/instructors`. `book.html` stays accessible at `/book/:slug` and `/learner/book.html` for backward-compat — existing learners who deep-link to it (via PWA manifest, lesson-page links, webhook redirects) continue to work. Once the new flow is proven (≥30 days post-launch, with no booking-failure-rate regression), retire `book.html` in a follow-up that updates all callers.
+- `public/buy-credits.html` — **KEEP during the soft-transition window.** Same rationale. Once Phase 1 is proven and `book.html` is being retired, replace with a 301 to `/instructors`.
 - `public/learner/profile.html` — Step 4 of credits plan already covers the balance UI change. This plan adds a "Find another instructor" link.
-- Sidebar nav (in `sidebar.js`) — adds "Find an instructor" / "Browse instructors" entry.
+- Sidebar nav (in `sidebar.js`) — adds "Find an instructor" / "Browse instructors" entry pointing at `/instructors`. The existing "Book a lesson" entry (pointing at `book.html`) stays during the soft-transition window.
+- Admin instructor modal — **extends the existing** modal at `public/admin/portal.html:878-947` rather than building a separate screen. Adds fields for `publicly_visible`, `bio_short`, `area_covered`, `pass_rate_sample`, `single_lessons_enabled`, `free_trial_offered`. The save handler at `public/admin/portal.js:300-337` and backend at `api/instructors.js:131-156` extend accordingly. When credits plan Step 8 ships, rate/tier fields land in the same modal.
 
 ### New / modified API endpoints
 
@@ -131,17 +230,47 @@ Pattern matches existing `?action=checkout-slot-guest`: guest provides email + n
 
 ### Schema additions
 
-- `instructors.slug TEXT UNIQUE` — URL-friendly identifier. Populated at instructor creation or backfilled from `name`.
-- `instructors.publicly_visible BOOLEAN NOT NULL DEFAULT FALSE` — gates appearance on `/instructors`. Defaults FALSE so new instructors are hidden until explicitly toggled on (Fraser-controlled).
-- `instructors.bio_short TEXT` — one-line bio for cards.
-- `instructors.bio_long TEXT` — full bio for the profile page.
-- `instructors.area_covered TEXT` — comma-separated area names or postcodes.
-- `instructors.pass_rate_pct INTEGER` — manually maintained for now; could auto-compute later.
-- `instructors.pass_rate_sample INTEGER` — "X% over last N lessons" for credibility.
+Reconciled against current `db/migration.sql` after coupling-review #11 surfaced that several columns already exist. **Use existing columns where present** — don't introduce parallel names.
+
+**Already exist** (verify and reuse, don't re-add):
+- `instructors.slug TEXT` (currently globally `UNIQUE` — see migration note below)
+- `instructors.pass_rate NUMERIC(4,1)` — preferred over the originally-proposed `pass_rate_pct INTEGER`
 - `instructors.years_experience INTEGER`
-- `instructors.specialisms TEXT[]` — array of tags ("manual", "automatic", "nervous learners", "motorway")
+- `instructors.specialisms JSONB` — preferred over the originally-proposed `TEXT[]` (matches the existing convention; queryable via `?` and `@>` operators)
+- `instructors.bio TEXT` — covers most of what `bio_long` would have done
+- `instructors.photo_url TEXT`
+
+**New columns required:**
+- `instructors.publicly_visible BOOLEAN NOT NULL DEFAULT FALSE` — gates appearance on `/instructors`. Defaults FALSE so new instructors are hidden until explicitly toggled on (Fraser-controlled).
+- `instructors.bio_short TEXT` — one-line bio for cards. The existing `bio` field stays as the full version.
+- `instructors.area_covered TEXT` — comma-separated area names or postcodes.
+- `instructors.pass_rate_sample INTEGER` — "X% over last N lessons" credibility denominator. If NULL, the page renders pass-rate as "Experience" instead (see Trust-signal language section).
 - `instructors.single_lessons_enabled BOOLEAN NOT NULL DEFAULT FALSE` — new toggle paralleling `bulk_tiers_enabled` from credits plan Step 7.
 - `instructors.free_trial_offered BOOLEAN NOT NULL DEFAULT FALSE` — gates whether free-trial CTA appears on the page.
+
+### Migration: school-scope the `slug` unique constraint
+
+The existing `slug` column has a global `UNIQUE` constraint (`db/migration.sql:1116`). For multi-tenant InstructorBook this is a clash waiting to happen — two schools both having a "fraser" or "simon" is plausible.
+
+```sql
+-- Migration: change global slug uniqueness to school-scoped
+ALTER TABLE instructors DROP CONSTRAINT IF EXISTS instructors_slug_key;
+DROP INDEX IF EXISTS instructors_slug_key;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_instructors_school_slug ON instructors(school_id, slug);
+```
+
+Run this migration BEFORE any new school is onboarded. CoachCarter has only `school_id = 1` today, so no data conflict — this is a forward-looking fix.
+
+### Backfill rule for `slug`
+
+Existing instructors may have NULL slug. Backfill from `name`:
+
+```sql
+UPDATE instructors
+SET slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g'))
+WHERE slug IS NULL OR slug = '';
+-- Resolve collisions within the same school by appending -2, -3 etc.
+```
 
 All school-scoped (`school_id` inherited via FK to the instructor's school).
 
@@ -216,18 +345,42 @@ This section is the focus of the next review pass. Every coupling point listed h
 
 ---
 
-## Open questions (to resolve during coupling-impact review)
+## Decisions made during coupling-impact review (2026-05-19 evening)
 
-1. **What happens to `book.html` exactly?** Three options:
-   - Delete entirely (redirects to `/instructor/fraser` for 30 days, then `/instructors`)
-   - Repurpose as the free-trial-only landing (since free-trial flow has its own spectator-mode pattern)
-   - Keep as a slot-feed-only debug surface accessible by admin
+All four open questions resolved:
 
-2. **Slot picker on the instructor page — replaces `book.html` entirely or just for this instructor's slots?** If the latter, what about overflow routing? The April 2026 overflow routing on `book.html` shows alternative instructors when the chosen one has no slots. Does the new instructor page have an "Overflow to other instructors →" CTA when the slot picker is empty?
+1. **`book.html` stays during soft transition.** Deeply referenced across sidebar.js, index.html, learner/lessons.js, manifest.json, webhook.js. Retire only after ≥30 days of proven new flow. Documented in "Modified pages" section.
+2. **Empty slot picker → "Browse other instructors" CTA**, not inline mixed feed. Keeps the instructor-first model honest. Existing `book.html` overflow routing stays intact during transition.
+3. **No "Verified" badge.** Pass rate renders only when both `pass_rate` and `pass_rate_sample` are populated, with the sample size shown. Otherwise falls back to "Experience" + "Specialisms" only. Trust-signal language section codifies this.
+4. **`publicly_visible = FALSE` → HTTP 404**, excluded from sitemap. Retired instructors return 410 GONE optionally. Documented in "Publicly-visible = FALSE rule" section.
 
-3. **Does Simon's instructor page surface anything that learners might construe as a "verified" or "vetted" badge?** Trust signals matter but I want to be honest about what we're claiming. Pass rate is empirical; "verified" implies platform-level vetting that we don't currently do.
+Net-new fixes that came out of coupling review:
 
-4. **What about instructors who are active but not yet publicly visible?** Internal/test instructors might exist. The `publicly_visible` flag handles this for `/instructors`, but `/instructor/[slug]` is also public — should we render a 404 for non-publicly-visible instructors' slug URLs, or render the page but with a "Not yet accepting bookings" notice?
+- **Multi-tenant school resolution** added as a hard rule. All public surfaces resolve `school_id` from host/branding/explicit slug, never silently default to 1.
+- **Bio XSS policy** codified — `textContent` only, no `innerHTML`, server-side validation.
+- **Image hosting decision** made — Vercel Blob with allowlist of formats and size limits.
+- **Hard-delete semantics** explicitly disallowed — use `active = FALSE` or `publicly_visible = FALSE`.
+- **Slug uniqueness** changed from global to `(school_id, slug)` composite. Migration before InstructorBook tenant onboarding.
+- **Schema reconciled** against existing columns: `slug`, `pass_rate`, `years_experience`, `specialisms` (JSONB), `bio`, `photo_url` already exist — reuse, don't duplicate.
+
+Coupling-resolution touchpoints with `PER-INSTRUCTOR-CREDITS-PLAN.md` (changes applied to that plan in the same session):
+
+- Credits plan locked the checkout request shape (`instructor_id`, `hours`/`duration_minutes`, `purchase_kind`, explicit error codes).
+- Credits plan added `getPublicInstructorRatePencePerMinute` distinct from the authenticated helper.
+- Credits plan documented Path A (account required at bundle CTA) for guest checkout.
+- Credits plan added server-side `single_lessons_enabled` enforcement in both `api/credits.js` and `api/slots.js`.
+
+## Outstanding before either plan starts implementation
+
+1. **PII leak fix in `api/instructors?action=list`** — spawned as a separate task during the coupling review. Must be merged before either plan ships because both plans expand the API surface that's leaking.
+2. **GPT-5.5 round-1 review of this plan** + round-4 review of the credits plan, both against this revised pair.
+3. **Lesson-history `funding_kind` work** is documented for Phase 2 — Phase 1 doesn't render history on the instructor page.
+
+## Things still left to decide (lower priority, can resolve at coding time)
+
+- The exact bulk-tier definitions per school (5h/10h/20h or other). Currently in `schools.config.pricing.bulk_discount_tiers`. Confirm CoachCarter's current values are appropriate for the new card UI.
+- Exact card grid layout for `/instructors` — design decision, not architectural. Cards are the unit; the grid responds to viewport.
+- The free-trial CTA wording on instructor pages.
 
 ---
 

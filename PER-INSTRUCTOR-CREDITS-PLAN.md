@@ -47,6 +47,13 @@ Business decisions resolved with Fraser during this round:
 - **Goodwill franchise-fee semantics:** instructor-absorbed goodwill excludes lesson REVENUE only. Weekly franchise fee accrues normally.
 - **Cash-refund model:** separate `credit_source_adjustments` table (not adjustment columns on `credit_transactions`). Aligns with "never hard-delete financial records" and supports admin corrections / dispute clawbacks generally.
 
+A fourth round of GPT-5.5 review (2026-05-19 evening) walked this plan side-by-side with `LEARNER-INSTRUCTOR-SELECTION-PLAN.md` and surfaced four plan-blocker couplings + several coordination items. This revision incorporates them:
+
+- **Checkout request shape locked** — explicit body fields, error codes, validation rules added to Step 4. Closes coupling #1 + #3.
+- **Public-rate helper added** — `getPublicInstructorRatePencePerMinute` distinct from the authenticated `getEffectiveRatePencePerMinute`. Per-pair custom rates never leak to public displays. Closes coupling #2.
+- **Guest bulk checkout = Path A** — account required at bundle CTA. Existing slot guest-checkout for free trials stays untouched. Closes coupling #5.
+- **`single_lessons_enabled` server-enforced** in both `api/credits.js?action=checkout` and `api/slots.js?action=book`. Defence-in-depth. Closes coupling #10.
+
 ---
 
 ## Load-bearing principles (carried forward from FRANCHISE-MODEL-PLAN.md)
@@ -471,15 +478,36 @@ Moved ahead of Phase 2A so that effective-rate snapshotting in Step 4 has correc
 
 ### What changes
 
-- New: `api/_pricing-helpers.js` exporting:
-  - `getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId })` → integer pence/hour
-  - `getEffectiveRatePencePerMinute(sql, { schoolId, instructorId, learnerId })` → integer pence/minute (banker's-rounded)
-  - `calcBulkTotal(sql, schoolId, hours, instructorId)` — refactor existing call site to take optional `instructorId`, fall through to instructor + per-pair rates.
-- Precedence (most-specific wins):
-  1. `instructor_learner_notes.custom_hourly_rate_pence` (per-learner-pair custom rate)
-  2. `instructors.hourly_rate_pence` (per-instructor — NULL means "inherit school")
-  3. `schools.config.pricing.bulk_hourly_pence` (school default)
-- Bulk discount percentages always apply to the *effective* rate from step 3 — instructor absorbs their own discount. Per CLAUDE.md rule.
+`api/_pricing-helpers.js` exports **two distinct functions** for two distinct call sites (coupling-review #2):
+
+**Authenticated helper** (learner is known, per-pair rates apply):
+
+- `getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId })` → integer pence/hour
+- `getEffectiveRatePencePerMinute(sql, { schoolId, instructorId, learnerId })` → integer pence/minute (banker's-rounded)
+- `calcBulkTotal(sql, schoolId, hours, instructorId, learnerId)` — refactor to take optional `instructorId` and `learnerId`
+
+Precedence (most-specific wins):
+1. `instructor_learner_notes.custom_hourly_rate_pence` (per-learner-pair custom rate)
+2. `instructors.hourly_rate_pence` (per-instructor — NULL means "inherit school")
+3. `schools.config.pricing.bulk_hourly_pence` (school default)
+
+Used by: `api/credits.js?action=checkout`, `api/slots.js?action=book`, `api/webhook.js` handlers, payout cron.
+
+**Public helper** (learner is NOT known, per-pair rates MUST NOT leak):
+
+- `getPublicInstructorRatePencePerMinute(sql, { schoolId, instructorId })` → integer pence/minute
+- `getPublicInstructorHourlyPence(sql, { schoolId, instructorId })` → integer pence/hour
+- `calcPublicBulkTiers(sql, schoolId, instructorId)` → array of `{ hours, total_pence, per_hour_pence }` per the school's bulk tier definitions
+
+Precedence:
+1. `instructors.hourly_rate_pence` (per-instructor — NULL means "inherit school")
+2. `schools.config.pricing.bulk_hourly_pence` (school default)
+
+**Never consults `instructor_learner_notes`.** Per-pair custom rates are private commercial arrangements between an instructor and a specific learner — they must not appear in public price displays where any visitor could see them.
+
+Used by: `api/credits.js?action=public-rate`, `api/instructors.js?action=profile` (public profile page rendering).
+
+Bulk discount percentages always apply to the *effective* rate from the appropriate helper — instructor absorbs their own discount. Per CLAUDE.md rule.
 
 ### Note on missing columns
 
@@ -491,9 +519,70 @@ Moved ahead of Phase 2A so that effective-rate snapshotting in Step 4 has correc
 
 ### Checkout (`api/credits.js?action=checkout`)
 
-- Required body field: `instructor_id`. Reject `400` if missing once the cutover date is reached (see legacy-session branch below).
-- Calls `getEffectiveRatePencePerMinute(sql, { schoolId, instructorId, learnerId })`.
-- Stripe `metadata` includes `instructor_id` and `effective_rate_pence_per_minute`.
+**Locked request shape** (coupling-review #1, #3):
+
+```http
+POST /api/credits?action=checkout
+Authorization: required (cc_learner cookie) — see "Guest bulk checkout" below
+Body: {
+  "instructor_id": <integer>,           // required
+  "hours": <integer>,                    // required when purchase_kind = "bulk"
+  "duration_minutes": <integer>,         // required when purchase_kind = "single"
+  "purchase_kind": "bulk" | "single"     // required
+}
+```
+
+**Validation rules** (server-side, defence-in-depth):
+
+| Check | Failure | Error code |
+|---|---|---|
+| `instructor_id` missing | 400 | `MISSING_INSTRUCTOR_ID` |
+| Instructor does not exist | 404 | `INSTRUCTOR_NOT_FOUND` |
+| Instructor not active | 403 | `INSTRUCTOR_NOT_ACTIVE` |
+| Instructor not `publicly_visible` (when called from learner-facing surface) | 403 | `INSTRUCTOR_NOT_PUBLIC` |
+| Instructor `school_id` ≠ caller's `school_id` | 403 | `INSTRUCTOR_WRONG_SCHOOL` |
+| `purchase_kind = 'bulk'` AND `instructors.bulk_tiers_enabled = FALSE` | 403 | `BULK_TIERS_DISABLED` |
+| `purchase_kind = 'single'` AND `instructors.single_lessons_enabled = FALSE` | 403 | `SINGLE_LESSONS_DISABLED` |
+| `hours` missing for bulk OR `duration_minutes` missing for single | 400 | `MISSING_QUANTITY` |
+| `duration_minutes` not in allowed set (60/90/120/165) | 400 | `INVALID_DURATION` |
+
+**Behaviour:**
+- Calls `getEffectiveRatePencePerMinute(sql, { schoolId, instructorId, learnerId })` (the **authenticated** helper — uses three-level fallback including per-pair custom rates).
+- For `purchase_kind = 'single'`, `minutes = duration_minutes`. For `purchase_kind = 'bulk'`, `minutes = hours × 60`.
+- Stripe `metadata` includes `instructor_id`, `effective_rate_pence_per_minute`, `minutes`, `purchase_kind`, `learner_id`.
+- Single-lesson and bulk-pack flows use **one shared code path**. The difference is only the `minutes` value and the post-purchase outcome (single → immediate booking via webhook, bulk → balance increment for later draw).
+
+### Public-rate display path (`api/credits.js?action=public-rate`)
+
+NEW endpoint added in this round to close coupling-review #2 (public-rate display on the unauthenticated instructor profile page).
+
+```http
+GET /api/credits?action=public-rate&instructor_id=<id>&purchase_kind=<bulk|single>
+Authorization: none required
+Response: {
+  "effective_pence_per_minute": <integer>,
+  "effective_hourly_pence": <integer>,
+  "bulk_tier_rates": [                   // null when purchase_kind = 'single'
+    { "hours": 5, "total_pence": 27500, "per_hour_pence": 5500 },
+    { "hours": 10, "total_pence": 53625, "per_hour_pence": 5362 },
+    ...
+  ]
+}
+```
+
+Server calls a NEW helper `getPublicInstructorRatePencePerMinute(sql, { schoolId, instructorId })` defined in Step 3 (see Step 3 update). **Critically, this helper never consults `instructor_learner_notes.custom_hourly_rate_pence`** — per-pair rates are private and must not appear in public pricing displays. Falls back: `instructors.hourly_rate_pence` → school default.
+
+The same `INSTRUCTOR_NOT_FOUND` / `INSTRUCTOR_NOT_PUBLIC` / `INSTRUCTOR_WRONG_SCHOOL` validation applies. No `learner_id` is ever accepted.
+
+### Guest bulk checkout — Path A (account required at bundle CTA)
+
+**Decision 2026-05-19 with Fraser** after coupling-review surfaced the gap: guest browsing all the way to bundle/single-lesson CTA is supported by the learner-UX plan, but the checkout endpoint itself **requires an authenticated learner**.
+
+Path A: when a guest clicks "Buy this bundle" or "Buy this lesson," the UI routes them to login/signup first, then back to checkout. The existing `?action=checkout-slot-guest` pattern for free-trial slot-clicks stays intact for the trial-conversion path — it is NOT extended to bulk/single-lesson purchases.
+
+Rationale: bulk purchases are bigger commitments than a single free-trial slot. The account creation is the right friction at that point — it gives the learner an audit trail for their purchase, a balance to draw from, and account recovery if something goes wrong with the lesson. Guest bulk checkout would also create orphan credit ledger rows that nobody can attach future bookings to, which conflicts with `booking_credit_sources.credit_transaction_id NOT NULL`.
+
+If post-launch data shows guest drop-off at the bundle CTA, revisit. For now: account required at bundle CTA, guest slot-checkout retained for free-trial only.
 
 ### Webhook + verify-session
 
@@ -509,6 +598,7 @@ Closes GPT-flaw #2. `grantCredits()` checks for `metadata.instructor_id`:
 ### Booking (`api/slots.js?action=book` and friends)
 
 - Transactional path (Step 0 refactor) now:
+  0. **Validate commercial toggles** (coupling-review #10, defence-in-depth): if the booking is a single-lesson direct purchase (no pre-existing credit balance involved), confirm `instructors.single_lessons_enabled = TRUE`. Return `SINGLE_LESSONS_DISABLED` (403) otherwise. If drawing from existing balance, this check is skipped — pre-existing credit was already validated at purchase time.
   1. `SELECT ... FOR UPDATE` on the appropriate `learner_credit_balances` row.
   2. Verify sufficient minutes.
   3. Decrement.
