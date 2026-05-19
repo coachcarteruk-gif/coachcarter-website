@@ -106,22 +106,164 @@ Two new principles surfaced by this revision:
     - `credit_transactions.stripe_session_id` (existing) — prevents double credit-transaction insert
     - `credit_transactions.stripe_payment_intent_id` (new in Step 2) — secondary identity
     - `booking_credit_sources` natural-key unique on `(booking_id, credit_transaction_id)` (new in Step 2) — prevents double BCS insert during retry. **Note:** if a single booking can legitimately draw from the same source twice (e.g. a booking expanded after partial refund), this needs to widen to `(booking_id, credit_transaction_id, sequence_no)`. Default plan assumes one draw per (booking, source) pair; revisit if Step 5 surfaces a real case.
-    - Balance upserts are naturally idempotent (`INSERT ... ON CONFLICT ... DO UPDATE SET balance_minutes = EXCLUDED.balance_minutes` with running totals derived inside the transaction from BCS rows).
+    - `learner_credit_balances` PK on `(learner_id, instructor_id)` — the row is upserted, never multi-inserted. **This row is also the canonical serialisation lock for all credit-affecting writes for that pair (see "LCB row as the canonical serialisation point" below).**
   - Returns `{ transactionId, alreadyProcessed, completed }` so callers can short-circuit notifications when `alreadyProcessed = true`.
+
+### Resumability SQL — the concrete duplicate-hit path
+
+Closes round-4 flaw "Step 0 resumability is still underspecified at the exact failure point" and round-4-critical C1 "concurrency gap under READ COMMITTED."
+
+The original wording implied balance was "derived from BCS rows," which cannot reconstruct the available balance of an unspent bulk purchase (a fresh purchase has zero BCS rows). The correct shape:
+
+The `credit_transactions` row is the authoritative ledger of granted minutes. `learner_credit_balances` is a materialised running total that MUST stay consistent with the ledger. BCS rows are deductions, not additions.
+
+#### LCB row as the canonical serialisation point (resolves C1)
+
+A naive `SELECT … FOR UPDATE` on the `credit_transactions` ledger row only locks that row — it does not lock the BCS or adjustment rows that the reconcile SUM reads. A concurrent `?action=book` decrement (inserting a BCS row) or a concurrent `grantCredits()` for the same `(learner_id, instructor_id)` can land between the lock acquisition and CTE evaluation, producing a wrong materialised balance under PostgreSQL's default `READ COMMITTED` isolation.
+
+The fix: **every writer that touches credits for a `(learner_id, instructor_id)` pair MUST first acquire `SELECT … FOR UPDATE` on the corresponding `learner_credit_balances` row.** That row is the single chokepoint. Holding it serialises all balance-affecting writes for that pair, so the reconcile SUMs see a consistent snapshot.
+
+This applies to all four writers:
+1. `grantCredits()` — credit insert path (this Step).
+2. `?action=book` deduct path — BCS insert + balance decrement (also this Step).
+3. `?action=cancel-booking` refund path — BCS update + balance increment (Step 5 / 5.5).
+4. Admin grant endpoints — `credit-reconciliation` and `credit-goodwill` (Step 5.5).
+
+Each path follows the same prologue: insert-if-missing into LCB, then lock the row, then do the work. The insert-if-missing-then-lock dance is the standard pattern for "first-ever write to a row that must be lockable":
+
+```sql
+-- Prologue: ensure the LCB row exists, then acquire the lock. The INSERT
+-- ON CONFLICT DO NOTHING is a no-op when the row already exists; the
+-- subsequent SELECT FOR UPDATE blocks if any other writer holds the lock.
+INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
+VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
+ON CONFLICT (learner_id, instructor_id) DO NOTHING;
+
+SELECT balance_minutes
+  FROM learner_credit_balances
+ WHERE learner_id = ${learnerId} AND instructor_id = ${instructorId}
+ FOR UPDATE;
+```
+
+Once the lock is held, the rest of the transaction proceeds. Because the lock excludes every other writer in this scope, the reconcile SUMs that follow are guaranteed to be consistent — no concurrent INSERT into `credit_transactions`, `booking_credit_sources`, or `credit_source_adjustments` for this pair can commit until the lock is released at `COMMIT`.
+
+#### Full resumability transaction (post-Step-2 schema)
+
+```sql
+BEGIN;
+
+-- 1. Acquire the LCB row lock (insert-if-missing-then-lock).
+INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
+VALUES ($learnerId, $instructorId, $schoolId, 0)
+ON CONFLICT (learner_id, instructor_id) DO NOTHING;
+
+SELECT balance_minutes
+  FROM learner_credit_balances
+ WHERE learner_id = $learnerId AND instructor_id = $instructorId
+ FOR UPDATE;
+
+-- 2. Insert the credit_transactions row, or detect a duplicate retry.
+--    On unique-index hit (uq_credit_tx_session or uq_credit_tx_pi), the
+--    INSERT raises 23505; the caller swallows it and proceeds to reconcile.
+INSERT INTO credit_transactions
+  (learner_id, instructor_id, school_id, type, credits, minutes,
+   amount_pence, stripe_session_id, stripe_payment_intent_id,
+   effective_rate_pence_per_minute, source, ...)
+VALUES (...)
+ON CONFLICT (stripe_session_id) DO NOTHING
+RETURNING id;
+-- If RETURNING produced no row, this is a retry — the original
+-- credit_transactions row already exists; the lock above guarantees
+-- the reconcile below picks it up correctly.
+
+-- 3. Reconcile the balance from the ledger. SUMs are safe because the
+--    LCB lock excludes every other writer in this (learner, instructor)
+--    scope, so no concurrent INSERT/UPDATE on credit_transactions /
+--    booking_credit_sources / credit_source_adjustments can commit.
+WITH granted AS (
+  SELECT COALESCE(SUM(minutes), 0) AS m
+    FROM credit_transactions
+   WHERE learner_id = $learnerId
+     AND instructor_id = $instructorId
+     AND school_id = $schoolId
+), drawn AS (
+  SELECT COALESCE(SUM(bcs.minutes), 0) AS m
+    FROM booking_credit_sources bcs
+    JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
+   WHERE ct.learner_id = $learnerId
+     AND ct.instructor_id = $instructorId
+     AND ct.school_id = $schoolId
+     AND bcs.refunded_at IS NULL
+), adjusted AS (
+  SELECT COALESCE(SUM(csa.minutes_delta), 0) AS m
+    FROM credit_source_adjustments csa
+    JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
+   WHERE ct.learner_id = $learnerId
+     AND ct.instructor_id = $instructorId
+     AND ct.school_id = $schoolId
+)
+UPDATE learner_credit_balances
+   SET balance_minutes = (SELECT m FROM granted) - (SELECT m FROM drawn) + (SELECT m FROM adjusted),
+       updated_at = NOW()
+ WHERE learner_id = $learnerId AND instructor_id = $instructorId;
+
+COMMIT;
+```
+
+The key properties:
+- **Single lock object per `(learner_id, instructor_id)`.** No need to enumerate every table whose rows the SUMs read.
+- **Works under default `READ COMMITTED`.** No isolation-level gymnastics, no retry-on-serialization-failure loop.
+- **Forces all writers through one chokepoint.** Future code paths that touch credits for a pair must also acquire the LCB lock, or the invariant breaks. This is a load-bearing convention — document it at the top of `api/_credit-grant.js` and grep-audit periodically.
+
+**Lock-ordering rule (prevents deadlock between learner-and-instructor writers):** when a single transaction needs to modify two LCB rows (e.g. a learner with credits at instructors A and B doing a cross-instructor swap), always lock rows in ascending `(learner_id, instructor_id)` order. The current plan has no such cross-instructor write path — flag this as a rule to honour if one ever appears.
+
+**Pre-Phase-2A degradation (resolves C2).** Before Step 2 ships, `learner_credit_balances` doesn't exist and `credit_transactions.instructor_id` is NULL on existing rows. `grantCredits()` ships in two SQL variants gated on phase detection:
+
+- **Variant PRE_2A** (Wave W1 → W2 entry): the prologue locks `learner_users` (`SELECT 1 FROM learner_users WHERE id = $learnerId FOR UPDATE`). The reconcile UPDATE writes `learner_users.balance_minutes`. CTEs omit the `instructor_id` filter entirely — the column doesn't exist on `credit_transactions` rows yet. School-id filter stays.
+- **Variant PHASE_2A** (Wave W3 onward): the SQL shown above. Locks LCB, writes LCB, CTEs filter by `(learner_id, instructor_id, school_id)`.
+
+Selection happens at module load via `process.env.PER_INSTRUCTOR_CREDITS_PHASE_2A === '1'` OR (preferred) a one-shot DDL check at first call: `SELECT 1 FROM information_schema.columns WHERE table_name = 'credit_transactions' AND column_name = 'instructor_id' LIMIT 1`. Cache the result for the lifetime of the Node process. Flip happens automatically when Step 2 ships its DDL; no env-var coordination required.
+
+The two variants live as separate exported functions (`grantCreditsPre2A`, `grantCreditsPhase2A`) with a dispatcher. This avoids the "one function with conditional SQL based on column existence" anti-pattern.
+
+**Acceptance criteria** below cover both variants — the fault-injection tests must run in both phases.
 - `api/webhook.js handleCreditPurchase` delegates to `grantCredits()`.
 - `api/credits.js?action=verify-session` delegates to the same `grantCredits()`. Eliminates the verify-vs-webhook race.
-- `api/slots.js?action=book` balance decrement wrapped in a transaction with `SELECT ... FOR UPDATE` on the relevant `learner_users` row (pre-Phase-2A) or `learner_credit_balances` rows (post-Phase-2A).
+- `api/slots.js?action=book` balance decrement wrapped in a transaction that follows the **same LCB-lock prologue** as `grantCredits()` (`INSERT … ON CONFLICT DO NOTHING; SELECT … FOR UPDATE`). Pre-Phase-2A the lock target is `learner_users`; post-Phase-2A it is `learner_credit_balances`. This is the second writer in the "every credit-affecting writer holds the LCB lock" invariant — see "LCB row as the canonical serialisation point" below for the full list.
 
 ### Files touched
 
 - New: `api/_credit-grant.js`
 - Modified: `api/webhook.js` (handleCreditPurchase, handleSlotBooking), `api/credits.js` (verify-session), `api/slots.js` (action=book deduct path), `api/offers.js` (handleOfferBooking / bookOfferSeries).
 
+### Stripe-session source-of-truth rule (NEW in round 4)
+
+Closes round-4 flaw "Checkout price snapshot is mostly right, but webhook source-of-truth must be explicit."
+
+`grantCredits()` callers in webhook/verify-session paths MUST source `amountPence`, `minutes`, `effectiveRatePencePerMinute`, and `instructorId` from **Stripe Session line items and `metadata` only** — never by re-calling `getEffectiveRatePencePerMinute()` or any other live pricing helper for an already-created Checkout Session. This protects in-flight sessions when an admin changes a rate between session creation and webhook delivery.
+
+The pricing helper is called once, at `?action=checkout` time, before the Stripe Session is created. Its output is snapshotted into `metadata.effective_rate_pence_per_minute` and into the Stripe `line_items` amounts. After that, the session is frozen — any later code path that needs those numbers reads them back from Stripe, not from the database.
+
+Defence-in-depth: `grantCredits()` accepts these values as explicit arguments and never has access to a `sql` connection for pricing lookup; the only DB writes it makes are the credit-transaction insert, the balance reconciliation, and (when called from a booking path) the BCS insert.
+
 ### Acceptance criteria
 
-- Manually-injected webhook failure between insert and balance update → next retry completes the credit, no double-credit, no missing minutes.
-- Concurrent verify-session + webhook for the same session → one wins, the other returns `alreadyProcessed: true`, balance is correct.
-- Two concurrent slot-book requests against the same learner with just-enough credit → one succeeds, one returns `insufficient_credit` cleanly; balance never goes negative.
+Fault-injection is required for the money-correctness path — observational tests ("call the endpoint, check the result") cannot exercise partial-failure recovery. The test harness needs three named injection points inside `grantCredits()`, each a single `if (process.env.FAULT_INJECT === '<name>') throw new Error('injected');` line. Production builds strip these via dead-code elimination (the env var is never set in prod). Each acceptance test runs the same fault in **both phases** (Pre-2A and Phase-2A) because the variants ship under different SQL.
+
+Named injection points:
+- **`after_lcb_lock`** — after the LCB-row insert-if-missing-then-lock prologue, before the credit_transactions INSERT.
+- **`after_ct_insert`** — after credit_transactions INSERT succeeds, before the reconcile UPDATE.
+- **`after_reconcile_before_commit`** — after the reconcile UPDATE, before COMMIT.
+
+Acceptance tests:
+
+- **Fault at `after_ct_insert`** → process dies, transaction rolls back, balance row reflects pre-grant state. Next webhook retry (same `stripe_session_id`) hits the unique-index 23505, swallows it, runs the reconcile path, lands exactly the granted minutes on the balance row. Verify: `SELECT balance_minutes FROM learner_credit_balances WHERE …` equals the expected post-grant value; only one credit_transactions row exists for the session.
+- **Fault at `after_reconcile_before_commit`** → process dies, transaction rolls back, credit_transactions row never persisted. Next retry inserts the row fresh and runs the reconcile cleanly. Verify same as above.
+- **Fault at `after_lcb_lock`** → process dies, transaction rolls back, no credit_transactions row exists. Next retry succeeds normally. Verify: balance is correct; no audit-log entry for the failed attempt (because the failure happened before the audit-log INSERT, which lives at the end of the transaction).
+- **Admin rate change mid-flight** → admin updates `instructors.hourly_rate_pence` between Stripe Session creation and webhook delivery. Webhook still credits the learner at the original session metadata rate, not the new rate. Audit log records the (session_rate, current_rate) pair if they differ.
+- **Concurrent verify-session + webhook for the same session** → one wins (acquires LCB lock first); the other waits, runs the reconcile against the same data, returns `alreadyProcessed: true`. Balance is correct; one credit_transactions row exists.
+- **Two concurrent slot-book requests against the same learner with just-enough credit** → one succeeds, one returns `insufficient_credit` cleanly. Balance never goes negative. Both transactions acquire the LCB lock in sequence; the second sees the decremented balance and refuses.
+- **Phase variant correctness** → on a database with the Step 2 schema, `grantCreditsPhase2A` is selected; on a database without the `instructor_id` column on `credit_transactions`, `grantCreditsPre2A` is selected. Verify by inspecting the chosen variant's SQL (a single `SELECT current_setting('credit_grant.variant')` debug hook, set once at module load).
 
 ### Risks
 
@@ -263,6 +405,20 @@ This is operational, not aspirational: the `getEligibleBookings` query excludes 
 ## Step 2 — Phase 1 schema
 
 Schema-only, no behavioural change. Same two-deploy split as Step 1 (schema migration first, then writer code in Step 4).
+
+### Deploy-cycle requirement (cold-start race, resolves C2 edge case)
+
+`api/_credit-grant.js` picks Pre-2A vs Phase-2A variants at module load via a one-shot `information_schema.columns` check (see Step 0 "Pre-Phase-2A degradation"). Warm Vercel workers booted before the Step 2 migration cache the Pre-2A choice for their lifetime. After the migration runs, those warm workers will keep running Pre-2A SQL against the new schema until they cycle.
+
+The Pre-2A SQL works correctly against the new schema — it just doesn't filter by `instructor_id`, so its reconcile SUMs ignore instructor scoping. The moment a second instructor has any `credit_transactions` row, this becomes wrong: a cross-instructor learner's balance can land too high in the brief window before warm workers cycle.
+
+**Operational rule:** immediately after `/api/migrate` returns success for the Step 2 DDL, **force a fresh Vercel deploy** (`git commit --allow-empty -m "redeploy: cycle workers after Step 2 migration" && git push`). This evicts every warm worker; the next batch boots against the new schema and caches the Phase-2A variant.
+
+Today this race has **zero blast radius** because Simon isn't live yet and no other `instructor_id` exists. It stops being zero the moment Simon (or any other instructor) gets onboarded — so the redeploy step is mandatory regardless of whether the window "feels safe" at deploy time. Don't skip it.
+
+Document the redeploy step in the Step 2 PR checklist alongside the `/api/migrate` invocation.
+
+### Sub-phases
 
 Step 2 must run in three sub-phases to avoid the "in-flight write hits a missing column or premature unique constraint" failure mode:
 
@@ -556,6 +712,8 @@ Body: {
 
 NEW endpoint added in this round to close coupling-review #2 (public-rate display on the unauthenticated instructor profile page).
 
+**Hard dependency (round 4):** this endpoint ships in **Wave W3.b**, which MUST NOT open until **Wave W3.a** (the learner-UX plan's Step 0 — tenant-resolution helper `api/_tenant.js`) is deployed to prod AND smoke-tested. Two separate PRs, two separate prod deploys, verification gate between them. The endpoint calls `resolveSchoolFromRequest()` to derive `school_id` from host/query and 404s on failure — without that helper live, the endpoint would either crash on import or fall back to silent `school_id = 1`, which is exactly the multi-tenant leak the public-rate API exists to avoid. Cross-plan rollout order (Waves W3.a → W3.b → W3.c) is documented in `LEARNER-INSTRUCTOR-SELECTION-PLAN.md` "Cross-plan rollout order."
+
 ```http
 GET /api/credits?action=public-rate&instructor_id=<id>&purchase_kind=<bulk|single>
 Authorization: none required
@@ -573,6 +731,16 @@ Response: {
 Server calls a NEW helper `getPublicInstructorRatePencePerMinute(sql, { schoolId, instructorId })` defined in Step 3 (see Step 3 update). **Critically, this helper never consults `instructor_learner_notes.custom_hourly_rate_pence`** — per-pair rates are private and must not appear in public pricing displays. Falls back: `instructors.hourly_rate_pence` → school default.
 
 The same `INSTRUCTOR_NOT_FOUND` / `INSTRUCTOR_NOT_PUBLIC` / `INSTRUCTOR_WRONG_SCHOOL` validation applies. No `learner_id` is ever accepted.
+
+**Tenant resolution** (NEW in round 4): `school_id` is derived server-side via the shared `resolveSchoolFromRequest()` helper added in the learner-UX plan's tenant-resolution section. The endpoint never accepts `school_id` from the client. If host/query resolution fails, return 404 — no silent default to `school_id = 1`.
+
+**Caching, rate-limiting, and scraping defence** (NEW in round 4 — closes "Public-rate endpoint has no cache/rate-limit/scraping control"):
+
+- **Edge cache:** response sets `Cache-Control: public, s-maxage=300, stale-while-revalidate=900` so Vercel's edge serves the same `(school_id, instructor_id, purchase_kind)` tuple from cache for 5 minutes. Admin rate changes propagate within that window; flag this in the admin-edit UI ("Rate changes take up to 5 minutes to appear on public pricing").
+- **Per-IP rate limit:** 60 requests/minute per IP via the same in-memory limiter used by `?action=checkout-slot-guest` (`api/slots.js:1496-1516`). Returns 429 with `Retry-After`.
+- **Embed pricing in cached profile response.** The learner-UX `/instructor/[slug]` page MUST receive bundle and single-lesson pricing as part of `api/instructors.js?action=profile` (one cached payload), not via N separate `public-rate` calls per card. The standalone `public-rate` endpoint exists for card-state changes (e.g. duration selector inside the modal) and for the index page (where it stays denormalised onto the card so the index doesn't fan out).
+- **Visibility check is hard.** If `instructors.publicly_visible = FALSE`, the endpoint returns `INSTRUCTOR_NOT_PUBLIC` even if `active = TRUE`. Test instructors never leak pricing.
+- **No enumeration helper.** There is no list-all-rates endpoint; competitors who want every instructor's price must hit the public profile page once per instructor and pay the per-IP rate-limit cost. This is intentional friction, not security through obscurity — public profiles are SEO-indexed so scraping is possible, but the slug-to-id mapping isn't predictable enough to enumerate cheaply.
 
 ### Guest bulk checkout — Path A (account required at bundle CTA)
 
@@ -959,16 +1127,19 @@ Trigger conditions to revisit:
 - Instructor #2 confirms a start date within 8 weeks, OR
 - ≥3 admin SQL conversions/edits in a single month (signal that the manual workaround is real friction).
 
+**Shape when it lands** (decided 2026-05-19): Step 8 does NOT build a new admin screen. It inserts a "Pricing" section into the consolidated instructor-edit modal scaffolded by learner-UX plan Step 6 — alongside the existing Profile and Visibility sections. Fields: `hourly_rate_pence`, bulk-tier overrides. See `LEARNER-INSTRUCTOR-SELECTION-PLAN.md` coupling point #9 for the full layout.
+
 ---
 
 ## Operator widget additions
 
-Two new tiles on the existing alert-layer widget (shipped 2026-05-17, `feat/widget-alert-layer`). Both queries run as part of the existing daily snapshot cron, no new infrastructure.
+Three new tiles on the existing alert-layer widget (shipped 2026-05-17, `feat/widget-alert-layer`). All queries run as part of the existing daily snapshot cron, no new infrastructure.
 
 | Tile | Query | Action |
 |---|---|---|
 | **Unknown-price bookings** | `COUNT(*)` from `lesson_bookings` where `list_price_source = 'unknown'` AND status IN ('scheduled', 'chargeable') | Click → list view with "Review & approve" button per row. Approving sets `list_price_source = 'live_compute_backfill'` and unblocks payout. |
 | **Goodwill spend (this month)** | `SUM(lb.list_price_pence)` from `lesson_bookings lb JOIN booking_credit_sources bcs ON bcs.booking_id = lb.id JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id` where `ct.source = 'goodwill' AND ct.absorbed_by = 'platform' AND lb.lesson_date >= date_trunc('month', CURRENT_DATE)` | Informational. Shows the real cost of platform-absorbed generosity each month. |
+| **Tenant-resolution drift** (NEW, paired with the `schools` trigger in `LEARNER-INSTRUCTOR-SELECTION-PLAN.md` Step 0) | `SELECT 1 WHERE EXISTS (SELECT 1 FROM schools WHERE id <> 1) AND NOT EXISTS (SELECT 1 FROM migration_markers WHERE key = 'public_endpoints_tenant_resolved')` | Red-flag tile. If non-zero, a non-default school exists but the legacy-endpoint sweep marker is missing — every public endpoint with `parseInt(req.query.school_id) || 1` is now a cross-tenant leak. **Required action:** sweep `api/instructors.js`, `api/slots.js`, free-trial flow, then insert the marker. The `schools` trigger should have prevented this state from being reachable; a non-zero tile means the trigger was bypassed (admin SQL, marker inserted prematurely, etc.) and the sweep genuinely isn't done. Email on first breach, daily until cleared. |
 
 ---
 
