@@ -2162,6 +2162,27 @@ Same-session follow-on to 2.99. While auditing Fraser's own Connect account post
 
 ---
 
+## 2.101 — Retire legacy `create-checkout-session` + `verify-session` (PR-J, audit #13, 19 May 2026)
+
+GPT-audit finding #13: `api/create-checkout-session.js` accepted caller-supplied `line_items` + `metadata` (no server-side pricing or validation) and routed paid checkouts to `webhook.js handleCheckoutComplete`, which stored bookings in an **in-memory `Map` that evaporated on every serverless cold start**. The `payg` and `bulk` buttons on `/lessons.html` had been pointed at this endpoint since the credit system shipped; in practice almost no one used them (the marketing site funnels through the free-trial flow) but anyone who did paid Stripe with no DB record landing — a latent customer-facing money-loss bug. `api/verify-session.js` was the unauthenticated post-payment confirmation read.
+
+**What changed:**
+- **Deleted:** `api/create-checkout-session.js`, `api/verify-session.js`, `public/success.html`, `public/success.js`
+- **Deleted from `api/webhook.js`:** the in-memory `bookings` Map, `handleCheckoutComplete()`, `sendCustomerConfirmation()`, `notifyStaff()`, `sendAvailabilityFormLink()`, `getPackageDisplayName()`, `incrementGuaranteePrice()`. The dispatcher's `else` branch that previously routed unknown `payment_type` to the legacy handler now alerts via `reportError()` — fail-loud, not silent.
+- **`public/lessons.js` — bulk-package buyer flow** (`btn-package`): now calls `/api/credits?action=checkout` with `{ hours: pkg.hrs }` after a login wall. Server prices via `calcBulkTotal()`; client sends nothing it can dictate. Anonymous visitors are bounced to `/learner/login.html?redirect=/lessons.html%23packages`. Slider/cards now also pull live bulk pricing from `/api/credits?action=bulk-pricing` so the displayed price matches what `?action=checkout` will charge (closes the latent `public/config.json` ↔ `schools.config.pricing` drift).
+- **`public/lessons.js` — PAYG button** (`cta-primary`): rebound to `bookFreeTrial()`. No Stripe call at all — the same redirect path the hero CTA already uses (send to `/learner/login.html` if not logged in, `/learner/book.html` otherwise). PAYG is bought as hours via the credit system once the learner has an account, not as a standalone Stripe charge.
+- **`public/lessons.js` — dead-code removal:** `startCalculatorCheckout()`, `calculateProfit()`, `getSelectedRetakes()`, `toggleAddon()`, `updateTotal()`, the `addonPrices` / `addonTiers` / `basePrice` calculator state, and the unused `applyConfig()` addon DOM-prep block. All only existed to drive the TRG calculator UI which has been hidden since 2026-04-28.
+
+**Post-purchase landing:** bulk-package buyers land on `/learner/?hours_added=N&session_id=…` — the same dashboard-toast path the in-app `buy-credits.html` flow already uses. No dedicated success page.
+
+**Guarantee pricing:** `api/guarantee-price.js` and the `guarantee_pricing` table survive; the increment-on-purchase wiring is gone but admin-override-via-Neon still works if the Pass Programme is ever re-enabled.
+
+**Why guest-checkout for bulk was rejected:** Fraser's call. Free-trial booking remains friction-free for guests (handled by `?action=book-free-trial` + `?action=checkout-slot-guest` paths, unchanged); bulk hours requires an account first because `handleCreditPurchase` needs `learner_id` to credit the right balance. The marketing site funnels new visitors through free-trial → account creation → bulk hours, which matches the post-April 2026 conversion flow.
+
+**Files changed:** `api/webhook.js`, `api/credits.js` (comment fix), `public/lessons.js`, `scripts/audit-stripe-charges.js` (comment refresh), `PROJECT.md`, `MIGRATION-PLAN.md`, `DEVELOPMENT-ROADMAP.md`. Deleted: `api/create-checkout-session.js`, `api/verify-session.js`, `public/success.html`, `public/success.js`.
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

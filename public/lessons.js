@@ -29,6 +29,59 @@ async function loadLivePricing() {
   }
 }
 
+// Pull live bulk-credit pricing from the same endpoint api/credits.js uses
+// server-side. This is what handleCheckout will actually charge the buyer,
+// so the slider/cards on this page MUST mirror it (PR-J — pre-PR-J the
+// numbers came from public/config.json which can drift from
+// schools.config.pricing). Falls back to config.json's bulk_packages if the
+// API is unavailable, which is the pre-PR-J behaviour.
+async function loadLiveBulkPricing() {
+  try {
+    const res = await fetch('/api/credits?action=bulk-pricing&school_id=1&t=' + Date.now());
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !data.ok || !data.hourly_pence) return null;
+    // discount_tiers comes sorted descending by min_hours (first match wins).
+    return {
+      hourly_pence: data.hourly_pence,
+      discount_tiers: Array.isArray(data.discount_tiers) ? data.discount_tiers : []
+    };
+  } catch (err) {
+    console.warn('Live bulk pricing fetch failed, falling back to config:', err);
+    return null;
+  }
+}
+
+// Mirror api/_pricing-helpers.js::getDiscountPct — tiers sorted desc, first match wins.
+function pickDiscountPct(hours, tiers) {
+  if (!Array.isArray(tiers) || !tiers.length) return 0;
+  const hit = tiers.find(t => hours >= t.min_hours);
+  return hit ? Number(hit.discount_pct) || 0 : 0;
+}
+
+// Replace the marketing config's bulk_packages with server-priced packages
+// derived from the live hourly rate + tiers. Keeps the same hour buckets the
+// marketing page advertises (10/20/30/40/50) but prices them from the source
+// the checkout endpoint will use. If overlay fails the page renders whatever
+// config.json shipped — same as pre-PR-J behaviour.
+function overlayServerBulkPackages(configData, live) {
+  if (!configData || !live || !configData.pricing || !Array.isArray(configData.pricing.bulk_packages)) return;
+  const hourlyPence = live.hourly_pence;
+  configData.pricing.bulk_packages = configData.pricing.bulk_packages.map(pkg => {
+    const hrs = Number(pkg.hrs);
+    if (!hrs) return pkg;
+    const fullPence = Math.round(hourlyPence * hrs);
+    const discountPct = pickDiscountPct(hrs, live.discount_tiers);
+    const discountAmtPence = Math.round(fullPence * discountPct / 100);
+    const totalPence = fullPence - discountAmtPence;
+    return {
+      hrs,
+      price: Math.round(totalPence / 100),          // £ for display only
+      discount: discountPct / 100                    // decimal (0.08 = 8%)
+    };
+  });
+}
+
 async function loadConfig() {
   let configData = null;
   try {
@@ -45,11 +98,15 @@ async function loadConfig() {
   }
 
   // Overlay live pricing from lesson_types so the page mirrors what learners actually pay.
-  const live = await loadLivePricing();
+  // Fetch both overlays in parallel — both are independent of each other and of configData.
+  const [live, liveBulk] = await Promise.all([loadLivePricing(), loadLiveBulkPricing()]);
   if (configData && live) {
     configData.pricing = configData.pricing || {};
     configData.pricing.payg_hourly = live.hourly;
     configData.pricing.payg_lesson_price = live.lesson_price;
+  }
+  if (configData && liveBulk) {
+    overlayServerBulkPackages(configData, liveBulk);
   }
 
   if (configData) {
@@ -95,23 +152,10 @@ function applyConfig() {
   if (stat1El) stat1El.textContent = '£' + hourly;
   if (stat1LabelEl) stat1LabelEl.innerHTML = 'Per hour,<br>standard rate';
 
-  // Guarantee elements may not exist (section moved to learner-journey.html)
-  const corePriceEl = document.getElementById('core-price-display');
-  if (corePriceEl) corePriceEl.textContent = '£' + p.core_programme.toLocaleString();
-
-  const totalCoreEl = document.getElementById('total-core-display');
-  if (totalCoreEl) totalCoreEl.textContent = '£' + p.core_programme.toLocaleString();
-
-  const rp = p.retake_price || 349;
-  addonPrices = { 1: rp, 2: rp, 3: rp };
-  const ap1 = document.getElementById('addon-price-1'); if (ap1) ap1.textContent = '+£' + rp;
-  const ap2 = document.getElementById('addon-price-2'); if (ap2) ap2.textContent = '+£' + rp;
-  const ap3 = document.getElementById('addon-price-3'); if (ap3) ap3.textContent = '+£' + rp;
-  const ta1 = document.getElementById('total-addon-1-display'); if (ta1) ta1.textContent = '£' + rp;
-  const ta2 = document.getElementById('total-addon-2-display'); if (ta2) ta2.textContent = '£' + rp;
-  const ta3 = document.getElementById('total-addon-3-display'); if (ta3) ta3.textContent = '£' + rp;
-
-  basePrice = p.core_programme;
+  // TRG / Core Programme / calculator addon DOM was removed from lessons.html
+  // 2026-04-28 (TRG hidden) and the JS hooks were retired 2026-05-19 (PR-J).
+  // The config still carries core_programme / retake_price for the
+  // learner-journey.html page; nothing on /lessons.html reads them.
 
   // Hero headline only — subheadline NO LONGER overridden from config (was reintroducing
   // TRG copy from old config.json values). 2026-04-28.
@@ -203,17 +247,7 @@ loadConfig();
 
 // PACKAGE DATA
 const PACKAGES = [];
-const BASE_RATE = 60;
 let currentPkgIndex = 2;
-
-// CALCULATOR STATE
-let basePrice = 2400;
-let addonPrices = { 1: 349, 2: 349, 3: 349 };
-let addonTiers = { 1: 'retake_2', 2: 'retake_3', 3: 'retake_4' };
-
-function getSelectedRetakes() {
-  return [1,2,3].filter(i => document.getElementById('addon-card-' + i)?.classList.contains('selected'));
-}
 
 function fmt(n) {
   return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -271,143 +305,70 @@ function openSetmoreBooking() {
   }
 }
 
-function toggleAddon(addon, element) {
-  const isActive = element.classList.contains('selected');
-  if (isActive) {
-    for (let i = addon; i <= 3; i++) {
-      const card = document.getElementById('addon-card-' + i);
-      if (card) card.classList.remove('selected');
-      const cb = document.getElementById('checkbox-' + i);
-      if (cb) cb.textContent = '';
-      const row = document.getElementById('addon-row-' + i);
-      if (row) row.style.display = 'none';
-    }
-  } else {
-    for (let i = 1; i < addon; i++) {
-      if (!document.getElementById('addon-card-' + i)?.classList.contains('selected')) return;
-    }
-    element.classList.add('selected');
-    document.getElementById('checkbox-' + addon).textContent = '✓';
-    document.getElementById('addon-row-' + addon).style.display = 'flex';
-  }
-  updateTotal();
-}
-
-function updateTotal() {
-  let total = basePrice;
-  for (let i = 1; i <= 3; i++) {
-    if (document.getElementById('addon-card-' + i)?.classList.contains('selected')) {
-      total += addonPrices[i];
-    }
-  }
-  const totalEl = document.getElementById('total-amount');
-  if (totalEl) totalEl.textContent = '£' + total.toLocaleString();
-}
-
-async function startCheckout(type, pkgIndex = null) {
+// Bulk-package purchase flow (PR-J, audit #13).
+//
+// Pre-PR-J this called /api/create-checkout-session with caller-controlled
+// line items and metadata, and the webhook routed through the legacy
+// in-memory `bookings` Map flow — the customer paid but no DB row was ever
+// written, so the hours never landed on a learner balance. The legacy
+// endpoint also let the caller dictate the price.
+//
+// Post-PR-J:
+//   • Login wall: anonymous visitors are bounced to /learner/login.html and
+//     returned to #packages after sign-in. We need learner_id + school_id
+//     in the Stripe metadata before the webhook can credit the right balance.
+//   • Server-priced: the only thing we send is hours. api/credits.js
+//     ?action=checkout re-prices via calcBulkTotal() — the slider price the
+//     user sees is rendered from the same /api/credits?action=bulk-pricing
+//     endpoint, so what's shown matches what's charged.
+//   • Lands on /learner/?hours_added=N&session_id=... — the same post-purchase
+//     verify-and-toast path the in-app buy-credits flow uses.
+async function startBulkCheckout(pkgIndex) {
   const btn = event.target;
   const originalText = btn.textContent;
-  btn.textContent = 'Loading...';
+  btn.textContent = 'Loading…';
   btn.disabled = true;
 
-  try {
-    let lineItems, metadata, customFields;
-    const p = SITE_CONFIG.pricing || { payg_lesson_price: 90, core_programme: 2400 };
-    const _paygLesson = p.payg_lesson_price || (p.payg_hourly ? p.payg_hourly * 1.5 : 90);
+  const restore = () => { btn.textContent = originalText; btn.disabled = false; };
 
-    if (type === 'payg') {
-      lineItems = [{
-        price_data: { currency: 'gbp', unit_amount: _paygLesson * 100, product_data: { name: 'Driving Lesson — Pay As You Go', description: 'Single 1.5hr lesson with CoachCarter' } },
-        quantity: 1
-      }];
-      metadata = { package_type: 'payg' };
-      customFields = [{ key: 'provisional_licence', label: { type: 'custom', custom: 'Provisional licence number' }, type: 'text', optional: false }];
-    } else if (type === 'bulk') {
-      const pkg = PACKAGES[pkgIndex || currentPkgIndex];
-      if (!pkg) throw new Error('No package selected');
-      lineItems = [{
-        price_data: { currency: 'gbp', unit_amount: pkg.price * 100, product_data: { name: pkg.hrs + ' Hour Package', description: pkg.hrs + ' hours of driving instruction — ' + (pkg.discount * 100) + '% off' } },
-        quantity: 1
-      }];
-      metadata = { package_type: 'bulk', hours: pkg.hrs, discount: pkg.discount };
-      customFields = [{ key: 'provisional_licence', label: { type: 'custom', custom: 'Provisional licence number' }, type: 'text', optional: false }];
+  try {
+    const pkg = PACKAGES[pkgIndex == null ? currentPkgIndex : pkgIndex];
+    if (!pkg) throw new Error('No package selected');
+
+    // Login wall — handleCheckout in api/credits.js requires a learner JWT.
+    // Bounce anonymous visitors to login and bring them back to #packages.
+    const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
+    if (!session) {
+      const redirect = encodeURIComponent('/lessons.html#packages');
+      window.location.href = '/learner/login.html?redirect=' + redirect;
+      return;
     }
 
-    const response = await fetch('/api/create-checkout-session', {
+    // Same fetch pattern the in-app buy-credits page uses. The cookie carries
+    // the JWT; we just need credentials: 'include' so it travels.
+    const response = await fetch('/api/credits?action=checkout', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ line_items: lineItems, metadata: metadata, custom_fields: customFields, success_url: window.location.origin + '/success.html?session_id={CHECKOUT_SESSION_ID}', cancel_url: window.location.origin + '/' })
+      body: JSON.stringify({ hours: pkg.hrs })
     });
 
-    if (!response.ok) throw new Error('Failed to create checkout');
+    if (response.status === 401) {
+      // JWT expired between page load and click. Re-prompt.
+      const redirect = encodeURIComponent('/lessons.html#packages');
+      window.location.href = '/learner/login.html?redirect=' + redirect;
+      return;
+    }
+
+    if (!response.ok) throw new Error('Failed to create checkout (HTTP ' + response.status + ')');
     const { url } = await response.json();
+    if (!url) throw new Error('No checkout URL returned');
     window.location.href = url;
   } catch (err) {
-    console.error('Checkout error:', err);
-    btn.textContent = originalText;
-    btn.disabled = false;
+    console.error('Bulk checkout error:', err);
+    restore();
     alert('Something went wrong. Please try again or contact us directly.');
   }
-}
-
-async function startCalculatorCheckout() {
-  const btn = event.target;
-  const originalText = btn.textContent;
-  btn.textContent = 'Loading...';
-  btn.disabled = true;
-
-  try {
-    let lineItems = [];
-    let metadata = {};
-    let customFields = [];
-
-    lineItems.push({
-      price_data: { currency: 'gbp', unit_amount: basePrice * 100, product_data: { name: 'Core Programme — 18 Week Guarantee', description: '18 weeks, practical test booked, instructor performance-paid' } },
-      quantity: 1
-    });
-
-    const selectedRetakes = getSelectedRetakes();
-    const retakeCount = selectedRetakes.length;
-    const retakeLabels = ['2nd', '3rd', '4th'];
-    const tierNames = ['core_only', 'core_plus_1', 'core_plus_2', 'core_plus_3'];
-    const tierName = tierNames[retakeCount] || 'core_only';
-    const packageName = retakeCount === 0 ? 'Core Programme' : 'Core + ' + retakeCount + ' Pre-paid Retake' + (retakeCount > 1 ? 's' : '');
-    const totalHours = (SITE_CONFIG.pricing?.core_hours || 30) + retakeCount * 15;
-
-    selectedRetakes.forEach((slot, idx) => {
-      lineItems.push({
-        price_data: { currency: 'gbp', unit_amount: addonPrices[slot] * 100, product_data: { name: retakeLabels[idx] + ' Retake Cover', description: '15 hrs tuition + DVSA test fee included' } },
-        quantity: 1
-      });
-    });
-
-    metadata = { package_type: tierName, package_name: packageName, total_hours: totalHours.toString(), retake_coverage: retakeCount.toString(), base_price: basePrice.toString(), addon_price: (retakeCount * (addonPrices[1] || 349)).toString(), estimated_profit: calculateProfit(tierName).toString() };
-    customFields = [
-      { key: 'provisional_licence', label: { type: 'custom', custom: 'Provisional licence number' }, type: 'text', optional: false },
-      { key: 'has_test_booked', label: { type: 'custom', custom: 'Do you already have a practical test booked?' }, type: 'dropdown', dropdown: { options: [{ label: 'No, I need you to book it', value: 'needstest' }, { label: 'Yes, I have a test date', value: 'hastest' }, { label: "I'm not sure / need help", value: 'unsure' }] } },
-      { key: 'dvsa_reference', label: { type: 'custom', custom: 'DVSA reference or preferred start date' }, type: 'text', optional: true }
-    ];
-
-    const response = await fetch('/api/create-checkout-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ line_items: lineItems, metadata: metadata, custom_fields: customFields, success_url: window.location.origin + '/success.html?session_id={CHECKOUT_SESSION_ID}', cancel_url: window.location.origin + '/#guarantee' })
-    });
-
-    if (!response.ok) throw new Error('Failed to create checkout');
-    const { url } = await response.json();
-    window.location.href = url;
-  } catch (err) {
-    console.error('Checkout error:', err);
-    btn.textContent = originalText;
-    btn.disabled = false;
-    alert('Something went wrong. Please try again or contact us directly.');
-  }
-}
-
-function calculateProfit(tier) {
-  const profits = { 'core_only': 430, 'core_plus_1': 489, 'core_plus_2': 548, 'core_plus_3': 607 };
-  return profits[tier] || 430;
 }
 
 // SCROLL REVEAL
@@ -471,9 +432,11 @@ document.addEventListener('click', function (e) {
 (function wire() {
   var bind = function (id, fn, ev) { var el = document.getElementById(id); if (el) el.addEventListener(ev || 'click', fn); };
   bind('hero-cta', scrollToPackages);
-  bind('btn-payg', bookFreeTrial);
+  bind('btn-payg', bookFreeTrial);                      // PAYG section is hidden but binding kept harmless
   bind('pkg-slider', function () { updatePkg(this.value); }, 'input');
-  bind('btn-package', function () { startCheckout('bulk', currentPkgIndex); });
-  bind('cta-primary', function () { startCheckout('payg'); });
+  bind('btn-package', function () { startBulkCheckout(currentPkgIndex); });
+  // cta-primary ("Book a lesson now") — sends learners to the credit-funded
+  // book.html flow instead of the retired legacy PAYG Stripe session (PR-J).
+  bind('cta-primary', bookFreeTrial);
 })();
 })();
