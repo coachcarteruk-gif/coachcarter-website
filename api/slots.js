@@ -986,15 +986,36 @@ async function handleBook(req, res) {
       }
     }
 
-    // 4. Deduct hours FIRST (skip for demo instructor or payments-disabled schools)
+    // 4. Deduct hours FIRST (skip for demo instructor or payments-disabled schools).
+    //
+    // Uses the canonical LCB-lock CTE prologue — see api/_credit-grant.js for
+    // the load-bearing invariant: every credit-affecting writer for a learner
+    // MUST acquire SELECT ... FOR UPDATE on the learner_users row (Pre-2A) or
+    // learner_credit_balances row (Phase-2A) before mutating. This serialises
+    // concurrent grantCredits() calls against this deduct so a fresh purchase
+    // and a booking can't race in a way that produces a wrong balance.
+    //
+    // The `WHERE balance_minutes >= ${totalMins}` is the insufficient-credit
+    // guard — if the lock holder just before us decremented the balance below
+    // what we need, the UPDATE matches zero rows and `deducted` is undefined,
+    // which we surface as a 402.
     if (!skipPayments) {
       const creditsToDeduct = Math.ceil(totalMins / 60);
       const [deducted] = await sql`
-        UPDATE learner_users
-        SET balance_minutes = balance_minutes - ${totalMins},
-            credit_balance = GREATEST(credit_balance - ${creditsToDeduct}, 0)
-        WHERE id = ${user.id} AND balance_minutes >= ${totalMins}
-        RETURNING balance_minutes
+        WITH locked AS (
+          SELECT id
+            FROM learner_users
+           WHERE id = ${user.id}
+             AND school_id = ${schoolId}
+           FOR UPDATE
+        )
+        UPDATE learner_users lu
+           SET balance_minutes = lu.balance_minutes - ${totalMins},
+               credit_balance  = GREATEST(lu.credit_balance - ${creditsToDeduct}, 0)
+          FROM locked
+         WHERE lu.id = locked.id
+           AND lu.balance_minutes >= ${totalMins}
+        RETURNING lu.balance_minutes
       `;
       if (!deducted)
         return res.status(402).json({ error: `Not enough hours. You need ${formatHours(totalMins)}. Please buy more hours.` });
@@ -1021,14 +1042,25 @@ async function handleBook(req, res) {
         createdBookings.push(b);
       }
     } catch (insertErr) {
-      // Refund the hours since booking failed (not needed for demo/free schools)
+      // Refund the hours since booking failed (not needed for demo/free schools).
+      // Same LCB-lock CTE prologue as the deduct above — this is a credit-
+      // affecting writer and must serialise against concurrent grantCredits()
+      // for this learner. See api/_credit-grant.js for the invariant.
       if (!skipPayments) {
         const creditsToRefund = Math.ceil(totalMins / 60);
         await sql`
-          UPDATE learner_users
-          SET balance_minutes = balance_minutes + ${totalMins},
-              credit_balance = credit_balance + ${creditsToRefund}
-          WHERE id = ${user.id}
+          WITH locked AS (
+            SELECT id
+              FROM learner_users
+             WHERE id = ${user.id}
+               AND school_id = ${schoolId}
+             FOR UPDATE
+          )
+          UPDATE learner_users lu
+             SET balance_minutes = lu.balance_minutes + ${totalMins},
+                 credit_balance  = lu.credit_balance  + ${creditsToRefund}
+            FROM locked
+           WHERE lu.id = locked.id
         `;
       }
       // If some bookings in a series were created before the failure, cancel them
