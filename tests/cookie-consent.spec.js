@@ -114,6 +114,11 @@ test.describe('Cookie consent — GDPR gate', () => {
       }));
     });
     await page.goto(PAGE);
+    // Wait for the loader's PostHog injection to settle. Without this, the
+    // dynamic <script> insert can destroy the evaluation context Playwright
+    // uses to poll the locator, surfacing as flaky
+    // "Execution context was destroyed" failures.
+    await page.waitForLoadState('networkidle');
     await expect(page.locator('#cc-consent-overlay')).toHaveCount(0);
     // PostHog should auto-load on this visit because consent was already true.
     await expect.poll(async () => page.evaluate(() => typeof window.posthog)).toBe('object');
