@@ -35,13 +35,21 @@ module.exports = async (req, res) => {
 };
 
 // ── GET /api/instructors?action=list ─────────────────────────────────────────
+//
+// Public endpoint (no auth). Returns ONLY whitelisted public-safe fields.
+// PII (email, phone) and operational/financial columns (stripe_account_id,
+// commission_rate, weekly_franchise_fee_pence, password_hash, payouts_paused,
+// must_change_password, calendar_token, setmore_*, ical_*, etc.) MUST NOT
+// appear in this response. The `email = 'demo@coachcarter.uk'` filter is
+// kept in the WHERE clause for legacy purposes — email is not returned.
 async function handleList(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = parseInt(req.query.school_id) || 1;
     const instructors = await sql`
-      SELECT id, name, email, phone, bio, photo_url, active, slug, created_at
+      SELECT id, name, slug, bio, photo_url, active,
+             pass_rate, years_experience, specialisms
       FROM instructors
       WHERE active = true
         AND school_id = ${schoolId}
