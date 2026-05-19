@@ -68,59 +68,68 @@ module.exports = async (req, res) => {
     return res.status(400).send('Webhook signature verification failed');
   }
 
-  // Klarna and other delayed-payment methods deliver `completed` early with
-  // payment_status='unpaid', then fire `async_payment_succeeded` once the
-  // payment actually clears. Card payments only fire `completed` (paid).
-  // We route both events through the same dispatch — handlers are idempotent
-  // via stripe_session_id and gate writes on payment_status='paid'.
-  if (event.type === 'checkout.session.completed' ||
-      event.type === 'checkout.session.async_payment_succeeded') {
-    const session = event.data.object;
-    const paymentType = session.metadata?.payment_type;
+  // Dispatch with re-throw semantics (PR-I, audit #14). Any thrown error
+  // bubbles up to the 500 response below, which Stripe interprets as a
+  // delivery failure and retries with exponential backoff (Stripe webhook
+  // retry schedule: up to 3 days). Handlers are idempotent via
+  // uq_credit_tx_session, so retries past the first successful INSERT are
+  // no-ops. Pre-PR-I these handlers swallowed every error and returned 200,
+  // which meant a transient Neon outage or bug silently dropped a paid
+  // checkout off the floor and Stripe never retried.
+  try {
+    // Klarna and other delayed-payment methods deliver `completed` early
+    // with payment_status='unpaid', then fire `async_payment_succeeded`
+    // once the payment actually clears. Card payments only fire
+    // `completed` (paid). We route both events through the same dispatch.
+    if (event.type === 'checkout.session.completed' ||
+        event.type === 'checkout.session.async_payment_succeeded') {
+      const session = event.data.object;
+      const paymentType = session.metadata?.payment_type;
 
-    if (paymentType === 'credit_purchase') {
-      // ── New credit-based booking system ──────────────────────────────────
-      await handleCreditPurchase(session);
-    } else if (paymentType === 'slot_booking') {
-      // ── Pay-per-slot: single lesson purchase + instant booking ──────────
-      await handleSlotBooking(session);
-    } else if (paymentType === 'lesson_offer') {
-      // ── Instructor-initiated offer: learner accepted + paid ─────────────
-      await handleOfferBooking(session);
-    } else {
-      // ── Legacy pass guarantee / package flow ──────────────────────────────
-      await handleCheckoutComplete(session);
+      if (paymentType === 'credit_purchase') {
+        // ── New credit-based booking system ────────────────────────────
+        await handleCreditPurchase(session);
+      } else if (paymentType === 'slot_booking') {
+        // ── Pay-per-slot: single lesson purchase + instant booking ─────
+        await handleSlotBooking(session);
+      } else if (paymentType === 'lesson_offer') {
+        // ── Instructor-initiated offer: learner accepted + paid ────────
+        await handleOfferBooking(session);
+      } else {
+        // ── Legacy pass guarantee / package flow ───────────────────────
+        await handleCheckoutComplete(session);
+      }
     }
-  }
 
-  // Klarna failure / cancellation — log only. No DB writes happened on the
-  // earlier `completed` event because handlers gate on payment_status='paid'.
-  if (event.type === 'checkout.session.async_payment_failed') {
-    const session = event.data.object;
-    console.error('Stripe async payment failed:', {
-      session_id: session.id,
-      payment_type: session.metadata?.payment_type,
-      learner_email: session.customer_details?.email || session.metadata?.learner_email,
-    });
-    reportError('/api/webhook (async_payment_failed)', new Error(
-      `Async payment failed for session ${session.id} (${session.metadata?.payment_type || 'unknown'})`
-    ));
-  }
+    // Klarna failure / cancellation — log only. No DB writes happened on
+    // the earlier `completed` event because handlers gate on
+    // payment_status='paid'. No retry needed (Stripe won't re-charge).
+    if (event.type === 'checkout.session.async_payment_failed') {
+      const session = event.data.object;
+      console.error('Stripe async payment failed:', {
+        session_id: session.id,
+        payment_type: session.metadata?.payment_type,
+        learner_email: session.customer_details?.email || session.metadata?.learner_email,
+      });
+      reportError('/api/webhook (async_payment_failed)', new Error(
+        `Async payment failed for session ${session.id} (${session.metadata?.payment_type || 'unknown'})`
+      ));
+    }
 
-  // ── Stripe Connect: instructor onboarding complete ──
-  if (event.type === 'account.updated') {
-    try {
+    // ── Stripe Connect: instructor onboarding complete ──
+    // Re-throw on DB failure so Stripe retries. Both UPDATE statements are
+    // idempotent (WHERE stripe_onboarding_complete = FALSE) so a retry
+    // after partial success is safe.
+    if (event.type === 'account.updated') {
       const account = event.data.object;
       if (account.charges_enabled && account.payouts_enabled) {
         const sql = neon(process.env.POSTGRES_URL);
-        // Update instructors table
         await sql`
           UPDATE instructors
              SET stripe_onboarding_complete = TRUE
            WHERE stripe_account_id = ${account.id}
              AND stripe_onboarding_complete = FALSE
         `;
-        // Also update schools table if the account belongs to a school
         await sql`
           UPDATE schools
              SET stripe_onboarding_complete = TRUE
@@ -128,13 +137,17 @@ module.exports = async (req, res) => {
              AND stripe_onboarding_complete = FALSE
         `;
       }
-    } catch (err) {
-      console.error('account.updated handler error:', err);
-      reportError('/api/webhook (account.updated)', err);
     }
-  }
 
-  res.json({ received: true });
+    return res.json({ received: true });
+  } catch (err) {
+    console.error(`Stripe webhook handler error (${event.type}):`, err);
+    reportError(`/api/webhook (${event.type})`, err);
+    // 500 → Stripe retries. Idempotency keys in handlers (uq_credit_tx_session
+    // for credit/slot/offer paths, WHERE stripe_onboarding_complete = FALSE
+    // for account.updated) make replays safe.
+    return res.status(500).json({ error: 'Webhook handler failed', event_type: event.type });
+  }
 };
 
 // Don't process unpaid sessions. Klarna fires `completed` with
@@ -240,8 +253,11 @@ async function handleCreditPurchase(session) {
 
   } catch (err) {
     console.error('❌ handleCreditPurchase error:', err);
-    // Don't rethrow — we've already responded 200 to Stripe.
-    // A failed DB write here should be caught by Neon error logging / Stripe retry.
+    // Re-throw — dispatcher catches and returns 500 so Stripe retries.
+    // uq_credit_tx_session makes a successful retry idempotent (INSERT
+    // either succeeds the first time or hits the unique violation that
+    // we already treat as "already processed" inside this handler).
+    throw err;
   }
 }
 
@@ -526,6 +542,12 @@ async function handleSlotBooking(session) {
 
   } catch (err) {
     console.error('❌ handleSlotBooking error:', err);
+    // Re-throw — dispatcher catches and returns 500 so Stripe retries.
+    // Inner booking-insert failures already alert + refund the learner via
+    // notifyBookingInsertFailed and return early (no throw), so this path
+    // only fires on errors before/after the booking insert window — which
+    // are idempotent under retry (uq_credit_tx_session + idempotent UPDATEs).
+    throw err;
   }
 }
 
@@ -1211,6 +1233,10 @@ async function handleOfferBooking(session) {
 
   } catch (err) {
     console.error('❌ handleOfferBooking error:', err);
+    // Re-throw — dispatcher catches and returns 500 so Stripe retries.
+    // Idempotency: offer.status='accepted' short-circuits on retry, and
+    // uq_credit_tx_session catches concurrent retries of the same session.
+    throw err;
   }
 }
 

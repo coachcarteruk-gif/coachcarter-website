@@ -9,12 +9,12 @@
 // transfers, and sends email notifications.
 
 const stripe   = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { neon } = require('@neondatabase/serverless');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 const { processAllPayouts, processSchoolPayouts } = require('./_payout-helpers');
 const { sendPayoutSummary } = require('./_payout-email');
 const { verifyCronAuth, requireAuth } = require('./_auth');
+const { withCronLock } = require('./_cron-lock');
 
 function isAuthorized(req) {
   // Cron secret (Bearer or ?key=) — fail-closed, timing-safe
@@ -29,8 +29,12 @@ module.exports = async (req, res) => {
     return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Invalid cron secret' });
   }
 
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
+  // Lease 600s — payout cron creates Stripe transfers serially and emails
+  // per instructor. Real-world runs <60s; the floor protects an admin
+  // accidentally double-clicking the manual-trigger button in the portal.
+  // Crash recovery: per-booking uq_payout_booking + uq_school_payout_booking
+  // are the hard idempotency keys, lock is overlap optimisation.
+  return withCronLock(req, res, 'cron-payouts', 600, async (sql) => {
 
     // 1. Instructor payouts (existing)
     const results = await processAllPayouts(sql, stripe);
@@ -110,7 +114,7 @@ module.exports = async (req, res) => {
       reportError('/api/cron-payouts (school payouts)', err);
     }
 
-    return res.json({
+    return {
       ok: true,
       instructors: {
         processed: results.processed,
@@ -124,9 +128,6 @@ module.exports = async (req, res) => {
         failed: schoolResults.failed,
         total_transferred_pence: schoolResults.total_pence
       }
-    });
-  } catch (err) {
-    reportError('/api/cron-payouts', err);
-    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Payout processing failed' });
-  }
+    };
+  });
 };

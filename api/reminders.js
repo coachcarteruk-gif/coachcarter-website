@@ -15,6 +15,7 @@ const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 const { verifyCronAuth, requireAuth } = require('./_auth');
 const { SCHEDULED } = require('./_booking-status');
+const { withCronLock } = require('./_cron-lock');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,9 +62,18 @@ module.exports = async (req, res) => {
 async function handleSendDue(req, res) {
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
+  // Lease 540s — hourly schedule, each reminder iteration sends email +
+  // WhatsApp so the loop can take a couple of minutes on a busy day. Lock
+  // closes the gap between SELECT due-and-not-yet-reminded → INSERT
+  // sent_reminders that previously let two overlapping cron runs double-
+  // email every learner whose reminder window opened in that gap.
+  return withCronLock(req, res, 'reminders.send-due', 540, async (sql) => {
+    return await runSendDue(sql);
+  });
+}
 
+async function runSendDue(sql, retryAttempt = 0) {
+  try {
     // Find confirmed bookings whose lesson time is within the instructor's
     // reminder_hours from now AND haven't already been reminded.
     //
@@ -107,7 +117,7 @@ async function handleSendDue(req, res) {
     `;
 
     if (dueBookings.length === 0) {
-      return res.json({ ok: true, sent: 0, reason: 'No reminders due' });
+      return { ok: true, sent: 0, reason: 'No reminders due' };
     }
 
     const mailer = createTransporter();
@@ -175,24 +185,20 @@ async function handleSendDue(req, res) {
       sentCount++;
     }
 
-    return res.json({ ok: true, sent: sentCount });
+    return { ok: true, sent: sentCount };
 
   } catch (err) {
-    // Retry once on transient Neon errors (cold start at 3am, control plane blips)
-    if (err.name === 'NeonDbError' && !req._remindersSendRetried) {
-      req._remindersSendRetried = true;
+    // Retry once on transient Neon errors (cold start at 3am, control plane blips).
+    // Stays inside the cron lock — withCronLock holds the lease across the retry.
+    if (err.name === 'NeonDbError' && retryAttempt === 0) {
       console.warn('[reminders] Neon transient error, retrying once…', err.message);
       await new Promise(r => setTimeout(r, 1000));
-      try {
-        return await handleSendDue(req, res);
-      } catch (retryErr) {
-        reportError('/api/reminders?action=send-due', retryErr);
-        return res.status(500).json({ error: 'Failed to send reminders after retry' });
-      }
+      return runSendDue(sql, 1);
     }
     console.error('reminders send-due error:', err);
-    reportError('/api/reminders?action=send-due', err);
-    return res.status(500).json({ error: 'Failed to send reminders' });
+    // Re-throw — withCronLock catches, reports, and sends a 500 so the cron
+    // shows red in Vercel and Stripe-style monitoring catches it.
+    throw err;
   }
 }
 
@@ -202,9 +208,9 @@ async function handleSendDue(req, res) {
 async function handleDailySchedule(req, res) {
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-
+  // Lease 600s — one email per opted-in instructor; runs <60s today but
+  // scales linearly with instructor count.
+  return withCronLock(req, res, 'reminders.daily-schedule', 600, async (sql) => {
     // Tomorrow's date in UTC
     const tomorrow = new Date();
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
@@ -221,7 +227,7 @@ async function handleDailySchedule(req, res) {
     `;
 
     if (instructors.length === 0) {
-      return res.json({ ok: true, sent: 0, reason: 'No instructors opted in' });
+      return { ok: true, sent: 0, reason: 'No instructors opted in' };
     }
 
     const mailer = createTransporter();
@@ -335,13 +341,8 @@ async function handleDailySchedule(req, res) {
       }
     }
 
-    return res.json({ ok: true, sent: sentCount });
-
-  } catch (err) {
-    console.error('reminders daily-schedule error:', err);
-    reportError('/api/reminders?action=daily-schedule', err);
-    return res.status(500).json({ error: 'Failed to send daily schedules' });
-  }
+    return { ok: true, sent: sentCount };
+  });
 }
 
 // ── GET ?action=settings ─────────────────────────────────────────────────────

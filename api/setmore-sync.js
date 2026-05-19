@@ -6,10 +6,9 @@
 // Fetches their Setmore appointments, matches/creates learner accounts,
 // and imports bookings into lesson_bookings. Idempotent via setmore_key.
 
-const { neon } = require('@neondatabase/serverless');
-const { reportError } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
 const { SCHEDULED, REFUNDED } = require('./_booking-status');
+const { withCronLock } = require('./_cron-lock');
 
 // ── Setmore service → real lesson duration (minus built-in buffer) ───────────
 
@@ -126,8 +125,16 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  const sql = neon(process.env.POSTGRES_URL);
+  // Lease 540s — 15-min schedule. Round-robin picks one instructor per
+  // invocation and the Setmore API is the slow path; lock closes the
+  // window where two parallel runs picked the same instructor and made
+  // two HTTP fetches + two passes over the same appointments.
+  return withCronLock(req, res, 'setmore-sync', 540, async (sql) => {
+    return await runSetmoreSync(sql);
+  });
+};
 
+async function runSetmoreSync(sql, retryAttempt = 0) {
   try {
     // 1. Pick the instructor whose Setmore feed was synced least recently
     const [instructor] = await sql`
@@ -141,7 +148,7 @@ module.exports = async (req, res) => {
     `;
 
     if (!instructor) {
-      return res.json({ ok: true, message: 'No Setmore feeds to sync' });
+      return { ok: true, message: 'No Setmore feeds to sync' };
     }
 
     // 2. Get Setmore access token
@@ -150,7 +157,7 @@ module.exports = async (req, res) => {
       token = await getAccessToken();
     } catch (err) {
       await setSyncError(sql, instructor.id, `Token error: ${err.message}`);
-      return res.json({ ok: false, error: err.message });
+      return { ok: false, error: err.message };
     }
 
     // 3. Fetch appointments for the next 90 days
@@ -167,7 +174,7 @@ module.exports = async (req, res) => {
       appointments = data.appointments || [];
     } catch (err) {
       await setSyncError(sql, instructor.id, `Fetch failed: ${err.message}`);
-      return res.json({ ok: false, error: err.message });
+      return { ok: false, error: err.message };
     }
 
     // 4. Load lesson types for slug → id mapping
@@ -349,32 +356,27 @@ module.exports = async (req, res) => {
       WHERE id = ${instructor.id}
     `;
 
-    return res.json({
+    return {
       ok: true,
       instructor_id: instructor.id,
       appointments_found: appointments.length,
       imported,
       skipped,
       cancelled
-    });
+    };
 
   } catch (err) {
-    // Retry once on transient Neon errors (cold start at 3am, control plane blips)
-    if (err.name === 'NeonDbError' && !req._setmoreSyncRetried) {
-      req._setmoreSyncRetried = true;
+    // Retry once on transient Neon errors (cold start at 3am, control plane blips).
+    // Stays inside the cron lock — withCronLock holds the lease across the retry.
+    if (err.name === 'NeonDbError' && retryAttempt === 0) {
       console.warn('[setmore-sync] Neon transient error, retrying once…', err.message);
       await new Promise(r => setTimeout(r, 1000));
-      try {
-        return await module.exports(req, res);
-      } catch (retryErr) {
-        reportError('/api/setmore-sync', retryErr);
-        return res.status(500).json({ error: 'Sync failed after retry' });
-      }
+      return runSetmoreSync(sql, 1);
     }
-    reportError('/api/setmore-sync', err);
-    return res.status(500).json({ error: 'Sync failed' });
+    // Re-throw — withCronLock catches, reports, and sends a 500.
+    throw err;
   }
-};
+}
 
 // ── Learner resolution ───────────────────────────────────────────────────────
 

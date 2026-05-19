@@ -15,19 +15,18 @@
 // Single-tier only: rewards flow once, from referee's lesson to direct
 // referrer. parent_referral_id chains are not followed.
 
-const { neon } = require('@neondatabase/serverless');
 const { CHARGEABLE } = require('./_booking-status');
-const { reportError } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
+const { withCronLock } = require('./_cron-lock');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  const results = { scanned: 0, rewarded: 0, skipped_disabled: 0, skipped_no_referrer: 0, errors: 0 };
-
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
+  // Lease 300s — daily cron, candidate set is small; stamp-then-credit
+  // is per-row idempotent already, lock is belt-and-braces.
+  return withCronLock(req, res, 'cron-referral-rewards', 300, async (sql) => {
+    const results = { scanned: 0, rewarded: 0, skipped_disabled: 0, skipped_no_referrer: 0, errors: 0 };
 
     // Pull every candidate booking in one query. Joins:
     //   - referee (the learner who took the lesson) must have referred_by set
@@ -146,9 +145,6 @@ module.exports = async (req, res) => {
       }
     }
 
-    return res.status(200).json({ ok: true, ...results });
-  } catch (err) {
-    reportError('/api/cron-referral-rewards', err);
-    return res.status(500).json({ error: 'Referral reward cron failed' });
-  }
+    return { ok: true, ...results };
+  });
 };

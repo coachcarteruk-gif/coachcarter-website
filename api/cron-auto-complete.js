@@ -14,19 +14,18 @@
 // (see api/slots.js cancel path). This cron flips those too, which is
 // exactly what we want — the instructor is paid for late-cancelled lessons.
 
-const { neon } = require('@neondatabase/serverless');
-const { reportError } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
 const { SCHEDULED, CHARGEABLE } = require('./_booking-status');
+const { withCronLock } = require('./_cron-lock');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-
   if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
 
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-
+  // Lease 120s — single UPDATE, completes in <1s normally. Lock is belt-and-
+  // braces; the UPDATE itself is idempotent (status filter), but the lock
+  // saves the wasted query on overlap.
+  return withCronLock(req, res, 'cron-auto-complete', 120, async (sql) => {
     // No school_id filter needed — same logic applies to all tenants,
     // no cross-tenant data is returned. Matches cron-retention.js pattern.
     const result = await sql`
@@ -37,9 +36,6 @@ module.exports = async (req, res) => {
     `;
 
     const flipped = result.length ?? 0;
-    return res.status(200).json({ ok: true, flipped });
-  } catch (err) {
-    reportError('/api/cron-auto-complete', err);
-    return res.status(500).json({ error: 'Flip-chargeable cron failed' });
-  }
+    return { ok: true, flipped };
+  });
 };

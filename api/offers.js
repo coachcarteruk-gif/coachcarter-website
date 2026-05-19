@@ -15,6 +15,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const jwt    = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
+const { withCronLock } = require('./_cron-lock');
 const { safeEqual, verifyCronAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, buildSessionCookie } = require('./_auth');
 const { buildCsrfCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { SCHEDULED, BLOCKING_STATUSES } = require('./_booking-status');
@@ -768,19 +769,15 @@ async function handleExpireOffers(req, res) {
     return res.status(401).json({ error: 'Unauthorised' });
   }
 
-  try {
-    const sql = neon(process.env.POSTGRES_URL);
-
+  // Lease 120s — hourly cron, single UPDATE. Lock is belt-and-braces; the
+  // UPDATE itself is idempotent (WHERE status='pending'), but lock saves
+  // wasted work + avoids two parallel runs both holding the row lock briefly.
+  return withCronLock(req, res, 'offers.expire', 120, async (sql) => {
     const expired = await sql`
       UPDATE lesson_offers SET status = 'expired'
       WHERE status = 'pending' AND expires_at <= NOW()
       RETURNING id, learner_email, scheduled_date::text
     `;
-
-    return res.json({ ok: true, expired_count: expired.length });
-  } catch (err) {
-    console.error('expire-offers error:', err);
-    reportError('/api/offers', err);
-    return res.status(500).json({ error: 'Failed to expire offers' });
-  }
+    return { ok: true, expired_count: expired.length };
+  });
 }
