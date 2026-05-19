@@ -249,8 +249,13 @@ module.exports = async (req, res) => {
         .map(block => block.text)
         .join('\n');
 
-      // Auth is required for purchasing
-      if (!user) {
+      // Auth is required for purchasing. The chat branch is deliberately
+      // open to guests (line ~207 above) so verifyAuth doesn't gate on
+      // role — but the checkout branch must, otherwise an instructor or
+      // admin cookie would mint a Stripe session with user.id as the
+      // learner_id, attributing the credit purchase to the wrong record.
+      const userRole = user?.role || (user ? 'learner' : null);
+      if (!user || userRole !== 'learner') {
         return res.json({
           type: 'auth_required',
           reply: textReply || 'To complete your purchase, please sign in or create an account first. Your conversation will be saved.',
