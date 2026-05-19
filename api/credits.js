@@ -3,6 +3,7 @@ const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { requireAuth } = require('./_auth');
 const { calcBulkTotal, getBulkPricing, MAX_HOURS_PER_PURCHASE } = require('./_pricing-helpers');
+const { grantCredits } = require('./_credit-grant');
 
 const STANDARD_LESSON_MINUTES = 90;
 
@@ -192,18 +193,10 @@ async function handleVerify(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // 1. Already processed? Return early (idempotent)
-    const [existing] = await sql`
-      SELECT id FROM credit_transactions WHERE stripe_session_id = ${sessionId} AND school_id = ${schoolId}
-    `;
-    if (existing) {
-      return res.json({ ok: true, already_processed: true });
-    }
-
-    // 2. Retrieve the Stripe checkout session
+    // 1. Retrieve the Stripe checkout session
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    // 3. Validate payment succeeded and metadata matches
+    // 2. Validate payment succeeded and metadata matches
     if (session.payment_status !== 'paid') {
       return res.status(400).json({ error: true, code: 'NOT_PAID', message: 'Payment not completed' });
     }
@@ -223,7 +216,7 @@ async function handleVerify(req, res) {
       return res.status(403).json({ error: true, code: 'SCHOOL_MISMATCH', message: 'Session does not belong to this school' });
     }
 
-    // 4. Extract purchase details from metadata
+    // 3. Extract purchase details from metadata
     const credits    = parseInt(metadata.credits_purchased, 10);
     const minutes    = parseInt(metadata.minutes_purchased, 10) || (credits * 90);
     const hours      = parseFloat(metadata.hours_purchased) || (minutes / 60);
@@ -234,48 +227,43 @@ async function handleVerify(req, res) {
       return res.status(400).json({ error: true, code: 'BAD_METADATA', message: 'Session metadata incomplete' });
     }
 
-    // 5. Double-check idempotency (race condition guard)
-    const [recheck] = await sql`
-      SELECT id FROM credit_transactions WHERE stripe_session_id = ${sessionId}
-    `;
-    if (recheck) {
-      return res.json({ ok: true, already_processed: true });
-    }
+    // 4. Grant via the shared helper. The webhook may be running the same
+    // session concurrently; the FOR UPDATE row lock in grantCredits() ensures
+    // exactly one caller applies the balance increment, and the other sees
+    // alreadyProcessed=true via the partial unique index. Pricing is sourced
+    // from the Stripe Session metadata above — never from a live rate helper
+    // (defence-in-depth against mid-flight rate changes).
+    const grant = await grantCredits({
+      sql,
+      learnerId,
+      schoolId,
+      credits,
+      minutes,
+      amountPence,
+      paymentMethod,
+      sessionId,
+    });
 
-    // 6. Record the transaction. The SELECT at step 5 is the fast-path
-    // idempotency guard; uq_credit_tx_session is the DB-enforced backstop
-    // for the genuine race — the webhook handler and this verify endpoint
-    // can both see no row, both INSERT, one loses on the unique index. The
-    // loser must NOT proceed to step 7, otherwise the balance gets
-    // double-credited.
-    try {
-      await sql`
-        INSERT INTO credit_transactions
-          (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id)
-        VALUES
-          (${learnerId}, 'purchase', ${credits}, ${amountPence}, ${paymentMethod}, ${sessionId}, ${minutes}, ${schoolId})
-      `;
-    } catch (insertErr) {
-      if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
-        // Webhook beat us to it. Same outcome as the recheck branch above.
-        return res.json({ ok: true, already_processed: true });
-      }
-      throw insertErr;
+    if (!grant.ok) {
+      // LEARNER_NOT_FOUND on the verify path means the JWT learner exists
+      // but their school_id has drifted from the session's school_id (caught
+      // above) OR something else removed them between auth and grant.
+      // Surface 404 with the typed code rather than 500 — this isn't a
+      // retry-worthy error.
+      return res.status(404).json({ error: true, code: grant.code, message: grant.message });
     }
-
-    // 7. Increment the learner's balance atomically
-    await sql`
-      UPDATE learner_users
-      SET credit_balance = credit_balance + ${credits},
-          balance_minutes = balance_minutes + ${minutes}
-      WHERE id = ${learnerId} AND school_id = ${schoolId}
-    `;
 
     // Referrer rewards are issued by api/cron-referral-rewards.js after each
     // qualifying lesson is completed (not at purchase time). See that file
     // for the trigger logic.
 
-    return res.json({ ok: true, granted: true, hours, minutes });
+    return res.json({
+      ok: true,
+      granted: !grant.alreadyProcessed,
+      already_processed: grant.alreadyProcessed,
+      hours,
+      minutes,
+    });
   } catch (err) {
     console.error('credits verify error:', err);
     reportError('/api/credits', err);
