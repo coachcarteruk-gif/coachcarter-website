@@ -117,10 +117,16 @@
 //
 // Do NOT flip this without also implementing grantCreditsPhase2A.
 //
-// Step 4 progress (2026-05-20): grantCreditsPhase2A is now real (this commit).
-// The flag stays false until every writer in the 9-file cutover has been
-// migrated to lockBalanceAndMutate. Final commit of the Step 4 PR flips it.
-let PHASE_2A_IMPLEMENTED = false;
+// Step 4 cutover (2026-05-20): every credit-affecting writer in the
+// codebase now routes through grantCredits / lockBalanceAndMutate /
+// lockBalanceAdjustLCB. The flag below flips Phase 2A behaviour on. Once
+// this PR deploys + /api/migrate-step-4 runs, every balance mutation
+// upserts into learner_credit_balances and the sync_pooled_balance trigger
+// keeps learner_users.balance_minutes denormalised for legacy readers.
+//
+// Rollback story: revert this commit + run a Neon PITR restore (Free tier
+// 6h window). Procedure documented in docs/credits-grandfather.md.
+let PHASE_2A_IMPLEMENTED = true;
 
 let phase2ACheckPromise;
 
