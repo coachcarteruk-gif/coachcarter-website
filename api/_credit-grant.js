@@ -116,6 +116,10 @@
 // override OR schema check. Either signal routes to Phase 2A.
 //
 // Do NOT flip this without also implementing grantCreditsPhase2A.
+//
+// Step 4 progress (2026-05-20): grantCreditsPhase2A is now real (this commit).
+// The flag stays false until every writer in the 9-file cutover has been
+// migrated to lockBalanceAndMutate. Final commit of the Step 4 PR flips it.
 let PHASE_2A_IMPLEMENTED = false;
 
 let phase2ACheckPromise;
@@ -161,6 +165,35 @@ function toOptionalNonNegativeInteger(value, name) {
   return n;
 }
 
+// Optional Phase-2A fields (D2 — extend normalizer; dispatcher / Phase-2A
+// callee enforces "required-when-Phase-2A," not the normalizer). Pre-2A
+// callers can keep passing the old arg set and get the same behaviour.
+//
+// `source` defaults to 'stripe' for purchase paths. Free-trial / referral /
+// admin paths set it explicitly. The DB column defaults to 'stripe' too, so
+// undefined here is also safe.
+const ALLOWED_SOURCES = new Set(['stripe', 'free_trial', 'reconciliation', 'goodwill']);
+const ALLOWED_ABSORBED_BY = new Set(['platform', 'instructor']);
+
+function toOptionalEnum(value, name, allowed) {
+  if (value === undefined || value === null || value === '') return null;
+  const s = String(value);
+  if (!allowed.has(s)) {
+    throw new Error(`${name} must be one of ${[...allowed].join(', ')} when provided`);
+  }
+  return s;
+}
+
+function toOptionalString(value, name, maxLen = 255) {
+  if (value === undefined || value === null || value === '') return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  if (s.length > maxLen) {
+    throw new Error(`${name} must be ${maxLen} chars or less`);
+  }
+  return s;
+}
+
 function normalizeGrantArgs(args) {
   if (!args || typeof args !== 'object') throw new Error('grantCredits args required');
   if (!args.sql) throw new Error('sql client required');
@@ -178,6 +211,15 @@ function normalizeGrantArgs(args) {
     paymentMethod:  String(args.paymentMethod || 'card').slice(0, 64),
     sessionId,
     stripeFeePence: toOptionalNonNegativeInteger(args.stripeFeePence, 'stripeFeePence'),
+
+    // Phase-2A fields (optional in the type system; dispatcher enforces
+    // required-when-Phase-2A semantics for instructorId before routing).
+    instructorId:                  toOptionalInteger(args.instructorId, 'instructorId'),
+    effectiveRatePencePerMinute:   toOptionalNonNegativeInteger(args.effectiveRatePencePerMinute, 'effectiveRatePencePerMinute'),
+    paymentIntentId:               toOptionalString(args.paymentIntentId, 'paymentIntentId'),
+    chargeId:                      toOptionalString(args.chargeId, 'chargeId'),
+    source:                        toOptionalEnum(args.source, 'source', ALLOWED_SOURCES),
+    absorbedBy:                    toOptionalEnum(args.absorbedBy, 'absorbedBy', ALLOWED_ABSORBED_BY),
   };
 }
 
@@ -274,6 +316,16 @@ async function grantCredits(args) {
     || await hasPhase2ASchema(normalized.sql);
 
   if (phase2A) {
+    // Required-when-Phase-2A validation lives on the dispatcher (D2). The
+    // normalizer accepts these as optional so Pre-2A callers don't break.
+    if (normalized.instructorId == null) {
+      // Plan §Step 4 L759-764: missing instructor_id is the "legacy_pre_cutover"
+      // path during the ~30-day window — grandfather to Fraser (instructor_id=1)
+      // and log it. After the sunset window this branch turns into a 500.
+      console.warn('[_credit-grant] legacy_pre_cutover: missing instructor_id on grantCredits, routing to Fraser (id=1) — sessionId=' + normalized.sessionId);
+      normalized.instructorId = 1;
+      normalized.legacyPreCutover = true;
+    }
     return grantCreditsPhase2A(normalized);
   }
   return grantCreditsPre2A(normalized);
@@ -373,32 +425,425 @@ async function grantCreditsPre2A({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE-2A variant (stub — implemented in Step 4)
+// PHASE-2A variant — single-statement CTE, instructor-scoped
 // ─────────────────────────────────────────────────────────────────────────────
-// Throwing stub. The dispatcher's PHASE_2A_IMPLEMENTED short-circuit at the
-// top of this module ensures no production traffic reaches this function
-// until Step 4 lands. If you ARE seeing this throw in production, it means:
-//   - PHASE_2A_IMPLEMENTED was flipped to true without the implementation
-//     being filled in (regression in the Step 4 PR — check the constant);
-//   - OR a test is bypassing the dispatcher (call grantCreditsPre2A directly).
+// Six CTEs and a top-level UPDATE. Same atomicity guarantee as Pre-2A
+// (everything inside the implicit transaction PG wraps each statement in),
+// but the lock target is the learner_credit_balances(learner_id, instructor_id)
+// row instead of learner_users(id), and the reconcile sums the ledger.
 //
-// Step 4's PR replaces this stub with the real (learner_credit_balances,
-// booking_credit_sources, instructor_id) implementation AND flips
-// PHASE_2A_IMPLEMENTED to true in the same commit.
+//   ensured   — INSERT ... ON CONFLICT DO NOTHING. Materialises an LCB row
+//               for this (learner_id, instructor_id) pair if missing.
+//               Resolves the "first-ever grant for this pair" case.
+//   locked    — SELECT ... FOR UPDATE on the LCB row. Acquires the lock that
+//               serialises every credit-affecting writer for this pair (the
+//               load-bearing invariant — see header).
+//   inserted  — INSERT into credit_transactions. ON CONFLICT clauses cover
+//               the three idempotency arbiters: stripe_session_id (partial),
+//               stripe_payment_intent_id (partial), stripe_charge_id (partial).
+//               Plan §Step 0 L165-177. The WHERE clause on the partial-index
+//               arbiter is load-bearing — PG requires it for arbiter inference.
+//   granted   — SUM(credit_transactions.minutes) for this scope.
+//   drawn     — SUM(booking_credit_sources.minutes_drawn) where refunded_at IS NULL,
+//               joined via the parent credit_transactions row's scope.
+//               Plan L190 SAYS `bcs.minutes` — that's a plan-drift trap;
+//               the real column is `minutes_drawn` (db/migration.sql:2210).
+//   adjusted  — SUM(credit_source_adjustments.minutes_adjusted). Plan L198
+//               SAYS `csa.minutes_delta` — same plan-drift trap; real
+//               column is `minutes_adjusted` (db/migration.sql:2232). CSA
+//               adjustments subtract from available, so we subtract their
+//               sum from the materialised balance.
+//
+// The top-level UPDATE writes `granted - drawn - adjusted` into LCB and
+// RETURNING surfaces the new balance + (transaction_id, alreadyProcessed)
+// so the caller can branch on first-grant vs duplicate-retry.
 
-async function grantCreditsPhase2A() {
-  throw new Error(
-    'grantCreditsPhase2A is a stub — Phase 2A (Step 4) has not shipped yet. ' +
-    'The dispatcher should never route here while PHASE_2A_IMPLEMENTED is false. ' +
-    'If you see this in production, the constant was flipped without the ' +
-    'implementation being filled in.'
-  );
+async function grantCreditsPhase2A({
+  sql,
+  learnerId,
+  instructorId,
+  schoolId,
+  credits,
+  minutes,
+  amountPence,
+  paymentMethod,
+  sessionId,
+  stripeFeePence,
+  effectiveRatePencePerMinute,
+  paymentIntentId,
+  chargeId,
+  source,
+  absorbedBy,
+  legacyPreCutover,
+}) {
+  const resolvedSource = source || 'stripe';
+
+  // The arbiter clause must be ON CONFLICT (stripe_session_id) WHERE
+  // stripe_session_id IS NOT NULL — same load-bearing partial-index match
+  // documented for Pre-2A above. The OR-chained alt arbiters cover the
+  // payment_intent and charge unique indexes. We pick the session-id arbiter
+  // because every webhook call carries one; PI / charge are belt-and-braces
+  // for the rare path where session_id is missing but PI is known (reconcile).
+  //
+  // ON CONFLICT can only target a single arbiter per INSERT, so the
+  // partial-index 23505 collisions on the other two unique indexes (PI,
+  // charge) raise as exceptions and the caller swallows them just like the
+  // Pre-2A path does in webhook.js handleCreditPurchase. The reconcile UPDATE
+  // below then SUM-derives the correct balance from the existing rows.
+  const [row] = await sql`
+    WITH ensured AS (
+      INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
+      VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
+      ON CONFLICT (learner_id, instructor_id) DO NOTHING
+      RETURNING id
+    ),
+    locked AS (
+      SELECT id, learner_id, instructor_id
+        FROM learner_credit_balances
+       WHERE learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+       FOR UPDATE
+    ),
+    inserted AS (
+      INSERT INTO credit_transactions
+        (learner_id, instructor_id, school_id, type, credits, minutes,
+         amount_pence, payment_method, stripe_session_id, stripe_fee_pence,
+         stripe_payment_intent_id, stripe_charge_id,
+         effective_rate_pence_per_minute, source, absorbed_by)
+      SELECT
+        ${learnerId}, ${instructorId}, ${schoolId}, 'purchase', ${credits}, ${minutes},
+        ${amountPence}, ${paymentMethod}, ${sessionId}, ${stripeFeePence},
+        ${paymentIntentId}, ${chargeId},
+        ${effectiveRatePencePerMinute}, ${resolvedSource}, ${absorbedBy}
+      FROM locked
+      ON CONFLICT (stripe_session_id) WHERE stripe_session_id IS NOT NULL DO NOTHING
+      RETURNING id
+    ),
+    granted AS (
+      SELECT COALESCE(SUM(minutes), 0)::int AS m
+        FROM credit_transactions
+       WHERE learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
+    ),
+    drawn AS (
+      SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS m
+        FROM booking_credit_sources bcs
+        JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
+       WHERE ct.learner_id = ${learnerId}
+         AND ct.instructor_id = ${instructorId}
+         AND ct.school_id = ${schoolId}
+         AND bcs.refunded_at IS NULL
+    ),
+    adjusted AS (
+      SELECT COALESCE(SUM(csa.minutes_adjusted), 0)::int AS m
+        FROM credit_source_adjustments csa
+        JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
+       WHERE ct.learner_id = ${learnerId}
+         AND ct.instructor_id = ${instructorId}
+         AND ct.school_id = ${schoolId}
+    )
+    UPDATE learner_credit_balances lcb
+       SET balance_minutes = (SELECT m FROM granted) - (SELECT m FROM drawn) - (SELECT m FROM adjusted),
+           updated_at = NOW()
+     WHERE lcb.learner_id = ${learnerId}
+       AND lcb.instructor_id = ${instructorId}
+       AND EXISTS (SELECT 1 FROM locked)
+    RETURNING
+      lcb.balance_minutes,
+      (SELECT id FROM inserted)                  AS transaction_id,
+      ((SELECT id FROM inserted) IS NULL)        AS already_processed
+  `;
+
+  if (!row) {
+    return {
+      ok: false,
+      code: 'LEARNER_NOT_FOUND',
+      message: 'Learner not found for credit grant',
+      alreadyProcessed: false,
+      transactionId: null,
+    };
+  }
+
+  return {
+    ok: true,
+    completed: true,
+    alreadyProcessed: Boolean(row.already_processed),
+    transactionId: row.transaction_id || null,
+    balanceMinutes: row.balance_minutes,
+    instructorId,
+    legacyPreCutover: Boolean(legacyPreCutover),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// lockBalanceAndMutate — shared helper for the 9-writer cutover (D1)
+// ─────────────────────────────────────────────────────────────────────────────
+// Used by every non-Stripe-purchase writer that mutates a learner's balance:
+//   - slots.js handleBook deduct + refund-on-failure  (already CTE-locked)
+//   - slots.js handleCancel single + series refund
+//   - offers.js bookOfferSeries refund-on-failure
+//   - admin.js edit-booking delta + adjust-credits
+//   - instructor.js cancel refund + edit-booking delta + mark-paid + undo
+//   - cron-referral-rewards.js referrer payout
+//   - magic-link.js welcome bonus
+//
+// The 4 purchase paths (webhook.handleCreditPurchase, webhook.handleOfferBooking,
+// webhook.handleFreeOffer, and any other Stripe-session-bearing grant) still
+// go through grantCredits() — that path also writes Stripe linkage fields
+// (session_id, payment_intent_id, charge_id, effective rate) which this
+// helper deliberately doesn't.
+//
+// Phase gating mirrors grantCredits():
+//   - PHASE_2A_IMPLEMENTED = false → lock learner_users + write balance_minutes.
+//     Pre-2A behaviour, current production.
+//   - PHASE_2A_IMPLEMENTED = true  → lock LCB row + reconcile via ledger SUM.
+//     Same chokepoint as grantCreditsPhase2A.
+//
+// The Pre-2A path here is a single CTE that mirrors the shape grantCreditsPre2A
+// uses, but with a signed `delta` (positive = grant, negative = deduct) and
+// the booking-flow ledger types ('edit_adjustment', 'admin_add', etc).
+// Insufficient-balance is signalled by `ok: false, code: 'INSUFFICIENT_BALANCE'`
+// — the UPDATE clause's `balance_minutes >= -delta` predicate prevents the
+// write when the balance would go negative on a deduct.
+
+const ALLOWED_LEDGER_TYPES = new Set([
+  'purchase', 'refund', 'slot_purchase',
+  'edit_adjustment', 'admin_add', 'admin_remove',
+  'referral_bonus', 'referral_reward', 'free_trial',
+]);
+
+async function lockBalanceAndMutate(sql, args) {
+  if (!sql) throw new Error('sql client required');
+  if (!args || typeof args !== 'object') throw new Error('lockBalanceAndMutate args required');
+
+  const learnerId   = toPositiveInteger(args.learnerId, 'learnerId');
+  const schoolId    = toPositiveInteger(args.schoolId || 1, 'schoolId');
+  const delta       = Number(args.delta);
+  if (!Number.isInteger(delta) || delta === 0) {
+    throw new Error('delta must be a non-zero integer');
+  }
+  const ledgerType  = String(args.ledgerType || '').trim();
+  if (!ALLOWED_LEDGER_TYPES.has(ledgerType)) {
+    throw new Error(`ledgerType must be one of ${[...ALLOWED_LEDGER_TYPES].join(', ')}`);
+  }
+  const reason         = String(args.reason || ledgerType).slice(0, 255);
+  const amountPence    = toNonNegativeInteger(args.amountPence || 0, 'amountPence');
+  const creditsDelta   = Number.isInteger(args.creditsDelta) ? args.creditsDelta : 0;
+  const allowOverdraft = Boolean(args.allowOverdraft);
+
+  // Phase-2A optional fields. instructorId is REQUIRED when Phase 2A is live;
+  // we mirror the dispatcher's grandfather behaviour so callers that haven't
+  // adopted instructor_id yet still work during the cutover window.
+  let instructorId = toOptionalInteger(args.instructorId, 'instructorId');
+  const effectiveRate            = toOptionalNonNegativeInteger(args.effectiveRatePencePerMinute, 'effectiveRatePencePerMinute');
+  const source                   = toOptionalEnum(args.source, 'source', ALLOWED_SOURCES);
+  const absorbedBy               = toOptionalEnum(args.absorbedBy, 'absorbedBy', ALLOWED_ABSORBED_BY);
+
+  // ─── Pre-2A path ────────────────────────────────────────────────────────
+  if (!PHASE_2A_IMPLEMENTED) {
+    return lockBalanceAndMutatePre2A({
+      sql, learnerId, schoolId, delta, ledgerType, reason,
+      amountPence, creditsDelta, allowOverdraft,
+    });
+  }
+
+  // ─── Phase-2A path ──────────────────────────────────────────────────────
+  // Same env-var / schema-check OR as grantCredits().
+  const phase2A = process.env.PER_INSTRUCTOR_CREDITS_PHASE_2A === '1'
+    || await hasPhase2ASchema(sql);
+  if (!phase2A) {
+    return lockBalanceAndMutatePre2A({
+      sql, learnerId, schoolId, delta, ledgerType, reason,
+      amountPence, creditsDelta, allowOverdraft,
+    });
+  }
+
+  if (instructorId == null) {
+    console.warn('[_credit-grant] legacy_pre_cutover: missing instructor_id on lockBalanceAndMutate, routing to Fraser (id=1) — ledgerType=' + ledgerType);
+    instructorId = 1;
+  }
+
+  return lockBalanceAndMutatePhase2A({
+    sql, learnerId, instructorId, schoolId, delta, ledgerType, reason,
+    amountPence, creditsDelta, allowOverdraft,
+    effectiveRate, source, absorbedBy,
+  });
+}
+
+async function lockBalanceAndMutatePre2A({
+  sql, learnerId, schoolId, delta, ledgerType, reason,
+  amountPence, creditsDelta, allowOverdraft,
+}) {
+  // Insufficient-balance guard: deducts (delta < 0) require enough balance
+  // to absorb the deduction without going negative. The UPDATE WHERE clause
+  // enforces it; if no row matches, the caller sees INSUFFICIENT_BALANCE.
+  // allowOverdraft skips the guard — used by referral-bonus and admin-add
+  // paths where the delta is always positive anyway.
+  const deductGuard = (delta < 0 && !allowOverdraft) ? -delta : null;
+
+  const [row] = await sql`
+    WITH locked AS (
+      SELECT id
+        FROM learner_users
+       WHERE id = ${learnerId}
+         AND school_id = ${schoolId}
+       FOR UPDATE
+    ),
+    inserted AS (
+      INSERT INTO credit_transactions
+        (learner_id, type, minutes, credits, amount_pence, payment_method, school_id)
+      SELECT
+        ${learnerId}, ${ledgerType}, ${delta}, ${creditsDelta}, ${amountPence}, ${reason}, ${schoolId}
+      FROM locked
+      WHERE ${deductGuard === null}::boolean
+         OR (SELECT balance_minutes FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}) >= ${deductGuard}
+      RETURNING id
+    )
+    UPDATE learner_users lu
+       SET balance_minutes = lu.balance_minutes + ${delta},
+           credit_balance  = GREATEST(lu.credit_balance + ${creditsDelta}, 0)
+     WHERE lu.id = ${learnerId}
+       AND lu.school_id = ${schoolId}
+       AND EXISTS (SELECT 1 FROM inserted)
+    RETURNING
+      lu.balance_minutes,
+      (SELECT id FROM inserted) AS transaction_id
+  `;
+
+  if (!row) {
+    // Could be LEARNER_NOT_FOUND or INSUFFICIENT_BALANCE — disambiguate.
+    const [exists] = await sql`
+      SELECT balance_minutes
+        FROM learner_users
+       WHERE id = ${learnerId} AND school_id = ${schoolId}
+    `;
+    if (!exists) {
+      return { ok: false, code: 'LEARNER_NOT_FOUND', balanceMinutes: null, transactionId: null };
+    }
+    return {
+      ok: false,
+      code: 'INSUFFICIENT_BALANCE',
+      balanceMinutes: exists.balance_minutes,
+      transactionId: null,
+    };
+  }
+
+  return {
+    ok: true,
+    balanceMinutes: row.balance_minutes,
+    transactionId: row.transaction_id || null,
+  };
+}
+
+async function lockBalanceAndMutatePhase2A({
+  sql, learnerId, instructorId, schoolId, delta, ledgerType, reason,
+  amountPence, creditsDelta, allowOverdraft,
+  effectiveRate, source, absorbedBy,
+}) {
+  // Phase-2A insufficient-balance guard reads the LCB row's balance_minutes,
+  // not the pooled learner_users.balance_minutes — credits are scoped per
+  // instructor now and a learner can have plenty of pooled minutes while
+  // having zero for this instructor.
+  const deductGuard = (delta < 0 && !allowOverdraft) ? -delta : null;
+  const resolvedSource = source || 'stripe';
+
+  const [row] = await sql`
+    WITH ensured AS (
+      INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
+      VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
+      ON CONFLICT (learner_id, instructor_id) DO NOTHING
+      RETURNING id
+    ),
+    locked AS (
+      SELECT id, balance_minutes
+        FROM learner_credit_balances
+       WHERE learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+       FOR UPDATE
+    ),
+    inserted AS (
+      INSERT INTO credit_transactions
+        (learner_id, instructor_id, school_id, type, minutes, credits,
+         amount_pence, payment_method,
+         effective_rate_pence_per_minute, source, absorbed_by)
+      SELECT
+        ${learnerId}, ${instructorId}, ${schoolId}, ${ledgerType}, ${delta}, ${creditsDelta},
+        ${amountPence}, ${reason},
+        ${effectiveRate}, ${resolvedSource}, ${absorbedBy}
+      FROM locked
+      WHERE ${deductGuard === null}::boolean
+         OR locked.balance_minutes >= ${deductGuard}
+      RETURNING id
+    ),
+    granted AS (
+      SELECT COALESCE(SUM(minutes), 0)::int AS m
+        FROM credit_transactions
+       WHERE learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
+    ),
+    drawn AS (
+      SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS m
+        FROM booking_credit_sources bcs
+        JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
+       WHERE ct.learner_id = ${learnerId}
+         AND ct.instructor_id = ${instructorId}
+         AND ct.school_id = ${schoolId}
+         AND bcs.refunded_at IS NULL
+    ),
+    adjusted AS (
+      SELECT COALESCE(SUM(csa.minutes_adjusted), 0)::int AS m
+        FROM credit_source_adjustments csa
+        JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
+       WHERE ct.learner_id = ${learnerId}
+         AND ct.instructor_id = ${instructorId}
+         AND ct.school_id = ${schoolId}
+    )
+    UPDATE learner_credit_balances lcb
+       SET balance_minutes = (SELECT m FROM granted) - (SELECT m FROM drawn) - (SELECT m FROM adjusted),
+           updated_at = NOW()
+     WHERE lcb.learner_id = ${learnerId}
+       AND lcb.instructor_id = ${instructorId}
+       AND EXISTS (SELECT 1 FROM inserted)
+    RETURNING
+      lcb.balance_minutes,
+      (SELECT id FROM inserted) AS transaction_id
+  `;
+
+  if (!row) {
+    // Disambiguate: LEARNER_NOT_FOUND (parent FK) vs INSUFFICIENT_BALANCE.
+    // The LCB row exists by construction (ensured CTE) for any valid learner
+    // — but the learner_credit_balances FK to learner_users would have raised
+    // by now if the learner didn't exist. So a missing return-row here means
+    // the deduct guard refused: INSUFFICIENT_BALANCE.
+    const [lcb] = await sql`
+      SELECT balance_minutes
+        FROM learner_credit_balances
+       WHERE learner_id = ${learnerId} AND instructor_id = ${instructorId}
+    `;
+    return {
+      ok: false,
+      code: 'INSUFFICIENT_BALANCE',
+      balanceMinutes: lcb ? lcb.balance_minutes : null,
+      transactionId: null,
+      instructorId,
+    };
+  }
+
+  return {
+    ok: true,
+    balanceMinutes: row.balance_minutes,
+    transactionId: row.transaction_id || null,
+    instructorId,
+  };
 }
 
 module.exports = {
   grantCredits,
   grantCreditsPre2A,
   grantCreditsPhase2A,
+  lockBalanceAndMutate,
   normalizeGrantArgs,
   hasPhase2ASchema,
   // Test-only.
