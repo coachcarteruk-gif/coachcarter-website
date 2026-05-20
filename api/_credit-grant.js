@@ -433,17 +433,27 @@ async function grantCreditsPre2A({
 // ─────────────────────────────────────────────────────────────────────────────
 // PHASE-2A variant — single-statement CTE, instructor-scoped
 // ─────────────────────────────────────────────────────────────────────────────
-// Six CTEs and a top-level UPDATE. Same atomicity guarantee as Pre-2A
-// (everything inside the implicit transaction PG wraps each statement in),
-// but the lock target is the learner_credit_balances(learner_id, instructor_id)
-// row instead of learner_users(id), and the reconcile sums the ledger.
+// Same atomicity guarantee as Pre-2A (everything inside the implicit
+// transaction PG wraps each statement in), but the lock target is the
+// learner_credit_balances(learner_id, instructor_id) row instead of
+// learner_users(id), and the reconcile sums the ledger.
 //
-//   ensured   — INSERT ... ON CONFLICT DO NOTHING. Materialises an LCB row
-//               for this (learner_id, instructor_id) pair if missing.
-//               Resolves the "first-ever grant for this pair" case.
-//   locked    — SELECT ... FOR UPDATE on the LCB row. Acquires the lock that
-//               serialises every credit-affecting writer for this pair (the
-//               load-bearing invariant — see header).
+//   ensured   — INSERT ... ON CONFLICT DO UPDATE ... RETURNING. Materialises
+//               an LCB row for this (learner_id, instructor_id) pair if
+//               missing AND acquires a row-level exclusive lock that's
+//               held until statement commit. ON CONFLICT DO UPDATE's lock
+//               is equivalent to FOR UPDATE for our purposes — serialises
+//               concurrent writers on the same row.
+//
+//               Why not ensured + separate locked CTE: data-modifying CTEs
+//               in PG share one snapshot; a sibling CTE scanning LCB after
+//               ensured's INSERT won't see the new row. First-ever writes
+//               for a (learner, instructor) pair would silently fail. The
+//               DO UPDATE pattern dodges this by returning the row directly
+//               whether it was inserted or already existed. The no-op SET
+//               clause (`updated_at = lcb.updated_at`) is the standard
+//               trick to force RETURNING on the conflict branch.
+//
 //   inserted  — INSERT into credit_transactions. ON CONFLICT clauses cover
 //               the three idempotency arbiters: stripe_session_id (partial),
 //               stripe_payment_intent_id (partial), stripe_charge_id (partial).
@@ -500,15 +510,9 @@ async function grantCreditsPhase2A({
     WITH ensured AS (
       INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
       VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
-      ON CONFLICT (learner_id, instructor_id) DO NOTHING
+      ON CONFLICT (learner_id, instructor_id) DO UPDATE
+        SET updated_at = learner_credit_balances.updated_at
       RETURNING id
-    ),
-    locked AS (
-      SELECT id, learner_id, instructor_id
-        FROM learner_credit_balances
-       WHERE learner_id = ${learnerId}
-         AND instructor_id = ${instructorId}
-       FOR UPDATE
     ),
     inserted AS (
       INSERT INTO credit_transactions
@@ -521,7 +525,7 @@ async function grantCreditsPhase2A({
         ${amountPence}, ${paymentMethod}, ${sessionId}, ${stripeFeePence},
         ${paymentIntentId}, ${chargeId},
         ${effectiveRatePencePerMinute}, ${resolvedSource}, ${absorbedBy}
-      FROM locked
+      FROM ensured
       ON CONFLICT (stripe_session_id) WHERE stripe_session_id IS NOT NULL DO NOTHING
       RETURNING id
     ),
@@ -554,7 +558,7 @@ async function grantCreditsPhase2A({
            updated_at = NOW()
      WHERE lcb.learner_id = ${learnerId}
        AND lcb.instructor_id = ${instructorId}
-       AND EXISTS (SELECT 1 FROM locked)
+       AND EXISTS (SELECT 1 FROM ensured)
     RETURNING
       lcb.balance_minutes,
       (SELECT id FROM inserted)                  AS transaction_id,
@@ -760,15 +764,9 @@ async function lockBalanceAndMutatePhase2A({
     WITH ensured AS (
       INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
       VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
-      ON CONFLICT (learner_id, instructor_id) DO NOTHING
-      RETURNING id
-    ),
-    locked AS (
-      SELECT id, balance_minutes
-        FROM learner_credit_balances
-       WHERE learner_id = ${learnerId}
-         AND instructor_id = ${instructorId}
-       FOR UPDATE
+      ON CONFLICT (learner_id, instructor_id) DO UPDATE
+        SET updated_at = learner_credit_balances.updated_at
+      RETURNING id, balance_minutes
     ),
     inserted AS (
       INSERT INTO credit_transactions
@@ -779,9 +777,9 @@ async function lockBalanceAndMutatePhase2A({
         ${learnerId}, ${instructorId}, ${schoolId}, ${ledgerType}, ${delta}, ${creditsDelta},
         ${amountPence}, ${reason},
         ${effectiveRate}, ${resolvedSource}, ${absorbedBy}
-      FROM locked
+      FROM ensured
       WHERE ${deductGuard === null}::boolean
-         OR locked.balance_minutes >= ${deductGuard}
+         OR ensured.balance_minutes >= ${deductGuard}
       RETURNING id
     ),
     granted AS (
@@ -966,15 +964,9 @@ async function lockBalanceAdjustPhase2A({
     WITH ensured AS (
       INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
       VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
-      ON CONFLICT (learner_id, instructor_id) DO NOTHING
-      RETURNING id
-    ),
-    locked AS (
-      SELECT id, balance_minutes
-        FROM learner_credit_balances
-       WHERE learner_id = ${learnerId}
-         AND instructor_id = ${instructorId}
-       FOR UPDATE
+      ON CONFLICT (learner_id, instructor_id) DO UPDATE
+        SET updated_at = learner_credit_balances.updated_at
+      RETURNING id, balance_minutes
     )
     UPDATE learner_credit_balances lcb
        SET balance_minutes = lcb.balance_minutes + ${delta},
@@ -982,9 +974,9 @@ async function lockBalanceAdjustPhase2A({
      WHERE lcb.learner_id = ${learnerId}
        AND lcb.instructor_id = ${instructorId}
        AND EXISTS (
-         SELECT 1 FROM locked
+         SELECT 1 FROM ensured
          WHERE ${deductGuard === null}::boolean
-            OR locked.balance_minutes >= ${deductGuard}
+            OR ensured.balance_minutes >= ${deductGuard}
        )
     RETURNING lcb.balance_minutes
   `;
