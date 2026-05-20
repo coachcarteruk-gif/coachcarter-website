@@ -2109,3 +2109,45 @@ CREATE TABLE IF NOT EXISTS migration_markers (
   completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   notes        TEXT
 );
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Credits Step 2a: credit_transactions Phase 1 schema (May 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Per PER-INSTRUCTOR-CREDITS-PLAN.md §Step 2 sub-phase 2a (L425-439). Adds the
+-- columns that Phase 2A will read/write. All nullable, all additive, no
+-- behavioural change. Existing rows read `source = 'stripe'` via the PG11+
+-- missing-value fast-path; sub-phase 2b (run via /api/migrate-step-2b) then
+-- defensively backfills and adds NOT NULL on `source`.
+--
+-- Column purposes:
+--   - instructor_id                     : which instructor these credits belong to (Phase 2A)
+--   - effective_rate_pence_per_minute   : rate snapshot at purchase time (Step 3 fallback)
+--   - source                            : provenance tag ('stripe'|'free_trial'|'reconciliation'|'goodwill')
+--   - absorbed_by                       : who eats the cost when source is non-Stripe ('platform'|'instructor')
+--   - stripe_payment_intent_id          : reconciliation idempotency key (uniq index added in 2c)
+--   - stripe_charge_id                  : reconciliation alt key (uniq index added in 2c)
+--
+-- NOT NULL constraints and unique indexes ship in sub-phases 2b/2c. The new
+-- tables (learner_credit_balances, booking_credit_sources, credit_source_adjustments)
+-- ship in sub-phase 2c. PHASE_2A_IMPLEMENTED stays false until Step 4.
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE credit_transactions
+  ADD COLUMN IF NOT EXISTS instructor_id INTEGER REFERENCES instructors(id);
+ALTER TABLE credit_transactions
+  ADD COLUMN IF NOT EXISTS effective_rate_pence_per_minute INTEGER;
+ALTER TABLE credit_transactions
+  ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'stripe'
+    CHECK (source IS NULL OR source IN ('stripe', 'free_trial', 'reconciliation', 'goodwill'));
+ALTER TABLE credit_transactions
+  ADD COLUMN IF NOT EXISTS absorbed_by TEXT
+    CHECK (absorbed_by IS NULL OR absorbed_by IN ('platform', 'instructor'));
+ALTER TABLE credit_transactions
+  ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+ALTER TABLE credit_transactions
+  ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT;
+
+-- CLAUDE.md security rule #6: every new FK column gets an index. Partial
+-- because most historical rows have instructor_id NULL until Step 4 backfills.
+CREATE INDEX IF NOT EXISTS idx_credit_tx_instructor
+  ON credit_transactions(instructor_id)
+  WHERE instructor_id IS NOT NULL;
