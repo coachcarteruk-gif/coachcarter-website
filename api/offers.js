@@ -38,7 +38,13 @@ const { allocate } = require('./_pence-allocator');
 async function bookOfferSeries(sql, {
   instructorId, learnerId, firstDate, startTime, endTime, lessonTypeId,
   durationMins, pickupAddress, schoolId, repeatWeeks, paymentMethod,
-  totalStripeFeePence = null
+  totalStripeFeePence = null,
+  // Step 1b: per-booking list-price snapshot. Callers supply the per-lesson
+  // price (already divided across the series) and the provenance tag.
+  // Paid offers tag 'stripe_metadata' (price was frozen in Stripe metadata at
+  // offer creation); free offers tag 'live_compute_insert' with value 0.
+  listPricePerBookingPence = null,
+  listPriceSource = null
 }) {
   const SERIES_LOOKAHEAD_WEEKS = 18;
   const seriesId = repeatWeeks > 1 ? crypto.randomUUID() : null;
@@ -122,11 +128,13 @@ async function bookOfferSeries(sql, {
           INSERT INTO lesson_bookings
             (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
              created_by, payment_method, lesson_type_id, minutes_deducted,
-             pickup_address, series_id, school_id)
+             pickup_address, series_id, school_id,
+             list_price_pence, list_price_source)
           VALUES
             (${learnerId}, ${instructorId}, ${candidateStr}, ${startTime}, ${endTime}, ${SCHEDULED},
              'instructor_offer', ${paymentMethod}, ${lessonTypeId}, ${durationMins},
-             ${pickupAddress || null}, ${seriesId}, ${schoolId})
+             ${pickupAddress || null}, ${seriesId}, ${schoolId},
+             ${listPricePerBookingPence}, ${listPriceSource})
           RETURNING id
         `;
         booked.push({ date: candidateStr, booking_id: b.id });
@@ -657,7 +665,12 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
       pickupAddress: learnerDetails.pickup_address || null,
       schoolId,
       repeatWeeks: repeats,
-      paymentMethod: 'free'
+      paymentMethod: 'free',
+      // Step 1b: free offer has no list price. Tag live_compute_insert so the
+      // value is a positive assertion ("0 is correct") rather than NULL ("we
+      // didn't snapshot").
+      listPricePerBookingPence: 0,
+      listPriceSource: 'live_compute_insert'
     });
   } catch (insertErr) {
     if (insertErr.message?.includes('uq_booking_slot') || insertErr.message?.includes('uq_instructor_slot')) {
