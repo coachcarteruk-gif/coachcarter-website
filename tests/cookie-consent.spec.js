@@ -50,6 +50,14 @@ async function stubConsentRecord(page) {
 }
 
 test.describe('Cookie consent — GDPR gate', () => {
+  // Block service workers. pwa.js registers /sw.js on the `load` event and
+  // reloads the page on `controllerchange` — under parallel-worker load, the
+  // SW can take control mid-test, navigate, and destroy the evaluation
+  // context Playwright is mid-call against ("Execution context was destroyed,
+  // most likely because of a navigation"). The cookie-consent contract has
+  // nothing to do with the PWA, so we opt this suite out entirely.
+  test.use({ serviceWorkers: 'block' });
+
   test('banner auto-shows on first visit', async ({ page }) => {
     await blockPostHog(page);
     await stubConsentRecord(page);
