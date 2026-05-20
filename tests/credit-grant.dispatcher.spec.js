@@ -26,6 +26,7 @@
 const { test, expect } = require('@playwright/test');
 const {
   grantCredits,
+  lockBalanceAndMutate,
   _resetPhaseDetectionForTests,
   _setPhase2AImplementedForTests,
 } = require('../api/_credit-grant');
@@ -49,6 +50,14 @@ function makeMockSql({ phase2aSchemaExists }) {
     // Match the information_schema check.
     if (text.includes('information_schema.columns')) {
       return Promise.resolve(phase2aSchemaExists ? [{ '?column?': 1 }] : []);
+    }
+    // Match the Phase-2A CTE (ensured + locked + reconcile against LCB).
+    if (text.includes('WITH ensured AS') && text.includes('learner_credit_balances')) {
+      return Promise.resolve([{
+        balance_minutes: 90,
+        transaction_id: 42,
+        already_processed: false,
+      }]);
     }
     // Match the Pre-2A CTE (or anything else — synthetic row for the grant).
     if (text.includes('WITH locked AS') && text.includes('INSERT INTO credit_transactions')) {
@@ -136,27 +145,150 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
   // ───────────────────────────────────────────────────────────────────────────
   //
   // These tests use _setPhase2AImplementedForTests(true) to simulate
-  // post-Step-4 behaviour. The Phase 2A function is still a stub at this
-  // point in the codebase, so calls SHOULD throw — which is the correct
-  // signal that the dispatcher routed to it.
-  test('PHASE_2A_IMPLEMENTED=true + schema has Phase-2A columns → routes to Phase 2A (which currently throws)', async () => {
+  // post-Step-4 behaviour. With Step 4 commit 1 in place, grantCreditsPhase2A
+  // is real — it issues the LCB-locking CTE. The mock matches that CTE shape
+  // and returns a canned row, so calls SHOULD succeed and the assertion is
+  // "the dispatcher reached the Phase-2A CTE."
+  test('PHASE_2A_IMPLEMENTED=true + schema has Phase-2A columns → routes to Phase 2A CTE', async () => {
     _setPhase2AImplementedForTests(true);
-    const { sql } = makeMockSql({ phase2aSchemaExists: true });
+    const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
 
-    await expect(grantCredits({ sql, ...baseArgs }))
-      .rejects.toThrow(/grantCreditsPhase2A is a stub/);
+    const result = await grantCredits({ sql, ...baseArgs, instructorId: 1 });
+
+    expect(result.ok).toBe(true);
+    expect(calls.some(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'))).toBe(true);
+    // And NOT the Pre-2A CTE.
+    expect(calls.some(c => c.text.includes('WITH locked AS') && c.text.includes('INSERT INTO credit_transactions'))).toBe(false);
   });
 
   test('PHASE_2A_IMPLEMENTED=true + env var set, schema lacks columns → routes to Phase 2A (env-var override)', async () => {
     _setPhase2AImplementedForTests(true);
     process.env.PER_INSTRUCTOR_CREDITS_PHASE_2A = '1';
-    const { sql } = makeMockSql({ phase2aSchemaExists: false });
+    const { sql, calls } = makeMockSql({ phase2aSchemaExists: false });
 
     // Env var alone is enough to flip the secondary check, once the master
     // switch allows it. This is the "eager override" path the plan calls
     // for (PER-INSTRUCTOR-CREDITS-PLAN.md L225).
-    await expect(grantCredits({ sql, ...baseArgs }))
-      .rejects.toThrow(/grantCreditsPhase2A is a stub/);
+    const result = await grantCredits({ sql, ...baseArgs, instructorId: 1 });
+    expect(result.ok).toBe(true);
+    expect(calls.some(c => c.text.includes('WITH ensured AS'))).toBe(true);
+  });
+
+  test('PHASE_2A_IMPLEMENTED=true + schema present + missing instructorId → grandfather to id=1 (legacy_pre_cutover)', async () => {
+    _setPhase2AImplementedForTests(true);
+    const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
+
+    // Capture console.warn so the test doesn't pollute output.
+    const origWarn = console.warn;
+    const warnings = [];
+    console.warn = (...args) => { warnings.push(args.join(' ')); };
+    try {
+      const result = await grantCredits({ sql, ...baseArgs }); // no instructorId
+      expect(result.ok).toBe(true);
+      expect(result.legacyPreCutover).toBe(true);
+      expect(result.instructorId).toBe(1);
+      // The CTE's bound values include instructorId=1.
+      const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS'));
+      expect(phase2ACall).toBeTruthy();
+      expect(phase2ACall.values).toContain(1);
+      expect(warnings.some(w => w.includes('legacy_pre_cutover'))).toBe(true);
+    } finally {
+      console.warn = origWarn;
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // P1 regression (PR #174 review): the Phase 2A CTE must NOT use the
+  // ensured + separate `locked AS (... FOR UPDATE)` pattern. That pattern
+  // silently fails first-ever LCB writes because data-modifying CTEs share
+  // one snapshot. The fix collapses them into a single
+  // INSERT ... ON CONFLICT DO UPDATE ... RETURNING clause. This test asserts
+  // the SQL text shape — if anyone reintroduces a separate locked CTE,
+  // this fails.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('P1 regression — Phase 2A CTE uses ON CONFLICT DO UPDATE, not separate locked CTE', async () => {
+    _setPhase2AImplementedForTests(true);
+    const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
+
+    await grantCredits({ sql, ...baseArgs, instructorId: 1 });
+
+    const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'));
+    expect(phase2ACall).toBeTruthy();
+    // ON CONFLICT DO UPDATE is the new pattern.
+    expect(phase2ACall.text).toContain('ON CONFLICT (learner_id, instructor_id) DO UPDATE');
+    // No separate "locked AS (... FOR UPDATE)" CTE in the Phase 2A SQL —
+    // ensured's RETURNING + the implicit row lock on DO UPDATE replaces it.
+    // (We allow FOR UPDATE in the Pre-2A path's `WITH locked AS`, but the
+    // Phase 2A call shouldn't contain that exact construct.)
+    expect(phase2ACall.text).not.toMatch(/locked AS \(\s*SELECT[^)]*FROM learner_credit_balances[^)]*FOR UPDATE/);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // P1 round-3 regression (PR #174 review): the previous reconcile shape
+  // (granted_existing scan + granted_new from inserted) was correct for the
+  // first-write visibility problem but still raced two concurrent writers
+  // against each other under READ COMMITTED. PG takes the statement
+  // snapshot BEFORE the LCB row lock is acquired, so the table scan inside
+  // the same statement can't see a sibling transaction that committed
+  // while we waited on the lock. Both writers would scan the pre-lock
+  // snapshot and each overwrite LCB with `pre_snapshot_sum + my_new` —
+  // the second commit silently loses the first writer's increment.
+  //
+  // The fix: LCB is the locked running total. ensured's RETURNING gives
+  // us the post-lock committed balance (correct by construction); add
+  // this writer's own inserted minutes. No ledger re-scan inside the
+  // statement. Periodic divergence check is the Step 4.5 cron, not
+  // inline.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('P1 round-3 regression — Phase 2A uses LCB-as-locked-running-total, not ledger reconcile', async () => {
+    _setPhase2AImplementedForTests(true);
+    const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
+
+    await grantCredits({ sql, ...baseArgs, instructorId: 1 });
+
+    const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'));
+    expect(phase2ACall).toBeTruthy();
+    // ensured returns balance_minutes (the post-lock committed value).
+    expect(phase2ACall.text).toMatch(/DO UPDATE[\s\S]*?RETURNING balance_minutes/);
+    // UPDATE adds ensured.balance_minutes + inserted minutes.
+    expect(phase2ACall.text).toMatch(/SELECT balance_minutes FROM ensured/);
+    expect(phase2ACall.text).toMatch(/SELECT SUM\(minutes\)[\s\S]*?FROM inserted/);
+    // No reconcile-from-ledger CTEs.
+    expect(phase2ACall.text).not.toMatch(/granted_existing AS \(/);
+    expect(phase2ACall.text).not.toMatch(/granted_new AS \(/);
+    expect(phase2ACall.text).not.toMatch(/,\s*granted AS \(/);
+    expect(phase2ACall.text).not.toMatch(/,\s*drawn AS \(/);
+    expect(phase2ACall.text).not.toMatch(/,\s*adjusted AS \(/);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // P2 regression (PR #174 review): verify-session must propagate
+  // instructor_id + effective_rate_pence_per_minute + paymentIntentId to
+  // grantCredits. We exercise the grantCredits args directly here; the
+  // routing test confirms the bound values reach the SQL.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('P2 regression — Phase 2A grant accepts instructor_id, effective rate, payment_intent_id', async () => {
+    _setPhase2AImplementedForTests(true);
+    const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
+
+    const result = await grantCredits({
+      sql,
+      ...baseArgs,
+      instructorId: 7,
+      effectiveRatePencePerMinute: 92,
+      paymentIntentId: 'pi_test_p2',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.legacyPreCutover).toBe(false);
+    expect(result.instructorId).toBe(7);
+
+    // The bound values include all three Phase-2A fields.
+    const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS'));
+    expect(phase2ACall).toBeTruthy();
+    expect(phase2ACall.values).toContain(7);   // instructorId
+    expect(phase2ACall.values).toContain(92);  // effectiveRatePencePerMinute
+    expect(phase2ACall.values).toContain('pi_test_p2');
   });
 
   test('PHASE_2A_IMPLEMENTED=true + neither env var nor schema → routes to Pre-2A', async () => {
@@ -173,5 +305,140 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
     // Pre-2A.
     expect(calls.some(c => c.text.includes('information_schema.columns'))).toBe(true);
     expect(calls.some(c => c.text.includes('WITH locked AS'))).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// lockBalanceAndMutate — dispatcher-routing tests
+// ──────────────────────────────────────────────────────────────────────────────
+// Same gating story as grantCredits(): PHASE_2A_IMPLEMENTED is the master
+// switch; env var / schema check are secondary signals. The Pre-2A path
+// locks learner_users + writes balance_minutes; the Phase-2A path locks
+// LCB + reconciles via the ledger SUM.
+
+function makeMutateMockSql({ phase2aSchemaExists, mode }) {
+  // mode: 'ok' → CTE returns a row (success);
+  //       'no-row' + 'learner-found-with-balance' → CTE returns nothing,
+  //         disambiguation query returns a learner row;
+  //       'no-row' + 'learner-missing' → CTE + disambiguation both return [].
+  const calls = [];
+  const sql = (strings, ...values) => {
+    const text = strings.join('?');
+    calls.push({ text, values });
+    if (text.includes('information_schema.columns')) {
+      return Promise.resolve(phase2aSchemaExists ? [{ '?column?': 1 }] : []);
+    }
+    // Phase 2A CTE.
+    if (text.includes('WITH ensured AS') && text.includes('learner_credit_balances')) {
+      if (mode === 'ok') return Promise.resolve([{ balance_minutes: 120, transaction_id: 7 }]);
+      // no-row paths trigger disambiguation query
+      return Promise.resolve([]);
+    }
+    // Pre-2A CTE.
+    if (text.includes('WITH locked AS') && text.includes('INSERT INTO credit_transactions')) {
+      if (mode === 'ok') return Promise.resolve([{ balance_minutes: 120, transaction_id: 7 }]);
+      return Promise.resolve([]);
+    }
+    // Disambiguation read.
+    if (text.includes('SELECT balance_minutes') && text.includes('FROM learner_users')) {
+      return Promise.resolve(mode === 'learner-missing' ? [] : [{ balance_minutes: 30 }]);
+    }
+    if (text.includes('SELECT balance_minutes') && text.includes('FROM learner_credit_balances')) {
+      return Promise.resolve([{ balance_minutes: 30 }]);
+    }
+    return Promise.resolve([]);
+  };
+  return { sql, calls };
+}
+
+test.describe('lockBalanceAndMutate dispatcher', () => {
+
+  test.beforeEach(() => {
+    _resetPhaseDetectionForTests();
+    _setPhase2AImplementedForTests(false);
+    delete process.env.PER_INSTRUCTOR_CREDITS_PHASE_2A;
+  });
+
+  test.afterAll(() => {
+    _resetPhaseDetectionForTests();
+    _setPhase2AImplementedForTests(false);
+    delete process.env.PER_INSTRUCTOR_CREDITS_PHASE_2A;
+  });
+
+  const baseMutateArgs = {
+    learnerId: 1,
+    schoolId: 1,
+    delta: 60,
+    ledgerType: 'admin_add',
+    reason: 'manual top-up',
+  };
+
+  test('PHASE_2A_IMPLEMENTED=false → routes to Pre-2A (locks learner_users)', async () => {
+    const { sql, calls } = makeMutateMockSql({ phase2aSchemaExists: true, mode: 'ok' });
+    const result = await lockBalanceAndMutate(sql, baseMutateArgs);
+    expect(result.ok).toBe(true);
+    expect(result.balanceMinutes).toBe(120);
+    expect(calls.some(c => c.text.includes('WITH locked AS') && c.text.includes('FROM learner_users'))).toBe(true);
+    // Did NOT touch the LCB CTE.
+    expect(calls.some(c => c.text.includes('WITH ensured AS'))).toBe(false);
+  });
+
+  test('PHASE_2A_IMPLEMENTED=true + schema present → routes to Phase 2A LCB CTE', async () => {
+    _setPhase2AImplementedForTests(true);
+    const { sql, calls } = makeMutateMockSql({ phase2aSchemaExists: true, mode: 'ok' });
+    const result = await lockBalanceAndMutate(sql, { ...baseMutateArgs, instructorId: 1 });
+    expect(result.ok).toBe(true);
+    expect(result.instructorId).toBe(1);
+    expect(calls.some(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'))).toBe(true);
+  });
+
+  test('Pre-2A INSUFFICIENT_BALANCE: CTE returns no row + learner exists', async () => {
+    const { sql } = makeMutateMockSql({ phase2aSchemaExists: false, mode: 'learner-found-with-balance' });
+    const result = await lockBalanceAndMutate(sql, { ...baseMutateArgs, delta: -120 });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe('INSUFFICIENT_BALANCE');
+    expect(result.balanceMinutes).toBe(30);
+  });
+
+  test('Pre-2A LEARNER_NOT_FOUND: CTE returns no row + learner missing', async () => {
+    const { sql } = makeMutateMockSql({ phase2aSchemaExists: false, mode: 'learner-missing' });
+    const result = await lockBalanceAndMutate(sql, { ...baseMutateArgs, delta: 30 });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe('LEARNER_NOT_FOUND');
+  });
+
+  test('rejects invalid ledgerType', async () => {
+    const { sql } = makeMutateMockSql({ phase2aSchemaExists: false, mode: 'ok' });
+    await expect(
+      lockBalanceAndMutate(sql, { ...baseMutateArgs, ledgerType: 'made_up_type' })
+    ).rejects.toThrow(/ledgerType must be one of/);
+  });
+
+  test('rejects zero delta', async () => {
+    const { sql } = makeMutateMockSql({ phase2aSchemaExists: false, mode: 'ok' });
+    await expect(
+      lockBalanceAndMutate(sql, { ...baseMutateArgs, delta: 0 })
+    ).rejects.toThrow(/non-zero integer/);
+  });
+
+  test('Phase 2A grandfathers missing instructorId to id=1', async () => {
+    _setPhase2AImplementedForTests(true);
+    const { sql, calls } = makeMutateMockSql({ phase2aSchemaExists: true, mode: 'ok' });
+
+    const origWarn = console.warn;
+    const warnings = [];
+    console.warn = (...args) => { warnings.push(args.join(' ')); };
+    try {
+      const result = await lockBalanceAndMutate(sql, baseMutateArgs); // no instructorId
+      expect(result.ok).toBe(true);
+      expect(result.instructorId).toBe(1);
+      // The Phase-2A CTE was actually called and instructorId=1 made it into the bound values.
+      const ctaCall = calls.find(c => c.text.includes('WITH ensured AS'));
+      expect(ctaCall).toBeTruthy();
+      expect(ctaCall.values).toContain(1);
+      expect(warnings.some(w => w.includes('legacy_pre_cutover'))).toBe(true);
+    } finally {
+      console.warn = origWarn;
+    }
   });
 });

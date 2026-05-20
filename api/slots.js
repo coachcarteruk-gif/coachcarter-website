@@ -35,6 +35,7 @@ const { notifyAvailableLearners, supersedeBroadcastSiblings } = require('./_noti
 const { checkAdjacentTravelTime, extractPostcode, bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES } = require('./_travel-time');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 const { getEffectiveRatePencePerMinute } = require('./_pricing-helpers');
+const { lockBalanceAdjustLCB } = require('./_credit-grant');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
@@ -1002,23 +1003,11 @@ async function handleBook(req, res) {
     // which we surface as a 402.
     if (!skipPayments) {
       const creditsToDeduct = Math.ceil(totalMins / 60);
-      const [deducted] = await sql`
-        WITH locked AS (
-          SELECT id
-            FROM learner_users
-           WHERE id = ${user.id}
-             AND school_id = ${schoolId}
-           FOR UPDATE
-        )
-        UPDATE learner_users lu
-           SET balance_minutes = lu.balance_minutes - ${totalMins},
-               credit_balance  = GREATEST(lu.credit_balance - ${creditsToDeduct}, 0)
-          FROM locked
-         WHERE lu.id = locked.id
-           AND lu.balance_minutes >= ${totalMins}
-        RETURNING lu.balance_minutes
-      `;
-      if (!deducted)
+      const deducted = await lockBalanceAdjustLCB(sql, {
+        learnerId: user.id, instructorId: instructor_id, schoolId,
+        delta: -totalMins, creditsDelta: -creditsToDeduct,
+      });
+      if (!deducted.ok)
         return res.status(402).json({ error: `Not enough hours. You need ${formatHours(totalMins)}. Please buy more hours.` });
     }
 
@@ -1057,25 +1046,16 @@ async function handleBook(req, res) {
       }
     } catch (insertErr) {
       // Refund the hours since booking failed (not needed for demo/free schools).
-      // Same LCB-lock CTE prologue as the deduct above — this is a credit-
-      // affecting writer and must serialise against concurrent grantCredits()
-      // for this learner. See api/_credit-grant.js for the invariant.
+      // lockBalanceAdjustLCB encapsulates the LCB-lock prologue — this is a
+      // credit-affecting writer and must serialise against concurrent
+      // grantCredits() for this learner. See api/_credit-grant.js for the
+      // invariant.
       if (!skipPayments) {
         const creditsToRefund = Math.ceil(totalMins / 60);
-        await sql`
-          WITH locked AS (
-            SELECT id
-              FROM learner_users
-             WHERE id = ${user.id}
-               AND school_id = ${schoolId}
-             FOR UPDATE
-          )
-          UPDATE learner_users lu
-             SET balance_minutes = lu.balance_minutes + ${totalMins},
-                 credit_balance  = lu.credit_balance  + ${creditsToRefund}
-            FROM locked
-           WHERE lu.id = locked.id
-        `;
+        await lockBalanceAdjustLCB(sql, {
+          learnerId: user.id, instructorId: instructor_id, schoolId,
+          delta: totalMins, creditsDelta: creditsToRefund,
+        });
       }
       // If some bookings in a series were created before the failure, cancel them
       if (createdBookings.length > 0) {
@@ -1450,7 +1430,10 @@ async function handleCheckoutSlot(req, res) {
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
         amount_pence:    String(pricePence),
-        school_id:       String(schoolId)
+        school_id:       String(schoolId),
+        // Step 4 / Phase 2A: derivable from pricePence/durationMins per the
+        // source-of-truth rule, snapshotted for audit clarity.
+        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
       },
       ...(emailValid ? { customer_email: learner.email } : {}),
       billing_address_collection: 'required',
@@ -1716,7 +1699,9 @@ async function handleCheckoutSlotGuest(req, res) {
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
         amount_pence:    String(pricePence),
-        school_id:       String(schoolId)
+        school_id:       String(schoolId),
+        // Step 4 / Phase 2A: snapshot for audit clarity.
+        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
       },
       customer_email: cleanEmail,
       billing_address_collection: 'required',
@@ -2262,15 +2247,16 @@ async function handleCancel(req, res) {
         }
       }
 
-      // Refund total eligible minutes in one update
+      // Refund total eligible minutes in one update. Series-cancel covers
+      // multiple bookings but they all share booking.instructor_id (series
+      // by construction = one instructor), so the refund lands on the same
+      // LCB row that was originally debited.
       if (totalMinsRefunded > 0) {
         const creditsBack = Math.ceil(totalMinsRefunded / 60);
-        await sql`
-          UPDATE learner_users
-          SET balance_minutes = balance_minutes + ${totalMinsRefunded},
-              credit_balance = credit_balance + ${creditsBack}
-          WHERE id = ${user.id}
-        `;
+        await lockBalanceAdjustLCB(sql, {
+          learnerId: user.id, instructorId: booking.instructor_id, schoolId,
+          delta: totalMinsRefunded, creditsDelta: creditsBack,
+        });
       }
 
       const [updated] = await sql`SELECT credit_balance, balance_minutes FROM learner_users WHERE id = ${user.id}`;
@@ -2383,14 +2369,13 @@ async function handleCancel(req, res) {
       `;
     }
 
-    // Return hours if eligible (not for demo bookings)
+    // Return hours if eligible (not for demo bookings). Refund lands on the
+    // same LCB row that was originally debited (booking.instructor_id).
     if (creditReturned) {
-      await sql`
-        UPDATE learner_users
-        SET balance_minutes = balance_minutes + ${minsToReturn},
-            credit_balance = credit_balance + ${Math.ceil(minsToReturn / 60)}
-        WHERE id = ${user.id}
-      `;
+      await lockBalanceAdjustLCB(sql, {
+        learnerId: user.id, instructorId: booking.instructor_id, schoolId,
+        delta: minsToReturn, creditsDelta: Math.ceil(minsToReturn / 60),
+      });
     }
 
     const [updated] = await sql`SELECT credit_balance, balance_minutes FROM learner_users WHERE id = ${user.id}`;

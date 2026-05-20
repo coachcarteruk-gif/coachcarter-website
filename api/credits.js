@@ -60,8 +60,24 @@ async function handleBalance(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
+    // Step 4 / Phase 2A: profile-balance read sums learner_credit_balances
+    // across instructors instead of reading learner_users.balance_minutes
+    // directly. The sync_pooled_balance trigger keeps the pooled column in
+    // sync, but reading LCB directly is defence-in-depth — if the trigger
+    // is ever missing or wrong, the UI still shows the real balance.
+    //
+    // credit_balance (legacy cosmetic counter) is still read from
+    // learner_users; LCB doesn't materialise that column.
     const [balanceRow] = await sql`
-      SELECT credit_balance, balance_minutes FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}
+      SELECT lu.credit_balance,
+             COALESCE((
+               SELECT SUM(lcb.balance_minutes)::int
+                 FROM learner_credit_balances lcb
+                WHERE lcb.learner_id = lu.id
+             ), lu.balance_minutes, 0) AS balance_minutes
+        FROM learner_users lu
+       WHERE lu.id = ${user.id}
+         AND lu.school_id = ${schoolId}
     `;
 
     if (!balanceRow) return res.status(404).json({ error: 'Learner not found' });
@@ -124,6 +140,16 @@ async function handleCheckout(req, res) {
   const minutes = Math.round(hours * 60);
   const lessonEquiv = Math.round(hours / 1.5); // for backwards compat metadata
 
+  // Step 4 / Phase 2A: scope credits to a specific instructor at purchase
+  // time. Accept instructor_id from the request body when provided (future
+  // multi-instructor learner UI); default to 1 (Fraser) when missing so
+  // current buy-credits.html callers continue to work without change. The
+  // webhook reads metadata.instructor_id and routes the LCB upsert there.
+  const instructorIdRaw = parseInt(req.body.instructor_id, 10);
+  const instructorId = Number.isFinite(instructorIdRaw) && instructorIdRaw > 0
+    ? instructorIdRaw
+    : 1;
+
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const { fullPence, discountPct, discountAmt, totalPence, pricePerHourPence } = await calcBulkTotal(sql, schoolId, hours);
@@ -158,7 +184,14 @@ async function handleCheckout(req, res) {
         hours_purchased:   String(hours),
         discount_pct:      String(discountPct),
         amount_pence:      String(totalPence),
-        school_id:         String(schoolId)
+        school_id:         String(schoolId),
+        // Step 4 / Phase 2A: scope LCB upsert in the webhook.
+        // effective_rate_pence_per_minute is derivable from the Stripe
+        // session itself (amount_pence / minutes) per the source-of-truth
+        // rule, but we also snapshot it into metadata for audit clarity
+        // and to surface the discount-applied rate (vs the school list rate).
+        instructor_id:                    String(instructorId),
+        effective_rate_pence_per_minute:  String(Math.round(totalPence / minutes))
       },
       ...(emailValid ? { customer_email: user.email } : {}),
       billing_address_collection: 'required',
@@ -233,6 +266,21 @@ async function handleVerify(req, res) {
     // alreadyProcessed=true via the partial unique index. Pricing is sourced
     // from the Stripe Session metadata above — never from a live rate helper
     // (defence-in-depth against mid-flight rate changes).
+    //
+    // Step 4 / Phase 2A: source instructor_id + effective_rate_pence_per_minute
+    // + paymentIntentId from Stripe metadata too. Without these, a verify-
+    // session call that beats the webhook to the database would grandfather
+    // to instructor 1, then the webhook's later INSERT would no-op on the
+    // uq_credit_tx_session arbiter — locking the misroute in place. Mirrors
+    // the same args handleCreditPurchase passes (api/webhook.js).
+    const instructorIdMeta = parseInt(metadata.instructor_id, 10) || null;
+    const effectiveRatePencePerMinute = minutes > 0
+      ? Math.round(amountPence / minutes)
+      : null;
+    const paymentIntentId = typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id || null;
+
     const grant = await grantCredits({
       sql,
       learnerId,
@@ -242,6 +290,10 @@ async function handleVerify(req, res) {
       amountPence,
       paymentMethod,
       sessionId,
+      instructorId: instructorIdMeta,
+      effectiveRatePencePerMinute,
+      paymentIntentId,
+      source: 'stripe',
     });
 
     if (!grant.ok) {

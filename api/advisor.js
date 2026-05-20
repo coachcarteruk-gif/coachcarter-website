@@ -167,9 +167,15 @@ async function handleCreateCheckout(toolInput, user, origin) {
       learner_id:        String(user.id),
       learner_email:     emailValid ? user.email : '',
       credits_purchased: String(qty),
+      minutes_purchased: String(qty * 90),
       discount_pct:      String(price.discountPct),
       amount_pence:      String(price.totalPence),
-      school_id:         String(user.school_id || 1)
+      school_id:         String(user.school_id || 1),
+      // Step 4 / Phase 2A: advisor checkout is bulk credit, not slot-specific.
+      // Default instructor_id to 1 (Fraser) — multi-instructor advisor flow
+      // lands in a later wave.
+      instructor_id:                    '1',
+      effective_rate_pence_per_minute:  String(Math.round(price.totalPence / (qty * 90)))
     },
     ...(emailValid ? { customer_email: user.email } : {}),
     billing_address_collection: 'required',

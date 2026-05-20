@@ -20,6 +20,7 @@ const { safeEqual, verifyCronAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, bu
 const { buildCsrfCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { SCHEDULED, BLOCKING_STATUSES } = require('./_booking-status');
 const { allocate } = require('./_pence-allocator');
+const { lockBalanceAndMutate } = require('./_credit-grant');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Series fan-out for offer-driven weekly repeats (May 2026)
@@ -515,13 +516,26 @@ async function handleAcceptOffer(req, res) {
         appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
       }
 
-      // 2. Add credit to learner balance
-      await sql`
-        UPDATE learner_users
-        SET credit_balance = credit_balance + 1,
-            balance_minutes = balance_minutes + ${durationMins}
-        WHERE id = ${learnerId}
-      `;
+      // 2. Add credit to learner balance.
+      //
+      // Step 4 audit improvement: this flexible-free-offer path historically
+      // wrote balance without a matching credit_transactions row, leaving no
+      // ledger trace of the grant. lockBalanceAndMutate inserts an
+      // 'admin_add' / source='goodwill' row alongside the balance write so
+      // admin credits views and learner transaction history reflect the
+      // grant. Scoped to the offer's instructor under Phase 2A.
+      await lockBalanceAndMutate(sql, {
+        learnerId,
+        schoolId,
+        instructorId: offer.instructor_id,
+        delta: durationMins,
+        creditsDelta: 1,
+        ledgerType: 'admin_add',
+        reason: 'free flexible offer',
+        source: 'goodwill',
+        absorbedBy: 'platform',
+        allowOverdraft: true,
+      });
 
       // 3. Mark offer accepted
       await sql`
@@ -600,7 +614,11 @@ async function handleAcceptOffer(req, res) {
         amount_pence:      String(pricePence),
         repeat_weeks:      String(repeatWeeksClean),
         school_id:         String(schoolId),
-        is_flexible:       isFlexible ? '1' : '0'
+        is_flexible:       isFlexible ? '1' : '0',
+        // Step 4 / Phase 2A: per-minute rate is invariant across the weekly
+        // series (Stripe charges quantity = repeatWeeksClean), so the rate
+        // computed here is correct for each booked lesson.
+        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
       },
       customer_email: resolvedEmail,
       billing_address_collection: 'required',

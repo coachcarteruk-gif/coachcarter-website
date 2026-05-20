@@ -45,6 +45,7 @@ const { reportError } = require('./_error-alert');
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
 const { getEligibleBookings }  = require('./_payout-helpers');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
+const { lockBalanceAndMutate, lockBalanceAdjustLCB } = require('./_credit-grant');
 
 
 const TOKEN_EXPIRY_MINUTES = 30;
@@ -966,7 +967,8 @@ async function handleCancelBooking(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [booking] = await sql`
-      SELECT lb.id, lb.status, lb.learner_id, lb.scheduled_date, lb.start_time,
+      SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
+             lb.scheduled_date, lb.start_time,
              COALESCE(lb.minutes_deducted, 90) AS minutes_deducted,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name
@@ -990,13 +992,16 @@ async function handleCancelBooking(req, res) {
       WHERE id = ${booking_id}
     `;
 
-    // Refund the learner's balance (minutes + credit count)
-    await sql`
-      UPDATE learner_users
-      SET balance_minutes = balance_minutes + ${minsToReturn},
-          credit_balance = credit_balance + ${Math.ceil(minsToReturn / 60)}
-      WHERE id = ${booking.learner_id}
-    `;
+    // Refund the learner's balance to the same LCB row that was debited.
+    // No ledger row (matches the slots.js cancel refund convention — the
+    // lesson_bookings row's REFUNDED status is the audit trail).
+    await lockBalanceAdjustLCB(sql, {
+      learnerId: booking.learner_id,
+      instructorId: booking.instructor_id,
+      schoolId: booking.school_id || 1,
+      delta: minsToReturn,
+      creditsDelta: Math.ceil(minsToReturn / 60),
+    });
 
     // Email the learner (unless notify is explicitly false)
     if (notify !== false) try {
@@ -1301,18 +1306,29 @@ async function handleEditBooking(req, res) {
     let balanceAdjusted = false;
 
     if (delta !== 0 && oldMinutes > 0) {
-      if (delta > 0) {
-        // Upgrade — learner needs more minutes
-        if (booking.balance_minutes < delta)
-          return res.status(402).json({ error: `Learner has insufficient balance. Needs ${delta} more minutes but has ${booking.balance_minutes}.` });
-        await sql`UPDATE learner_users SET balance_minutes = balance_minutes - ${delta} WHERE id = ${booking.learner_id}`;
-      } else {
-        // Downgrade — refund minutes
-        await sql`UPDATE learner_users SET balance_minutes = balance_minutes + ${Math.abs(delta)} WHERE id = ${booking.learner_id}`;
+      if (delta > 0 && booking.balance_minutes < delta)
+        return res.status(402).json({ error: `Learner has insufficient balance. Needs ${delta} more minutes but has ${booking.balance_minutes}.` });
+      // Step 4 cutover: atomic balance + ledger via one CTE. Previously
+      // the UPDATE and INSERT ran separately so a process kill between
+      // them could move the balance without logging the adjustment.
+      // delta is signed (positive = upgrade, negative = downgrade); the
+      // credit_transactions row historically wrote `-delta` (positive when
+      // minutes are deducted), so we negate here to preserve that convention.
+      const adj = await lockBalanceAndMutate(sql, {
+        learnerId: booking.learner_id,
+        schoolId,
+        instructorId: booking.instructor_id,
+        delta: -delta,
+        ledgerType: 'edit_adjustment',
+        reason: 'edit',
+      });
+      if (!adj.ok) {
+        return res.status(adj.code === 'INSUFFICIENT_BALANCE' ? 402 : 500).json({
+          error: adj.code === 'INSUFFICIENT_BALANCE'
+            ? `Learner has insufficient balance. Needs ${delta} more minutes.`
+            : 'Failed to adjust learner balance',
+        });
       }
-      // Log the adjustment
-      await sql`INSERT INTO credit_transactions (learner_id, type, minutes, credits, amount_pence, payment_method, school_id)
-        VALUES (${booking.learner_id}, 'edit_adjustment', ${-delta}, 0, 0, 'edit', ${schoolId})`;
       balanceAdjusted = true;
     }
 
@@ -1444,21 +1460,20 @@ async function handleCreateBooking(req, res) {
       SELECT id, name, email, phone FROM instructors WHERE id = ${instructor.id} AND school_id = ${schoolId}
     `;
 
-    // Handle credit/hours deduction if paying by credit
+    // Handle credit/hours deduction if paying by credit. lockBalanceAdjustLCB
+    // matches today's shape (no separate ledger row — the lesson_bookings row
+    // is the audit-of-record for credit-paid lessons).
     let creditDeducted = false;
     if (payMethod === 'credit') {
       const balance = learner.balance_minutes || 0;
       if (balance < durationMins)
         return res.status(402).json({ error: `${learner.name} doesn't have enough hours. They need ${durationStr} but have ${(balance / 60).toFixed(1)} hrs. Use "Cash" or "Free" instead.` });
 
-      const [deducted] = await sql`
-        UPDATE learner_users
-        SET balance_minutes = balance_minutes - ${durationMins},
-            credit_balance = GREATEST(credit_balance - 1, 0)
-        WHERE id = ${learner_id} AND balance_minutes >= ${durationMins}
-        RETURNING balance_minutes
-      `;
-      if (!deducted)
+      const deducted = await lockBalanceAdjustLCB(sql, {
+        learnerId: learner_id, instructorId: instructor.id, schoolId,
+        delta: -durationMins, creditsDelta: -1,
+      });
+      if (!deducted.ok)
         return res.status(402).json({ error: 'Learner doesn\'t have enough hours.' });
       creditDeducted = true;
     }
@@ -1484,7 +1499,10 @@ async function handleCreateBooking(req, res) {
     } catch (insertErr) {
       // Rollback hours if deducted
       if (creditDeducted) {
-        await sql`UPDATE learner_users SET balance_minutes = balance_minutes + ${durationMins}, credit_balance = credit_balance + 1 WHERE id = ${learner_id}`;
+        await lockBalanceAdjustLCB(sql, {
+          learnerId: learner_id, instructorId: instructor.id, schoolId,
+          delta: durationMins, creditsDelta: 1,
+        });
       }
       if (insertErr.message?.includes('uq_booking_slot') || insertErr.code === '23505') {
         return res.status(409).json({ error: 'That slot is already booked. Please choose another time.' });

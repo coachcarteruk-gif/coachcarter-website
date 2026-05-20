@@ -7,6 +7,7 @@ const { SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { reportError } = require('./_error-alert');
+const { lockBalanceAndMutate } = require('./_credit-grant');
 
 const FREE_TRIAL_CREDITS = 0;
 
@@ -455,11 +456,21 @@ async function applyReferralWelcomeBonus(sql, newLearnerId, referrerId, schoolId
   const bonusMinutes = config.referral_welcome_bonus_minutes ?? 90;
   if (bonusMinutes <= 0) return;
 
-  // Credit the new learner with welcome bonus
-  await sql`UPDATE learner_users SET balance_minutes = balance_minutes + ${bonusMinutes} WHERE id = ${newLearnerId} AND school_id = ${schoolId}`;
-  await sql`
-    INSERT INTO credit_transactions (learner_id, type, credits, minutes, amount_pence, payment_method, school_id)
-    VALUES (${newLearnerId}, 'referral_bonus', 0, ${bonusMinutes}, 0, 'referral', ${schoolId})`;
+  // Credit the new learner with welcome bonus. Step 4 cutover: atomic
+  // balance + ledger via lockBalanceAndMutate. instructor_id grandfathers
+  // to 1 (Fraser) — the welcome bonus is platform-funded and isn't
+  // scoped to a specific instructor today.
+  await lockBalanceAndMutate(sql, {
+    learnerId: newLearnerId,
+    schoolId,
+    instructorId: 1,
+    delta: bonusMinutes,
+    ledgerType: 'referral_bonus',
+    reason: 'referral',
+    source: 'goodwill',
+    absorbedBy: 'platform',
+    allowOverdraft: true,
+  });
 
   // Notify the referrer
   try {
