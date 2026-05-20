@@ -6,7 +6,7 @@ const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
 const { SCHEDULED } = require('./_booking-status');
 const { fetchSessionFeePence } = require('./_stripe-fee');
-const { grantCredits } = require('./_credit-grant');
+const { grantCredits, lockBalanceAdjustLCB } = require('./_credit-grant');
 
 
 // Resolve school_id from Stripe metadata with a tenant-safe fallback.
@@ -200,6 +200,25 @@ async function handleCreditPurchase(session) {
     // as zero in the meantime.
     const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
 
+    // Step 4 / Phase 2A: source instructor scope + effective rate from the
+    // Stripe Session metadata so credits are written against the correct
+    // (learner, instructor) LCB row. Metadata is the source of truth per
+    // PER-INSTRUCTOR-CREDITS-PLAN.md §Step 0 L239-247. If metadata is missing
+    // instructor_id (in-flight session created before checkout sites added
+    // it), grantCredits' dispatcher grandfather routes to instructor_id = 1
+    // and logs legacy_pre_cutover.
+    //
+    // effective_rate_pence_per_minute = amountPence / minutes (derived from
+    // Stripe-session values rather than a live pricing recall — same source
+    // the learner agreed to).
+    const instructorIdMeta = parseInt(metadata.instructor_id, 10) || null;
+    const effectiveRatePencePerMinute = minutes > 0
+      ? Math.round(amountPence / minutes)
+      : null;
+    const paymentIntentId = typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id || null;
+
     // Record the transaction AND increment the balance in one DB statement
     // via api/_credit-grant.js. Closes the historical split-write race:
     //
@@ -221,6 +240,10 @@ async function handleCreditPurchase(session) {
       paymentMethod,
       sessionId: session.id,
       stripeFeePence,
+      instructorId: instructorIdMeta,
+      effectiveRatePencePerMinute,
+      paymentIntentId,
+      source: 'stripe',
     });
 
     if (!grant.ok) {
@@ -364,14 +387,27 @@ async function handleSlotBooking(session) {
     // as zero in the meantime.
     const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
 
+    // Step 4 / Phase 2A: effective rate is derivable from the Stripe-session
+    // amount and minutes — no live pricing recall. instructor_id comes from
+    // metadata (already in scope above). payment_intent_id is captured for
+    // the uq_credit_tx_payment_intent reconciliation idempotency arbiter.
+    const effectiveRatePencePerMinute = durationMins > 0
+      ? Math.round(amountPence / durationMins)
+      : null;
+    const paymentIntentId = typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id || null;
+
     // 1. Record the transaction. uq_credit_tx_session backstops the
     // SELECT idempotency check above against concurrent retries.
     try {
       await sql`
         INSERT INTO credit_transactions
-          (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
+          (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id,
+           stripe_fee_pence, instructor_id, effective_rate_pence_per_minute, stripe_payment_intent_id, source)
         VALUES
-          (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId}, ${stripeFeePence})
+          (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId},
+           ${stripeFeePence}, ${instructorId}, ${effectiveRatePencePerMinute}, ${paymentIntentId}, 'stripe')
       `;
     } catch (insertErr) {
       if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
@@ -381,25 +417,29 @@ async function handleSlotBooking(session) {
       throw insertErr;
     }
 
-    // 2. Add hours to balance (net zero — add then deduct)
-    await sql`
-      UPDATE learner_users
-      SET credit_balance = credit_balance + 1,
-          balance_minutes = balance_minutes + ${durationMins}
-      WHERE id = ${learnerId}
-    `;
+    // 2. Add hours to balance (net zero — add then deduct). lockBalanceAdjustLCB
+    // is the balance-only writer (no separate ledger row — the slot_purchase
+    // INSERT above is the single audit-of-record for this Stripe payment).
+    // Same chokepoint invariant as grantCredits: locks the LCB row for this
+    // (learner, instructor) pair, serialising concurrent writers.
+    const addResult = await lockBalanceAdjustLCB(sql, {
+      learnerId, instructorId, schoolId,
+      delta: durationMins, creditsDelta: 1,
+    });
+    if (!addResult.ok) {
+      console.error('❌ slot_booking: failed to add hours pre-deduct', addResult.code);
+      return;
+    }
 
-    // 3. Immediately deduct hours and create the booking
-    const [deducted] = await sql`
-      UPDATE learner_users
-      SET credit_balance = credit_balance - 1,
-          balance_minutes = balance_minutes - ${durationMins}
-      WHERE id = ${learnerId} AND balance_minutes >= ${durationMins}
-      RETURNING credit_balance, balance_minutes
-    `;
-
-    if (!deducted) {
-      console.error('❌ slot_booking: failed to deduct hours after adding — race condition?');
+    // 3. Immediately deduct hours and create the booking. allowOverdraft is
+    // unnecessary because the matching add above already landed under the
+    // same lock, but it's belt-and-braces against a misconfigured edge case.
+    const deductResult = await lockBalanceAdjustLCB(sql, {
+      learnerId, instructorId, schoolId,
+      delta: -durationMins, creditsDelta: -1,
+    });
+    if (!deductResult.ok) {
+      console.error('❌ slot_booking: failed to deduct hours after adding — race condition?', deductResult.code);
       return;
     }
 
@@ -433,12 +473,10 @@ async function handleSlotBooking(session) {
       // Booking insert failed (slot taken, FK / CHECK violation, etc.). Refund
       // the deduction so the learner has the hours on their account, then
       // alert Fraser + email the learner — see notifyBookingInsertFailed.
-      await sql`
-        UPDATE learner_users
-        SET credit_balance = credit_balance + 1,
-            balance_minutes = balance_minutes + ${durationMins}
-        WHERE id = ${learnerId}
-      `;
+      await lockBalanceAdjustLCB(sql, {
+        learnerId, instructorId, schoolId,
+        delta: durationMins, creditsDelta: 1,
+      });
       console.error('❌ slot_booking: insert failed, hours refunded to learner balance', insertErr.message);
       await notifyBookingInsertFailed({
         session, kind: 'slot_booking',
@@ -743,15 +781,28 @@ async function handleOfferBooking(session) {
     // the N bookings via booking_credit_sources.
     const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
 
+    // Step 4 / Phase 2A: effective rate is per-minute on the total charge
+    // (totalAmountPence / totalMinutes). For repeat-weeks series this is the
+    // same per-minute rate every week (Stripe charges per-week × repeatWeeks
+    // via line-item quantity, so the per-minute rate is invariant across weeks).
+    const effectiveRatePencePerMinute = totalMinutes > 0
+      ? Math.round(totalAmountPence / totalMinutes)
+      : null;
+    const paymentIntentId = typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id || null;
+
     // uq_credit_tx_session catches concurrent Stripe retries on the same
     // offer-acceptance event. SELECT idempotency above is the fast path;
     // this is the DB-enforced backstop.
     try {
       await sql`
         INSERT INTO credit_transactions
-          (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id, stripe_fee_pence)
+          (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id,
+           stripe_fee_pence, instructor_id, effective_rate_pence_per_minute, stripe_payment_intent_id, source)
         VALUES
-          (${learnerId}, 'slot_purchase', ${totalCredits}, ${totalAmountPence}, 'card', ${session.id}, ${totalMinutes}, ${schoolId}, ${stripeFeePence})
+          (${learnerId}, 'slot_purchase', ${totalCredits}, ${totalAmountPence}, 'card', ${session.id}, ${totalMinutes}, ${schoolId},
+           ${stripeFeePence}, ${instructorId}, ${effectiveRatePencePerMinute}, ${paymentIntentId}, 'stripe')
       `;
     } catch (insertErr) {
       if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
@@ -761,12 +812,12 @@ async function handleOfferBooking(session) {
       throw insertErr;
     }
 
-    await sql`
-      UPDATE learner_users
-      SET credit_balance = credit_balance + ${totalCredits},
-          balance_minutes = balance_minutes + ${totalMinutes}
-      WHERE id = ${learnerId}
-    `;
+    // Net-zero add (matched by deduct below for slot-pinned offers, left in
+    // place for flexible offers so the learner has balance to spend).
+    await lockBalanceAdjustLCB(sql, {
+      learnerId, instructorId, schoolId,
+      delta: totalMinutes, creditsDelta: totalCredits,
+    });
 
     // ── Flexible offers: credit the learner, skip booking (they pick their own slot) ──
     if (isFlexible) {
@@ -836,16 +887,13 @@ async function handleOfferBooking(session) {
     }
 
     // ── Slot-pinned offers: deduct credit and create booking(s) ──
-    const [deducted] = await sql`
-      UPDATE learner_users
-      SET credit_balance = credit_balance - ${totalCredits},
-          balance_minutes = balance_minutes - ${totalMinutes}
-      WHERE id = ${learnerId} AND balance_minutes >= ${totalMinutes}
-      RETURNING credit_balance, balance_minutes
-    `;
+    const deducted = await lockBalanceAdjustLCB(sql, {
+      learnerId, instructorId, schoolId,
+      delta: -totalMinutes, creditsDelta: -totalCredits,
+    });
 
-    if (!deducted) {
-      console.error('❌ lesson_offer: failed to deduct hours after adding — race condition?');
+    if (!deducted.ok) {
+      console.error('❌ lesson_offer: failed to deduct hours after adding — race condition?', deducted.code);
       return;
     }
 
@@ -881,12 +929,10 @@ async function handleOfferBooking(session) {
       // the deduction so the learner has the hours on their account, mark the
       // offer cancelled, then alert Fraser + email the learner — see
       // notifyBookingInsertFailed.
-      await sql`
-        UPDATE learner_users
-        SET credit_balance = credit_balance + ${totalCredits},
-            balance_minutes = balance_minutes + ${totalMinutes}
-        WHERE id = ${learnerId}
-      `;
+      await lockBalanceAdjustLCB(sql, {
+        learnerId, instructorId, schoolId,
+        delta: totalMinutes, creditsDelta: totalCredits,
+      });
       console.error('❌ lesson_offer: insert failed, hours refunded to learner balance', insertErr.message);
       await sql`UPDATE lesson_offers SET status = 'cancelled' WHERE id = ${offerId}`;
       await notifyBookingInsertFailed({

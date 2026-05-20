@@ -588,11 +588,13 @@ async function grantCreditsPhase2A({
 //   - cron-referral-rewards.js referrer payout
 //   - magic-link.js welcome bonus
 //
-// The 4 purchase paths (webhook.handleCreditPurchase, webhook.handleOfferBooking,
-// webhook.handleFreeOffer, and any other Stripe-session-bearing grant) still
-// go through grantCredits() — that path also writes Stripe linkage fields
-// (session_id, payment_intent_id, charge_id, effective rate) which this
-// helper deliberately doesn't.
+// The Stripe-session purchase paths (webhook.handleCreditPurchase plus the
+// offers.js handleFreeOffer credit grant) still go through grantCredits() —
+// that path writes Stripe linkage fields (session_id, payment_intent_id,
+// charge_id, effective rate) which this helper deliberately doesn't.
+// The slot-purchase net-zero pattern in webhook.handleSlotBooking and the
+// slot-pinned arm of webhook.handleOfferBooking use lockBalanceAdjustLCB
+// below (balance-only, no separate ledger row).
 //
 // Phase gating mirrors grantCredits():
 //   - PHASE_2A_IMPLEMENTED = false → lock learner_users + write balance_minutes.
@@ -839,11 +841,170 @@ async function lockBalanceAndMutatePhase2A({
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// lockBalanceAdjustLCB — balance-only mutation, no ledger row
+// ─────────────────────────────────────────────────────────────────────────────
+// Used by the slot-purchase / offer net-zero add-then-deduct sites in
+// webhook.js. Those paths INSERT a single 'slot_purchase' credit_transactions
+// row themselves (carrying the Stripe session_id, payment_intent_id, fee, etc.)
+// and then need to bump the balance by the lesson minutes and immediately
+// bump it back — both writes are pure balance mutations, no audit row.
+//
+// Why this exists separately from lockBalanceAndMutate:
+//   The helper above always writes a credit_transactions row alongside the
+//   balance mutation. For slot-purchase webhook sites that already INSERT
+//   their own 'slot_purchase' ledger row, routing the two net-zero balance
+//   writes through it would produce 3 ledger rows per slot booking instead
+//   of 1, breaking cron-payouts / cron-reconcile assumptions about
+//   row-count-per-Stripe-payment.
+//
+// Behaviour:
+//   - PHASE_2A_IMPLEMENTED = false → lock learner_users + write balance_minutes
+//     (and optional credit_balance delta). Pre-2A behaviour, current prod.
+//   - PHASE_2A_IMPLEMENTED = true  → lock LCB row + write LCB.balance_minutes.
+//
+// Net-zero pairing: this helper is designed to be called in matched pairs
+// (one positive delta, one negative). The trigger fires after each, so the
+// pooled balance flickers up and back. That's the same shape as today's
+// raw UPDATEs; the trigger is the cleanup mechanism.
+//
+// Insufficient-balance: the deduct half of a net-zero pair can't go negative
+// because the matching positive write just landed and the LCB lock prevents
+// any other writer from draining the row between them. But the predicate is
+// still belt-and-braces — if for any reason the row doesn't have enough, we
+// return INSUFFICIENT_BALANCE and the caller logs / alerts.
+
+async function lockBalanceAdjustLCB(sql, args) {
+  if (!sql) throw new Error('sql client required');
+  if (!args || typeof args !== 'object') throw new Error('lockBalanceAdjustLCB args required');
+
+  const learnerId   = toPositiveInteger(args.learnerId, 'learnerId');
+  const schoolId    = toPositiveInteger(args.schoolId || 1, 'schoolId');
+  const delta       = Number(args.delta);
+  if (!Number.isInteger(delta) || delta === 0) {
+    throw new Error('delta must be a non-zero integer');
+  }
+  const creditsDelta   = Number.isInteger(args.creditsDelta) ? args.creditsDelta : 0;
+  const allowOverdraft = Boolean(args.allowOverdraft);
+  let instructorId     = toOptionalInteger(args.instructorId, 'instructorId');
+
+  // ─── Pre-2A path ────────────────────────────────────────────────────────
+  if (!PHASE_2A_IMPLEMENTED) {
+    return lockBalanceAdjustPre2A({
+      sql, learnerId, schoolId, delta, creditsDelta, allowOverdraft,
+    });
+  }
+
+  const phase2A = process.env.PER_INSTRUCTOR_CREDITS_PHASE_2A === '1'
+    || await hasPhase2ASchema(sql);
+  if (!phase2A) {
+    return lockBalanceAdjustPre2A({
+      sql, learnerId, schoolId, delta, creditsDelta, allowOverdraft,
+    });
+  }
+
+  if (instructorId == null) {
+    console.warn('[_credit-grant] legacy_pre_cutover: missing instructor_id on lockBalanceAdjustLCB, routing to Fraser (id=1)');
+    instructorId = 1;
+  }
+
+  return lockBalanceAdjustPhase2A({
+    sql, learnerId, instructorId, schoolId, delta, allowOverdraft,
+  });
+}
+
+async function lockBalanceAdjustPre2A({
+  sql, learnerId, schoolId, delta, creditsDelta, allowOverdraft,
+}) {
+  const deductGuard = (delta < 0 && !allowOverdraft) ? -delta : null;
+
+  const [row] = await sql`
+    WITH locked AS (
+      SELECT id, balance_minutes
+        FROM learner_users
+       WHERE id = ${learnerId}
+         AND school_id = ${schoolId}
+       FOR UPDATE
+    )
+    UPDATE learner_users lu
+       SET balance_minutes = lu.balance_minutes + ${delta},
+           credit_balance  = GREATEST(lu.credit_balance + ${creditsDelta}, 0)
+     WHERE lu.id = ${learnerId}
+       AND lu.school_id = ${schoolId}
+       AND EXISTS (
+         SELECT 1 FROM locked
+         WHERE ${deductGuard === null}::boolean
+            OR locked.balance_minutes >= ${deductGuard}
+       )
+    RETURNING lu.balance_minutes
+  `;
+
+  if (!row) {
+    const [exists] = await sql`
+      SELECT balance_minutes FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}
+    `;
+    if (!exists) {
+      return { ok: false, code: 'LEARNER_NOT_FOUND', balanceMinutes: null };
+    }
+    return { ok: false, code: 'INSUFFICIENT_BALANCE', balanceMinutes: exists.balance_minutes };
+  }
+  return { ok: true, balanceMinutes: row.balance_minutes };
+}
+
+async function lockBalanceAdjustPhase2A({
+  sql, learnerId, instructorId, schoolId, delta, allowOverdraft,
+}) {
+  const deductGuard = (delta < 0 && !allowOverdraft) ? -delta : null;
+
+  const [row] = await sql`
+    WITH ensured AS (
+      INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
+      VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
+      ON CONFLICT (learner_id, instructor_id) DO NOTHING
+      RETURNING id
+    ),
+    locked AS (
+      SELECT id, balance_minutes
+        FROM learner_credit_balances
+       WHERE learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+       FOR UPDATE
+    )
+    UPDATE learner_credit_balances lcb
+       SET balance_minutes = lcb.balance_minutes + ${delta},
+           updated_at = NOW()
+     WHERE lcb.learner_id = ${learnerId}
+       AND lcb.instructor_id = ${instructorId}
+       AND EXISTS (
+         SELECT 1 FROM locked
+         WHERE ${deductGuard === null}::boolean
+            OR locked.balance_minutes >= ${deductGuard}
+       )
+    RETURNING lcb.balance_minutes
+  `;
+
+  if (!row) {
+    const [lcb] = await sql`
+      SELECT balance_minutes
+        FROM learner_credit_balances
+       WHERE learner_id = ${learnerId} AND instructor_id = ${instructorId}
+    `;
+    return {
+      ok: false,
+      code: 'INSUFFICIENT_BALANCE',
+      balanceMinutes: lcb ? lcb.balance_minutes : null,
+      instructorId,
+    };
+  }
+  return { ok: true, balanceMinutes: row.balance_minutes, instructorId };
+}
+
 module.exports = {
   grantCredits,
   grantCreditsPre2A,
   grantCreditsPhase2A,
   lockBalanceAndMutate,
+  lockBalanceAdjustLCB,
   normalizeGrantArgs,
   hasPhase2ASchema,
   // Test-only.
