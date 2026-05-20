@@ -2151,3 +2151,85 @@ ALTER TABLE credit_transactions
 CREATE INDEX IF NOT EXISTS idx_credit_tx_instructor
   ON credit_transactions(instructor_id)
   WHERE instructor_id IS NOT NULL;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Credits Step 2c: unique indexes + per-instructor balance / FIFO / refund tables (May 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Per PER-INSTRUCTOR-CREDITS-PLAN.md §Step 2 sub-phase 2c (L468-532). Adds the
+-- two reconciliation-idempotency unique indexes plus the three new tables that
+-- Phase 2A code (Step 4) will read/write:
+--
+--   - learner_credit_balances    : per (learner, instructor) balance ledger.
+--   - booking_credit_sources     : FIFO attribution — which credit_transactions
+--                                  row(s) funded each lesson_bookings row.
+--   - credit_source_adjustments  : cash-refund / dispute-clawback ledger
+--                                  (immutable source totals + additive history).
+--
+-- All additive. PHASE_2A_IMPLEMENTED stays false; no writer reads these tables
+-- until Step 4. The LCB backfill from learner_users.balance_minutes lives in
+-- /api/migrate-step-2c (data mutation, not schema), mirroring the Step 1c
+-- precedent. Sync trigger ships in Step 4 Phase B (not here).
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- Unique partial indexes for Stripe-payment idempotency in Step 5 reconciliation.
+-- Partial WHERE is load-bearing: historical rows have these NULL (plan §Step 2
+-- decision A — no historical Stripe-ID backfill).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_credit_tx_payment_intent
+  ON credit_transactions(stripe_payment_intent_id)
+  WHERE stripe_payment_intent_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_credit_tx_charge
+  ON credit_transactions(stripe_charge_id)
+  WHERE stripe_charge_id IS NOT NULL;
+
+-- Per-instructor balance ledger.
+CREATE TABLE IF NOT EXISTS learner_credit_balances (
+  id              SERIAL PRIMARY KEY,
+  learner_id      INTEGER NOT NULL REFERENCES learner_users(id) ON DELETE CASCADE,
+  instructor_id   INTEGER NOT NULL REFERENCES instructors(id),
+  school_id       INTEGER NOT NULL REFERENCES schools(id) DEFAULT 1,
+  balance_minutes INTEGER NOT NULL DEFAULT 0,
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (learner_id, instructor_id)
+);
+CREATE INDEX IF NOT EXISTS idx_lcb_learner    ON learner_credit_balances(learner_id);
+CREATE INDEX IF NOT EXISTS idx_lcb_instructor ON learner_credit_balances(instructor_id);
+
+-- FIFO attribution snapshots. credit_transaction_id NOT NULL — free-trial /
+-- goodwill / referral grants all create their own (zero-value) credit_transactions
+-- row so this column is never NULL.
+CREATE TABLE IF NOT EXISTS booking_credit_sources (
+  id                    SERIAL PRIMARY KEY,
+  booking_id            INTEGER NOT NULL REFERENCES lesson_bookings(id) ON DELETE CASCADE,
+  credit_transaction_id INTEGER NOT NULL REFERENCES credit_transactions(id),
+  minutes_drawn         INTEGER NOT NULL CHECK (minutes_drawn > 0),
+  rate_pence_per_minute INTEGER NOT NULL,
+  contribution_pence    INTEGER NOT NULL,
+  stripe_fee_pence      INTEGER NOT NULL DEFAULT 0,
+  absorbed_by           TEXT CHECK (absorbed_by IS NULL OR absorbed_by IN ('platform', 'instructor')),
+  refunded_at           TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (booking_id, credit_transaction_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bcs_booking   ON booking_credit_sources(booking_id);
+CREATE INDEX IF NOT EXISTS idx_bcs_credit_tx ON booking_credit_sources(credit_transaction_id);
+CREATE INDEX IF NOT EXISTS idx_bcs_active
+  ON booking_credit_sources(credit_transaction_id)
+  WHERE refunded_at IS NULL;
+
+-- Cash-refund / dispute-clawback / admin-correction ledger. Additive — never
+-- mutate credit_transactions.minutes or amount_pence because BCS snapshots
+-- depend on those historical facts.
+CREATE TABLE IF NOT EXISTS credit_source_adjustments (
+  id                    SERIAL PRIMARY KEY,
+  credit_transaction_id INTEGER NOT NULL REFERENCES credit_transactions(id),
+  kind                  TEXT NOT NULL CHECK (kind IN ('cash_refund', 'admin_correction', 'dispute_clawback')),
+  minutes_adjusted      INTEGER NOT NULL,
+  pence_adjusted        INTEGER NOT NULL,
+  reason                TEXT NOT NULL,
+  stripe_refund_id      TEXT,
+  created_at            TIMESTAMPTZ DEFAULT NOW(),
+  created_by            INTEGER REFERENCES admin_users(id),
+  UNIQUE (stripe_refund_id)
+);
+CREATE INDEX IF NOT EXISTS idx_csa_credit_tx ON credit_source_adjustments(credit_transaction_id);
