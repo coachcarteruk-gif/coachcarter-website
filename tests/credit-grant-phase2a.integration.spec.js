@@ -66,6 +66,7 @@ const path = require('path');
 const {
   grantCredits,
   lockBalanceAndMutate,
+  lockBalanceAdjustLCB,
   _resetPhaseDetectionForTests,
   _setPhase2AImplementedForTests,
 } = require('../api/_credit-grant');
@@ -550,5 +551,148 @@ test.describe('Phase 2A SQL shape — integration', () => {
       expect(ledger[0].minutes).toBe(60);
       expect(ledger[1].minutes).toBe(-50);
     }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // T8: lockBalanceAdjustLCB — net-zero balance-only pair against existing row.
+  // ───────────────────────────────────────────────────────────────────────────
+  // GPT review of PR #176 follow-up commit found a P1:
+  // lockBalanceAdjustPhase2A's SELECT had `WHERE NOT $isDeduct` — for a
+  // normal negative delta against an existing row, isDeduct=true → SELECT
+  // returns zero rows → INSERT attempts nothing → ON CONFLICT never fires
+  // → helper returns INSUFFICIENT_BALANCE even though the row has plenty
+  // of balance. This silently breaks the net-zero pairing used by
+  // webhook.js slot-purchase:
+  //
+  //   1. +lessonMinutes adjust → existing-row add → succeeds → LCB inflated
+  //   2. -lessonMinutes adjust → existing-row deduct → broken path returns
+  //                              INSUFFICIENT_BALANCE → LCB stays inflated
+  //
+  // The fix is the same EXISTS-gated WHERE clause used in
+  // lockBalanceAndMutatePhase2A. This test exercises lockBalanceAdjustLCB
+  // (the dispatcher → Phase 2A) directly to prove:
+  //
+  //   8a. Negative balance-only adjust against an existing row decrements
+  //       correctly (the broken path's main symptom).
+  //   8b. The +N/-N net-zero pair leaves the LCB row exactly where it
+  //       started (the webhook slot-purchase pattern).
+  //   8c. Negative balance-only adjust against a MISSING LCB row still
+  //       refuses (first-write-deduct contract preserved).
+  //   8d. Negative adjust exceeding existing balance refuses (the
+  //       insufficient-balance contract preserved).
+  test('T8: lockBalanceAdjustLCB — net-zero pair against existing row decrements correctly', async () => {
+    // 8a. Existing row, normal negative delta — must decrement.
+    await resetState();
+    const seed = await grantCredits({
+      sql,
+      learnerId: testLearnerId,
+      instructorId: INSTRUCTOR_ID,
+      schoolId: SCHOOL_ID,
+      credits: 1, minutes: 90, amountPence: 4950, paymentMethod: 'card',
+      sessionId: freshSessionId('t8a-seed'), stripeFeePence: 250,
+      effectiveRatePencePerMinute: 55,
+    });
+    expect(seed.balanceMinutes).toBe(90);
+
+    const deductRes = await lockBalanceAdjustLCB(sql, {
+      learnerId: testLearnerId,
+      instructorId: INSTRUCTOR_ID,
+      schoolId: SCHOOL_ID,
+      delta: -30,
+    });
+    expect(deductRes.ok, '8a: existing-row deduct must succeed').toBe(true);
+    expect(deductRes.balanceMinutes).toBe(60);
+
+    const [lcb8a] = await sql`
+      SELECT balance_minutes FROM learner_credit_balances
+       WHERE learner_id = ${testLearnerId} AND instructor_id = ${INSTRUCTOR_ID}
+    `;
+    expect(lcb8a.balance_minutes).toBe(60);
+
+    // 8b. Net-zero pair (the webhook slot-purchase pattern).
+    await resetState();
+    await grantCredits({
+      sql,
+      learnerId: testLearnerId,
+      instructorId: INSTRUCTOR_ID,
+      schoolId: SCHOOL_ID,
+      credits: 1, minutes: 90, amountPence: 4950, paymentMethod: 'card',
+      sessionId: freshSessionId('t8b-seed'), stripeFeePence: 250,
+      effectiveRatePencePerMinute: 55,
+    });
+
+    const addRes = await lockBalanceAdjustLCB(sql, {
+      learnerId: testLearnerId,
+      instructorId: INSTRUCTOR_ID,
+      schoolId: SCHOOL_ID,
+      delta: +60,
+    });
+    expect(addRes.ok).toBe(true);
+    expect(addRes.balanceMinutes).toBe(150);
+
+    const subRes = await lockBalanceAdjustLCB(sql, {
+      learnerId: testLearnerId,
+      instructorId: INSTRUCTOR_ID,
+      schoolId: SCHOOL_ID,
+      delta: -60,
+    });
+    expect(subRes.ok, '8b: matching deduct in net-zero pair must succeed').toBe(true);
+    expect(subRes.balanceMinutes).toBe(90);
+
+    const [lcb8b] = await sql`
+      SELECT balance_minutes FROM learner_credit_balances
+       WHERE learner_id = ${testLearnerId} AND instructor_id = ${INSTRUCTOR_ID}
+    `;
+    expect(lcb8b.balance_minutes, '8b: LCB must return to seed value after net-zero pair').toBe(90);
+
+    // 8c. Missing LCB row + negative delta — must refuse, no row materialised.
+    await resetState();
+    const preRows = await sql`
+      SELECT 1 FROM learner_credit_balances
+       WHERE learner_id = ${testLearnerId} AND instructor_id = ${INSTRUCTOR_ID}
+    `;
+    expect(preRows).toHaveLength(0);
+
+    const missingRes = await lockBalanceAdjustLCB(sql, {
+      learnerId: testLearnerId,
+      instructorId: INSTRUCTOR_ID,
+      schoolId: SCHOOL_ID,
+      delta: -30,
+    });
+    expect(missingRes.ok).toBe(false);
+    expect(missingRes.code).toBe('INSUFFICIENT_BALANCE');
+
+    const postRows = await sql`
+      SELECT 1 FROM learner_credit_balances
+       WHERE learner_id = ${testLearnerId} AND instructor_id = ${INSTRUCTOR_ID}
+    `;
+    expect(postRows, '8c: no LCB row must materialise from a refused first-write deduct').toHaveLength(0);
+
+    // 8d. Existing row + deduct exceeds balance — must refuse, no change.
+    await resetState();
+    await grantCredits({
+      sql,
+      learnerId: testLearnerId,
+      instructorId: INSTRUCTOR_ID,
+      schoolId: SCHOOL_ID,
+      credits: 1, minutes: 30, amountPence: 1650, paymentMethod: 'card',
+      sessionId: freshSessionId('t8d-seed'), stripeFeePence: 75,
+      effectiveRatePencePerMinute: 55,
+    });
+
+    const tooMuchRes = await lockBalanceAdjustLCB(sql, {
+      learnerId: testLearnerId,
+      instructorId: INSTRUCTOR_ID,
+      schoolId: SCHOOL_ID,
+      delta: -60,
+    });
+    expect(tooMuchRes.ok).toBe(false);
+    expect(tooMuchRes.code).toBe('INSUFFICIENT_BALANCE');
+
+    const [lcb8d] = await sql`
+      SELECT balance_minutes FROM learner_credit_balances
+       WHERE learner_id = ${testLearnerId} AND instructor_id = ${INSTRUCTOR_ID}
+    `;
+    expect(lcb8d.balance_minutes, '8d: LCB must be unchanged after refused deduct').toBe(30);
   });
 });
