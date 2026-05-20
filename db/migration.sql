@@ -2071,3 +2071,21 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS list_price_pence INTEGER;
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS list_price_source TEXT
   CHECK (list_price_source IS NULL OR list_price_source IN
     ('stripe_metadata', 'live_compute_insert', 'live_compute_backfill', 'unknown'));
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Credits Step 3a: instructors.hourly_rate_pence column (May 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Per PER-INSTRUCTOR-CREDITS-PLAN.md §Step 3 (L668-670). Per-instructor
+-- hourly rate, level 2 of the three-level pricing fallback:
+--   1. instructor_learner_notes.custom_hourly_rate_pence  (per-learner-pair)
+--   2. instructors.hourly_rate_pence                       (per-instructor) ← NEW
+--   3. schools.config.pricing.bulk_hourly_pence            (school default)
+--
+-- Nullable. NULL means "inherit school default" (level 3) — so no behavioural
+-- change for any existing instructor until an admin sets a value explicitly.
+-- CHECK bound (1..50000 pence) mirrors validateBulkPricingConfig in
+-- api/_pricing-helpers.js so admin-set values are bounded consistently.
+-- Schema-only deploy; the helper that consumes this column ships in Step 3b.
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS hourly_rate_pence INTEGER
+  CHECK (hourly_rate_pence IS NULL OR (hourly_rate_pence > 0 AND hourly_rate_pence <= 50000));
