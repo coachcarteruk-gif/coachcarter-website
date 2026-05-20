@@ -1194,6 +1194,38 @@ async function handleExportData(req, res) {
         AND lb.school_id = ${schoolId}
       ORDER BY lc.created_at DESC`;
 
+    // ── Per-instructor credits (Step 2c) ─────────────────────────────────────
+    // GDPR Article 15: data subject access. These tables ship as schema-only in
+    // Step 2c; Phase 2A (Step 4) starts populating them. Until Step 4, the
+    // first two queries return empty arrays for everyone except the LCB
+    // backfill rows for Fraser. credit_source_adjustments is only written by
+    // future admin cash-refund flows (Step 5.5+), so it's also typically empty.
+    const creditBalances = await sql`
+      SELECT lcb.instructor_id, i.name AS instructor_name,
+             lcb.balance_minutes, lcb.updated_at
+        FROM learner_credit_balances lcb
+        JOIN instructors i ON i.id = lcb.instructor_id
+       WHERE lcb.learner_id = ${user.id} AND lcb.school_id = ${schoolId}
+       ORDER BY lcb.updated_at DESC`;
+
+    const bookingCreditSources = await sql`
+      SELECT bcs.booking_id, bcs.credit_transaction_id, bcs.minutes_drawn,
+             bcs.rate_pence_per_minute, bcs.contribution_pence,
+             bcs.stripe_fee_pence, bcs.absorbed_by, bcs.refunded_at, bcs.created_at,
+             lb.scheduled_date::text, lb.start_time::text
+        FROM booking_credit_sources bcs
+        JOIN lesson_bookings lb ON lb.id = bcs.booking_id
+       WHERE lb.learner_id = ${user.id} AND lb.school_id = ${schoolId}
+       ORDER BY bcs.created_at DESC`;
+
+    const creditAdjustments = await sql`
+      SELECT csa.credit_transaction_id, csa.kind, csa.minutes_adjusted,
+             csa.pence_adjusted, csa.reason, csa.stripe_refund_id, csa.created_at
+        FROM credit_source_adjustments csa
+        JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
+       WHERE ct.learner_id = ${user.id} AND ct.school_id = ${schoolId}
+       ORDER BY csa.created_at DESC`;
+
     // Offers sent to this learner (by learner_id once they signed up, or by
     // email before signup). Exclude the token itself — it's an active secret.
     const learnerEmail = profile?.email || null;
@@ -1228,7 +1260,8 @@ async function handleExportData(req, res) {
           'referral_code', 'referrals_made',
           'availability', 'instructor_notes_about_me',
           'cookie_consents', 'deletion_requests',
-          'lesson_confirmations', 'offers_received'
+          'lesson_confirmations', 'offers_received',
+          'credit_balances', 'booking_credit_sources', 'credit_adjustments'
         ]
       },
       profile: profile || {},
@@ -1249,6 +1282,9 @@ async function handleExportData(req, res) {
       deletion_requests: deletionRequests,
       lesson_confirmations: lessonConfirmations,
       offers_received: offersReceived,
+      credit_balances: creditBalances,
+      booking_credit_sources: bookingCreditSources,
+      credit_adjustments: creditAdjustments,
     };
 
     const dateStr = new Date().toISOString().slice(0, 10);

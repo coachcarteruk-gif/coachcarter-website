@@ -76,6 +76,14 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
     sql`DELETE FROM learner_onboarding WHERE learner_id = ${learnerId}`,
     sql`DELETE FROM instructor_learner_notes WHERE learner_id = ${learnerId}`,
     sql`DELETE FROM learner_availability WHERE learner_id = ${learnerId}`,
+    // Per-instructor credit balances (Step 2c). Hard-delete: the balance ledger
+    // is per-learner state, not a financial record — credit_transactions and
+    // booking_credit_sources carry the 7-year-retained money facts. Deleting
+    // LCB rows BEFORE the parent learner is required because the FK is
+    // ON DELETE CASCADE and the (planned, Step 4) sync trigger would otherwise
+    // fire against a half-deleted learner. The trigger has a GDPR no-op guard
+    // for belt-and-braces but explicit deletion here is the cleaner contract.
+    sql`DELETE FROM learner_credit_balances WHERE learner_id = ${learnerId}`,
     sql`UPDATE learner_users SET referred_by = NULL WHERE referred_by = ${learnerId}`,
     sql`DELETE FROM referrals WHERE learner_id = ${learnerId}`,
     // deletion_requests.learner_id is NOT NULL with no ON DELETE clause, so we
