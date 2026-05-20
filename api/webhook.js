@@ -407,17 +407,25 @@ async function handleSlotBooking(session) {
     // one charge funds exactly one booking on this path, so the full fee
     // attributes directly. NULL stays NULL if the fee fetch failed at webhook
     // time; the reconcile cron (4f.e) backfills.
+    //
+    // list_price_pence snapshot (Step 1b): one Stripe charge → one booking, so
+    // metadata.amount_pence IS the per-lesson list price. Tag stripe_metadata
+    // per the source-of-truth rule (PER-INSTRUCTOR-CREDITS-PLAN.md §Step 0
+    // L239-247): once the Checkout Session is created, the snapshot is frozen
+    // and read back from Stripe, never recomputed live.
     let booking;
     try {
       const [b] = await sql`
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            lesson_type_id, minutes_deducted, school_id,
-           stripe_fee_pence, stripe_fee_source)
+           stripe_fee_pence, stripe_fee_source,
+           list_price_pence, list_price_source)
         VALUES
           (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
            ${lessonTypeId}, ${durationMins}, ${schoolId},
-           ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null})
+           ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null},
+           ${amountPence}, 'stripe_metadata')
         RETURNING id, scheduled_date, start_time::text, end_time::text
       `;
       booking = b;
@@ -858,7 +866,14 @@ async function handleOfferBooking(session) {
         schoolId,
         repeatWeeks,
         paymentMethod: 'card',
-        totalStripeFeePence: stripeFeePence
+        totalStripeFeePence: stripeFeePence,
+        // Step 1b: amountPence is already per-lesson here (Stripe charged
+        // amountPence × repeatWeeks via line-item quantity — see L735), so it
+        // is also the per-booking list price. Tag stripe_metadata per the
+        // source-of-truth rule: the snapshot was frozen at offer-acceptance
+        // time, before this webhook fired.
+        listPricePerBookingPence: amountPence,
+        listPriceSource: 'stripe_metadata'
       });
       booking = { id: seriesResult.booked[0].booking_id, scheduled_date: scheduledDate, start_time: startTime, end_time: endTime };
     } catch (insertErr) {

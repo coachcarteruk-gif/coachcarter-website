@@ -34,6 +34,7 @@ const { createTransporter } = require('./_auth-helpers');
 const { notifyAvailableLearners, supersedeBroadcastSiblings } = require('./_notify-availability');
 const { checkAdjacentTravelTime, extractPostcode, bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES } = require('./_travel-time');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
+const { getEffectiveRatePencePerMinute } = require('./_pricing-helpers');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
@@ -1028,15 +1029,28 @@ async function handleBook(req, res) {
     const minsPerBooking = skipPayments ? 0 : durationMins;
     const createdBookings = [];
 
+    // list_price_pence snapshot (Step 1b). Three-level fallback via the pricing
+    // helper: per-learner-pair > per-instructor > school default. Same value
+    // across every iteration of the loop (same instructor/learner/duration), so
+    // compute once. skipPayments paths (demo instructor, payments-disabled
+    // school) snapshot 0 — no list price was charged or owed.
+    const listPricePence = skipPayments
+      ? 0
+      : Math.round(durationMins * await getEffectiveRatePencePerMinute(sql, {
+          schoolId, instructorId: instructor_id, learnerId: user.id
+        }));
+
     try {
       for (const bd of bookingDates) {
         const [b] = await sql`
           INSERT INTO lesson_bookings
             (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-             pickup_address, dropoff_address, lesson_type_id, minutes_deducted, series_id, school_id)
+             pickup_address, dropoff_address, lesson_type_id, minutes_deducted, series_id, school_id,
+             list_price_pence, list_price_source)
           VALUES
             (${user.id}, ${instructor_id}, ${bd.date}, ${start_time}, ${end_time}, ${SCHEDULED},
-             ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${minsPerBooking}, ${seriesId}, ${schoolId})
+             ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${minsPerBooking}, ${seriesId}, ${schoolId},
+             ${listPricePence}, 'live_compute_insert')
           RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at
         `;
         createdBookings.push(b);
@@ -1987,17 +2001,27 @@ async function handleBookFreeTrial(req, res) {
     }
 
     // ── Create the booking ──
+    // list_price_pence = 0 + 'live_compute_insert' (Step 1b): a free trial has
+    // no list price. PER-INSTRUCTOR-CREDITS-PLAN.md §Step 1b also calls for a
+    // matching zero-value credit_transactions row here so future FIFO BCS
+    // attribution has somewhere to point — that lands in Step 2 alongside the
+    // new schema (booking_credit_sources table + credit_transactions source /
+    // absorbed_by / instructor_id / effective_rate_pence_per_minute columns +
+    // 'free_trial' added to credit_transactions_type_check). None of those
+    // exist on main yet, so this PR snapshots the booking row only.
     let booking;
     try {
       const [b] = await sql`
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            created_by, payment_method, lesson_type_id, minutes_deducted,
-           pickup_address, school_id, guest_phone)
+           pickup_address, school_id, guest_phone,
+           list_price_pence, list_price_source)
         VALUES
           (${learnerId}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, ${SCHEDULED},
            'free_trial_self_serve', 'free', ${trialType.id}, 0,
-           ${cleanAddr}, ${schoolId}, ${cleanPhone})
+           ${cleanAddr}, ${schoolId}, ${cleanPhone},
+           0, 'live_compute_insert')
         RETURNING id, scheduled_date::text, start_time::text, end_time::text
       `;
       booking = b;
@@ -2560,6 +2584,12 @@ async function handleReschedule(req, res) {
     // 2. Create new booking. Carry the Stripe fee snapshot forward — it was
     // paid on the original charge and the lesson is still happening, just at
     // a different time. (Step 4f.c.)
+    //
+    // list_price_pence + list_price_source carry forward for the same reason
+    // (Step 1b): reschedule is not a new sale, so the list-price snapshot
+    // taken at the original booking still represents what the learner paid
+    // for this lesson. Recomputing here would mis-snapshot if the school
+    // changed list prices between original booking and reschedule.
     let newBooking;
     try {
       const [b] = await sql`
@@ -2567,7 +2597,8 @@ async function handleReschedule(req, res) {
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            rescheduled_from, reschedule_count, pickup_address, dropoff_address,
            lesson_type_id, minutes_deducted, school_id,
-           stripe_fee_pence, stripe_fee_source)
+           stripe_fee_pence, stripe_fee_source,
+           list_price_pence, list_price_source)
         VALUES
           (${user.id}, ${booking.instructor_id}, ${new_date}, ${new_start_time}, ${new_end_time},
            ${SCHEDULED}, ${booking_id}, ${booking.reschedule_count + 1},
@@ -2575,7 +2606,9 @@ async function handleReschedule(req, res) {
            ${booking.lesson_type_id || null}, ${booking.minutes_deducted != null ? booking.minutes_deducted : null},
            ${schoolId},
            ${booking.stripe_fee_pence != null ? booking.stripe_fee_pence : null},
-           ${booking.stripe_fee_source || null})
+           ${booking.stripe_fee_source || null},
+           ${booking.list_price_pence != null ? booking.list_price_pence : null},
+           ${booking.list_price_source || null})
         RETURNING id, scheduled_date, start_time::text, end_time::text, status,
                   rescheduled_from, reschedule_count
       `;
