@@ -521,8 +521,9 @@ async function grantCreditsPhase2A({
   // ON CONFLICT can only target a single arbiter per INSERT, so the
   // partial-index 23505 collisions on the other two unique indexes (PI,
   // charge) raise as exceptions and the caller swallows them just like the
-  // Pre-2A path does in webhook.js handleCreditPurchase. The reconcile UPDATE
-  // below then SUM-derives the correct balance from the existing rows.
+  // Pre-2A path does in webhook.js handleCreditPurchase. The UPDATE below
+  // then writes ensured.balance_minutes + inserted minutes (LCB-as-locked-
+  // running-total per the module header — no inline ledger reconcile).
   const [row] = await sql`
     WITH ensured AS (
       INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
