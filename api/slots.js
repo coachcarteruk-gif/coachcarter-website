@@ -2002,13 +2002,7 @@ async function handleBookFreeTrial(req, res) {
 
     // ── Create the booking ──
     // list_price_pence = 0 + 'live_compute_insert' (Step 1b): a free trial has
-    // no list price. PER-INSTRUCTOR-CREDITS-PLAN.md §Step 1b also calls for a
-    // matching zero-value credit_transactions row here so future FIFO BCS
-    // attribution has somewhere to point — that lands in Step 2 alongside the
-    // new schema (booking_credit_sources table + credit_transactions source /
-    // absorbed_by / instructor_id / effective_rate_pence_per_minute columns +
-    // 'free_trial' added to credit_transactions_type_check). None of those
-    // exist on main yet, so this PR snapshots the booking row only.
+    // no list price.
     let booking;
     try {
       const [b] = await sql`
@@ -2030,6 +2024,47 @@ async function handleBookFreeTrial(req, res) {
         return res.status(409).json({ error: 'Sorry, that slot was just taken.' });
       }
       throw insertErr;
+    }
+
+    // ── Step 2.5: zero-value credit_transactions row + BCS attribution ──
+    // PER-INSTRUCTOR-CREDITS-PLAN.md §Step 2 table at L538-543: free-trial
+    // bookings get a credit_transactions row with source='free_trial',
+    // amount_pence=0, credits=0, absorbed_by='platform'. The BCS row pins
+    // FIFO attribution to that credit_transactions row so the booking has
+    // a ledger ancestor like every paid booking.
+    //
+    // minutes_drawn = durationMins because the BCS CHECK requires > 0; the
+    // economic effect is still zero (contribution_pence = 0, fee = 0).
+    //
+    // If either INSERT fails the booking has already succeeded and the trial
+    // is committed. We log + alert rather than rolling back: zero financial
+    // impact, and a missing BCS row for a free trial doesn't break payouts
+    // (free trials are excluded by absorbed_by='platform' at payout time).
+    try {
+      const [creditTx] = await sql`
+        INSERT INTO credit_transactions
+          (learner_id, type, credits, amount_pence, payment_method,
+           minutes, school_id, stripe_fee_pence,
+           instructor_id, effective_rate_pence_per_minute, source, absorbed_by)
+        VALUES
+          (${learnerId}, 'free_trial', 0, 0, 'free',
+           ${durationMins}, ${schoolId}, 0,
+           ${instructor_id}, 0, 'free_trial', 'platform')
+        RETURNING id
+      `;
+
+      await sql`
+        INSERT INTO booking_credit_sources
+          (booking_id, credit_transaction_id, minutes_drawn,
+           rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
+        VALUES
+          (${booking.id}, ${creditTx.id}, ${durationMins},
+           0, 0, 0, 'platform')
+      `;
+    } catch (ledgerErr) {
+      console.error('[handleBookFreeTrial] ledger insert failed (booking succeeded)',
+        { bookingId: booking.id, learnerId, instructorId: instructor_id, err: ledgerErr.message });
+      reportError('/api/slots?action=book-free-trial:ledger', ledgerErr);
     }
 
     // ── Generate magic-link token (login from confirmation email) ──
