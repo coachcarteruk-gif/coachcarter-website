@@ -2052,3 +2052,22 @@ CREATE INDEX IF NOT EXISTS idx_notif_log_learner   ON notification_log(learner_i
 CREATE INDEX IF NOT EXISTS idx_notif_log_recipient ON notification_log(recipient, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notif_log_failed    ON notification_log(created_at DESC) WHERE delivery_status = 'failed';
 
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Credits Step 1a: list_price_pence keystone column (May 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Per PER-INSTRUCTOR-CREDITS-PLAN.md §Step 1a. Snapshots the list price (in
+-- pence) at booking creation time, plus a provenance tag describing how the
+-- snapshot was sourced. Schema-only deploy — no writer code yet. Both columns
+-- nullable; Step 1b (writer wiring in every INSERT path) and Step 1c (backfill
+-- with source tagging) follow in later PRs.
+--
+-- `list_price_source` values:
+--   'stripe_metadata'        — read from Stripe session metadata at webhook time
+--   'live_compute_insert'    — computed via getEffectiveRatePencePerMinute at INSERT
+--   'live_compute_backfill'  — computed by Step 1c backfill against historical rate
+--   'unknown'                — pre-backfill rows that could not be classified
+-- ══════════════════════════════════════════════════════════════════════════════
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS list_price_pence INTEGER;
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS list_price_source TEXT
+  CHECK (list_price_source IS NULL OR list_price_source IN
+    ('stripe_metadata', 'live_compute_insert', 'live_compute_backfill', 'unknown'));
