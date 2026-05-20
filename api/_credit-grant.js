@@ -799,23 +799,116 @@ async function lockBalanceAndMutatePhase2A({
   // instructor now and a learner can have plenty of pooled minutes while
   // having zero for this instructor.
   //
-  // SQL shape: see grantCreditsPhase2A header for the load-bearing PG §7.8.4
-  // reasoning. The ledger insert is the CTE; the LCB write is the outer
-  // INSERT ... ON CONFLICT DO UPDATE. Deduct guard lives in the ledger CTE
-  // via a subquery against LCB:
-  //   - Missing LCB row + deduct → subquery returns NULL, NULL >= deductGuard
-  //     is NULL (falsy) → CTE refuses → `inserted` empty → no LCB write
-  //     → caller observes INSUFFICIENT_BALANCE (T6 contract).
-  //   - Existing LCB row + insufficient → balance_minutes < deductGuard →
-  //     CTE refuses → same path (T5 contract).
-  //   - Belt-and-braces on the conflict UPDATE: refuse if the post-write
-  //     balance would go negative. Should never trip if the CTE guard fires
-  //     correctly, but cheap to add.
-  const deductGuard = (delta < 0 && !allowOverdraft) ? -delta : null;
+  // SQL shape: the LCB write is the lock-acquiring statement (its own
+  // INSERT ... ON CONFLICT DO UPDATE WHERE guard). The ledger insert is a
+  // dependent CTE that consumes the LCB write's RETURNING — it fires only
+  // when the LCB write actually committed.
+  //
+  // Why this ordering matters (GPT review of PR #176):
+  //
+  //   PR #176's first cut had the ledger insert as the FIRST CTE with a
+  //   pre-lock subquery against LCB for the deduct guard, then the LCB
+  //   write as the outer INSERT...ON CONFLICT DO UPDATE WHERE balance +
+  //   delta >= 0. Race: two concurrent delta=-50 calls against LCB=60
+  //   both pass the pre-lock subquery (60 >= 50), both write a -50 row
+  //   into credit_transactions. Caller A wins the lock, UPDATE passes,
+  //   LCB=10. Caller B waits for the lock, re-reads LCB=10, UPDATE
+  //   rejects (10 + -50 < 0), returns no row → INSUFFICIENT_BALANCE,
+  //   but the -50 ledger row from B is already committed. Ledger and
+  //   LCB diverge by one phantom row.
+  //
+  //   The fix: the ledger insert must depend on a row that ONLY exists
+  //   if the locked LCB mutation actually succeeded. PG §7.8.4 still
+  //   applies — CTEs share a snapshot — but the LCB write returns
+  //   RETURNING from inside the same statement, so the ledger CTE
+  //   consuming that RETURNING does see it (RETURNING data is exactly
+  //   the §7.8.4-permitted communication channel between CTEs).
+  //
+  // Shape:
+  //
+  //   WITH lcb_write AS (
+  //     INSERT INTO learner_credit_balances (...) VALUES (... $delta)
+  //     ON CONFLICT (learner_id, instructor_id) DO UPDATE
+  //       SET balance_minutes = LCB.balance_minutes + $delta, ...
+  //       WHERE LCB.balance_minutes + $delta >= 0
+  //     RETURNING balance_minutes
+  //   ),
+  //   inserted AS (
+  //     INSERT INTO credit_transactions (...) VALUES (...)
+  //     FROM lcb_write   -- only fires if lcb_write committed a row
+  //     RETURNING id
+  //   )
+  //   SELECT lcb_write.balance_minutes, inserted.id AS transaction_id
+  //     FROM lcb_write LEFT JOIN inserted ON TRUE;
+  //
+  // First-write deduct (no LCB row, delta negative): the LCB INSERT branch
+  // would create a row with balance_minutes = $delta (negative), which we
+  // refuse via a `WHERE NOT $isDeduct` on the SELECT. Existing-row deduct
+  // (LCB row present, would go negative): the ON CONFLICT DO UPDATE WHERE
+  // rejects, lcb_write returns no row, inserted gets no input row, ledger
+  // stays clean.
+  const isDeduct = delta < 0 && !allowOverdraft;
   const resolvedSource = source || 'stripe';
 
+  // Implementation note on the two-clause refusal pattern:
+  //
+  //   isDeduct=true + no LCB row:  the SELECT's WHERE NOT $isDeduct is
+  //     FALSE → the INSERT attempts nothing → no INSERT branch, no
+  //     CONFLICT branch → lcb_write returns 0 rows. (T6 contract.)
+  //
+  //   isDeduct=true + existing LCB row: the SELECT's WHERE NOT $isDeduct
+  //     is FALSE → INSERT attempts nothing — BUT we still need the
+  //     ON CONFLICT DO UPDATE path to run so the existing-row deduct
+  //     can succeed (or be refused on a balance-would-go-negative basis).
+  //     To make the INSERT actually attempt-and-conflict, we feed the
+  //     SELECT a single row UNCONDITIONALLY and rely entirely on the
+  //     ON CONFLICT DO UPDATE WHERE clause to gate deducts. For first-
+  //     write-deduct (no row exists), we then need a separate check —
+  //     handled by the WHERE in the ON CONFLICT DO NOTHING fallback
+  //     pattern below.
+  //
+  // The clean expression:
+  //   - If isDeduct AND there's no LCB row → must refuse (no row to deduct
+  //     from). We can't INSERT a negative balance, so we filter the SELECT
+  //     against the existence of an LCB row.
+  //   - If isDeduct AND there's an LCB row → INSERT attempt fires, hits
+  //     ON CONFLICT, runs DO UPDATE which has the post-write-non-negative
+  //     guard. This is the locked path; any concurrent writer has to
+  //     serialise here.
+  //   - If !isDeduct → INSERT fires either as first-write or as conflict;
+  //     no guards needed (or trivially satisfied).
+  //
+  // The SELECT WHERE expression:
+  //   NOT $isDeduct OR EXISTS (SELECT 1 FROM learner_credit_balances ...)
+  //
+  // First-write add: !isDeduct → TRUE → INSERT fires, no conflict, row
+  //   materialises with balance = $delta. ✓
+  // First-write deduct: isDeduct + no LCB → FALSE → INSERT skipped → no
+  //   side effects → lcb_write returns 0 rows. ✓
+  // Existing-row add: !isDeduct → TRUE → INSERT attempt, conflict, DO
+  //   UPDATE WHERE TRUE → row updated. ✓
+  // Existing-row deduct: isDeduct + EXISTS → TRUE → INSERT attempt,
+  //   conflict, DO UPDATE WHERE post >= 0 → either updates and returns,
+  //   or rejects and returns nothing. ✓
   const [row] = await sql`
-    WITH inserted AS (
+    WITH lcb_write AS (
+      INSERT INTO learner_credit_balances
+        (learner_id, instructor_id, school_id, balance_minutes)
+      SELECT ${learnerId}, ${instructorId}, ${schoolId}, ${delta}
+       WHERE NOT ${isDeduct}::boolean
+          OR EXISTS (
+               SELECT 1 FROM learner_credit_balances
+                WHERE learner_id = ${learnerId}
+                  AND instructor_id = ${instructorId}
+             )
+      ON CONFLICT (learner_id, instructor_id) DO UPDATE
+        SET balance_minutes = learner_credit_balances.balance_minutes + ${delta},
+            updated_at = NOW()
+        WHERE NOT ${isDeduct}::boolean
+           OR learner_credit_balances.balance_minutes + ${delta} >= 0
+      RETURNING balance_minutes
+    ),
+    inserted AS (
       INSERT INTO credit_transactions
         (learner_id, instructor_id, school_id, type, minutes, credits,
          amount_pence, payment_method,
@@ -824,41 +917,20 @@ async function lockBalanceAndMutatePhase2A({
         ${learnerId}, ${instructorId}, ${schoolId}, ${ledgerType}, ${delta}, ${creditsDelta},
         ${amountPence}, ${reason},
         ${effectiveRate}, ${resolvedSource}, ${absorbedBy}
-      WHERE ${deductGuard === null}::boolean
-         OR COALESCE(
-              (SELECT balance_minutes
-                 FROM learner_credit_balances
-                WHERE learner_id = ${learnerId}
-                  AND instructor_id = ${instructorId}),
-              0
-            ) >= ${deductGuard}
-      RETURNING id, minutes
+      FROM lcb_write
+      RETURNING id
     )
-    INSERT INTO learner_credit_balances
-      (learner_id, instructor_id, school_id, balance_minutes)
-    SELECT
-      ${learnerId}, ${instructorId}, ${schoolId},
-      COALESCE((SELECT SUM(minutes)::int FROM inserted), 0)
-    WHERE EXISTS (SELECT 1 FROM inserted)
-    ON CONFLICT (learner_id, instructor_id) DO UPDATE
-      SET balance_minutes = learner_credit_balances.balance_minutes
-                          + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
-          updated_at = NOW()
-      WHERE learner_credit_balances.balance_minutes
-              + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0) >= 0
-    RETURNING
-      learner_credit_balances.balance_minutes,
-      (SELECT id FROM inserted) AS transaction_id
+    SELECT lcb_write.balance_minutes,
+           (SELECT id FROM inserted) AS transaction_id
+      FROM lcb_write
   `;
 
   if (!row) {
-    // Two paths land here:
-    //   1. Deduct guard refused (CTE wrote nothing, outer INSERT skipped via
-    //      WHERE EXISTS). Most common case.
-    //   2. Belt-and-braces UPDATE guard refused on the conflict branch (very
-    //      rare — would mean the CTE guard let through but the post-write
-    //      balance still went negative; treat as INSUFFICIENT_BALANCE).
-    // Either way: query LCB to surface the current balance to the caller.
+    // The lcb_write CTE refused: either the conflict-branch UPDATE WHERE
+    // failed (post-deduct balance would go negative), or the SELECT WHERE
+    // refused a first-write deduct against a missing LCB row.
+    // No ledger row was written (the inserted CTE consumes lcb_write's
+    // RETURNING, so it gets nothing).
     const [lcb] = await sql`
       SELECT balance_minutes
         FROM learner_credit_balances

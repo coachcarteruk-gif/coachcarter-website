@@ -458,4 +458,97 @@ test.describe('Phase 2A SQL shape — integration', () => {
     const ledger = await sql`SELECT id FROM credit_transactions WHERE learner_id = ${testLearnerId}`;
     expect(ledger).toHaveLength(0);
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // T7: Concurrent-deduct race — refused caller writes no ledger row.
+  // ───────────────────────────────────────────────────────────────────────────
+  // GPT review of PR #176 found a P1: the first-cut fix put the ledger
+  // INSERT as the first CTE with a pre-lock subquery against LCB for the
+  // deduct guard. Two concurrent delta=-N calls against LCB=N+ε can both
+  // pass the unlocked subquery; both write a ledger row; the first writer
+  // wins the LCB lock and lands its balance update; the second writer
+  // re-reads LCB inside the locked DO UPDATE, fails the WHERE clause,
+  // returns no row → INSUFFICIENT_BALANCE — BUT its ledger row is already
+  // committed. Ledger and LCB diverge.
+  //
+  // The shipped fix puts the LCB write as the lock-acquiring CTE, with
+  // the ledger insert as a dependent CTE that consumes lcb_write's
+  // RETURNING. The ledger insert can only fire if the locked LCB
+  // mutation actually committed.
+  //
+  // This test seeds LCB=60, fires two parallel delta=-50 deducts. Exactly
+  // ONE must succeed; the other must return INSUFFICIENT_BALANCE; final
+  // LCB must be 10; and credit_transactions must have exactly ONE row.
+  // Run 20× to flush timing windows. On the broken shape this test
+  // produced two ledger rows ~10–20% of runs.
+  test('T7: concurrent-deduct race — refused caller writes no ledger row', async () => {
+    const RUNS = 20;
+
+    for (let i = 0; i < RUNS; i++) {
+      await resetState();
+
+      // Seed LCB to 60 minutes via a grant.
+      const seedResult = await grantCredits({
+        sql,
+        learnerId: testLearnerId,
+        instructorId: INSTRUCTOR_ID,
+        schoolId: SCHOOL_ID,
+        credits: 1, minutes: 60, amountPence: 3300, paymentMethod: 'card',
+        sessionId: freshSessionId(`t7-seed-${i}`),
+        stripeFeePence: 150,
+        effectiveRatePencePerMinute: 55,
+      });
+      expect(seedResult.balanceMinutes).toBe(60);
+
+      // Fire two parallel -50 deducts. Only one can succeed (60 - 50 = 10
+      // works once; 10 - 50 = -40 cannot pass the guard).
+      const argsBase = {
+        learnerId: testLearnerId,
+        instructorId: INSTRUCTOR_ID,
+        schoolId: SCHOOL_ID,
+        delta: -50,
+        ledgerType: 'slot_purchase',
+        reason: `t7 concurrent deduct ${i}`,
+      };
+
+      const [aRes, bRes] = await Promise.all([
+        lockBalanceAndMutate(sql,  argsBase),
+        lockBalanceAndMutate(sql2, argsBase),
+      ]);
+
+      // Exactly one is ok=true, the other is INSUFFICIENT_BALANCE.
+      const winners = [aRes, bRes].filter(r => r.ok === true);
+      const losers  = [aRes, bRes].filter(r => r.ok === false);
+      expect(winners,
+             `run ${i}: exactly one caller must succeed; got winners=${winners.length} losers=${losers.length}`).toHaveLength(1);
+      expect(losers).toHaveLength(1);
+      expect(losers[0].code).toBe('INSUFFICIENT_BALANCE');
+      // The winner returns the post-deduct balance.
+      expect(winners[0].balanceMinutes).toBe(10);
+      // The winner has a transaction id; the loser does not.
+      expect(winners[0].transactionId).toBeTruthy();
+      expect(losers[0].transactionId).toBeNull();
+
+      // Final LCB is 10 (single successful deduct from 60).
+      const [lcb] = await sql`
+        SELECT balance_minutes FROM learner_credit_balances
+         WHERE learner_id = ${testLearnerId} AND instructor_id = ${INSTRUCTOR_ID}
+      `;
+      expect(lcb.balance_minutes,
+             `run ${i}: LCB must be 10 (60 - 50); got ${lcb.balance_minutes}`).toBe(10);
+
+      // The load-bearing invariant: credit_transactions has exactly TWO
+      // rows total — one seed grant (+60), one successful deduct (-50).
+      // Not three (the bug).
+      const ledger = await sql`
+        SELECT minutes FROM credit_transactions
+         WHERE learner_id = ${testLearnerId}
+         ORDER BY id
+      `;
+      expect(ledger,
+             `run ${i}: ledger must have exactly 2 rows (seed + 1 deduct); got ${ledger.length}`).toHaveLength(2);
+      expect(ledger[0].minutes).toBe(60);
+      expect(ledger[1].minutes).toBe(-50);
+    }
+  });
 });
