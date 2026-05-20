@@ -107,8 +107,18 @@ function reportError(endpoint, err) {
         <p><strong>${safeName}:</strong> ${safeMessage}</p>
         <pre style="background:#f5f5f5;padding:12px;border-radius:6px;font-size:13px;overflow-x:auto;">${safeFrames}</pre>
       `
-    }).catch(() => {}); // fire-and-forget
-  } catch (_) {} // don't let alert failures break anything
+    }).catch(err => {
+      // Fire-and-forget contract is preserved (we don't throw), but log the
+      // SMTP failure so silent delivery failures surface in Vercel logs.
+      // Caught a real bug 2026-05-20: cron-credit-reconcile reported
+      // alert_sent: true but no email arrived; this log line was the
+      // diagnostic that surfaced the root cause.
+      console.error('[reportError] sendMail failed:', err && err.message ? err.message : err);
+    });
+  } catch (err) {
+    // Synchronous failure from createTransporter (missing env, etc).
+    console.error('[reportError] createTransporter failed:', err && err.message ? err.message : err);
+  }
 }
 
 /**
@@ -121,7 +131,10 @@ function reportError(endpoint, err) {
  */
 function sendAlertEmail({ subject, html, text }) {
   const to = process.env.ERROR_ALERT_EMAIL;
-  if (!to) return;
+  if (!to) {
+    console.error('[sendAlertEmail] ERROR_ALERT_EMAIL env var not set; alert dropped:', subject);
+    return;
+  }
   try {
     const transporter = createTransporter();
     transporter.sendMail({
@@ -130,8 +143,26 @@ function sendAlertEmail({ subject, html, text }) {
       subject,
       text: text || '',
       html: html || ''
-    }).catch(() => {});
-  } catch (_) {}
+    }).then(info => {
+      // Surface delivery acceptance for the operator-visible cron alerts. The
+      // SMTP relay's `accepted` array contains recipients the server accepted;
+      // an empty array means delivery was rejected even though sendMail didn't
+      // throw. Logged for the rare delivery edge cases.
+      const accepted = info && info.accepted ? info.accepted.length : 0;
+      const rejected = info && info.rejected ? info.rejected.length : 0;
+      if (rejected > 0 || accepted === 0) {
+        console.warn(`[sendAlertEmail] partial/rejected delivery: accepted=${accepted} rejected=${rejected} subject=${subject}`);
+      } else {
+        console.log(`[sendAlertEmail] delivered subject="${subject}" to ${to}`);
+      }
+    }).catch(err => {
+      // Fire-and-forget contract preserved (we don't throw), but log so silent
+      // SMTP failures surface in Vercel logs.
+      console.error('[sendAlertEmail] sendMail rejected:', err && err.message ? err.message : err, 'subject=', subject);
+    });
+  } catch (err) {
+    console.error('[sendAlertEmail] createTransporter failed:', err && err.message ? err.message : err, 'subject=', subject);
+  }
 }
 
 module.exports = { reportError, sendAlertEmail };
