@@ -442,65 +442,104 @@ async function grantCreditsPre2A({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE-2A variant — single-statement CTE, instructor-scoped
+// PHASE-2A variant — single-statement, LCB-write-via-ON-CONFLICT, instructor-scoped
 // ─────────────────────────────────────────────────────────────────────────────
 // Same atomicity guarantee as Pre-2A (everything inside the implicit
 // transaction PG wraps each statement in), but the lock target is the
 // learner_credit_balances(learner_id, instructor_id) row instead of
-// learner_users(id), and the reconcile sums the ledger.
+// learner_users(id).
 //
-//   ensured   — INSERT ... ON CONFLICT DO UPDATE ... RETURNING. Materialises
-//               an LCB row for this (learner_id, instructor_id) pair if
-//               missing AND acquires a row-level exclusive lock that's
-//               held until statement commit. ON CONFLICT DO UPDATE's lock
-//               is equivalent to FOR UPDATE for our purposes — serialises
-//               concurrent writers on the same row.
+// Load-bearing constraint (PostgreSQL docs §7.8.4
+// https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-MODIFYING):
 //
-//               Why not ensured + separate locked CTE: data-modifying CTEs
-//               in PG share one snapshot; a sibling CTE scanning LCB after
-//               ensured's INSERT won't see the new row. First-ever writes
-//               for a (learner, instructor) pair would silently fail. The
-//               DO UPDATE pattern dodges this by returning the row directly
-//               whether it was inserted or already existed. The no-op SET
-//               clause (`updated_at = lcb.updated_at`) is the standard
-//               trick to force RETURNING on the conflict branch.
+//   "All the statements are executed with the same snapshot, so they
+//    cannot 'see' one another's effects on the target tables ...
+//    RETURNING data is the only way to communicate changes between
+//    different WITH sub-statements and the main query."
 //
-//   inserted  — INSERT into credit_transactions. ON CONFLICT clauses cover
-//               the three idempotency arbiters: stripe_session_id (partial),
-//               stripe_payment_intent_id (partial), stripe_charge_id (partial).
-//               Plan §Step 0 L165-177. The WHERE clause on the partial-index
-//               arbiter is load-bearing — PG requires it for arbiter inference.
-//               RETURNING (id, minutes) — caller adds the new minutes to LCB.
+// This rules out the obvious shape (PR #174's shipped + reverted shape):
 //
-// The top-level UPDATE is `balance_minutes = ensured.balance_minutes +
-// inserted.minutes`. This is a deliberate departure from the plan's
-// "reconcile from ledger" wording (SUM(ct) − SUM(bcs) + SUM(csa)). That
-// wording is the right shape for a periodic divergence-check (Step 4.5
-// TODO below); it is the WRONG shape for an inline single-statement
-// writer because PG's READ COMMITTED snapshot is taken at statement
-// start, before the LCB row lock is acquired. A sibling table-scan on
-// credit_transactions inside the same statement therefore can't see a
-// concurrent transaction that committed while this statement was
-// waiting on the LCB row lock. Two concurrent writes would each scan
-// the pre-lock snapshot, each add their own minutes, and each overwrite
-// LCB.balance_minutes with `pre_snapshot_sum + my_new`, losing the
-// other writer's increment.
+//   WITH ensured  AS (INSERT INTO LCB ... ON CONFLICT DO UPDATE RETURNING ...),
+//        inserted AS (INSERT INTO credit_transactions ... RETURNING minutes)
+//   UPDATE learner_credit_balances lcb
+//      SET balance_minutes = ...
+//    WHERE lcb.learner_id = $1 AND lcb.instructor_id = $2;
 //
-// The lock-then-running-total pattern (ensured.balance_minutes is read
-// AFTER the row lock is acquired by ON CONFLICT DO UPDATE — that
-// returns the post-conflict committed value) dodges the snapshot
-// problem entirely. The locked balance is correct by construction;
-// add your own delta to it. Duplicate Stripe retries: `inserted` is
-// empty, delta is 0, LCB.balance_minutes is rewritten to its current
-// value (no-op), alreadyProcessed = true. Exactly what we want.
+// For a first-ever (learner_id, instructor_id) pair, the outer UPDATE's
+// table scan runs against the pre-statement snapshot — ensured's INSERT
+// is invisible to it. The scan matches nothing, the UPDATE writes zero
+// rows, RETURNING is empty, the helper returns LEARNER_NOT_FOUND, but
+// credit_transactions was already inserted. Stripe retries hit the
+// session_id arbiter and skip. Learner's balance is stuck at 0.
+//
+// The fix: make the LCB write itself the ON CONFLICT statement, with
+// the ledger insert as a CTE feeding EXCLUDED.balance_minutes:
+//
+//   WITH inserted AS (
+//     INSERT INTO credit_transactions (...) VALUES (...)
+//     ON CONFLICT (stripe_session_id) WHERE ... DO NOTHING
+//     RETURNING id, minutes
+//   )
+//   INSERT INTO learner_credit_balances
+//     (learner_id, instructor_id, school_id, balance_minutes)
+//   SELECT $1, $2, $3, COALESCE((SELECT SUM(minutes)::int FROM inserted), 0)
+//   ON CONFLICT (learner_id, instructor_id) DO UPDATE
+//     SET balance_minutes = learner_credit_balances.balance_minutes
+//                         + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
+//         updated_at = NOW()
+//   RETURNING balance_minutes,
+//             (SELECT id FROM inserted) AS transaction_id,
+//             ((SELECT id FROM inserted) IS NULL) AS already_processed;
+//
+// Why this shape is correct:
+//
+//  - First-ever write: no LCB row exists, so the INSERT branch fires,
+//    materialising the row with balance_minutes = inserted.minutes.
+//    Atomic with the ledger insert; no snapshot-visibility problem
+//    because we never read LCB before writing it.
+//
+//  - Existing row: the conflict branch's UPDATE clause reads
+//    learner_credit_balances.balance_minutes from the row it just
+//    acquired the exclusive lock on. PG's INSERT ... ON CONFLICT
+//    DO UPDATE semantics are: lock the conflicting row, then read+
+//    update it. The read happens AFTER the lock, so any concurrent
+//    writer that committed while we waited on the lock is visible.
+//    Concurrent writes therefore serialise correctly — no lost
+//    increments. This is the documented guarantee of ON CONFLICT
+//    DO UPDATE (§7.8.4 says it differently for CTEs; the per-row
+//    locking semantics for ON CONFLICT DO UPDATE are in §6.4).
+//
+//  - Duplicate Stripe retry: `inserted` is empty, the COALESCE'd
+//    SUM is 0, EXCLUDED.balance_minutes is 0, the conflict branch's
+//    UPDATE is balance_minutes = LCB.balance_minutes + 0 (no-op).
+//    transaction_id is NULL, already_processed = true.
+//
+// Idempotency anchor: ON CONFLICT (stripe_session_id) WHERE
+// stripe_session_id IS NOT NULL on the credit_transactions INSERT —
+// the same load-bearing partial-index match documented for Pre-2A.
+// We can only target one arbiter per INSERT; the other unique
+// indexes (payment_intent, charge) raise 23505 as exceptions and the
+// caller swallows them like the Pre-2A path does in webhook.js.
+//
+// Edge case — duplicate retry where first attempt died between the
+// ledger insert and the LCB write (extremely rare, requires a
+// process crash mid-statement which the single-statement shape
+// itself rules out, but possible if a future refactor splits them):
+// `inserted` will be empty, EXCLUDED.balance_minutes is 0, the
+// INSERT branch materialises LCB with balance_minutes = 0. Ledger
+// is correct (one row); LCB is wrong (0 instead of `minutes`). The
+// Step 4.5 divergence-check cron catches this; we accept it as the
+// cost of the atomic single-statement shape. Do not reintroduce
+// inline ledger-scan reconcile to "fix" this — that reintroduces
+// the §7.8.4 problem.
 //
 // Step 4.5 TODO: add a divergence-check cron that compares
 // learner_credit_balances.balance_minutes against the full ledger
 // reconcile: SUM(credit_transactions.minutes)
 // − SUM(booking_credit_sources.minutes_drawn)
 // − SUM(credit_source_adjustments.minutes_adjusted). Inline writers
-// treat LCB as the locked running total; the cron is the guardrail
-// for drift.
+// trust ON CONFLICT DO UPDATE's locking semantics; the cron is the
+// guardrail for drift.
 
 async function grantCreditsPhase2A({
   sql,
@@ -522,53 +561,40 @@ async function grantCreditsPhase2A({
 }) {
   const resolvedSource = source || 'stripe';
 
-  // The arbiter clause must be ON CONFLICT (stripe_session_id) WHERE
-  // stripe_session_id IS NOT NULL — same load-bearing partial-index match
-  // documented for Pre-2A above. The OR-chained alt arbiters cover the
-  // payment_intent and charge unique indexes. We pick the session-id arbiter
-  // because every webhook call carries one; PI / charge are belt-and-braces
-  // for the rare path where session_id is missing but PI is known (reconcile).
-  //
-  // ON CONFLICT can only target a single arbiter per INSERT, so the
-  // partial-index 23505 collisions on the other two unique indexes (PI,
-  // charge) raise as exceptions and the caller swallows them just like the
-  // Pre-2A path does in webhook.js handleCreditPurchase. The UPDATE below
-  // then writes ensured.balance_minutes + inserted minutes (LCB-as-locked-
-  // running-total per the module header — no inline ledger reconcile).
+  // See module header above for the load-bearing PG §7.8.4 reasoning.
+  // The arbiter clause on the ledger INSERT is ON CONFLICT (stripe_session_id)
+  // WHERE stripe_session_id IS NOT NULL — the partial-index match required
+  // for arbiter inference. Other unique indexes (payment_intent, charge) raise
+  // 23505 as exceptions; callers (webhook.js handleCreditPurchase) swallow
+  // those exactly as in the Pre-2A path.
   const [row] = await sql`
-    WITH ensured AS (
-      INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
-      VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
-      ON CONFLICT (learner_id, instructor_id) DO UPDATE
-        SET updated_at = learner_credit_balances.updated_at
-      RETURNING balance_minutes
-    ),
-    inserted AS (
+    WITH inserted AS (
       INSERT INTO credit_transactions
         (learner_id, instructor_id, school_id, type, credits, minutes,
          amount_pence, payment_method, stripe_session_id, stripe_fee_pence,
          stripe_payment_intent_id, stripe_charge_id,
          effective_rate_pence_per_minute, source, absorbed_by)
-      SELECT
-        ${learnerId}, ${instructorId}, ${schoolId}, 'purchase', ${credits}, ${minutes},
-        ${amountPence}, ${paymentMethod}, ${sessionId}, ${stripeFeePence},
-        ${paymentIntentId}, ${chargeId},
-        ${effectiveRatePencePerMinute}, ${resolvedSource}, ${absorbedBy}
-      FROM ensured
+      VALUES
+        (${learnerId}, ${instructorId}, ${schoolId}, 'purchase', ${credits}, ${minutes},
+         ${amountPence}, ${paymentMethod}, ${sessionId}, ${stripeFeePence},
+         ${paymentIntentId}, ${chargeId},
+         ${effectiveRatePencePerMinute}, ${resolvedSource}, ${absorbedBy})
       ON CONFLICT (stripe_session_id) WHERE stripe_session_id IS NOT NULL DO NOTHING
       RETURNING id, minutes
     )
-    UPDATE learner_credit_balances lcb
-       SET balance_minutes = (SELECT balance_minutes FROM ensured)
-                           + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
-           updated_at = NOW()
-     WHERE lcb.learner_id = ${learnerId}
-       AND lcb.instructor_id = ${instructorId}
-       AND EXISTS (SELECT 1 FROM ensured)
+    INSERT INTO learner_credit_balances
+      (learner_id, instructor_id, school_id, balance_minutes)
+    SELECT
+      ${learnerId}, ${instructorId}, ${schoolId},
+      COALESCE((SELECT SUM(minutes)::int FROM inserted), 0)
+    ON CONFLICT (learner_id, instructor_id) DO UPDATE
+      SET balance_minutes = learner_credit_balances.balance_minutes
+                          + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
+          updated_at = NOW()
     RETURNING
-      lcb.balance_minutes,
-      (SELECT id FROM inserted)                  AS transaction_id,
-      ((SELECT id FROM inserted) IS NULL)        AS already_processed
+      learner_credit_balances.balance_minutes,
+      (SELECT id FROM inserted)            AS transaction_id,
+      ((SELECT id FROM inserted) IS NULL)  AS already_processed
   `;
 
   if (!row) {
@@ -763,18 +789,24 @@ async function lockBalanceAndMutatePhase2A({
   // not the pooled learner_users.balance_minutes — credits are scoped per
   // instructor now and a learner can have plenty of pooled minutes while
   // having zero for this instructor.
+  //
+  // SQL shape: see grantCreditsPhase2A header for the load-bearing PG §7.8.4
+  // reasoning. The ledger insert is the CTE; the LCB write is the outer
+  // INSERT ... ON CONFLICT DO UPDATE. Deduct guard lives in the ledger CTE
+  // via a subquery against LCB:
+  //   - Missing LCB row + deduct → subquery returns NULL, NULL >= deductGuard
+  //     is NULL (falsy) → CTE refuses → `inserted` empty → no LCB write
+  //     → caller observes INSUFFICIENT_BALANCE (T6 contract).
+  //   - Existing LCB row + insufficient → balance_minutes < deductGuard →
+  //     CTE refuses → same path (T5 contract).
+  //   - Belt-and-braces on the conflict UPDATE: refuse if the post-write
+  //     balance would go negative. Should never trip if the CTE guard fires
+  //     correctly, but cheap to add.
   const deductGuard = (delta < 0 && !allowOverdraft) ? -delta : null;
   const resolvedSource = source || 'stripe';
 
   const [row] = await sql`
-    WITH ensured AS (
-      INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
-      VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
-      ON CONFLICT (learner_id, instructor_id) DO UPDATE
-        SET updated_at = learner_credit_balances.updated_at
-      RETURNING id, balance_minutes
-    ),
-    inserted AS (
+    WITH inserted AS (
       INSERT INTO credit_transactions
         (learner_id, instructor_id, school_id, type, minutes, credits,
          amount_pence, payment_method,
@@ -783,33 +815,41 @@ async function lockBalanceAndMutatePhase2A({
         ${learnerId}, ${instructorId}, ${schoolId}, ${ledgerType}, ${delta}, ${creditsDelta},
         ${amountPence}, ${reason},
         ${effectiveRate}, ${resolvedSource}, ${absorbedBy}
-      FROM ensured
       WHERE ${deductGuard === null}::boolean
-         OR ensured.balance_minutes >= ${deductGuard}
+         OR COALESCE(
+              (SELECT balance_minutes
+                 FROM learner_credit_balances
+                WHERE learner_id = ${learnerId}
+                  AND instructor_id = ${instructorId}),
+              0
+            ) >= ${deductGuard}
       RETURNING id, minutes
     )
-    -- LCB as locked running total (see grantCreditsPhase2A header). The
-    -- ensured CTE's RETURNING gives us the post-lock committed balance;
-    -- add this writer's own delta from inserted. No ledger re-scan, no
-    -- READ COMMITTED snapshot hazard.
-    UPDATE learner_credit_balances lcb
-       SET balance_minutes = (SELECT balance_minutes FROM ensured)
-                           + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
-           updated_at = NOW()
-     WHERE lcb.learner_id = ${learnerId}
-       AND lcb.instructor_id = ${instructorId}
-       AND EXISTS (SELECT 1 FROM inserted)
+    INSERT INTO learner_credit_balances
+      (learner_id, instructor_id, school_id, balance_minutes)
+    SELECT
+      ${learnerId}, ${instructorId}, ${schoolId},
+      COALESCE((SELECT SUM(minutes)::int FROM inserted), 0)
+    WHERE EXISTS (SELECT 1 FROM inserted)
+    ON CONFLICT (learner_id, instructor_id) DO UPDATE
+      SET balance_minutes = learner_credit_balances.balance_minutes
+                          + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
+          updated_at = NOW()
+      WHERE learner_credit_balances.balance_minutes
+              + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0) >= 0
     RETURNING
-      lcb.balance_minutes,
+      learner_credit_balances.balance_minutes,
       (SELECT id FROM inserted) AS transaction_id
   `;
 
   if (!row) {
-    // Disambiguate: LEARNER_NOT_FOUND (parent FK) vs INSUFFICIENT_BALANCE.
-    // The LCB row exists by construction (ensured CTE) for any valid learner
-    // — but the learner_credit_balances FK to learner_users would have raised
-    // by now if the learner didn't exist. So a missing return-row here means
-    // the deduct guard refused: INSUFFICIENT_BALANCE.
+    // Two paths land here:
+    //   1. Deduct guard refused (CTE wrote nothing, outer INSERT skipped via
+    //      WHERE EXISTS). Most common case.
+    //   2. Belt-and-braces UPDATE guard refused on the conflict branch (very
+    //      rare — would mean the CTE guard let through but the post-write
+    //      balance still went negative; treat as INSUFFICIENT_BALANCE).
+    // Either way: query LCB to surface the current balance to the caller.
     const [lcb] = await sql`
       SELECT balance_minutes
         FROM learner_credit_balances
@@ -945,27 +985,30 @@ async function lockBalanceAdjustPre2A({
 async function lockBalanceAdjustPhase2A({
   sql, learnerId, instructorId, schoolId, delta, allowOverdraft,
 }) {
-  const deductGuard = (delta < 0 && !allowOverdraft) ? -delta : null;
+  // Balance-only mutation, no ledger row. SQL shape: INSERT ... ON CONFLICT
+  // DO UPDATE on LCB, with delta baked directly into the values clauses.
+  // See grantCreditsPhase2A header for the PG §7.8.4 reasoning.
+  //
+  // Deduct guard:
+  //   - First-write deduct: INSERT branch would materialise a row with
+  //     balance_minutes = $delta, which is negative. Refuse by gating the
+  //     SELECT with WHERE delta >= 0 OR allowOverdraft.
+  //   - Existing row deduct: conflict-branch UPDATE WHERE refuses if the
+  //     post-write balance would go negative.
+  // Either refusal path returns no row → caller falls into INSUFFICIENT_BALANCE.
+  const isDeduct = delta < 0 && !allowOverdraft;
 
   const [row] = await sql`
-    WITH ensured AS (
-      INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
-      VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
-      ON CONFLICT (learner_id, instructor_id) DO UPDATE
-        SET updated_at = learner_credit_balances.updated_at
-      RETURNING id, balance_minutes
-    )
-    UPDATE learner_credit_balances lcb
-       SET balance_minutes = lcb.balance_minutes + ${delta},
-           updated_at = NOW()
-     WHERE lcb.learner_id = ${learnerId}
-       AND lcb.instructor_id = ${instructorId}
-       AND EXISTS (
-         SELECT 1 FROM ensured
-         WHERE ${deductGuard === null}::boolean
-            OR ensured.balance_minutes >= ${deductGuard}
-       )
-    RETURNING lcb.balance_minutes
+    INSERT INTO learner_credit_balances
+      (learner_id, instructor_id, school_id, balance_minutes)
+    SELECT ${learnerId}, ${instructorId}, ${schoolId}, ${delta}
+    WHERE NOT ${isDeduct}::boolean
+    ON CONFLICT (learner_id, instructor_id) DO UPDATE
+      SET balance_minutes = learner_credit_balances.balance_minutes + ${delta},
+          updated_at = NOW()
+      WHERE ${!isDeduct}::boolean
+         OR learner_credit_balances.balance_minutes + ${delta} >= 0
+    RETURNING learner_credit_balances.balance_minutes
   `;
 
   if (!row) {
