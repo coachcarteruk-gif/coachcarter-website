@@ -117,27 +117,36 @@
 //
 // Do NOT flip this without also implementing grantCreditsPhase2A.
 //
-// EMERGENCY REVERT 2026-05-20 ~13:15 BST: a fourth-round GPT review
-// surfaced a P1 in the Phase 2A SQL — per PG docs §7.8.4, all
-// data-modifying CTEs in one WITH chain share the pre-statement
-// snapshot. The outer `UPDATE learner_credit_balances WHERE ...` that
-// filters by table columns (not by referencing the ensured CTE alias)
-// cannot see the row ensured's INSERT just created. For a first-ever
-// (learner, instructor) pair the UPDATE matches nothing and the
-// balance write silently fails — even though the credit_transactions
-// row got written. Stripe retries would then see the session as
-// already processed and the learner's balance stays stuck at 0.
-//
-// Flipped this back to false to close the silent-failure window. A
-// follow-up PR restructures the Phase 2A SQL to use
-// INSERT ... ON CONFLICT DO UPDATE on learner_credit_balances itself
-// (the only single-statement shape that gives correct first-write
-// semantics under PG's CTE snapshot rules). Re-flips after that
-// follow-up ships + deploys.
+// History:
+//   2026-05-20 ~12:56 BST — PR #174 flipped this to true. Within 14
+//     minutes a fourth-round GPT review surfaced a P1 in the Phase 2A
+//     SQL: per PG docs §7.8.4, all data-modifying CTEs in one WITH
+//     chain share the pre-statement snapshot. The outer
+//     `UPDATE learner_credit_balances WHERE …` that filtered by table
+//     columns (not via the ensured CTE alias) could not see the row
+//     ensured's INSERT had just created. For any first-ever
+//     (learner, instructor) pair the UPDATE matched nothing — balance
+//     write silently dropped while the credit_transactions row landed.
+//     Stripe retries then saw the session as already processed; the
+//     learner's balance was stuck at 0. Zero customer impact in the
+//     14-min window (0 Phase 2A writes verified via Neon).
+//   2026-05-20 ~13:20 BST — PR #175 flipped this back to false to
+//     close the silent-failure window.
+//   2026-05-20 (this commit) — re-flip to true after restructuring all
+//     three Phase 2A SQL statements to use INSERT ... ON CONFLICT
+//     DO UPDATE on learner_credit_balances itself (the only single-
+//     statement shape that gives correct first-write semantics under
+//     PG's CTE snapshot rules). See the grantCreditsPhase2A header
+//     comment block for the load-bearing PG §7.8.4 reasoning. SQL
+//     shape verified by six integration tests against the Neon test
+//     branch (tests/credit-grant-phase2a.integration.spec.js):
+//     T1 first-ever write, T2 increment, T3 idempotent retry, T4
+//     concurrent first-write race (20 runs), T5 deduct guard on
+//     existing row, T6 deduct guard on missing row.
 //
 // Rollback story: revert this commit + run a Neon PITR restore (Free
 // tier 6h window). Procedure documented in docs/credits-grandfather.md.
-let PHASE_2A_IMPLEMENTED = false;
+let PHASE_2A_IMPLEMENTED = true;
 
 let phase2ACheckPromise;
 
