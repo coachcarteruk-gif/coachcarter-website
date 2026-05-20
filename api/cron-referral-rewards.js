@@ -18,6 +18,7 @@
 const { CHARGEABLE } = require('./_booking-status');
 const { verifyCronAuth } = require('./_auth');
 const { withCronLock } = require('./_cron-lock');
+const { lockBalanceAndMutate } = require('./_credit-grant');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -121,19 +122,27 @@ module.exports = async (req, res) => {
         `;
         if (stamped.length === 0) continue; // lost the race, another run paid this one
 
-        await sql`
-          UPDATE learner_users
-             SET balance_minutes = balance_minutes + ${rewardMinutes}
-           WHERE id = ${c.referrer_id}
-             AND school_id = ${c.booking_school_id}
-        `;
-
-        await sql`
-          INSERT INTO credit_transactions
-            (learner_id, type, credits, minutes, amount_pence, payment_method, school_id)
-          VALUES
-            (${c.referrer_id}, 'referral_reward', 0, ${rewardMinutes}, 0, 'referral', ${c.booking_school_id})
-        `;
+        // Step 4 cutover: balance + ledger written atomically inside one
+        // CTE. The stamp-then-credit idempotency above guarantees only one
+        // cron invocation reaches here per booking, so the LCB lock here
+        // is racing against learner-side writers (purchases, cancellations)
+        // rather than against itself.
+        //
+        // instructor_id grandfathers to 1 (Fraser) until a second instructor
+        // is onboarded — per project_per_instructor_credits_plan.md, the
+        // referral reward is platform-funded and isn't scoped to a specific
+        // instructor today.
+        await lockBalanceAndMutate(sql, {
+          learnerId: c.referrer_id,
+          schoolId: c.booking_school_id,
+          instructorId: 1,
+          delta: rewardMinutes,
+          ledgerType: 'referral_reward',
+          reason: 'referral',
+          source: 'goodwill',
+          absorbedBy: 'platform',
+          allowOverdraft: true,
+        });
 
         results.rewarded++;
       } catch (innerErr) {
