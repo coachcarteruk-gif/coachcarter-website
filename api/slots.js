@@ -1430,7 +1430,10 @@ async function handleCheckoutSlot(req, res) {
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
         amount_pence:    String(pricePence),
-        school_id:       String(schoolId)
+        school_id:       String(schoolId),
+        // Step 4 / Phase 2A: derivable from pricePence/durationMins per the
+        // source-of-truth rule, snapshotted for audit clarity.
+        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
       },
       ...(emailValid ? { customer_email: learner.email } : {}),
       billing_address_collection: 'required',
@@ -1696,7 +1699,9 @@ async function handleCheckoutSlotGuest(req, res) {
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
         amount_pence:    String(pricePence),
-        school_id:       String(schoolId)
+        school_id:       String(schoolId),
+        // Step 4 / Phase 2A: snapshot for audit clarity.
+        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
       },
       customer_email: cleanEmail,
       billing_address_collection: 'required',

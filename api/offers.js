@@ -614,7 +614,11 @@ async function handleAcceptOffer(req, res) {
         amount_pence:      String(pricePence),
         repeat_weeks:      String(repeatWeeksClean),
         school_id:         String(schoolId),
-        is_flexible:       isFlexible ? '1' : '0'
+        is_flexible:       isFlexible ? '1' : '0',
+        // Step 4 / Phase 2A: per-minute rate is invariant across the weekly
+        // series (Stripe charges quantity = repeatWeeksClean), so the rate
+        // computed here is correct for each booked lesson.
+        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
       },
       customer_email: resolvedEmail,
       billing_address_collection: 'required',
