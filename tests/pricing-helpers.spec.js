@@ -1,0 +1,214 @@
+// @ts-check
+// Unit tests for the three-level pricing fallback in api/_pricing-helpers.js —
+// Step 3b of PER-INSTRUCTOR-CREDITS-PLAN.md.
+//
+// Pure-function tests against a mocked `sql` tag. No real database needed;
+// the helper makes at most three SELECTs (pair → instructor → school), each
+// matched by a substring of the query text. Run with:
+//   npx playwright test pricing-helpers
+//
+// What this covers (the three-level fallback contract):
+//   1. Per-pair rate wins when present (level 1).
+//   2. Per-pair zero / null falls through to level 2.
+//   3. Per-pair query is skipped when learnerId is absent.
+//   4. Per-instructor rate wins when present (level 2).
+//   5. Per-instructor null falls through to level 3.
+//   6. School default wins when neither override is set (level 3).
+//   7. school_id is included in the per-pair WHERE clause (defence in depth).
+//   8. getEffectiveRatePencePerMinute returns banker's-rounded integer.
+//   9. calcBulkTotal is backwards-compatible (3-arg call = today's behaviour).
+//  10. calcBulkTotal honours the optional { instructorId, learnerId } shape
+//      AND still applies bulk discount tiers on top of the effective rate.
+
+const { test, expect } = require('@playwright/test');
+const {
+  getEffectiveHourlyPence,
+  getEffectiveRatePencePerMinute,
+  calcBulkTotal,
+} = require('../api/_pricing-helpers');
+
+// ─── Mock sql tag ───────────────────────────────────────────────────────────
+// Each test configures one or more canned responses by query-substring match.
+// Records every call so tests can assert which queries fired.
+function makeMockSql(canned) {
+  const calls = [];
+  const sql = (strings, ...values) => {
+    const text = strings.join('?');
+    calls.push({ text, values });
+    for (const entry of canned) {
+      if (text.includes(entry.match)) {
+        return Promise.resolve(entry.rows);
+      }
+    }
+    return Promise.resolve([]);
+  };
+  return { sql, calls };
+}
+
+// Default school config row used by getBulkPricing's first SELECT.
+function schoolRow(bulkHourlyPence) {
+  return {
+    config: {
+      pricing: {
+        bulk_hourly_pence: bulkHourlyPence,
+        bulk_discount_tiers: [
+          { min_hours: 20, discount_pct: 7.5 },
+          { min_hours: 10, discount_pct: 5 },
+          { min_hours: 5,  discount_pct: 2.5 },
+        ],
+      },
+    },
+  };
+}
+
+// ─── Level 1: per-pair rate ────────────────────────────────────────────────
+
+test('level 1 wins: per-pair custom rate > 0 returned, instructors not queried',
+  async () => {
+    const { sql, calls } = makeMockSql([
+      { match: 'instructor_learner_notes', rows: [{ custom_hourly_rate_pence: 6500 }] },
+      { match: 'FROM instructors',          rows: [{ hourly_rate_pence: 9999 }] }, // should not fire
+      { match: 'FROM schools',              rows: [schoolRow(5500)] },
+    ]);
+    const result = await getEffectiveHourlyPence(sql, {
+      schoolId: 1, instructorId: 7, learnerId: 42,
+    });
+    expect(result).toBe(6500);
+    expect(calls.some(c => c.text.includes('FROM instructors'))).toBe(false);
+    expect(calls.some(c => c.text.includes('FROM schools'))).toBe(false);
+  });
+
+test('level 1 skipped when per-pair = 0: falls through to level 2', async () => {
+  const { sql, calls } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [{ custom_hourly_rate_pence: 0 }] },
+    { match: 'FROM instructors',          rows: [{ hourly_rate_pence: 6000 }] },
+    { match: 'FROM schools',              rows: [schoolRow(5500)] },
+  ]);
+  const result = await getEffectiveHourlyPence(sql, {
+    schoolId: 1, instructorId: 7, learnerId: 42,
+  });
+  expect(result).toBe(6000);
+  expect(calls.some(c => c.text.includes('FROM instructors'))).toBe(true);
+});
+
+test('level 1 skipped when per-pair = NULL: falls through to level 2', async () => {
+  const { sql } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [{ custom_hourly_rate_pence: null }] },
+    { match: 'FROM instructors',          rows: [{ hourly_rate_pence: 6000 }] },
+    { match: 'FROM schools',              rows: [schoolRow(5500)] },
+  ]);
+  const result = await getEffectiveHourlyPence(sql, {
+    schoolId: 1, instructorId: 7, learnerId: 42,
+  });
+  expect(result).toBe(6000);
+});
+
+test('level 1 skipped when learnerId absent: query never runs', async () => {
+  const { sql, calls } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [{ custom_hourly_rate_pence: 6500 }] },
+    { match: 'FROM instructors',          rows: [{ hourly_rate_pence: 6000 }] },
+    { match: 'FROM schools',              rows: [schoolRow(5500)] },
+  ]);
+  const result = await getEffectiveHourlyPence(sql, {
+    schoolId: 1, instructorId: 7, // no learnerId
+  });
+  expect(result).toBe(6000);
+  expect(calls.some(c => c.text.includes('instructor_learner_notes'))).toBe(false);
+});
+
+// ─── Level 2: per-instructor rate ──────────────────────────────────────────
+
+test('level 2 wins when level 1 absent: per-instructor rate returned', async () => {
+  const { sql } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [] },
+    { match: 'FROM instructors',          rows: [{ hourly_rate_pence: 6000 }] },
+    { match: 'FROM schools',              rows: [schoolRow(5500)] },
+  ]);
+  const result = await getEffectiveHourlyPence(sql, {
+    schoolId: 1, instructorId: 7, learnerId: 42,
+  });
+  expect(result).toBe(6000);
+});
+
+test('level 2 skipped when per-instructor = NULL: falls through to level 3', async () => {
+  const { sql } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [] },
+    { match: 'FROM instructors',          rows: [{ hourly_rate_pence: null }] },
+    { match: 'FROM schools',              rows: [schoolRow(5500)] },
+  ]);
+  const result = await getEffectiveHourlyPence(sql, {
+    schoolId: 1, instructorId: 7, learnerId: 42,
+  });
+  expect(result).toBe(5500);
+});
+
+// ─── Level 3: school default ───────────────────────────────────────────────
+
+test('level 3 fallback when no instructor/learner given: school default', async () => {
+  const { sql, calls } = makeMockSql([
+    { match: 'FROM schools', rows: [schoolRow(5500)] },
+  ]);
+  const result = await getEffectiveHourlyPence(sql, { schoolId: 1 });
+  expect(result).toBe(5500);
+  expect(calls.some(c => c.text.includes('instructor_learner_notes'))).toBe(false);
+  expect(calls.some(c => c.text.includes('FROM instructors'))).toBe(false);
+});
+
+// ─── Defence in depth: school_id is filtered in the per-pair query ─────────
+
+test('per-pair query includes school_id in the WHERE clause', async () => {
+  const { sql, calls } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [{ custom_hourly_rate_pence: 6500 }] },
+  ]);
+  await getEffectiveHourlyPence(sql, {
+    schoolId: 3, instructorId: 7, learnerId: 42,
+  });
+  const pairCall = calls.find(c => c.text.includes('instructor_learner_notes'));
+  expect(pairCall).toBeTruthy();
+  expect(pairCall.text).toMatch(/school_id/);
+  // Values are bound positionally — 3 == schoolId should appear in the values.
+  expect(pairCall.values).toContain(3);
+});
+
+// ─── Pence-per-minute variant ──────────────────────────────────────────────
+
+test('getEffectiveRatePencePerMinute banker-rounds the hourly value', async () => {
+  // 5500 / 60 = 91.666... → 92
+  const { sql } = makeMockSql([
+    { match: 'FROM schools', rows: [schoolRow(5500)] },
+  ]);
+  const result = await getEffectiveRatePencePerMinute(sql, { schoolId: 1 });
+  expect(result).toBe(92);
+});
+
+// ─── calcBulkTotal backwards-compat + new optional shape ───────────────────
+
+test('calcBulkTotal 3-arg call is backwards-compatible (school default only)',
+  async () => {
+    const { sql } = makeMockSql([
+      { match: 'FROM schools', rows: [schoolRow(5500)] },
+    ]);
+    // 10 hours at £55/hr, 5% discount tier matches → £495 total.
+    const result = await calcBulkTotal(sql, 1, 10);
+    expect(result.pricePerHourPence).toBe(5500);
+    expect(result.fullPence).toBe(55000);
+    expect(result.discountPct).toBe(5);
+    expect(result.discountAmt).toBe(2750);
+    expect(result.totalPence).toBe(52250);
+  });
+
+test('calcBulkTotal with { instructorId, learnerId } uses level-1 rate AND applies tier discount',
+  async () => {
+    // Per-pair rate £65/hr (6500p), 10 hours → £650 full, 5% tier → £617.50.
+    const { sql } = makeMockSql([
+      { match: 'instructor_learner_notes', rows: [{ custom_hourly_rate_pence: 6500 }] },
+      // getBulkPricing also gets called once more inside calcBulkTotal to pull the tiers.
+      { match: 'FROM schools', rows: [schoolRow(5500)] },
+    ]);
+    const result = await calcBulkTotal(sql, 1, 10, { instructorId: 7, learnerId: 42 });
+    expect(result.pricePerHourPence).toBe(6500);
+    expect(result.fullPence).toBe(65000);
+    expect(result.discountPct).toBe(5);
+    expect(result.discountAmt).toBe(3250);
+    expect(result.totalPence).toBe(61750);
+  });

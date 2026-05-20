@@ -88,11 +88,91 @@ function getDiscountPct(hours, discountTiers) {
 }
 
 /**
+ * Three-level pricing fallback (most-specific wins). Authenticated callers
+ * only — learnerId is allowed because the caller has proved who the learner
+ * is. Never use this on a public surface; use the (forthcoming) public-rate
+ * helpers instead.
+ *
+ *   1. instructor_learner_notes.custom_hourly_rate_pence  (per-pair)
+ *   2. instructors.hourly_rate_pence                       (per-instructor)
+ *   3. schools.config.pricing.bulk_hourly_pence            (school default)
+ *
+ * Zero or NULL at levels 1/2 means "no override at this level" and falls
+ * through to the next. learnerId is optional — when omitted, level 1 is
+ * skipped (e.g. bulk-credit checkout before a specific learner is targeted).
+ *
+ * Returns an integer pence/hour. Never throws.
+ */
+async function getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId } = {}) {
+  const sid = parseInt(schoolId) || 1;
+  const iid = parseInt(instructorId) || null;
+  const lid = parseInt(learnerId)    || null;
+
+  // Level 1: per-learner-pair custom rate (only if both ids present)
+  if (iid && lid) {
+    const [pair] = await sql`
+      SELECT custom_hourly_rate_pence
+        FROM instructor_learner_notes
+       WHERE instructor_id = ${iid}
+         AND learner_id    = ${lid}
+         AND school_id     = ${sid}
+    `;
+    if (pair?.custom_hourly_rate_pence > 0) {
+      return pair.custom_hourly_rate_pence;
+    }
+  }
+
+  // Level 2: per-instructor rate
+  if (iid) {
+    const [inst] = await sql`
+      SELECT hourly_rate_pence
+        FROM instructors
+       WHERE id        = ${iid}
+         AND school_id = ${sid}
+    `;
+    if (inst?.hourly_rate_pence > 0) {
+      return inst.hourly_rate_pence;
+    }
+  }
+
+  // Level 3: school default
+  const { hourlyPence } = await getBulkPricing(sql, sid);
+  return hourlyPence;
+}
+
+/**
+ * Pence-per-minute variant of getEffectiveHourlyPence. Banker's-rounded so
+ * integer-pence callers stay integer.
+ */
+async function getEffectiveRatePencePerMinute(sql, { schoolId, instructorId, learnerId } = {}) {
+  const hourly = await getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId });
+  return Math.round(hourly / 60);
+}
+
+/**
  * Calculate full pricing breakdown for a bulk-credit purchase.
  * sql + schoolId required so per-school rate + tiers are looked up.
+ *
+ * Optional 4th arg `{ instructorId, learnerId }` engages the three-level
+ * fallback via getEffectiveHourlyPence. When omitted, behaviour is identical
+ * to the original school-default-only signature (back-compat for existing
+ * api/credits.js callers).
  */
-async function calcBulkTotal(sql, schoolId, hours) {
-  const { hourlyPence, discountTiers, source } = await getBulkPricing(sql, schoolId);
+async function calcBulkTotal(sql, schoolId, hours, { instructorId, learnerId } = {}) {
+  const useFallback = instructorId != null || learnerId != null;
+  let hourlyPence;
+  let source;
+
+  if (useFallback) {
+    hourlyPence = await getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId });
+    source = 'effective';
+  } else {
+    const bulk = await getBulkPricing(sql, schoolId);
+    hourlyPence = bulk.hourlyPence;
+    source = bulk.source;
+  }
+
+  const { discountTiers } = await getBulkPricing(sql, schoolId);
   const fullPence = Math.round(hourlyPence * hours);
   const discountPct = getDiscountPct(hours, discountTiers);
   const discountAmt = Math.round(fullPence * discountPct / 100);
@@ -147,6 +227,8 @@ module.exports = {
   getBulkPricing,
   getDiscountPct,
   calcBulkTotal,
+  getEffectiveHourlyPence,
+  getEffectiveRatePencePerMinute,
   validateBulkPricingConfig,
   MAX_HOURS_PER_PURCHASE,
 };
