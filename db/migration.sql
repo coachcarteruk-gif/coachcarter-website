@@ -746,6 +746,10 @@ ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_status_check
 -- Inserts with the newer values were silently 23514-erroring on prod (some sites
 -- swallowed in try/catch, leaving balance_minutes correct but the audit row
 -- missing). Patched live 2026-05-10 after a webhook outage exposed it.
+--
+-- Step 2.5 (May 2026) added 'free_trial' for the slots.js handleBookFreeTrial
+-- writer (zero-value credit_transactions row + BCS attribution for free
+-- trials). PER-INSTRUCTOR-CREDITS-PLAN.md §Step 2.
 ALTER TABLE credit_transactions DROP CONSTRAINT IF EXISTS credit_transactions_type_check;
 ALTER TABLE credit_transactions ADD CONSTRAINT credit_transactions_type_check
   CHECK (type IN (
@@ -756,7 +760,8 @@ ALTER TABLE credit_transactions ADD CONSTRAINT credit_transactions_type_check
     'admin_add',
     'admin_remove',
     'referral_bonus',
-    'referral_reward'
+    'referral_reward',
+    'free_trial'
   ));
 
 -- ── Weekly franchise fee model (alternative to commission_rate) ──
