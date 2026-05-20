@@ -117,16 +117,27 @@
 //
 // Do NOT flip this without also implementing grantCreditsPhase2A.
 //
-// Step 4 cutover (2026-05-20): every credit-affecting writer in the
-// codebase now routes through grantCredits / lockBalanceAndMutate /
-// lockBalanceAdjustLCB. The flag below flips Phase 2A behaviour on. Once
-// this PR deploys + /api/migrate-step-4 runs, every balance mutation
-// upserts into learner_credit_balances and the sync_pooled_balance trigger
-// keeps learner_users.balance_minutes denormalised for legacy readers.
+// EMERGENCY REVERT 2026-05-20 ~13:15 BST: a fourth-round GPT review
+// surfaced a P1 in the Phase 2A SQL — per PG docs §7.8.4, all
+// data-modifying CTEs in one WITH chain share the pre-statement
+// snapshot. The outer `UPDATE learner_credit_balances WHERE ...` that
+// filters by table columns (not by referencing the ensured CTE alias)
+// cannot see the row ensured's INSERT just created. For a first-ever
+// (learner, instructor) pair the UPDATE matches nothing and the
+// balance write silently fails — even though the credit_transactions
+// row got written. Stripe retries would then see the session as
+// already processed and the learner's balance stays stuck at 0.
 //
-// Rollback story: revert this commit + run a Neon PITR restore (Free tier
-// 6h window). Procedure documented in docs/credits-grandfather.md.
-let PHASE_2A_IMPLEMENTED = true;
+// Flipped this back to false to close the silent-failure window. A
+// follow-up PR restructures the Phase 2A SQL to use
+// INSERT ... ON CONFLICT DO UPDATE on learner_credit_balances itself
+// (the only single-statement shape that gives correct first-write
+// semantics under PG's CTE snapshot rules). Re-flips after that
+// follow-up ships + deploys.
+//
+// Rollback story: revert this commit + run a Neon PITR restore (Free
+// tier 6h window). Procedure documented in docs/credits-grandfather.md.
+let PHASE_2A_IMPLEMENTED = false;
 
 let phase2ACheckPromise;
 
