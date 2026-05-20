@@ -1076,36 +1076,97 @@ async function handleAdjustCredits(req, res) {
     const [learner] = await sql`SELECT id, balance_minutes, credit_balance FROM learner_users WHERE id = ${learner_id} AND school_id = ${schoolId}`;
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
-    // Prevent negative balance
-    const newMinutes = (learner.balance_minutes || 0) + minutesDelta;
-    if (newMinutes < 0)
-      return res.status(400).json({ error: 'Cannot reduce below 0. Current balance: ' + Math.round((learner.balance_minutes || 0) / 60 * 10) / 10 + ' hours' });
-
-    // Step 4 cutover: lockBalanceAndMutate writes the balance UPDATE and the
-    // ledger INSERT atomically inside one CTE — previously they ran as
-    // separate statements with the ledger as best-effort. allowOverdraft is
-    // false but the negative-balance pre-check above already short-circuited
-    // any deduct that would go below zero.
+    // Step 4 cutover: lockBalanceAndMutate writes balance + ledger
+    // atomically inside one CTE.
     //
-    // Trade-off accepted: credit_balance is now incremented additively
+    // Phase-2A scoping (PR #174 review P3 fix). Admin adjust-credits is
+    // historically pooled — the UI doesn't pick an instructor. Under
+    // Phase 2A every mutation must land on a specific LCB row. Resolve
+    // the target instructor based on the learner's existing LCB rows:
+    //
+    //   - 0 LCB rows  → grandfather to instructor 1 (Fraser). Same as the
+    //                   dispatcher's default; explicit here for audit. The
+    //                   negative-balance pre-check below uses pooled
+    //                   because there's no LCB row to read.
+    //   - 1 LCB row   → use that instructor. Pre-check reads that row's
+    //                   balance directly.
+    //   - 2+ LCB rows → AMBIGUOUS_INSTRUCTOR. Admin must re-issue with an
+    //                   explicit instructor_id. Without this guard, a
+    //                   pooled pre-check could pass while the LCB write
+    //                   minted a negative balance on the wrong row.
+    //
+    // Accept req.body.instructor_id when present so a future admin UI can
+    // pass it explicitly and skip the auto-resolve.
+    let targetInstructorId = parseInt(req.body.instructor_id, 10);
+    let preCheckBalance = learner.balance_minutes || 0;
+    if (!Number.isFinite(targetInstructorId) || targetInstructorId <= 0) {
+      const lcbRows = await sql`
+        SELECT instructor_id, balance_minutes
+          FROM learner_credit_balances
+         WHERE learner_id = ${learner_id}
+         ORDER BY instructor_id
+      `;
+      if (lcbRows.length === 0) {
+        targetInstructorId = 1; // grandfather, keep pooled pre-check
+      } else if (lcbRows.length === 1) {
+        targetInstructorId = lcbRows[0].instructor_id;
+        preCheckBalance = lcbRows[0].balance_minutes;
+      } else {
+        return res.status(409).json({
+          error: 'AMBIGUOUS_INSTRUCTOR',
+          message: `Learner has balances with ${lcbRows.length} instructors. Re-issue this request with an explicit instructor_id.`,
+          instructor_ids: lcbRows.map(r => r.instructor_id),
+        });
+      }
+    } else {
+      // Explicit instructor — read THAT row's balance for the pre-check
+      // so an admin can't accidentally take Fraser negative by passing
+      // instructor_id=1 when the learner's balance lives elsewhere.
+      const [lcbRow] = await sql`
+        SELECT balance_minutes
+          FROM learner_credit_balances
+         WHERE learner_id = ${learner_id} AND instructor_id = ${targetInstructorId}
+      `;
+      preCheckBalance = lcbRow ? lcbRow.balance_minutes : 0;
+    }
+
+    // Prevent negative balance (now against the resolved target).
+    const newMinutes = preCheckBalance + minutesDelta;
+    if (newMinutes < 0) {
+      return res.status(400).json({
+        error: `Cannot reduce below 0. Instructor ${targetInstructorId} balance: ${Math.round(preCheckBalance / 60 * 10) / 10} hours`
+      });
+    }
+
+    // Trade-off accepted: credit_balance is incremented additively
     // (creditsDelta = Math.round(hoursFloat)) rather than re-derived from
     // balance_minutes / 60. For fractional adjustments this can drift over
     // many grants. credit_balance is the legacy cosmetic counter; the next
     // purchase via grantCredits rebases it. Admin grants are infrequent
     // enough that the drift is acceptable.
     const creditsDelta = Math.round(hoursFloat);
+    // allowOverdraft: false (defence-in-depth — the pre-check above is
+    // racy against concurrent writers on the same LCB row; the helper's
+    // own deduct-guard inside the CTE refuses overdraft at write time).
+    // Grants (positive delta) skip the guard inside the helper anyway.
     const adj = await lockBalanceAndMutate(sql, {
       learnerId: learner_id,
       schoolId,
+      instructorId: targetInstructorId,
       delta: minutesDelta,
       creditsDelta,
       ledgerType: minutesDelta > 0 ? 'admin_add' : 'admin_remove',
       reason: reason || 'Admin adjustment',
       source: 'goodwill',
       absorbedBy: 'platform',
-      allowOverdraft: true,
+      allowOverdraft: false,
     });
     if (!adj.ok) {
+      if (adj.code === 'INSUFFICIENT_BALANCE') {
+        return res.status(400).json({
+          error: `Cannot reduce below 0. Instructor ${targetInstructorId} balance: ${Math.round((adj.balanceMinutes || 0) / 60 * 10) / 10} hours`
+        });
+      }
       console.error('admin adjust-credits failed:', adj.code);
       return res.status(500).json({ error: 'Failed to adjust learner balance' });
     }
