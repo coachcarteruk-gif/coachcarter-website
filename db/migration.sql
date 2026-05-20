@@ -2089,3 +2089,23 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS list_price_source TEXT
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS hourly_rate_pence INTEGER
   CHECK (hourly_rate_pence IS NULL OR (hourly_rate_pence > 0 AND hourly_rate_pence <= 50000));
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Credits Step 1c: migration_markers table (May 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Per PER-INSTRUCTOR-CREDITS-PLAN.md §Step 1c (L357-385). Operational ordering
+-- table so future migrations can refuse to run until a prerequisite backfill
+-- has completed. Specifically: Step 2's schema PR will wrap its DDL in a
+-- DO-block that checks for the 'per_instructor_credits_step_1c_backfill' key.
+-- If missing → RAISE EXCEPTION halts the migration.
+--
+-- The table is created here (schema-only); marker rows are inserted by the
+-- corresponding migration endpoint after it confirms the backfill completed
+-- successfully. /api/migrate-step-1c is the only writer in this PR; future
+-- migrations get their own keys.
+-- ══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS migration_markers (
+  key          TEXT PRIMARY KEY,
+  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  notes        TEXT
+);
