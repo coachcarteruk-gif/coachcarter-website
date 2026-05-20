@@ -11,11 +11,28 @@
 // ledger reconcile, per (learner_id, instructor_id) pair:
 //
 //   expected_balance_minutes
-//     =  SUM(credit_transactions.minutes)                                      (always)
-//      - SUM(booking_credit_sources.minutes_drawn) FILTER (WHERE refunded_at IS NULL)   (if BCS exists)
-//      - SUM(credit_source_adjustments.minutes_adjusted)                       (if CSA exists)
+//     =  SUM(credit_transactions.minutes)                                          (always — credit purchases)
+//      - SUM(lesson_bookings.minutes_deducted)
+//             WHERE credit_returned = FALSE
+//               AND booking has no booking_credit_sources row                       (always — un-attributed booking draws)
+//      - SUM(booking_credit_sources.minutes_drawn) WHERE refunded_at IS NULL        (if BCS exists — attributed draws)
+//      - SUM(credit_source_adjustments.minutes_adjusted)                            (if CSA exists — cash refunds, admin clawbacks)
 //
 // Drift = actual_lcb - expected. Any non-zero drift fires an operator alert.
+//
+// Why the lb.minutes_deducted term is load-bearing in EVERY mode
+// ──────────────────────────────────────────────────────────────────────────────
+// Booking deductions on the live writer path (api/slots.js#L1006) go through
+// lockBalanceAdjustLCB, which mutates LCB but DOES NOT write a credit_transactions
+// row (deliberate — see api/_credit-grant.js#L957 "balance-only mutation, no
+// ledger row"). The deduction is recorded as lesson_bookings.minutes_deducted
+// and reversed by toggling credit_returned = TRUE on ≥48h cancellation.
+//
+// Step 5's booking_credit_sources writer will start populating BCS rows at
+// booking-creation time, but it does NOT backfill historical bookings (per
+// PER-INSTRUCTOR-CREDITS-PLAN.md §Step 5). So historical bookings will live
+// in lb.minutes_deducted forever; new bookings will live in BCS. The
+// "booking has no BCS row" guard prevents double-counting once Step 5 ships.
 //
 // This is a READ-ONLY guardrail. It MUST NOT mutate learner_credit_balances,
 // learner_users.balance_minutes, credit_transactions, booking_credit_sources,
@@ -109,16 +126,43 @@ async function probeSchemaMode(sql) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function reconcileCtOnly(sql) {
+  // BCS absent (current main state). Booking deductions come exclusively from
+  // lesson_bookings.minutes_deducted. NOT IN (SELECT booking_id FROM
+  // booking_credit_sources) is omitted because the table doesn't exist —
+  // every active booking with minutes_deducted contributes to the deduction.
   return sql`
-    WITH ledger AS (
+    WITH purchases AS (
       SELECT
         ct.learner_id,
         ct.instructor_id,
-        COALESCE(SUM(ct.minutes), 0)::int AS expected_balance_minutes
+        COALESCE(SUM(ct.minutes), 0)::int AS minutes
       FROM credit_transactions ct
       WHERE ct.school_id = ${SCHOOL_ID}
         AND ct.instructor_id IS NOT NULL    -- exclude Pre-2A pooled rows
       GROUP BY ct.learner_id, ct.instructor_id
+    ),
+    booking_draws AS (
+      SELECT
+        lb.learner_id,
+        lb.instructor_id,
+        COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+      FROM lesson_bookings lb
+      WHERE lb.school_id = ${SCHOOL_ID}
+        AND lb.credit_returned = FALSE
+        AND lb.minutes_deducted IS NOT NULL
+        AND lb.minutes_deducted > 0
+      GROUP BY lb.learner_id, lb.instructor_id
+    ),
+    ledger AS (
+      SELECT
+        COALESCE(p.learner_id,    bd.learner_id)    AS learner_id,
+        COALESCE(p.instructor_id, bd.instructor_id) AS instructor_id,
+          COALESCE(p.minutes,  0)
+        - COALESCE(bd.minutes, 0)                   AS expected_balance_minutes
+      FROM purchases p
+      FULL OUTER JOIN booking_draws bd
+        ON  bd.learner_id    = p.learner_id
+        AND bd.instructor_id = p.instructor_id
     )
     SELECT
       COALESCE(lcb.learner_id,    l.learner_id)    AS learner_id,
@@ -134,34 +178,72 @@ async function reconcileCtOnly(sql) {
     WHERE (lcb.school_id IS NULL OR lcb.school_id = ${SCHOOL_ID})
       AND COALESCE(lcb.balance_minutes, 0)
             IS DISTINCT FROM COALESCE(l.expected_balance_minutes, 0)
-    ORDER BY drift_minutes DESC, learner_id, instructor_id
+    ORDER BY ABS(COALESCE(lcb.balance_minutes, 0)
+                 - COALESCE(l.expected_balance_minutes, 0)) DESC,
+             learner_id, instructor_id
   `;
 }
 
 async function reconcileCtPlusBcs(sql) {
-  // Aggregate BCS draws per credit_transaction first (active rows only),
-  // then LEFT JOIN onto the per-pair ledger sum. This keeps each subexpression
-  // a flat GROUP BY rather than nesting an aggregate inside another aggregate.
+  // BCS present, CSA absent. Mixed deduction sourcing:
+  //   • bookings WITH a BCS row → counted via SUM(active BCS minutes_drawn)
+  //   • bookings WITHOUT a BCS row → counted via SUM(lb.minutes_deducted)
+  // The booking_draws CTE filters to lb.id NOT IN (BCS booking_ids) so historical
+  // bookings predating Step 5 (no BCS row) and any future writer regression
+  // (booking inserted but BCS row missing) both get caught.
   return sql`
-    WITH bcs_per_ct AS (
-      SELECT
-        bcs.credit_transaction_id,
-        SUM(bcs.minutes_drawn)::int AS minutes_drawn
-      FROM booking_credit_sources bcs
-      WHERE bcs.refunded_at IS NULL
-      GROUP BY bcs.credit_transaction_id
-    ),
-    ledger AS (
+    WITH bcs_per_pair AS (
       SELECT
         ct.learner_id,
         ct.instructor_id,
-          COALESCE(SUM(ct.minutes), 0)::int
-        - COALESCE(SUM(bpc.minutes_drawn), 0)::int    AS expected_balance_minutes
+        SUM(bcs.minutes_drawn)::int AS minutes
+      FROM booking_credit_sources bcs
+      JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
+      WHERE bcs.refunded_at IS NULL
+        AND ct.school_id = ${SCHOOL_ID}
+        AND ct.instructor_id IS NOT NULL
+      GROUP BY ct.learner_id, ct.instructor_id
+    ),
+    purchases AS (
+      SELECT
+        ct.learner_id,
+        ct.instructor_id,
+        COALESCE(SUM(ct.minutes), 0)::int AS minutes
       FROM credit_transactions ct
-      LEFT JOIN bcs_per_ct bpc ON bpc.credit_transaction_id = ct.id
       WHERE ct.school_id = ${SCHOOL_ID}
         AND ct.instructor_id IS NOT NULL
       GROUP BY ct.learner_id, ct.instructor_id
+    ),
+    booking_draws AS (
+      SELECT
+        lb.learner_id,
+        lb.instructor_id,
+        COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+      FROM lesson_bookings lb
+      WHERE lb.school_id = ${SCHOOL_ID}
+        AND lb.credit_returned = FALSE
+        AND lb.minutes_deducted IS NOT NULL
+        AND lb.minutes_deducted > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM booking_credit_sources bcs2
+           WHERE bcs2.booking_id = lb.id
+        )
+      GROUP BY lb.learner_id, lb.instructor_id
+    ),
+    ledger AS (
+      SELECT
+        COALESCE(p.learner_id, bd.learner_id, b.learner_id)             AS learner_id,
+        COALESCE(p.instructor_id, bd.instructor_id, b.instructor_id)    AS instructor_id,
+          COALESCE(p.minutes,  0)
+        - COALESCE(bd.minutes, 0)
+        - COALESCE(b.minutes,  0)                                       AS expected_balance_minutes
+      FROM purchases p
+      FULL OUTER JOIN booking_draws bd
+        ON  bd.learner_id    = p.learner_id
+        AND bd.instructor_id = p.instructor_id
+      FULL OUTER JOIN bcs_per_pair b
+        ON  b.learner_id    = COALESCE(p.learner_id, bd.learner_id)
+        AND b.instructor_id = COALESCE(p.instructor_id, bd.instructor_id)
     )
     SELECT
       COALESCE(lcb.learner_id,    l.learner_id)    AS learner_id,
@@ -177,40 +259,88 @@ async function reconcileCtPlusBcs(sql) {
     WHERE (lcb.school_id IS NULL OR lcb.school_id = ${SCHOOL_ID})
       AND COALESCE(lcb.balance_minutes, 0)
             IS DISTINCT FROM COALESCE(l.expected_balance_minutes, 0)
-    ORDER BY drift_minutes DESC, learner_id, instructor_id
+    ORDER BY ABS(COALESCE(lcb.balance_minutes, 0)
+                 - COALESCE(l.expected_balance_minutes, 0)) DESC,
+             learner_id, instructor_id
   `;
 }
 
 async function reconcileFull(sql) {
+  // BCS and CSA both present. Adds CSA cash-refund / admin-clawback deductions
+  // on top of the ct_plus_bcs formula. Same mixed-sourcing rule for bookings:
+  // attributed via BCS or un-attributed via lb.minutes_deducted, never both.
   return sql`
-    WITH bcs_per_ct AS (
-      SELECT
-        bcs.credit_transaction_id,
-        SUM(bcs.minutes_drawn)::int AS minutes_drawn
-      FROM booking_credit_sources bcs
-      WHERE bcs.refunded_at IS NULL
-      GROUP BY bcs.credit_transaction_id
-    ),
-    csa_per_ct AS (
-      SELECT
-        csa.credit_transaction_id,
-        SUM(csa.minutes_adjusted)::int AS minutes_adjusted
-      FROM credit_source_adjustments csa
-      GROUP BY csa.credit_transaction_id
-    ),
-    ledger AS (
+    WITH bcs_per_pair AS (
       SELECT
         ct.learner_id,
         ct.instructor_id,
-          COALESCE(SUM(ct.minutes), 0)::int
-        - COALESCE(SUM(bpc.minutes_drawn),    0)::int
-        - COALESCE(SUM(cpc.minutes_adjusted), 0)::int AS expected_balance_minutes
-      FROM credit_transactions ct
-      LEFT JOIN bcs_per_ct bpc ON bpc.credit_transaction_id = ct.id
-      LEFT JOIN csa_per_ct cpc ON cpc.credit_transaction_id = ct.id
+        SUM(bcs.minutes_drawn)::int AS minutes
+      FROM booking_credit_sources bcs
+      JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
+      WHERE bcs.refunded_at IS NULL
+        AND ct.school_id = ${SCHOOL_ID}
+        AND ct.instructor_id IS NOT NULL
+      GROUP BY ct.learner_id, ct.instructor_id
+    ),
+    csa_per_pair AS (
+      SELECT
+        ct.learner_id,
+        ct.instructor_id,
+        SUM(csa.minutes_adjusted)::int AS minutes
+      FROM credit_source_adjustments csa
+      JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
       WHERE ct.school_id = ${SCHOOL_ID}
         AND ct.instructor_id IS NOT NULL
       GROUP BY ct.learner_id, ct.instructor_id
+    ),
+    purchases AS (
+      SELECT
+        ct.learner_id,
+        ct.instructor_id,
+        COALESCE(SUM(ct.minutes), 0)::int AS minutes
+      FROM credit_transactions ct
+      WHERE ct.school_id = ${SCHOOL_ID}
+        AND ct.instructor_id IS NOT NULL
+      GROUP BY ct.learner_id, ct.instructor_id
+    ),
+    booking_draws AS (
+      SELECT
+        lb.learner_id,
+        lb.instructor_id,
+        COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+      FROM lesson_bookings lb
+      WHERE lb.school_id = ${SCHOOL_ID}
+        AND lb.credit_returned = FALSE
+        AND lb.minutes_deducted IS NOT NULL
+        AND lb.minutes_deducted > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM booking_credit_sources bcs2
+           WHERE bcs2.booking_id = lb.id
+        )
+      GROUP BY lb.learner_id, lb.instructor_id
+    ),
+    all_pairs AS (
+      SELECT learner_id, instructor_id FROM purchases
+      UNION
+      SELECT learner_id, instructor_id FROM booking_draws
+      UNION
+      SELECT learner_id, instructor_id FROM bcs_per_pair
+      UNION
+      SELECT learner_id, instructor_id FROM csa_per_pair
+    ),
+    ledger AS (
+      SELECT
+        ap.learner_id,
+        ap.instructor_id,
+          COALESCE(p.minutes,  0)
+        - COALESCE(bd.minutes, 0)
+        - COALESCE(b.minutes,  0)
+        - COALESCE(c.minutes,  0)                              AS expected_balance_minutes
+      FROM all_pairs ap
+      LEFT JOIN purchases     p  ON p.learner_id  = ap.learner_id AND p.instructor_id  = ap.instructor_id
+      LEFT JOIN booking_draws bd ON bd.learner_id = ap.learner_id AND bd.instructor_id = ap.instructor_id
+      LEFT JOIN bcs_per_pair  b  ON b.learner_id  = ap.learner_id AND b.instructor_id  = ap.instructor_id
+      LEFT JOIN csa_per_pair  c  ON c.learner_id  = ap.learner_id AND c.instructor_id  = ap.instructor_id
     )
     SELECT
       COALESCE(lcb.learner_id,    l.learner_id)    AS learner_id,
@@ -226,12 +356,15 @@ async function reconcileFull(sql) {
     WHERE (lcb.school_id IS NULL OR lcb.school_id = ${SCHOOL_ID})
       AND COALESCE(lcb.balance_minutes, 0)
             IS DISTINCT FROM COALESCE(l.expected_balance_minutes, 0)
-    ORDER BY drift_minutes DESC, learner_id, instructor_id
+    ORDER BY ABS(COALESCE(lcb.balance_minutes, 0)
+                 - COALESCE(l.expected_balance_minutes, 0)) DESC,
+             learner_id, instructor_id
   `;
 }
 
-// Total pair count for the scanned scope, for the response payload. Cheap
-// COUNT(DISTINCT …) on a small table.
+// Total pair count for the scanned scope, for the response payload. Unions
+// across every table the reconcile considers (LCB, credit_transactions,
+// lesson_bookings) so the count reflects the actual analytical universe.
 async function countPairsScanned(sql) {
   const [row] = await sql`
     WITH all_pairs AS (
@@ -239,6 +372,11 @@ async function countPairsScanned(sql) {
       UNION
       SELECT learner_id, instructor_id FROM credit_transactions
        WHERE school_id = ${SCHOOL_ID} AND instructor_id IS NOT NULL
+      UNION
+      SELECT learner_id, instructor_id FROM lesson_bookings
+       WHERE school_id = ${SCHOOL_ID}
+         AND minutes_deducted IS NOT NULL
+         AND minutes_deducted > 0
     )
     SELECT COUNT(*)::int AS n FROM all_pairs
   `;

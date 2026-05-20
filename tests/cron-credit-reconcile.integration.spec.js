@@ -255,15 +255,26 @@ async function ensureStep5Tables({ wantBcs, wantCsa }) {
 
 // Create a synthetic lesson_booking for BCS rows to reference. BCS has an FK
 // to lesson_bookings, but the cron's reconcile only cares about credit data.
+// minutes_deducted = 0 here (no credit draw); use insertBookingWithMinutes
+// when the booking should appear in the cron's booking_draws CTE.
 async function insertBooking() {
+  return insertBookingWithMinutes(0, false);
+}
+
+// Synthetic booking that draws `mins` credit minutes from LCB. Sets school_id
+// and minutes_deducted so the cron's booking_draws CTE sees it. credit_returned
+// toggles between "still drawing" and "refunded back to LCB" scenarios.
+async function insertBookingWithMinutes(mins, creditReturned) {
   const dateStr = `2030-01-${String(Math.floor(Math.random() * 27) + 1).padStart(2, '0')}`;
   const hour = String(Math.floor(Math.random() * 12) + 8).padStart(2, '0');
   const minute = String(Math.floor(Math.random() * 60)).padStart(2, '0');
+  const startTime = `${hour}:${minute}:00`;
+  const endTime   = `${hour}:${String(Math.min(59, parseInt(minute) + 30)).padStart(2, '0')}:00`;
   const [row] = await sql`
     INSERT INTO lesson_bookings
-      (learner_id, instructor_id, scheduled_date, start_time, end_time, status)
+      (learner_id, instructor_id, school_id, scheduled_date, start_time, end_time, status, minutes_deducted, credit_returned)
     VALUES
-      (${testLearnerId}, ${INSTRUCTOR_ID}, ${dateStr}::date, ${`${hour}:${minute}:00`}::time, ${`${hour}:${Math.min(59, parseInt(minute) + 30)}:00`}::time, 'scheduled')
+      (${testLearnerId}, ${INSTRUCTOR_ID}, ${SCHOOL_ID}, ${dateStr}::date, ${startTime}::time, ${endTime}::time, 'scheduled', ${mins}, ${creditReturned})
     RETURNING id
   `;
   return row.id;
@@ -306,82 +317,107 @@ function findOurPair(result) {
   );
 }
 
-// Bypass the drift_summary cap: query LCB and credit_transactions directly
+// Bypass the drift_summary cap: query LCB + ledger + booking draws directly
 // for the test pair and recompute drift in the same shape the cron uses.
 // Used by every assertion that needs precision regardless of how much
 // noise is on the branch.
+//
+// The formula must match the cron's reconcile functions EXACTLY, otherwise
+// P2 from the review applies: a bug in the cron's SQL would be masked by
+// the helper still computing the right answer independently. To minimise
+// that risk we keep the formula here as close to the cron's as possible
+// — same CTEs, same predicates — just scoped to our (testLearner, INSTRUCTOR)
+// pair instead of the whole world.
 async function findOurPairOnDb() {
   const [row] = await sql`
-    WITH ledger AS (
-      SELECT
-        ct.learner_id,
-        ct.instructor_id,
-        COALESCE(SUM(ct.minutes), 0)::int AS expected_balance_minutes
-      FROM credit_transactions ct
-      WHERE ct.school_id = ${SCHOOL_ID}
-        AND ct.instructor_id IS NOT NULL
-        AND ct.learner_id = ${testLearnerId}
-        AND ct.instructor_id = ${INSTRUCTOR_ID}
-      GROUP BY ct.learner_id, ct.instructor_id
+    WITH purchases AS (
+      SELECT COALESCE(SUM(ct.minutes), 0)::int AS minutes
+        FROM credit_transactions ct
+       WHERE ct.school_id     = ${SCHOOL_ID}
+         AND ct.instructor_id = ${INSTRUCTOR_ID}
+         AND ct.learner_id    = ${testLearnerId}
     ),
-    bcs_sub AS (
-      SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS m
+    booking_draws AS (
+      SELECT COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+        FROM lesson_bookings lb
+       WHERE lb.school_id      = ${SCHOOL_ID}
+         AND lb.learner_id     = ${testLearnerId}
+         AND lb.instructor_id  = ${INSTRUCTOR_ID}
+         AND lb.credit_returned = FALSE
+         AND lb.minutes_deducted IS NOT NULL
+         AND lb.minutes_deducted > 0
+         AND NOT EXISTS (
+           SELECT 1 FROM booking_credit_sources bcs2 WHERE bcs2.booking_id = lb.id
+         )
+    ),
+    bcs_draws AS (
+      SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS minutes
         FROM booking_credit_sources bcs
         JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
-       WHERE ct.learner_id = ${testLearnerId}
+       WHERE ct.learner_id    = ${testLearnerId}
          AND ct.instructor_id = ${INSTRUCTOR_ID}
          AND bcs.refunded_at IS NULL
     ),
-    csa_sub AS (
-      SELECT COALESCE(SUM(csa.minutes_adjusted), 0)::int AS m
+    csa_draws AS (
+      SELECT COALESCE(SUM(csa.minutes_adjusted), 0)::int AS minutes
         FROM credit_source_adjustments csa
         JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
-       WHERE ct.learner_id = ${testLearnerId}
+       WHERE ct.learner_id    = ${testLearnerId}
          AND ct.instructor_id = ${INSTRUCTOR_ID}
     )
     SELECT
-      ${testLearnerId}::int                          AS learner_id,
-      ${INSTRUCTOR_ID}::int                          AS instructor_id,
-      COALESCE(lcb.balance_minutes, 0)               AS actual_lcb_balance_minutes,
-      COALESCE(l.expected_balance_minutes, 0)
-        - (SELECT m FROM bcs_sub)
-        - (SELECT m FROM csa_sub)                    AS computed_ledger_balance_minutes,
+      ${testLearnerId}::int                    AS learner_id,
+      ${INSTRUCTOR_ID}::int                    AS instructor_id,
+      COALESCE(lcb.balance_minutes, 0)         AS actual_lcb_balance_minutes,
+        (SELECT minutes FROM purchases)
+      - (SELECT minutes FROM booking_draws)
+      - (SELECT minutes FROM bcs_draws)
+      - (SELECT minutes FROM csa_draws)        AS computed_ledger_balance_minutes,
       COALESCE(lcb.balance_minutes, 0)
-        - (COALESCE(l.expected_balance_minutes, 0)
-           - (SELECT m FROM bcs_sub)
-           - (SELECT m FROM csa_sub))                AS drift_minutes
+        - (  (SELECT minutes FROM purchases)
+           - (SELECT minutes FROM booking_draws)
+           - (SELECT minutes FROM bcs_draws)
+           - (SELECT minutes FROM csa_draws) ) AS drift_minutes
     FROM (SELECT 1) _
-    LEFT JOIN ledger l ON true
     LEFT JOIN learner_credit_balances lcb
       ON lcb.learner_id    = ${testLearnerId}
      AND lcb.instructor_id = ${INSTRUCTOR_ID}
   `;
-  // If drift is zero, return undefined to mirror "not flagged".
   if (!row || row.drift_minutes === 0) return undefined;
   return row;
 }
 
-// In a clean ct_only world we'd skip bcs_sub / csa_sub. The query above
-// references both unconditionally — so when those tables are absent we
-// fall back to a CT-only version of the per-pair recompute.
+// ct_only variant — BCS / CSA tables absent on the branch. booking_draws also
+// drops the NOT EXISTS predicate (no BCS table to check against).
 async function findOurPairOnDbCtOnly() {
   const [row] = await sql`
-    WITH ledger AS (
-      SELECT COALESCE(SUM(ct.minutes), 0)::int AS expected_balance_minutes
+    WITH purchases AS (
+      SELECT COALESCE(SUM(ct.minutes), 0)::int AS minutes
         FROM credit_transactions ct
-       WHERE ct.school_id    = ${SCHOOL_ID}
-         AND ct.instructor_id IS NOT NULL
-         AND ct.learner_id    = ${testLearnerId}
+       WHERE ct.school_id     = ${SCHOOL_ID}
          AND ct.instructor_id = ${INSTRUCTOR_ID}
+         AND ct.learner_id    = ${testLearnerId}
+    ),
+    booking_draws AS (
+      SELECT COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+        FROM lesson_bookings lb
+       WHERE lb.school_id      = ${SCHOOL_ID}
+         AND lb.learner_id     = ${testLearnerId}
+         AND lb.instructor_id  = ${INSTRUCTOR_ID}
+         AND lb.credit_returned = FALSE
+         AND lb.minutes_deducted IS NOT NULL
+         AND lb.minutes_deducted > 0
     )
     SELECT
-      ${testLearnerId}::int                     AS learner_id,
-      ${INSTRUCTOR_ID}::int                     AS instructor_id,
-      COALESCE(lcb.balance_minutes, 0)          AS actual_lcb_balance_minutes,
-      COALESCE(l.expected_balance_minutes, 0)   AS computed_ledger_balance_minutes,
+      ${testLearnerId}::int                    AS learner_id,
+      ${INSTRUCTOR_ID}::int                    AS instructor_id,
+      COALESCE(lcb.balance_minutes, 0)         AS actual_lcb_balance_minutes,
+        (SELECT minutes FROM purchases)
+      - (SELECT minutes FROM booking_draws)    AS computed_ledger_balance_minutes,
       COALESCE(lcb.balance_minutes, 0)
-        - COALESCE(l.expected_balance_minutes, 0) AS drift_minutes
-    FROM ledger l
+        - (  (SELECT minutes FROM purchases)
+           - (SELECT minutes FROM booking_draws) ) AS drift_minutes
+    FROM (SELECT 1) _
     LEFT JOIN learner_credit_balances lcb
       ON lcb.learner_id    = ${testLearnerId}
      AND lcb.instructor_id = ${INSTRUCTOR_ID}
@@ -474,20 +510,25 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
   // ───────────────────────────────────────────────────────────────────────────
   test('C3: positive drift (LCB inflated) — drift_minutes > 0 reported with correct sign', async () => {
     await resetState();
+    // Snapshot the cron's count before our injection — defends against P2:
+    // a +1 delta is a direct assertion against the cron's SQL, not a
+    // parallel test re-implementation.
+    const before = await runCron();
+
     await insertCt({ minutes: 60 });   // ledger says +60
     await setLcbBalance(120);          // LCB says 120 → drift +60
 
     const result = await runCron();
     expect(result.ok).toBe(true);
+    // P2 mitigation: drift_count must increase by exactly 1.
+    expect(result.drift_count).toBe(before.drift_count + 1);
     // Precision against the DB. drift_summary may not include our pair if
-    // the branch has >20 worse drifts (test branches off prod often do).
+    // the branch has >20 worse drifts.
     const row = await findOurPairPrecise();
     expect(row).toBeTruthy();
     expect(row.actual_lcb_balance_minutes).toBe(120);
     expect(row.computed_ledger_balance_minutes).toBe(60);
     expect(row.drift_minutes).toBe(60);
-    // And drift_count reflects at least our injected pair.
-    expect(result.drift_count).toBeGreaterThanOrEqual(1);
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -515,11 +556,15 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
   // ───────────────────────────────────────────────────────────────────────────
   test('C5: missing LCB row + non-zero ledger — drift reported via FULL OUTER JOIN', async () => {
     await resetState();
+    const before = await runCron();
     await insertCt({ minutes: 90 });
     // No LCB row at all.
 
     const result = await runCron();
     expect(result.ok).toBe(true);
+    // P2 mitigation: this asserts the cron's FULL OUTER JOIN found the
+    // missing-LCB direction, not just our parallel helper.
+    expect(result.drift_count).toBe(before.drift_count + 1);
     const row = await findOurPairPrecise();
     expect(row).toBeTruthy();
     expect(row.actual_lcb_balance_minutes).toBe(0);
@@ -534,11 +579,14 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
   // ───────────────────────────────────────────────────────────────────────────
   test('C6: phantom LCB (non-zero balance, no ledger) — drift reported via FULL OUTER JOIN', async () => {
     await resetState();
+    const before = await runCron();
     await setLcbBalance(45);
     // No CT rows.
 
     const result = await runCron();
     expect(result.ok).toBe(true);
+    // P2 mitigation: assert the cron's SQL caught the phantom-LCB direction.
+    expect(result.drift_count).toBe(before.drift_count + 1);
     const row = await findOurPairPrecise();
     expect(row).toBeTruthy();
     expect(row.actual_lcb_balance_minutes).toBe(45);
@@ -742,5 +790,106 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
       await sql`DROP TABLE IF EXISTS credit_source_adjustments`;
       branchHasCsa = false;
     }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C13 — LOAD-BEARING: legitimate credit-funded booking must NOT be flagged.
+  //
+  // Booking deductions on the live writer path mutate LCB via
+  // lockBalanceAdjustLCB without writing a credit_transactions row. The cron
+  // MUST subtract lb.minutes_deducted (where credit_returned = FALSE) so
+  // these legitimate draws don't appear as negative drift.
+  //
+  // Pre-fix, this scenario produced drift_minutes = -60 (LCB 60 - ledger 120).
+  // Post-fix, the booking_draws CTE subtracts the 60, leaving expected = 60
+  // and drift = 0.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C13: credit purchase + matching booking deduction → no drift', async () => {
+    await resetState();
+    await insertCt({ minutes: 120 });                    // purchase 120
+    const bookingId = await insertBookingWithMinutes(60, false /* credit_returned */);
+    await setLcbBalance(60);                             // LCB after deduction
+
+    const result = await runCron();
+    expect(result.ok).toBe(true);
+    // The precise lookup recomputes the same formula the cron uses (P2 risk:
+    // bug in shared formula could pass — see C14 below for the cron-output
+    // assertion that bypasses this).
+    expect(await findOurPairPrecise()).toBeUndefined();
+    // Cleanup the booking before next test.
+    await sql`DELETE FROM lesson_bookings WHERE id = ${bookingId}`;
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C14 — symmetric to C13: a fully-refunded booking does NOT get subtracted.
+  //
+  // When credit_returned = TRUE the deduction was reversed back into LCB via
+  // a separate lockBalanceAdjustLCB call. The booking row carries
+  // minutes_deducted (snapshot of what was originally drawn) but the cron
+  // must NOT subtract it again.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C14: refunded booking (credit_returned = TRUE) excluded from deduction', async () => {
+    await resetState();
+    await insertCt({ minutes: 120 });
+    const bookingId = await insertBookingWithMinutes(60, true /* credit_returned */);
+    // LCB stays at 120 — the deduction was reversed.
+    await setLcbBalance(120);
+
+    const result = await runCron();
+    expect(result.ok).toBe(true);
+    expect(await findOurPairPrecise()).toBeUndefined();
+    await sql`DELETE FROM lesson_bookings WHERE id = ${bookingId}`;
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C15 — P2 mitigation: forced-large drift must appear in result.drift_summary.
+  //
+  // C3-C6 assert against findOurPairPrecise() which is a parallel SQL
+  // implementation. A bug in the cron's FULL OUTER JOIN / filtering could
+  // be masked if the helper still computes the right drift. This test
+  // forces a drift so large it MUST enter the top-20 drift_summary, then
+  // asserts against the cron's actual returned row.
+  //
+  // We use 10_000_000 minutes (≈ 19 years of lesson time) — guaranteed to
+  // exceed any pre-existing wild drift on the branch by orders of magnitude.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C15: extreme drift appears in cron output drift_summary (P2 mitigation)', async () => {
+    await resetState();
+    const EXTREME = 10_000_000;
+    await insertCt({ minutes: EXTREME });
+    // No LCB row — missing LCB direction of FULL OUTER JOIN.
+    const result = await runCron();
+    expect(result.ok).toBe(true);
+
+    // The pair MUST be in drift_summary at this drift magnitude.
+    const inSummary = (result.drift_summary || []).find(
+      r => r.learner_id === testLearnerId && r.instructor_id === INSTRUCTOR_ID
+    );
+    expect(inSummary).toBeTruthy();
+    expect(inSummary.computed_ledger_balance_minutes).toBe(EXTREME);
+    expect(inSummary.actual_lcb_balance_minutes).toBe(0);
+    expect(inSummary.drift_minutes).toBe(-EXTREME);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C16 — P2 mitigation: drift_count delta strictly increases by 1.
+  //
+  // Independent of WHICH row makes drift_summary, drift_count is the full
+  // count from the cron's SQL — so a +1 delta when we inject exactly one
+  // new drifting pair is a direct assertion against the cron's output.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C16: injecting one drift pair increments cron drift_count by exactly 1', async () => {
+    await resetState();
+    const before = await runCron();
+
+    // Inject phantom LCB drift (LCB > 0 with no ledger).
+    await setLcbBalance(45);
+    const after = await runCron();
+    expect(after.drift_count).toBe(before.drift_count + 1);
+
+    // And cleaning it up brings drift_count back to baseline.
+    await deleteLcb();
+    const final = await runCron();
+    expect(final.drift_count).toBe(before.drift_count);
   });
 });
