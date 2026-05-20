@@ -224,6 +224,36 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  // P1 round-2 regression (PR #174 review): the Phase 2A reconcile CTE used
+  // to scan credit_transactions in a sibling CTE after `inserted` had
+  // already INSERTed into the same table. Data-modifying CTEs share one
+  // snapshot, so sibling table scans don't see the new row — first-ever
+  // grants/deducts/admin-adds would set balance_minutes to 0 (existing sum)
+  // and lose the just-inserted minutes. Fix: split into granted_existing
+  // (table scan, excludes new row) + granted_new (FROM inserted, sees new
+  // row via the CTE alias).
+  // ───────────────────────────────────────────────────────────────────────────
+  test('P1 round-2 regression — Phase 2A reconcile splits granted_existing + granted_new', async () => {
+    _setPhase2AImplementedForTests(true);
+    const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
+
+    await grantCredits({ sql, ...baseArgs, instructorId: 1 });
+
+    const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'));
+    expect(phase2ACall).toBeTruthy();
+    // The new shape has BOTH granted_existing AND granted_new CTEs.
+    expect(phase2ACall.text).toMatch(/granted_existing AS \(/);
+    expect(phase2ACall.text).toMatch(/granted_new AS \(\s*SELECT[\s\S]*?FROM inserted\s*\)/);
+    // And the UPDATE uses both: SUM = granted_existing + granted_new - drawn - adjusted.
+    expect(phase2ACall.text).toMatch(/granted_existing[\s\S]*\+[\s\S]*granted_new/);
+    // The old `granted AS (SELECT SUM(minutes) FROM credit_transactions WHERE ...)`
+    // monolithic CTE must NOT appear by itself (we still have the named CTEs
+    // granted_existing and granted_new, but no bare "WITH granted AS" or
+    // ", granted AS" pattern).
+    expect(phase2ACall.text).not.toMatch(/,\s*granted AS \(/);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
   // P2 regression (PR #174 review): verify-session must propagate
   // instructor_id + effective_rate_pence_per_minute + paymentIntentId to
   // grantCredits. We exercise the grantCredits args directly here; the

@@ -527,14 +527,23 @@ async function grantCreditsPhase2A({
         ${effectiveRatePencePerMinute}, ${resolvedSource}, ${absorbedBy}
       FROM ensured
       ON CONFLICT (stripe_session_id) WHERE stripe_session_id IS NOT NULL DO NOTHING
-      RETURNING id
+      RETURNING id, minutes
     ),
-    granted AS (
+    -- Reconcile: existing rows (via table scan — won't see the row just
+    -- inserted in this statement, due to data-modifying-CTE snapshot
+    -- semantics) PLUS the inserted CTE's own RETURNING set (which IS
+    -- visible because we're querying the CTE alias, not re-scanning the
+    -- table). Total = existing + new. Same reason the Pre-2A variant
+    -- derives applied from the inserted CTE rather than re-scanning.
+    granted_existing AS (
       SELECT COALESCE(SUM(minutes), 0)::int AS m
         FROM credit_transactions
        WHERE learner_id = ${learnerId}
          AND instructor_id = ${instructorId}
          AND school_id = ${schoolId}
+    ),
+    granted_new AS (
+      SELECT COALESCE(SUM(minutes), 0)::int AS m FROM inserted
     ),
     drawn AS (
       SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS m
@@ -554,7 +563,8 @@ async function grantCreditsPhase2A({
          AND ct.school_id = ${schoolId}
     )
     UPDATE learner_credit_balances lcb
-       SET balance_minutes = (SELECT m FROM granted) - (SELECT m FROM drawn) - (SELECT m FROM adjusted),
+       SET balance_minutes = (SELECT m FROM granted_existing) + (SELECT m FROM granted_new)
+                           - (SELECT m FROM drawn) - (SELECT m FROM adjusted),
            updated_at = NOW()
      WHERE lcb.learner_id = ${learnerId}
        AND lcb.instructor_id = ${instructorId}
@@ -780,14 +790,23 @@ async function lockBalanceAndMutatePhase2A({
       FROM ensured
       WHERE ${deductGuard === null}::boolean
          OR ensured.balance_minutes >= ${deductGuard}
-      RETURNING id
+      RETURNING id, minutes
     ),
-    granted AS (
+    -- Reconcile: existing rows (via table scan — won't see the row just
+    -- inserted in this statement, due to data-modifying-CTE snapshot
+    -- semantics) PLUS the inserted CTE's own RETURNING set (visible
+    -- because we're querying the CTE alias, not re-scanning the table).
+    -- Without this split, first-ever grants/deducts would set
+    -- balance_minutes = 0 (existing sum) and lose the new row's minutes.
+    granted_existing AS (
       SELECT COALESCE(SUM(minutes), 0)::int AS m
         FROM credit_transactions
        WHERE learner_id = ${learnerId}
          AND instructor_id = ${instructorId}
          AND school_id = ${schoolId}
+    ),
+    granted_new AS (
+      SELECT COALESCE(SUM(minutes), 0)::int AS m FROM inserted
     ),
     drawn AS (
       SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS m
@@ -807,7 +826,8 @@ async function lockBalanceAndMutatePhase2A({
          AND ct.school_id = ${schoolId}
     )
     UPDATE learner_credit_balances lcb
-       SET balance_minutes = (SELECT m FROM granted) - (SELECT m FROM drawn) - (SELECT m FROM adjusted),
+       SET balance_minutes = (SELECT m FROM granted_existing) + (SELECT m FROM granted_new)
+                           - (SELECT m FROM drawn) - (SELECT m FROM adjusted),
            updated_at = NOW()
      WHERE lcb.learner_id = ${learnerId}
        AND lcb.instructor_id = ${instructorId}
