@@ -459,20 +459,37 @@ async function grantCreditsPre2A({
 //               stripe_payment_intent_id (partial), stripe_charge_id (partial).
 //               Plan §Step 0 L165-177. The WHERE clause on the partial-index
 //               arbiter is load-bearing — PG requires it for arbiter inference.
-//   granted   — SUM(credit_transactions.minutes) for this scope.
-//   drawn     — SUM(booking_credit_sources.minutes_drawn) where refunded_at IS NULL,
-//               joined via the parent credit_transactions row's scope.
-//               Plan L190 SAYS `bcs.minutes` — that's a plan-drift trap;
-//               the real column is `minutes_drawn` (db/migration.sql:2210).
-//   adjusted  — SUM(credit_source_adjustments.minutes_adjusted). Plan L198
-//               SAYS `csa.minutes_delta` — same plan-drift trap; real
-//               column is `minutes_adjusted` (db/migration.sql:2232). CSA
-//               adjustments subtract from available, so we subtract their
-//               sum from the materialised balance.
+//               RETURNING (id, minutes) — caller adds the new minutes to LCB.
 //
-// The top-level UPDATE writes `granted - drawn - adjusted` into LCB and
-// RETURNING surfaces the new balance + (transaction_id, alreadyProcessed)
-// so the caller can branch on first-grant vs duplicate-retry.
+// The top-level UPDATE is `balance_minutes = ensured.balance_minutes +
+// inserted.minutes`. This is a deliberate departure from the plan's
+// "reconcile from ledger" wording (SUM(ct) − SUM(bcs) + SUM(csa)). That
+// wording is the right shape for a periodic divergence-check (Step 4.5
+// TODO below); it is the WRONG shape for an inline single-statement
+// writer because PG's READ COMMITTED snapshot is taken at statement
+// start, before the LCB row lock is acquired. A sibling table-scan on
+// credit_transactions inside the same statement therefore can't see a
+// concurrent transaction that committed while this statement was
+// waiting on the LCB row lock. Two concurrent writes would each scan
+// the pre-lock snapshot, each add their own minutes, and each overwrite
+// LCB.balance_minutes with `pre_snapshot_sum + my_new`, losing the
+// other writer's increment.
+//
+// The lock-then-running-total pattern (ensured.balance_minutes is read
+// AFTER the row lock is acquired by ON CONFLICT DO UPDATE — that
+// returns the post-conflict committed value) dodges the snapshot
+// problem entirely. The locked balance is correct by construction;
+// add your own delta to it. Duplicate Stripe retries: `inserted` is
+// empty, delta is 0, LCB.balance_minutes is rewritten to its current
+// value (no-op), alreadyProcessed = true. Exactly what we want.
+//
+// Step 4.5 TODO: add a divergence-check cron that compares
+// learner_credit_balances.balance_minutes against the full ledger
+// reconcile: SUM(credit_transactions.minutes)
+// − SUM(booking_credit_sources.minutes_drawn)
+// − SUM(credit_source_adjustments.minutes_adjusted). Inline writers
+// treat LCB as the locked running total; the cron is the guardrail
+// for drift.
 
 async function grantCreditsPhase2A({
   sql,
@@ -512,7 +529,7 @@ async function grantCreditsPhase2A({
       VALUES (${learnerId}, ${instructorId}, ${schoolId}, 0)
       ON CONFLICT (learner_id, instructor_id) DO UPDATE
         SET updated_at = learner_credit_balances.updated_at
-      RETURNING id
+      RETURNING balance_minutes
     ),
     inserted AS (
       INSERT INTO credit_transactions
@@ -528,43 +545,10 @@ async function grantCreditsPhase2A({
       FROM ensured
       ON CONFLICT (stripe_session_id) WHERE stripe_session_id IS NOT NULL DO NOTHING
       RETURNING id, minutes
-    ),
-    -- Reconcile: existing rows (via table scan — won't see the row just
-    -- inserted in this statement, due to data-modifying-CTE snapshot
-    -- semantics) PLUS the inserted CTE's own RETURNING set (which IS
-    -- visible because we're querying the CTE alias, not re-scanning the
-    -- table). Total = existing + new. Same reason the Pre-2A variant
-    -- derives applied from the inserted CTE rather than re-scanning.
-    granted_existing AS (
-      SELECT COALESCE(SUM(minutes), 0)::int AS m
-        FROM credit_transactions
-       WHERE learner_id = ${learnerId}
-         AND instructor_id = ${instructorId}
-         AND school_id = ${schoolId}
-    ),
-    granted_new AS (
-      SELECT COALESCE(SUM(minutes), 0)::int AS m FROM inserted
-    ),
-    drawn AS (
-      SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS m
-        FROM booking_credit_sources bcs
-        JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
-       WHERE ct.learner_id = ${learnerId}
-         AND ct.instructor_id = ${instructorId}
-         AND ct.school_id = ${schoolId}
-         AND bcs.refunded_at IS NULL
-    ),
-    adjusted AS (
-      SELECT COALESCE(SUM(csa.minutes_adjusted), 0)::int AS m
-        FROM credit_source_adjustments csa
-        JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
-       WHERE ct.learner_id = ${learnerId}
-         AND ct.instructor_id = ${instructorId}
-         AND ct.school_id = ${schoolId}
     )
     UPDATE learner_credit_balances lcb
-       SET balance_minutes = (SELECT m FROM granted_existing) + (SELECT m FROM granted_new)
-                           - (SELECT m FROM drawn) - (SELECT m FROM adjusted),
+       SET balance_minutes = (SELECT balance_minutes FROM ensured)
+                           + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
            updated_at = NOW()
      WHERE lcb.learner_id = ${learnerId}
        AND lcb.instructor_id = ${instructorId}
@@ -791,43 +775,14 @@ async function lockBalanceAndMutatePhase2A({
       WHERE ${deductGuard === null}::boolean
          OR ensured.balance_minutes >= ${deductGuard}
       RETURNING id, minutes
-    ),
-    -- Reconcile: existing rows (via table scan — won't see the row just
-    -- inserted in this statement, due to data-modifying-CTE snapshot
-    -- semantics) PLUS the inserted CTE's own RETURNING set (visible
-    -- because we're querying the CTE alias, not re-scanning the table).
-    -- Without this split, first-ever grants/deducts would set
-    -- balance_minutes = 0 (existing sum) and lose the new row's minutes.
-    granted_existing AS (
-      SELECT COALESCE(SUM(minutes), 0)::int AS m
-        FROM credit_transactions
-       WHERE learner_id = ${learnerId}
-         AND instructor_id = ${instructorId}
-         AND school_id = ${schoolId}
-    ),
-    granted_new AS (
-      SELECT COALESCE(SUM(minutes), 0)::int AS m FROM inserted
-    ),
-    drawn AS (
-      SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS m
-        FROM booking_credit_sources bcs
-        JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
-       WHERE ct.learner_id = ${learnerId}
-         AND ct.instructor_id = ${instructorId}
-         AND ct.school_id = ${schoolId}
-         AND bcs.refunded_at IS NULL
-    ),
-    adjusted AS (
-      SELECT COALESCE(SUM(csa.minutes_adjusted), 0)::int AS m
-        FROM credit_source_adjustments csa
-        JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
-       WHERE ct.learner_id = ${learnerId}
-         AND ct.instructor_id = ${instructorId}
-         AND ct.school_id = ${schoolId}
     )
+    -- LCB as locked running total (see grantCreditsPhase2A header). The
+    -- ensured CTE's RETURNING gives us the post-lock committed balance;
+    -- add this writer's own delta from inserted. No ledger re-scan, no
+    -- READ COMMITTED snapshot hazard.
     UPDATE learner_credit_balances lcb
-       SET balance_minutes = (SELECT m FROM granted_existing) + (SELECT m FROM granted_new)
-                           - (SELECT m FROM drawn) - (SELECT m FROM adjusted),
+       SET balance_minutes = (SELECT balance_minutes FROM ensured)
+                           + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
            updated_at = NOW()
      WHERE lcb.learner_id = ${learnerId}
        AND lcb.instructor_id = ${instructorId}

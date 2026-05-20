@@ -224,16 +224,23 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // P1 round-2 regression (PR #174 review): the Phase 2A reconcile CTE used
-  // to scan credit_transactions in a sibling CTE after `inserted` had
-  // already INSERTed into the same table. Data-modifying CTEs share one
-  // snapshot, so sibling table scans don't see the new row — first-ever
-  // grants/deducts/admin-adds would set balance_minutes to 0 (existing sum)
-  // and lose the just-inserted minutes. Fix: split into granted_existing
-  // (table scan, excludes new row) + granted_new (FROM inserted, sees new
-  // row via the CTE alias).
+  // P1 round-3 regression (PR #174 review): the previous reconcile shape
+  // (granted_existing scan + granted_new from inserted) was correct for the
+  // first-write visibility problem but still raced two concurrent writers
+  // against each other under READ COMMITTED. PG takes the statement
+  // snapshot BEFORE the LCB row lock is acquired, so the table scan inside
+  // the same statement can't see a sibling transaction that committed
+  // while we waited on the lock. Both writers would scan the pre-lock
+  // snapshot and each overwrite LCB with `pre_snapshot_sum + my_new` —
+  // the second commit silently loses the first writer's increment.
+  //
+  // The fix: LCB is the locked running total. ensured's RETURNING gives
+  // us the post-lock committed balance (correct by construction); add
+  // this writer's own inserted minutes. No ledger re-scan inside the
+  // statement. Periodic divergence check is the Step 4.5 cron, not
+  // inline.
   // ───────────────────────────────────────────────────────────────────────────
-  test('P1 round-2 regression — Phase 2A reconcile splits granted_existing + granted_new', async () => {
+  test('P1 round-3 regression — Phase 2A uses LCB-as-locked-running-total, not ledger reconcile', async () => {
     _setPhase2AImplementedForTests(true);
     const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
 
@@ -241,16 +248,17 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
 
     const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'));
     expect(phase2ACall).toBeTruthy();
-    // The new shape has BOTH granted_existing AND granted_new CTEs.
-    expect(phase2ACall.text).toMatch(/granted_existing AS \(/);
-    expect(phase2ACall.text).toMatch(/granted_new AS \(\s*SELECT[\s\S]*?FROM inserted\s*\)/);
-    // And the UPDATE uses both: SUM = granted_existing + granted_new - drawn - adjusted.
-    expect(phase2ACall.text).toMatch(/granted_existing[\s\S]*\+[\s\S]*granted_new/);
-    // The old `granted AS (SELECT SUM(minutes) FROM credit_transactions WHERE ...)`
-    // monolithic CTE must NOT appear by itself (we still have the named CTEs
-    // granted_existing and granted_new, but no bare "WITH granted AS" or
-    // ", granted AS" pattern).
+    // ensured returns balance_minutes (the post-lock committed value).
+    expect(phase2ACall.text).toMatch(/DO UPDATE[\s\S]*?RETURNING balance_minutes/);
+    // UPDATE adds ensured.balance_minutes + inserted minutes.
+    expect(phase2ACall.text).toMatch(/SELECT balance_minutes FROM ensured/);
+    expect(phase2ACall.text).toMatch(/SELECT SUM\(minutes\)[\s\S]*?FROM inserted/);
+    // No reconcile-from-ledger CTEs.
+    expect(phase2ACall.text).not.toMatch(/granted_existing AS \(/);
+    expect(phase2ACall.text).not.toMatch(/granted_new AS \(/);
     expect(phase2ACall.text).not.toMatch(/,\s*granted AS \(/);
+    expect(phase2ACall.text).not.toMatch(/,\s*drawn AS \(/);
+    expect(phase2ACall.text).not.toMatch(/,\s*adjusted AS \(/);
   });
 
   // ───────────────────────────────────────────────────────────────────────────
