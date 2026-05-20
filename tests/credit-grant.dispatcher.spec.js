@@ -51,8 +51,11 @@ function makeMockSql({ phase2aSchemaExists }) {
     if (text.includes('information_schema.columns')) {
       return Promise.resolve(phase2aSchemaExists ? [{ '?column?': 1 }] : []);
     }
-    // Match the Phase-2A CTE (ensured + locked + reconcile against LCB).
-    if (text.includes('WITH ensured AS') && text.includes('learner_credit_balances')) {
+    // Match the Phase-2A SQL: LCB write via INSERT ... ON CONFLICT DO UPDATE.
+    // See `Phase 2A SQL shape` regression test below for why this is the
+    // load-bearing identifier.
+    if (text.includes('INSERT INTO learner_credit_balances')
+        && text.includes('ON CONFLICT (learner_id, instructor_id) DO UPDATE')) {
       return Promise.resolve([{
         balance_minutes: 90,
         transaction_id: 42,
@@ -71,6 +74,16 @@ function makeMockSql({ phase2aSchemaExists }) {
     return Promise.resolve([]);
   };
   return { sql, calls };
+}
+
+// Identifier for the Phase 2A LCB write across all three statements
+// (grantCreditsPhase2A, lockBalanceAndMutatePhase2A, lockBalanceAdjustPhase2A).
+// All three end in an INSERT INTO learner_credit_balances ... ON CONFLICT
+// (learner_id, instructor_id) DO UPDATE clause. Anchored on text matches
+// so it survives whitespace/CTE-reorder refactors but pins the shape.
+function isPhase2ALcbWrite(text) {
+  return text.includes('INSERT INTO learner_credit_balances')
+      && text.includes('ON CONFLICT (learner_id, instructor_id) DO UPDATE');
 }
 
 const baseArgs = {
@@ -156,7 +169,7 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
     const result = await grantCredits({ sql, ...baseArgs, instructorId: 1 });
 
     expect(result.ok).toBe(true);
-    expect(calls.some(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'))).toBe(true);
+    expect(calls.some(c => isPhase2ALcbWrite(c.text))).toBe(true);
     // And NOT the Pre-2A CTE.
     expect(calls.some(c => c.text.includes('WITH locked AS') && c.text.includes('INSERT INTO credit_transactions'))).toBe(false);
   });
@@ -171,7 +184,7 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
     // for (PER-INSTRUCTOR-CREDITS-PLAN.md L225).
     const result = await grantCredits({ sql, ...baseArgs, instructorId: 1 });
     expect(result.ok).toBe(true);
-    expect(calls.some(c => c.text.includes('WITH ensured AS'))).toBe(true);
+    expect(calls.some(c => isPhase2ALcbWrite(c.text))).toBe(true);
   });
 
   test('PHASE_2A_IMPLEMENTED=true + schema present + missing instructorId → grandfather to id=1 (legacy_pre_cutover)', async () => {
@@ -187,8 +200,8 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
       expect(result.ok).toBe(true);
       expect(result.legacyPreCutover).toBe(true);
       expect(result.instructorId).toBe(1);
-      // The CTE's bound values include instructorId=1.
-      const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS'));
+      // The Phase 2A SQL's bound values include instructorId=1.
+      const phase2ACall = calls.find(c => isPhase2ALcbWrite(c.text));
       expect(phase2ACall).toBeTruthy();
       expect(phase2ACall.values).toContain(1);
       expect(warnings.some(w => w.includes('legacy_pre_cutover'))).toBe(true);
@@ -198,67 +211,55 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // P1 regression (PR #174 review): the Phase 2A CTE must NOT use the
-  // ensured + separate `locked AS (... FOR UPDATE)` pattern. That pattern
-  // silently fails first-ever LCB writes because data-modifying CTEs share
-  // one snapshot. The fix collapses them into a single
-  // INSERT ... ON CONFLICT DO UPDATE ... RETURNING clause. This test asserts
-  // the SQL text shape — if anyone reintroduces a separate locked CTE,
-  // this fails.
+  // Phase 2A SQL shape — load-bearing anti-pattern assertion
   // ───────────────────────────────────────────────────────────────────────────
-  test('P1 regression — Phase 2A CTE uses ON CONFLICT DO UPDATE, not separate locked CTE', async () => {
-    _setPhase2AImplementedForTests(true);
-    const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
-
-    await grantCredits({ sql, ...baseArgs, instructorId: 1 });
-
-    const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'));
-    expect(phase2ACall).toBeTruthy();
-    // ON CONFLICT DO UPDATE is the new pattern.
-    expect(phase2ACall.text).toContain('ON CONFLICT (learner_id, instructor_id) DO UPDATE');
-    // No separate "locked AS (... FOR UPDATE)" CTE in the Phase 2A SQL —
-    // ensured's RETURNING + the implicit row lock on DO UPDATE replaces it.
-    // (We allow FOR UPDATE in the Pre-2A path's `WITH locked AS`, but the
-    // Phase 2A call shouldn't contain that exact construct.)
-    expect(phase2ACall.text).not.toMatch(/locked AS \(\s*SELECT[^)]*FROM learner_credit_balances[^)]*FOR UPDATE/);
-  });
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // P1 round-3 regression (PR #174 review): the previous reconcile shape
-  // (granted_existing scan + granted_new from inserted) was correct for the
-  // first-write visibility problem but still raced two concurrent writers
-  // against each other under READ COMMITTED. PG takes the statement
-  // snapshot BEFORE the LCB row lock is acquired, so the table scan inside
-  // the same statement can't see a sibling transaction that committed
-  // while we waited on the lock. Both writers would scan the pre-lock
-  // snapshot and each overwrite LCB with `pre_snapshot_sum + my_new` —
-  // the second commit silently loses the first writer's increment.
+  // PR #174 shipped + reverted same day (PR #175). The shape that broke:
   //
-  // The fix: LCB is the locked running total. ensured's RETURNING gives
-  // us the post-lock committed balance (correct by construction); add
-  // this writer's own inserted minutes. No ledger re-scan inside the
-  // statement. Periodic divergence check is the Step 4.5 cron, not
-  // inline.
+  //   WITH ensured  AS (INSERT INTO LCB ... ON CONFLICT DO UPDATE RETURNING ...),
+  //        inserted AS (INSERT INTO credit_transactions ... RETURNING minutes)
+  //   UPDATE learner_credit_balances lcb
+  //      SET balance_minutes = ...
+  //    WHERE lcb.learner_id = $1 AND lcb.instructor_id = $2;
+  //
+  // PostgreSQL docs §7.8.4: data-modifying CTEs share the pre-statement
+  // snapshot, so the outer UPDATE's table scan can't see ensured's INSERT.
+  // First-ever (learner, instructor) writes silently drop the balance
+  // update while still inserting the ledger row. Stripe retries hit the
+  // session_id arbiter and skip. Learner stuck at 0.
+  //
+  // The fix: make the LCB write itself the INSERT ... ON CONFLICT DO
+  // UPDATE statement, with the ledger insert as a feeding CTE. The
+  // conflict branch reads + locks LCB atomically (per ON CONFLICT DO
+  // UPDATE semantics, not §7.8.4 CTE rules).
+  //
+  // Assertions below survive harmless formatting refactors (whitespace,
+  // CTE reordering, comment moves) but pin the load-bearing shape.
   // ───────────────────────────────────────────────────────────────────────────
-  test('P1 round-3 regression — Phase 2A uses LCB-as-locked-running-total, not ledger reconcile', async () => {
+  test('Phase 2A SQL — LCB write via INSERT...ON CONFLICT DO UPDATE; no top-level UPDATE on LCB', async () => {
     _setPhase2AImplementedForTests(true);
     const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
 
     await grantCredits({ sql, ...baseArgs, instructorId: 1 });
 
-    const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'));
+    const phase2ACall = calls.find(c => isPhase2ALcbWrite(c.text));
     expect(phase2ACall).toBeTruthy();
-    // ensured returns balance_minutes (the post-lock committed value).
-    expect(phase2ACall.text).toMatch(/DO UPDATE[\s\S]*?RETURNING balance_minutes/);
-    // UPDATE adds ensured.balance_minutes + inserted minutes.
-    expect(phase2ACall.text).toMatch(/SELECT balance_minutes FROM ensured/);
-    expect(phase2ACall.text).toMatch(/SELECT SUM\(minutes\)[\s\S]*?FROM inserted/);
-    // No reconcile-from-ledger CTEs.
-    expect(phase2ACall.text).not.toMatch(/granted_existing AS \(/);
-    expect(phase2ACall.text).not.toMatch(/granted_new AS \(/);
-    expect(phase2ACall.text).not.toMatch(/,\s*granted AS \(/);
-    expect(phase2ACall.text).not.toMatch(/,\s*drawn AS \(/);
-    expect(phase2ACall.text).not.toMatch(/,\s*adjusted AS \(/);
+
+    // MUST: the LCB write is an INSERT … ON CONFLICT (learner_id, instructor_id)
+    // DO UPDATE … on learner_credit_balances. This is the only shape with
+    // correct first-ever-write semantics for the (learner_id, instructor_id)
+    // pair (per PG §7.8.4).
+    expect(phase2ACall.text).toMatch(
+      /INSERT\s+INTO\s+learner_credit_balances[\s\S]*?ON\s+CONFLICT\s*\(\s*learner_id\s*,\s*instructor_id\s*\)\s*DO\s+UPDATE/
+    );
+
+    // MUST NOT: a top-level UPDATE on learner_credit_balances with a
+    // table-filter WHERE (the broken shape from PR #174). Note the
+    // negative lookahead skipping `ON CONFLICT DO UPDATE` so the conflict-
+    // branch UPDATE inside the INSERT is not flagged.
+    //   - Pattern matches `UPDATE learner_credit_balances <alias> SET ...`
+    //     that is NOT preceded by `ON CONFLICT (...) DO `.
+    const topLevelUpdate = /(^|\n)\s*UPDATE\s+learner_credit_balances\s+\w+\s+SET[\s\S]*?WHERE\s+\w+\.learner_id/i;
+    expect(phase2ACall.text).not.toMatch(topLevelUpdate);
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -284,7 +285,7 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
     expect(result.instructorId).toBe(7);
 
     // The bound values include all three Phase-2A fields.
-    const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS'));
+    const phase2ACall = calls.find(c => isPhase2ALcbWrite(c.text));
     expect(phase2ACall).toBeTruthy();
     expect(phase2ACall.values).toContain(7);   // instructorId
     expect(phase2ACall.values).toContain(92);  // effectiveRatePencePerMinute
@@ -328,8 +329,9 @@ function makeMutateMockSql({ phase2aSchemaExists, mode }) {
     if (text.includes('information_schema.columns')) {
       return Promise.resolve(phase2aSchemaExists ? [{ '?column?': 1 }] : []);
     }
-    // Phase 2A CTE.
-    if (text.includes('WITH ensured AS') && text.includes('learner_credit_balances')) {
+    // Phase 2A SQL: LCB write via INSERT ... ON CONFLICT DO UPDATE.
+    if (text.includes('INSERT INTO learner_credit_balances')
+        && text.includes('ON CONFLICT (learner_id, instructor_id) DO UPDATE')) {
       if (mode === 'ok') return Promise.resolve([{ balance_minutes: 120, transaction_id: 7 }]);
       // no-row paths trigger disambiguation query
       return Promise.resolve([]);
@@ -379,17 +381,17 @@ test.describe('lockBalanceAndMutate dispatcher', () => {
     expect(result.ok).toBe(true);
     expect(result.balanceMinutes).toBe(120);
     expect(calls.some(c => c.text.includes('WITH locked AS') && c.text.includes('FROM learner_users'))).toBe(true);
-    // Did NOT touch the LCB CTE.
-    expect(calls.some(c => c.text.includes('WITH ensured AS'))).toBe(false);
+    // Did NOT touch the LCB write.
+    expect(calls.some(c => isPhase2ALcbWrite(c.text))).toBe(false);
   });
 
-  test('PHASE_2A_IMPLEMENTED=true + schema present → routes to Phase 2A LCB CTE', async () => {
+  test('PHASE_2A_IMPLEMENTED=true + schema present → routes to Phase 2A LCB write', async () => {
     _setPhase2AImplementedForTests(true);
     const { sql, calls } = makeMutateMockSql({ phase2aSchemaExists: true, mode: 'ok' });
     const result = await lockBalanceAndMutate(sql, { ...baseMutateArgs, instructorId: 1 });
     expect(result.ok).toBe(true);
     expect(result.instructorId).toBe(1);
-    expect(calls.some(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'))).toBe(true);
+    expect(calls.some(c => isPhase2ALcbWrite(c.text))).toBe(true);
   });
 
   test('Pre-2A INSUFFICIENT_BALANCE: CTE returns no row + learner exists', async () => {
@@ -432,8 +434,8 @@ test.describe('lockBalanceAndMutate dispatcher', () => {
       const result = await lockBalanceAndMutate(sql, baseMutateArgs); // no instructorId
       expect(result.ok).toBe(true);
       expect(result.instructorId).toBe(1);
-      // The Phase-2A CTE was actually called and instructorId=1 made it into the bound values.
-      const ctaCall = calls.find(c => c.text.includes('WITH ensured AS'));
+      // The Phase-2A SQL was actually called and instructorId=1 made it into the bound values.
+      const ctaCall = calls.find(c => isPhase2ALcbWrite(c.text));
       expect(ctaCall).toBeTruthy();
       expect(ctaCall.values).toContain(1);
       expect(warnings.some(w => w.includes('legacy_pre_cutover'))).toBe(true);
