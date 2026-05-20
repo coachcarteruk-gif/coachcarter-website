@@ -266,6 +266,21 @@ async function handleVerify(req, res) {
     // alreadyProcessed=true via the partial unique index. Pricing is sourced
     // from the Stripe Session metadata above — never from a live rate helper
     // (defence-in-depth against mid-flight rate changes).
+    //
+    // Step 4 / Phase 2A: source instructor_id + effective_rate_pence_per_minute
+    // + paymentIntentId from Stripe metadata too. Without these, a verify-
+    // session call that beats the webhook to the database would grandfather
+    // to instructor 1, then the webhook's later INSERT would no-op on the
+    // uq_credit_tx_session arbiter — locking the misroute in place. Mirrors
+    // the same args handleCreditPurchase passes (api/webhook.js).
+    const instructorIdMeta = parseInt(metadata.instructor_id, 10) || null;
+    const effectiveRatePencePerMinute = minutes > 0
+      ? Math.round(amountPence / minutes)
+      : null;
+    const paymentIntentId = typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id || null;
+
     const grant = await grantCredits({
       sql,
       learnerId,
@@ -275,6 +290,10 @@ async function handleVerify(req, res) {
       amountPence,
       paymentMethod,
       sessionId,
+      instructorId: instructorIdMeta,
+      effectiveRatePencePerMinute,
+      paymentIntentId,
+      source: 'stripe',
     });
 
     if (!grant.ok) {
