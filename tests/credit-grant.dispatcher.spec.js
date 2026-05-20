@@ -197,6 +197,62 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
     }
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // P1 regression (PR #174 review): the Phase 2A CTE must NOT use the
+  // ensured + separate `locked AS (... FOR UPDATE)` pattern. That pattern
+  // silently fails first-ever LCB writes because data-modifying CTEs share
+  // one snapshot. The fix collapses them into a single
+  // INSERT ... ON CONFLICT DO UPDATE ... RETURNING clause. This test asserts
+  // the SQL text shape — if anyone reintroduces a separate locked CTE,
+  // this fails.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('P1 regression — Phase 2A CTE uses ON CONFLICT DO UPDATE, not separate locked CTE', async () => {
+    _setPhase2AImplementedForTests(true);
+    const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
+
+    await grantCredits({ sql, ...baseArgs, instructorId: 1 });
+
+    const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS') && c.text.includes('learner_credit_balances'));
+    expect(phase2ACall).toBeTruthy();
+    // ON CONFLICT DO UPDATE is the new pattern.
+    expect(phase2ACall.text).toContain('ON CONFLICT (learner_id, instructor_id) DO UPDATE');
+    // No separate "locked AS (... FOR UPDATE)" CTE in the Phase 2A SQL —
+    // ensured's RETURNING + the implicit row lock on DO UPDATE replaces it.
+    // (We allow FOR UPDATE in the Pre-2A path's `WITH locked AS`, but the
+    // Phase 2A call shouldn't contain that exact construct.)
+    expect(phase2ACall.text).not.toMatch(/locked AS \(\s*SELECT[^)]*FROM learner_credit_balances[^)]*FOR UPDATE/);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // P2 regression (PR #174 review): verify-session must propagate
+  // instructor_id + effective_rate_pence_per_minute + paymentIntentId to
+  // grantCredits. We exercise the grantCredits args directly here; the
+  // routing test confirms the bound values reach the SQL.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('P2 regression — Phase 2A grant accepts instructor_id, effective rate, payment_intent_id', async () => {
+    _setPhase2AImplementedForTests(true);
+    const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
+
+    const result = await grantCredits({
+      sql,
+      ...baseArgs,
+      instructorId: 7,
+      effectiveRatePencePerMinute: 92,
+      paymentIntentId: 'pi_test_p2',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.legacyPreCutover).toBe(false);
+    expect(result.instructorId).toBe(7);
+
+    // The bound values include all three Phase-2A fields.
+    const phase2ACall = calls.find(c => c.text.includes('WITH ensured AS'));
+    expect(phase2ACall).toBeTruthy();
+    expect(phase2ACall.values).toContain(7);   // instructorId
+    expect(phase2ACall.values).toContain(92);  // effectiveRatePencePerMinute
+    expect(phase2ACall.values).toContain('pi_test_p2');
+  });
+
   test('PHASE_2A_IMPLEMENTED=true + neither env var nor schema → routes to Pre-2A', async () => {
     _setPhase2AImplementedForTests(true);
     const { sql, calls } = makeMockSql({ phase2aSchemaExists: false });
