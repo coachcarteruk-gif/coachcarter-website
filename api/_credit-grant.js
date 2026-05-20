@@ -1070,13 +1070,26 @@ async function lockBalanceAdjustPhase2A({
   // DO UPDATE on LCB, with delta baked directly into the values clauses.
   // See grantCreditsPhase2A header for the PG §7.8.4 reasoning.
   //
-  // Deduct guard:
-  //   - First-write deduct: INSERT branch would materialise a row with
-  //     balance_minutes = $delta, which is negative. Refuse by gating the
-  //     SELECT with WHERE delta >= 0 OR allowOverdraft.
-  //   - Existing row deduct: conflict-branch UPDATE WHERE refuses if the
-  //     post-write balance would go negative.
-  // Either refusal path returns no row → caller falls into INSUFFICIENT_BALANCE.
+  // Deduct guard — two refusal paths, same shape as
+  // lockBalanceAndMutatePhase2A (see GPT review of PR #176):
+  //
+  //   First-write deduct (no LCB row, isDeduct=true): SELECT WHERE refuses
+  //     because EXISTS evaluates FALSE → INSERT attempts nothing → no
+  //     CONFLICT branch → no side effect.
+  //
+  //   Existing-row deduct (LCB present, isDeduct=true): SELECT WHERE
+  //     passes (EXISTS=TRUE) → INSERT attempts → ON CONFLICT fires →
+  //     DO UPDATE WHERE post-deduct-non-negative gates the actual write.
+  //     The DO UPDATE reads the row's current value under the conflict
+  //     lock (PG ON CONFLICT DO UPDATE semantics), so concurrent deducts
+  //     serialise correctly.
+  //
+  // Without the EXISTS-gated SELECT WHERE clause, a normal deduct against
+  // an existing row would have `NOT $isDeduct = FALSE`, no row would feed
+  // the INSERT, ON CONFLICT would never trigger, and the helper would
+  // return INSUFFICIENT_BALANCE for any deduct path — breaking the
+  // net-zero pairing used by webhook.js slot-purchase (positive +N then
+  // matching -N).
   const isDeduct = delta < 0 && !allowOverdraft;
 
   const [row] = await sql`
@@ -1084,10 +1097,15 @@ async function lockBalanceAdjustPhase2A({
       (learner_id, instructor_id, school_id, balance_minutes)
     SELECT ${learnerId}, ${instructorId}, ${schoolId}, ${delta}
     WHERE NOT ${isDeduct}::boolean
+       OR EXISTS (
+            SELECT 1 FROM learner_credit_balances
+             WHERE learner_id = ${learnerId}
+               AND instructor_id = ${instructorId}
+          )
     ON CONFLICT (learner_id, instructor_id) DO UPDATE
       SET balance_minutes = learner_credit_balances.balance_minutes + ${delta},
           updated_at = NOW()
-      WHERE ${!isDeduct}::boolean
+      WHERE NOT ${isDeduct}::boolean
          OR learner_credit_balances.balance_minutes + ${delta} >= 0
     RETURNING learner_credit_balances.balance_minutes
   `;
