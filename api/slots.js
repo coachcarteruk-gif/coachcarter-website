@@ -2594,10 +2594,17 @@ async function handleReschedule(req, res) {
       return res.status(409).json({ error: 'Someone is currently booking that slot. Try another or wait a few minutes.' });
 
     // Atomically: mark old booking as refunded, create new one
-    // 1. Mark old booking as refunded
+    // 1. Mark old booking as refunded. credit_returned = TRUE prevents the
+    // divergence cron from double-counting the deduction: the credit was
+    // debited once on the original booking, the new booking carries the
+    // same minutes_deducted forward, and the old row is no longer an
+    // active draw. Without this, the cron's booking_draws CTE counts both
+    // rows and reports +minutes_deducted of drift per reschedule (see
+    // memory/project_step_4_5_shipped.md chip #3 entry for the three
+    // historical bookings affected: #117, #133, #214).
     await sql`
       UPDATE lesson_bookings
-      SET status = ${REFUNDED}, cancelled_at = NOW()
+      SET status = ${REFUNDED}, credit_returned = TRUE, cancelled_at = NOW()
       WHERE id = ${booking_id}
     `;
 
@@ -2634,10 +2641,13 @@ async function handleReschedule(req, res) {
       `;
       newBooking = b;
     } catch (insertErr) {
-      // Rollback: restore old booking
+      // Rollback: restore old booking. credit_returned must flip back to
+      // FALSE in lockstep — leaving it TRUE while status returns to
+      // SCHEDULED would silently exclude the booking from the cron's
+      // booking_draws CTE, manufacturing -minutes_deducted of drift.
       await sql`
         UPDATE lesson_bookings
-        SET status = ${SCHEDULED}, cancelled_at = NULL
+        SET status = ${SCHEDULED}, credit_returned = FALSE, cancelled_at = NULL
         WHERE id = ${booking_id}
       `;
       if (insertErr.message?.includes('uq_booking_slot') || insertErr.code === '23505') {
