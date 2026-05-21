@@ -8,6 +8,10 @@ Format: `**[Date] — Decision** — Reason — Consequence`.
 
 ## 2026-05 — Credits & payouts
 
+**2026-05-21 — Four absorbed refund-without-credit-return bookings are historical learner-cancel artifacts, not Setmore or reschedule rows.**
+Reason: Read-only prod metadata for bookings #111, #113, #165, and #194 shows `created_by='learner'`, `payment_method='credit'`, `setmore_key IS NULL`, `rescheduled_from IS NULL`, `minutes_deducted=90`, `credit_returned=FALSE`, and `credit_forfeited=FALSE`. #111 and #165 were cancelled before the 2026-04-13 `slots.js` fix for invalid 48h date parsing. #194 is explicitly named in commit 46f59df (2026-04-27) as having hit the later Neon DATE-object parsing bug: cancelled with ~104h notice, but the refund branch did not fire. #113 has `cancelled_at=NULL`, so the exact writer cannot be proven from retained row metadata; it is still ruled out as Setmore, instructor cancel, and reschedule, and most likely came from the same early learner-cancel/manual-status era before mutation logging existed.
+Consequence: Do not auto-fix those four rows. The current learner/instructor cancel paths set `credit_returned=TRUE` on refundable cancellations, late learner cancels now stay `scheduled` with `credit_forfeited=TRUE`, and reschedule stale-refund rows were fixed separately by PR #187. Setmore cancellation sync still writes refunded zero-deduction imported rows without setting `credit_returned`, but that did not produce these four (`setmore_key IS NULL`, `minutes_deducted=90`) and should be handled only as a separate hardening question if needed.
+
 **2026-05-21 — B1/B3 absorption rule: do not auto-fix refund-without-credit-return on grandfathered learners.**
 Reason: Plan B1's synthetic `credit_transactions` rows mathematically absorb those draws. Flipping `credit_returned=TRUE` after the fact would manufacture opposite-sign drift because the synthetic CT row is fixed.
 Consequence: Bookings #111, #113, #165, #194 are deliberately left in their current shape. Any future "fix all rows with shape X" sweep on `lesson_bookings` must use an explicit allowlist, not a predicate. See `prod-facts.md` for the canonical list.

@@ -30,6 +30,7 @@
 | Service worker auth-path carve-out + cache bump cc-v4 → cc-v5 | LIVE (PR #161) | `public/sw.js` |
 | Reschedule paths set `credit_returned = TRUE` on old booking (chip #3) | LIVE (PR #187, 2026-05-21 12:45 UTC) | `api/instructor.js handleRescheduleBooking`, `api/slots.js handleReschedule` |
 | Slot-booking webhook confirmation balance fix (chip #5) | LIVE (PR #188, 2026-05-21) | `api/webhook.js handleSlotBooking`, `tests/webhook-slot-booking.spec.js` |
+| Four absorbed refund-without-credit-return bookings origin | INVESTIGATED (2026-05-21) | Historical learner-cancel parser bugs/manual-status era; see `decision-log.md` |
 
 ## Current migration / credits state
 
