@@ -74,10 +74,12 @@ let sql;
 let handler;
 let MARKER_KEY;
 let runCron;
-let groupCLearnerId;         // B1: no LCB, draws at (L, 4), no per-pair CT
-let hasLcbElsewhereLearnerId; // B2: LCB at instructor != 4 + draws at (L, 4)
-let hasPerPairCtLearnerId;   // B3: no LCB, draws at (L, 4), per-pair CT exists
-let returnedDrawsLearnerId;  // B4: no LCB, draws at (L, 4) but credit_returned = TRUE
+let groupCLearnerId;            // B1: no LCB, draws at (L, 4), no per-pair CT
+let hasLcbElsewhereLearnerId;   // B2: LCB at instructor != 4 + draws at (L, 4)
+let hasPerPairCtLearnerId;      // B3: no LCB, draws at (L, 4), per-pair CT exists
+let returnedDrawsLearnerId;     // B4: no LCB, draws at (L, 4) but credit_returned = TRUE
+let mixedCleanRefundedLearnerId; // B9: no LCB, mix of clean + refunded-stale draws at (L, 4)
+let refundedOnlyLearnerId;       // B10: no LCB, only status=refunded credit_returned=FALSE draws
 let createdLearnerIds = [];
 let createdBookingIds = [];
 
@@ -118,7 +120,7 @@ async function makeLearner(label) {
   return row.id;
 }
 
-async function makeBooking(learnerId, instructorId, minutesDeducted, { creditReturned = false } = {}) {
+async function makeBooking(learnerId, instructorId, minutesDeducted, { creditReturned = false, status = 'scheduled' } = {}) {
   // Randomized future slot to avoid uq_instructor_slot collisions across reruns.
   const futureDate = `2027-03-${String((crypto.randomBytes(1)[0] % 28) + 1).padStart(2, '0')}`;
   const hour = String(8 + (crypto.randomBytes(2)[0] % 8)).padStart(2, '0');
@@ -131,7 +133,7 @@ async function makeBooking(learnerId, instructorId, minutesDeducted, { creditRet
        credit_returned, minutes_deducted, school_id, created_by, payment_method)
     VALUES
       (${learnerId}, ${instructorId}, ${futureDate}::date,
-       ${startTime}::time, ${endTime}::time, 'scheduled',
+       ${startTime}::time, ${endTime}::time, ${status},
        ${creditReturned}, ${minutesDeducted}, ${SCHOOL_ID},
        'learner', 'credit')
     RETURNING id
@@ -275,12 +277,10 @@ test.describe('migrate-step-2c-no-lcb-backfill — integration', () => {
     await makeBooking(groupCLearnerId, TARGET_INSTRUCTOR_ID, 90);
 
     // ── B2 fixture: learner with LCB at a different instructor ─────────────
-    // Models the Simon cross-instructor case (learner=11 had LCB at (11, 4)
-    // after B1, draws at (11, 6)). On the test branch we may not have a
-    // second eligible instructor with the right shape — we approximate by
-    // creating an LCB row at instructor=TARGET-1 (or any non-target). The
-    // gate "NOT EXISTS LCB for learner at ANY instructor" should exclude
-    // this learner regardless of which instructor the LCB row is at.
+    // Tests the "NOT EXISTS LCB for learner at ANY instructor" gate. Creates
+    // an LCB row at a non-target instructor + draws at (L, target). The
+    // learner must be excluded from B3 regardless of which instructor the
+    // LCB row is at.
     hasLcbElsewhereLearnerId = await makeLearner('has-lcb-elsewhere');
     await makeBooking(hasLcbElsewhereLearnerId, TARGET_INSTRUCTOR_ID, 60);
     // Pick any other real instructor to host the unrelated LCB row.
@@ -321,6 +321,27 @@ test.describe('migrate-step-2c-no-lcb-backfill — integration', () => {
     returnedDrawsLearnerId = await makeLearner('returned-draws');
     await makeBooking(returnedDrawsLearnerId, TARGET_INSTRUCTOR_ID, 60,
                       { creditReturned: true });
+
+    // ── B9 fixture: clean draw + stale-refund draw at the same pair ────────
+    // Models prod's learner 55 shape — 8 clean scheduled bookings + 1
+    // refunded-but-credit-not-returned booking. The synthetic CT must
+    // count ONLY the clean minutes (60); the refunded booking stays
+    // visible to the cron as residual bug drift for chip #3.
+    mixedCleanRefundedLearnerId = await makeLearner('mixed-clean-refunded');
+    await makeBooking(mixedCleanRefundedLearnerId, TARGET_INSTRUCTOR_ID, 60,
+                      { status: 'scheduled' });
+    await makeBooking(mixedCleanRefundedLearnerId, TARGET_INSTRUCTOR_ID, 90,
+                      { status: 'refunded' });
+
+    // ── B10 fixture: refunded-only learner ─────────────────────────────────
+    // Models prod's learner 11 shape — only booking is status=refunded with
+    // credit_returned=FALSE. After tightening the predicate to exclude
+    // refunded, this learner has zero clean draws — HAVING SUM > 0 in the
+    // candidate aggregation drops the pair entirely. NO synthetic CT
+    // should be written, and the refund-bug drift stays visible.
+    refundedOnlyLearnerId = await makeLearner('refunded-only');
+    await makeBooking(refundedOnlyLearnerId, TARGET_INSTRUCTOR_ID, 90,
+                      { status: 'refunded' });
   });
 
   test.afterAll(async () => {
@@ -371,22 +392,40 @@ test.describe('migrate-step-2c-no-lcb-backfill — integration', () => {
     const breakdown = r.body.candidates_breakdown || [];
     const learnerIds = breakdown.map(c => c.learner_id);
 
-    // Group C learner appears.
+    // Group C learner appears (clean draws only).
     expect(learnerIds).toContain(groupCLearnerId);
+    // Mixed-clean-refunded learner appears (clean half qualifies).
+    expect(learnerIds).toContain(mixedCleanRefundedLearnerId);
     // Excluded cohorts must NOT appear.
     expect(learnerIds).not.toContain(hasLcbElsewhereLearnerId);
     expect(learnerIds).not.toContain(hasPerPairCtLearnerId);
     expect(learnerIds).not.toContain(returnedDrawsLearnerId);
+    expect(learnerIds).not.toContain(refundedOnlyLearnerId);
 
-    // Shape: each candidate carries draws + synthetic minutes (equal — the
-    // structural identity that makes the drift reconcile to 0).
+    // Shape: synthetic minutes = clean draws only (NOT total draws). The
+    // breakdown also reports stale_refund_draws_at_pair so the operator
+    // can predict the residual cron drift after B3 lands.
     for (const c of breakdown) {
       expect(c.active_draw_minutes_at_pair).toBe(c.synthetic_ct_minutes);
-      expect(c.expected_post_drift).toBe(0);
       expect(c.draws_booking_count).toBeGreaterThan(0);
+      expect(c).toHaveProperty('stale_refund_draws_at_pair');
+      expect(c).toHaveProperty('expected_residual_cron_drift_after_b3');
+      expect(c.expected_residual_cron_drift_after_b3).toBe(c.stale_refund_draws_at_pair);
     }
 
-    // No CT row created.
+    // Mixed learner: synthetic CT = 60 (clean), stale = 90 (refunded).
+    const mixed = breakdown.find(c => c.learner_id === mixedCleanRefundedLearnerId);
+    expect(mixed).toBeTruthy();
+    expect(mixed.synthetic_ct_minutes).toBe(60);
+    expect(mixed.stale_refund_draws_at_pair).toBe(90);
+
+    // Group C learner: synthetic CT = 90, no stale.
+    const clean = breakdown.find(c => c.learner_id === groupCLearnerId);
+    expect(clean).toBeTruthy();
+    expect(clean.synthetic_ct_minutes).toBe(90);
+    expect(clean.stale_refund_draws_at_pair).toBe(0);
+
+    // No CT row created (dry-run).
     const synth = await getCt(groupCLearnerId, TARGET_INSTRUCTOR_ID, 'legacy_grandfather');
     expect(synth).toBeFalsy();
   });
@@ -448,6 +487,57 @@ test.describe('migrate-step-2c-no-lcb-backfill — integration', () => {
     const synth = await getCt(returnedDrawsLearnerId, TARGET_INSTRUCTOR_ID,
                               'legacy_grandfather');
     expect(synth).toBeFalsy();
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // B9: mixed clean + refunded stale draws — synthetic CT counts clean only.
+  // Models the prod learner 55 shape: synthetic CT must be 60 (the clean
+  // booking only), NOT 150 (which would silently grandfather the 90-min
+  // stale-refund row and hide chip #3's target bug).
+  //
+  // After B3 inserts the 60-min synthetic CT, the cron sees:
+  //   ΣCT = 60, Σdraws (cron's predicate doesn't filter status) = 150
+  //   expected = 60 - 150 = -90
+  //   actual_lcb = 0
+  //   drift = 0 - (-90) = +90  ← visible to chip #3
+  // ─────────────────────────────────────────────────────────────────────────
+  test('B9: mixed clean + stale-refund learner gets synthetic CT = clean minutes only', async () => {
+    const synth = await getCt(mixedCleanRefundedLearnerId, TARGET_INSTRUCTOR_ID,
+                              'legacy_grandfather');
+    expect(synth).toBeTruthy();
+    expect(synth.minutes).toBe(60); // CRITICAL: NOT 150 — refunded excluded
+
+    // Post-state pair drift = +90 (the stale-refund residual chip #3 will fix).
+    const post = await pairDrift(mixedCleanRefundedLearnerId, TARGET_INSTRUCTOR_ID);
+    expect(post.lcb_minutes).toBe(0);
+    expect(post.ct_minutes).toBe(60);
+    expect(post.booking_minutes).toBe(150); // cron sees both clean + refunded
+    expect(post.drift).toBe(90);
+
+    // No LCB row written.
+    const [anyLcb] = await sql`
+      SELECT id FROM learner_credit_balances
+       WHERE learner_id = ${mixedCleanRefundedLearnerId} LIMIT 1
+    `;
+    expect(anyLcb).toBeFalsy();
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // B10: refunded-only learner — HAVING SUM > 0 drops the pair entirely.
+  // Models the prod learner 11 shape. NO synthetic CT may be written.
+  // Refund-bug drift stays visible to the cron.
+  // ─────────────────────────────────────────────────────────────────────────
+  test('B10: learner with only refunded stale draws gets no synthetic CT', async () => {
+    const synth = await getCt(refundedOnlyLearnerId, TARGET_INSTRUCTOR_ID,
+                              'legacy_grandfather');
+    expect(synth).toBeFalsy();
+
+    // Cron-side reality check: the pair still drifts +90 (refund bug).
+    const post = await pairDrift(refundedOnlyLearnerId, TARGET_INSTRUCTOR_ID);
+    expect(post.lcb_minutes).toBe(0);
+    expect(post.ct_minutes).toBe(0);
+    expect(post.booking_minutes).toBe(90);
+    expect(post.drift).toBe(90);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
