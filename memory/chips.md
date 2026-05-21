@@ -31,6 +31,7 @@ Each chip is a small, well-defined unit of work. Goal · why · risks · files �
   - Step 0 has shipped; remaining gates: 4th-round GPT critique on the plan + checking longest historical Stripe Checkout-session-to-payment-intent gap.
   - `trg_sync_pooled_balance` prerequisite shipped on prod 2026-05-21; re-verify `pg_trigger` and divergence before starting Step 5.
 - **Already present on current `main`:** `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, and focused tests for `api/_pence-allocator.js`.
+- **Accepted decisions (2026-05-21):** add `booking_credit_sources.school_id`; reschedules refund old BCS rows and create fresh replacement rows; mixed-source `list_price_pence` sums payable active BCS contribution excluding instructor-absorbed portions only; direct paid slot purchases create BCS rows against `slot_purchase` CTs.
 - **Likely files:** `api/_credit-grant.js` (writer wiring), `api/slots.js` / `api/webhook.js` / `api/offers.js` (allocation at booking time), `api/_payout-helpers.js` (cron + preview read per-source), `tests/booking-credit-sources.*`.
 - **Success criteria:**
   - `booking_credit_sources` rows created for every new booking after cutover.

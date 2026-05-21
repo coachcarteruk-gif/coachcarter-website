@@ -9,7 +9,7 @@
 //   1. CREATE UNIQUE INDEX uq_credit_tx_payment_intent (partial, on NOT NULL).
 //   2. CREATE UNIQUE INDEX uq_credit_tx_charge (partial, on NOT NULL).
 //   3. CREATE TABLE learner_credit_balances + 2 indexes.
-//   4. CREATE TABLE booking_credit_sources + 3 indexes.
+//   4. CREATE TABLE booking_credit_sources + 4 indexes.
 //   5. CREATE TABLE credit_source_adjustments + 1 index.
 //   6. Backfill learner_credit_balances from learner_users.balance_minutes
 //      (hardcoded instructor_id = 1 — Fraser is the only instructor at backfill
@@ -51,6 +51,7 @@ const NEW_INDEXES = [
   'idx_lcb_instructor',
   'idx_bcs_booking',
   'idx_bcs_credit_tx',
+  'idx_bcs_school',
   'idx_bcs_active',
   'idx_csa_credit_tx',
 ];
@@ -184,6 +185,7 @@ module.exports = async function handler(req, res) {
         id                    SERIAL PRIMARY KEY,
         booking_id            INTEGER NOT NULL REFERENCES lesson_bookings(id) ON DELETE CASCADE,
         credit_transaction_id INTEGER NOT NULL REFERENCES credit_transactions(id),
+        school_id             INTEGER NOT NULL REFERENCES schools(id) DEFAULT 1,
         minutes_drawn         INTEGER NOT NULL CHECK (minutes_drawn > 0),
         rate_pence_per_minute INTEGER NOT NULL,
         contribution_pence    INTEGER NOT NULL,
@@ -194,8 +196,36 @@ module.exports = async function handler(req, res) {
         UNIQUE (booking_id, credit_transaction_id)
       )
     `;
+    await sql`ALTER TABLE booking_credit_sources ADD COLUMN IF NOT EXISTS school_id INTEGER`;
+    await sql`
+      UPDATE booking_credit_sources bcs
+         SET school_id = COALESCE(
+               (SELECT lb.school_id FROM lesson_bookings lb WHERE lb.id = bcs.booking_id),
+               (SELECT ct.school_id FROM credit_transactions ct WHERE ct.id = bcs.credit_transaction_id),
+               1
+             )
+       WHERE bcs.school_id IS NULL
+    `;
+    await sql`ALTER TABLE booking_credit_sources ALTER COLUMN school_id SET DEFAULT 1`;
+    await sql`ALTER TABLE booking_credit_sources ALTER COLUMN school_id SET NOT NULL`;
+    await sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+            FROM pg_constraint
+           WHERE conname = 'booking_credit_sources_school_id_fkey'
+             AND conrelid = 'booking_credit_sources'::regclass
+        ) THEN
+          ALTER TABLE booking_credit_sources
+            ADD CONSTRAINT booking_credit_sources_school_id_fkey
+            FOREIGN KEY (school_id) REFERENCES schools(id);
+        END IF;
+      END $$
+    `;
     await sql`CREATE INDEX IF NOT EXISTS idx_bcs_booking ON booking_credit_sources(booking_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_bcs_credit_tx ON booking_credit_sources(credit_transaction_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_bcs_school ON booking_credit_sources(school_id)`;
     await sql`
       CREATE INDEX IF NOT EXISTS idx_bcs_active
         ON booking_credit_sources(credit_transaction_id)

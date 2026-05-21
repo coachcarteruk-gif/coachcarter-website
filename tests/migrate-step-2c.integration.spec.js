@@ -5,7 +5,7 @@
 //   1. Refuses to run without the Step 2b prereq marker.
 //   2. Dry-run reports tables_to_create / indexes_to_create / lcb_backfill_candidates
 //      without writing.
-//   3. POST creates the three new tables and all eight new indexes.
+//   3. POST creates the three new tables and all nine new indexes.
 //   4. CHECK constraints on the new tables enforce correctly (BCS minutes_drawn,
 //      CSA kind, absorbed_by).
 //   5. UNIQUE constraints enforce idempotency (LCB learner_id+instructor_id,
@@ -339,10 +339,11 @@ test.describe('migrate-step-2c — integration', () => {
         (booking_id, credit_transaction_id, minutes_drawn, rate_pence_per_minute, contribution_pence, absorbed_by)
       VALUES
         (${testBookingId}, ${testCreditTxId}, 60, 92, 5520, NULL)
-      RETURNING id, minutes_drawn, contribution_pence
+      RETURNING id, minutes_drawn, contribution_pence, school_id
     `;
     expect(row.minutes_drawn).toBe(60);
     expect(row.contribution_pence).toBe(5520);
+    expect(row.school_id).toBe(SCHOOL_ID);
   });
 
   test('BCS UNIQUE(booking_id, credit_transaction_id) enforces idempotency', async () => {

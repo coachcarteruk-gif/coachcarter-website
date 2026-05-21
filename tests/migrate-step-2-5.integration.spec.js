@@ -322,13 +322,14 @@ test.describe('migrate-step-2-5 — integration', () => {
     const [bcs] = await sql`
       INSERT INTO booking_credit_sources
         (booking_id, credit_transaction_id, minutes_drawn,
-         rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
+         school_id, rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
       VALUES
         (${bookingId}, ${tx.id}, ${durationMins},
-         0, 0, 0, 'platform')
-      RETURNING id, minutes_drawn, contribution_pence, stripe_fee_pence, absorbed_by
+         ${SCHOOL_ID}, 0, 0, 0, 'platform')
+      RETURNING id, minutes_drawn, school_id, contribution_pence, stripe_fee_pence, absorbed_by
     `;
     expect(bcs.minutes_drawn).toBe(durationMins);
+    expect(bcs.school_id).toBe(SCHOOL_ID);
     expect(bcs.contribution_pence).toBe(0);
     expect(bcs.stripe_fee_pence).toBe(0);
     expect(bcs.absorbed_by).toBe('platform');
