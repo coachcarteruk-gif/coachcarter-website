@@ -17,21 +17,36 @@ SELECT key, completed_at::text
  ORDER BY completed_at;
 
 -- ── 2. Candidate pairs (BCS-aware variant) ─────────────────────────────
--- This MUST mirror the cron's booking_draws CTE in full mode. If
--- booking_credit_sources exists on the target environment, use this query;
--- otherwise drop the BCS NOT EXISTS clause and use the simpler form below.
+-- This MUST mirror the cron's booking_draws CTE PLUS the
+-- `status != 'refunded'` tightening B3 applies. The cron itself does
+-- not filter on status — refunded-but-credit-not-returned rows are an
+-- active draw to the cron (and rightly so; that IS the bug chip #3
+-- fixes). B3 narrows synthetic CT minutes to status != 'refunded' so
+-- the stale-refund residual stays visible.
 --
--- Each row is a pair the migration will INSERT a synthetic legacy_grandfather
--- CT for, with minutes = draws_minutes. The drift on every such pair will
--- become 0 by construction.
+-- If booking_credit_sources exists on the target environment use this
+-- query; otherwise drop the BCS NOT EXISTS clause.
+--
+-- Each row is a pair the migration will INSERT a synthetic
+-- legacy_grandfather CT for, with minutes = draws_minutes (clean only).
 SELECT
   lb.learner_id,
   lb.instructor_id,
   lu.name                       AS learner_name,
   lu.email                      AS learner_email,
   i.name                        AS instructor_name,
-  SUM(lb.minutes_deducted)::int AS draws_minutes,
-  COUNT(*)::int                 AS draws_booking_count,
+  SUM(lb.minutes_deducted)::int AS clean_draws_minutes,
+  COUNT(*)::int                 AS clean_draws_booking_count,
+  COALESCE((
+    SELECT SUM(lb2.minutes_deducted)::int FROM lesson_bookings lb2
+     WHERE lb2.school_id = lb.school_id
+       AND lb2.learner_id = lb.learner_id
+       AND lb2.instructor_id = lb.instructor_id
+       AND lb2.credit_returned = FALSE
+       AND lb2.minutes_deducted IS NOT NULL
+       AND lb2.minutes_deducted > 0
+       AND lb2.status = 'refunded'
+  ), 0) AS stale_refund_draws_at_pair,
   COALESCE((
     SELECT COUNT(*)::int FROM credit_transactions ct
      WHERE ct.school_id     = lb.school_id
@@ -51,6 +66,7 @@ WHERE lb.school_id = 1
   AND lb.credit_returned = FALSE
   AND lb.minutes_deducted IS NOT NULL
   AND lb.minutes_deducted > 0
+  AND lb.status != 'refunded'
   AND NOT EXISTS (
     SELECT 1 FROM booking_credit_sources bcs2
      WHERE bcs2.booking_id = lb.id
@@ -71,12 +87,22 @@ ORDER BY SUM(lb.minutes_deducted) DESC, lb.learner_id, lb.instructor_id;
 
 -- ── 3. Verify candidate set matches the cron's drift report ────────────
 -- Cross-check: every candidate pair should currently appear in the cron's
--- per-pair drift report with drift_minutes = draws_minutes (positive).
--- If a candidate is NOT in the cron drift, the predicates have drifted
--- apart — investigate before applying.
+-- per-pair drift report with drift_minutes ≥ clean_draws_minutes (and
+-- possibly higher if the pair also has stale-refund draws, which the
+-- cron includes in its booking_draws CTE). If a candidate is NOT in the
+-- cron drift, the predicates have drifted apart — investigate before
+-- applying.
 --
--- After the migration, none of these pairs should appear in the drift
--- report (their drift will be 0).
+-- After the migration:
+--   • Pairs with stale_refund_draws_at_pair = 0 → drop OUT of cron drift
+--     entirely (their drift becomes 0).
+--   • Pairs with stale_refund_draws_at_pair > 0 → STAY in cron drift at
+--     drift_minutes = stale_refund_draws_at_pair (the refund-bug
+--     residual chip #3 will fix). On current prod data this leaves
+--     (55, 4) +90 visible.
+-- Refunded-only pairs (e.g. (11, 6) on prod) are NOT candidates at all
+-- because HAVING SUM(clean draws) > 0 drops them — they stay in cron
+-- drift unchanged for chip #3.
 
 -- ── 4. Existing legacy_grandfather CT count (informational) ────────────
 -- After B1 (PR #184) this should be 21 on prod. B3 will add one per
