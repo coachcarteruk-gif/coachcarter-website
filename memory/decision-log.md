@@ -8,6 +8,10 @@ Format: `**[Date] — Decision** — Reason — Consequence`.
 
 ## 2026-05 — Credits & payouts
 
+**2026-05-21 - BCS `contribution_pence` is exact payable pence, not rounded-rate multiplication.**
+Reason: Direct paid slots and credit packs can have non-integer pence-per-minute prices, e.g. GBP 82.50 / 90 minutes. `booking_credit_sources.rate_pence_per_minute` is integer, so `minutes_drawn * rate_pence_per_minute` can drift from the actual payable pence.
+Consequence: `rate_pence_per_minute` is a rounded audit/display snapshot only. `booking_credit_sources.contribution_pence` is allocated from the source `credit_transactions.amount_pence` with pence-exact source-level conservation and last-draw-takes-remainder semantics, mirroring Stripe-fee allocation. CSA `pence_adjusted` reduces the source contribution pence available to future BCS rows, so exhausted sources conserve as active BCS contribution plus CSA pence equals original source amount. Direct paid slot BCS rows use exact `metadata.amount_pence` as contribution.
+
 **2026-05-21 — Step 5 BCS writer-policy decisions accepted.**
 Reason: PR #193 preflight narrowed Step 5 to writer/payout wiring and surfaced four Fraser decisions before behaviour should ship.
 Consequence: `booking_credit_sources` gets explicit `school_id`; reschedules refund old BCS rows and create fresh rows for replacement bookings; mixed-source `lesson_bookings.list_price_pence` is the sum of payable active BCS `contribution_pence`, excluding instructor-absorbed portions only; direct paid slot purchases create BCS rows against their `slot_purchase` `credit_transactions` source. First implementation slice is schema/writer groundwork only, not full FIFO/payout cutover.
