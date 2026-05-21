@@ -2248,7 +2248,6 @@ CREATE TABLE IF NOT EXISTS booking_credit_sources (
 );
 CREATE INDEX IF NOT EXISTS idx_bcs_booking   ON booking_credit_sources(booking_id);
 CREATE INDEX IF NOT EXISTS idx_bcs_credit_tx ON booking_credit_sources(credit_transaction_id);
-CREATE INDEX IF NOT EXISTS idx_bcs_school    ON booking_credit_sources(school_id);
 CREATE INDEX IF NOT EXISTS idx_bcs_active
   ON booking_credit_sources(credit_transaction_id)
   WHERE refunded_at IS NULL;

@@ -22,6 +22,8 @@ test.describe('booking_credit_sources.school_id groundwork', () => {
     expect(sql).toContain('ALTER TABLE booking_credit_sources ALTER COLUMN school_id SET NOT NULL');
     expect(sql).toContain('booking_credit_sources_school_id_fkey');
     expect(sql).toContain('CREATE INDEX IF NOT EXISTS idx_bcs_school ON booking_credit_sources(school_id)');
+    expect(sql.indexOf('ALTER TABLE booking_credit_sources ADD COLUMN IF NOT EXISTS school_id INTEGER'))
+      .toBeLessThan(sql.indexOf('CREATE INDEX IF NOT EXISTS idx_bcs_school ON booking_credit_sources(school_id)'));
   });
 
   test('targeted Step 2c migration creates school_id and index for fresh test branches', () => {
