@@ -807,6 +807,7 @@ Implementation contract:
 - **Serialization point:** the `learner_credit_balances(learner_id, instructor_id)` row lock is the first lock acquired for a scoped credit mutation. Once held, FIFO source reads, BCS inserts/refunds, CSA reads/writes, and balance updates for that learner/instructor pair serialize behind the same point.
 - **BCS active/refunded semantics:** a BCS row is active when `refunded_at IS NULL`; active rows count against source availability, Stripe-fee allocation sums, and payout attribution. Refunded rows are immutable audit history and must not be reactivated; a later rebook creates new active BCS rows against the same source if minutes are available again.
 - **Pence allocation invariants:** active BCS `stripe_fee_pence` must never over-allocate a source (`SUM(active fees) <= credit_transactions.stripe_fee_pence`). When a source is exhausted after active BCS rows plus CSA adjustments, equality is required (`SUM(active fees) = credit_transactions.stripe_fee_pence`) so the final draw absorbs any remainder penny.
+- **Contribution allocation invariants:** `booking_credit_sources.contribution_pence` is exact payable pence allocated from the source `credit_transactions.amount_pence`, not `minutes_drawn * rate_pence_per_minute`. `rate_pence_per_minute` is a rounded audit/display snapshot only. Active BCS contribution plus CSA `pence_adjusted` must never over-allocate a source, and when a source is exhausted equality is required (`SUM(active contribution_pence) + SUM(csa.pence_adjusted) = credit_transactions.amount_pence`) so the final draw absorbs any remainder penny.
 - **Payout lockstep:** any math change in `processPayoutForInstructor` must be mirrored in `simulatePayoutForInstructor` in the same PR. The admin preview is the preflight for the Friday cron, not an independent approximation.
 
 Accepted Fraser decisions for Step 5 (2026-05-21):
@@ -820,7 +821,7 @@ Accepted Fraser decisions for Step 5 (2026-05-21):
 
 - Booking creation (inside the Step 0 transaction) inserts one or more `booking_credit_sources` rows after the `learner_credit_balances` decrement.
 - FIFO selection: order eligible `credit_transactions` rows by `created_at ASC, id ASC` (id is the deterministic tie-breaker for identical timestamps).
-- Each `booking_credit_sources` row snapshots its own `rate_pence_per_minute` and `stripe_fee_pence` from the source row at draw time. Once snapshotted, these values never change.
+- Each `booking_credit_sources` row snapshots its rounded `rate_pence_per_minute`, exact allocated `contribution_pence`, and allocated `stripe_fee_pence` from the source row at draw time. Once snapshotted, these values never change. Contribution and fee pence are source-conserving allocations; CSA `pence_adjusted` reduces the contribution pence still available to future BCS rows. The rounded rate is not used for money math.
 
 ### Fee snapshot formula — per-minute with last-draw-takes-remainder
 
@@ -877,10 +878,10 @@ Source: `minutes = 600, stripe_fee_pence = 1`.
 
 A learner buys two bulk packs at different rates:
 
-| `credit_transactions` row | Purchased | Minutes | Rate (`effective_rate_pence_per_minute`) | Stripe fee (pence) | Fee per minute |
+| `credit_transactions` row | Purchased | Minutes | Rounded rate (`effective_rate_pence_per_minute`) | Stripe fee (pence) | Fee per minute |
 |---|---|---|---|---|---|
-| 1001 | 2026-06-01 | 600 | 137.50 (£82.50/hr) | 600 | 1.0p |
-| 1002 | 2026-07-15 | 1200 | 125.00 (£75.00/hr, bulk discount) | 1100 | 0.917p |
+| 1001 | 2026-06-01 | 600 | 138 (£82.50/hr exact payable pence) | 600 | 1.0p |
+| 1002 | 2026-07-15 | 1200 | 125 (£75.00/hr, bulk discount) | 1100 | 0.917p |
 
 After both purchases, learner's `learner_credit_balances(learner_id, instructor_id=1)` shows **1800 minutes available with Fraser.**
 
@@ -892,8 +893,8 @@ FIFO picks row 1001 (oldest). BCS row created:
 |---|---|---|
 | `credit_transaction_id` | 1001 | FIFO pick |
 | `minutes_drawn` | 120 | full booking |
-| `rate_pence_per_minute` | 137.50 | from source row |
-| `contribution_pence` | 16500 | 120 × 137.50 |
+| `rate_pence_per_minute` | 138 | rounded audit/display snapshot from source row |
+| `contribution_pence` | 16500 | exact source amount allocated by minutes |
 | `stripe_fee_pence` | 120 | round(120 × 1.0) |
 | `refunded_at` | NULL | active |
 
@@ -905,8 +906,8 @@ By the time we get to booking B, row 1001 has only 60 minutes left. The booking 
 
 | BCS row | source | minutes | rate | contribution | fee |
 |---|---|---|---|---|---|
-| B-1 | 1001 | 60 | 137.50 | 8250 | 60 |
-| B-2 | 1002 | 60 | 125.00 | 7500 | 55 |
+| B-1 | 1001 | 60 | 138 | 8250 | 60 |
+| B-2 | 1002 | 60 | 125 | 7500 | 55 |
 
 **One booking, two BCS rows.** This is the most complex case — and the per-minute method handles it without any "remaining unallocated" bookkeeping.
 
@@ -1177,7 +1178,8 @@ Concrete observations that would force a revision. The reconciliation cron (`api
 | **No orphan pooled minutes** | `SELECT id FROM learner_users WHERE balance_minutes > 0 AND id NOT IN (SELECT learner_id FROM learner_credit_balances WHERE instructor_id = 1)` | Step 2 backfill missed a learner, or post-Step-4 code wrote to pooled balance directly. The "structurally impossible cross-pool leakage" claim is wrong. |
 | **Fee over-allocation** | `SELECT ct.id FROM credit_transactions ct LEFT JOIN booking_credit_sources bcs ON bcs.credit_transaction_id = ct.id GROUP BY ct.id HAVING COALESCE(SUM(bcs.stripe_fee_pence) FILTER (WHERE bcs.refunded_at IS NULL), 0) > ct.stripe_fee_pence` | Per-minute fee math is wrong somewhere, or a refund-rebook race created duplicate active rows. |
 | **Fee under-allocation (equality-on-exhaustion)** | For every source row with 0 available minutes remaining (consumed + adjusted = total): `SUM(active BCS stripe_fee_pence) = source.stripe_fee_pence` exactly. NEW in 3rd revision. | Last-draw-takes-remainder logic failed, or a refunded BCS row was incorrectly counted as active. |
-| **Contribution math** | `SELECT id FROM booking_credit_sources WHERE contribution_pence <> minutes_drawn * rate_pence_per_minute` | A BCS row's contribution doesn't match its own snapshot. Data corruption event — investigate immediately. |
+| **Contribution over-allocation** | For each source row: `(SUM(active BCS contribution_pence) + SUM(csa.pence_adjusted)) <= ct.amount_pence`. | Exact payable pence allocation is wrong somewhere, a cash-refund adjustment was duplicated, or a refund-rebook race created duplicate active rows. |
+| **Contribution under-allocation (equality-on-exhaustion)** | For every source row with 0 available minutes remaining (consumed + adjusted = total): `SUM(active BCS contribution_pence) + SUM(csa.pence_adjusted) = source.amount_pence` exactly. | Last-draw-takes-remainder logic failed, CSA pence was not counted, or a refunded BCS row was incorrectly counted as active. |
 | **Balance vs sources (LCB divergence)** | `SELECT lcb.learner_id, lcb.instructor_id FROM learner_credit_balances lcb WHERE lcb.balance_minutes <> (minutes - active_BCS_minutes - adjustments_minutes for this learner/instructor's sources)` | The denormalised balance has drifted from the source-of-truth. Updated in 3rd revision to include `credit_source_adjustments` in the computed-available. |
 | **Pooled-vs-scoped divergence** (during transition, Phases B & C) | `learner_users.balance_minutes ≠ SUM(LCB.balance_minutes per learner)` | Legacy writer still firing OR trigger has missed an event. NEW in 3rd revision. |
 | **No double-reconciliation** | `SELECT stripe_payment_intent_id, COUNT(*) FROM credit_transactions WHERE stripe_payment_intent_id IS NOT NULL GROUP BY 1 HAVING COUNT(*) > 1` UNION the same for `stripe_session_id` and `stripe_charge_id`. | The unique indexes have been bypassed somehow, or a Stripe identity got reused. |

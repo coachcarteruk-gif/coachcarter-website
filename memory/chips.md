@@ -31,12 +31,12 @@ Each chip is a small, well-defined unit of work. Goal · why · risks · files �
   - Step 0 has shipped; remaining gates: 4th-round GPT critique on the plan + checking longest historical Stripe Checkout-session-to-payment-intent gap.
   - `trg_sync_pooled_balance` prerequisite shipped on prod 2026-05-21; re-verify `pg_trigger` and divergence before starting Step 5.
 - **Already present on current `main` / prod:** `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, explicit BCS `school_id` (prod `/api/migrate` after PR #194 verified NOT NULL/default 1/FK/index/null rows 0/mismatch `[]`), and focused tests for `api/_pence-allocator.js`.
-- **Accepted decisions (2026-05-21):** add `booking_credit_sources.school_id`; reschedules refund old BCS rows and create fresh replacement rows; mixed-source `list_price_pence` sums payable active BCS contribution excluding instructor-absorbed portions only; direct paid slot purchases create BCS rows against `slot_purchase` CTs.
+- **Accepted decisions (2026-05-21):** add `booking_credit_sources.school_id`; reschedules refund old BCS rows and create fresh replacement rows; mixed-source `list_price_pence` sums payable active BCS contribution excluding instructor-absorbed portions only; direct paid slot purchases create BCS rows against `slot_purchase` CTs; `contribution_pence` is exact payable pence from source `amount_pence` net of CSA `pence_adjusted`, while `rate_pence_per_minute` is rounded audit/display only.
 - **Likely files:** `api/_credit-grant.js` (writer wiring), `api/slots.js` / `api/webhook.js` / `api/offers.js` (allocation at booking time), `api/_payout-helpers.js` (cron + preview read per-source), `tests/booking-credit-sources.*`.
 - **Success criteria:**
   - `booking_credit_sources` rows created for every new booking after cutover.
   - FIFO order `(created_at ASC, id ASC)` verified in integration tests.
-  - Pence-exact allocation with last-draw-takes-remainder (two invariants: over-allocation ≤; equality-on-exhaustion when source is 0).
+  - Pence-exact fee and contribution allocation with last-draw-takes-remainder (source-level over-allocation and equality-on-exhaustion invariants, with CSA pence counted for contribution conservation).
   - `processPayoutForInstructor` and `simulatePayoutForInstructor` remain in lockstep for any payout math change.
   - Divergence cron continues to return `drift_count = 0` post-cutover.
 
