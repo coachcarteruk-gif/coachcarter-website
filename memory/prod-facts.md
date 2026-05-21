@@ -75,7 +75,7 @@ These four are absorbed by Plan B1's synthetic CT math. Flipping `credit_returne
 | #165 | 15 (Fraser test) | 4 (Fraser) | 2026-04-17 | NULL |
 | #194 | 15 (Fraser test) | 4 (Fraser) | 2026-05-01 | NULL |
 
-All four were flipped to `refunded` via plain cancel/refund (not the reschedule path chip #3 fixed). Originating writer-path is unidentified; not urgent because the absorption is clean.
+All four were flipped to `refunded` via learner-created credit bookings, not Setmore (`setmore_key IS NULL`), instructor cancel, or reschedule. #111 and #165 match the pre-2026-04-13 learner-cancel 48h date-parsing bug; #194 is explicitly named in commit 46f59df as the Neon DATE-object parsing bug. #113 has `cancelled_at=NULL`, so the exact writer is not provable from retained row metadata, but it is ruled out as Setmore/reschedule/instructor cancel. Absorption remains clean; do not mutate them.
 
 ## Known assumption that needs re-checking
 

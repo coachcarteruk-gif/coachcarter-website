@@ -37,18 +37,6 @@ Each chip is a small, well-defined unit of work. Goal · why · risks · files �
 
 ---
 
-## Investigation — the four "unknown" refund-bug bookings
-
-- **Goal:** Identify the writer path that produced the refund-without-credit-return shape on bookings #111, #113, #165, #194.
-- **Why:** Diagnostic only. They are cleanly absorbed by Plan B1 and **must not be auto-fixed** (see `decision-log.md` and `prod-facts.md`). But knowing the origin path lets us close any remaining bug that could write the same shape on a non-grandfathered learner.
-- **Known risks:** Pure investigation. Risk is producing a "fix" PR that breaks the B1 absorption. Don't do that.
-- **Likely files:** `api/_credit-grant.js` historical paths, old cancel/refund admin endpoints, possibly `api/setmore-sync.js` cancellation path.
-- **Success criteria:**
-  - Documented writer path identified, or definitively ruled out for every live code path.
-  - Result captured in `decision-log.md` under a new entry, not as code change.
-
----
-
 ## Plan-blocker — PII leak on `api/instructors?action=list`
 
 - **Goal:** Whitelist response fields on the public instructor list endpoint so email + phone are no longer returned.
