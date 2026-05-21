@@ -283,7 +283,7 @@ Acceptance tests:
 
 ### Acceptance criteria
 
-- `allocate(100, [1, 1, 1])` → `[33, 33, 34]` or `[34, 33, 33]` (deterministic, documented).
+- `allocate(100, [1, 1, 1])` → `[34, 33, 33]` (deterministic; lowest index wins remainder ties).
 - `allocate(100, [2, 1])` → `[67, 33]`.
 - Sum always equals input.
 
@@ -796,6 +796,25 @@ Closes GPT-flaw #2. `grantCredits()` checks for `metadata.instructor_id`:
 ---
 
 ## Step 5 — Step 4g: FIFO attribution + invariants
+
+### 2026-05-21 preflight contract
+
+Current `main` already contains the Step 5 schema substrate: `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, and the shared pure pence allocator with tests. This step is therefore a writer/payout wiring step, not a fresh schema step, unless the unresolved decisions below change the schema.
+
+Implementation contract:
+
+- **FIFO order:** eligible source rows are consumed by `created_at ASC, id ASC`. The `id` tie-breaker is load-bearing for deterministic replay.
+- **Serialization point:** the `learner_credit_balances(learner_id, instructor_id)` row lock is the first lock acquired for a scoped credit mutation. Once held, FIFO source reads, BCS inserts/refunds, CSA reads/writes, and balance updates for that learner/instructor pair serialize behind the same point.
+- **BCS active/refunded semantics:** a BCS row is active when `refunded_at IS NULL`; active rows count against source availability, Stripe-fee allocation sums, and payout attribution. Refunded rows are immutable audit history and must not be reactivated; a later rebook creates new active BCS rows against the same source if minutes are available again.
+- **Pence allocation invariants:** active BCS `stripe_fee_pence` must never over-allocate a source (`SUM(active fees) <= credit_transactions.stripe_fee_pence`). When a source is exhausted after active BCS rows plus CSA adjustments, equality is required (`SUM(active fees) = credit_transactions.stripe_fee_pence`) so the final draw absorbs any remainder penny.
+- **Payout lockstep:** any math change in `processPayoutForInstructor` must be mirrored in `simulatePayoutForInstructor` in the same PR. The admin preview is the preflight for the Friday cron, not an independent approximation.
+
+Unresolved Fraser decisions before writer/payout behaviour ships:
+
+- Should `booking_credit_sources` gain `school_id`, or is tenancy inherited strictly through `lesson_bookings` and `credit_transactions`?
+- On reschedule, should attribution stay attached to the old booking as refunded audit rows with new BCS rows on the replacement, or be transferred in some other way?
+- For mixed-source bookings, especially mixed `absorbed_by` sources, what exact `lesson_bookings.list_price_pence` policy should the writer snapshot?
+- Should direct paid slot purchases create BCS rows pointing at their `slot_purchase` `credit_transactions` source, or remain booking-level money rows outside BCS?
 
 ### What changes
 

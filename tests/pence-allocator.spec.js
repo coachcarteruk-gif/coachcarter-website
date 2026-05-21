@@ -59,6 +59,24 @@ test.describe('allocate() — sum invariant', () => {
   }
 });
 
+test.describe('allocate() — documented hostile pence splits', () => {
+  test('one penny across five equal draws concentrates on the first draw', () => {
+    const out = allocate(1, [120, 120, 120, 120, 120]);
+    expect(out).toEqual([1, 0, 0, 0, 0]);
+    expect(out.reduce((a, b) => a + b, 0)).toBe(1);
+  });
+
+  test('850p across three equal 200-minute draws is pence-exact', () => {
+    const out = allocate(850, [200, 200, 200]);
+    expect(out).toEqual([284, 283, 283]);
+    expect(out.reduce((a, b) => a + b, 0)).toBe(850);
+  });
+
+  test('1100p across two equal 600-minute draws splits evenly', () => {
+    expect(allocate(1100, [600, 600])).toEqual([550, 550]);
+  });
+});
+
 test.describe('allocate() — determinism', () => {
   test('repeated calls produce identical results', () => {
     const a = allocate(100, [1, 1, 1]);

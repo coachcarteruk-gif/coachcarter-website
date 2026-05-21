@@ -91,5 +91,4 @@ All four were flipped to `refunded` via learner-created credit bookings, not Set
 
 ## Known assumption that needs re-checking
 
-- "PII leak in `api/instructors?action=list` returns email and phone publicly." Memory entry dated 2026-05-19; treat as **assumption** until re-verified against current `api/instructors.js`. If it has been fixed, move to decision-log under "Superseded".
 - "Branch protection on `main` is off." assumption, verified 2026-05-19 — re-check `gh api repos/.../branches/main/protection` before relying on it.
