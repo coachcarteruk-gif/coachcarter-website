@@ -87,12 +87,22 @@ ORDER BY SUM(lb.minutes_deducted) DESC, lb.learner_id, lb.instructor_id;
 
 -- ── 3. Verify candidate set matches the cron's drift report ────────────
 -- Cross-check: every candidate pair should currently appear in the cron's
--- per-pair drift report with drift_minutes = draws_minutes (positive).
--- If a candidate is NOT in the cron drift, the predicates have drifted
--- apart — investigate before applying.
+-- per-pair drift report with drift_minutes ≥ clean_draws_minutes (and
+-- possibly higher if the pair also has stale-refund draws, which the
+-- cron includes in its booking_draws CTE). If a candidate is NOT in the
+-- cron drift, the predicates have drifted apart — investigate before
+-- applying.
 --
--- After the migration, none of these pairs should appear in the drift
--- report (their drift will be 0).
+-- After the migration:
+--   • Pairs with stale_refund_draws_at_pair = 0 → drop OUT of cron drift
+--     entirely (their drift becomes 0).
+--   • Pairs with stale_refund_draws_at_pair > 0 → STAY in cron drift at
+--     drift_minutes = stale_refund_draws_at_pair (the refund-bug
+--     residual chip #3 will fix). On current prod data this leaves
+--     (55, 4) +90 visible.
+-- Refunded-only pairs (e.g. (11, 6) on prod) are NOT candidates at all
+-- because HAVING SUM(clean draws) > 0 drops them — they stay in cron
+-- drift unchanged for chip #3.
 
 -- ── 4. Existing legacy_grandfather CT count (informational) ────────────
 -- After B1 (PR #184) this should be 21 on prod. B3 will add one per

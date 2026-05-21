@@ -35,8 +35,21 @@ WHERE ct.type           = 'legacy_grandfather'
 ORDER BY ct.minutes DESC, ct.learner_id, ct.instructor_id;
 
 -- ── 3. Drift reconcile check (BCS-aware variant) ───────────────────────
--- For every learner that B3 just backfilled, drift at the pair should be 0.
--- If any are non-zero, the predicate manufactured drift somewhere.
+-- For every learner that B3 just backfilled, drift at the pair should
+-- EQUAL the stale_refund_draws_at_pair predicted by the pre-migration
+-- diagnostic (NOT zero). Specifically:
+--   • Pairs with no stale-refund residual → drift = 0 post-B3.
+--   • Pairs with stale-refund residual (cron's booking_draws still
+--     counts those rows) → drift = stale_refund_minutes post-B3.
+--     This is the refund-bug residual chip #3 will fix; it is NOT a
+--     B3 failure mode.
+-- On current prod data the expected post-B3 per-pair drift is:
+--   (55, 4) → +90  (booking #133 stale-refund residual)
+--   (73, 4) →   0
+--   (92, 4) →   0
+-- If ANY pair has |drift| > its pre-migration stale_refund_draws_at_pair,
+-- the predicate has drifted from the cron's booking_draws — investigate
+-- immediately.
 WITH backfilled_pairs AS (
   SELECT learner_id, instructor_id
     FROM credit_transactions
@@ -76,11 +89,33 @@ SELECT
   COALESCE(bd.minutes, 0)                                         AS booking_minutes,
   COALESCE(p.minutes, 0) - COALESCE(bd.minutes, 0)                AS expected,
   0                                                                AS actual_lcb,
-  0 - (COALESCE(p.minutes, 0) - COALESCE(bd.minutes, 0))           AS drift
+  0 - (COALESCE(p.minutes, 0) - COALESCE(bd.minutes, 0))           AS drift,
+  -- Stale-refund minutes at the same pair (cron's booking_draws shape +
+  -- status='refunded'). drift SHOULD equal this; if it doesn't, the
+  -- migration's predicate and the cron's have drifted apart.
+  COALESCE((
+    SELECT SUM(lb2.minutes_deducted)::int FROM lesson_bookings lb2
+     WHERE lb2.school_id = 1
+       AND lb2.learner_id = bp.learner_id
+       AND lb2.instructor_id = bp.instructor_id
+       AND lb2.credit_returned = FALSE
+       AND lb2.minutes_deducted IS NOT NULL
+       AND lb2.minutes_deducted > 0
+       AND lb2.status = 'refunded'
+       AND NOT EXISTS (
+         SELECT 1 FROM booking_credit_sources bcs2
+          WHERE bcs2.booking_id = lb2.id
+       )
+  ), 0)                                                            AS expected_drift_from_stale_refund
 FROM backfilled_pairs bp
 LEFT JOIN purchases     p  ON p.learner_id  = bp.learner_id AND p.instructor_id  = bp.instructor_id
 LEFT JOIN booking_draws bd ON bd.learner_id = bp.learner_id AND bd.instructor_id = bp.instructor_id
 ORDER BY bp.learner_id, bp.instructor_id;
+-- Per-pair invariant: drift = expected_drift_from_stale_refund.
+-- On current prod data this means:
+--   (55, 4) → drift=+90, expected=+90  ✓ (booking #133 awaits chip #3)
+--   (73, 4) → drift=  0, expected=  0  ✓
+--   (92, 4) → drift=  0, expected=  0  ✓
 
 -- ── 4. Confirm no LCB rows were created ────────────────────────────────
 -- B3 MUST NOT touch LCB. If this returns rows, the migration overstepped.
@@ -100,5 +135,18 @@ SELECT lcb.learner_id, lcb.instructor_id, lcb.balance_minutes, lcb.updated_at::t
 
 -- ── 5. Final cron drift count ──────────────────────────────────────────
 -- Operator: re-run /api/cron-credit-reconcile and compare drift_count to
--- pre-migration. Expected reduction: one pair per row from query (2) above.
--- Residual drift should be the Simon (11, 6) cross-instructor pair only.
+-- pre-migration.
+--
+-- Expected reduction = COUNT(pairs where stale_refund_draws_at_pair = 0
+-- in the pre-migration diagnostic). Pairs with stale_refund_draws > 0
+-- STAY in the drift report at drift = stale_refund_minutes — that is
+-- the refund-bug residual chip #3 will fix, NOT a B3 failure mode.
+--
+-- On current prod data the expected post-B3 cron state is:
+--   pre-B3:  drift_count = 4 (all four no-LCB pairs flagging)
+--   post-B3: drift_count = 2
+--     • (55, 4) +90  — booking #133 stale-refund residual (clean 720 silenced)
+--     • (11, 6) +90  — booking #117 stale-refund residual (refunded-only,
+--                       not a B3 candidate; unchanged by B3)
+-- After chip #3 lands and flips credit_returned=TRUE on bookings #117
+-- and #133, drift_count drops 2 → 0 with no opposite-sign drift.

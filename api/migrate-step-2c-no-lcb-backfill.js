@@ -122,10 +122,17 @@
 //   - Does NOT alter pre-Phase-2A pooled CTs (instructor_id IS NULL).
 //     Those stay as the original pooled-era ledger. The cron's purchases
 //     CTE excludes them, so no double-counting from the legacy side.
-//   - Does NOT fix (learner=11, instructor=6). Learner 11 has an LCB
-//     row at (11, 4) from B1's grandfather → reattribute path, so the
-//     "no LCB anywhere" gate excludes them. The pair stays as visible
-//     drift representing a real cross-instructor consumption question.
+//   - Does NOT fix (learner=11, instructor=6). Learner 11 has NO LCB
+//     row anywhere on prod, and their only booking at instructor=6 is
+//     status='refunded' with credit_returned=FALSE (booking #117) —
+//     the same refund-bug shape as learner 55's booking #133. The
+//     `status != 'refunded'` filter on the draws sum drops the whole
+//     pair via HAVING SUM(clean draws) > 0. The pair stays as visible
+//     cron drift representing chip #3's target (reschedule paths that
+//     don't flip credit_returned).
+//   - Does NOT fix (learner=55, instructor=4) booking #133. The clean
+//     720 minutes get a synthetic CT; the 90-min stale-refund residual
+//     stays visible as cron drift for the same reason.
 //   - Does NOT widen credit_transactions_type_check. Plan B1 (PR #184)
 //     already widened it to include 'legacy_grandfather'; the constant
 //     is also in db/migration.sql for fresh-environment installs.
