@@ -6,6 +6,7 @@
 
 - **Credits divergence cron returns `drift_count = 0` as of 2026-05-21 12:45 UTC.** verified
 - **Per-instructor credits plan Steps 0–2.5 + 3a/3b + 4 (Phase 2A) + 4.5 are merged on `main`.** verified via `git log` 2026-05-21.
+- **Chip #4 `trg_sync_pooled_balance` is installed on prod as of 2026-05-21 20:51 UTC.** verified by prod `migration_markers`, `pg_proc`, `pg_trigger`, and pooled-vs-LCB divergence SELECTs.
 - **Step 5 (BCS + FIFO) is the next forward-progress milestone.** Not started.
 - **No in-flight feature branches expected on `main`** — last 25 commits are merged squash-merges. verified.
 
@@ -30,6 +31,7 @@
 | Service worker auth-path carve-out + cache bump cc-v4 → cc-v5 | LIVE (PR #161) | `public/sw.js` |
 | Reschedule paths set `credit_returned = TRUE` on old booking (chip #3) | LIVE (PR #187, 2026-05-21 12:45 UTC) | `api/instructor.js handleRescheduleBooking`, `api/slots.js handleReschedule` |
 | Slot-booking webhook confirmation balance fix (chip #5) | LIVE (PR #188, 2026-05-21) | `api/webhook.js handleSlotBooking`, `tests/webhook-slot-booking.spec.js` |
+| Pooled balance sync trigger (chip #4) | LIVE (prod POST 2026-05-21 20:51 UTC) | `api/migrate-step-4.js`, prod `trg_sync_pooled_balance` |
 | Four absorbed refund-without-credit-return bookings origin | INVESTIGATED (2026-05-21) | Historical learner-cancel parser bugs/manual-status era; see `decision-log.md` |
 
 ## Current migration / credits state
