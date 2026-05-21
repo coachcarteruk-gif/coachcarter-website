@@ -81,20 +81,6 @@ Each chip is a small, well-defined unit of work. Goal · why · risks · files �
 
 ---
 
-## Chip #5 — fix `handleSlotBooking` variable typo in `api/webhook.js` — IN PROGRESS — 2026-05-21
-
-- **Goal:** Rename the misreferenced variable so the confirmation email path stops throwing.
-- **Why:** `api/webhook.js` declares `deductResult` in `handleSlotBooking`, then read `deducted.balance_minutes` (undefined). Throws every webhook fire after booking + CT + LCB are committed. Data is safe but the confirmation email never sends, and the error noise hides real failures.
-- **Known risks:** Very low — pure typo. Verify the variable name is consistent with surrounding code (`deductResult.balance_minutes`).
-- **Likely files:** `api/webhook.js` (handleSlotBooking), `tests/webhook-slot-booking.spec.js` (focused regression test).
-- **Success criteria:**
-  - Line numbers re-verified in current `main` before editing.
-  - Confirmation email path reads `deductResult.balance_minutes`.
-  - Focused regression test catches reintroducing `deducted.balance_minutes` in `handleSlotBooking`.
-  - No new `console.error` log lines from the slot-booking webhook path on the next 24h of prod traffic after deploy.
-
----
-
 ## Watchlist (not yet chips)
 
 - **Trigger B threshold recalibration** — needs 2–3 weeks of post-2026-05-22 outflow data. Revisit then.
