@@ -68,7 +68,11 @@ async function alertIfWidgetLied(sql, { payout, instructor, error }) {
         <li><b>total_payout:</b> ${fmt(snap.total_payout_pence)}</li>
       </ul>
     `;
-    sendAlertEmail({
+    // MUST await — Vercel kills the function instance after the HTTP
+    // response, so fire-and-forget would tear down SMTP in flight. See
+    // _error-alert.js sendAlertEmail JSDoc. sendAlertEmail itself never
+    // throws (the contract), so the outer try/catch is belt-and-braces.
+    await sendAlertEmail({
       subject: `🚨 Payout #${payout.id} failed despite green widget — ${instructor.name}`,
       text: txt,
       html

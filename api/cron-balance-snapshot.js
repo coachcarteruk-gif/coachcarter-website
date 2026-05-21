@@ -136,7 +136,11 @@ module.exports = async (req, res) => {
         <pre style="background:#f5f5f5;padding:12px;border-radius:6px;font-size:13px;">${lines || '(none)'}</pre>
         <p style="color:#666;">Most likely: bulk-pack list-rate overpay bias (see <code>project_credit_funded_default.md</code>), or a new failure mode.</p>
       `;
-      sendAlertEmail({
+      // MUST await — Vercel kills the function instance after the HTTP
+      // response, so fire-and-forget would tear down SMTP in flight.
+      // See _error-alert.js sendAlertEmail JSDoc and the 2026-05-21
+      // cron-credit-reconcile incident.
+      await sendAlertEmail({
         subject: `⚠️ Trailing 30d payouts exceed Stripe inflow by £${(gapPence/100).toFixed(2)}`,
         text: txt,
         html

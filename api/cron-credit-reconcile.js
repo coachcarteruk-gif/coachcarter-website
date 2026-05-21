@@ -960,8 +960,14 @@ async function runDivergenceCheck(sql, { now = new Date(), sendAlerts = true } =
   // Impossible state — alert and refuse to reconcile. Returns ok:false but
   // the HTTP wrapper still uses 200 to stop Vercel retrying the same alert.
   if (schema.mode === 'half_migrated_csa_without_bcs') {
+    let alertSent = false;
     if (sendAlerts) {
-      sendAlertEmail({
+      // MUST await — Vercel kills the function instance after the HTTP
+      // response, so fire-and-forget would tear down the SMTP request in
+      // flight. CLAUDE.md hard rule "Always await async operations before
+      // res.json()". Proved by the 2026-05-21 incident where alert_sent:
+      // true but no email AND no [sendAlertEmail] log line appeared.
+      alertSent = await sendAlertEmail({
         subject: `🚨 Credit reconcile cron — half-migrated schema (CSA without BCS)`,
         text: [
           `The credit reconcile cron probed information_schema and found`,
@@ -991,7 +997,7 @@ async function runDivergenceCheck(sql, { now = new Date(), sendAlerts = true } =
       ran_at: now.toISOString(),
       pairs_scanned: 0,
       drift_count: 0,
-      alert_sent: !!sendAlerts,
+      alert_sent: alertSent,
     };
   }
 
@@ -1034,8 +1040,12 @@ async function runDivergenceCheck(sql, { now = new Date(), sendAlerts = true } =
   let alertSent = false;
   if (driftRows.length > 0 && sendAlerts) {
     const email = await buildAlertEmail(sql, schema.mode, driftRows, now);
-    sendAlertEmail(email);
-    alertSent = true;
+    // MUST await — see CLAUDE.md "Always await async operations before
+    // res.json()" and the 2026-05-21 incident where alert_sent: true but
+    // no email arrived because Vercel froze the function before the
+    // fire-and-forget SMTP request completed. alertSent now reflects the
+    // SMTP relay's actual outcome (accepted >= 1, rejected = 0).
+    alertSent = await sendAlertEmail(email);
   }
 
   return {
