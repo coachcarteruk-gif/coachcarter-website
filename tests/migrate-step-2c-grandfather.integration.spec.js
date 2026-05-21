@@ -314,21 +314,64 @@ test.describe('migrate-step-2c-grandfather — integration', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Test 3: idempotency — second POST is a no-op.
+  // Test 3 (P1): second POST is REFUSED with 409 — self-marker hard stop.
+  //
+  // Rerunning the migration could grandfather a newly-created bad LCB row
+  // (LCB > 0, no per-pair CT) and silence it as "legacy" when it's actually
+  // a writer regression we want the divergence cron to alert on. The
+  // endpoint refuses POST once its own marker is present. The operator can
+  // force a rerun by deleting the marker row manually.
   // ───────────────────────────────────────────────────────────────────────────
-  test('second POST reports rows_updated = 0 and marker_already_present = true', async () => {
+  test('second POST is refused with 409 once self-marker is present', async () => {
+    const r = await call({ method: 'POST' });
+    expect(r.statusCode).toBe(409);
+    expect(r.body.ok).toBe(false);
+    expect(String(r.body.error)).toContain('already completed');
+    expect(r.body.self_marker).toBeTruthy();
+    expect(r.body.self_marker.key).toBe(MARKER_KEY);
+
+    // And the previously-grandfathered row is untouched (no work was done).
+    const legacy = await getLcb(testLearnerLegacyId);
+    expect(legacy.grandfathered_at).not.toBeNull();
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Test 3b: dry-run (GET) is still allowed after marker lands.
+  //
+  // Operators may want to inspect what the predicate WOULD touch even after
+  // the migration has run (e.g. to spot new pure-legacy rows that have
+  // appeared since — which is exactly the case the hard stop protects).
+  // ───────────────────────────────────────────────────────────────────────────
+  test('dry-run still works after self-marker is present and reports self_marker', async () => {
+    const r = await call({ method: 'GET' });
+    expect(r.statusCode).toBe(200);
+    expect(r.body.ok).toBe(true);
+    expect(r.body.dry_run).toBe(true);
+    expect(r.body.self_marker).toBeTruthy();
+    expect(r.body.self_marker.key).toBe(MARKER_KEY);
+    expect(r.body.rows_updated).toBe(0);
+    expect(r.body.marker_written).toBe(false);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Test 3c: deleting the marker re-enables POST (manual rerun path).
+  //
+  // Documents the unfreeze procedure for a legitimate rollback rerun.
+  // After deletion the predicate finds no new candidates (we already
+  // grandfathered the legacy fixture) so rows_updated stays 0 but the
+  // marker is re-written.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('after manual marker DELETE, POST runs again and re-writes the marker', async () => {
+    await sql`DELETE FROM migration_markers WHERE key = ${MARKER_KEY}`;
     const r = await call({ method: 'POST' });
     expect(r.statusCode).toBe(200);
     expect(r.body.ok).toBe(true);
-    // Our learner's row is already grandfathered → predicate excludes it
-    // → 0 new rows touched. Other branch state may legitimately add to
-    // rows_updated (the migration is global) but the legacy row itself
-    // stays put.
+    expect(r.body.marker_written).toBe(true);
+    // Our legacy row was already grandfathered in Test 2 and the predicate
+    // excludes already-grandfathered rows, so this run touches 0 of our
+    // fixtures (rows_updated may be non-zero from other branch state).
     const legacy = await getLcb(testLearnerLegacyId);
     expect(legacy.grandfathered_at).not.toBeNull();
-
-    expect(r.body.marker_already_present).toBe(true);
-    expect(r.body.marker_written).toBe(false);
   });
 
   // ───────────────────────────────────────────────────────────────────────────

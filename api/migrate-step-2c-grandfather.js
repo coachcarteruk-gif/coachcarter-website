@@ -82,6 +82,33 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // ── Self-marker hard stop (P1) ─────────────────────────────────────────
+    // If our own marker already exists, this is a rerun. Dry-run (GET) is
+    // still allowed so the operator can inspect what the predicate WOULD do
+    // against current data, but POST refuses. Rationale: a later POST could
+    // grandfather a newly-created bad LCB row (LCB > 0, no per-pair CT) that
+    // is in fact a writer regression we want the cron to alert on — silencing
+    // it as "legacy" would be the wrong outcome.
+    //
+    // Re-grandfathering after a true rollback is a manual action: DELETE the
+    // marker row first, then re-POST. This is deliberately friction-laden.
+    const [selfMarkerRow] = await sql`
+      SELECT key, completed_at::text AS completed_at
+        FROM migration_markers
+       WHERE key = ${MARKER_KEY}
+       LIMIT 1
+    `;
+    if (selfMarkerRow && !isDryRun) {
+      return res.status(409).json({
+        ok: false,
+        error: `Migration already completed at ${selfMarkerRow.completed_at}. ` +
+               `Refusing to rerun — a second pass could silence a newly-created bad LCB ` +
+               `row as "legacy". To force a rerun (e.g. after a deliberate rollback), ` +
+               `DELETE the '${MARKER_KEY}' row from migration_markers first.`,
+        self_marker: selfMarkerRow,
+      });
+    }
+
     // ── Ensure the column exists (idempotent) ──────────────────────────────
     // Mirror of db/migration.sql; running this here means the endpoint can
     // be invoked on environments where the generic /api/migrate hasn't been
@@ -173,6 +200,7 @@ module.exports = async function handler(req, res) {
     const result = {
       dry_run: isDryRun,
       prereq_marker: prereqRow,
+      self_marker: selfMarkerRow || null,
       column_present: true,
       candidate_count: candidates.length,
       candidates_sample: candidates.slice(0, 25), // bounded for the JSON body

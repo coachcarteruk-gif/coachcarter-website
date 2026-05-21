@@ -213,6 +213,24 @@ The divergence cron's JSON response now includes `grandfathered_count`: how many
 - **NOT a policy for what happens when an instructor leaves, a learner switches instructors, or credit converts** — that's the Step 6 four-scenario work below, currently still TODO and gated on Steps 4 + 5 + 5.5.
 - **NOT a permanent solution for cross-instructor leakage (Group B from the first prod fire).** Plan C will audit `lockBalanceAdjustLCB`'s writer behaviour. Plan A only addresses the Group A (pure-legacy) shape.
 
+### Schema-aware degradation
+
+The cron's `probeSchemaMode` checks both the Step 5 BCS/CSA tables (existing) and the `grandfathered_at` column (Plan A). If the column doesn't yet exist — the window between Vercel deploying the Plan A code and the operator running `/api/migrate` — every reconcile function emits a non-suppressing variant, `grandfathered_count` short-circuits to 0, and `has_grandfathered_at: false` appears in the cron's JSON response. Cron degrades to "alert on all drift" — the conservative direction. No `column does not exist` crash.
+
+### Rerunning the migration
+
+The endpoint refuses POST once its `per_instructor_credits_step_2c_grandfather` marker is present, regardless of how many new pure-legacy-looking rows exist. Rationale: a row that newly looks pure-legacy (LCB > 0, no per-pair CT) on a system that's been running Phase-2A writers is more likely a writer regression we want the divergence cron to alert on than a true legacy artefact.
+
+To force a rerun (e.g. after a deliberate PITR rollback of the Step 2c backfill window):
+
+```sql
+DELETE FROM migration_markers WHERE key = 'per_instructor_credits_step_2c_grandfather';
+-- Audit-log via api/_audit.js: action 'admin.migration_marker_cleared'
+-- Then re-POST /api/migrate-step-2c-grandfather
+```
+
+This is deliberately friction-laden. The GET dry-run still works after the marker lands, so inspection-without-mutation is always available.
+
 ---
 
 ## Grandfather scenarios (Step 6 — currently TODO)

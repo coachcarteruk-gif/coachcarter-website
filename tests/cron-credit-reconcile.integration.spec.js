@@ -1023,6 +1023,45 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  // C21 (P2 fix): cron survives when grandfathered_at column is absent.
+  //
+  // Deploy ordering: the new cron code ships in the same Vercel deploy as
+  // the column DDL, but there's a window between deploy completion and
+  // /api/migrate finishing where the cron's SQL would reference a column
+  // that doesn't exist yet. probeSchemaMode reports has_grandfathered_at
+  // = false, the reconcile functions emit non-suppressing variants, and
+  // grandfathered_count short-circuits to 0.
+  //
+  // This test DROPs and re-ADDs the column around a single cron run. The
+  // afterAll cleanup re-adds the column unconditionally as a safety net
+  // in case a prior assertion threw mid-test.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C21: cron returns ok with non-suppressing variant when grandfathered_at column is absent (P2 fix)', async () => {
+    await resetState();
+    // Drop the column. The branch already has Phase-2A schema, so other
+    // queries (purchases, booking_draws, etc.) remain healthy.
+    await sql`ALTER TABLE learner_credit_balances DROP COLUMN IF EXISTS grandfathered_at`;
+
+    try {
+      const result = await runCron();
+      expect(result.ok).toBe(true);
+      expect(result.has_grandfathered_at).toBe(false);
+      // Count short-circuits to 0 when column is absent.
+      expect(result.grandfathered_count).toBe(0);
+      // drift_count is just the normal full-detection count; we don't
+      // assert a specific value (branch state varies) — only that the
+      // cron completed without error.
+      expect(typeof result.drift_count).toBe('number');
+    } finally {
+      // Re-add the column. ALTER + IF NOT EXISTS makes this idempotent.
+      await sql`
+        ALTER TABLE learner_credit_balances
+          ADD COLUMN IF NOT EXISTS grandfathered_at TIMESTAMPTZ
+      `;
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
   // C20: P2 mitigation specifically for grandfather suppression.
   //
   // C17 asserts via findOurPairPrecise(), which is parallel SQL. A bug in
