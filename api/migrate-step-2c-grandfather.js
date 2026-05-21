@@ -214,37 +214,57 @@ module.exports = async function handler(req, res) {
       return res.json({ ok: true, ...result });
     }
 
-    // ── Write grandfathered_at = NOW() to candidates ───────────────────────
-    // RE-EVALUATE the predicate at UPDATE time (not via id-in list). The
-    // candidate query above used a snapshot; if a Phase-2A writer landed
-    // a credit_transactions row for a candidate pair between the SELECT
-    // and the UPDATE, that pair must NOT be grandfathered. The pair-scoped
-    // NOT EXISTS in the UPDATE WHERE is the authoritative predicate.
-    const updated = await sql`
-      UPDATE learner_credit_balances lcb
-         SET grandfathered_at = NOW()
-       WHERE lcb.school_id        = ${SCHOOL_ID}
-         AND lcb.balance_minutes  > 0
-         AND lcb.grandfathered_at IS NULL
-         AND NOT EXISTS (
-           SELECT 1 FROM credit_transactions ct
-            WHERE ct.school_id     = lcb.school_id
-              AND ct.learner_id    = lcb.learner_id
-              AND ct.instructor_id = lcb.instructor_id
-         )
-      RETURNING lcb.learner_id, lcb.instructor_id
+    // ── Atomic UPDATE + marker write (P1 fix) ───────────────────────────────
+    // Single SQL statement with CTEs so the UPDATE and marker INSERT commit
+    // together or roll back together. If the function dies between the two,
+    // a later POST could otherwise grandfather newly-created bad LCB rows
+    // (LCB > 0, no per-pair CT) as "legacy" without hitting the hard-stop.
+    //
+    // The marker INSERT is the FIRST CTE step (marker_lock) with
+    // ON CONFLICT DO NOTHING. The UPDATE in the second CTE is gated on
+    // `EXISTS (SELECT 1 FROM marker_lock)`, so two concurrent POSTs that
+    // both pass the pre-flight self-marker check still race for the marker
+    // INSERT — only the winner's UPDATE actually executes. The loser
+    // returns rows_updated = 0 and marker_written = 0 (someone else got
+    // there first).
+    //
+    // The pair-scoped NOT EXISTS predicate is re-evaluated at UPDATE time
+    // (not via an id-in list), so if a Phase-2A writer lands a CT row for
+    // a candidate pair between the SELECT and the UPDATE, that pair is
+    // legitimately excluded.
+    const [{ rows_updated, marker_written, marker_completed_at }] = await sql`
+      WITH marker_lock AS (
+        INSERT INTO migration_markers (key, notes)
+        VALUES (${MARKER_KEY}, 'grandfathered_at backfill for pure-legacy LCB rows')
+        ON CONFLICT (key) DO NOTHING
+        RETURNING key, completed_at::text AS completed_at
+      ),
+      updated AS (
+        UPDATE learner_credit_balances lcb
+           SET grandfathered_at = NOW()
+         WHERE EXISTS (SELECT 1 FROM marker_lock)
+           AND lcb.school_id        = ${SCHOOL_ID}
+           AND lcb.balance_minutes  > 0
+           AND lcb.grandfathered_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM credit_transactions ct
+              WHERE ct.school_id     = lcb.school_id
+                AND ct.learner_id    = lcb.learner_id
+                AND ct.instructor_id = lcb.instructor_id
+           )
+        RETURNING lcb.learner_id, lcb.instructor_id
+      )
+      SELECT
+        (SELECT COUNT(*)::int FROM updated)                      AS rows_updated,
+        (SELECT COUNT(*)::int FROM marker_lock)                  AS marker_written,
+        (SELECT completed_at FROM marker_lock LIMIT 1)           AS marker_completed_at
     `;
-    result.rows_updated = updated.length;
-
-    // ── Marker write ────────────────────────────────────────────────────────
-    const markerRows = await sql`
-      INSERT INTO migration_markers (key, notes)
-      VALUES (${MARKER_KEY}, ${`grandfathered_at backfill for pure-legacy LCB rows — ${updated.length} row(s) flagged`})
-      ON CONFLICT (key) DO NOTHING
-      RETURNING key, completed_at::text AS completed_at
-    `;
-    result.marker_written        = markerRows.length > 0;
-    result.marker_already_present = markerRows.length === 0;
+    result.rows_updated           = rows_updated;
+    result.marker_written         = marker_written > 0;
+    result.marker_already_present = marker_written === 0;
+    if (marker_completed_at) {
+      result.self_marker = { key: MARKER_KEY, completed_at: marker_completed_at };
+    }
 
     return res.json({ ok: true, ...result });
   } catch (err) {

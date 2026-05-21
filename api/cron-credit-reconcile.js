@@ -197,13 +197,17 @@ async function reconcileCtOnly(sql, { hasGrandfatheredAt } = {}) {
       WHERE (lcb.school_id IS NULL OR lcb.school_id = ${SCHOOL_ID})
         AND COALESCE(lcb.balance_minutes, 0)
               IS DISTINCT FROM COALESCE(l.expected_balance_minutes, 0)
-        -- Conditional grandfather suppression (Plan A). Only suppress rows
-        -- that are legacy-origin AND have a clean per-pair ledger; the
-        -- moment the ledger goes non-zero we re-flag regardless of the
-        -- grandfather sigil. See docs/credits-grandfather.md "Mechanical
-        -- grandfathering" for the truth table.
+        -- Conditional grandfather suppression (Plan A). Only suppress
+        -- legacy-origin rows that have NO per-pair ledger activity at all
+        -- (l.learner_id IS NULL ⇔ the FULL OUTER JOIN found no ledger row
+        -- for this pair, which in turn means none of purchases / booking_
+        -- draws had any rows for it). The moment any per-pair row exists
+        -- — even one whose net is zero, e.g. +60 purchase + -60 draw — we
+        -- re-flag, because legacy LCB is now mixed with new activity and
+        -- the divergence is real (1860 legacy + 0 net = 1860 drift).
+        -- See docs/credits-grandfather.md "Mechanical grandfathering".
         AND (lcb.grandfathered_at IS NULL
-             OR COALESCE(l.expected_balance_minutes, 0) IS DISTINCT FROM 0)
+             OR l.learner_id IS NOT NULL)
       ORDER BY ABS(COALESCE(lcb.balance_minutes, 0)
                    - COALESCE(l.expected_balance_minutes, 0)) DESC,
                learner_id, instructor_id
@@ -342,8 +346,10 @@ async function reconcileCtPlusBcs(sql, { hasGrandfatheredAt } = {}) {
         AND COALESCE(lcb.balance_minutes, 0)
               IS DISTINCT FROM COALESCE(l.expected_balance_minutes, 0)
         -- Conditional grandfather suppression (Plan A) — see reconcileCtOnly.
+        -- "No per-pair ledger rows" = l.learner_id IS NULL (the FULL OUTER
+        -- JOIN found no ledger row for this pair).
         AND (lcb.grandfathered_at IS NULL
-             OR COALESCE(l.expected_balance_minutes, 0) IS DISTINCT FROM 0)
+             OR l.learner_id IS NOT NULL)
       ORDER BY ABS(COALESCE(lcb.balance_minutes, 0)
                    - COALESCE(l.expected_balance_minutes, 0)) DESC,
                learner_id, instructor_id
@@ -518,8 +524,10 @@ async function reconcileFull(sql, { hasGrandfatheredAt } = {}) {
         AND COALESCE(lcb.balance_minutes, 0)
               IS DISTINCT FROM COALESCE(l.expected_balance_minutes, 0)
         -- Conditional grandfather suppression (Plan A) — see reconcileCtOnly.
+        -- "No per-pair ledger rows" = l.learner_id IS NULL (the FULL OUTER
+        -- JOIN found no ledger row for this pair).
         AND (lcb.grandfathered_at IS NULL
-             OR COALESCE(l.expected_balance_minutes, 0) IS DISTINCT FROM 0)
+             OR l.learner_id IS NOT NULL)
       ORDER BY ABS(COALESCE(lcb.balance_minutes, 0)
                    - COALESCE(l.expected_balance_minutes, 0)) DESC,
                learner_id, instructor_id
@@ -623,30 +631,30 @@ async function reconcileFull(sql, { hasGrandfatheredAt } = {}) {
 //
 // Each function returns COUNT(*) of LCB rows that:
 //   • have grandfathered_at IS NOT NULL (legacy-origin), AND
-//   • would have appeared in the corresponding reconcile's drift output if
-//     the suppression predicate were dropped — i.e. lcb.balance_minutes
-//     IS DISTINCT FROM expected_balance_minutes for the same pair, AND
-//     expected_balance_minutes = 0 (the suppression branch's pre-condition).
+//   • have NO per-pair ledger rows in any source CTE (purchases, booking
+//     draws, BCS, CSA — whichever the mode considers), AND
+//   • have lcb.balance_minutes != 0 (else there's nothing to silence —
+//     LCB = 0 with no ledger trivially matches expected = 0).
 //
-// The "expected = 0" branch is computed directly here, mirroring each
-// reconcile mode's ledger arithmetic, not by subtracting the cron's drift
-// count from a hypothetical un-suppressed count. Direct computation keeps
-// the semantics legible: this is "rows we silenced".
+// "No per-pair ledger rows" — not "ledger nets to zero" — is the load-
+// bearing semantics. A grandfathered pair with +60 purchase + -60 booking
+// draw nets to zero but DOES have ledger rows, so it's NOT in the
+// suppression set; the cron reports the residual legacy LCB as drift.
+// The helpers must match the cron's WHERE predicate exactly for the
+// "would-have-flagged-but-suppressed" semantics to hold.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function countGrandfatheredSuppressedCtOnly(sql) {
   const [row] = await sql`
     WITH purchases AS (
-      SELECT ct.learner_id, ct.instructor_id,
-             COALESCE(SUM(ct.minutes), 0)::int AS minutes
+      SELECT ct.learner_id, ct.instructor_id
         FROM credit_transactions ct
        WHERE ct.school_id = ${SCHOOL_ID}
          AND ct.instructor_id IS NOT NULL
        GROUP BY ct.learner_id, ct.instructor_id
     ),
     booking_draws AS (
-      SELECT lb.learner_id, lb.instructor_id,
-             COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+      SELECT lb.learner_id, lb.instructor_id
         FROM lesson_bookings lb
        WHERE lb.school_id = ${SCHOOL_ID}
          AND lb.credit_returned = FALSE
@@ -662,7 +670,8 @@ async function countGrandfatheredSuppressedCtOnly(sql) {
         ON bd.learner_id = lcb.learner_id AND bd.instructor_id = lcb.instructor_id
      WHERE lcb.school_id = ${SCHOOL_ID}
        AND lcb.grandfathered_at IS NOT NULL
-       AND (COALESCE(p.minutes, 0) - COALESCE(bd.minutes, 0)) = 0
+       AND p.learner_id IS NULL
+       AND bd.learner_id IS NULL
        AND COALESCE(lcb.balance_minutes, 0) IS DISTINCT FROM 0
   `;
   return row.n || 0;
@@ -671,16 +680,14 @@ async function countGrandfatheredSuppressedCtOnly(sql) {
 async function countGrandfatheredSuppressedCtPlusBcs(sql) {
   const [row] = await sql`
     WITH purchases AS (
-      SELECT ct.learner_id, ct.instructor_id,
-             COALESCE(SUM(ct.minutes), 0)::int AS minutes
+      SELECT ct.learner_id, ct.instructor_id
         FROM credit_transactions ct
        WHERE ct.school_id = ${SCHOOL_ID}
          AND ct.instructor_id IS NOT NULL
        GROUP BY ct.learner_id, ct.instructor_id
     ),
     booking_draws AS (
-      SELECT lb.learner_id, lb.instructor_id,
-             COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+      SELECT lb.learner_id, lb.instructor_id
         FROM lesson_bookings lb
        WHERE lb.school_id = ${SCHOOL_ID}
          AND lb.credit_returned = FALSE
@@ -692,8 +699,7 @@ async function countGrandfatheredSuppressedCtPlusBcs(sql) {
        GROUP BY lb.learner_id, lb.instructor_id
     ),
     bcs_per_pair AS (
-      SELECT ct.learner_id, ct.instructor_id,
-             SUM(bcs.minutes_drawn)::int AS minutes
+      SELECT ct.learner_id, ct.instructor_id
         FROM booking_credit_sources bcs
         JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
        WHERE bcs.refunded_at IS NULL
@@ -711,9 +717,9 @@ async function countGrandfatheredSuppressedCtPlusBcs(sql) {
         ON b.learner_id = lcb.learner_id AND b.instructor_id = lcb.instructor_id
      WHERE lcb.school_id = ${SCHOOL_ID}
        AND lcb.grandfathered_at IS NOT NULL
-       AND ( COALESCE(p.minutes, 0)
-           - COALESCE(bd.minutes, 0)
-           - COALESCE(b.minutes,  0) ) = 0
+       AND p.learner_id  IS NULL
+       AND bd.learner_id IS NULL
+       AND b.learner_id  IS NULL
        AND COALESCE(lcb.balance_minutes, 0) IS DISTINCT FROM 0
   `;
   return row.n || 0;
@@ -722,16 +728,14 @@ async function countGrandfatheredSuppressedCtPlusBcs(sql) {
 async function countGrandfatheredSuppressedFull(sql) {
   const [row] = await sql`
     WITH purchases AS (
-      SELECT ct.learner_id, ct.instructor_id,
-             COALESCE(SUM(ct.minutes), 0)::int AS minutes
+      SELECT ct.learner_id, ct.instructor_id
         FROM credit_transactions ct
        WHERE ct.school_id = ${SCHOOL_ID}
          AND ct.instructor_id IS NOT NULL
        GROUP BY ct.learner_id, ct.instructor_id
     ),
     booking_draws AS (
-      SELECT lb.learner_id, lb.instructor_id,
-             COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+      SELECT lb.learner_id, lb.instructor_id
         FROM lesson_bookings lb
        WHERE lb.school_id = ${SCHOOL_ID}
          AND lb.credit_returned = FALSE
@@ -743,8 +747,7 @@ async function countGrandfatheredSuppressedFull(sql) {
        GROUP BY lb.learner_id, lb.instructor_id
     ),
     bcs_per_pair AS (
-      SELECT ct.learner_id, ct.instructor_id,
-             SUM(bcs.minutes_drawn)::int AS minutes
+      SELECT ct.learner_id, ct.instructor_id
         FROM booking_credit_sources bcs
         JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
        WHERE bcs.refunded_at IS NULL
@@ -753,8 +756,7 @@ async function countGrandfatheredSuppressedFull(sql) {
        GROUP BY ct.learner_id, ct.instructor_id
     ),
     csa_per_pair AS (
-      SELECT ct.learner_id, ct.instructor_id,
-             SUM(csa.minutes_adjusted)::int AS minutes
+      SELECT ct.learner_id, ct.instructor_id
         FROM credit_source_adjustments csa
         JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
        WHERE ct.school_id = ${SCHOOL_ID}
@@ -773,10 +775,10 @@ async function countGrandfatheredSuppressedFull(sql) {
         ON c.learner_id = lcb.learner_id AND c.instructor_id = lcb.instructor_id
      WHERE lcb.school_id = ${SCHOOL_ID}
        AND lcb.grandfathered_at IS NOT NULL
-       AND ( COALESCE(p.minutes,  0)
-           - COALESCE(bd.minutes, 0)
-           - COALESCE(b.minutes,  0)
-           - COALESCE(c.minutes,  0) ) = 0
+       AND p.learner_id  IS NULL
+       AND bd.learner_id IS NULL
+       AND b.learner_id  IS NULL
+       AND c.learner_id  IS NULL
        AND COALESCE(lcb.balance_minutes, 0) IS DISTINCT FROM 0
   `;
   return row.n || 0;

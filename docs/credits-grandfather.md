@@ -129,25 +129,28 @@ Shipped 2026-05-21 as Plan A in response to the first prod fire of the divergenc
 
 ### What it is
 
-`learner_credit_balances.grandfathered_at TIMESTAMPTZ`. NULL = ordinary row, subject to full drift detection. Non-NULL = legacy origin; the divergence cron conditionally suppresses these rows only when the per-pair ledger is exactly zero.
+`learner_credit_balances.grandfathered_at TIMESTAMPTZ`. NULL = ordinary row, subject to full drift detection. Non-NULL = legacy origin; the divergence cron conditionally suppresses these rows only when there are NO per-pair ledger rows in any source CTE (purchases, booking draws, BCS, CSA).
 
 ### Truth table the cron implements
 
-| `lcb.grandfathered_at` | `expected_balance_minutes` | Result |
+| `lcb.grandfathered_at` | Per-pair ledger rows exist? | Result |
 |---|---|---|
-| NULL | 0 | (not drift — LCB matches ledger) |
-| NULL | non-zero | flag |
-| non-NULL | 0 | **SUPPRESS** (this is what Plan A buys) |
-| non-NULL | non-zero | **flag** (the load-bearing branch — see C18) |
+| NULL | no  | (not drift — LCB and ledger both empty/matching) |
+| NULL | yes | flag if LCB drifts from ledger |
+| non-NULL | no  | **SUPPRESS** (this is what Plan A buys) |
+| non-NULL | yes | **flag** (the load-bearing branch — see C18, C22) |
 
 The SQL predicate, identical in all three reconcile modes:
 
 ```sql
 AND (lcb.grandfathered_at IS NULL
-     OR COALESCE(l.expected_balance_minutes, 0) IS DISTINCT FROM 0)
+     OR l.learner_id IS NOT NULL)  -- l.learner_id IS NULL ⇔ no ledger CTE
+                                   -- produced a row for this pair
 ```
 
-The moment a grandfathered pair gets any ledger activity (a Phase-2A purchase, a refund, a booking deduction), the suppression branch drops away and drift is reported as normal. The flag is *sticky on the row* but *conditional on the ledger* — keeping `grandfathered_at` set forever (rather than clearing it when new CT rows land) preserves the audit trail that the row originated from legacy backfill, and the truth table handles the rest.
+The "any per-pair ledger rows" condition — not "ledger nets to non-zero" — is the load-bearing semantics. A grandfathered pair that lands +60 purchase AND -60 booking deduction nets to zero expected balance, but still has ledger rows; the cron MUST flag it, because the legacy LCB (e.g. 1860 minutes) is still unaccounted-for and the drift is real.
+
+C22 is the discriminator test for this: it forces the predicate to distinguish "no rows" from "rows net to zero". A naive `expected_balance_minutes = 0` suppression would fail C22 silently. Keeping `grandfathered_at` set forever (rather than clearing it when new CT rows land) preserves the audit trail that the row originated from legacy backfill; the truth table handles future activity.
 
 ### Which rows get the flag (and which don't)
 
