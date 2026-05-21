@@ -33,7 +33,7 @@ const VALID_STATUS   = new Set(['sent', 'failed', 'skipped']);
  */
 async function logNotification(entry) {
   try {
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = neon(process.env.POSTGRES_URL);
     const channel = VALID_CHANNELS.has(entry.channel) ? entry.channel : 'email';
     const status  = VALID_STATUS.has(entry.deliveryStatus) ? entry.deliveryStatus : 'sent';
     const purpose = String(entry.purpose || 'other').slice(0, 80);
