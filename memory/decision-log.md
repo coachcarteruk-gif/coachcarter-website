@@ -100,6 +100,9 @@ Consequence: Every new query MUST filter `WHERE school_id = ${schoolId}`. Every 
 
 ## Superseded
 
+**[Superseded 2026-05-21] — "`api/instructors?action=list` publicly returns instructor email and phone."**
+Re-verified on current `main`: `api/instructors.js` public `list` selects only `id`, `name`, `slug`, `bio`, `photo_url`, `active`, `pass_rate`, `years_experience`, and `specialisms`. Frontend usage under `public/` only needs the public shape, primarily `id`, `name`, and `slug`.
+
 **[Superseded 2026-05-21] — "Drift residual is 3 refund-bug bookings (#117, #133, #214)."**
 This held at the moment PR #186 landed. Superseded by PR #187 the same day, which flipped `credit_returned = TRUE` on all three rows. Drift is now 0.
 
