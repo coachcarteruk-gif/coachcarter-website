@@ -89,6 +89,19 @@ const INSTRUCTOR_ID = 1; // Fraser — always exists on any branch off main.
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Set grandfathered_at on the test pair's LCB row to NOW(). Used by C17/C18
+// to author "this row is legacy-origin" scenarios. The setLcbBalance helper
+// touches updated_at but leaves grandfathered_at alone, so this is invoked
+// after setLcbBalance.
+async function setLcbGrandfathered() {
+  await sql`
+    UPDATE learner_credit_balances
+       SET grandfathered_at = NOW()
+     WHERE learner_id = ${testLearnerId}
+       AND instructor_id = ${INSTRUCTOR_ID}
+  `;
+}
+
 // Reset all per-test state for the test learner.
 async function resetState() {
   // CSA → BCS → CT (FK order). LCB has no FK to CT, so order between LCB and
@@ -331,14 +344,16 @@ function findOurPair(result) {
 async function findOurPairOnDb() {
   const [row] = await sql`
     WITH purchases AS (
-      SELECT COALESCE(SUM(ct.minutes), 0)::int AS minutes
+      SELECT COALESCE(SUM(ct.minutes), 0)::int AS minutes,
+             (COUNT(*) > 0)                    AS has_rows
         FROM credit_transactions ct
        WHERE ct.school_id     = ${SCHOOL_ID}
          AND ct.instructor_id = ${INSTRUCTOR_ID}
          AND ct.learner_id    = ${testLearnerId}
     ),
     booking_draws AS (
-      SELECT COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+      SELECT COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes,
+             (COUNT(*) > 0)                              AS has_rows
         FROM lesson_bookings lb
        WHERE lb.school_id      = ${SCHOOL_ID}
          AND lb.learner_id     = ${testLearnerId}
@@ -351,7 +366,8 @@ async function findOurPairOnDb() {
          )
     ),
     bcs_draws AS (
-      SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS minutes
+      SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS minutes,
+             (COUNT(*) > 0)                            AS has_rows
         FROM booking_credit_sources bcs
         JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
        WHERE ct.learner_id    = ${testLearnerId}
@@ -359,7 +375,8 @@ async function findOurPairOnDb() {
          AND bcs.refunded_at IS NULL
     ),
     csa_draws AS (
-      SELECT COALESCE(SUM(csa.minutes_adjusted), 0)::int AS minutes
+      SELECT COALESCE(SUM(csa.minutes_adjusted), 0)::int AS minutes,
+             (COUNT(*) > 0)                              AS has_rows
         FROM credit_source_adjustments csa
         JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
        WHERE ct.learner_id    = ${testLearnerId}
@@ -377,13 +394,22 @@ async function findOurPairOnDb() {
         - (  (SELECT minutes FROM purchases)
            - (SELECT minutes FROM booking_draws)
            - (SELECT minutes FROM bcs_draws)
-           - (SELECT minutes FROM csa_draws) ) AS drift_minutes
+           - (SELECT minutes FROM csa_draws) ) AS drift_minutes,
+      lcb.grandfathered_at                     AS grandfathered_at,
+        (SELECT has_rows FROM purchases)
+       OR (SELECT has_rows FROM booking_draws)
+       OR (SELECT has_rows FROM bcs_draws)
+       OR (SELECT has_rows FROM csa_draws)     AS has_ledger_rows
     FROM (SELECT 1) _
     LEFT JOIN learner_credit_balances lcb
       ON lcb.learner_id    = ${testLearnerId}
      AND lcb.instructor_id = ${INSTRUCTOR_ID}
   `;
   if (!row || row.drift_minutes === 0) return undefined;
+  // Mirror cron's conditional grandfather suppression: a grandfathered row
+  // with NO per-pair ledger rows is silenced. Any per-pair ledger activity
+  // — even one that nets to zero — re-asserts drift (C18, C22).
+  if (row.grandfathered_at != null && !row.has_ledger_rows) return undefined;
   return row;
 }
 
@@ -392,14 +418,16 @@ async function findOurPairOnDb() {
 async function findOurPairOnDbCtOnly() {
   const [row] = await sql`
     WITH purchases AS (
-      SELECT COALESCE(SUM(ct.minutes), 0)::int AS minutes
+      SELECT COALESCE(SUM(ct.minutes), 0)::int AS minutes,
+             (COUNT(*) > 0)                    AS has_rows
         FROM credit_transactions ct
        WHERE ct.school_id     = ${SCHOOL_ID}
          AND ct.instructor_id = ${INSTRUCTOR_ID}
          AND ct.learner_id    = ${testLearnerId}
     ),
     booking_draws AS (
-      SELECT COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+      SELECT COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes,
+             (COUNT(*) > 0)                              AS has_rows
         FROM lesson_bookings lb
        WHERE lb.school_id      = ${SCHOOL_ID}
          AND lb.learner_id     = ${testLearnerId}
@@ -416,13 +444,18 @@ async function findOurPairOnDbCtOnly() {
       - (SELECT minutes FROM booking_draws)    AS computed_ledger_balance_minutes,
       COALESCE(lcb.balance_minutes, 0)
         - (  (SELECT minutes FROM purchases)
-           - (SELECT minutes FROM booking_draws) ) AS drift_minutes
+           - (SELECT minutes FROM booking_draws) ) AS drift_minutes,
+      lcb.grandfathered_at                     AS grandfathered_at,
+        (SELECT has_rows FROM purchases)
+       OR (SELECT has_rows FROM booking_draws) AS has_ledger_rows
     FROM (SELECT 1) _
     LEFT JOIN learner_credit_balances lcb
       ON lcb.learner_id    = ${testLearnerId}
      AND lcb.instructor_id = ${INSTRUCTOR_ID}
   `;
   if (!row || row.drift_minutes === 0) return undefined;
+  // Same conditional grandfather suppression as findOurPairOnDb.
+  if (row.grandfathered_at != null && !row.has_ledger_rows) return undefined;
   return row;
 }
 
@@ -891,5 +924,270 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
     await deleteLcb();
     const final = await runCron();
     expect(final.drift_count).toBe(before.drift_count);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Plan A — grandfathered_at column + conditional drift suppression.
+  //
+  // Truth table the cron implements (all three schema modes):
+  //   grandfathered_at | per-pair ledger rows exist? | result
+  //   ─────────────────┼─────────────────────────────┼────────────────
+  //   NULL             | no                          | (no drift)
+  //   NULL             | yes                         | flag if LCB != 0
+  //   non-NULL         | no                          | SUPPRESS   ← C17 / C20
+  //   non-NULL         | yes                         | flag       ← C18 / C22
+  //
+  // "Per-pair ledger rows exist" — not "ledger nets to non-zero" — is the
+  // load-bearing condition. C22 forces the predicate to distinguish the
+  // two: +60 purchase + -60 booking on a grandfathered row nets to zero
+  // but still has rows, so it must flag.
+  //
+  // C19 covers idempotency of the suppression flag itself: re-marking
+  // does not change counts.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C17: grandfathered LCB row with no per-pair ledger → suppressed.
+  //
+  // This is the steady-state Group A shape from the first prod fire on
+  // 2026-05-20: legacy backfill rows with LCB > 0 and no credit_transactions
+  // entries for the pair. After grandfathering, the cron must not flag them.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C17: grandfathered + no ledger → suppressed from drift and counted as grandfathered', async () => {
+    await resetState();
+    // Inject the Group A shape: LCB > 0, no CT, no bookings.
+    await setLcbBalance(1860);
+    await setLcbGrandfathered();
+
+    // Snapshot drift + grandfathered counts before our injection took effect.
+    // Note: setLcbBalance + setLcbGrandfathered already happened. The "before"
+    // here is just for sanity — we expect our row NOT to appear in drift.
+    const result = await runCron();
+    expect(result.ok).toBe(true);
+
+    // The cron MUST NOT flag our pair.
+    expect(await findOurPairPrecise()).toBeUndefined();
+
+    // And grandfathered_count includes our pair (grandfathered + no ledger
+    // rows + LCB != 0).
+    expect(result.grandfathered_count).toBeGreaterThanOrEqual(1);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C18: grandfathered LCB row WITH non-zero ledger → STILL flagged.
+  //
+  // LOAD-BEARING TEST. If suppression were unconditional (`AND
+  // lcb.grandfathered_at IS NULL` in the WHERE), this test would fail by
+  // silently dropping a real drift signal once any per-pair CT row landed.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C18: grandfathered + non-zero ledger → STILL flagged (load-bearing)', async () => {
+    await resetState();
+    // Start with the Group A shape, then add a Phase-2A purchase. The CT
+    // row makes expected_balance = 60; LCB is still the pre-existing 1860
+    // (the grant did NOT touch LCB because we authored the row directly via
+    // setLcbBalance, simulating a mixed-state row that hasn't been
+    // reconciled yet).
+    await setLcbBalance(1860);
+    await setLcbGrandfathered();
+
+    const before = await runCron();
+
+    await insertCt({ minutes: 60 });   // expected_balance = 60, LCB = 1860 → drift +1800
+
+    const after = await runCron();
+    expect(after.ok).toBe(true);
+
+    // P2 mitigation: cron's own drift_count must rise by exactly 1.
+    expect(after.drift_count).toBe(before.drift_count + 1);
+
+    // And our pair must be in the precise lookup.
+    const row = await findOurPairPrecise();
+    expect(row).toBeTruthy();
+    expect(row.actual_lcb_balance_minutes).toBe(1860);
+    expect(row.computed_ledger_balance_minutes).toBe(60);
+    expect(row.drift_minutes).toBe(1800);
+
+    // Grandfathered_count should drop OR stay flat (depending on prior state):
+    // our pair is no longer in "would-have-flagged-but-suppressed" because
+    // it's now actually flagged. The key assertion is "still flagged" above;
+    // the count semantics is asserted independently in C17.
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C22: grandfathered LCB row + ledger activity that NETS TO ZERO → STILL flagged.
+  //
+  // SECOND LOAD-BEARING TEST. A naive "expected = 0" suppression predicate
+  // would silence this pair: +60 purchase + -60 booking draw = 0 expected
+  // balance. But the LCB still carries 1860 minutes of legacy origin AND
+  // now has real per-pair activity sitting on top of it — the divergence
+  // is 1860 minutes, not zero, and we MUST report it.
+  //
+  // The correct predicate is "any per-pair ledger rows exist" — not
+  // "ledger nets to zero". This test is the discriminator between the two.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C22: grandfathered + net-zero ledger activity → STILL flagged (second load-bearing)', async () => {
+    await resetState();
+    await setLcbBalance(1860);
+    await setLcbGrandfathered();
+
+    const before = await runCron();
+
+    // Net-zero ledger: +60 purchase + -60 booking deduction = 0 expected.
+    await insertCt({ minutes: 60 });
+    const bookingId = await insertBookingWithMinutes(60, false /* credit_returned */);
+
+    try {
+      const after = await runCron();
+      expect(after.ok).toBe(true);
+
+      // Cron must report a NEW drift pair — the legacy 1860 is still
+      // unaccounted-for. Net-zero ledger does NOT silence a grandfathered row.
+      expect(after.drift_count).toBe(before.drift_count + 1);
+
+      const row = await findOurPairPrecise();
+      expect(row).toBeTruthy();
+      expect(row.actual_lcb_balance_minutes).toBe(1860);
+      // Expected balance is +60 (purchase) - 60 (deduction) = 0.
+      expect(row.computed_ledger_balance_minutes).toBe(0);
+      // But drift is the full 1860 — the LCB is "wrong" by the legacy
+      // amount, and that's what the operator needs to see.
+      expect(row.drift_minutes).toBe(1860);
+    } finally {
+      await sql`DELETE FROM lesson_bookings WHERE id = ${bookingId}`;
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C23: P2 mitigation for the net-zero load-bearing case.
+  //
+  // C22 asserts via findOurPairPrecise() (parallel SQL). If the cron's
+  // suppression predicate is the buggy "expected = 0" form, the helper's
+  // matching JS check would also suppress the row — the bug would hide.
+  // This test asserts cron OUTPUT delta directly: drift_count must rise
+  // by exactly 1 when we add net-zero ledger activity to a grandfathered
+  // pair. Independent of the helper.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C23: net-zero ledger on grandfathered row produces drift_count delta=+1 (P2-mitigation for C22)', async () => {
+    await resetState();
+    await setLcbBalance(1860);
+    await setLcbGrandfathered();
+
+    const before = await runCron();
+    // grandfathered_count should include our row at this point (clean
+    // grandfathered, no ledger).
+    expect(before.grandfathered_count).toBeGreaterThanOrEqual(1);
+
+    await insertCt({ minutes: 60 });
+    const bookingId = await insertBookingWithMinutes(60, false);
+
+    try {
+      const after = await runCron();
+      // Direct assertion against the cron's own counts — not via the helper.
+      expect(after.drift_count).toBe(before.drift_count + 1);
+      // And the row is no longer in the "would-have-flagged-but-suppressed"
+      // bucket, because it IS now flagged.
+      expect(after.grandfathered_count).toBe(before.grandfathered_count - 1);
+    } finally {
+      await sql`DELETE FROM lesson_bookings WHERE id = ${bookingId}`;
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C19: grandfather flag is sticky — re-marking is idempotent.
+  //
+  // setLcbGrandfathered runs UPDATE … SET grandfathered_at = NOW(). The
+  // backfill migration's predicate (api/migrate-step-2c-grandfather.js)
+  // includes `grandfathered_at IS NULL` so a second run can't touch a row
+  // that's already grandfathered. This test asserts the suppression
+  // behaviour stays consistent across a re-mark.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C19: re-grandfathering an already-grandfathered row leaves suppression behaviour unchanged', async () => {
+    await resetState();
+    await setLcbBalance(900);
+    await setLcbGrandfathered();
+
+    const first = await runCron();
+    expect(await findOurPairPrecise()).toBeUndefined();
+    const firstGrandfathered = first.grandfathered_count;
+
+    // Re-mark (simulating a second migration pass that somehow doesn't
+    // gate on IS NULL — the cron's behaviour must still be deterministic).
+    await setLcbGrandfathered();
+
+    const second = await runCron();
+    expect(await findOurPairPrecise()).toBeUndefined();
+    expect(second.grandfathered_count).toBe(firstGrandfathered);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C21 (P2 fix): cron survives when grandfathered_at column is absent.
+  //
+  // Deploy ordering: the new cron code ships in the same Vercel deploy as
+  // the column DDL, but there's a window between deploy completion and
+  // /api/migrate finishing where the cron's SQL would reference a column
+  // that doesn't exist yet. probeSchemaMode reports has_grandfathered_at
+  // = false, the reconcile functions emit non-suppressing variants, and
+  // grandfathered_count short-circuits to 0.
+  //
+  // This test DROPs and re-ADDs the column around a single cron run. The
+  // afterAll cleanup re-adds the column unconditionally as a safety net
+  // in case a prior assertion threw mid-test.
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C21: cron returns ok with non-suppressing variant when grandfathered_at column is absent (P2 fix)', async () => {
+    await resetState();
+    // Drop the column. The branch already has Phase-2A schema, so other
+    // queries (purchases, booking_draws, etc.) remain healthy.
+    await sql`ALTER TABLE learner_credit_balances DROP COLUMN IF EXISTS grandfathered_at`;
+
+    try {
+      const result = await runCron();
+      expect(result.ok).toBe(true);
+      expect(result.has_grandfathered_at).toBe(false);
+      // Count short-circuits to 0 when column is absent.
+      expect(result.grandfathered_count).toBe(0);
+      // drift_count is just the normal full-detection count; we don't
+      // assert a specific value (branch state varies) — only that the
+      // cron completed without error.
+      expect(typeof result.drift_count).toBe('number');
+    } finally {
+      // Re-add the column. ALTER + IF NOT EXISTS makes this idempotent.
+      await sql`
+        ALTER TABLE learner_credit_balances
+          ADD COLUMN IF NOT EXISTS grandfathered_at TIMESTAMPTZ
+      `;
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C20: P2 mitigation specifically for grandfather suppression.
+  //
+  // C17 asserts via findOurPairPrecise(), which is parallel SQL. A bug in
+  // the cron's WHERE predicate could be masked if the helper still computed
+  // the right answer. This test compares drift_count and grandfathered_count
+  // BEFORE and AFTER injecting one grandfathered-clean row, asserting:
+  //   • drift_count is UNCHANGED (suppression worked),
+  //   • grandfathered_count rose by exactly 1 (the row was counted as
+  //     suppressed, not dropped silently).
+  // ───────────────────────────────────────────────────────────────────────────
+  test('C20: grandfathered clean row produces (drift_count delta=0, grandfathered_count delta=+1) (P2 mitigation)', async () => {
+    await resetState();
+    const before = await runCron();
+
+    await setLcbBalance(1860);
+    await setLcbGrandfathered();
+
+    const after = await runCron();
+
+    // Suppression worked — no new drift entry.
+    expect(after.drift_count).toBe(before.drift_count);
+    // And the row was visibly counted as suppressed.
+    expect(after.grandfathered_count).toBe(before.grandfathered_count + 1);
+
+    // Cleaning up: removing the LCB row also removes it from the suppressed
+    // count, confirming the count is computed live (not cached).
+    await deleteLcb();
+    const final = await runCron();
+    expect(final.drift_count).toBe(before.drift_count);
+    expect(final.grandfathered_count).toBe(before.grandfathered_count);
   });
 });
