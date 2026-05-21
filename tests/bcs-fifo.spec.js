@@ -129,4 +129,39 @@ test.describe('planFifoCreditDraw', () => {
     expect(plan.ok).toBe(true);
     expect(plan.rows[0].absorbed_by).toBe('instructor');
   });
+
+  test('wrong-school sources are ignored', () => {
+    const plan = planFifoCreditDraw({
+      schoolId: 1,
+      minutes: 90,
+      sources: [
+        source({ id: 1, school_id: 2, minutes: 90, created_at: '2026-05-01T10:00:00.000Z' }),
+        source({ id: 2, school_id: 1, minutes: 90, created_at: '2026-06-01T10:00:00.000Z' }),
+      ],
+    });
+
+    expect(plan.ok).toBe(true);
+    expect(plan.rows).toHaveLength(1);
+    expect(plan.rows[0].credit_transaction_id).toBe(2);
+    expect(plan.rows[0].school_id).toBe(1);
+    expect(plan.rows[0].minutes_drawn).toBe(90);
+  });
+
+  test('insufficient available minutes returns partial plan and shortage', () => {
+    const plan = planFifoCreditDraw({
+      schoolId: 1,
+      minutes: 180,
+      sources: [
+        source({ id: 1, minutes: 90, active_minutes_drawn: 30, active_stripe_fee_pence: 30 }),
+        source({ id: 2, minutes: 60, school_id: 2 }),
+        source({ id: 3, minutes: 45, created_at: '2026-06-02T10:00:00.000Z' }),
+      ],
+    });
+
+    expect(plan.ok).toBe(false);
+    expect(plan.planned_minutes).toBe(105);
+    expect(plan.shortage_minutes).toBe(75);
+    expect(plan.rows.map(r => [r.credit_transaction_id, r.minutes_drawn]))
+      .toEqual([[1, 60], [3, 45]]);
+  });
 });
