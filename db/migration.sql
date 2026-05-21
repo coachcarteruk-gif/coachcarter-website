@@ -2236,6 +2236,7 @@ CREATE TABLE IF NOT EXISTS booking_credit_sources (
   id                    SERIAL PRIMARY KEY,
   booking_id            INTEGER NOT NULL REFERENCES lesson_bookings(id) ON DELETE CASCADE,
   credit_transaction_id INTEGER NOT NULL REFERENCES credit_transactions(id),
+  school_id             INTEGER NOT NULL REFERENCES schools(id) DEFAULT 1,
   minutes_drawn         INTEGER NOT NULL CHECK (minutes_drawn > 0),
   rate_pence_per_minute INTEGER NOT NULL,
   contribution_pence    INTEGER NOT NULL,
@@ -2250,6 +2251,34 @@ CREATE INDEX IF NOT EXISTS idx_bcs_credit_tx ON booking_credit_sources(credit_tr
 CREATE INDEX IF NOT EXISTS idx_bcs_active
   ON booking_credit_sources(credit_transaction_id)
   WHERE refunded_at IS NULL;
+
+-- Step 5 groundwork (May 2026): BCS is a tenant-scoped financial attribution
+-- table. The table already exists in production from Step 2c, so add and
+-- backfill school_id idempotently before enforcing NOT NULL.
+ALTER TABLE booking_credit_sources ADD COLUMN IF NOT EXISTS school_id INTEGER;
+UPDATE booking_credit_sources bcs
+   SET school_id = COALESCE(
+         (SELECT lb.school_id FROM lesson_bookings lb WHERE lb.id = bcs.booking_id),
+         (SELECT ct.school_id FROM credit_transactions ct WHERE ct.id = bcs.credit_transaction_id),
+         1
+       )
+ WHERE bcs.school_id IS NULL;
+ALTER TABLE booking_credit_sources ALTER COLUMN school_id SET DEFAULT 1;
+ALTER TABLE booking_credit_sources ALTER COLUMN school_id SET NOT NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_constraint
+     WHERE conname = 'booking_credit_sources_school_id_fkey'
+       AND conrelid = 'booking_credit_sources'::regclass
+  ) THEN
+    ALTER TABLE booking_credit_sources
+      ADD CONSTRAINT booking_credit_sources_school_id_fkey
+      FOREIGN KEY (school_id) REFERENCES schools(id);
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_bcs_school ON booking_credit_sources(school_id);
 
 -- Cash-refund / dispute-clawback / admin-correction ledger. Additive — never
 -- mutate credit_transactions.minutes or amount_pence because BCS snapshots

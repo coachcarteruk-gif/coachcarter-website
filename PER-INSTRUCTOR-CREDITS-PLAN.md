@@ -34,7 +34,7 @@ A third round of external GPT-5.5 review (16:42 same day) returned 14 further fl
 - **Reconciliation looks up by all three Stripe identities** (session_id, payment_intent_id, charge_id) with explicit reject conditions for partial refunds, disputes, amount mismatches, missing metadata. Closes the "double-grant if original row lacks payment_intent_id" blocker.
 - **Step 2 is split into 2a/2b/2c sub-phases** with backfill of `stripe_payment_intent_id` on existing rows BEFORE the unique index is created. Closes the migration race.
 - **Goodwill absorption is now a property of `credit_transactions`** (copied to `booking_credit_sources.absorbed_by` at draw time). Closes the "absorbed status doesn't survive refund/rebook" blocker.
-- **`list_price_pence = 0` for instructor-absorbed bookings**, with proportional handling for mixed-source bookings. Closes "goodwill writer may snapshot nonzero list_price_pence."
+- **`list_price_pence = 0` for fully instructor-absorbed bookings**, with mixed-source bookings summing payable active BCS `contribution_pence` and excluding instructor-absorbed portions only. Closes "goodwill writer may snapshot nonzero list_price_pence."
 - **Per-minute fee allocation switches to last-draw-takes-remainder** for pence-exact allocation. Closes the "penny leak" and "invariant too weak" flaws.
 - **Cash refunds use a new `credit_source_adjustments` table** (immutable source totals + additive history). Closes the "ledger semantics are contradictory" blocker.
 - **Free-trial wiring lives in Step 1b** (not deferred to Step 5.5). Closes the "free trial NOT NULL source" blocker.
@@ -799,7 +799,7 @@ Closes GPT-flaw #2. `grantCredits()` checks for `metadata.instructor_id`:
 
 ### 2026-05-21 preflight contract
 
-Current `main` already contains the Step 5 schema substrate: `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, and the shared pure pence allocator with tests. This step is therefore a writer/payout wiring step, not a fresh schema step, unless the unresolved decisions below change the schema.
+Current `main` already contains the Step 5 schema substrate: `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, and the shared pure pence allocator with tests. This step is therefore mostly a writer/payout wiring step. Fraser accepted one schema addition on 2026-05-21: `booking_credit_sources.school_id`.
 
 Implementation contract:
 
@@ -809,12 +809,12 @@ Implementation contract:
 - **Pence allocation invariants:** active BCS `stripe_fee_pence` must never over-allocate a source (`SUM(active fees) <= credit_transactions.stripe_fee_pence`). When a source is exhausted after active BCS rows plus CSA adjustments, equality is required (`SUM(active fees) = credit_transactions.stripe_fee_pence`) so the final draw absorbs any remainder penny.
 - **Payout lockstep:** any math change in `processPayoutForInstructor` must be mirrored in `simulatePayoutForInstructor` in the same PR. The admin preview is the preflight for the Friday cron, not an independent approximation.
 
-Unresolved Fraser decisions before writer/payout behaviour ships:
+Accepted Fraser decisions for Step 5 (2026-05-21):
 
-- Should `booking_credit_sources` gain `school_id`, or is tenancy inherited strictly through `lesson_bookings` and `credit_transactions`?
-- On reschedule, should attribution stay attached to the old booking as refunded audit rows with new BCS rows on the replacement, or be transferred in some other way?
-- For mixed-source bookings, especially mixed `absorbed_by` sources, what exact `lesson_bookings.list_price_pence` policy should the writer snapshot?
-- Should direct paid slot purchases create BCS rows pointing at their `slot_purchase` `credit_transactions` source, or remain booking-level money rows outside BCS?
+- `booking_credit_sources.school_id` is explicit, indexed, and treated as tenant scope for BCS queries. Existing rows are backfilled from `lesson_bookings.school_id`, falling back to `credit_transactions.school_id`, then default school 1.
+- Reschedules refund old active BCS rows (`refunded_at = NOW()`) and create fresh BCS rows for the replacement booking. Do not transfer or reactivate old BCS rows.
+- Mixed-source `lesson_bookings.list_price_pence` equals the sum of payable active BCS `contribution_pence`, excluding instructor-absorbed portions only.
+- Direct paid slot purchases create BCS rows against their matching `slot_purchase` `credit_transactions` source.
 
 ### What changes
 

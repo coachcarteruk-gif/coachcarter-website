@@ -546,6 +546,12 @@ Allowed `type` values (enforced by `credit_transactions_type_check`):
 - `referral_reward` — credit granted to the referrer when the referee completes a lesson (cron)
 - `refund` — reserved for future refund flows (no callsite writes this today; cancellations update `balance_minutes` directly without an audit row)
 
+**`learner_credit_balances`** — per `(learner_id, instructor_id)` scoped credit balance. Columns: `learner_id`, `instructor_id`, `school_id`, `balance_minutes`, `updated_at`, unique `(learner_id, instructor_id)`. This is the materialised balance; `credit_transactions` are grants and `booking_credit_sources` are deductions.
+
+**`booking_credit_sources`** — Step 5 financial attribution rows linking a booking to the credit transaction source(s) that funded it. Columns: `booking_id`, `credit_transaction_id`, `school_id`, `minutes_drawn`, `rate_pence_per_minute`, `contribution_pence`, `stripe_fee_pence`, `absorbed_by`, `refunded_at`, `created_at`. Tenant-scoped by explicit `school_id`; active rows are `refunded_at IS NULL`; unique `(booking_id, credit_transaction_id)` prevents retry double-inserts.
+
+**`credit_source_adjustments`** — additive source-level adjustment ledger for cash refunds, admin corrections, and dispute clawbacks. Columns: `credit_transaction_id`, `kind`, `minutes_adjusted`, `pence_adjusted`, `reason`, `stripe_refund_id`, `created_at`, `created_by`. Never mutates `credit_transactions.minutes` / `amount_pence`.
+
 **`lesson_bookings`**
 ```sql
 id SERIAL PRIMARY KEY
