@@ -83,15 +83,39 @@ let RETRO_MARKER_KEY;
 let createdLearnerIds = [];
 let createdBookingIds = [];
 
-function fakeReq({ method = 'GET', query = {}, headers = {}, body = {}, cookies = {} } = {}) {
-  return { method, query, headers, body, cookies };
+// CSRF double-submit value. Used in both the JWT-bearing cookie string
+// (cc_csrf=...) AND the matching `x-csrf-token` header so api/_csrf.js's
+// verifyCsrf passes on POST.
+const CSRF_TOKEN = 'test-csrf-' + crypto.randomBytes(8).toString('hex');
+
+function fakeReq({ method = 'GET', query = {}, headers = {}, body = {}, cookies = {}, cookie } = {}) {
+  // If a `cookie` string was supplied, merge in the CSRF cookie so
+  // verifyCsrf passes on mutating requests.
+  const cookieStr = cookie != null
+    ? `${cookie}; cc_csrf=${CSRF_TOKEN}`
+    : `cc_csrf=${CSRF_TOKEN}`;
+  const mergedHeaders = {
+    'x-csrf-token': CSRF_TOKEN,
+    cookie: cookieStr,
+    ...headers,
+  };
+  return { method, query, headers: mergedHeaders, body, cookies };
 }
 function fakeRes() {
+  // api/slots.js's top-level dispatcher attaches a `res.on('finish', ...)`
+  // listener for POST/PUT/DELETE logging. Stub `on` so the dispatcher
+  // doesn't throw before reaching the handler. Also stub setHeader /
+  // getHeader since some downstream paths (CORS, Set-Cookie writers)
+  // may call them.
   const r = {
     statusCode: 200,
     body: null,
+    _headers: {},
     status(code) { this.statusCode = code; return this; },
     json(body) { this.body = body; return this; },
+    on(/* event, cb */) { /* no-op */ return this; },
+    setHeader(name, value) { this._headers[String(name).toLowerCase()] = value; return this; },
+    getHeader(name) { return this._headers[String(name).toLowerCase()]; },
   };
   return r;
 }
@@ -150,21 +174,25 @@ async function getBooking(id) {
 }
 
 // Build a learner JWT for handleReschedule (api/slots.js). The slots.js
-// path uses verifyAuth from api/_auth.js which decodes cc_learner cookie.
+// path uses verifyAuth from api/_auth.js which decodes cc_learner cookie
+// and reads payload.id (NOT payload.user_id / payload.learner_id) — the
+// handler filters bookings on `lb.learner_id = ${user.id}`.
 function makeLearnerJwt(learnerId) {
   const jwt = require('jsonwebtoken');
   return jwt.sign(
-    { user_id: learnerId, learner_id: learnerId, school_id: SCHOOL_ID, role: 'learner' },
+    { id: learnerId, school_id: SCHOOL_ID, role: 'learner' },
     process.env.JWT_SECRET,
     { expiresIn: '1h' }
   );
 }
 
 // Build an instructor JWT for handleRescheduleBooking (api/instructor.js).
+// Same id-field semantics as the learner JWT — handler reads
+// `instructor.id` and filters on `lb.instructor_id = ${instructor.id}`.
 function makeInstructorJwt(instructorId) {
   const jwt = require('jsonwebtoken');
   return jwt.sign(
-    { user_id: instructorId, instructor_id: instructorId, school_id: SCHOOL_ID, role: 'instructor' },
+    { id: instructorId, school_id: SCHOOL_ID, role: 'instructor' },
     process.env.JWT_SECRET,
     { expiresIn: '1h' }
   );
