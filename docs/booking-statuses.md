@@ -39,7 +39,7 @@ This is the rule the three-state model exists to encode. If you find yourself ad
 | `scheduled` | `refunded` | Instructor cancels their own slot (any time) | `instructor.js?action=cancel-booking` |
 | `scheduled` | `refunded` | Instructor cancels on learner's behalf (any time) | `instructor.js?action=cancel-booking` |
 | `scheduled` | `refunded` | Admin cancels (any time) | `admin.js?action=cancel-booking` |
-| `scheduled` | `refunded` | Reschedule — old row terminates here, new row born as `scheduled` | `slots.js?action=reschedule` |
+| `scheduled` | `refunded` | Reschedule — old row terminates here (`credit_returned = TRUE` so the divergence cron stops counting it; new row carries `minutes_deducted` forward) | `slots.js?action=reschedule`, `instructor.js?action=reschedule-booking` |
 | `chargeable` | `refunded` | Admin manual override (goodwill, retroactive dispute, post-payout correction) | `admin.js` |
 | `refunded` | — | Terminal — no transitions out | — |
 
@@ -66,9 +66,11 @@ Why not just set `chargeable` immediately on the late-cancel? Because the calend
 - Manual admin override (rare, for retroactive corrections)
 
 **`refunded` (writes):**
-- `api/slots.js` — cancel (≥48h), reschedule (old row)
-- `api/instructor.js` — instructor-side cancel
+- `api/slots.js` — cancel (≥48h), reschedule (old row, with `credit_returned = TRUE`)
+- `api/instructor.js` — instructor-side cancel, reschedule (old row, with `credit_returned = TRUE`)
 - `api/admin.js` — admin cancel, admin retroactive refund (`chargeable → refunded`)
+
+**Reschedule `credit_returned` invariant:** every code path that flips `status → refunded` as part of a reschedule MUST also flip `credit_returned = TRUE` on the same row. The new booking carries `minutes_deducted` forward, so without the flag the divergence cron's `booking_draws` CTE counts BOTH rows and reports `+minutes_deducted` of drift per reschedule. Both `cancelled_at` and `credit_returned` must lockstep on the rollback path too (back to `NULL` / `FALSE`). See `api/migrate-credit-returned-retro-fix.js` for the historical fixup pattern.
 
 **`credit_forfeited = TRUE` (writes):**
 - `api/slots.js` — learner cancel <48h (only writer)

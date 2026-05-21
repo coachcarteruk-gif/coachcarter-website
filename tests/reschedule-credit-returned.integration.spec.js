@@ -1,0 +1,556 @@
+// @ts-check
+// Integration tests for chip #3: reschedule paths set credit_returned=TRUE
+// on the old booking. Covers:
+//
+//   Writer paths (both reschedule endpoints):
+//     C1. api/instructor.js handleRescheduleBooking — forward path flips
+//         credit_returned=TRUE on the old booking.
+//     C2. api/instructor.js handleRescheduleBooking — INSERT-failure
+//         rollback flips credit_returned BACK to FALSE in lockstep.
+//     C3. api/slots.js handleReschedule — forward path flips
+//         credit_returned=TRUE on the old booking.
+//     C4. api/slots.js handleReschedule — rollback flips credit_returned
+//         back to FALSE in lockstep.
+//
+//   Retro-fix migration (api/migrate-credit-returned-retro-fix.js):
+//     M1. Refuses to rerun once the marker is present.
+//     M2. Dry-run reports current state of each target booking without
+//         writing.
+//     M3. POST flips credit_returned=TRUE on rows where
+//         status=REFUNDED AND credit_returned=FALSE AND
+//         credit_forfeited=FALSE AND minutes_deducted>0 — and ONLY
+//         those rows.
+//     M4. Rows that don't match the predicate (e.g. status=scheduled,
+//         credit_returned already TRUE, credit_forfeited=TRUE) are
+//         left alone.
+//     M5. Production-output assertion: cron drift drops by exactly the
+//         number of flipped rows.
+//
+// The writer-path tests directly invoke the exported handler functions —
+// they don't go through HTTP — so we can run against a Neon test branch
+// without spinning up a server.
+//
+// How to run:
+//   CC_TEST_DB=1 npx playwright test reschedule-credit-returned.integration
+
+const { test, expect } = require('@playwright/test');
+const { neon } = require('@neondatabase/serverless');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+
+(function loadEnvLocal() {
+  try {
+    const envPath = path.resolve(__dirname, '..', '.env.local');
+    if (!fs.existsSync(envPath)) return;
+    const raw = fs.readFileSync(envPath, 'utf8');
+    for (const line of raw.split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
+      if (!m) continue;
+      const key = m[1];
+      if (key.startsWith('#')) continue;
+      if (process.env[key] !== undefined) continue;
+      let val = m[2];
+      if ((val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      process.env[key] = val;
+    }
+  } catch (err) {
+    console.warn('[reschedule-credit-returned.integration] .env.local load failed:', err.message);
+  }
+})();
+
+if (!process.env.MIGRATION_SECRET) {
+  process.env.MIGRATION_SECRET = 'test-secret-' + crypto.randomBytes(8).toString('hex');
+}
+if (!process.env.JWT_SECRET) {
+  process.env.JWT_SECRET = 'test-jwt-secret-' + crypto.randomBytes(8).toString('hex');
+}
+
+let _originalPostgresUrl;
+const ENABLED = process.env.CC_TEST_DB === '1' && !!process.env.POSTGRES_URL_TEST;
+test.describe.configure({ mode: 'serial' });
+
+const SCHOOL_ID = 1;
+const TARGET_INSTRUCTOR_ID = 4;
+
+let sql;
+let retroHandler;
+let runCron;
+let RETRO_MARKER_KEY;
+let createdLearnerIds = [];
+let createdBookingIds = [];
+
+function fakeReq({ method = 'GET', query = {}, headers = {}, body = {}, cookies = {} } = {}) {
+  return { method, query, headers, body, cookies };
+}
+function fakeRes() {
+  const r = {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  return r;
+}
+
+async function makeLearner(label) {
+  const email = `c3-${label}-${crypto.randomBytes(5).toString('hex')}@coachcarter.test`;
+  const [row] = await sql`
+    INSERT INTO learner_users (name, email, school_id, balance_minutes, credit_balance)
+    VALUES (${`Chip3 ${label}`}, ${email}, ${SCHOOL_ID}, 0, 0)
+    RETURNING id
+  `;
+  createdLearnerIds.push(row.id);
+  return row.id;
+}
+
+async function makeBooking(learnerId, instructorId, opts = {}) {
+  const {
+    status = 'scheduled',
+    creditReturned = false,
+    creditForfeited = false,
+    minutesDeducted = 90,
+    rescheduleCount = 0,
+    dateOffset = 0, // days from today
+  } = opts;
+  const baseDate = new Date(Date.now() + dateOffset * 86400000);
+  const futureDate = baseDate.toISOString().slice(0, 10);
+  // Randomized hour to avoid uq_instructor_slot collisions across reruns.
+  const hour = String(8 + (crypto.randomBytes(1)[0] % 8)).padStart(2, '0');
+  const startTime = `${hour}:00`;
+  const endTime = `${String(Number(hour) + 1).padStart(2, '0')}:30`;
+  const [booking] = await sql`
+    INSERT INTO lesson_bookings
+      (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+       credit_returned, credit_forfeited, minutes_deducted, reschedule_count,
+       school_id, created_by, payment_method)
+    VALUES
+      (${learnerId}, ${instructorId}, ${futureDate}::date,
+       ${startTime}::time, ${endTime}::time, ${status},
+       ${creditReturned}, ${creditForfeited}, ${minutesDeducted},
+       ${rescheduleCount}, ${SCHOOL_ID}, 'learner', 'credit')
+    RETURNING id, scheduled_date::text AS scheduled_date,
+              start_time::text AS start_time, end_time::text AS end_time
+  `;
+  createdBookingIds.push(booking.id);
+  return booking;
+}
+
+async function getBooking(id) {
+  const [row] = await sql`
+    SELECT id, status, credit_returned, credit_forfeited, cancelled_at::text AS cancelled_at,
+           minutes_deducted, scheduled_date::text AS scheduled_date,
+           start_time::text AS start_time
+      FROM lesson_bookings WHERE id = ${id}
+  `;
+  return row;
+}
+
+// Build a learner JWT for handleReschedule (api/slots.js). The slots.js
+// path uses verifyAuth from api/_auth.js which decodes cc_learner cookie.
+function makeLearnerJwt(learnerId) {
+  const jwt = require('jsonwebtoken');
+  return jwt.sign(
+    { user_id: learnerId, learner_id: learnerId, school_id: SCHOOL_ID, role: 'learner' },
+    process.env.JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+}
+
+// Build an instructor JWT for handleRescheduleBooking (api/instructor.js).
+function makeInstructorJwt(instructorId) {
+  const jwt = require('jsonwebtoken');
+  return jwt.sign(
+    { user_id: instructorId, instructor_id: instructorId, school_id: SCHOOL_ID, role: 'instructor' },
+    process.env.JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+}
+
+test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
+  test.skip(() => !ENABLED, 'Set CC_TEST_DB=1 and POSTGRES_URL_TEST to run.');
+
+  test.beforeAll(async () => {
+    if (!ENABLED) return;
+    if (process.env.POSTGRES_URL && process.env.POSTGRES_URL_TEST === process.env.POSTGRES_URL) {
+      throw new Error('REFUSING TO RUN: POSTGRES_URL_TEST equals POSTGRES_URL. Point at an isolated branch.');
+    }
+    _originalPostgresUrl = process.env.POSTGRES_URL;
+    process.env.POSTGRES_URL = process.env.POSTGRES_URL_TEST;
+
+    retroHandler = require('../api/migrate-credit-returned-retro-fix');
+    RETRO_MARKER_KEY = retroHandler.MARKER_KEY;
+    runCron = require('../api/cron-credit-reconcile').runDivergenceCheck;
+
+    sql = neon(process.env.POSTGRES_URL_TEST);
+
+    // Marker table existence sanity.
+    await sql`
+      CREATE TABLE IF NOT EXISTS migration_markers (
+        key TEXT PRIMARY KEY, completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), notes TEXT
+      )
+    `;
+    await sql`DELETE FROM migration_markers WHERE key = ${RETRO_MARKER_KEY}`;
+
+    const [target] = await sql`SELECT id FROM instructors WHERE id = ${TARGET_INSTRUCTOR_ID}`;
+    if (!target) {
+      throw new Error(`Test branch lacks instructors.id = ${TARGET_INSTRUCTOR_ID} — required.`);
+    }
+  });
+
+  test.afterAll(async () => {
+    if (!ENABLED) return;
+    try {
+      if (createdBookingIds.length) {
+        await sql`DELETE FROM lesson_bookings WHERE id = ANY(${createdBookingIds})`;
+      }
+      if (createdLearnerIds.length) {
+        await sql`DELETE FROM credit_transactions WHERE learner_id = ANY(${createdLearnerIds})`;
+        await sql`DELETE FROM learner_credit_balances WHERE learner_id = ANY(${createdLearnerIds})`;
+        await sql`DELETE FROM learner_users WHERE id = ANY(${createdLearnerIds})`;
+      }
+      await sql`DELETE FROM migration_markers WHERE key = ${RETRO_MARKER_KEY}`;
+    } catch (_) {}
+    if (_originalPostgresUrl !== undefined) process.env.POSTGRES_URL = _originalPostgresUrl;
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Writer-path tests: invoke the handler functions directly with fake
+  // req/res, against the real test-branch DB.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  test('C1: instructor reschedule flips credit_returned=TRUE on the old booking', async () => {
+    const learnerId = await makeLearner('c1');
+    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 30 });
+
+    // Reschedule to a slot far enough away to avoid uq_instructor_slot collision.
+    const newDate = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+    const newHour = String(15 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
+    const newStartTime = `${newHour}:00`;
+
+    const instructorHandler = require('../api/instructor');
+    const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
+
+    const req = fakeReq({
+      method: 'POST',
+      query: { action: 'reschedule-booking' },
+      headers: { cookie: `cc_instructor=${jwt}` },
+      body: { booking_id: oldBooking.id, new_date: newDate, new_start_time: newStartTime },
+    });
+    const res = fakeRes();
+    await instructorHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    const old = await getBooking(oldBooking.id);
+    expect(old.status).toBe('refunded');
+    expect(old.credit_returned).toBe(true);     // <-- the fix
+    expect(old.cancelled_at).toBeTruthy();
+    // minutes_deducted stays untouched (the carry-forward is to the new row)
+    expect(old.minutes_deducted).toBe(90);
+
+    if (res.body.new_booking_id) createdBookingIds.push(res.body.new_booking_id);
+    const newB = await getBooking(res.body.new_booking_id);
+    expect(newB.status).toBe('scheduled');
+    expect(newB.credit_returned).toBe(false);
+    expect(newB.minutes_deducted).toBe(90);
+  });
+
+  test('C2: instructor reschedule INSERT-failure rollback flips credit_returned BACK to FALSE', async () => {
+    const learnerId = await makeLearner('c2');
+    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 31 });
+
+    // Pre-seed a CLASH at the target slot to force the INSERT to 23505.
+    const newDate = new Date(Date.now() + 62 * 86400000).toISOString().slice(0, 10);
+    const newHour = String(10 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
+    const newStartTime = `${newHour}:00`;
+    const clashLearnerId = await makeLearner('c2-clash');
+    await sql`
+      INSERT INTO lesson_bookings
+        (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+         credit_returned, minutes_deducted, school_id, created_by, payment_method)
+      VALUES
+        (${clashLearnerId}, ${TARGET_INSTRUCTOR_ID}, ${newDate}::date,
+         ${newStartTime}::time, ${`${String(Number(newHour)+1).padStart(2,'0')}:30`}::time,
+         'scheduled', FALSE, 90, ${SCHOOL_ID}, 'learner', 'credit')
+      RETURNING id
+    `;
+    // We can't easily push the clash row ID into createdBookingIds before
+    // this insert resolves; track it on the next afterAll cleanup pass.
+    const [clashRow] = await sql`
+      SELECT id FROM lesson_bookings
+       WHERE learner_id = ${clashLearnerId} ORDER BY id DESC LIMIT 1
+    `;
+    if (clashRow) createdBookingIds.push(clashRow.id);
+
+    const instructorHandler = require('../api/instructor');
+    const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
+
+    const req = fakeReq({
+      method: 'POST',
+      query: { action: 'reschedule-booking' },
+      headers: { cookie: `cc_instructor=${jwt}` },
+      body: { booking_id: oldBooking.id, new_date: newDate, new_start_time: newStartTime },
+    });
+    const res = fakeRes();
+    await instructorHandler(req, res);
+
+    // Could 409 (preflight clash check) OR 409 (INSERT race) — both surface as 409.
+    expect(res.statusCode).toBe(409);
+
+    // Critical invariant: regardless of which path hit, old booking must
+    // be back to original state if a rollback ran. If preflight returned
+    // 409 BEFORE the UPDATE, old booking should also be unchanged.
+    const old = await getBooking(oldBooking.id);
+    expect(old.status).toBe('scheduled');
+    expect(old.credit_returned).toBe(false);    // <-- the rollback fix
+    expect(old.cancelled_at).toBeNull();
+  });
+
+  test('C3: learner reschedule flips credit_returned=TRUE on the old booking', async () => {
+    const learnerId = await makeLearner('c3');
+    // Learner reschedule needs ≥48h notice — schedule the OLD booking
+    // 5 days out so the policy check passes.
+    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 35 });
+
+    const newDate = new Date(Date.now() + 70 * 86400000).toISOString().slice(0, 10);
+    const newHour = String(11 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
+    const newStartTime = `${newHour}:00`;
+
+    const slotsHandler = require('../api/slots');
+    const jwt = makeLearnerJwt(learnerId);
+
+    const req = fakeReq({
+      method: 'POST',
+      query: { action: 'reschedule' },
+      headers: { cookie: `cc_learner=${jwt}` },
+      body: { booking_id: oldBooking.id, new_date: newDate, new_start_time: newStartTime },
+    });
+    const res = fakeRes();
+    await slotsHandler(req, res);
+
+    if (res.statusCode !== 200) {
+      console.error('C3 unexpected response:', res.statusCode, res.body);
+    }
+    expect(res.statusCode).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    const old = await getBooking(oldBooking.id);
+    expect(old.status).toBe('refunded');
+    expect(old.credit_returned).toBe(true);     // <-- the fix
+    expect(old.cancelled_at).toBeTruthy();
+
+    if (res.body.new_booking_id) createdBookingIds.push(res.body.new_booking_id);
+    const newB = await getBooking(res.body.new_booking_id);
+    expect(newB.status).toBe('scheduled');
+    expect(newB.credit_returned).toBe(false);
+  });
+
+  test('C4: learner reschedule INSERT-failure rollback flips credit_returned BACK to FALSE', async () => {
+    const learnerId = await makeLearner('c4');
+    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 36 });
+
+    // Pre-seed a clash to force INSERT failure.
+    const newDate = new Date(Date.now() + 72 * 86400000).toISOString().slice(0, 10);
+    const newHour = String(9 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
+    const newStartTime = `${newHour}:00`;
+    const clashLearnerId = await makeLearner('c4-clash');
+    await sql`
+      INSERT INTO lesson_bookings
+        (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+         credit_returned, minutes_deducted, school_id, created_by, payment_method)
+      VALUES
+        (${clashLearnerId}, ${TARGET_INSTRUCTOR_ID}, ${newDate}::date,
+         ${newStartTime}::time, ${`${String(Number(newHour)+1).padStart(2,'0')}:30`}::time,
+         'scheduled', FALSE, 90, ${SCHOOL_ID}, 'learner', 'credit')
+    `;
+    const [clashRow] = await sql`
+      SELECT id FROM lesson_bookings
+       WHERE learner_id = ${clashLearnerId} ORDER BY id DESC LIMIT 1
+    `;
+    if (clashRow) createdBookingIds.push(clashRow.id);
+
+    const slotsHandler = require('../api/slots');
+    const jwt = makeLearnerJwt(learnerId);
+
+    const req = fakeReq({
+      method: 'POST',
+      query: { action: 'reschedule' },
+      headers: { cookie: `cc_learner=${jwt}` },
+      body: { booking_id: oldBooking.id, new_date: newDate, new_start_time: newStartTime },
+    });
+    const res = fakeRes();
+    await slotsHandler(req, res);
+
+    expect(res.statusCode).toBe(409);
+
+    const old = await getBooking(oldBooking.id);
+    expect(old.status).toBe('scheduled');
+    expect(old.credit_returned).toBe(false);    // <-- the rollback fix
+    expect(old.cancelled_at).toBeNull();
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Retro-fix migration tests.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  let m_targetBooking;            // status=refunded, credit_returned=FALSE — WILL flip
+  let m_alreadyFlippedBooking;    // status=refunded, credit_returned=TRUE — left alone
+  let m_forfeitedBooking;         // status=refunded, credit_forfeited=TRUE — left alone
+  let m_scheduledBooking;         // status=scheduled — left alone
+  let m_zeroMinutesBooking;       // status=refunded, minutes_deducted=0 — left alone
+
+  test('M-setup: build fixture rows that exercise each predicate branch', async () => {
+    const learnerId = await makeLearner('m-setup');
+
+    // Will flip.
+    const wf = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+      dateOffset: 100, status: 'refunded', creditReturned: false, minutesDeducted: 90,
+    });
+    m_targetBooking = wf.id;
+
+    // Already TRUE — left alone.
+    const af = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+      dateOffset: 101, status: 'refunded', creditReturned: true, minutesDeducted: 90,
+    });
+    m_alreadyFlippedBooking = af.id;
+
+    // Forfeited late-cancel — left alone.
+    const ff = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+      dateOffset: 102, status: 'refunded', creditReturned: false, creditForfeited: true, minutesDeducted: 90,
+    });
+    m_forfeitedBooking = ff.id;
+
+    // Status=scheduled — left alone.
+    const sc = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+      dateOffset: 103, status: 'scheduled', creditReturned: false, minutesDeducted: 90,
+    });
+    m_scheduledBooking = sc.id;
+
+    // Zero minutes — left alone.
+    const zm = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+      dateOffset: 104, status: 'refunded', creditReturned: false, minutesDeducted: 0,
+    });
+    m_zeroMinutesBooking = zm.id;
+
+    // Override the BOOKING_IDS allowlist for the handler under test —
+    // we want to point the migration at OUR fixture rows, not the prod
+    // IDs (which don't exist on the test branch). We hack this in-place
+    // by reaching into the module export. Safe per-test because
+    // afterAll resets process.env.POSTGRES_URL.
+    retroHandler.BOOKING_IDS.length = 0;
+    retroHandler.BOOKING_IDS.push(
+      m_targetBooking,
+      m_alreadyFlippedBooking,
+      m_forfeitedBooking,
+      m_scheduledBooking,
+      m_zeroMinutesBooking,
+    );
+  });
+
+  test('M2: dry-run reports per-target state without writing', async () => {
+    const req = fakeReq({ method: 'GET', query: { secret: process.env.MIGRATION_SECRET } });
+    const res = fakeRes();
+    await retroHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.dry_run).toBe(true);
+    expect(res.body.rows_flipped).toBe(0);
+    expect(res.body.marker_written).toBe(false);
+
+    const will = res.body.inspect_rows.filter(r => r.will_flip).map(r => r.id);
+    const wont = res.body.inspect_rows.filter(r => !r.will_flip).map(r => r.id);
+    expect(will).toEqual([m_targetBooking]);
+    expect(wont.sort()).toEqual([
+      m_alreadyFlippedBooking, m_forfeitedBooking,
+      m_scheduledBooking, m_zeroMinutesBooking,
+    ].sort());
+
+    // DB unchanged.
+    const target = await getBooking(m_targetBooking);
+    expect(target.credit_returned).toBe(false);
+  });
+
+  test('M3: POST flips only the target booking', async () => {
+    const req = fakeReq({ method: 'POST', query: { secret: process.env.MIGRATION_SECRET } });
+    const res = fakeRes();
+    await retroHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.rows_flipped).toBe(1);
+    expect(res.body.total_minutes_flipped).toBe(90);
+    expect(res.body.marker_written).toBe(true);
+
+    const target = await getBooking(m_targetBooking);
+    expect(target.status).toBe('refunded');
+    expect(target.credit_returned).toBe(true);
+  });
+
+  test('M4: non-matching predicates left alone', async () => {
+    const already = await getBooking(m_alreadyFlippedBooking);
+    expect(already.credit_returned).toBe(true); // unchanged from fixture
+
+    const forf = await getBooking(m_forfeitedBooking);
+    expect(forf.credit_returned).toBe(false);   // unchanged — forfeited rows protected
+    expect(forf.credit_forfeited).toBe(true);
+
+    const sch = await getBooking(m_scheduledBooking);
+    expect(sch.status).toBe('scheduled');
+    expect(sch.credit_returned).toBe(false);
+
+    const zm = await getBooking(m_zeroMinutesBooking);
+    expect(zm.credit_returned).toBe(false);     // minutes_deducted=0 protected
+    expect(zm.minutes_deducted).toBe(0);
+  });
+
+  test('M1: rerun is refused with 409', async () => {
+    const req = fakeReq({ method: 'POST', query: { secret: process.env.MIGRATION_SECRET } });
+    const res = fakeRes();
+    await retroHandler(req, res);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.ok).toBe(false);
+    expect(res.body.self_marker).toBeTruthy();
+    expect(res.body.self_marker.key).toBe(RETRO_MARKER_KEY);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // M5: production-output assertion. Set up a fresh refund-bug fixture
+  // and confirm runDivergenceCheck.drift_count drops by exactly 1 after
+  // the marker-deleted rerun.
+  // ─────────────────────────────────────────────────────────────────────────
+  test('M5: cron drift_count drops by exactly 1 after fresh fixture + rerun', async () => {
+    const learnerId = await makeLearner('m5');
+    const bug = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+      dateOffset: 200, status: 'refunded', creditReturned: false, minutesDeducted: 90,
+    });
+
+    // Pre-state: this pair drifts +90 (no LCB row at the learner, no per-pair CT,
+    // refunded-but-credit-not-returned booking is an "active draw" per cron).
+    const pre = await runCron(sql, { sendAlerts: false });
+    const preCount = pre.drift_count;
+
+    // Override the allowlist to point only at the fresh fixture.
+    retroHandler.BOOKING_IDS.length = 0;
+    retroHandler.BOOKING_IDS.push(bug.id);
+
+    // Delete the marker so the second POST can run.
+    await sql`DELETE FROM migration_markers WHERE key = ${RETRO_MARKER_KEY}`;
+
+    const req = fakeReq({ method: 'POST', query: { secret: process.env.MIGRATION_SECRET } });
+    const res = fakeRes();
+    await retroHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.rows_flipped).toBe(1);
+
+    const post = await runCron(sql, { sendAlerts: false });
+    expect(post.drift_count).toBe(preCount - 1);
+  });
+});
