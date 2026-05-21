@@ -127,41 +127,57 @@ function reportError(endpoint, err) {
  * _payout-helpers.js — these are not 500 errors, they're "the dashboard is
  * lying" diagnostics that need to land in Fraser's inbox.
  *
- * Fire-and-forget. Failures to send must not break the calling code path.
+ * Returns a Promise<boolean> that resolves to `true` if SMTP accepted at
+ * least one recipient, `false` otherwise. The Promise NEVER rejects — all
+ * errors are caught and logged, so callers can safely `await` without try/
+ * catch. The function returning a Promise means CRON call sites MUST await
+ * it (Vercel kills the function after the HTTP response, which would
+ * otherwise tear down the sendMail in flight — CLAUDE.md hard rule "Always
+ * await async operations before res.json()"). Non-cron callers can still
+ * call without await and rely on Vercel's keep-alive for warm instances.
+ *
+ * The 2026-05-21 first-fire-after-Plan-A incident proved this: the cron
+ * logged `alert_sent: true` but no email arrived AND no `[sendAlertEmail]`
+ * log line appeared in Vercel — meaning the fire-and-forget Promise never
+ * resolved before the function instance was frozen.
  */
-function sendAlertEmail({ subject, html, text }) {
+async function sendAlertEmail({ subject, html, text }) {
   const to = process.env.ERROR_ALERT_EMAIL;
   if (!to) {
     console.error('[sendAlertEmail] ERROR_ALERT_EMAIL env var not set; alert dropped:', subject);
-    return;
+    return false;
+  }
+  let transporter;
+  try {
+    transporter = createTransporter();
+  } catch (err) {
+    console.error('[sendAlertEmail] createTransporter failed:', err && err.message ? err.message : err, 'subject=', subject);
+    return false;
   }
   try {
-    const transporter = createTransporter();
-    transporter.sendMail({
+    const info = await transporter.sendMail({
       from: process.env.SMTP_USER,
       to,
       subject,
       text: text || '',
       html: html || ''
-    }).then(info => {
-      // Surface delivery acceptance for the operator-visible cron alerts. The
-      // SMTP relay's `accepted` array contains recipients the server accepted;
-      // an empty array means delivery was rejected even though sendMail didn't
-      // throw. Logged for the rare delivery edge cases.
-      const accepted = info && info.accepted ? info.accepted.length : 0;
-      const rejected = info && info.rejected ? info.rejected.length : 0;
-      if (rejected > 0 || accepted === 0) {
-        console.warn(`[sendAlertEmail] partial/rejected delivery: accepted=${accepted} rejected=${rejected} subject=${subject}`);
-      } else {
-        console.log(`[sendAlertEmail] delivered subject="${subject}" to ${to}`);
-      }
-    }).catch(err => {
-      // Fire-and-forget contract preserved (we don't throw), but log so silent
-      // SMTP failures surface in Vercel logs.
-      console.error('[sendAlertEmail] sendMail rejected:', err && err.message ? err.message : err, 'subject=', subject);
     });
+    // Surface delivery acceptance for the operator-visible cron alerts. The
+    // SMTP relay's `accepted` array contains recipients the server accepted;
+    // an empty array means delivery was rejected even though sendMail didn't
+    // throw. Logged for the rare delivery edge cases.
+    const accepted = info && info.accepted ? info.accepted.length : 0;
+    const rejected = info && info.rejected ? info.rejected.length : 0;
+    if (rejected > 0 || accepted === 0) {
+      console.warn(`[sendAlertEmail] partial/rejected delivery: accepted=${accepted} rejected=${rejected} subject=${subject}`);
+      return false;
+    }
+    console.log(`[sendAlertEmail] delivered subject="${subject}" to ${to}`);
+    return true;
   } catch (err) {
-    console.error('[sendAlertEmail] createTransporter failed:', err && err.message ? err.message : err, 'subject=', subject);
+    // Never throw — preserve the "callers don't need try/catch" contract.
+    console.error('[sendAlertEmail] sendMail rejected:', err && err.message ? err.message : err, 'subject=', subject);
+    return false;
   }
 }
 
