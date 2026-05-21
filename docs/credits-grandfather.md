@@ -214,7 +214,7 @@ The divergence cron's JSON response now includes `grandfathered_count`: how many
 
 - **NOT auto-correction.** The cron stays read-only. Grandfathering changes which rows alert, not the values.
 - **NOT a policy for what happens when an instructor leaves, a learner switches instructors, or credit converts** — that's the Step 6 four-scenario work below, currently still TODO and gated on Steps 4 + 5 + 5.5.
-- **NOT a permanent solution for cross-instructor leakage (Group B from the first prod fire).** Plan C will audit `lockBalanceAdjustLCB`'s writer behaviour. Plan A only addresses the Group A (pure-legacy) shape.
+- **NOT the fix for Group B (cross-instructor) drift.** Plan A only addresses Group A (pure-legacy, no per-pair ledger). Plan B1 — see next section — re-attributes the grandfathered LCB rows from the seed instructor to Fraser's real account and backfills synthetic CT rows that make the per-instructor ledger internally coherent.
 
 ### Schema-aware degradation
 
@@ -233,6 +233,111 @@ DELETE FROM migration_markers WHERE key = 'per_instructor_credits_step_2c_grandf
 ```
 
 This is deliberately friction-laden. The GET dry-run still works after the marker lands, so inspection-without-mutation is always available.
+
+---
+
+## Re-attribution + synthetic-CT backfill (Plan B1)
+
+Shipped 2026-05-21 alongside Plan A. Fixes the wrong-instructor target Step 2c's mechanical backfill chose, AND makes the per-instructor ledger internally coherent so the divergence cron returns drift = 0 for re-attributed pairs.
+
+### The original mistake
+
+`/api/migrate-step-2c.js:39` hardcoded `GRANDFATHER_INSTRUCTOR_ID = 1` with the comment "Fraser is the only instructor when this runs". That assumption was wrong:
+
+- **instructors.id = 1** is a "James Carter" seed fixture row from `db/migration.sql` initial data — never used, zero bookings, zero CT rows, no Stripe Connect account.
+- **instructors.id = 4** is Fraser's real account — 106 of 121 recent bookings, Stripe Connect linked, `payouts_start_date = 2026-05-15`.
+
+Step 2c backfilled 21 LCB rows (12,810 minutes / 213.5 hours of grandfathered legacy pool) to instructor=1. The bookings keep being delivered by instructor=4. The per-instructor ledger therefore says "Fraser=4 has zero LCB and one CT" while the bookings table says "Fraser=4 has delivered 106 lessons" — a structural mismatch the divergence cron correctly reports as Group B drift.
+
+### What Plan B1 does
+
+A single endpoint, `/api/migrate-step-2c-reattribute`, that wraps four operations atomically:
+
+1. Widens `credit_transactions_type_check` to allow `'legacy_grandfather'`.
+2. Moves every grandfathered LCB row from `(learner, 1)` to `(learner, 4)`, deleting the source row.
+3. Inserts ONE synthetic `credit_transactions` row per moved learner with:
+   - `type = 'legacy_grandfather'`, `source = 'reconciliation'`, `payment_method = 'migration'`
+   - `instructor_id = 4`, `school_id = (preserved)`
+   - `minutes = (moved LCB balance) + (active draw minutes at (L, 4))`  ← **Shape B math**
+   - `amount_pence = 0`, `credits = 0`
+4. Writes the `per_instructor_credits_step_2c_reattribute` migration marker.
+
+The conflict policy on `(learner_id, instructor_id = 4)` LCB collisions:
+- `balance_minutes` — SUM (legacy pool stacks on top of any active Phase-2A balance).
+- `grandfathered_at` — NULL if either side was NULL (watched-stays-watched). Encoded via CASE rather than LEAST() because PG's `LEAST(NULL, ts)` returns `ts`, which would promote an active row to grandfathered — wrong direction.
+
+### Why a synthetic CT exists at all
+
+Re-attribution alone makes the cron drift LOUDER, not quieter. Moving LCB from (L, 1) to (L, 4) bumps `actual_lcb(L, 4)` from 0 → balance_minutes, but `expected = ΣCT − Σmin_deducted` at (L, 4) still has no purchases — so expected swings more negative and drift inflates.
+
+The synthetic CT is the structural answer: the legacy pool IS a real credit source for the per-instructor ledger; it just predates per-instructor tracking. Recording it as such lines up with Step 5 BCS work, which will treat every booking deduction as drawn from a specific credit source.
+
+### Shape B math (the load-bearing part)
+
+The synthetic CT must represent the **original legacy pool size at the target instructor**, not the current remaining balance:
+
+```
+original_legacy_pool_at_target = remaining_grandfathered_lcb_at_target
+                              + already_spent_active_draws_at_target
+```
+
+Then the cron's reconcile becomes:
+
+```
+actual_lcb(L, 4) = remaining_grandfathered_lcb
+expected         = ΣCT − Σmin_deducted
+                 = synthetic_ct.minutes − active_draws
+                 = (remaining + draws) − draws
+                 = remaining
+drift            = actual_lcb − expected = 0
+```
+
+Drift = 0 by construction. The `IS DISTINCT FROM` clause in the cron's outer `WHERE` then drops the pair from `drift_summary` entirely.
+
+**Cron-predicate mirroring is load-bearing.** The migration's `active_draws` subquery mirrors `api/cron-credit-reconcile.js`'s `booking_draws` CTE byte-for-byte (per schema mode). If the two ever diverge, the migration manufactures a new drift class. The handler probes `information_schema` for `booking_credit_sources` and picks the matching variant — same shape as the cron's `probeSchemaMode`.
+
+### What stays visible after Plan B1
+
+Cross-instructor cases — a learner whose legacy pool was spent on a lesson delivered by a DIFFERENT instructor — are deliberately NOT covered by Shape B. The draws subquery is scoped to `(learner_id, instructor_id = 4)`, so:
+
+- (Learner L, instructor=4): Shape B reconciles to drift = 0.
+- (Learner L, instructor=6 or other): cron still flags drift = +N, where N is the cross-instructor booking minutes.
+
+On current prod data this surfaces ONE pair — `(learner 11, instructor 6, +90 min)` — Laura Thomas's Simon=6 lesson funded from Fraser's legacy pool. That's a deliberate residual representing a real cross-instructor consumption question. Resolution is a deliberate human decision: transfer 90 minutes from Fraser's legacy CT to a new Simon-attributed entry, or leave as a tracked imbalance until Step 5 BCS arrives with proper attribution semantics. **Not the migration's job to silently silence.**
+
+### Operator workflow
+
+1. Run `db/diagnostics/step-2c-reattribute-pre-migration.sql`. Eyeball the per-learner Shape B breakdown table — confirm `synthetic_ct_minutes = moved_balance + active_draw_minutes_at_4` for every row, no surprises.
+2. Dry-run: `GET /api/migrate-step-2c-reattribute?secret=$MIGRATION_SECRET`. The JSON response includes `candidates_breakdown` (per-learner Shape B preview), `total_minutes_to_move`, `total_active_draw_minutes_at_target`, `total_synthetic_ct_minutes`, and `conflicts`.
+3. POST the endpoint: `POST /api/migrate-step-2c-reattribute?secret=...`.
+4. Verify via `db/diagnostics/step-2c-reattribute-post-migration.sql` — the per-learner reconciliation check should show every row as `CLEAN ✓`.
+5. Next cron-credit-reconcile dry-run: `drift_count` should drop by the number of pre-Plan-B1 Group B pairs whose only drift source was wrong-instructor attribution. Cross-instructor pairs remain.
+
+### Rerunning
+
+The endpoint refuses POST once its `per_instructor_credits_step_2c_reattribute` marker is present. Same friction-laden pattern as Plan A:
+
+```sql
+DELETE FROM migration_markers WHERE key = 'per_instructor_credits_step_2c_reattribute';
+-- Audit-log via api/_audit.js: action 'admin.migration_marker_cleared'
+-- Then re-POST /api/migrate-step-2c-reattribute
+```
+
+GET dry-run is always available.
+
+### What Plan B1 explicitly does NOT do
+
+- **Does NOT delete the seed instructor #1 row.** That's Plan B2 (separate PR) after the four hardcoded `instructor_id = 1` fallbacks in `api/_credit-grant.js` and `api/admin.js` are removed/replaced. Deleting the seed row first would risk FK violations or silent default-routing into a deleted row.
+- **Does NOT widen Plan A's suppression.** Suppression is a monitoring escape hatch; synthetic CT makes the ledger internally coherent. That's the healthier mechanism.
+- **Does NOT touch the reschedule-bypasses-LCB latent bug** (`api/instructor.js:1048`, `api/slots.js:2616`). Separate follow-up.
+- **Does NOT install the missing `trg_sync_pooled_balance` trigger** (`/api/migrate-step-4` marker not present on prod). Separate follow-up — the move keeps `SUM(LCB per learner)` mathematically unchanged, so the pooled shadow stays accurate without the trigger.
+
+### Cross-references
+
+- `api/migrate-step-2c-reattribute.js` — the handler itself, with full header forensic.
+- `tests/migrate-step-2c-reattribute.integration.spec.js` — 10 tests (R0-R8 + dry-run sanity) against Neon test branch.
+- `db/diagnostics/step-2c-reattribute-{pre,post}-migration.sql` — operator companions.
+- `memory/project_step_4_5_shipped.md` — Plan A ship record and Group B forensic.
 
 ---
 

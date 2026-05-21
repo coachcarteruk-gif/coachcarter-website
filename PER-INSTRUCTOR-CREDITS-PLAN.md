@@ -608,9 +608,11 @@ WHERE balance_minutes > 0
 ON CONFLICT (learner_id, instructor_id) DO NOTHING;
 ```
 
-Hardcoded `instructor_id = 1` is acceptable here because at backfill time Fraser is the only active instructor. Documented as the grandfather rule.
+Hardcoded `instructor_id = 1` was specified here because at backfill time Fraser was assumed to be the only active instructor. **This was wrong** — instructor=1 is a "James Carter" seed fixture row; Fraser is instructor=4. Plan B1 (below) re-attributed the grandfathered rows after the cron's first prod fire surfaced the mismatch.
 
-**Plan A (2026-05-21):** `learner_credit_balances.grandfathered_at TIMESTAMPTZ` column added; populated by `/api/migrate-step-2c-grandfather` for legacy rows where `balance_minutes > 0` and no per-pair `credit_transactions` row exists. The divergence cron's WHERE adds a conditional suppression: `AND (lcb.grandfathered_at IS NULL OR COALESCE(l.expected_balance_minutes, 0) IS DISTINCT FROM 0)` — pure-legacy rows go silent, but any per-pair ledger activity re-asserts drift. Full operator reference in `docs/credits-grandfather.md` "Mechanical grandfathering".
+**Plan A (2026-05-21):** `learner_credit_balances.grandfathered_at TIMESTAMPTZ` column added; populated by `/api/migrate-step-2c-grandfather` for legacy rows where `balance_minutes > 0` and no per-pair `credit_transactions` row exists. The divergence cron's WHERE adds a conditional suppression: `AND (lcb.grandfathered_at IS NULL OR l.learner_id IS NOT NULL)` — pure-legacy rows go silent, but any per-pair ledger activity re-asserts drift. Full operator reference in `docs/credits-grandfather.md` "Mechanical grandfathering".
+
+**Plan B1 (2026-05-21):** `/api/migrate-step-2c-reattribute` moves the 21 grandfathered LCB rows from `(learner, 1)` (the seed-row mistake) to `(learner, 4)` (Fraser's real account) and backfills synthetic `credit_transactions` rows with `type='legacy_grandfather'`, `source='reconciliation'`, `instructor_id=4`. Synthetic CT minutes use Shape B math: `moved_balance + active_draw_minutes_at_target`, so the cron's `expected = ΣCT − Σmin_deducted` formula reconciles to drift = 0 by construction. Widens `credit_transactions_type_check` to add `'legacy_grandfather'`. Cross-instructor cases (e.g. Simon=6 lessons funded from Fraser legacy) deliberately remain visible. Full operator reference in `docs/credits-grandfather.md` "Re-attribution + synthetic-CT backfill".
 
 ### GDPR additions
 
