@@ -21,19 +21,6 @@ Each chip is a small, well-defined unit of work. Goal · why · risks · files �
 
 ---
 
-## Chip #5 — fix `handleSlotBooking` variable typo in `api/webhook.js`
-
-- **Goal:** Rename the misreferenced variable so the confirmation email path stops throwing.
-- **Why:** `api/webhook.js:437` declares `deductResult`; `:518` reads `deducted.balance_minutes` (undefined). Throws every webhook fire after booking + CT + LCB are committed. Data is safe but the confirmation email never sends, and the error noise hides real failures.
-- **Known risks:** Very low — pure typo. Verify the variable name is consistent with surrounding code (`deductResult.balance_minutes`).
-- **Likely files:** `api/webhook.js` (handleSlotBooking), `tests/webhook-slot-booking.spec.js` (add a regression test that asserts no throw on the confirmation path).
-- **Success criteria:**
-  - Line numbers re-verified in current `main` before editing — they may have drifted.
-  - Confirmation email sends on a real slot-booking webhook event (or its integration-test analogue).
-  - No new `console.error` log lines from the slot-booking webhook path on the next 24h of prod traffic.
-
----
-
 ## Plan B2 — remove hardcoded `instructor_id = 1` fallbacks + DELETE seed instructor
 
 - **Goal:** Convert the four `instructor_id = 1` fallbacks to errors, then `DELETE FROM instructors WHERE id = 1` behind a `migration_markers` gate.
@@ -91,6 +78,20 @@ Each chip is a small, well-defined unit of work. Goal · why · risks · files �
   - FIFO order `(created_at ASC, id ASC)` verified in integration tests.
   - Pence-exact allocation with last-draw-takes-remainder (two invariants: over-allocation ≤; equality-on-exhaustion when source is 0).
   - Divergence cron continues to return `drift_count = 0` post-cutover.
+
+---
+
+## Chip #5 — fix `handleSlotBooking` variable typo in `api/webhook.js` — IN PROGRESS — 2026-05-21
+
+- **Goal:** Rename the misreferenced variable so the confirmation email path stops throwing.
+- **Why:** `api/webhook.js` declares `deductResult` in `handleSlotBooking`, then read `deducted.balance_minutes` (undefined). Throws every webhook fire after booking + CT + LCB are committed. Data is safe but the confirmation email never sends, and the error noise hides real failures.
+- **Known risks:** Very low — pure typo. Verify the variable name is consistent with surrounding code (`deductResult.balance_minutes`).
+- **Likely files:** `api/webhook.js` (handleSlotBooking), `tests/webhook-slot-booking.spec.js` (focused regression test).
+- **Success criteria:**
+  - Line numbers re-verified in current `main` before editing.
+  - Confirmation email path reads `deductResult.balance_minutes`.
+  - Focused regression test catches reintroducing `deducted.balance_minutes` in `handleSlotBooking`.
+  - No new `console.error` log lines from the slot-booking webhook path on the next 24h of prod traffic after deploy.
 
 ---
 
