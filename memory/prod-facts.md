@@ -33,6 +33,20 @@
 | `learner_users` has no `anonymized` column — soft-delete is `archived_at IS NULL` | verified | Memory `feedback_learner_soft_delete_column.md` |
 | `migration_markers` table is the gating mechanism for credit-plan migrations | verified | Step 2 DDL refuses to run until Step 1c backfill marker exists |
 | `trg_sync_pooled_balance` exists on `learner_credit_balances` and calls `sync_pooled_balance()` after INSERT or UPDATE | verified | Prod SELECT from `pg_trigger` / `pg_proc`, 2026-05-21 20:51 UTC |
+| `booking_credit_sources.school_id` exists, is `NOT NULL`, default `1`, with FK `booking_credit_sources_school_id_fkey` and index `idx_bcs_school` | verified | Prod post-migration diagnostic after PR #194 `/api/migrate`, 2026-05-21 |
+
+## BCS school_id migration state (as of 2026-05-21)
+
+| Check | Result | Status |
+|---|---|---|
+| `/api/migrate` after PR #194 | Run once | verified |
+| PowerShell `curl` alias response | Did not return body (`Invoke-WebRequest` null-reference error); no retry performed | verified |
+| Post-diagnostic completion proof | `booking_credit_sources.school_id` exists | verified |
+| Nullability/default | `is_nullable = NO`, `column_default = 1` | verified |
+| FK | `booking_credit_sources_school_id_fkey` exists | verified |
+| Index | `idx_bcs_school` exists | verified |
+| Null `school_id` rows | `0` | verified |
+| School mismatch query | `[]` | verified |
 
 ### Live `migration_markers` rows (last known)
 
