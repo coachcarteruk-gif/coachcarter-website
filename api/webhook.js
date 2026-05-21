@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const { sendWhatsApp } = require('./_whatsapp');
 const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
-const { SCHEDULED } = require('./_booking-status');
+const { SCHEDULED, blocksSlot, isTerminal } = require('./_booking-status');
 const { fetchSessionFeePence } = require('./_stripe-fee');
 const { grantCredits, lockBalanceAdjustLCB } = require('./_credit-grant');
 
@@ -374,19 +374,6 @@ async function handleSlotBooking(session) {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = await resolveSchoolId(sql, metadata, session.id);
 
-    // Idempotency check
-    const [existing] = await sql`
-      SELECT id FROM credit_transactions WHERE stripe_session_id = ${session.id}
-    `;
-    if (existing) {
-      return;
-    }
-
-    // Snapshot the Stripe processing fee (Step 4f.b). NULL on failure; the
-    // reconcile cron (4f.e) backfills, and the payout pipeline treats NULL
-    // as zero in the meantime.
-    const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
-
     // Step 4 / Phase 2A: effective rate is derivable from the Stripe-session
     // amount and minutes — no live pricing recall. instructor_id comes from
     // metadata (already in scope above). payment_intent_id is captured for
@@ -398,20 +385,88 @@ async function handleSlotBooking(session) {
       ? session.payment_intent
       : session.payment_intent?.id || null;
 
+    const [existingCreditTx] = await sql`
+      SELECT id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute
+        FROM credit_transactions
+       WHERE stripe_session_id = ${session.id}
+         AND type = 'slot_purchase'
+         AND learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
+       LIMIT 1
+    `;
+    if (existingCreditTx) {
+      const existingBooking = await findExistingSlotBooking(sql, {
+        learnerId, instructorId, scheduledDate, startTime, endTime, schoolId,
+      });
+      if (existingBooking && blocksSlot(existingBooking.status)) {
+        await ensureSlotBookingBcs(sql, {
+          schoolId,
+          bookingId: existingBooking.id,
+          creditTransaction: existingCreditTx,
+          durationMins,
+        });
+        return;
+      }
+      if (existingBooking && isTerminal(existingBooking.status)) {
+        console.warn(`slot_booking ${session.id} has slot_purchase CT and refunded booking ${existingBooking.id}; not repairing active BCS`);
+        return;
+      }
+
+      // Existing behaviour for an orphan paid session: once the slot_purchase
+      // ledger row exists but no matching booking exists, do not replay the
+      // booking/balance/notification path from a retry. The existing failure
+      // alert path is responsible for operator recovery.
+      console.warn(`slot_booking ${session.id} has slot_purchase CT but no matching booking; leaving orphan recovery to operator flow`);
+      return;
+    }
+
+    // Snapshot the Stripe processing fee (Step 4f.b). NULL on failure; the
+    // reconcile cron (4f.e) backfills, and the payout pipeline treats NULL
+    // as zero in the meantime.
+    const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
+
     // 1. Record the transaction. uq_credit_tx_session backstops the
     // SELECT idempotency check above against concurrent retries.
+    let slotCreditTx;
     try {
-      await sql`
+      const [creditTx] = await sql`
         INSERT INTO credit_transactions
           (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id,
            stripe_fee_pence, instructor_id, effective_rate_pence_per_minute, stripe_payment_intent_id, source)
         VALUES
           (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId},
            ${stripeFeePence}, ${instructorId}, ${effectiveRatePencePerMinute}, ${paymentIntentId}, 'stripe')
+        RETURNING id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute
       `;
+      slotCreditTx = creditTx;
     } catch (insertErr) {
       if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
-        console.log(`⏭  slot_booking ${session.id} — already processed (uq_credit_tx_session)`);
+        const [racedCreditTx] = await sql`
+          SELECT id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute
+            FROM credit_transactions
+           WHERE stripe_session_id = ${session.id}
+             AND type = 'slot_purchase'
+             AND learner_id = ${learnerId}
+             AND instructor_id = ${instructorId}
+             AND school_id = ${schoolId}
+           LIMIT 1
+        `;
+        const racedBooking = await findExistingSlotBooking(sql, {
+          learnerId, instructorId, scheduledDate, startTime, endTime, schoolId,
+        });
+        if (racedCreditTx && racedBooking && blocksSlot(racedBooking.status)) {
+          await ensureSlotBookingBcs(sql, {
+            schoolId,
+            bookingId: racedBooking.id,
+            creditTransaction: racedCreditTx,
+            durationMins,
+          });
+        } else if (racedBooking && isTerminal(racedBooking.status)) {
+          console.warn(`slot_booking ${session.id} hit uq_credit_tx_session with refunded booking ${racedBooking.id}; not repairing active BCS`);
+        } else {
+          console.warn(`slot_booking ${session.id} hit uq_credit_tx_session before a matching booking was visible; leaving retry/operator flow unchanged`);
+        }
         return;
       }
       throw insertErr;
@@ -486,6 +541,17 @@ async function handleSlotBooking(session) {
       });
       return;
     }
+
+    // 4b. Attribute this direct-paid slot purchase to the booking. One Stripe
+    // charge funds exactly one lesson here, so the single slot_purchase source
+    // row contributes the full payable amount and fee. The rounded rate is only
+    // an audit/display snapshot; contribution_pence is the exact source amount.
+    await ensureSlotBookingBcs(sql, {
+      schoolId,
+      bookingId: booking.id,
+      creditTransaction: slotCreditTx,
+      durationMins,
+    });
 
     // 5a. Supersede any pending broadcast offers on this slot — a learner just
     // booked it through the guest-checkout flow, so the broadcast is moot.
@@ -625,6 +691,48 @@ async function handleSlotBooking(session) {
     // are idempotent under retry (uq_credit_tx_session + idempotent UPDATEs).
     throw err;
   }
+}
+
+async function findExistingSlotBooking(sql, {
+  learnerId,
+  instructorId,
+  scheduledDate,
+  startTime,
+  endTime,
+  schoolId,
+}) {
+  const bookings = await sql`
+    SELECT id, status, scheduled_date, start_time::text, end_time::text
+      FROM lesson_bookings
+     WHERE learner_id = ${learnerId}
+       AND instructor_id = ${instructorId}
+       AND scheduled_date = ${scheduledDate}
+       AND start_time = ${startTime}
+       AND end_time = ${endTime}
+       AND school_id = ${schoolId}
+     ORDER BY id DESC
+  `;
+  return bookings.find(booking => blocksSlot(booking.status))
+    || bookings.find(booking => isTerminal(booking.status))
+    || null;
+}
+
+async function ensureSlotBookingBcs(sql, {
+  schoolId,
+  bookingId,
+  creditTransaction,
+  durationMins,
+}) {
+  const bcsStripeFeePence = creditTransaction.stripe_fee_pence ?? 0;
+  await sql`
+    INSERT INTO booking_credit_sources
+      (school_id, booking_id, credit_transaction_id, minutes_drawn,
+       rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
+    VALUES
+      (${schoolId}, ${bookingId}, ${creditTransaction.id}, ${durationMins},
+       ${creditTransaction.effective_rate_pence_per_minute}, ${creditTransaction.amount_pence}, ${bcsStripeFeePence}, NULL)
+    ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING
+  `;
 }
 
 // Generate .ics calendar file for slot bookings
