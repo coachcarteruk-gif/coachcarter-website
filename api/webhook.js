@@ -515,7 +515,7 @@ async function handleSlotBooking(session) {
       SELECT name, email, phone FROM learner_users WHERE id = ${learnerId}
     `;
 
-    const balanceHrs = ((deducted.balance_minutes || 0) / 60).toFixed(1);
+    const balanceHrs = ((deductResult.balance_minutes || 0) / 60).toFixed(1);
     const durationStr = durationMins >= 60
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
       : `${durationMins} mins`;
