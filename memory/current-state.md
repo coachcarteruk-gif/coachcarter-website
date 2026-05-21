@@ -7,7 +7,7 @@
 - **Credits divergence cron returns `drift_count = 0` as of 2026-05-21 12:45 UTC.** verified
 - **Per-instructor credits plan Steps 0–2.5 + 3a/3b + 4 (Phase 2A) + 4.5 are merged on `main`.** verified via `git log` 2026-05-21.
 - **Chip #4 `trg_sync_pooled_balance` is installed on prod as of 2026-05-21 20:51 UTC.** verified by prod `migration_markers`, `pg_proc`, `pg_trigger`, and pooled-vs-LCB divergence SELECTs.
-- **Step 5 (BCS + FIFO) is the next forward-progress milestone.** Preflight found the BCS/CSA schema substrate already present on current `main`; remaining scope is writer/payout wiring plus tests.
+- **Step 5 (BCS + FIFO) is the next forward-progress milestone.** BCS/CSA schema substrate is present, and `booking_credit_sources.school_id` was applied on prod after PR #194. Remaining scope is writer/payout wiring plus tests.
 - **No in-flight feature branches expected on `main`** — last 25 commits are merged squash-merges. verified.
 
 ## What is currently shipped (production-relevant)
@@ -32,6 +32,7 @@
 | Reschedule paths set `credit_returned = TRUE` on old booking (chip #3) | LIVE (PR #187, 2026-05-21 12:45 UTC) | `api/instructor.js handleRescheduleBooking`, `api/slots.js handleReschedule` |
 | Slot-booking webhook confirmation balance fix (chip #5) | LIVE (PR #188, 2026-05-21) | `api/webhook.js handleSlotBooking`, `tests/webhook-slot-booking.spec.js` |
 | Pooled balance sync trigger (chip #4) | LIVE (prod POST 2026-05-21 20:51 UTC) | `api/migrate-step-4.js`, prod `trg_sync_pooled_balance` |
+| BCS `school_id` schema groundwork | LIVE (PR #194 + prod `/api/migrate`, 2026-05-21) | `booking_credit_sources.school_id`, FK, `idx_bcs_school`; post-diagnostic verified |
 | Four absorbed refund-without-credit-return bookings origin | INVESTIGATED (2026-05-21) | Historical learner-cancel parser bugs/manual-status era; see `decision-log.md` |
 
 ## Current migration / credits state
@@ -48,7 +49,7 @@
 | Step 3b — `getEffectiveHourlyPence` + per-minute helper | SHIPPED PR #169 | |
 | Step 4 — Phase 2A behavioural cutover (per-instructor credits) | SHIPPED via PR #176 + hotfix PR #177 | First attempt PR #174 was reverted by #175 (emergency flip). Q1 audit verified zero customer impact. `PHASE_2A_IMPLEMENTED=true` on prod. |
 | Step 4.5 — daily credit-divergence cron + Plans A / B1 / B3 + chip #3 | SHIPPED PRs #179 / #180 / #182 / #183 / #184 / #186 / #187 | Drift trajectory: 34 → 13 → 4 → 3 → 0. |
-| Step 5 — BCS + FIFO | GROUNDWORK IN PROGRESS | Current `main` already has `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, and pence allocator tests. Fraser accepted `booking_credit_sources.school_id` plus three writer-policy decisions on 2026-05-21. First implementation slice adds BCS `school_id` schema/writer groundwork only; remaining scope is FIFO writer wiring, payout/simulation wiring, and behaviour tests. |
+| Step 5 — BCS + FIFO | GROUNDWORK IN PROGRESS | Current `main` already has `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, and pence allocator tests. Fraser accepted `booking_credit_sources.school_id` plus three writer-policy decisions on 2026-05-21. PR #194's BCS `school_id` migration was applied once on prod and post-diagnostic verified `school_id` exists/NOT NULL/default 1, FK + `idx_bcs_school` exist, null rows = 0, mismatch query = `[]`. Remaining scope is FIFO writer wiring, payout/simulation wiring, and behaviour tests. |
 
 ### Cron drift watch
 
