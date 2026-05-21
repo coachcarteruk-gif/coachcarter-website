@@ -750,6 +750,14 @@ ALTER TABLE lesson_bookings ADD CONSTRAINT lesson_bookings_status_check
 -- Step 2.5 (May 2026) added 'free_trial' for the slots.js handleBookFreeTrial
 -- writer (zero-value credit_transactions row + BCS attribution for free
 -- trials). PER-INSTRUCTOR-CREDITS-PLAN.md §Step 2.
+--
+-- Step 2c Plan B1 (May 2026) added 'legacy_grandfather' for the synthetic
+-- CT rows emitted by /api/migrate-step-2c-reattribute. One synthetic CT
+-- per moved grandfathered LCB row, paired with source='reconciliation'
+-- and payment_method='migration'. Lets the divergence cron's
+-- expected = ΣCT − Σmin_deducted formula reconcile against the moved
+-- legacy pool. See api/migrate-step-2c-reattribute.js header for the
+-- forensic.
 ALTER TABLE credit_transactions DROP CONSTRAINT IF EXISTS credit_transactions_type_check;
 ALTER TABLE credit_transactions ADD CONSTRAINT credit_transactions_type_check
   CHECK (type IN (
@@ -761,7 +769,8 @@ ALTER TABLE credit_transactions ADD CONSTRAINT credit_transactions_type_check
     'admin_remove',
     'referral_bonus',
     'referral_reward',
-    'free_trial'
+    'free_trial',
+    'legacy_grandfather'
   ));
 
 -- ── Weekly franchise fee model (alternative to commission_rate) ──
@@ -2211,6 +2220,14 @@ CREATE INDEX IF NOT EXISTS idx_lcb_instructor ON learner_credit_balances(instruc
 -- "Mechanical grandfathering" section.
 ALTER TABLE learner_credit_balances
   ADD COLUMN IF NOT EXISTS grandfathered_at TIMESTAMPTZ;
+
+-- Step 2c Plan B1 re-attribution: data-only migration (no DDL). The Step 2c
+-- backfill targeted instructor_id = 1 (a seed "James Carter" fixture row)
+-- by mistake; Fraser's real account is instructor_id = 4. Run
+-- /api/migrate-step-2c-reattribute after /api/migrate-step-2c-grandfather
+-- to move the 21 grandfathered LCB rows from (learner, 1) to (learner, 4).
+-- See docs/credits-grandfather.md "Re-attribution" section and
+-- api/migrate-step-2c-reattribute.js for the full forensic.
 
 -- FIFO attribution snapshots. credit_transaction_id NOT NULL — free-trial /
 -- goodwill / referral grants all create their own (zero-value) credit_transactions
