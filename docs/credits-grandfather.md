@@ -123,6 +123,98 @@ Add a row after every drill or real incident. Annual cadence minimum.
 
 ---
 
+## Mechanical grandfathering (the `grandfathered_at` column)
+
+Shipped 2026-05-21 as Plan A in response to the first prod fire of the divergence cron (`memory/project_step_4_5_shipped.md`). Distinct from the Step 6 four-scenario policy below — this is purely an operational mark for legacy LCB rows whose Step 2c `balance_minutes`-copy backfill happened before any per-pair `credit_transactions` rows existed.
+
+### What it is
+
+`learner_credit_balances.grandfathered_at TIMESTAMPTZ`. NULL = ordinary row, subject to full drift detection. Non-NULL = legacy origin; the divergence cron conditionally suppresses these rows only when the per-pair ledger is exactly zero.
+
+### Truth table the cron implements
+
+| `lcb.grandfathered_at` | `expected_balance_minutes` | Result |
+|---|---|---|
+| NULL | 0 | (not drift — LCB matches ledger) |
+| NULL | non-zero | flag |
+| non-NULL | 0 | **SUPPRESS** (this is what Plan A buys) |
+| non-NULL | non-zero | **flag** (the load-bearing branch — see C18) |
+
+The SQL predicate, identical in all three reconcile modes:
+
+```sql
+AND (lcb.grandfathered_at IS NULL
+     OR COALESCE(l.expected_balance_minutes, 0) IS DISTINCT FROM 0)
+```
+
+The moment a grandfathered pair gets any ledger activity (a Phase-2A purchase, a refund, a booking deduction), the suppression branch drops away and drift is reported as normal. The flag is *sticky on the row* but *conditional on the ledger* — keeping `grandfathered_at` set forever (rather than clearing it when new CT rows land) preserves the audit trail that the row originated from legacy backfill, and the truth table handles the rest.
+
+### Which rows get the flag (and which don't)
+
+The backfill predicate (in `/api/migrate-step-2c-grandfather`) is:
+
+```sql
+WHERE lcb.school_id        = 1
+  AND lcb.balance_minutes  > 0
+  AND lcb.grandfathered_at IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM credit_transactions ct
+     WHERE ct.school_id     = lcb.school_id
+       AND ct.learner_id    = lcb.learner_id
+       AND ct.instructor_id = lcb.instructor_id
+  )
+```
+
+The pair-scoped `NOT EXISTS` is the load-bearing definition of "pure-legacy". An LCB row qualifies iff there is no per-pair `credit_transactions` row at all. The Step 2c marker timestamp is reported as supporting evidence in the dry-run output but is NOT in the predicate — the Step 2c migration's INSERT and marker-write were two separately-awaited statements with no explicit BEGIN, so `updated_at ≈ marker.completed_at` is a correlation clue, not a transactional guarantee.
+
+**Mixed-state rows are deliberately not grandfathered** by this mechanical pass. If a learner has LCB > 0 AND any per-pair `credit_transactions` row, they fall outside Plan A's scope and continue to surface in the divergence cron's drift report. The operator resolves each one manually (typically by reconciling the LCB against the ledger then deciding whether the residual is legitimately legacy — in which case set `grandfathered_at = NOW()` by hand).
+
+### Operator workflow
+
+**Backfill (one-shot):**
+
+1. Dry-run: `GET /api/migrate-step-2c-grandfather?secret=$MIGRATION_SECRET`. Eyeball the `candidates_sample` (learner_id, instructor_id, balance_minutes, grandfathered_at, lcb_updated_at, scoped_ct_count, scoped_ct_minutes) and compare `marker_window_match_count` against `candidate_count` — a near-1:1 ratio confirms these are indeed Step 2c artefacts.
+2. Run `db/diagnostics/step-2c-grandfather-pre-migration.sql` for fuller context.
+3. POST the endpoint: `POST /api/migrate-step-2c-grandfather?secret=...`.
+4. Verify via `db/diagnostics/step-2c-grandfather-post-migration.sql` and the next cron-credit-reconcile dry-run — `drift_count` should drop, `grandfathered_count` should approximately match `rows_updated`.
+
+**Manually marking a single row (post-incident):**
+
+```sql
+UPDATE learner_credit_balances
+   SET grandfathered_at = NOW()
+ WHERE learner_id = $1
+   AND instructor_id = $2
+   AND grandfathered_at IS NULL;
+-- Audit-log via api/_audit.js: action 'admin.lcb_grandfathered'
+```
+
+**Un-marking (rare — operator decided the row isn't legacy after all):**
+
+```sql
+UPDATE learner_credit_balances
+   SET grandfathered_at = NULL
+ WHERE learner_id = $1
+   AND instructor_id = $2;
+-- Audit-log: action 'admin.lcb_ungrandfathered'
+```
+
+### Operational signal: `grandfathered_count`
+
+The divergence cron's JSON response now includes `grandfathered_count`: how many LCB rows are in the suppression branch right now (legacy-origin + zero-ledger + non-zero LCB). Operationally useful as a movement indicator:
+
+- **Spikes upward** between runs: a newly-grandfathered row's ledger just became zero (e.g. its only CT was deleted). Worth investigating.
+- **Drops** between runs: a previously-suppressed row's ledger went non-zero. The row should now appear in `drift_count`. Cross-check.
+- **Static**: nominal — pure-legacy rows in steady state.
+
+### What this is NOT
+
+- **NOT auto-correction.** The cron stays read-only. Grandfathering changes which rows alert, not the values.
+- **NOT a policy for what happens when an instructor leaves, a learner switches instructors, or credit converts** — that's the Step 6 four-scenario work below, currently still TODO and gated on Steps 4 + 5 + 5.5.
+- **NOT a permanent solution for cross-instructor leakage (Group B from the first prod fire).** Plan C will audit `lockBalanceAdjustLCB`'s writer behaviour. Plan A only addresses the Group A (pure-legacy) shape.
+
+---
+
 ## Grandfather scenarios (Step 6 — currently TODO)
 
 The credits plan (L1100–1104) commits this file to cover four scenarios from GPT-flaw #18:

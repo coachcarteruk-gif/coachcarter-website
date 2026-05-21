@@ -2200,6 +2200,17 @@ CREATE TABLE IF NOT EXISTS learner_credit_balances (
 CREATE INDEX IF NOT EXISTS idx_lcb_learner    ON learner_credit_balances(learner_id);
 CREATE INDEX IF NOT EXISTS idx_lcb_instructor ON learner_credit_balances(instructor_id);
 
+-- Step 4.5 Plan A: grandfather flag for legacy LCB rows created by Step 2c's
+-- mechanical balance_minutes-copy backfill. NULL = normal row, subject to
+-- full drift detection. Non-NULL = legacy origin; the divergence cron
+-- conditionally suppresses these only when the per-pair ledger is exactly
+-- zero. Any per-pair ledger activity (positive or negative) re-asserts
+-- drift even on grandfathered rows. Backfill via
+-- /api/migrate-step-2c-grandfather. See docs/credits-grandfather.md
+-- "Mechanical grandfathering" section.
+ALTER TABLE learner_credit_balances
+  ADD COLUMN IF NOT EXISTS grandfathered_at TIMESTAMPTZ;
+
 -- FIFO attribution snapshots. credit_transaction_id NOT NULL — free-trial /
 -- goodwill / referral grants all create their own (zero-value) credit_transactions
 -- row so this column is never NULL.

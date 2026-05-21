@@ -610,6 +610,8 @@ ON CONFLICT (learner_id, instructor_id) DO NOTHING;
 
 Hardcoded `instructor_id = 1` is acceptable here because at backfill time Fraser is the only active instructor. Documented as the grandfather rule.
 
+**Plan A (2026-05-21):** `learner_credit_balances.grandfathered_at TIMESTAMPTZ` column added; populated by `/api/migrate-step-2c-grandfather` for legacy rows where `balance_minutes > 0` and no per-pair `credit_transactions` row exists. The divergence cron's WHERE adds a conditional suppression: `AND (lcb.grandfathered_at IS NULL OR COALESCE(l.expected_balance_minutes, 0) IS DISTINCT FROM 0)` — pure-legacy rows go silent, but any per-pair ledger activity re-asserts drift. Full operator reference in `docs/credits-grandfather.md` "Mechanical grandfathering".
+
 ### GDPR additions
 
 Update `api/_gdpr.js deleteLearnerCascade()`:
