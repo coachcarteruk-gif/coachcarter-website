@@ -33,11 +33,12 @@ test.describe('booking_credit_sources.school_id groundwork', () => {
     expect(js).toContain('CREATE INDEX IF NOT EXISTS idx_bcs_school ON booking_credit_sources(school_id)');
   });
 
-  test('current free-trial BCS writer propagates request schoolId', () => {
+  test('current free-trial BCS writer stays deploy-safe before prod migration', () => {
     const js = read('api/slots.js');
-    const insert = js.match(/INSERT INTO booking_credit_sources[\s\S]*?VALUES[\s\S]*?\$\{booking\.id\}[\s\S]*?\$\{schoolId\}[\s\S]*?'platform'\)/);
+    const insert = js.match(/INSERT INTO booking_credit_sources[\s\S]*?VALUES[\s\S]*?\$\{booking\.id\}[\s\S]*?'platform'\)/);
 
-    expect(insert, 'free-trial BCS insert should include school_id and ${schoolId}').not.toBeNull();
-    expect(insert[0]).toContain('school_id, rate_pence_per_minute');
+    expect(insert, 'free-trial BCS insert should still work before prod has BCS school_id').not.toBeNull();
+    expect(insert[0]).not.toContain('school_id');
+    expect(insert[0]).not.toContain('${schoolId}');
   });
 });

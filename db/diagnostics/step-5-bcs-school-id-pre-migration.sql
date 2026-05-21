@@ -1,5 +1,7 @@
 -- Step 5 BCS school_id pre-migration diagnostics.
--- Read-only. Safe to run before applying db/migration.sql.
+-- Read-only. Intended for current prod after Step 2c, where
+-- booking_credit_sources already exists. It is the preflight for adding
+-- booking_credit_sources.school_id, not a pre-Step-2c diagnostic.
 
 SELECT
   EXISTS (
