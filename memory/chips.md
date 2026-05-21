@@ -6,21 +6,6 @@ Each chip is a small, well-defined unit of work. Goal · why · risks · files �
 
 ---
 
-## Chip #4 — install `trg_sync_pooled_balance` trigger
-
-- **Goal:** POST `/api/migrate-step-4` so the trigger exists on prod.
-- **Why:** Currently latent — pooled `learner_users.balance_minutes` happens to equal `SUM(learner_credit_balances)` by Step 2c coincidence and because Plan B3 didn't write LCB rows. Once Step 5 (BCS + FIFO) starts writing LCB actively, `learner_users.balance_minutes` will drift from the per-instructor truth unless the trigger keeps them in sync.
-- **Known risks:**
-  - If any live reader of `learner_users.balance_minutes` is intolerant of staleness today, installing the trigger doesn't help retroactively — re-audit before deferring further. Known reader: `api/instructor.js:1468` (verify line number; the memory note is from 2026-05-21).
-  - Trigger semantics on Neon HTTP driver: confirm the trigger fires inside the same statement, not in a separate connection.
-- **Likely files:** `db/migration.sql` (definition), `api/migrate-step-4.js` (apply endpoint), `api/instructor.js` (read-site audit), `api/_credit-grant.js` (writer-paths it monitors).
-- **Success criteria:**
-  - Trigger present on prod (`SELECT … FROM pg_trigger WHERE tgname = 'trg_sync_pooled_balance'` returns one row).
-  - A forced LCB UPDATE in an integration test moves `learner_users.balance_minutes` by the same delta.
-  - Divergence cron continues to return `drift_count = 0`.
-
----
-
 ## Plan B2 — remove hardcoded `instructor_id = 1` fallbacks + DELETE seed instructor
 
 - **Goal:** Convert the four `instructor_id = 1` fallbacks to errors, then `DELETE FROM instructors WHERE id = 1` behind a `migration_markers` gate.
@@ -59,7 +44,7 @@ Each chip is a small, well-defined unit of work. Goal · why · risks · files �
 - **Known risks:**
   - Largest single piece of work in the plan (~10–15h of the 38–50h total).
   - Step 0 has shipped; remaining gates: 4th-round GPT critique on the plan + checking longest historical Stripe Checkout-session-to-payment-intent gap.
-  - Triggers the install of `trg_sync_pooled_balance` (chip #4) as a prerequisite.
+  - `trg_sync_pooled_balance` prerequisite shipped on prod 2026-05-21; re-verify `pg_trigger` and divergence before starting Step 5.
 - **Likely files:** `db/migration.sql` (new table + indexes), `api/_credit-grant.js` (writer wiring), `api/webhook.js` (allocation at booking time), `api/_payout-helpers.js` (cron reads per-source), `tests/booking-credit-sources.*`.
 - **Success criteria:**
   - `booking_credit_sources` rows created for every new booking after cutover.
