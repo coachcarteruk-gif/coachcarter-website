@@ -7,7 +7,7 @@
 - **Credits divergence cron returns `drift_count = 0` as of 2026-05-21 12:45 UTC.** verified
 - **Per-instructor credits plan Steps 0–2.5 + 3a/3b + 4 (Phase 2A) + 4.5 are merged on `main`.** verified via `git log` 2026-05-21.
 - **Chip #4 `trg_sync_pooled_balance` is installed on prod as of 2026-05-21 20:51 UTC.** verified by prod `migration_markers`, `pg_proc`, `pg_trigger`, and pooled-vs-LCB divergence SELECTs.
-- **Step 5 (BCS + FIFO) is the next forward-progress milestone.** Not started.
+- **Step 5 (BCS + FIFO) is the next forward-progress milestone.** Preflight found the BCS/CSA schema substrate already present on current `main`; remaining scope is writer/payout wiring plus tests.
 - **No in-flight feature branches expected on `main`** — last 25 commits are merged squash-merges. verified.
 
 ## What is currently shipped (production-relevant)
@@ -48,7 +48,7 @@
 | Step 3b — `getEffectiveHourlyPence` + per-minute helper | SHIPPED PR #169 | |
 | Step 4 — Phase 2A behavioural cutover (per-instructor credits) | SHIPPED via PR #176 + hotfix PR #177 | First attempt PR #174 was reverted by #175 (emergency flip). Q1 audit verified zero customer impact. `PHASE_2A_IMPLEMENTED=true` on prod. |
 | Step 4.5 — daily credit-divergence cron + Plans A / B1 / B3 + chip #3 | SHIPPED PRs #179 / #180 / #182 / #183 / #184 / #186 / #187 | Drift trajectory: 34 → 13 → 4 → 3 → 0. |
-| Step 5 — BCS + FIFO | NOT STARTED | Next forward-progress work. |
+| Step 5 — BCS + FIFO | PREP / PARTIAL SUBSTRATE | Current `main` already has `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, and pence allocator tests. Remaining forward-progress scope is FIFO writer wiring, payout/simulation wiring, and behaviour tests. |
 
 ### Cron drift watch
 
@@ -86,4 +86,4 @@ Run through this list before any prod-affecting POST or migration.
 - Stripe Connect for instructor #2 — pending real onboarding date.
 - 4th-round external GPT review on `PER-INSTRUCTOR-CREDITS-PLAN.md` (Step 0 of plan is paused until verdict). assumption — last noted 2026-05-19.
 - 1st-round external GPT review on `LEARNER-INSTRUCTOR-SELECTION-PLAN.md`. assumption.
-- PII leak fix on `api/instructors?action=list` (email + phone publicly returned). Spawned as separate task; must merge before any plan that expands the public instructor API. assumption — re-verify status before relying on it.
+- PII leak fix on `api/instructors?action=list` was superseded by PR #190 / commit `976a857`. Current `main` returns only public-safe instructor fields; see `memory/decision-log.md`.
