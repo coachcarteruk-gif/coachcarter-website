@@ -2041,10 +2041,12 @@ async function handleBookFreeTrial(req, res) {
       await sql`
         INSERT INTO booking_credit_sources
           (booking_id, credit_transaction_id, minutes_drawn,
-           rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
+           rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by,
+           school_id)
         VALUES
           (${booking.id}, ${creditTx.id}, ${durationMins},
-           0, 0, 0, 'platform')
+           0, 0, 0, 'platform',
+           ${schoolId})
       `;
     } catch (ledgerErr) {
       console.error('[handleBookFreeTrial] ledger insert failed (booking succeeded)',
