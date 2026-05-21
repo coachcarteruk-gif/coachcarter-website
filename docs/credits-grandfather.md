@@ -341,6 +341,81 @@ GET dry-run is always available.
 
 ---
 
+## No-LCB synthetic CT backfill (Plan B3)
+
+### Why Plan B3
+
+After Plan B1 shipped on 2026-05-21 the cron reported drift_count = 4 (down from 13 after Plan A, then 13 → 4 after B1). Three of those residuals (`(55, 4)+810`, `(73, 4)+180`, `(92, 4)+90`) share a structural shape that neither Plan A nor Plan B1 reaches: pre-cutover learners with **no LCB row at any instructor**, only pooled `instructor_id IS NULL` CTs the cron deliberately excludes from its purchases CTE.
+
+Plan A requires `balance_minutes > 0` on an existing LCB row. Plan B1 requires a grandfathered LCB row to re-attribute. These Group-C learners have neither — they spent their entire legacy pool, leaving zero balance and no row to flag/move. The cron sees `actual_lcb(L, I) = 0`, `ΣCT(L, I) = 0`, `Σdraws(L, I) = N`, `drift = +N`.
+
+The fourth residual, `(11, 6)+90`, has a DIFFERENT shape: learner 11 has an LCB row at (11, 4) from B1's grandfather pass, but their draws are at instructor=6 (Simon). That's a real cross-instructor question and stays as visible drift (see "What stays visible after Plan B1" above).
+
+### What Plan B3 does
+
+A single endpoint, `/api/migrate-step-2c-no-lcb-backfill`, that inserts one synthetic `legacy_grandfather` CT per qualifying `(learner, instructor)` pair. No LCB writes.
+
+Candidate predicate (per pair):
+- `school_id = 1`
+- `NOT EXISTS (LCB row for learner L at any instructor)` — gates out Plan B1's cohort AND the Simon cross-instructor case
+- `NOT EXISTS (credit_transactions at (L, I) with instructor_id NOT NULL)` — defensive belt-and-braces
+- Active draws at `(L, I) > 0` using the cron's `booking_draws` predicate exactly (schema-aware)
+
+For each qualifying pair, INSERT one CT with `type='legacy_grandfather'`, `source='reconciliation'`, `payment_method='migration'`, `minutes = SUM(active draws at the pair)`, `amount_pence = 0`, `credits = 0`.
+
+### Why no LCB write (vs Plan B1)
+
+These learners have spent their entire legacy pool. Active draws AT THE PAIR equal the original pool consumed at that instructor. There is no remaining balance to grandfather. Adding an LCB row at balance=0 would be a no-op for the cron and would just create stale state for Step 5 to ignore. The simpler answer: make the per-pair ledger coherent without manufacturing fake state.
+
+Math per pair `(L, I)`:
+```
+Before B3:
+  actual_lcb(L, I)  = 0                 (no LCB row)
+  ΣCT(L, I)         = 0                 (pooled CT has instructor_id IS NULL, excluded)
+  Σdraws(L, I)      = D                 (active draws)
+  expected          = -D
+  drift             = 0 - (-D) = +D
+
+After B3:
+  actual_lcb(L, I)  = 0                 (UNCHANGED)
+  ΣCT(L, I)         = D                 (synthetic legacy_grandfather CT)
+  Σdraws(L, I)      = D
+  expected          = 0
+  drift             = 0  ✓
+```
+
+### What stays visible after Plan B3
+
+The Simon cross-instructor pair `(learner=11, instructor=6, +90 min)` — the same residual Plan B1 left, and for the same reason. Learner 11 has an LCB row at (11, 4) so B3's "no LCB anywhere" gate excludes them. Resolution is a deliberate human decision, not silenced by either migration.
+
+### Operator workflow
+
+1. Run `db/diagnostics/step-2c-no-lcb-backfill-pre-migration.sql`. Eyeball the candidate-pairs table — confirm pair count + `draws_minutes` per row matches the current cron's drift summary for these pairs.
+2. Dry-run: `GET /api/migrate-step-2c-no-lcb-backfill?secret=$MIGRATION_SECRET`. JSON response includes `candidates_breakdown` (per-pair preview with `synthetic_ct_minutes`, `pooled_ct_minutes_for_learner` context, and `expected_post_drift: 0`).
+3. POST the endpoint.
+4. Verify via `db/diagnostics/step-2c-no-lcb-backfill-post-migration.sql` — reconcile check should show drift = 0 per backfilled pair, and the "no LCB created" check should return zero rows.
+5. Next cron-credit-reconcile dry-run: `drift_count` should drop by the candidate count from step 1. Only residual on current prod data: the Simon `(11, 6)` cross-instructor pair.
+
+### Rerunning
+
+Same friction-laden marker pattern. DELETE `migration_markers WHERE key = 'per_instructor_credits_step_2c_no_lcb_backfill'`, then re-POST. The `NOT EXISTS CT` predicate provides secondary protection so a rerun doesn't double-insert.
+
+### What Plan B3 explicitly does NOT do
+
+- **Does NOT touch LCB.** Read this twice. No LCB rows added, modified, or deleted. If the post-migration verification query (4) above returns any row, the migration has a bug — investigate immediately.
+- **Does NOT widen `credit_transactions_type_check`.** Plan B1 already widened it in PR #184.
+- **Does NOT fix the Simon `(11, 6)` cross-instructor case.** Same reason as B1: not the migration's job to silently silence a real cross-instructor question.
+
+### Cross-references
+
+- `api/migrate-step-2c-no-lcb-backfill.js` — handler with full header forensic.
+- `tests/migrate-step-2c-no-lcb-backfill.integration.spec.js` — 9 tests (B0-B8 + dry-run sanity) against Neon test branch.
+- `db/diagnostics/step-2c-no-lcb-backfill-{pre,post}-migration.sql` — operator companions.
+- `memory/project_step_4_5_shipped.md` — Group C diagnosis (the table with the four residuals).
+- `memory/feedback_lcb_reshape_needs_matching_ct.md` — the structural lesson B3 directly inherits.
+
+---
+
 ## Grandfather scenarios (Step 6 — currently TODO)
 
 The credits plan (L1100–1104) commits this file to cover four scenarios from GPT-flaw #18:
