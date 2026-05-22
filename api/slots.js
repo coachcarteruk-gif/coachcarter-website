@@ -34,8 +34,10 @@ const { createTransporter } = require('./_auth-helpers');
 const { notifyAvailableLearners, supersedeBroadcastSiblings } = require('./_notify-availability');
 const { checkAdjacentTravelTime, extractPostcode, bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES } = require('./_travel-time');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
-const { getEffectiveRatePencePerMinute } = require('./_pricing-helpers');
 const { lockBalanceAdjustLCB } = require('./_credit-grant');
+const { withNeonTransaction } = require('./_db-transaction');
+const { planFifoCreditDraw } = require('./_bcs-fifo');
+const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
@@ -43,6 +45,19 @@ const MAX_DAYS_AHEAD      = 84;   // 12-week booking window (offer-driven series
 const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
 const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
+const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
+
+class BookingTransactionAbort extends Error {
+  constructor(result) {
+    super(result?.message || result?.code || 'BOOKING_TRANSACTION_ABORT');
+    this.name = 'BookingTransactionAbort';
+    this.result = { ok: false, ...(result || {}) };
+  }
+}
+
+function abortBookingTransaction(result) {
+  throw new BookingTransactionAbort(result);
+}
 
 // Look up a lesson type by ID (or return the default 'standard' type)
 async function getLessonType(sql, lessonTypeId, schoolId) {
@@ -831,6 +846,263 @@ async function handleDurationsForSlot(req, res) {
 // ── POST /api/slots?action=book ───────────────────────────────────────────────
 // Body: { instructor_id, date, start_time, end_time, lesson_type_id?, pickup_address?, dropoff_address? }
 // Deducts hours from balance atomically and creates a confirmed booking.
+async function bookCreditFundedSlotsTransaction({
+  connectionString,
+  learnerId,
+  instructorId,
+  schoolId,
+  bookingDates,
+  startTime,
+  endTime,
+  lessonTypeId,
+  durationMins,
+  pickupAddress,
+  dropoffAddress,
+  seriesId,
+  sourceTypes = CREDIT_BOOKING_SOURCE_TYPES,
+  blockingStatuses = BLOCKING_STATUSES,
+}) {
+  const totalMins = durationMins * bookingDates.length;
+  const dateStrings = bookingDates.map(bd => bd.date);
+
+  try {
+    return await withNeonTransaction(connectionString, async client => {
+    await client.query(
+      `INSERT INTO learner_credit_balances
+         (learner_id, instructor_id, school_id, balance_minutes)
+       VALUES ($1, $2, $3, 0)
+       ON CONFLICT (learner_id, instructor_id) DO NOTHING`,
+      [learnerId, instructorId, schoolId]
+    );
+
+    const locked = await client.query(
+      `SELECT balance_minutes
+         FROM learner_credit_balances
+        WHERE learner_id = $1
+          AND instructor_id = $2
+          AND school_id = $3
+        FOR UPDATE`,
+      [learnerId, instructorId, schoolId]
+    );
+
+    if (locked.rowCount === 0) {
+      abortBookingTransaction({
+        ok: false,
+        code: 'LCB_SCOPE_INVARIANT',
+        message: 'Learner credit balance row exists outside the expected school scope',
+      });
+    }
+
+    const balanceMinutes = Number(locked.rows[0].balance_minutes || 0);
+    if (balanceMinutes < totalMins) {
+      abortBookingTransaction({ ok: false, code: 'INSUFFICIENT_BALANCE', balanceMinutes });
+    }
+
+    const bookingConflicts = await client.query(
+      `SELECT scheduled_date::text AS date, start_time::text
+         FROM lesson_bookings
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = ANY($3::date[])
+          AND start_time = $4
+          AND status = ANY($5::text[])`,
+      [instructorId, schoolId, dateStrings, startTime, blockingStatuses]
+    );
+
+    const reservations = await client.query(
+      `SELECT scheduled_date::text AS date, start_time::text
+         FROM slot_reservations
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = ANY($3::date[])
+          AND start_time = $4
+          AND expires_at > NOW()`,
+      [instructorId, schoolId, dateStrings, startTime]
+    );
+
+    const offerConflicts = await client.query(
+      `SELECT scheduled_date::text AS date, start_time::text
+         FROM lesson_offers
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = ANY($3::date[])
+          AND start_time = $4
+          AND status = 'pending'
+          AND expires_at > NOW()`,
+      [instructorId, schoolId, dateStrings, startTime]
+    );
+
+    const takenDates = new Set([
+      ...bookingConflicts.rows.map(c => String(c.date).slice(0, 10)),
+      ...reservations.rows.map(r => String(r.date).slice(0, 10)),
+      ...offerConflicts.rows.map(o => String(o.date).slice(0, 10)),
+    ]);
+    if (takenDates.size > 0) {
+      abortBookingTransaction({
+        ok: false,
+        code: 'SLOTS_UNAVAILABLE',
+        conflicts: [...takenDates].map(d => ({ date: d, start_time: startTime, reason: 'already booked' })),
+        available: dateStrings.filter(d => !takenDates.has(d)).map(d => ({ date: d, start_time: startTime })),
+      });
+    }
+
+    const sourcesResult = await client.query(
+      `SELECT
+         ct.id,
+         ct.created_at,
+         ct.school_id,
+         ct.minutes,
+         COALESCE(ct.amount_pence, 0)::int AS amount_pence,
+         COALESCE(ct.effective_rate_pence_per_minute, 0)::int AS effective_rate_pence_per_minute,
+         COALESCE(ct.stripe_fee_pence, 0)::int AS stripe_fee_pence,
+         ct.absorbed_by,
+         COALESCE(bcs.active_minutes_drawn, 0)::int AS active_minutes_drawn,
+         COALESCE(bcs.active_contribution_pence, 0)::int AS active_contribution_pence,
+         COALESCE(bcs.active_stripe_fee_pence, 0)::int AS active_stripe_fee_pence,
+         COALESCE(csa.adjusted_minutes, 0)::int AS adjusted_minutes,
+         COALESCE(csa.adjusted_pence, 0)::int AS adjusted_pence
+       FROM credit_transactions ct
+       LEFT JOIN LATERAL (
+         SELECT
+           COALESCE(SUM(minutes_drawn), 0)::int AS active_minutes_drawn,
+           COALESCE(SUM(contribution_pence), 0)::int AS active_contribution_pence,
+           COALESCE(SUM(stripe_fee_pence), 0)::int AS active_stripe_fee_pence
+         FROM booking_credit_sources
+         WHERE credit_transaction_id = ct.id
+           AND school_id = $3
+           AND refunded_at IS NULL
+       ) bcs ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT
+           COALESCE(SUM(minutes_adjusted), 0)::int AS adjusted_minutes,
+           COALESCE(SUM(pence_adjusted), 0)::int AS adjusted_pence
+         FROM credit_source_adjustments
+         WHERE credit_transaction_id = ct.id
+       ) csa ON TRUE
+       WHERE ct.learner_id = $1
+         AND ct.instructor_id = $2
+         AND ct.school_id = $3
+         AND ct.type = ANY($4::text[])
+         AND ct.minutes > 0
+       ORDER BY ct.created_at ASC, ct.id ASC`,
+      [learnerId, instructorId, schoolId, sourceTypes]
+    );
+
+    const fifoPlan = planFifoCreditDraw({ sources: sourcesResult.rows, minutes: totalMins, schoolId });
+    if (!fifoPlan.ok) {
+      abortBookingTransaction({
+        ok: false,
+        code: 'INSUFFICIENT_FIFO_SOURCES',
+        balanceMinutes,
+        shortageMinutes: fifoPlan.shortage_minutes,
+      });
+    }
+
+    const bookingTargets = [];
+    const createdBookings = [];
+    for (const bd of bookingDates) {
+      try {
+        const inserted = await client.query(
+          `INSERT INTO lesson_bookings
+             (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+              pickup_address, dropoff_address, lesson_type_id, minutes_deducted, series_id, school_id,
+              list_price_pence, list_price_source)
+           VALUES
+             ($1, $2, $3, $4, $5, $6,
+              $7, $8, $9, $10, $11, $12,
+              0, 'live_compute_insert')
+           RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at`,
+          [
+            learnerId, instructorId, bd.date, startTime, endTime, SCHEDULED,
+            pickupAddress, dropoffAddress, lessonTypeId, durationMins, seriesId, schoolId,
+          ]
+        );
+        const booking = inserted.rows[0];
+        createdBookings.push(booking);
+        bookingTargets.push({ booking_id: booking.id, minutes: durationMins });
+      } catch (err) {
+        if (err.code === '23505' || err.message?.includes('uq_booking_slot') || err.message?.includes('uq_instructor_slot')) {
+          abortBookingTransaction({
+            ok: false,
+            code: 'SLOTS_UNAVAILABLE',
+            conflicts: [{ date: bd.date, start_time: startTime, reason: 'already booked' }],
+            available: dateStrings.filter(d => d !== bd.date).map(d => ({ date: d, start_time: startTime })),
+          });
+        }
+        throw err;
+      }
+    }
+
+    const bcsRows = splitFifoPlanAcrossBookings({ plannedRows: fifoPlan.rows, bookingTargets });
+    const listPriceByBookingId = new Map();
+    for (const row of bcsRows) {
+      if (row.absorbed_by === 'instructor') continue;
+      listPriceByBookingId.set(row.booking_id, (listPriceByBookingId.get(row.booking_id) || 0) + row.contribution_pence);
+    }
+
+    let insertedBcsCount = 0;
+    for (const row of bcsRows) {
+      const inserted = await client.query(
+        `INSERT INTO booking_credit_sources
+           (school_id, booking_id, credit_transaction_id, minutes_drawn,
+            rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
+         VALUES
+           ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING
+         RETURNING id`,
+        [
+          row.school_id, row.booking_id, row.credit_transaction_id, row.minutes_drawn,
+          row.rate_pence_per_minute, row.contribution_pence, row.stripe_fee_pence, row.absorbed_by,
+        ]
+      );
+      insertedBcsCount += inserted.rowCount;
+    }
+
+    if (insertedBcsCount !== bcsRows.length) {
+      throw new Error(`BCS_IDEMPOTENCY_INVARIANT: expected ${bcsRows.length} inserts, got ${insertedBcsCount}`);
+    }
+
+    for (const booking of createdBookings) {
+      await client.query(
+        `UPDATE lesson_bookings
+            SET list_price_pence = $1
+          WHERE id = $2
+            AND school_id = $3`,
+        [listPriceByBookingId.get(booking.id) || 0, booking.id, schoolId]
+      );
+    }
+
+    const decremented = await client.query(
+      `UPDATE learner_credit_balances
+          SET balance_minutes = balance_minutes - $4,
+              updated_at = NOW()
+        WHERE learner_id = $1
+          AND instructor_id = $2
+          AND school_id = $3
+          AND balance_minutes >= $4
+      RETURNING balance_minutes`,
+      [learnerId, instructorId, schoolId, totalMins]
+    );
+
+    if (decremented.rowCount !== 1) {
+      throw new Error('LCB_DECREMENT_INVARIANT: locked balance failed guarded decrement');
+    }
+
+    return {
+      ok: true,
+      createdBookings,
+      balanceMinutes: Number(decremented.rows[0].balance_minutes || 0),
+      bcsRows,
+    };
+    });
+  } catch (err) {
+    if (err instanceof BookingTransactionAbort) {
+      return err.result;
+    }
+    throw err;
+  }
+}
+
 async function handleBook(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -931,13 +1203,6 @@ async function handleBook(req, res) {
     }
 
     const totalMins = durationMins * weeks;
-    if (!skipPayments) {
-      const balance = learner.balance_minutes || 0;
-      if (balance < totalMins)
-        return res.status(402).json({
-          error: `Not enough hours. You need ${formatHours(totalMins)} for ${weeks} lessons but have ${formatHours(balance)}. Please buy more hours.`
-        });
-    }
 
     // 3. For recurring bookings, check all slots are available before booking any
     if (isRecurring) {
@@ -946,15 +1211,17 @@ async function handleBook(req, res) {
         SELECT scheduled_date::text AS date, start_time::text
         FROM lesson_bookings
         WHERE instructor_id = ${instructor_id}
+          AND school_id = ${schoolId}
           AND scheduled_date = ANY(${dateStrings})
           AND start_time = ${start_time}
-          AND status = ${SCHEDULED}
+          AND status = ANY(${BLOCKING_STATUSES}::text[])
       `;
       // Also check slot reservations (Stripe checkout holds)
       const reservations = await sql`
         SELECT scheduled_date::text AS date, start_time::text
         FROM slot_reservations
         WHERE instructor_id = ${instructor_id}
+          AND school_id = ${schoolId}
           AND scheduled_date = ANY(${dateStrings})
           AND start_time = ${start_time}
           AND expires_at > NOW()
@@ -966,6 +1233,7 @@ async function handleBook(req, res) {
           SELECT scheduled_date::text AS date, start_time::text
           FROM lesson_offers
           WHERE instructor_id = ${instructor_id}
+            AND school_id = ${schoolId}
             AND scheduled_date = ANY(${dateStrings})
             AND start_time = ${start_time}
             AND status = 'pending'
@@ -988,48 +1256,62 @@ async function handleBook(req, res) {
       }
     }
 
-    // 4. Deduct hours FIRST (skip for demo instructor or payments-disabled schools).
-    //
-    // Uses the canonical LCB-lock CTE prologue — see api/_credit-grant.js for
-    // the load-bearing invariant: every credit-affecting writer for a learner
-    // MUST acquire SELECT ... FOR UPDATE on the learner_users row (Pre-2A) or
-    // learner_credit_balances row (Phase-2A) before mutating. This serialises
-    // concurrent grantCredits() calls against this deduct so a fresh purchase
-    // and a booking can't race in a way that produces a wrong balance.
-    //
-    // The `WHERE balance_minutes >= ${totalMins}` is the insufficient-credit
-    // guard — if the lock holder just before us decremented the balance below
-    // what we need, the UPDATE matches zero rows and `deducted` is undefined,
-    // which we surface as a 402.
-    if (!skipPayments) {
-      const creditsToDeduct = Math.ceil(totalMins / 60);
-      const deducted = await lockBalanceAdjustLCB(sql, {
-        learnerId: user.id, instructorId: instructor_id, schoolId,
-        delta: -totalMins, creditsDelta: -creditsToDeduct,
-      });
-      if (!deducted.ok)
-        return res.status(402).json({ error: `Not enough hours. You need ${formatHours(totalMins)}. Please buy more hours.` });
-    }
+    // Credit-funded bookings are written by bookCreditFundedSlotsTransaction()
+    // below. Do not use the standalone balance-only LCB helper here: the LCB
+    // lock must stay held through FIFO planning, booking inserts, BCS inserts,
+    // and the final scoped balance decrement.
 
     // 5. Create booking(s) — unique index on (instructor_id, scheduled_date, start_time)
     const seriesId = isRecurring ? crypto.randomUUID() : null;
     const bookingPickup  = pickup_address || learner.pickup_address || null;
     const bookingDropoff = dropoff_address || null;
     const minsPerBooking = skipPayments ? 0 : durationMins;
-    const createdBookings = [];
+    let createdBookings = [];
+    let transactionBalanceMinutes = null;
 
-    // list_price_pence snapshot (Step 1b). Three-level fallback via the pricing
-    // helper: per-learner-pair > per-instructor > school default. Same value
-    // across every iteration of the loop (same instructor/learner/duration), so
-    // compute once. skipPayments paths (demo instructor, payments-disabled
-    // school) snapshot 0 — no list price was charged or owed.
-    const listPricePence = skipPayments
-      ? 0
-      : Math.round(durationMins * await getEffectiveRatePencePerMinute(sql, {
-          schoolId, instructorId: instructor_id, learnerId: user.id
-        }));
+    // Credit-funded list_price_pence is computed inside the transaction from
+    // planned payable BCS contribution. skipPayments paths snapshot 0 because
+    // no credit source was consumed and no list price is owed.
+    const listPricePence = 0;
 
-    try {
+    if (!skipPayments) {
+      const booked = await bookCreditFundedSlotsTransaction({
+        connectionString: process.env.POSTGRES_URL,
+        learnerId: user.id,
+        instructorId: Number(instructor_id),
+        schoolId,
+        bookingDates,
+        startTime: start_time,
+        endTime: end_time,
+        lessonTypeId: lessonType.id,
+        durationMins,
+        pickupAddress: bookingPickup,
+        dropoffAddress: bookingDropoff,
+        seriesId,
+      });
+
+      if (!booked.ok && (booked.code === 'INSUFFICIENT_BALANCE' || booked.code === 'INSUFFICIENT_FIFO_SOURCES')) {
+        return res.status(402).json({ error: `Not enough hours. You need ${formatHours(totalMins)}. Please buy more hours.` });
+      }
+      if (!booked.ok && booked.code === 'SLOTS_UNAVAILABLE') {
+        return res.status(409).json({
+          error: true,
+          code: 'SLOTS_UNAVAILABLE',
+          message: `${booked.conflicts?.length || 1} of ${weeks} slots are not available`,
+          conflicts: booked.conflicts || [],
+          available: booked.available || []
+        });
+      }
+      if (!booked.ok && booked.code === 'LCB_SCOPE_INVARIANT') {
+        throw new Error(booked.message || 'LCB_SCOPE_INVARIANT');
+      }
+      if (!booked.ok) {
+        throw new Error(`Credit-funded booking transaction failed: ${booked.code || 'UNKNOWN'}`);
+      }
+
+      createdBookings = booked.createdBookings;
+      transactionBalanceMinutes = booked.balanceMinutes;
+    } else try {
       for (const bd of bookingDates) {
         const [b] = await sql`
           INSERT INTO lesson_bookings
@@ -1088,8 +1370,9 @@ async function handleBook(req, res) {
 
     // 6. Get updated balance for response
     const [updated] = await sql`SELECT balance_minutes, credit_balance FROM learner_users WHERE id = ${user.id}`;
+    const responseBalanceMinutes = transactionBalanceMinutes ?? (updated.balance_minutes || 0);
     const durationStr = formatHours(durationMins);
-    const balanceStr  = formatHours(updated.balance_minutes || 0);
+    const balanceStr  = formatHours(responseBalanceMinutes);
 
     // 7. Send notifications
     const mailer = createTransporter();
@@ -1261,8 +1544,8 @@ async function handleBook(req, res) {
     const response = {
       success:         true,
       booking_id:      createdBookings[0].id,
-      balance_minutes: updated.balance_minutes || 0,
-      balance_hours:   ((updated.balance_minutes || 0) / 60).toFixed(1),
+      balance_minutes: responseBalanceMinutes,
+      balance_hours:   (responseBalanceMinutes / 60).toFixed(1),
       credit_balance:  updated.credit_balance,
       payments_enabled: !!schoolConfig.payments_enabled
     };
@@ -2990,3 +3273,6 @@ function formatDateDisplay(str) {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'
   });
 }
+
+module.exports._bookCreditFundedSlotsTransaction = bookCreditFundedSlotsTransaction;
+module.exports._CREDIT_BOOKING_SOURCE_TYPES = CREDIT_BOOKING_SOURCE_TYPES;
