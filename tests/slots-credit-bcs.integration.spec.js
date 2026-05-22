@@ -122,12 +122,33 @@ test.describe('slots.js credit-funded BCS writer - integration', () => {
 
     sql = neon(process.env.POSTGRES_URL_TEST);
 
-    expect(CREDIT_BOOKING_SOURCE_TYPES).toEqual(['purchase', 'admin_add', 'referral_reward', 'legacy_grandfather']);
+    expect(CREDIT_BOOKING_SOURCE_TYPES).toEqual(['purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather']);
     expect(CREDIT_BOOKING_SOURCE_TYPES).not.toContain('slot_purchase');
     expect(CREDIT_BOOKING_SOURCE_TYPES).not.toContain('admin_remove');
     expect(CREDIT_BOOKING_SOURCE_TYPES).not.toContain('free_trial');
 
     const email = `${unique('slots-bcs')}@coachcarter.test`;
+    const [hasBcsSchoolId] = await sql`
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'booking_credit_sources'
+        AND column_name = 'school_id'
+    `;
+    if (!hasBcsSchoolId) {
+      throw new Error('Test branch is missing booking_credit_sources.school_id. Point POSTGRES_URL_TEST at an isolated Neon branch with latest main migrations applied.');
+    }
+
+    const [hasLcb] = await sql`
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = 'learner_credit_balances'
+    `;
+    if (!hasLcb) {
+      throw new Error('Test branch is missing learner_credit_balances. Point POSTGRES_URL_TEST at an isolated Neon branch with latest main migrations applied.');
+    }
+
     const [learner] = await sql`
       INSERT INTO learner_users (name, email, school_id, balance_minutes, credit_balance)
       VALUES ('Slots BCS Test', ${email}, ${SCHOOL_ID}, 0, 0)
@@ -352,5 +373,57 @@ test.describe('slots.js credit-funded BCS writer - integration', () => {
     `;
     expect(bcs.absorbed_by).toBe('instructor');
     expect(bcs.contribution_pence).toBe(9000);
+  });
+
+  test('platform-goodwill admin_add credits are drawable and snapshot zero list price', async () => {
+    await seedLcb(90);
+    await seedCreditSource({
+      minutes: 90,
+      amountPence: 0,
+      type: 'admin_add',
+      source: 'goodwill',
+      absorbedBy: 'platform',
+    });
+
+    const result = await book({ date: 100 });
+
+    expect(result.ok).toBe(true);
+    const [booking] = await sql`
+      SELECT list_price_pence FROM lesson_bookings
+      WHERE id = ${result.createdBookings[0].id}
+    `;
+    expect(booking.list_price_pence).toBe(0);
+
+    const [bcs] = await sql`
+      SELECT absorbed_by, contribution_pence, minutes_drawn
+      FROM booking_credit_sources
+      WHERE booking_id = ${result.createdBookings[0].id}
+    `;
+    expect(bcs.absorbed_by).toBe('platform');
+    expect(bcs.contribution_pence).toBe(0);
+    expect(bcs.minutes_drawn).toBe(90);
+  });
+
+  test('referral_bonus credits are drawable by regular credit booking FIFO', async () => {
+    await seedLcb(90);
+    const creditTxId = await seedCreditSource({
+      minutes: 90,
+      amountPence: 0,
+      type: 'referral_bonus',
+      source: 'goodwill',
+      absorbedBy: 'platform',
+    });
+
+    const result = await book({ date: 120 });
+
+    expect(result.ok).toBe(true);
+    const [bcs] = await sql`
+      SELECT credit_transaction_id, contribution_pence, minutes_drawn
+      FROM booking_credit_sources
+      WHERE booking_id = ${result.createdBookings[0].id}
+    `;
+    expect(bcs.credit_transaction_id).toBe(creditTxId);
+    expect(bcs.contribution_pence).toBe(0);
+    expect(bcs.minutes_drawn).toBe(90);
   });
 });

@@ -11,6 +11,7 @@ test.describe('slots.js credit-funded BCS writer policy', () => {
     expect(CREDIT_BOOKING_SOURCE_TYPES).toEqual([
       'purchase',
       'admin_add',
+      'referral_bonus',
       'referral_reward',
       'legacy_grandfather',
     ]);
