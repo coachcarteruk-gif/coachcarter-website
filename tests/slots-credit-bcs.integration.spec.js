@@ -280,6 +280,52 @@ test.describe('slots.js credit-funded BCS writer - integration', () => {
     expect(BLOCKING_STATUSES).toContain(SCHEDULED);
   });
 
+  test('second booking insert conflict rolls back the first booking, BCS, and LCB decrement', async () => {
+    await seedLcb(180);
+    await seedCreditSource({ minutes: 180, amountPence: 18000 });
+    const duplicateDate = futureDate(70);
+
+    const result = await bookCreditFundedSlotsTransaction({
+      connectionString: process.env.POSTGRES_URL_TEST,
+      learnerId,
+      instructorId,
+      schoolId: SCHOOL_ID,
+      bookingDates: [{ date: duplicateDate }, { date: duplicateDate }],
+      startTime: '09:00',
+      endTime: '10:30',
+      lessonTypeId,
+      durationMins: 90,
+      pickupAddress: '1 Test Street, London SW1A 1AA',
+      dropoffAddress: null,
+      seriesId: crypto.randomUUID(),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe('SLOTS_UNAVAILABLE');
+
+    const [counts] = await sql`
+      SELECT
+        (SELECT COUNT(*)::int
+           FROM lesson_bookings
+          WHERE learner_id = ${learnerId}
+            AND instructor_id = ${instructorId}
+            AND scheduled_date = ${duplicateDate}
+            AND start_time = '09:00') AS bookings,
+        (SELECT COUNT(*)::int
+           FROM booking_credit_sources bcs
+           JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
+          WHERE ct.learner_id = ${learnerId}
+            AND ct.instructor_id = ${instructorId}) AS bcs_rows,
+        (SELECT balance_minutes::int
+           FROM learner_credit_balances
+          WHERE learner_id = ${learnerId}
+            AND instructor_id = ${instructorId}) AS balance_minutes
+    `;
+    expect(counts.bookings).toBe(0);
+    expect(counts.bcs_rows).toBe(0);
+    expect(counts.balance_minutes).toBe(180);
+  });
+
   test('instructor-absorbed sources create BCS but zero payable list_price_pence', async () => {
     await seedLcb(90);
     await seedCreditSource({

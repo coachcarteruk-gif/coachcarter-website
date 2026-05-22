@@ -47,6 +47,18 @@ const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
 const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
 const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'admin_add', 'referral_reward', 'legacy_grandfather'];
 
+class BookingTransactionAbort extends Error {
+  constructor(result) {
+    super(result?.message || result?.code || 'BOOKING_TRANSACTION_ABORT');
+    this.name = 'BookingTransactionAbort';
+    this.result = { ok: false, ...(result || {}) };
+  }
+}
+
+function abortBookingTransaction(result) {
+  throw new BookingTransactionAbort(result);
+}
+
 // Look up a lesson type by ID (or return the default 'standard' type)
 async function getLessonType(sql, lessonTypeId, schoolId) {
   if (lessonTypeId) {
@@ -853,7 +865,8 @@ async function bookCreditFundedSlotsTransaction({
   const totalMins = durationMins * bookingDates.length;
   const dateStrings = bookingDates.map(bd => bd.date);
 
-  return withNeonTransaction(connectionString, async client => {
+  try {
+    return await withNeonTransaction(connectionString, async client => {
     await client.query(
       `INSERT INTO learner_credit_balances
          (learner_id, instructor_id, school_id, balance_minutes)
@@ -873,16 +886,16 @@ async function bookCreditFundedSlotsTransaction({
     );
 
     if (locked.rowCount === 0) {
-      return {
+      abortBookingTransaction({
         ok: false,
         code: 'LCB_SCOPE_INVARIANT',
         message: 'Learner credit balance row exists outside the expected school scope',
-      };
+      });
     }
 
     const balanceMinutes = Number(locked.rows[0].balance_minutes || 0);
     if (balanceMinutes < totalMins) {
-      return { ok: false, code: 'INSUFFICIENT_BALANCE', balanceMinutes };
+      abortBookingTransaction({ ok: false, code: 'INSUFFICIENT_BALANCE', balanceMinutes });
     }
 
     const bookingConflicts = await client.query(
@@ -925,12 +938,12 @@ async function bookCreditFundedSlotsTransaction({
       ...offerConflicts.rows.map(o => String(o.date).slice(0, 10)),
     ]);
     if (takenDates.size > 0) {
-      return {
+      abortBookingTransaction({
         ok: false,
         code: 'SLOTS_UNAVAILABLE',
         conflicts: [...takenDates].map(d => ({ date: d, start_time: startTime, reason: 'already booked' })),
         available: dateStrings.filter(d => !takenDates.has(d)).map(d => ({ date: d, start_time: startTime })),
-      };
+      });
     }
 
     const sourcesResult = await client.query(
@@ -977,12 +990,12 @@ async function bookCreditFundedSlotsTransaction({
 
     const fifoPlan = planFifoCreditDraw({ sources: sourcesResult.rows, minutes: totalMins, schoolId });
     if (!fifoPlan.ok) {
-      return {
+      abortBookingTransaction({
         ok: false,
         code: 'INSUFFICIENT_FIFO_SOURCES',
         balanceMinutes,
         shortageMinutes: fifoPlan.shortage_minutes,
-      };
+      });
     }
 
     const bookingTargets = [];
@@ -1009,12 +1022,12 @@ async function bookCreditFundedSlotsTransaction({
         bookingTargets.push({ booking_id: booking.id, minutes: durationMins });
       } catch (err) {
         if (err.code === '23505' || err.message?.includes('uq_booking_slot') || err.message?.includes('uq_instructor_slot')) {
-          return {
+          abortBookingTransaction({
             ok: false,
             code: 'SLOTS_UNAVAILABLE',
             conflicts: [{ date: bd.date, start_time: startTime, reason: 'already booked' }],
             available: dateStrings.filter(d => d !== bd.date).map(d => ({ date: d, start_time: startTime })),
-          };
+          });
         }
         throw err;
       }
@@ -1081,7 +1094,13 @@ async function bookCreditFundedSlotsTransaction({
       balanceMinutes: Number(decremented.rows[0].balance_minutes || 0),
       bcsRows,
     };
-  });
+    });
+  } catch (err) {
+    if (err instanceof BookingTransactionAbort) {
+      return err.result;
+    }
+    throw err;
+  }
 }
 
 async function handleBook(req, res) {
