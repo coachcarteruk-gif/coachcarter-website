@@ -30,7 +30,7 @@ Each chip is a small, well-defined unit of work. Goal · why · risks · files �
   - Largest single piece of work in the plan (~10–15h of the 38–50h total).
   - Step 0 has shipped; remaining gates: 4th-round GPT critique on the plan + checking longest historical Stripe Checkout-session-to-payment-intent gap.
   - `trg_sync_pooled_balance` prerequisite shipped on prod 2026-05-21; re-verify `pg_trigger` and divergence before starting Step 5.
-- **Already present on current `main` / prod:** `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, explicit BCS `school_id` (prod `/api/migrate` after PR #194 verified NOT NULL/default 1/FK/index/null rows 0/mismatch `[]`), read-only missing active BCS coverage detection in `api/cron-credit-reconcile.js`, and focused tests for `api/_pence-allocator.js`.
+- **Already present on current `main` / prod:** `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, explicit BCS `school_id` (prod `/api/migrate` after PR #194 verified NOT NULL/default 1/FK/index/null rows 0/mismatch `[]`), read-only path-aware missing active BCS coverage detection in `api/cron-credit-reconcile.js`, and focused tests for `api/_pence-allocator.js`.
 - **Accepted decisions (2026-05-21):** add `booking_credit_sources.school_id`; reschedules refund old BCS rows and create fresh replacement rows; mixed-source `list_price_pence` sums payable active BCS contribution excluding instructor-absorbed portions only; direct paid slot purchases create BCS rows against `slot_purchase` CTs; `contribution_pence` is exact payable pence from source `amount_pence` net of CSA `pence_adjusted`, while `rate_pence_per_minute` is rounded audit/display only.
 - **Likely files:** `api/_credit-grant.js` (writer wiring), `api/slots.js` / `api/webhook.js` / `api/offers.js` (allocation at booking time), `api/_payout-helpers.js` (cron + preview read per-source), `tests/booking-credit-sources.*`.
 - **Success criteria:**
@@ -38,7 +38,7 @@ Each chip is a small, well-defined unit of work. Goal · why · risks · files �
   - FIFO order `(created_at ASC, id ASC)` verified in integration tests.
   - Pence-exact fee and contribution allocation with last-draw-takes-remainder (source-level over-allocation and equality-on-exhaustion invariants, with CSA pence counted for contribution conservation).
   - `processPayoutForInstructor` and `simulatePayoutForInstructor` remain in lockstep for any payout math change.
-  - Divergence cron continues to return `drift_count = 0` post-cutover, with `missing_bcs_count = 0` confirming active post-cutover credit bookings have active BCS attribution.
+  - Divergence cron continues to return `drift_count = 0` post-cutover, with `missing_bcs_count = 0` confirming active post-writer credit bookings have active BCS attribution.
 
 ---
 

@@ -86,6 +86,16 @@ const { REFUNDED } = require('./_booking-status');
 
 const SCHOOL_ID = 1; // CoachCarter — only school using per-instructor credits at the cutover.
 
+// Diagnostic-only rollout cutovers for missing BCS coverage. These are not
+// business rules; they stop the read-only detector from treating bookings
+// created during the staged Step 5 rollout as actionable post-writer gaps.
+// A single data marker is not durable enough here: the first school BCS row
+// was a free-trial write before credit-booking, reschedule, and instructor
+// writers had all shipped.
+const BCS_LEARNER_CREDIT_WRITER_CUTOVER_AT     = '2026-05-22T07:41:32Z'; // #203
+const BCS_RESCHEDULE_COPY_WRITER_CUTOVER_AT    = '2026-05-25T19:30:31Z'; // #208
+const BCS_INSTRUCTOR_CREDIT_WRITER_CUTOVER_AT  = '2026-05-25T20:49:42Z'; // #210
+
 // Hard cap on per-pair detail rows included in the alert email body. If drift
 // is wider than this, the email summarises and points at the manual diagnostic
 // SQL. Prevents a corruption event from generating a multi-megabyte email.
@@ -831,20 +841,33 @@ async function findMissingBcsBookings(sql, { hasBcs, hasBcsSchoolId }) {
   }
 
   const [countRow] = await sql`
-    WITH bcs_cutover_by_school AS (
-      SELECT school_id, MIN(created_at) AS cutover_at
-        FROM booking_credit_sources
-       GROUP BY school_id
-    ),
-    missing AS (
-      SELECT lb.id
+    WITH credit_booking_candidates AS (
+      SELECT
+        lb.id,
+        CASE
+          WHEN lb.rescheduled_from IS NOT NULL THEN 'reschedule_replacement'
+          WHEN lb.created_by = 'instructor' THEN 'instructor_credit_booking'
+          WHEN COALESCE(lb.created_by, 'learner') = 'learner' THEN 'learner_credit_booking'
+          ELSE NULL
+        END AS bcs_writer_path,
+        CASE
+          WHEN lb.rescheduled_from IS NOT NULL THEN ${BCS_RESCHEDULE_COPY_WRITER_CUTOVER_AT}::timestamptz
+          WHEN lb.created_by = 'instructor' THEN ${BCS_INSTRUCTOR_CREDIT_WRITER_CUTOVER_AT}::timestamptz
+          WHEN COALESCE(lb.created_by, 'learner') = 'learner' THEN ${BCS_LEARNER_CREDIT_WRITER_CUTOVER_AT}::timestamptz
+          ELSE NULL::timestamptz
+        END AS writer_cutover_at
         FROM lesson_bookings lb
-        JOIN bcs_cutover_by_school bc ON bc.school_id = lb.school_id
-       WHERE bc.cutover_at IS NOT NULL
-         AND lb.created_at >= bc.cutover_at
+       WHERE lb.payment_method = 'credit'
          AND lb.status <> ${REFUNDED}
          AND COALESCE(lb.credit_returned, FALSE) = FALSE
          AND COALESCE(lb.minutes_deducted, 0) > 0
+    ),
+    missing AS (
+      SELECT c.id
+        FROM credit_booking_candidates c
+        JOIN lesson_bookings lb ON lb.id = c.id
+       WHERE c.writer_cutover_at IS NOT NULL
+         AND lb.created_at >= c.writer_cutover_at
          AND NOT EXISTS (
            SELECT 1
              FROM booking_credit_sources bcs
@@ -857,12 +880,7 @@ async function findMissingBcsBookings(sql, { hasBcs, hasBcsSchoolId }) {
   `;
 
   const summaryRows = await sql`
-    WITH bcs_cutover_by_school AS (
-      SELECT school_id, MIN(created_at) AS cutover_at
-        FROM booking_credit_sources
-       GROUP BY school_id
-    ),
-    missing AS (
+    WITH credit_booking_candidates AS (
       SELECT
         lb.id AS booking_id,
         lb.school_id,
@@ -873,19 +891,35 @@ async function findMissingBcsBookings(sql, { hasBcs, hasBcsSchoolId }) {
         lb.start_time::text AS start_time,
         lb.status,
         lb.minutes_deducted,
-        lb.credit_returned
+        lb.credit_returned,
+        CASE
+          WHEN lb.rescheduled_from IS NOT NULL THEN 'reschedule_replacement'
+          WHEN lb.created_by = 'instructor' THEN 'instructor_credit_booking'
+          WHEN COALESCE(lb.created_by, 'learner') = 'learner' THEN 'learner_credit_booking'
+          ELSE NULL
+        END AS bcs_writer_path,
+        CASE
+          WHEN lb.rescheduled_from IS NOT NULL THEN ${BCS_RESCHEDULE_COPY_WRITER_CUTOVER_AT}::timestamptz
+          WHEN lb.created_by = 'instructor' THEN ${BCS_INSTRUCTOR_CREDIT_WRITER_CUTOVER_AT}::timestamptz
+          WHEN COALESCE(lb.created_by, 'learner') = 'learner' THEN ${BCS_LEARNER_CREDIT_WRITER_CUTOVER_AT}::timestamptz
+          ELSE NULL::timestamptz
+        END AS writer_cutover_at
       FROM lesson_bookings lb
-      JOIN bcs_cutover_by_school bc ON bc.school_id = lb.school_id
-      WHERE bc.cutover_at IS NOT NULL
-        AND lb.created_at >= bc.cutover_at
+      WHERE lb.payment_method = 'credit'
         AND lb.status <> ${REFUNDED}
         AND COALESCE(lb.credit_returned, FALSE) = FALSE
         AND COALESCE(lb.minutes_deducted, 0) > 0
+    ),
+    missing AS (
+      SELECT *
+        FROM credit_booking_candidates c
+       WHERE c.writer_cutover_at IS NOT NULL
+         AND c.created_at::timestamptz >= c.writer_cutover_at
         AND NOT EXISTS (
           SELECT 1
             FROM booking_credit_sources bcs
-           WHERE bcs.school_id = lb.school_id
-             AND bcs.booking_id = lb.id
+           WHERE bcs.school_id = c.school_id
+             AND bcs.booking_id = c.booking_id
              AND bcs.refunded_at IS NULL
         )
     )
@@ -909,6 +943,8 @@ async function findMissingBcsBookings(sql, { hasBcs, hasBcsSchoolId }) {
       status: r.status,
       minutes_deducted: r.minutes_deducted,
       credit_returned: r.credit_returned,
+      bcs_writer_path: r.bcs_writer_path,
+      writer_cutover_at: r.writer_cutover_at,
     })),
     truncated: count > summaryRows.length,
   };
