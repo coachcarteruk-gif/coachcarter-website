@@ -38,6 +38,7 @@ const { lockBalanceAdjustLCB } = require('./_credit-grant');
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
+const { markBookingCreditSourcesRefunded, restoreBookingCreditSourcesActive } = require('./_bcs-refund-marker');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
@@ -2892,6 +2893,9 @@ async function handleReschedule(req, res) {
       SET status = ${REFUNDED}, credit_returned = TRUE, cancelled_at = NOW()
       WHERE id = ${booking_id}
     `;
+    // Transitional Step 5 behaviour: the replacement booking remains
+    // unattributed, so the old booking's active BCS rows must stop counting.
+    const refundedBcsIds = await markBookingCreditSourcesRefunded(sql, { bookingId: booking_id, schoolId });
 
     // 2. Create new booking. Carry the Stripe fee snapshot forward — it was
     // paid on the original charge and the lesson is still happening, just at
@@ -2935,6 +2939,7 @@ async function handleReschedule(req, res) {
         SET status = ${SCHEDULED}, credit_returned = FALSE, cancelled_at = NULL
         WHERE id = ${booking_id}
       `;
+      await restoreBookingCreditSourcesActive(sql, { bcsIds: refundedBcsIds, schoolId });
       if (insertErr.message?.includes('uq_booking_slot') || insertErr.code === '23505') {
         return res.status(409).json({ error: 'That slot was just booked by someone else. Please choose another.' });
       }
@@ -2958,8 +2963,9 @@ async function handleReschedule(req, res) {
       instructor_name: booking.instructor_name
     });
 
-    // Email to learner
-    await mailer.sendMail({
+    // Notifications are best-effort: reschedule DB writes are already complete.
+    try {
+      await mailer.sendMail({
       from:    'CoachCarter <bookings@coachcarter.uk>',
       to:      booking.learner_email,
       subject: `Lesson rescheduled — now ${newDateStr} at ${newTime}`,
@@ -2988,11 +2994,15 @@ async function handleReschedule(req, res) {
         content:  icsContent,
         contentType: 'text/calendar; method=PUBLISH'
       }]
-    });
+      });
+    } catch (emailErr) {
+      console.warn('Learner reschedule email failed:', emailErr.message);
+    }
 
     // Email to instructor (skip demo)
     if (!isDemoBooking) {
-      await mailer.sendMail({
+      try {
+        await mailer.sendMail({
         from:    'CoachCarter <system@coachcarter.uk>',
         to:      booking.instructor_email,
         subject: `Lesson rescheduled — ${booking.learner_name}`,
@@ -3011,17 +3021,28 @@ async function handleReschedule(req, res) {
             </a>
           </p>
         `
-      });
+        });
+      } catch (emailErr) {
+        console.warn('Instructor reschedule email failed:', emailErr.message);
+      }
     }
 
     // WhatsApp notifications
-    await sendWhatsApp(booking.learner_phone,
+    try {
+      await sendWhatsApp(booking.learner_phone,
       `🔄 Lesson rescheduled!\n\n❌ Was: ${oldDateStr} at ${oldTime}\n✅ Now: ${newDateStr} at ${newTime}\n🚗 Instructor: ${booking.instructor_name}\n\nView bookings: https://coachcarter.uk/learner/`
     );
+    } catch (waErr) {
+      console.warn('Learner reschedule WhatsApp failed:', waErr.message);
+    }
     if (!isDemoBooking) {
-      await sendWhatsApp(booking.instructor_phone,
+      try {
+        await sendWhatsApp(booking.instructor_phone,
         `🔄 Lesson rescheduled\n\n👤 ${booking.learner_name}\n❌ Was: ${oldDateStr} at ${oldTime}\n✅ Now: ${newDateStr} at ${newTime}\n\nView schedule: https://coachcarter.uk/instructor/`
-      );
+        );
+      } catch (waErr) {
+        console.warn('Instructor reschedule WhatsApp failed:', waErr.message);
+      }
     }
 
     return res.json({
