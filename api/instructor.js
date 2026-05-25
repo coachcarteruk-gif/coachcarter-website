@@ -992,6 +992,10 @@ async function handleCancelBooking(req, res) {
         instructor_notes = ${reason ? 'Cancelled: ' + reason.trim() : 'Cancelled by instructor'}
       WHERE id = ${booking_id}
     `;
+    await markBookingCreditSourcesRefunded(sql, {
+      bookingId: booking_id,
+      schoolId: booking.school_id || 1,
+    });
 
     // Refund the learner's balance to the same LCB row that was debited.
     // No ledger row (matches the slots.js cancel refund convention — the

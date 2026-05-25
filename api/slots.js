@@ -2491,6 +2491,7 @@ async function handleCancel(req, res) {
         FROM lesson_bookings
         WHERE series_id = ${booking.series_id}
           AND learner_id = ${user.id}
+          AND COALESCE(school_id, 1) = ${schoolId}
           AND status = ${SCHEDULED}
           AND scheduled_date >= CURRENT_DATE
         ORDER BY scheduled_date
@@ -2516,6 +2517,7 @@ async function handleCancel(req, res) {
             SET status = ${REFUNDED}, cancelled_at = NOW(), credit_returned = TRUE
             WHERE id = ${sb.id}
           `;
+          await markBookingCreditSourcesRefunded(sql, { bookingId: sb.id, schoolId });
         } else {
           await sql`
             UPDATE lesson_bookings
@@ -2647,6 +2649,7 @@ async function handleCancel(req, res) {
         SET status = ${REFUNDED}, cancelled_at = NOW(), credit_returned = TRUE
         WHERE id = ${booking_id}
       `;
+      await markBookingCreditSourcesRefunded(sql, { bookingId: booking_id, schoolId });
     } else {
       await sql`
         UPDATE lesson_bookings

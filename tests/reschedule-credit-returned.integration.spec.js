@@ -195,6 +195,28 @@ async function insertClashBookingWithRetry(learnerId, instructorId, dateOffset) 
   };
 }
 
+async function findFreeRescheduleSlot(instructorId, dateOffset) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const baseDate = new Date(Date.now() + (dateOffset + attempt) * 86400000);
+    const newDate = baseDate.toISOString().slice(0, 10);
+    for (let hour = 15; hour <= 18; hour++) {
+      const newStartTime = `${String(hour).padStart(2, '0')}:00`;
+      const [existing] = await sql`
+        SELECT id
+          FROM lesson_bookings
+         WHERE instructor_id = ${instructorId}
+           AND school_id = ${SCHOOL_ID}
+           AND scheduled_date = ${newDate}
+           AND start_time = ${newStartTime}::time
+           AND status IN ('scheduled', 'chargeable')
+         LIMIT 1
+      `;
+      if (!existing) return { newDate, newStartTime };
+    }
+  }
+  throw new Error('findFreeRescheduleSlot could not find a free slot');
+}
+
 async function seedLcb(learnerId, instructorId, minutes) {
   await sql`
     INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
@@ -424,9 +446,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 30 });
 
     // Reschedule to a slot far enough away to avoid uq_instructor_slot collision.
-    const newDate = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
-    const newHour = String(15 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
-    const newStartTime = `${newHour}:00`;
+    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 60);
 
     const instructorHandler = require('../api/instructor');
     const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
@@ -463,9 +483,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 32 });
     const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90);
 
-    const newDate = new Date(Date.now() + 64 * 86400000).toISOString().slice(0, 10);
-    const newHour = String(15 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
-    const newStartTime = `${newHour}:00`;
+    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 64);
 
     const instructorHandler = require('../api/instructor');
     const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
