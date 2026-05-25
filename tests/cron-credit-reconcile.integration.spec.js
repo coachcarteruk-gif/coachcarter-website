@@ -62,6 +62,7 @@ const {
   runDivergenceCheck,
   probeSchemaMode,
 } = require('../api/cron-credit-reconcile');
+const { REFUNDED } = require('../api/_booking-status');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Gating
@@ -183,9 +184,10 @@ async function probeBcsCsa() {
   const [r] = await sql`
     SELECT
       EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='booking_credit_sources')     AS has_bcs,
+      EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='booking_credit_sources' AND column_name='school_id') AS has_bcs_school_id,
       EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='credit_source_adjustments')  AS has_csa
   `;
-  return { hasBcs: !!r.has_bcs, hasCsa: !!r.has_csa };
+  return { hasBcs: !!r.has_bcs, hasBcsSchoolId: !!r.has_bcs_school_id, hasCsa: !!r.has_csa };
 }
 
 // For C9 / C10: create the Step 5 tables if absent, returning a cleanup fn
@@ -194,6 +196,7 @@ async function probeBcsCsa() {
 async function ensureStep5Tables({ wantBcs, wantCsa }) {
   const initial = await probeBcsCsa();
   const createdBcs = wantBcs && !initial.hasBcs;
+  const addedBcsSchoolId = wantBcs && initial.hasBcs && !initial.hasBcsSchoolId;
   const createdCsa = wantCsa && !initial.hasCsa;
 
   if (createdBcs) {
@@ -202,6 +205,7 @@ async function ensureStep5Tables({ wantBcs, wantCsa }) {
         id                    SERIAL PRIMARY KEY,
         booking_id            INTEGER NOT NULL REFERENCES lesson_bookings(id) ON DELETE CASCADE,
         credit_transaction_id INTEGER NOT NULL REFERENCES credit_transactions(id),
+        school_id             INTEGER NOT NULL DEFAULT 1,
         minutes_drawn         INTEGER NOT NULL CHECK (minutes_drawn > 0),
         rate_pence_per_minute INTEGER NOT NULL DEFAULT 55,
         contribution_pence    INTEGER NOT NULL DEFAULT 0,
@@ -212,6 +216,9 @@ async function ensureStep5Tables({ wantBcs, wantCsa }) {
         UNIQUE (booking_id, credit_transaction_id)
       )
     `;
+  }
+  if (addedBcsSchoolId) {
+    await sql`ALTER TABLE booking_credit_sources ADD COLUMN school_id INTEGER NOT NULL DEFAULT 1`;
   }
   if (createdCsa) {
     await sql`
@@ -262,6 +269,8 @@ async function ensureStep5Tables({ wantBcs, wantCsa }) {
     if (createdBcs) {
       await sql`DROP TABLE IF EXISTS booking_credit_sources`;
       branchHasBcs = false;
+    } else if (addedBcsSchoolId) {
+      await sql`ALTER TABLE booking_credit_sources DROP COLUMN IF EXISTS school_id`;
     }
   };
 }
@@ -277,27 +286,29 @@ async function insertBooking() {
 // Synthetic booking that draws `mins` credit minutes from LCB. Sets school_id
 // and minutes_deducted so the cron's booking_draws CTE sees it. credit_returned
 // toggles between "still drawing" and "refunded back to LCB" scenarios.
-async function insertBookingWithMinutes(mins, creditReturned) {
+async function insertBookingWithMinutes(mins, creditReturned, opts = {}) {
   const dateStr = `2030-01-${String(Math.floor(Math.random() * 27) + 1).padStart(2, '0')}`;
   const hour = String(Math.floor(Math.random() * 12) + 8).padStart(2, '0');
   const minute = String(Math.floor(Math.random() * 60)).padStart(2, '0');
   const startTime = `${hour}:${minute}:00`;
   const endTime   = `${hour}:${String(Math.min(59, parseInt(minute) + 30)).padStart(2, '0')}:00`;
+  const status = opts.status || 'scheduled';
+  const createdAt = opts.createdAt || null;
   const [row] = await sql`
     INSERT INTO lesson_bookings
-      (learner_id, instructor_id, school_id, scheduled_date, start_time, end_time, status, minutes_deducted, credit_returned)
+      (learner_id, instructor_id, school_id, scheduled_date, start_time, end_time, status, minutes_deducted, credit_returned, created_at)
     VALUES
-      (${testLearnerId}, ${INSTRUCTOR_ID}, ${SCHOOL_ID}, ${dateStr}::date, ${startTime}::time, ${endTime}::time, 'scheduled', ${mins}, ${creditReturned})
+      (${testLearnerId}, ${INSTRUCTOR_ID}, ${SCHOOL_ID}, ${dateStr}::date, ${startTime}::time, ${endTime}::time, ${status}, ${mins}, ${creditReturned}, COALESCE(${createdAt}::timestamptz, NOW()))
     RETURNING id
   `;
   return row.id;
 }
 
-async function insertBcs({ bookingId, ctId, minutesDrawn, refundedAt = null }) {
+async function insertBcs({ bookingId, ctId, minutesDrawn, refundedAt = null, createdAt = null }) {
   await sql`
     INSERT INTO booking_credit_sources
-      (booking_id, credit_transaction_id, minutes_drawn, rate_pence_per_minute, contribution_pence, refunded_at)
-    VALUES (${bookingId}, ${ctId}, ${minutesDrawn}, 55, ${minutesDrawn * 55}, ${refundedAt})
+      (booking_id, credit_transaction_id, school_id, minutes_drawn, rate_pence_per_minute, contribution_pence, refunded_at, created_at)
+    VALUES (${bookingId}, ${ctId}, ${SCHOOL_ID}, ${minutesDrawn}, 55, ${minutesDrawn * 55}, ${refundedAt}, COALESCE(${createdAt}::timestamptz, NOW()))
   `;
 }
 
@@ -314,6 +325,10 @@ async function insertCsa({ ctId, minutesAdjusted, kind = 'cash_refund' }) {
 // value is the JSON payload — that's what we assert against.
 async function runCron({ now = new Date() } = {}) {
   return runDivergenceCheck(sql, { now, sendAlerts: false });
+}
+
+function missingSummaryBooking(result, bookingId) {
+  return (result.missing_bcs_summary || []).find(r => r.booking_id === bookingId);
 }
 
 // Helper to find the test pair's drift row in the response, if present.
@@ -747,13 +762,134 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // C11: Alert email fires only when drift is non-zero.
+  // C10a-d: missing active BCS attribution is reported separately from drift.
   //
-  // We can't easily intercept SMTP from the integration test, but
-  // result.alert_sent is the surface signal. With sendAlerts:false in
-  // runCron(), the helper short-circuits before calling sendAlertEmail,
-  // so alert_sent reflects "would have sent" only when drift > 0.
+  // These scenarios pin the data-derived cutover, active/refunded BCS
+  // semantics, and the invariant that matching balances keep drift_count
+  // stable while missing_bcs_count moves independently.
   // ───────────────────────────────────────────────────────────────────────────
+  test('C10a: BCS coverage diagnostic ignores historical no-BCS booking before cutover', async () => {
+    const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
+    try {
+      await resetState();
+
+      const seedCtId = await insertCt({ minutes: 60 });
+      const seedBookingId = await insertBookingWithMinutes(0, false, { createdAt: '2026-05-25T12:00:00Z' });
+      await insertBcs({ bookingId: seedBookingId, ctId: seedCtId, minutesDrawn: 60, createdAt: '2026-05-25T12:00:00Z' });
+      await setLcbBalance(0);
+      const before = await runCron();
+
+      await insertCt({ minutes: 90 });
+      const historicalBookingId = await insertBookingWithMinutes(90, false, { createdAt: '2000-01-01T12:00:00Z' });
+
+      const after = await runCron();
+      expect(after.missing_bcs_count).toBe(before.missing_bcs_count);
+      expect(missingSummaryBooking(after, historicalBookingId)).toBeUndefined();
+      expect(after.drift_count).toBe(before.drift_count);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('C10b: BCS coverage diagnostic flags post-cutover active credit booking without active BCS', async () => {
+    const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
+    try {
+      await resetState();
+
+      const seedCtId = await insertCt({ minutes: 60 });
+      const seedBookingId = await insertBookingWithMinutes(0, false, { createdAt: '2026-05-25T12:00:00Z' });
+      await insertBcs({ bookingId: seedBookingId, ctId: seedCtId, minutesDrawn: 60, createdAt: '2026-05-25T12:00:00Z' });
+      await setLcbBalance(0);
+      const before = await runCron();
+
+      await insertCt({ minutes: 90 });
+      const missingBookingId = await insertBookingWithMinutes(90, false, { createdAt: '2100-01-01T12:00:00Z' });
+
+      const after = await runCron();
+      expect(after.missing_bcs_count).toBe(before.missing_bcs_count + 1);
+      expect(missingSummaryBooking(after, missingBookingId)).toMatchObject({
+        booking_id: missingBookingId,
+        learner_id: testLearnerId,
+        instructor_id: INSTRUCTOR_ID,
+        status: 'scheduled',
+        minutes_deducted: 90,
+        credit_returned: false,
+      });
+      expect(after.drift_count).toBe(before.drift_count);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('C10c: BCS coverage diagnostic does not flag booking with active BCS', async () => {
+    const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
+    try {
+      await resetState();
+
+      const seedCtId = await insertCt({ minutes: 60 });
+      const seedBookingId = await insertBookingWithMinutes(0, false, { createdAt: '2026-05-25T12:00:00Z' });
+      await insertBcs({ bookingId: seedBookingId, ctId: seedCtId, minutesDrawn: 60, createdAt: '2026-05-25T12:00:00Z' });
+      await setLcbBalance(0);
+      const before = await runCron();
+
+      const ctId = await insertCt({ minutes: 90 });
+      const bookingId = await insertBookingWithMinutes(90, false, { createdAt: '2100-01-02T12:00:00Z' });
+      await insertBcs({ bookingId, ctId, minutesDrawn: 90, createdAt: '2100-01-02T12:01:00Z' });
+
+      const after = await runCron();
+      expect(after.missing_bcs_count).toBe(before.missing_bcs_count);
+      expect(missingSummaryBooking(after, bookingId)).toBeUndefined();
+      expect(after.drift_count).toBe(before.drift_count);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('C10d: BCS coverage diagnostic treats only-refunded BCS as inactive for active bookings', async () => {
+    const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
+    try {
+      await resetState();
+
+      const seedCtId = await insertCt({ minutes: 60 });
+      const seedBookingId = await insertBookingWithMinutes(0, false, { createdAt: '2026-05-25T12:00:00Z' });
+      await insertBcs({ bookingId: seedBookingId, ctId: seedCtId, minutesDrawn: 60, createdAt: '2026-05-25T12:00:00Z' });
+      await setLcbBalance(0);
+      const before = await runCron();
+
+      const activeCtId = await insertCt({ minutes: 60 });
+      const activeBookingId = await insertBookingWithMinutes(60, false, { createdAt: '2100-01-03T12:00:00Z' });
+      await insertBcs({
+        bookingId: activeBookingId,
+        ctId: activeCtId,
+        minutesDrawn: 60,
+        refundedAt: '2100-01-03T12:10:00Z',
+        createdAt: '2100-01-03T12:01:00Z',
+      });
+
+      const refundedCtId = await insertCt({ minutes: 30 });
+      const refundedBookingId = await insertBookingWithMinutes(30, true, {
+        status: REFUNDED,
+        createdAt: '2100-01-04T12:00:00Z',
+      });
+      await insertBcs({
+        bookingId: refundedBookingId,
+        ctId: refundedCtId,
+        minutesDrawn: 30,
+        refundedAt: '2100-01-04T12:10:00Z',
+        createdAt: '2100-01-04T12:01:00Z',
+      });
+
+      await setLcbBalance(90);
+      const after = await runCron();
+      expect(after.missing_bcs_count).toBe(before.missing_bcs_count + 1);
+      expect(missingSummaryBooking(after, activeBookingId)).toBeTruthy();
+      expect(missingSummaryBooking(after, refundedBookingId)).toBeUndefined();
+      expect(after.drift_count).toBe(before.drift_count);
+    } finally {
+      await cleanup();
+    }
+  });
+
   test('C11: alert_sent flag tracks drift presence; drift injection bumps drift_count by 1', async () => {
     // sendAlerts is OFF throughout — we never want this test to send a real
     // email to ERROR_ALERT_EMAIL during a CI / local run. alert_sent in the

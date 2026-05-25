@@ -49,11 +49,11 @@
 | Step 3b — `getEffectiveHourlyPence` + per-minute helper | SHIPPED PR #169 | |
 | Step 4 — Phase 2A behavioural cutover (per-instructor credits) | SHIPPED via PR #176 + hotfix PR #177 | First attempt PR #174 was reverted by #175 (emergency flip). Q1 audit verified zero customer impact. `PHASE_2A_IMPLEMENTED=true` on prod. |
 | Step 4.5 — daily credit-divergence cron + Plans A / B1 / B3 + chip #3 | SHIPPED PRs #179 / #180 / #182 / #183 / #184 / #186 / #187 | Drift trajectory: 34 → 13 → 4 → 3 → 0. |
-| Step 5 — BCS + FIFO | GROUNDWORK IN PROGRESS | Current `main` already has `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, and pence allocator tests. Fraser accepted `booking_credit_sources.school_id` plus three writer-policy decisions on 2026-05-21. PR #194's BCS `school_id` migration was applied once on prod and post-diagnostic verified `school_id` exists/NOT NULL/default 1, FK + `idx_bcs_school` exist, null rows = 0, mismatch query = `[]`. Remaining scope is FIFO writer wiring, payout/simulation wiring, and behaviour tests. |
+| Step 5 — BCS + FIFO | GROUNDWORK IN PROGRESS | Current `main` already has `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, pence allocator tests, and read-only missing active BCS coverage detection in `api/cron-credit-reconcile.js`. Fraser accepted `booking_credit_sources.school_id` plus three writer-policy decisions on 2026-05-21. PR #194's BCS `school_id` migration was applied once on prod and post-diagnostic verified `school_id` exists/NOT NULL/default 1, FK + `idx_bcs_school` exist, null rows = 0, mismatch query = `[]`. Remaining scope is FIFO writer wiring, payout/simulation wiring, and behaviour tests. |
 
 ### Cron drift watch
 
-- Daily 08:30 UTC cron `api/cron-credit-reconcile.js`. Returns JSON with `drift_count`, `drift_summary`, `alert_sent`.
+- Daily 08:30 UTC cron `api/cron-credit-reconcile.js`. Returns JSON with `drift_count`, `drift_summary`, `alert_sent`, plus separate read-only BCS attribution coverage fields `missing_bcs_count`, `missing_bcs_summary`, and `missing_bcs_truncated`.
 - Last observed `drift_count = 0` at 2026-05-21 12:45:40 UTC. verified
 - Email alert recipient: `ERROR_ALERT_EMAIL` (= `coachcarteruk@gmail.com` in prod).
 
