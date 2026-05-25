@@ -1,13 +1,13 @@
 # Current state
 
-> Snapshot date: **2026-05-21 (evening)**. Re-verify any claim against `git log` and prod before acting on it. Items below are tagged `verified` (checked against prod or live code in the named session) or `assumption` (carried forward from memory, not re-checked here).
+> Snapshot date: **2026-05-25**. Re-verify any claim against `git log` and prod before acting on it. Items below are tagged `verified` (checked against prod or live code in the named session) or `assumption` (carried forward from memory, not re-checked here).
 
 ## Headline
 
-- **Credits divergence cron returns `drift_count = 0` as of 2026-05-21 12:45 UTC.** verified
+- **Credits divergence cron returns `drift_count = 0`; latest post-PR-#212 read-only output also has `missing_bcs_count = 0`.** verified by operator report 2026-05-25
 - **Per-instructor credits plan Steps 0–2.5 + 3a/3b + 4 (Phase 2A) + 4.5 are merged on `main`.** verified via `git log` 2026-05-21.
 - **Chip #4 `trg_sync_pooled_balance` is installed on prod as of 2026-05-21 20:51 UTC.** verified by prod `migration_markers`, `pg_proc`, `pg_trigger`, and pooled-vs-LCB divergence SELECTs.
-- **Step 5 (BCS + FIFO) is the next forward-progress milestone.** BCS/CSA schema substrate is present, and `booking_credit_sources.school_id` was applied on prod after PR #194. Remaining scope is writer/payout wiring plus tests.
+- **Step 5 (BCS + FIFO) is in sliced rollout.** BCS/CSA schema substrate is present, and `booking_credit_sources.school_id` was applied on prod after PR #194. PR #211 and PR #212 are merged; latest prod read-only reconcile after #212 returned `drift_count=0`, `missing_bcs_count=0`, `missing_bcs_summary=[]`, `missing_bcs_truncated=false`, `alert_sent=false` (verified by operator report 2026-05-25). This PR adds the smallest safe payout read-model cutover in `getEligibleBookings`; remaining Step 5 scope is FIFO writer wiring and Step 5.5 admin endpoints.
 - **No in-flight feature branches expected on `main`** — last 25 commits are merged squash-merges. verified.
 
 ## What is currently shipped (production-relevant)
@@ -49,12 +49,12 @@
 | Step 3b — `getEffectiveHourlyPence` + per-minute helper | SHIPPED PR #169 | |
 | Step 4 — Phase 2A behavioural cutover (per-instructor credits) | SHIPPED via PR #176 + hotfix PR #177 | First attempt PR #174 was reverted by #175 (emergency flip). Q1 audit verified zero customer impact. `PHASE_2A_IMPLEMENTED=true` on prod. |
 | Step 4.5 — daily credit-divergence cron + Plans A / B1 / B3 + chip #3 | SHIPPED PRs #179 / #180 / #182 / #183 / #184 / #186 / #187 | Drift trajectory: 34 → 13 → 4 → 3 → 0. |
-| Step 5 — BCS + FIFO | GROUNDWORK IN PROGRESS | Current `main` already has `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, pence allocator tests, and read-only path-aware missing active BCS coverage detection in `api/cron-credit-reconcile.js`. Fraser accepted `booking_credit_sources.school_id` plus three writer-policy decisions on 2026-05-21. PR #194's BCS `school_id` migration was applied once on prod and post-diagnostic verified `school_id` exists/NOT NULL/default 1, FK + `idx_bcs_school` exist, null rows = 0, mismatch query = `[]`. Remaining scope is FIFO writer wiring, payout/simulation wiring, and behaviour tests. |
+| Step 5 — BCS + FIFO | SLICED ROLLOUT | Current `main` already has `booking_credit_sources`, `credit_source_adjustments`, BCS indexes, `UNIQUE (booking_id, credit_transaction_id)`, pence allocator tests, and read-only path-aware missing active BCS coverage detection in `api/cron-credit-reconcile.js`. Fraser accepted `booking_credit_sources.school_id` plus three writer-policy decisions on 2026-05-21. PR #194's BCS `school_id` migration was applied once on prod and post-diagnostic verified `school_id` exists/NOT NULL/default 1, FK + `idx_bcs_school` exist, null rows = 0, mismatch query = `[]`. PR #211 and PR #212 are merged; latest prod read-only reconcile after #212 returned `drift_count=0`, `missing_bcs_count=0`, `missing_bcs_summary=[]`, `missing_bcs_truncated=false`, `alert_sent=false` (operator report 2026-05-25). This PR cuts the payout read model over to shared `getEligibleBookings`: prefer `lesson_bookings.list_price_pence`, use active BCS Stripe-fee sums when present, and exclude active instructor-absorbed BCS rows. Remaining scope is FIFO writer wiring and Step 5.5 admin endpoints. |
 
 ### Cron drift watch
 
 - Daily 08:30 UTC cron `api/cron-credit-reconcile.js`. Returns JSON with `drift_count`, `drift_summary`, `alert_sent`, plus separate read-only path-aware BCS attribution coverage fields `missing_bcs_count`, `missing_bcs_summary`, and `missing_bcs_truncated`. The primary missing count is actionable post-writer coverage, not rollout-window historical gaps.
-- Last observed `drift_count = 0` at 2026-05-21 12:45:40 UTC. verified
+- Last observed post-PR-#212 read-only output (operator report 2026-05-25): `drift_count=0`, `missing_bcs_count=0`, `missing_bcs_summary=[]`, `missing_bcs_truncated=false`, `alert_sent=false`. verified
 - Email alert recipient: `ERROR_ALERT_EMAIL` (= `coachcarteruk@gmail.com` in prod).
 
 ### Known-but-deliberately-untouched data (do NOT auto-fix)

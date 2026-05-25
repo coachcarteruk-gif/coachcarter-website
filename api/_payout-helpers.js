@@ -95,23 +95,44 @@ async function getEligibleBookings(sql, instructorId, payoutsStartDate = null) {
            lb.start_time,
            lb.end_time,
            lb.status,
-           CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL
-             THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
-             ELSE COALESCE(lt.price_pence, 8250)
-           END AS price_pence,
-           COALESCE(lb.stripe_fee_pence, 0) AS stripe_fee_pence,
+           COALESCE(
+             lb.list_price_pence,
+             CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL
+               THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
+               ELSE COALESCE(lt.price_pence, 8250)
+             END
+           ) AS price_pence,
+           CASE WHEN active_bcs_fees.active_bcs_count > 0
+             THEN active_bcs_fees.stripe_fee_pence
+             ELSE COALESCE(lb.stripe_fee_pence, 0)
+           END AS stripe_fee_pence,
            COALESCE(lt.duration_minutes, 90) AS duration_minutes,
            COALESCE(lt.name, 'Standard Lesson') AS lesson_type_name
       FROM lesson_bookings lb
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       LEFT JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
+      LEFT JOIN (
+        SELECT booking_id,
+               COALESCE(SUM(stripe_fee_pence), 0)::int AS stripe_fee_pence,
+               COUNT(*)::int AS active_bcs_count
+          FROM booking_credit_sources
+         WHERE refunded_at IS NULL
+         GROUP BY booking_id
+      ) active_bcs_fees ON active_bcs_fees.booking_id = lb.id
       LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
      WHERE lb.instructor_id = ${instructorId}
        AND pli.id IS NULL
        AND (${payoutsStartDate}::date IS NULL OR lb.scheduled_date >= ${payoutsStartDate}::date)
        AND lb.status = ${CHARGEABLE}
        AND COALESCE(lu.is_test_account, FALSE) = FALSE
+       AND NOT EXISTS (
+         SELECT 1
+           FROM booking_credit_sources absorbed_bcs
+          WHERE absorbed_bcs.booking_id = lb.id
+            AND absorbed_bcs.refunded_at IS NULL
+            AND absorbed_bcs.absorbed_by = 'instructor'
+       )
      ORDER BY lb.scheduled_date ASC
   `;
 }
