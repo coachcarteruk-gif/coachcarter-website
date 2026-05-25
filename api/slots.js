@@ -2963,8 +2963,9 @@ async function handleReschedule(req, res) {
       instructor_name: booking.instructor_name
     });
 
-    // Email to learner
-    await mailer.sendMail({
+    // Notifications are best-effort: reschedule DB writes are already complete.
+    try {
+      await mailer.sendMail({
       from:    'CoachCarter <bookings@coachcarter.uk>',
       to:      booking.learner_email,
       subject: `Lesson rescheduled — now ${newDateStr} at ${newTime}`,
@@ -2993,11 +2994,15 @@ async function handleReschedule(req, res) {
         content:  icsContent,
         contentType: 'text/calendar; method=PUBLISH'
       }]
-    });
+      });
+    } catch (emailErr) {
+      console.warn('Learner reschedule email failed:', emailErr.message);
+    }
 
     // Email to instructor (skip demo)
     if (!isDemoBooking) {
-      await mailer.sendMail({
+      try {
+        await mailer.sendMail({
         from:    'CoachCarter <system@coachcarter.uk>',
         to:      booking.instructor_email,
         subject: `Lesson rescheduled — ${booking.learner_name}`,
@@ -3016,17 +3021,28 @@ async function handleReschedule(req, res) {
             </a>
           </p>
         `
-      });
+        });
+      } catch (emailErr) {
+        console.warn('Instructor reschedule email failed:', emailErr.message);
+      }
     }
 
     // WhatsApp notifications
-    await sendWhatsApp(booking.learner_phone,
+    try {
+      await sendWhatsApp(booking.learner_phone,
       `🔄 Lesson rescheduled!\n\n❌ Was: ${oldDateStr} at ${oldTime}\n✅ Now: ${newDateStr} at ${newTime}\n🚗 Instructor: ${booking.instructor_name}\n\nView bookings: https://coachcarter.uk/learner/`
     );
+    } catch (waErr) {
+      console.warn('Learner reschedule WhatsApp failed:', waErr.message);
+    }
     if (!isDemoBooking) {
-      await sendWhatsApp(booking.instructor_phone,
+      try {
+        await sendWhatsApp(booking.instructor_phone,
         `🔄 Lesson rescheduled\n\n👤 ${booking.learner_name}\n❌ Was: ${oldDateStr} at ${oldTime}\n✅ Now: ${newDateStr} at ${newTime}\n\nView schedule: https://coachcarter.uk/instructor/`
-      );
+        );
+      } catch (waErr) {
+        console.warn('Instructor reschedule WhatsApp failed:', waErr.message);
+      }
     }
 
     return res.json({
