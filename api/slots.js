@@ -38,7 +38,11 @@ const { lockBalanceAdjustLCB } = require('./_credit-grant');
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
-const { markBookingCreditSourcesRefunded, restoreBookingCreditSourcesActive } = require('./_bcs-refund-marker');
+const {
+  markBookingCreditSourcesRefunded,
+  restoreBookingCreditSourcesActive,
+  copyRefundedBookingCreditSources,
+} = require('./_bcs-refund-marker');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
@@ -2896,8 +2900,6 @@ async function handleReschedule(req, res) {
       SET status = ${REFUNDED}, credit_returned = TRUE, cancelled_at = NOW()
       WHERE id = ${booking_id}
     `;
-    // Transitional Step 5 behaviour: the replacement booking remains
-    // unattributed, so the old booking's active BCS rows must stop counting.
     const refundedBcsIds = await markBookingCreditSourcesRefunded(sql, { bookingId: booking_id, schoolId });
 
     // 2. Create new booking. Carry the Stripe fee snapshot forward — it was
@@ -2948,6 +2950,11 @@ async function handleReschedule(req, res) {
       }
       throw insertErr;
     }
+    await copyRefundedBookingCreditSources(sql, {
+      bcsIds: refundedBcsIds,
+      newBookingId: newBooking.id,
+      schoolId,
+    });
 
     // Send notifications
     const oldDateStr = formatDateDisplay(oldDate);

@@ -228,14 +228,20 @@ async function seedLcb(learnerId, instructorId, minutes) {
   `;
 }
 
-async function attachBcs(bookingId, creditTransactionId, minutes = 90) {
+async function attachBcs(bookingId, creditTransactionId, minutes = 90, opts = {}) {
+  const {
+    ratePencePerMinute = 92,
+    contributionPence = 8280,
+    stripeFeePence = 144,
+    absorbedBy = null,
+  } = opts;
   const [row] = await sql`
     INSERT INTO booking_credit_sources
       (school_id, booking_id, credit_transaction_id, minutes_drawn,
-       rate_pence_per_minute, contribution_pence, stripe_fee_pence)
+       rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
     VALUES
       (${SCHOOL_ID}, ${bookingId}, ${creditTransactionId}, ${minutes},
-       0, 0, 0)
+       ${ratePencePerMinute}, ${contributionPence}, ${stripeFeePence}, ${absorbedBy})
     RETURNING id
   `;
   return row.id;
@@ -243,7 +249,9 @@ async function attachBcs(bookingId, creditTransactionId, minutes = 90) {
 
 async function getBcsRowsForBooking(bookingId) {
   return sql`
-    SELECT id, booking_id, credit_transaction_id, minutes_drawn, refunded_at
+    SELECT id, booking_id, credit_transaction_id, minutes_drawn,
+           rate_pence_per_minute, contribution_pence, stripe_fee_pence,
+           absorbed_by, refunded_at
       FROM booking_credit_sources
      WHERE booking_id = ${bookingId}
        AND school_id = ${SCHOOL_ID}
@@ -383,12 +391,14 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     if (!target) {
       throw new Error(`Test branch lacks instructors.id = ${TARGET_INSTRUCTOR_ID} — required.`);
     }
-    const [hasBcs] = await sql`
-      SELECT 1 FROM information_schema.tables
-       WHERE table_schema = 'public' AND table_name = 'booking_credit_sources'
+    const [hasBcsSchoolId] = await sql`
+      SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'booking_credit_sources'
+         AND column_name = 'school_id'
     `;
-    if (!hasBcs) {
-      throw new Error('Test branch lacks booking_credit_sources — required.');
+    if (!hasBcsSchoolId) {
+      throw new Error('Test branch lacks booking_credit_sources.school_id - apply latest main migrations to the isolated branch first.');
     }
   });
 
@@ -477,11 +487,17 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(newB.minutes_deducted).toBe(90);
   });
 
-  test('C1b: instructor reschedule marks active BCS rows refunded on the old booking', async () => {
+  test('C1b: instructor reschedule refunds old BCS and copies allocation to replacement booking', async () => {
     const learnerId = await makeLearner('c1b');
+    await seedLcb(learnerId, TARGET_INSTRUCTOR_ID, 90);
     const creditTxId = await makeCreditSource(learnerId, TARGET_INSTRUCTOR_ID, 180);
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 32 });
-    const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90);
+    const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90, {
+      ratePencePerMinute: 91,
+      contributionPence: 8190,
+      stripeFeePence: 143,
+      absorbedBy: 'platform',
+    });
 
     const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 64);
 
@@ -507,12 +523,34 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(oldBcsRows[0].refunded_at).toBeTruthy();
 
     const newBcsRows = await getBcsRowsForBooking(res.body.new_booking_id);
-    expect(newBcsRows).toHaveLength(0);
+    expect(newBcsRows).toHaveLength(1);
+    expect(newBcsRows[0].id).not.toBe(oldBcsId);
+    expect(newBcsRows[0].refunded_at).toBeNull();
+    expect(newBcsRows[0].credit_transaction_id).toBe(creditTxId);
+    expect(newBcsRows[0].minutes_drawn).toBe(90);
+    expect(newBcsRows[0].rate_pence_per_minute).toBe(91);
+    expect(newBcsRows[0].contribution_pence).toBe(8190);
+    expect(newBcsRows[0].stripe_fee_pence).toBe(143);
+    expect(newBcsRows[0].absorbed_by).toBe('platform');
+
+    const recomputed = await recomputePair(learnerId, TARGET_INSTRUCTOR_ID);
+    expect(recomputed.granted_minutes).toBe(180);
+    expect(recomputed.unattributed_booking_draw_minutes).toBe(0);
+    expect(recomputed.active_bcs_draw_minutes).toBe(90);
+    expect(recomputed.computed_ledger_minutes).toBe(90);
+    expect(recomputed.lcb_balance_minutes).toBe(90);
+    expect(recomputed.drift_minutes).toBe(0);
+
+    const cron = await runCron(sql, { sendAlerts: false });
+    const row = cron.drift_summary.find(r => r.learner_id === learnerId && r.instructor_id === TARGET_INSTRUCTOR_ID);
+    expect(row).toBeUndefined();
   });
 
   test('C2: instructor reschedule INSERT-failure rollback flips credit_returned BACK to FALSE', async () => {
     const learnerId = await makeLearner('c2');
+    const creditTxId = await makeCreditSource(learnerId, TARGET_INSTRUCTOR_ID, 180);
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 31 });
+    const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90);
 
     // Pre-seed a CLASH at the target slot to force the INSERT to 23505.
     const clashLearnerId = await makeLearner('c2-clash');
@@ -544,6 +582,19 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(old.status).toBe('scheduled');
     expect(old.credit_returned).toBe(false);    // <-- the rollback fix
     expect(old.cancelled_at).toBeNull();
+
+    const oldBcsRows = await getBcsRowsForBooking(oldBooking.id);
+    expect(oldBcsRows).toHaveLength(1);
+    expect(oldBcsRows[0].id).toBe(oldBcsId);
+    expect(oldBcsRows[0].refunded_at).toBeNull();
+
+    const copiedRows = await sql`
+      SELECT id FROM booking_credit_sources
+       WHERE school_id = ${SCHOOL_ID}
+         AND credit_transaction_id = ${creditTxId}
+         AND booking_id <> ${oldBooking.id}
+    `;
+    expect(copiedRows).toHaveLength(0);
   });
 
   test('C3: learner reschedule flips credit_returned=TRUE on the old booking', async () => {
@@ -585,12 +636,17 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(newB.credit_returned).toBe(false);
   });
 
-  test('C3b: learner reschedule refunds old BCS row and leaves replacement unattributed', async () => {
+  test('C3b: learner reschedule refunds old BCS and copies allocation to replacement booking', async () => {
     const learnerId = await makeLearner('c3b');
     await seedLcb(learnerId, TARGET_INSTRUCTOR_ID, 90);
     const creditTxId = await makeCreditSource(learnerId, TARGET_INSTRUCTOR_ID, 180);
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 37 });
-    const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90);
+    const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90, {
+      ratePencePerMinute: 92,
+      contributionPence: 8280,
+      stripeFeePence: 144,
+      absorbedBy: 'platform',
+    });
 
     const newDate = new Date(Date.now() + 74 * 86400000).toISOString().slice(0, 10);
     const newHour = String(12 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
@@ -622,12 +678,20 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(oldBcsRows[0].refunded_at).toBeTruthy();
 
     const newBcsRows = await getBcsRowsForBooking(res.body.new_booking_id);
-    expect(newBcsRows).toHaveLength(0);
+    expect(newBcsRows).toHaveLength(1);
+    expect(newBcsRows[0].id).not.toBe(oldBcsId);
+    expect(newBcsRows[0].refunded_at).toBeNull();
+    expect(newBcsRows[0].credit_transaction_id).toBe(creditTxId);
+    expect(newBcsRows[0].minutes_drawn).toBe(90);
+    expect(newBcsRows[0].rate_pence_per_minute).toBe(92);
+    expect(newBcsRows[0].contribution_pence).toBe(8280);
+    expect(newBcsRows[0].stripe_fee_pence).toBe(144);
+    expect(newBcsRows[0].absorbed_by).toBe('platform');
 
     const recomputed = await recomputePair(learnerId, TARGET_INSTRUCTOR_ID);
     expect(recomputed.granted_minutes).toBe(180);
-    expect(recomputed.unattributed_booking_draw_minutes).toBe(90);
-    expect(recomputed.active_bcs_draw_minutes).toBe(0);
+    expect(recomputed.unattributed_booking_draw_minutes).toBe(0);
+    expect(recomputed.active_bcs_draw_minutes).toBe(90);
     expect(recomputed.computed_ledger_minutes).toBe(90);
     expect(recomputed.lcb_balance_minutes).toBe(90);
     expect(recomputed.drift_minutes).toBe(0);
@@ -639,7 +703,9 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
 
   test('C4: learner reschedule INSERT-failure rollback flips credit_returned BACK to FALSE', async () => {
     const learnerId = await makeLearner('c4');
+    const creditTxId = await makeCreditSource(learnerId, TARGET_INSTRUCTOR_ID, 180);
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 36 });
+    const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90);
 
     // Pre-seed a clash to force INSERT failure.
     const clashLearnerId = await makeLearner('c4-clash');
@@ -667,6 +733,19 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(old.status).toBe('scheduled');
     expect(old.credit_returned).toBe(false);    // <-- the rollback fix
     expect(old.cancelled_at).toBeNull();
+
+    const oldBcsRows = await getBcsRowsForBooking(oldBooking.id);
+    expect(oldBcsRows).toHaveLength(1);
+    expect(oldBcsRows[0].id).toBe(oldBcsId);
+    expect(oldBcsRows[0].refunded_at).toBeNull();
+
+    const copiedRows = await sql`
+      SELECT id FROM booking_credit_sources
+       WHERE school_id = ${SCHOOL_ID}
+         AND credit_transaction_id = ${creditTxId}
+         AND booking_id <> ${oldBooking.id}
+    `;
+    expect(copiedRows).toHaveLength(0);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
