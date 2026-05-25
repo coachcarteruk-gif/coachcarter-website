@@ -82,6 +82,7 @@ let runCron;
 let RETRO_MARKER_KEY;
 let createdLearnerIds = [];
 let createdBookingIds = [];
+let createdCreditTxIds = [];
 
 // CSRF double-submit value. Used in both the JWT-bearing cookie string
 // (cc_csrf=...) AND the matching `x-csrf-token` header so api/_csrf.js's
@@ -163,12 +164,124 @@ async function makeBooking(learnerId, instructorId, opts = {}) {
   return booking;
 }
 
+async function makeCreditSource(learnerId, instructorId, minutes = 180) {
+  const [row] = await sql`
+    INSERT INTO credit_transactions
+      (learner_id, instructor_id, school_id, type, credits, minutes,
+       amount_pence, payment_method, source)
+    VALUES
+      (${learnerId}, ${instructorId}, ${SCHOOL_ID}, 'legacy_grandfather', 0, ${minutes},
+       0, 'test', 'reconciliation')
+    RETURNING id
+  `;
+  createdCreditTxIds.push(row.id);
+  return row.id;
+}
+
+async function seedLcb(learnerId, instructorId, minutes) {
+  await sql`
+    INSERT INTO learner_credit_balances (learner_id, instructor_id, school_id, balance_minutes)
+    VALUES (${learnerId}, ${instructorId}, ${SCHOOL_ID}, ${minutes})
+    ON CONFLICT (learner_id, instructor_id) DO UPDATE
+      SET balance_minutes = EXCLUDED.balance_minutes,
+          school_id = EXCLUDED.school_id,
+          updated_at = NOW()
+  `;
+}
+
+async function attachBcs(bookingId, creditTransactionId, minutes = 90) {
+  const [row] = await sql`
+    INSERT INTO booking_credit_sources
+      (school_id, booking_id, credit_transaction_id, minutes_drawn,
+       rate_pence_per_minute, contribution_pence, stripe_fee_pence)
+    VALUES
+      (${SCHOOL_ID}, ${bookingId}, ${creditTransactionId}, ${minutes},
+       0, 0, 0)
+    RETURNING id
+  `;
+  return row.id;
+}
+
+async function getBcsRowsForBooking(bookingId) {
+  return sql`
+    SELECT id, booking_id, credit_transaction_id, minutes_drawn, refunded_at
+      FROM booking_credit_sources
+     WHERE booking_id = ${bookingId}
+       AND school_id = ${SCHOOL_ID}
+     ORDER BY id
+  `;
+}
+
+async function recomputePair(learnerId, instructorId) {
+  const [row] = await sql`
+    WITH purchases AS (
+      SELECT COALESCE(SUM(ct.minutes), 0)::int AS granted_minutes
+        FROM credit_transactions ct
+       WHERE ct.school_id = ${SCHOOL_ID}
+         AND ct.learner_id = ${learnerId}
+         AND ct.instructor_id = ${instructorId}
+    ),
+    unattributed_booking_draws AS (
+      SELECT COALESCE(SUM(lb.minutes_deducted), 0)::int AS unattributed_booking_draw_minutes
+        FROM lesson_bookings lb
+       WHERE lb.school_id = ${SCHOOL_ID}
+         AND lb.learner_id = ${learnerId}
+         AND lb.instructor_id = ${instructorId}
+         AND lb.credit_returned = FALSE
+         AND lb.minutes_deducted IS NOT NULL
+         AND lb.minutes_deducted > 0
+         AND NOT EXISTS (
+           SELECT 1 FROM booking_credit_sources bcs
+            WHERE bcs.booking_id = lb.id
+              AND bcs.school_id = ${SCHOOL_ID}
+         )
+    ),
+    active_bcs_draws AS (
+      SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS active_bcs_draw_minutes
+        FROM booking_credit_sources bcs
+        JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
+       WHERE bcs.refunded_at IS NULL
+         AND bcs.school_id = ${SCHOOL_ID}
+         AND ct.school_id = ${SCHOOL_ID}
+         AND ct.learner_id = ${learnerId}
+         AND ct.instructor_id = ${instructorId}
+    ),
+    csa_draws AS (
+      SELECT COALESCE(SUM(csa.minutes_adjusted), 0)::int AS csa_adjusted_minutes
+        FROM credit_source_adjustments csa
+        JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id
+       WHERE ct.school_id = ${SCHOOL_ID}
+         AND ct.learner_id = ${learnerId}
+         AND ct.instructor_id = ${instructorId}
+    ),
+    lcb AS (
+      SELECT COALESCE(MAX(balance_minutes), 0)::int AS lcb_balance_minutes
+        FROM learner_credit_balances
+       WHERE school_id = ${SCHOOL_ID}
+         AND learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+    )
+    SELECT
+      p.granted_minutes,
+      u.unattributed_booking_draw_minutes,
+      b.active_bcs_draw_minutes,
+      c.csa_adjusted_minutes,
+      (p.granted_minutes - u.unattributed_booking_draw_minutes - b.active_bcs_draw_minutes - c.csa_adjusted_minutes)::int AS computed_ledger_minutes,
+      l.lcb_balance_minutes,
+      (l.lcb_balance_minutes - (p.granted_minutes - u.unattributed_booking_draw_minutes - b.active_bcs_draw_minutes - c.csa_adjusted_minutes))::int AS drift_minutes
+      FROM purchases p, unattributed_booking_draws u, active_bcs_draws b, csa_draws c, lcb l
+  `;
+  return row;
+}
+
 async function getBooking(id) {
   const [row] = await sql`
-    SELECT id, status, credit_returned, credit_forfeited, cancelled_at::text AS cancelled_at,
+      SELECT id, status, credit_returned, credit_forfeited, cancelled_at::text AS cancelled_at,
            minutes_deducted, scheduled_date::text AS scheduled_date,
            start_time::text AS start_time
-      FROM lesson_bookings WHERE id = ${id}
+      FROM lesson_bookings
+     WHERE id = ${id}
+       AND school_id = ${SCHOOL_ID}
   `;
   return row;
 }
@@ -223,9 +336,20 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     `;
     await sql`DELETE FROM migration_markers WHERE key = ${RETRO_MARKER_KEY}`;
 
-    const [target] = await sql`SELECT id FROM instructors WHERE id = ${TARGET_INSTRUCTOR_ID}`;
+    const [target] = await sql`
+      SELECT id FROM instructors
+       WHERE id = ${TARGET_INSTRUCTOR_ID}
+         AND school_id = ${SCHOOL_ID}
+    `;
     if (!target) {
       throw new Error(`Test branch lacks instructors.id = ${TARGET_INSTRUCTOR_ID} — required.`);
+    }
+    const [hasBcs] = await sql`
+      SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'booking_credit_sources'
+    `;
+    if (!hasBcs) {
+      throw new Error('Test branch lacks booking_credit_sources — required.');
     }
   });
 
@@ -233,12 +357,40 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     if (!ENABLED) return;
     try {
       if (createdBookingIds.length) {
-        await sql`DELETE FROM lesson_bookings WHERE id = ANY(${createdBookingIds})`;
+        await sql`
+          DELETE FROM booking_credit_sources
+           WHERE booking_id = ANY(${createdBookingIds})
+             AND school_id = ${SCHOOL_ID}
+        `;
+        await sql`
+          DELETE FROM lesson_bookings
+           WHERE id = ANY(${createdBookingIds})
+             AND school_id = ${SCHOOL_ID}
+        `;
+      }
+      if (createdCreditTxIds.length) {
+        await sql`
+          DELETE FROM credit_transactions
+           WHERE id = ANY(${createdCreditTxIds})
+             AND school_id = ${SCHOOL_ID}
+        `;
       }
       if (createdLearnerIds.length) {
-        await sql`DELETE FROM credit_transactions WHERE learner_id = ANY(${createdLearnerIds})`;
-        await sql`DELETE FROM learner_credit_balances WHERE learner_id = ANY(${createdLearnerIds})`;
-        await sql`DELETE FROM learner_users WHERE id = ANY(${createdLearnerIds})`;
+        await sql`
+          DELETE FROM credit_transactions
+           WHERE learner_id = ANY(${createdLearnerIds})
+             AND school_id = ${SCHOOL_ID}
+        `;
+        await sql`
+          DELETE FROM learner_credit_balances
+           WHERE learner_id = ANY(${createdLearnerIds})
+             AND school_id = ${SCHOOL_ID}
+        `;
+        await sql`
+          DELETE FROM learner_users
+           WHERE id = ANY(${createdLearnerIds})
+             AND school_id = ${SCHOOL_ID}
+        `;
       }
       await sql`DELETE FROM migration_markers WHERE key = ${RETRO_MARKER_KEY}`;
     } catch (_) {}
@@ -288,6 +440,41 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(newB.minutes_deducted).toBe(90);
   });
 
+  test('C1b: instructor reschedule marks active BCS rows refunded on the old booking', async () => {
+    const learnerId = await makeLearner('c1b');
+    const creditTxId = await makeCreditSource(learnerId, TARGET_INSTRUCTOR_ID, 180);
+    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 32 });
+    const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90);
+
+    const newDate = new Date(Date.now() + 64 * 86400000).toISOString().slice(0, 10);
+    const newHour = String(15 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
+    const newStartTime = `${newHour}:00`;
+
+    const instructorHandler = require('../api/instructor');
+    const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
+
+    const req = fakeReq({
+      method: 'POST',
+      query: { action: 'reschedule-booking' },
+      headers: { cookie: `cc_instructor=${jwt}` },
+      body: { booking_id: oldBooking.id, new_date: newDate, new_start_time: newStartTime },
+    });
+    const res = fakeRes();
+    await instructorHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.ok).toBe(true);
+    if (res.body.new_booking_id) createdBookingIds.push(res.body.new_booking_id);
+
+    const oldBcsRows = await getBcsRowsForBooking(oldBooking.id);
+    expect(oldBcsRows).toHaveLength(1);
+    expect(oldBcsRows[0].id).toBe(oldBcsId);
+    expect(oldBcsRows[0].refunded_at).toBeTruthy();
+
+    const newBcsRows = await getBcsRowsForBooking(res.body.new_booking_id);
+    expect(newBcsRows).toHaveLength(0);
+  });
+
   test('C2: instructor reschedule INSERT-failure rollback flips credit_returned BACK to FALSE', async () => {
     const learnerId = await makeLearner('c2');
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 31 });
@@ -311,7 +498,9 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     // this insert resolves; track it on the next afterAll cleanup pass.
     const [clashRow] = await sql`
       SELECT id FROM lesson_bookings
-       WHERE learner_id = ${clashLearnerId} ORDER BY id DESC LIMIT 1
+       WHERE learner_id = ${clashLearnerId}
+         AND school_id = ${SCHOOL_ID}
+       ORDER BY id DESC LIMIT 1
     `;
     if (clashRow) createdBookingIds.push(clashRow.id);
 
@@ -378,6 +567,58 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(newB.credit_returned).toBe(false);
   });
 
+  test('C3b: learner reschedule refunds old BCS row and leaves replacement unattributed', async () => {
+    const learnerId = await makeLearner('c3b');
+    await seedLcb(learnerId, TARGET_INSTRUCTOR_ID, 90);
+    const creditTxId = await makeCreditSource(learnerId, TARGET_INSTRUCTOR_ID, 180);
+    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 37 });
+    const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90);
+
+    const newDate = new Date(Date.now() + 74 * 86400000).toISOString().slice(0, 10);
+    const newHour = String(12 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
+    const newStartTime = `${newHour}:00`;
+
+    const slotsHandler = require('../api/slots');
+    const jwt = makeLearnerJwt(learnerId);
+
+    const req = fakeReq({
+      method: 'POST',
+      query: { action: 'reschedule' },
+      headers: { cookie: `cc_learner=${jwt}` },
+      body: { booking_id: oldBooking.id, new_date: newDate, new_start_time: newStartTime },
+    });
+    const res = fakeRes();
+    await slotsHandler(req, res);
+
+    if (res.statusCode !== 200) {
+      console.error('C3b unexpected response:', res.statusCode, res.body);
+    }
+    expect(res.statusCode).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    if (res.body.new_booking_id) createdBookingIds.push(res.body.new_booking_id);
+
+    const oldBcsRows = await getBcsRowsForBooking(oldBooking.id);
+    expect(oldBcsRows).toHaveLength(1);
+    expect(oldBcsRows[0].id).toBe(oldBcsId);
+    expect(oldBcsRows[0].refunded_at).toBeTruthy();
+
+    const newBcsRows = await getBcsRowsForBooking(res.body.new_booking_id);
+    expect(newBcsRows).toHaveLength(0);
+
+    const recomputed = await recomputePair(learnerId, TARGET_INSTRUCTOR_ID);
+    expect(recomputed.granted_minutes).toBe(180);
+    expect(recomputed.unattributed_booking_draw_minutes).toBe(90);
+    expect(recomputed.active_bcs_draw_minutes).toBe(0);
+    expect(recomputed.computed_ledger_minutes).toBe(90);
+    expect(recomputed.lcb_balance_minutes).toBe(90);
+    expect(recomputed.drift_minutes).toBe(0);
+
+    const cron = await runCron(sql, { sendAlerts: false });
+    const row = cron.drift_summary.find(r => r.learner_id === learnerId && r.instructor_id === TARGET_INSTRUCTOR_ID);
+    expect(row).toBeUndefined();
+  });
+
   test('C4: learner reschedule INSERT-failure rollback flips credit_returned BACK to FALSE', async () => {
     const learnerId = await makeLearner('c4');
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 36 });
@@ -398,7 +639,9 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     `;
     const [clashRow] = await sql`
       SELECT id FROM lesson_bookings
-       WHERE learner_id = ${clashLearnerId} ORDER BY id DESC LIMIT 1
+       WHERE learner_id = ${clashLearnerId}
+         AND school_id = ${SCHOOL_ID}
+       ORDER BY id DESC LIMIT 1
     `;
     if (clashRow) createdBookingIds.push(clashRow.id);
 

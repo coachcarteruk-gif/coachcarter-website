@@ -38,6 +38,7 @@ const { lockBalanceAdjustLCB } = require('./_credit-grant');
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
+const { markBookingCreditSourcesRefunded, restoreBookingCreditSourcesActive } = require('./_bcs-refund-marker');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
@@ -2892,6 +2893,9 @@ async function handleReschedule(req, res) {
       SET status = ${REFUNDED}, credit_returned = TRUE, cancelled_at = NOW()
       WHERE id = ${booking_id}
     `;
+    // Transitional Step 5 behaviour: the replacement booking remains
+    // unattributed, so the old booking's active BCS rows must stop counting.
+    const refundedBcsIds = await markBookingCreditSourcesRefunded(sql, { bookingId: booking_id, schoolId });
 
     // 2. Create new booking. Carry the Stripe fee snapshot forward — it was
     // paid on the original charge and the lesson is still happening, just at
@@ -2935,6 +2939,7 @@ async function handleReschedule(req, res) {
         SET status = ${SCHEDULED}, credit_returned = FALSE, cancelled_at = NULL
         WHERE id = ${booking_id}
       `;
+      await restoreBookingCreditSourcesActive(sql, { bcsIds: refundedBcsIds, schoolId });
       if (insertErr.message?.includes('uq_booking_slot') || insertErr.code === '23505') {
         return res.status(409).json({ error: 'That slot was just booked by someone else. Please choose another.' });
       }
