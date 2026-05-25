@@ -279,12 +279,19 @@ SELECT id, scheduled_date, start_time, status, minutes_deducted, credit_returned
 -- BCS COVERAGE DIAGNOSTIC (read-only, BCS modes only)
 -- ============================================================================
 -- Mirrors api/cron-credit-reconcile.js missing_bcs_count /
--- missing_bcs_summary. The cutover is the first durable BCS write per school,
--- so intentionally historical pre-cutover bookings are excluded without
--- mixing tenants.
+-- missing_bcs_summary. The actionable cutover is path-aware because Step 5
+-- shipped in slices. A single per-school BCS marker is too broad: school 1's
+-- first BCS row was a free-trial write before credit-booking, reschedule, and
+-- instructor writers had all shipped.
+--
+-- Diagnostic rollout thresholds:
+--   learner credit booking:      2026-05-22 07:41:32 UTC (#203)
+--   reschedule replacement:      2026-05-25 19:30:31 UTC (#208)
+--   instructor-created credit:   2026-05-25 20:49:42 UTC (#210)
 --
 -- Active credit-deducting booking =
---   * created after the first booking_credit_sources.created_at for the same school
+--   * payment_method = 'credit'
+--   * created after that path's BCS writer shipped
 --   * status <> 'refunded'
 --   * credit_returned = FALSE
 --   * minutes_deducted > 0
@@ -294,47 +301,46 @@ SELECT id, scheduled_date, start_time, status, minutes_deducted, credit_returned
 --   * booking_credit_sources.booking_id = lesson_bookings.id
 --   * booking_credit_sources.refunded_at IS NULL
 
-WITH bcs_cutover_by_school AS (
-  SELECT school_id, MIN(created_at) AS cutover_at
-    FROM booking_credit_sources
-   GROUP BY school_id
-),
-missing AS (
+WITH credit_booking_candidates AS (
   SELECT
     lb.id AS booking_id,
     lb.school_id,
-    lb.learner_id,
-    lb.instructor_id,
     lb.created_at,
-    lb.scheduled_date,
-    lb.start_time,
-    lb.status,
-    lb.minutes_deducted,
-    lb.credit_returned
+    CASE
+      WHEN lb.rescheduled_from IS NOT NULL THEN 'reschedule_replacement'
+      WHEN lb.created_by = 'instructor' THEN 'instructor_credit_booking'
+      WHEN COALESCE(lb.created_by, 'learner') = 'learner' THEN 'learner_credit_booking'
+      ELSE NULL
+    END AS bcs_writer_path,
+    CASE
+      WHEN lb.rescheduled_from IS NOT NULL THEN '2026-05-25T19:30:31Z'::timestamptz
+      WHEN lb.created_by = 'instructor' THEN '2026-05-25T20:49:42Z'::timestamptz
+      WHEN COALESCE(lb.created_by, 'learner') = 'learner' THEN '2026-05-22T07:41:32Z'::timestamptz
+      ELSE NULL::timestamptz
+    END AS writer_cutover_at
   FROM lesson_bookings lb
-  JOIN bcs_cutover_by_school bc ON bc.school_id = lb.school_id
-  WHERE bc.cutover_at IS NOT NULL
-    AND lb.created_at >= bc.cutover_at
+  WHERE lb.payment_method = 'credit'
     AND lb.status <> 'refunded'
     AND COALESCE(lb.credit_returned, FALSE) = FALSE
     AND COALESCE(lb.minutes_deducted, 0) > 0
+),
+missing AS (
+  SELECT c.booking_id
+  FROM credit_booking_candidates c
+  WHERE c.writer_cutover_at IS NOT NULL
+    AND c.created_at >= c.writer_cutover_at
     AND NOT EXISTS (
       SELECT 1
         FROM booking_credit_sources bcs
-       WHERE bcs.school_id = lb.school_id
-         AND bcs.booking_id = lb.id
+       WHERE bcs.school_id = c.school_id
+         AND bcs.booking_id = c.booking_id
          AND bcs.refunded_at IS NULL
     )
 )
 SELECT COUNT(*)::int AS missing_bcs_count
   FROM missing;
 
-WITH bcs_cutover_by_school AS (
-  SELECT school_id, MIN(created_at) AS cutover_at
-    FROM booking_credit_sources
-   GROUP BY school_id
-),
-missing AS (
+WITH credit_booking_candidates AS (
   SELECT
     lb.id AS booking_id,
     lb.school_id,
@@ -345,19 +351,35 @@ missing AS (
     lb.start_time,
     lb.status,
     lb.minutes_deducted,
-    lb.credit_returned
+    lb.credit_returned,
+    CASE
+      WHEN lb.rescheduled_from IS NOT NULL THEN 'reschedule_replacement'
+      WHEN lb.created_by = 'instructor' THEN 'instructor_credit_booking'
+      WHEN COALESCE(lb.created_by, 'learner') = 'learner' THEN 'learner_credit_booking'
+      ELSE NULL
+    END AS bcs_writer_path,
+    CASE
+      WHEN lb.rescheduled_from IS NOT NULL THEN '2026-05-25T19:30:31Z'::timestamptz
+      WHEN lb.created_by = 'instructor' THEN '2026-05-25T20:49:42Z'::timestamptz
+      WHEN COALESCE(lb.created_by, 'learner') = 'learner' THEN '2026-05-22T07:41:32Z'::timestamptz
+      ELSE NULL::timestamptz
+    END AS writer_cutover_at
   FROM lesson_bookings lb
-  JOIN bcs_cutover_by_school bc ON bc.school_id = lb.school_id
-  WHERE bc.cutover_at IS NOT NULL
-    AND lb.created_at >= bc.cutover_at
+  WHERE lb.payment_method = 'credit'
     AND lb.status <> 'refunded'
     AND COALESCE(lb.credit_returned, FALSE) = FALSE
     AND COALESCE(lb.minutes_deducted, 0) > 0
+),
+missing AS (
+  SELECT *
+  FROM credit_booking_candidates c
+  WHERE c.writer_cutover_at IS NOT NULL
+    AND c.created_at >= c.writer_cutover_at
     AND NOT EXISTS (
       SELECT 1
         FROM booking_credit_sources bcs
-       WHERE bcs.school_id = lb.school_id
-         AND bcs.booking_id = lb.id
+       WHERE bcs.school_id = c.school_id
+         AND bcs.booking_id = c.booking_id
          AND bcs.refunded_at IS NULL
     )
 )

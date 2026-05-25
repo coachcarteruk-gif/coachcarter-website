@@ -84,6 +84,12 @@ let branchHasBcs = false;
 let branchHasCsa = false;
 
 const SCHOOL_ID = 1;
+const PRE_LEARNER_BCS_WRITER_AT = '2026-05-22T07:40:00Z';
+const POST_LEARNER_BCS_WRITER_AT = '2026-05-22T07:42:00Z';
+const PRE_RESCHEDULE_BCS_WRITER_AT = '2026-05-25T19:29:00Z';
+const POST_RESCHEDULE_BCS_WRITER_AT = '2026-05-25T19:31:00Z';
+const PRE_INSTRUCTOR_BCS_WRITER_AT = '2026-05-25T20:48:00Z';
+const POST_INSTRUCTOR_BCS_WRITER_AT = '2026-05-25T20:50:00Z';
 const INSTRUCTOR_ID = 1; // Fraser — always exists on any branch off main.
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -294,11 +300,14 @@ async function insertBookingWithMinutes(mins, creditReturned, opts = {}) {
   const endTime   = `${hour}:${String(Math.min(59, parseInt(minute) + 30)).padStart(2, '0')}:00`;
   const status = opts.status || 'scheduled';
   const createdAt = opts.createdAt || null;
+  const createdBy = opts.createdBy || 'learner';
+  const paymentMethod = opts.paymentMethod || 'credit';
+  const rescheduledFrom = opts.rescheduledFrom || null;
   const [row] = await sql`
     INSERT INTO lesson_bookings
-      (learner_id, instructor_id, school_id, scheduled_date, start_time, end_time, status, minutes_deducted, credit_returned, created_at)
+      (learner_id, instructor_id, school_id, scheduled_date, start_time, end_time, status, minutes_deducted, credit_returned, created_at, created_by, payment_method, rescheduled_from)
     VALUES
-      (${testLearnerId}, ${INSTRUCTOR_ID}, ${SCHOOL_ID}, ${dateStr}::date, ${startTime}::time, ${endTime}::time, ${status}, ${mins}, ${creditReturned}, COALESCE(${createdAt}::timestamptz, NOW()))
+      (${testLearnerId}, ${INSTRUCTOR_ID}, ${SCHOOL_ID}, ${dateStr}::date, ${startTime}::time, ${endTime}::time, ${status}, ${mins}, ${creditReturned}, COALESCE(${createdAt}::timestamptz, NOW()), ${createdBy}, ${paymentMethod}, ${rescheduledFrom})
     RETURNING id
   `;
   return row.id;
@@ -768,7 +777,7 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
   // semantics, and the invariant that matching balances keep drift_count
   // stable while missing_bcs_count moves independently.
   // ───────────────────────────────────────────────────────────────────────────
-  test('C10a: BCS coverage diagnostic ignores historical no-BCS booking before cutover', async () => {
+  test('C10a: BCS coverage diagnostic ignores pre-#203 learner credit booking without BCS', async () => {
     const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
     try {
       await resetState();
@@ -780,7 +789,7 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
       const before = await runCron();
 
       await insertCt({ minutes: 90 });
-      const historicalBookingId = await insertBookingWithMinutes(90, false, { createdAt: '2000-01-01T12:00:00Z' });
+      const historicalBookingId = await insertBookingWithMinutes(90, false, { createdAt: PRE_LEARNER_BCS_WRITER_AT });
 
       const after = await runCron();
       expect(after.missing_bcs_count).toBe(before.missing_bcs_count);
@@ -791,7 +800,7 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
     }
   });
 
-  test('C10b: BCS coverage diagnostic flags post-cutover active credit booking without active BCS', async () => {
+  test('C10b: BCS coverage diagnostic flags post-#203 learner credit booking without active BCS', async () => {
     const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
     try {
       await resetState();
@@ -803,7 +812,7 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
       const before = await runCron();
 
       await insertCt({ minutes: 90 });
-      const missingBookingId = await insertBookingWithMinutes(90, false, { createdAt: '2100-01-01T12:00:00Z' });
+      const missingBookingId = await insertBookingWithMinutes(90, false, { createdAt: POST_LEARNER_BCS_WRITER_AT });
 
       const after = await runCron();
       expect(after.missing_bcs_count).toBe(before.missing_bcs_count + 1);
@@ -814,6 +823,107 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
         status: 'scheduled',
         minutes_deducted: 90,
         credit_returned: false,
+        bcs_writer_path: 'learner_credit_booking',
+      });
+      expect(after.drift_count).toBe(before.drift_count);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('C10b2: BCS coverage diagnostic ignores pre-#210 instructor-created credit booking without BCS', async () => {
+    const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
+    try {
+      await resetState();
+      const before = await runCron();
+
+      await insertCt({ minutes: 90 });
+      const bookingId = await insertBookingWithMinutes(90, false, {
+        createdAt: PRE_INSTRUCTOR_BCS_WRITER_AT,
+        createdBy: 'instructor',
+      });
+      await setLcbBalance(0);
+
+      const after = await runCron();
+      expect(after.missing_bcs_count).toBe(before.missing_bcs_count);
+      expect(missingSummaryBooking(after, bookingId)).toBeUndefined();
+      expect(after.drift_count).toBe(before.drift_count);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('C10b3: BCS coverage diagnostic flags post-#210 instructor-created credit booking without BCS', async () => {
+    const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
+    try {
+      await resetState();
+      const before = await runCron();
+
+      await insertCt({ minutes: 90 });
+      const bookingId = await insertBookingWithMinutes(90, false, {
+        createdAt: POST_INSTRUCTOR_BCS_WRITER_AT,
+        createdBy: 'instructor',
+      });
+      await setLcbBalance(0);
+
+      const after = await runCron();
+      expect(after.missing_bcs_count).toBe(before.missing_bcs_count + 1);
+      expect(missingSummaryBooking(after, bookingId)).toMatchObject({
+        booking_id: bookingId,
+        bcs_writer_path: 'instructor_credit_booking',
+      });
+      expect(after.drift_count).toBe(before.drift_count);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('C10b4: BCS coverage diagnostic ignores pre-#208 reschedule replacement without BCS', async () => {
+    const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
+    try {
+      await resetState();
+      const sourceBookingId = await insertBookingWithMinutes(0, false, {
+        createdAt: '2026-05-25T12:00:00Z',
+      });
+      const before = await runCron();
+
+      await insertCt({ minutes: 90 });
+      const bookingId = await insertBookingWithMinutes(90, false, {
+        createdAt: PRE_RESCHEDULE_BCS_WRITER_AT,
+        rescheduledFrom: sourceBookingId,
+      });
+      await setLcbBalance(0);
+
+      const after = await runCron();
+      expect(after.missing_bcs_count).toBe(before.missing_bcs_count);
+      expect(missingSummaryBooking(after, bookingId)).toBeUndefined();
+      expect(after.drift_count).toBe(before.drift_count);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('C10b5: BCS coverage diagnostic flags post-#208 reschedule replacement without BCS', async () => {
+    const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
+    try {
+      await resetState();
+      const sourceBookingId = await insertBookingWithMinutes(0, false, {
+        createdAt: '2026-05-25T12:00:00Z',
+      });
+      const before = await runCron();
+
+      await insertCt({ minutes: 90 });
+      const bookingId = await insertBookingWithMinutes(90, false, {
+        createdAt: POST_RESCHEDULE_BCS_WRITER_AT,
+        rescheduledFrom: sourceBookingId,
+      });
+      await setLcbBalance(0);
+
+      const after = await runCron();
+      expect(after.missing_bcs_count).toBe(before.missing_bcs_count + 1);
+      expect(missingSummaryBooking(after, bookingId)).toMatchObject({
+        booking_id: bookingId,
+        bcs_writer_path: 'reschedule_replacement',
       });
       expect(after.drift_count).toBe(before.drift_count);
     } finally {
@@ -835,6 +945,28 @@ test.describe('cron-credit-reconcile — divergence check integration', () => {
       const ctId = await insertCt({ minutes: 90 });
       const bookingId = await insertBookingWithMinutes(90, false, { createdAt: '2100-01-02T12:00:00Z' });
       await insertBcs({ bookingId, ctId, minutesDrawn: 90, createdAt: '2100-01-02T12:01:00Z' });
+
+      const after = await runCron();
+      expect(after.missing_bcs_count).toBe(before.missing_bcs_count);
+      expect(missingSummaryBooking(after, bookingId)).toBeUndefined();
+      expect(after.drift_count).toBe(before.drift_count);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('C10c2: BCS coverage diagnostic ignores direct-paid non-credit booking even with minutes_deducted', async () => {
+    const cleanup = await ensureStep5Tables({ wantBcs: true, wantCsa: true });
+    try {
+      await resetState();
+      const before = await runCron();
+
+      await insertCt({ minutes: 90, type: 'slot_purchase' });
+      const bookingId = await insertBookingWithMinutes(90, false, {
+        createdAt: '2100-01-02T13:00:00Z',
+        paymentMethod: 'stripe',
+      });
+      await setLcbBalance(0);
 
       const after = await runCron();
       expect(after.missing_bcs_count).toBe(before.missing_bcs_count);
