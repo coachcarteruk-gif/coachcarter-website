@@ -142,27 +142,34 @@ async function makeBooking(learnerId, instructorId, opts = {}) {
     rescheduleCount = 0,
     dateOffset = 0, // days from today
   } = opts;
-  const baseDate = new Date(Date.now() + dateOffset * 86400000);
-  const futureDate = baseDate.toISOString().slice(0, 10);
-  // Randomized hour to avoid uq_instructor_slot collisions across reruns.
-  const hour = String(8 + (crypto.randomBytes(1)[0] % 8)).padStart(2, '0');
-  const startTime = `${hour}:00`;
-  const endTime = `${String(Number(hour) + 1).padStart(2, '0')}:30`;
-  const [booking] = await sql`
-    INSERT INTO lesson_bookings
-      (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-       credit_returned, credit_forfeited, minutes_deducted, reschedule_count,
-       school_id, created_by, payment_method)
-    VALUES
-      (${learnerId}, ${instructorId}, ${futureDate}::date,
-       ${startTime}::time, ${endTime}::time, ${status},
-       ${creditReturned}, ${creditForfeited}, ${minutesDeducted},
-       ${rescheduleCount}, ${SCHOOL_ID}, 'learner', 'credit')
-    RETURNING id, scheduled_date::text AS scheduled_date,
-              start_time::text AS start_time, end_time::text AS end_time
-  `;
-  createdBookingIds.push(booking.id);
-  return booking;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const baseDate = new Date(Date.now() + (dateOffset + attempt) * 86400000);
+    const futureDate = baseDate.toISOString().slice(0, 10);
+    const hour = String(8 + ((crypto.randomBytes(1)[0] + attempt) % 9)).padStart(2, '0');
+    const startTime = `${hour}:00`;
+    const endTime = `${String(Number(hour) + 1).padStart(2, '0')}:30`;
+    try {
+      const [booking] = await sql`
+        INSERT INTO lesson_bookings
+          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+           credit_returned, credit_forfeited, minutes_deducted, reschedule_count,
+           school_id, created_by, payment_method)
+        VALUES
+          (${learnerId}, ${instructorId}, ${futureDate}::date,
+           ${startTime}::time, ${endTime}::time, ${status},
+           ${creditReturned}, ${creditForfeited}, ${minutesDeducted},
+           ${rescheduleCount}, ${SCHOOL_ID}, 'learner', 'credit')
+        RETURNING id, scheduled_date::text AS scheduled_date,
+                  start_time::text AS start_time, end_time::text AS end_time
+      `;
+      createdBookingIds.push(booking.id);
+      return booking;
+    } catch (err) {
+      if (err.code === '23505' || err.message?.includes('uq_instructor_slot')) continue;
+      throw err;
+    }
+  }
+  throw new Error('makeBooking could not find a unique future slot after 30 attempts');
 }
 
 async function makeCreditSource(learnerId, instructorId, minutes = 180) {
@@ -177,6 +184,15 @@ async function makeCreditSource(learnerId, instructorId, minutes = 180) {
   `;
   createdCreditTxIds.push(row.id);
   return row.id;
+}
+
+async function insertClashBookingWithRetry(learnerId, instructorId, dateOffset) {
+  const booking = await makeBooking(learnerId, instructorId, { dateOffset });
+  return {
+    id: booking.id,
+    newDate: String(booking.scheduled_date).slice(0, 10),
+    newStartTime: String(booking.start_time).slice(0, 5),
+  };
 }
 
 async function seedLcb(learnerId, instructorId, minutes) {
@@ -481,29 +497,12 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 31 });
 
     // Pre-seed a CLASH at the target slot to force the INSERT to 23505.
-    const newDate = new Date(Date.now() + 62 * 86400000).toISOString().slice(0, 10);
-    const newHour = String(10 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
-    const newStartTime = `${newHour}:00`;
     const clashLearnerId = await makeLearner('c2-clash');
-    await sql`
-      INSERT INTO lesson_bookings
-        (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-         credit_returned, minutes_deducted, school_id, created_by, payment_method)
-      VALUES
-        (${clashLearnerId}, ${TARGET_INSTRUCTOR_ID}, ${newDate}::date,
-         ${newStartTime}::time, ${`${String(Number(newHour)+1).padStart(2,'0')}:30`}::time,
-         'scheduled', FALSE, 90, ${SCHOOL_ID}, 'learner', 'credit')
-      RETURNING id
-    `;
-    // We can't easily push the clash row ID into createdBookingIds before
-    // this insert resolves; track it on the next afterAll cleanup pass.
-    const [clashRow] = await sql`
-      SELECT id FROM lesson_bookings
-       WHERE learner_id = ${clashLearnerId}
-         AND school_id = ${SCHOOL_ID}
-       ORDER BY id DESC LIMIT 1
-    `;
-    if (clashRow) createdBookingIds.push(clashRow.id);
+    const { newDate, newStartTime } = await insertClashBookingWithRetry(
+      clashLearnerId,
+      TARGET_INSTRUCTOR_ID,
+      62
+    );
 
     const instructorHandler = require('../api/instructor');
     const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
@@ -625,26 +624,12 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 36 });
 
     // Pre-seed a clash to force INSERT failure.
-    const newDate = new Date(Date.now() + 72 * 86400000).toISOString().slice(0, 10);
-    const newHour = String(9 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
-    const newStartTime = `${newHour}:00`;
     const clashLearnerId = await makeLearner('c4-clash');
-    await sql`
-      INSERT INTO lesson_bookings
-        (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-         credit_returned, minutes_deducted, school_id, created_by, payment_method)
-      VALUES
-        (${clashLearnerId}, ${TARGET_INSTRUCTOR_ID}, ${newDate}::date,
-         ${newStartTime}::time, ${`${String(Number(newHour)+1).padStart(2,'0')}:30`}::time,
-         'scheduled', FALSE, 90, ${SCHOOL_ID}, 'learner', 'credit')
-    `;
-    const [clashRow] = await sql`
-      SELECT id FROM lesson_bookings
-       WHERE learner_id = ${clashLearnerId}
-         AND school_id = ${SCHOOL_ID}
-       ORDER BY id DESC LIMIT 1
-    `;
-    if (clashRow) createdBookingIds.push(clashRow.id);
+    const { newDate, newStartTime } = await insertClashBookingWithRetry(
+      clashLearnerId,
+      TARGET_INSTRUCTOR_ID,
+      72
+    );
 
     const slotsHandler = require('../api/slots');
     const jwt = makeLearnerJwt(learnerId);
