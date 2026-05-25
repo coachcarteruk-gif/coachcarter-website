@@ -46,7 +46,11 @@ const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_tra
 const { getEligibleBookings }  = require('./_payout-helpers');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 const { lockBalanceAndMutate, lockBalanceAdjustLCB } = require('./_credit-grant');
-const { markBookingCreditSourcesRefunded, restoreBookingCreditSourcesActive } = require('./_bcs-refund-marker');
+const {
+  markBookingCreditSourcesRefunded,
+  restoreBookingCreditSourcesActive,
+  copyRefundedBookingCreditSources,
+} = require('./_bcs-refund-marker');
 
 
 const TOKEN_EXPIRY_MINUTES = 30;
@@ -1116,8 +1120,6 @@ async function handleRescheduleBooking(req, res) {
       SET status = ${REFUNDED}, credit_returned = TRUE, cancelled_at = NOW()
       WHERE id = ${booking_id}
     `;
-    // Transitional Step 5 behaviour: the replacement booking remains
-    // unattributed, so the old booking's active BCS rows must stop counting.
     const refundedBcsIds = await markBookingCreditSourcesRefunded(sql, { bookingId: booking_id, schoolId });
 
     // Create new booking
@@ -1152,6 +1154,11 @@ async function handleRescheduleBooking(req, res) {
       }
       throw insertErr;
     }
+    await copyRefundedBookingCreditSources(sql, {
+      bcsIds: refundedBcsIds,
+      newBookingId: newBooking.id,
+      schoolId,
+    });
 
     // Email the learner
     try {
