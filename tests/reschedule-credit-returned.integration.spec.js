@@ -92,13 +92,14 @@ const CSRF_TOKEN = 'test-csrf-' + crypto.randomBytes(8).toString('hex');
 function fakeReq({ method = 'GET', query = {}, headers = {}, body = {}, cookies = {}, cookie } = {}) {
   // If a `cookie` string was supplied, merge in the CSRF cookie so
   // verifyCsrf passes on mutating requests.
-  const cookieStr = cookie != null
-    ? `${cookie}; cc_csrf=${CSRF_TOKEN}`
+  const callerCookie = cookie != null ? cookie : headers.cookie;
+  const cookieStr = callerCookie != null
+    ? `${callerCookie}; cc_csrf=${CSRF_TOKEN}`
     : `cc_csrf=${CSRF_TOKEN}`;
   const mergedHeaders = {
     'x-csrf-token': CSRF_TOKEN,
-    cookie: cookieStr,
     ...headers,
+    cookie: cookieStr,
   };
   return { method, query, headers: mergedHeaders, body, cookies };
 }
