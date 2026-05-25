@@ -274,3 +274,94 @@ SELECT id, scheduled_date, start_time, status, minutes_deducted, credit_returned
 --  WHERE ct.learner_id    = /* paste learner_id */    NULL
 --    AND ct.instructor_id = /* paste instructor_id */ NULL
 --  ORDER BY csa.created_at, csa.id;
+
+-- ============================================================================
+-- BCS COVERAGE DIAGNOSTIC (read-only, BCS modes only)
+-- ============================================================================
+-- Mirrors api/cron-credit-reconcile.js missing_bcs_count /
+-- missing_bcs_summary. The cutover is the first durable BCS write per school,
+-- so intentionally historical pre-cutover bookings are excluded without
+-- mixing tenants.
+--
+-- Active credit-deducting booking =
+--   * created after the first booking_credit_sources.created_at for the same school
+--   * status <> 'refunded'
+--   * credit_returned = FALSE
+--   * minutes_deducted > 0
+--
+-- Active BCS attribution =
+--   * booking_credit_sources.school_id = lesson_bookings.school_id
+--   * booking_credit_sources.booking_id = lesson_bookings.id
+--   * booking_credit_sources.refunded_at IS NULL
+
+WITH bcs_cutover_by_school AS (
+  SELECT school_id, MIN(created_at) AS cutover_at
+    FROM booking_credit_sources
+   GROUP BY school_id
+),
+missing AS (
+  SELECT
+    lb.id AS booking_id,
+    lb.school_id,
+    lb.learner_id,
+    lb.instructor_id,
+    lb.created_at,
+    lb.scheduled_date,
+    lb.start_time,
+    lb.status,
+    lb.minutes_deducted,
+    lb.credit_returned
+  FROM lesson_bookings lb
+  JOIN bcs_cutover_by_school bc ON bc.school_id = lb.school_id
+  WHERE bc.cutover_at IS NOT NULL
+    AND lb.created_at >= bc.cutover_at
+    AND lb.status <> 'refunded'
+    AND COALESCE(lb.credit_returned, FALSE) = FALSE
+    AND COALESCE(lb.minutes_deducted, 0) > 0
+    AND NOT EXISTS (
+      SELECT 1
+        FROM booking_credit_sources bcs
+       WHERE bcs.school_id = lb.school_id
+         AND bcs.booking_id = lb.id
+         AND bcs.refunded_at IS NULL
+    )
+)
+SELECT COUNT(*)::int AS missing_bcs_count
+  FROM missing;
+
+WITH bcs_cutover_by_school AS (
+  SELECT school_id, MIN(created_at) AS cutover_at
+    FROM booking_credit_sources
+   GROUP BY school_id
+),
+missing AS (
+  SELECT
+    lb.id AS booking_id,
+    lb.school_id,
+    lb.learner_id,
+    lb.instructor_id,
+    lb.created_at,
+    lb.scheduled_date,
+    lb.start_time,
+    lb.status,
+    lb.minutes_deducted,
+    lb.credit_returned
+  FROM lesson_bookings lb
+  JOIN bcs_cutover_by_school bc ON bc.school_id = lb.school_id
+  WHERE bc.cutover_at IS NOT NULL
+    AND lb.created_at >= bc.cutover_at
+    AND lb.status <> 'refunded'
+    AND COALESCE(lb.credit_returned, FALSE) = FALSE
+    AND COALESCE(lb.minutes_deducted, 0) > 0
+    AND NOT EXISTS (
+      SELECT 1
+        FROM booking_credit_sources bcs
+       WHERE bcs.school_id = lb.school_id
+         AND bcs.booking_id = lb.id
+         AND bcs.refunded_at IS NULL
+    )
+)
+SELECT *
+  FROM missing
+ ORDER BY created_at DESC, booking_id DESC
+ LIMIT 20;

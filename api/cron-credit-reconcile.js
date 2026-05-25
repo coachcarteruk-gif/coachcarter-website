@@ -82,6 +82,7 @@
 const { sendAlertEmail } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
 const { withCronLock } = require('./_cron-lock');
+const { REFUNDED } = require('./_booking-status');
 
 const SCHOOL_ID = 1; // CoachCarter — only school using per-instructor credits at the cutover.
 
@@ -101,6 +102,12 @@ async function probeSchemaMode(sql) {
          WHERE table_schema = 'public' AND table_name = 'booking_credit_sources'
       ) AS has_bcs,
       EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name   = 'booking_credit_sources'
+           AND column_name  = 'school_id'
+      ) AS has_bcs_school_id,
+      EXISTS (
         SELECT 1 FROM information_schema.tables
          WHERE table_schema = 'public' AND table_name = 'credit_source_adjustments'
       ) AS has_csa,
@@ -112,6 +119,7 @@ async function probeSchemaMode(sql) {
       ) AS has_grandfathered_at
   `;
   const hasBcs = !!row.has_bcs;
+  const hasBcsSchoolId = !!row.has_bcs_school_id;
   const hasCsa = !!row.has_csa;
   // P2: Plan A's grandfathered_at column may not exist yet — the new cron
   // code is in the deploy that ships the column DDL, and there's a window
@@ -121,7 +129,12 @@ async function probeSchemaMode(sql) {
   // of crashing on `column does not exist`.
   const hasGrandfatheredAt = !!row.has_grandfathered_at;
 
-  const base = { has_bcs: hasBcs, has_csa: hasCsa, has_grandfathered_at: hasGrandfatheredAt };
+  const base = {
+    has_bcs: hasBcs,
+    has_bcs_school_id: hasBcsSchoolId,
+    has_csa: hasCsa,
+    has_grandfathered_at: hasGrandfatheredAt,
+  };
   if (hasBcs && hasCsa)   return { mode: 'full',                          ...base };
   if (hasBcs && !hasCsa)  return { mode: 'ct_plus_bcs',                   ...base };
   if (!hasBcs && !hasCsa) return { mode: 'ct_only',                       ...base };
@@ -806,10 +819,104 @@ async function countPairsScanned(sql) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Missing BCS coverage diagnostic. Capped at ALERT_EMAIL_MAX_PAIRS rows in
+// the response summary so the cron JSON stays bounded under broad regressions.
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 5 coverage diagnostic. This is deliberately separate from the balance
+// drift calculation: it asks whether post-cutover active credit-deducting
+// bookings have active BCS attribution, without mutating balances or sources.
+async function findMissingBcsBookings(sql, { hasBcs, hasBcsSchoolId }) {
+  if (!hasBcs || !hasBcsSchoolId) {
+    return { count: 0, summary: [], truncated: false };
+  }
+
+  const [countRow] = await sql`
+    WITH bcs_cutover_by_school AS (
+      SELECT school_id, MIN(created_at) AS cutover_at
+        FROM booking_credit_sources
+       GROUP BY school_id
+    ),
+    missing AS (
+      SELECT lb.id
+        FROM lesson_bookings lb
+        JOIN bcs_cutover_by_school bc ON bc.school_id = lb.school_id
+       WHERE bc.cutover_at IS NOT NULL
+         AND lb.created_at >= bc.cutover_at
+         AND lb.status <> ${REFUNDED}
+         AND COALESCE(lb.credit_returned, FALSE) = FALSE
+         AND COALESCE(lb.minutes_deducted, 0) > 0
+         AND NOT EXISTS (
+           SELECT 1
+             FROM booking_credit_sources bcs
+            WHERE bcs.school_id = lb.school_id
+              AND bcs.booking_id = lb.id
+              AND bcs.refunded_at IS NULL
+         )
+    )
+    SELECT COUNT(*)::int AS n FROM missing
+  `;
+
+  const summaryRows = await sql`
+    WITH bcs_cutover_by_school AS (
+      SELECT school_id, MIN(created_at) AS cutover_at
+        FROM booking_credit_sources
+       GROUP BY school_id
+    ),
+    missing AS (
+      SELECT
+        lb.id AS booking_id,
+        lb.school_id,
+        lb.learner_id,
+        lb.instructor_id,
+        lb.created_at::text AS created_at,
+        lb.scheduled_date::text AS scheduled_date,
+        lb.start_time::text AS start_time,
+        lb.status,
+        lb.minutes_deducted,
+        lb.credit_returned
+      FROM lesson_bookings lb
+      JOIN bcs_cutover_by_school bc ON bc.school_id = lb.school_id
+      WHERE bc.cutover_at IS NOT NULL
+        AND lb.created_at >= bc.cutover_at
+        AND lb.status <> ${REFUNDED}
+        AND COALESCE(lb.credit_returned, FALSE) = FALSE
+        AND COALESCE(lb.minutes_deducted, 0) > 0
+        AND NOT EXISTS (
+          SELECT 1
+            FROM booking_credit_sources bcs
+           WHERE bcs.school_id = lb.school_id
+             AND bcs.booking_id = lb.id
+             AND bcs.refunded_at IS NULL
+        )
+    )
+    SELECT *
+      FROM missing
+     ORDER BY created_at::timestamptz DESC, booking_id DESC
+     LIMIT ${ALERT_EMAIL_MAX_PAIRS}
+  `;
+
+  const count = countRow.n || 0;
+  return {
+    count,
+    summary: summaryRows.map(r => ({
+      booking_id: r.booking_id,
+      school_id: r.school_id,
+      learner_id: r.learner_id,
+      instructor_id: r.instructor_id,
+      created_at: r.created_at,
+      scheduled_date: r.scheduled_date,
+      start_time: r.start_time,
+      status: r.status,
+      minutes_deducted: r.minutes_deducted,
+      credit_returned: r.credit_returned,
+    })),
+    truncated: count > summaryRows.length,
+  };
+}
+
 // Alert email composition. Capped at ALERT_EMAIL_MAX_PAIRS rows; the tail
 // gets summarised. No payment intent IDs, no Stripe identifiers — those live
 // in the manual diagnostic SQL the operator pulls separately.
-// ─────────────────────────────────────────────────────────────────────────────
 async function buildAlertEmail(sql, schemaMode, driftRows, capturedAt) {
   const totalDrift = driftRows.length;
   const shown = driftRows.slice(0, ALERT_EMAIL_MAX_PAIRS);
@@ -992,11 +1099,15 @@ async function runDivergenceCheck(sql, { now = new Date(), sendAlerts = true } =
       error: 'schema_inconsistent',
       schema_mode: schema.mode,
       has_bcs: schema.has_bcs,
+      has_bcs_school_id: schema.has_bcs_school_id,
       has_csa: schema.has_csa,
       has_grandfathered_at: schema.has_grandfathered_at,
       ran_at: now.toISOString(),
       pairs_scanned: 0,
       drift_count: 0,
+      missing_bcs_count: 0,
+      missing_bcs_summary: [],
+      missing_bcs_truncated: false,
       alert_sent: alertSent,
     };
   }
@@ -1025,6 +1136,10 @@ async function runDivergenceCheck(sql, { now = new Date(), sendAlerts = true } =
   }
 
   const pairsScanned = await countPairsScanned(sql);
+  const missingBcs = await findMissingBcsBookings(sql, {
+    hasBcs: schema.has_bcs,
+    hasBcsSchoolId: schema.has_bcs_school_id,
+  });
 
   // Compose response. The drift_summary array is bounded by
   // ALERT_EMAIL_MAX_PAIRS so the JSON body stays bounded even under a
@@ -1052,13 +1167,17 @@ async function runDivergenceCheck(sql, { now = new Date(), sendAlerts = true } =
     ok: true,
     schema_mode: schema.mode,
     has_bcs: schema.has_bcs,
+    has_bcs_school_id: schema.has_bcs_school_id,
     has_csa: schema.has_csa,
     has_grandfathered_at: schema.has_grandfathered_at,
     ran_at: now.toISOString(),
     pairs_scanned: pairsScanned,
     drift_count: driftRows.length,
+    missing_bcs_count: missingBcs.count,
     grandfathered_count: grandfatheredCount,
     alert_sent: alertSent,
+    missing_bcs_summary: missingBcs.summary,
+    missing_bcs_truncated: missingBcs.truncated,
     drift_summary: driftSummary,
     drift_truncated: driftRows.length > driftSummary.length,
   };
