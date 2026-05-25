@@ -56,6 +56,10 @@ const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin,
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { lockBalanceAndMutate } = require('./_credit-grant');
+const {
+  validateGoodwillRequest,
+  validateReconciliationRequest,
+} = require('./_admin-credit-contracts');
 const { logAudit } = require('./_audit');
 const { deleteLearnerCascade } = require('./_gdpr');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
@@ -99,6 +103,8 @@ module.exports = async (req, res) => {
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
   if (action === 'update-learner')    return handleUpdateLearner(req, res);
   if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
+  if (action === 'credit-goodwill')    return handleCreditGoodwillContract(req, res);
+  if (action === 'credit-reconciliation') return handleCreditReconciliationContract(req, res);
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
   if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
   if (action === 'toggle-payout-pause')  return handleTogglePayoutPause(req, res);
@@ -1189,7 +1195,56 @@ async function handleAdjustCredits(req, res) {
   }
 }
 
-// ── POST /api/admin?action=delete-learner ────────────────────────────────────
+// Step 5.5 contract stub only. Auth + request validation are live; the money
+// writer remains intentionally unimplemented until the FIFO writer slice lands.
+async function handleCreditGoodwillContract(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const validated = validateGoodwillRequest(req.body || {}, { schoolId });
+  if (!validated.ok) {
+    return res.status(validated.status).json({
+      error: true,
+      code: validated.code,
+      message: validated.message,
+    });
+  }
+
+  return res.status(501).json({
+    error: true,
+    code: 'NOT_IMPLEMENTED',
+    message: 'credit-goodwill contract is specified; writer is not implemented yet.',
+  });
+}
+
+// Step 5.5 contract stub only. This endpoint must never call Stripe or write
+// credit rows until the real reconciliation writer is implemented.
+async function handleCreditReconciliationContract(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const validated = validateReconciliationRequest(req.body || {}, { schoolId });
+  if (!validated.ok) {
+    return res.status(validated.status).json({
+      error: true,
+      code: validated.code,
+      message: validated.message,
+    });
+  }
+
+  return res.status(501).json({
+    error: true,
+    code: 'NOT_IMPLEMENTED',
+    message: 'credit-reconciliation contract is specified; writer is not implemented yet.',
+  });
+}
+
 // Body: { learner_id }
 // Deletes a learner and all their associated data.
 async function handleDeleteLearner(req, res) {
