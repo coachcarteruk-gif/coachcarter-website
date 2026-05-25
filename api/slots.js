@@ -50,7 +50,7 @@ const MAX_DAYS_AHEAD      = 84;   // 12-week booking window (offer-driven series
 const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
 const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
-const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
+const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
 
 class BookingTransactionAbort extends Error {
   constructor(result) {

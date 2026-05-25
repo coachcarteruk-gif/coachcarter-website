@@ -14,7 +14,7 @@ const {
   _CREDIT_BOOKING_SOURCE_TYPES: CREDIT_BOOKING_SOURCE_TYPES,
 } = require('../api/slots');
 
-const { SCHEDULED, CHARGEABLE, BLOCKING_STATUSES } = require('../api/_booking-status');
+const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('../api/_booking-status');
 
 const ENABLED = process.env.CC_TEST_DB === '1' && !!process.env.POSTGRES_URL_TEST;
 const SCHOOL_ID = 1;
@@ -122,8 +122,7 @@ test.describe('slots.js credit-funded BCS writer - integration', () => {
 
     sql = neon(process.env.POSTGRES_URL_TEST);
 
-    expect(CREDIT_BOOKING_SOURCE_TYPES).toEqual(['purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather']);
-    expect(CREDIT_BOOKING_SOURCE_TYPES).not.toContain('slot_purchase');
+    expect(CREDIT_BOOKING_SOURCE_TYPES).toEqual(['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather']);
     expect(CREDIT_BOOKING_SOURCE_TYPES).not.toContain('admin_remove');
     expect(CREDIT_BOOKING_SOURCE_TYPES).not.toContain('free_trial');
 
@@ -215,6 +214,142 @@ test.describe('slots.js credit-funded BCS writer - integration', () => {
       WHERE learner_id = ${learnerId} AND instructor_id = ${instructorId}
     `;
     expect(lcb.balance_minutes).toBe(30);
+  });
+
+  async function recomputePairDrift() {
+    const [row] = await sql`
+      WITH purchases AS (
+        SELECT COALESCE(SUM(minutes), 0)::int AS granted_minutes
+          FROM credit_transactions
+         WHERE learner_id = ${learnerId}
+           AND instructor_id = ${instructorId}
+           AND school_id = ${SCHOOL_ID}
+      ),
+      unattributed_booking_draws AS (
+        SELECT COALESCE(SUM(lb.minutes_deducted), 0)::int AS minutes
+          FROM lesson_bookings lb
+         WHERE lb.learner_id = ${learnerId}
+           AND lb.instructor_id = ${instructorId}
+           AND lb.school_id = ${SCHOOL_ID}
+           AND lb.credit_returned = FALSE
+           AND lb.minutes_deducted > 0
+           AND NOT EXISTS (
+             SELECT 1 FROM booking_credit_sources bcs
+              WHERE bcs.booking_id = lb.id
+                AND bcs.school_id = ${SCHOOL_ID}
+           )
+      ),
+      active_bcs_draws AS (
+        SELECT COALESCE(SUM(bcs.minutes_drawn), 0)::int AS minutes
+          FROM booking_credit_sources bcs
+          JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
+         WHERE bcs.refunded_at IS NULL
+           AND bcs.school_id = ${SCHOOL_ID}
+           AND ct.learner_id = ${learnerId}
+           AND ct.instructor_id = ${instructorId}
+           AND ct.school_id = ${SCHOOL_ID}
+      ),
+      lcb AS (
+        SELECT COALESCE(MAX(balance_minutes), 0)::int AS balance_minutes
+          FROM learner_credit_balances
+         WHERE learner_id = ${learnerId}
+           AND instructor_id = ${instructorId}
+           AND school_id = ${SCHOOL_ID}
+      )
+      SELECT
+        (l.balance_minutes - (p.granted_minutes - u.minutes - b.minutes))::int AS drift_minutes
+        FROM purchases p, unattributed_booking_draws u, active_bcs_draws b, lcb l
+    `;
+    return row.drift_minutes;
+  }
+
+  async function seedHistoricalBookingWithRefundedBcs(creditTxId) {
+    const oldDate = futureDate(150);
+    const [booking] = await sql`
+      INSERT INTO lesson_bookings
+        (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+         lesson_type_id, minutes_deducted, credit_returned, school_id,
+         payment_method, created_by, list_price_pence, list_price_source)
+      VALUES
+        (${learnerId}, ${instructorId}, ${oldDate}, '12:00', '13:30', ${REFUNDED},
+         ${lessonTypeId}, 90, TRUE, ${SCHOOL_ID},
+         'card', 'learner', 8250, 'stripe_metadata')
+      RETURNING id
+    `;
+    createdBookingIds.add(booking.id);
+    await sql`
+      INSERT INTO booking_credit_sources
+        (school_id, booking_id, credit_transaction_id, minutes_drawn,
+         rate_pence_per_minute, contribution_pence, stripe_fee_pence, refunded_at)
+      VALUES
+        (${SCHOOL_ID}, ${booking.id}, ${creditTxId}, 90,
+         92, 8250, 144, NOW())
+    `;
+    return booking.id;
+  }
+
+  test('refunded slot_purchase BCS source can fund a fresh credit booking without drift', async () => {
+    await seedLcb(90);
+    const creditTxId = await seedCreditSource({
+      minutes: 90,
+      amountPence: 8250,
+      type: 'slot_purchase',
+      source: 'stripe',
+      stripeFeePence: 144,
+    });
+    const oldBookingId = await seedHistoricalBookingWithRefundedBcs(creditTxId);
+
+    const result = await book({ date: 12 });
+
+    expect(result.ok).toBe(true);
+    expect(result.balanceMinutes).toBe(0);
+
+    const rows = await sql`
+      SELECT booking_id, credit_transaction_id, minutes_drawn, contribution_pence,
+             stripe_fee_pence, refunded_at
+        FROM booking_credit_sources
+       WHERE credit_transaction_id = ${creditTxId}
+       ORDER BY id
+    `;
+    expect(rows).toHaveLength(2);
+    expect(rows[0].booking_id).toBe(oldBookingId);
+    expect(rows[0].refunded_at).not.toBeNull();
+    expect(rows[1].booking_id).toBe(result.createdBookings[0].id);
+    expect(rows[1].credit_transaction_id).toBe(creditTxId);
+    expect(rows[1].minutes_drawn).toBe(90);
+    expect(rows[1].contribution_pence).toBe(8250);
+    expect(rows[1].stripe_fee_pence).toBe(144);
+    expect(rows[1].refunded_at).toBeNull();
+    expect(await recomputePairDrift()).toBe(0);
+  });
+
+  test('flexible-offer-shaped slot_purchase source can fund a credit booking without drift', async () => {
+    await seedLcb(90);
+    const creditTxId = await seedCreditSource({
+      minutes: 90,
+      amountPence: 8250,
+      type: 'slot_purchase',
+      source: 'stripe',
+      stripeFeePence: 144,
+    });
+
+    const result = await book({ date: 14 });
+
+    expect(result.ok).toBe(true);
+    expect(result.balanceMinutes).toBe(0);
+
+    const [bcs] = await sql`
+      SELECT booking_id, credit_transaction_id, minutes_drawn, contribution_pence,
+             stripe_fee_pence, refunded_at
+        FROM booking_credit_sources
+       WHERE booking_id = ${result.createdBookings[0].id}
+    `;
+    expect(bcs.credit_transaction_id).toBe(creditTxId);
+    expect(bcs.minutes_drawn).toBe(90);
+    expect(bcs.contribution_pence).toBe(8250);
+    expect(bcs.stripe_fee_pence).toBe(144);
+    expect(bcs.refunded_at).toBeNull();
+    expect(await recomputePairDrift()).toBe(0);
   });
 
   test('repeat bookings split FIFO sources across booking IDs', async () => {
