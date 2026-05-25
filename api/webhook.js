@@ -816,13 +816,33 @@ async function handleOfferBooking(session) {
 
     // Idempotency — check offer hasn't already been processed
     const [offer] = await sql`
-      SELECT id, status FROM lesson_offers WHERE token = ${offerToken}
+      SELECT id, status, booking_id FROM lesson_offers WHERE token = ${offerToken}
     `;
     if (!offer) {
       console.error('❌ lesson_offer webhook: offer not found for token', offerToken);
       return;
     }
     if (offer.status === 'accepted') {
+      if (!isFlexible && repeatWeeks === 1 && offer.booking_id) {
+        const [existingOfferCreditTx] = await sql`
+          SELECT id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute
+            FROM credit_transactions
+           WHERE stripe_session_id = ${session.id}
+             AND type = 'slot_purchase'
+             AND learner_id IS NOT NULL
+             AND instructor_id = ${instructorId}
+             AND school_id = ${schoolId}
+           LIMIT 1
+        `;
+        if (existingOfferCreditTx) {
+          await ensureSlotBookingBcs(sql, {
+            schoolId,
+            bookingId: offer.booking_id,
+            creditTransaction: existingOfferCreditTx,
+            durationMins,
+          });
+        }
+      }
       return;
     }
 
@@ -903,15 +923,18 @@ async function handleOfferBooking(session) {
     // uq_credit_tx_session catches concurrent Stripe retries on the same
     // offer-acceptance event. SELECT idempotency above is the fast path;
     // this is the DB-enforced backstop.
+    let offerCreditTx;
     try {
-      await sql`
+      const [creditTx] = await sql`
         INSERT INTO credit_transactions
           (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id,
            stripe_fee_pence, instructor_id, effective_rate_pence_per_minute, stripe_payment_intent_id, source)
         VALUES
           (${learnerId}, 'slot_purchase', ${totalCredits}, ${totalAmountPence}, 'card', ${session.id}, ${totalMinutes}, ${schoolId},
            ${stripeFeePence}, ${instructorId}, ${effectiveRatePencePerMinute}, ${paymentIntentId}, 'stripe')
+        RETURNING id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute
       `;
+      offerCreditTx = creditTx;
     } catch (insertErr) {
       if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
         console.log(`⏭  lesson_offer ${session.id} — already processed (uq_credit_tx_session)`);
@@ -1050,6 +1073,18 @@ async function handleOfferBooking(session) {
         amountPence, insertErr
       });
       return;
+    }
+
+    // Step 5 narrow slice: only single-slot, non-flexible paid offer
+    // acceptances get BCS attribution here. Repeat, flexible, and free offers
+    // deliberately remain outside this writer until their dedicated slices.
+    if (!isFlexible && repeatWeeks === 1 && seriesResult.booked.length === 1) {
+      await ensureSlotBookingBcs(sql, {
+        schoolId,
+        bookingId: seriesResult.booked[0].booking_id,
+        creditTransaction: offerCreditTx,
+        durationMins,
+      });
     }
 
     // If we couldn't book all the requested weeks (skip-clash hit the 18-week
