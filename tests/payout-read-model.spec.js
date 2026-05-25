@@ -13,6 +13,7 @@ const {
   processPayoutForInstructor,
   simulatePayoutForInstructor,
 } = require('../api/_payout-helpers');
+const { computePlatformBalance } = require('../api/_platform-balance');
 
 const helperPath = path.join(__dirname, '..', 'api', '_payout-helpers.js');
 
@@ -35,6 +36,29 @@ function makeSqlMock({ eligibleRows = [] } = {}) {
     }
     if (text.includes('INSERT INTO instructor_payouts')) {
       return Promise.resolve([{ id: 9001 }]);
+    }
+    return Promise.resolve([]);
+  };
+  return { sql, calls };
+}
+
+function makePlatformBalanceSqlMock({ instructors = [], eligibleRows = [] } = {}) {
+  const calls = [];
+  const sql = (strings, ...values) => {
+    const text = strings.join('?');
+    calls.push({ text, values });
+
+    if (text.includes('FROM instructors') && text.includes('stripe_onboarding_complete = TRUE')) {
+      return Promise.resolve(instructors);
+    }
+    if (text.includes('SELECT lb.id AS booking_id')) {
+      return Promise.resolve(eligibleRows);
+    }
+    if (text.includes('COUNT(lb.id)::int AS chargeable_lessons')) {
+      return Promise.resolve([]);
+    }
+    if (text.includes('live_credit_pence')) {
+      return Promise.resolve([{ live_credit_pence: 0, net_cash_in_pence: 0 }]);
     }
     return Promise.resolve([]);
   };
@@ -113,6 +137,45 @@ test.describe('payout Step 5 read model', () => {
     });
     expect(calls).toHaveLength(1);
     expect(calls[0].text).toContain('SELECT lb.id AS booking_id');
+  });
+
+  test('Next Payout Preview totals include snapshotted BCS gross and active BCS fees', async () => {
+    const attributedBooking = {
+      ...eligibleBcsFundedBooking,
+      price_pence: 12345,
+      stripe_fee_pence: 678,
+    };
+    const { sql, calls } = makePlatformBalanceSqlMock({
+      instructors: [instructor],
+      eligibleRows: [attributedBooking],
+    });
+    const stripe = {
+      balance: {
+        retrieve: async () => ({
+          available: [{ currency: 'gbp', amount: 20000 }],
+          pending: [{ currency: 'gbp', amount: 3000 }],
+        }),
+      },
+    };
+
+    const result = await computePlatformBalance(sql, stripe);
+
+    expect(result).toMatchObject({
+      available_pence: 20000,
+      pending_pence: 3000,
+      total_payout_pence: 11667,
+      balance_after_payout_pence: 8333,
+      status: 'green',
+    });
+    expect(result.payout_preview).toHaveLength(1);
+    expect(result.payout_preview[0]).toMatchObject({
+      instructor_id: instructor.id,
+      gross_pence: 12345,
+      stripe_fees_pence: 678,
+      amount_pence: 11667,
+      lesson_count: 1,
+    });
+    expect(calls.some(call => call.text.includes('SELECT lb.id AS booking_id'))).toBe(true);
   });
 
   test('processPayoutForInstructor and simulatePayoutForInstructor use the same eligible-bookings query and math', async () => {
