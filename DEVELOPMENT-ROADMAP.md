@@ -6,6 +6,24 @@ This document tracks the development of the **Coach Carter driving school platfo
 
 ---
 
+## 2.102 — Repeat Offer BCS Attribution for Fully Booked Series (26 May 2026)
+
+PR #220 shipped BCS attribution for paid, non-flexible, slot-pinned repeat offer series when every requested repeat week is successfully booked. The webhook now splits the single `slot_purchase` credit transaction across all booked lessons using the existing BCS booking-plan helper.
+
+**Contract:**
+- Scope is intentionally limited to paid, non-flexible, slot-pinned repeat offer series where every requested repeat week books successfully.
+- The allocation preserves exact conservation of minutes, contribution pence, and Stripe fee pence.
+- Retry/idempotency is guarded by `ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING`.
+- Partial repeat offers remain intentionally outside this slice and need a later CSA-aware implementation.
+
+**Deploy note:** PR #220 "Attribute BCS for fully booked repeat offers" merged and deployed on 2026-05-26. Focused local `npm.cmd test -- tests/bcs-fifo.spec.js tests/bcs-booking-plan.spec.js tests/webhook-offer-bcs.spec.js` passed: 26 passed.
+
+**Post-deploy prod note:** read-only `cron-credit-reconcile` ran at 2026-05-26T16:48:34.705Z and returned clean: `ok=true`, `schema_mode=full`, `has_bcs=true`, `has_bcs_school_id=true`, `has_csa=true`, `has_grandfathered_at=true`, `pairs_scanned=30`, `drift_count=0`, `missing_bcs_count=0`, `grandfathered_count=0`, `alert_sent=false`, empty missing-BCS and drift summaries, and both truncation flags false. No prod writes other than the read-only cron trigger, migrations, payout crons, Neon/prod integration tests, live Stripe calls, Stripe mutations, goodwill grants, reconciliation grants, or UI apply/grant paths were run.
+
+**Files:** `api/webhook.js`, `tests/bcs-booking-plan.spec.js`, `tests/webhook-offer-bcs.spec.js`.
+
+---
+
 ## 2.101 — Step 5.5 Admin Credit Reconciliation Backend Writer (26 May 2026)
 
 Backend-only follow-up to the Step 5.5 reconciliation inspection slices. `POST /api/admin?action=credit-reconciliation` now has a mutating backend path for reconciling a missed Stripe credit-purchase webhook, while the admin UI remains inspection-only with no apply/grant button.

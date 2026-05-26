@@ -82,7 +82,7 @@ Earlier markers exist for Steps 1c / 2 / 2.5 / Plan A / Plan B1 — re-query bef
 
 12 cron entrypoints total, all wrapped in `withCronLock` (PR #155).
 
-## Drift state (as of 2026-05-26 09:47:19 UTC)
+## Drift state (as of 2026-05-26 16:48:34 UTC)
 
 | Field | Value | Status |
 |---|---|---|
@@ -93,7 +93,18 @@ Earlier markers exist for Steps 1c / 2 / 2.5 / Plan A / Plan B1 — re-query bef
 | `missing_bcs_summary` | `[]` | verified |
 | `alert_sent` | `false` | verified |
 
-Latest manual read-only `cron-credit-reconcile` trigger was run post-PR-#218 deploy at 2026-05-26T09:47:19.119Z. It returned full schema mode with BCS/CSA/grandfathering columns present: `ok=true`, `schema_mode=full`, `has_bcs=true`, `has_bcs_school_id=true`, `has_csa=true`, `has_grandfathered_at=true`, `grandfathered_count=0`, `missing_bcs_truncated=false`, and `drift_truncated=false`. No prod writes, migrations, payout crons, Neon/prod integration tests, live Stripe calls, Stripe mutations, goodwill grants, reconciliation grants, or UI apply/grant path were run.
+Latest manual read-only `cron-credit-reconcile` trigger was run post-PR-#220 deploy at 2026-05-26T16:48:34.705Z. It returned full schema mode with BCS/CSA/grandfathering columns present: `ok=true`, `schema_mode=full`, `has_bcs=true`, `has_bcs_school_id=true`, `has_csa=true`, `has_grandfathered_at=true`, `grandfathered_count=0`, `missing_bcs_truncated=false`, and `drift_truncated=false`. No prod writes other than the read-only cron trigger, migrations, payout crons, Neon/prod integration tests, live Stripe calls, Stripe mutations, goodwill grants, reconciliation grants, or UI apply/grant paths were run.
+
+## Latest BCS deployment slice
+
+| Fact | Status | How verified |
+|---|---|---|
+| PR #220 "Attribute BCS for fully booked repeat offers" merged and deployed on 2026-05-26 | verified | Operator report, 2026-05-26 |
+| Paid, non-flexible, slot-pinned repeat offer series now get BCS attribution when every requested repeat week is successfully booked | verified | PR #220 deploy note + focused local tests |
+| The single `slot_purchase` credit transaction is split across all booked lessons using the existing BCS booking-plan helper | verified | PR #220 deploy note |
+| Repeat-offer BCS attribution preserves exact conservation of minutes, contribution pence, and Stripe fee pence | verified | Focused local `npm.cmd test -- tests/bcs-fifo.spec.js tests/bcs-booking-plan.spec.js tests/webhook-offer-bcs.spec.js` (26 passed) |
+| Retry/idempotency is guarded by `ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING` | verified | PR #220 deploy note |
+| Partial repeat offers remain intentionally outside this slice and need a later CSA-aware implementation | verified | PR #220 deploy note |
 
 ## Bookings deliberately left in refund-without-credit-return shape
 
