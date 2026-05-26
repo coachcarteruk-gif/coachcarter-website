@@ -297,14 +297,18 @@ test.describe('admin Step 5.5 credit endpoints', () => {
       .toMatchObject({ ok: false, code: 'STRIPE_IDENTITY_REQUIRED' });
   });
 
-  test('credit-reconciliation valid requests stop at the non-mutating contract stub', async () => {
+  test('credit-reconciliation mutating requests require a reason before inspection or writes', async () => {
     const res = await callAdmin('credit-reconciliation', {
       headers: csrfAuthedHeaders(),
-      body: { payment_intent_id: 'pi_contract', reason: 'webhook missed' },
+      body: { payment_intent_id: 'pi_contract' },
     });
 
-    expect(res.statusCode).toBe(501);
-    expect(res.body).toMatchObject({ error: true, code: 'NOT_IMPLEMENTED' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({
+      error: true,
+      code: 'INVALID_REASON',
+      message: 'reason is required.',
+    });
   });
 
   test('credit-reconciliation no-ops when any existing credit transaction is found', () => {

@@ -6,6 +6,24 @@ This document tracks the development of the **Coach Carter driving school platfo
 
 ---
 
+## 2.101 — Step 5.5 Admin Credit Reconciliation Backend Writer (26 May 2026)
+
+Backend-only follow-up to the Step 5.5 reconciliation inspection slices. `POST /api/admin?action=credit-reconciliation` now has a mutating backend path for reconciling a missed Stripe credit-purchase webhook, while the admin UI remains inspection-only with no apply/grant button.
+
+**Contract:**
+- Dry-run/inspection requests (`dry_run: true` or `mode: 'inspect'`) remain non-mutating and return `inspection_only: true` plus `credit_granted: false`.
+- Mutating mode requires a non-empty `reason`.
+- The writer runs Stripe/DB inspection and `buildReconciliationGrantInput()` before any mutation.
+- The credit grant uses the shared serialized credit mutation path / LCB lock path (`lockBalanceAndMutate()`), creating a reconciliation `admin_add` ledger row with all Stripe identities carried from inspection.
+- Audit action: `admin.credit_reconciliation`.
+- Duplicate Stripe identity races are handled by re-inspection instead of retrying a grant.
+
+**No prod actions in this branch:** no prod writes, migrations, live Stripe calls, Stripe mutations, goodwill grants, reconciliation grants, payout crons, or UI grant path were run or added.
+
+**Files:** `api/admin.js`, `api/_admin-credit-reconciliation.js`, `api/_admin-credit-reconciliation-stripe.js`, `api/_credit-grant.js`, `tests/admin-credit-reconciliation-*.spec.js`, `tests/admin-credit-contract.spec.js`.
+
+---
+
 ## Phase 1: Booking & Payment System ✅ Complete
 
 ### 1.1 — Lesson Credits & Payments ✅
