@@ -930,10 +930,13 @@ async function showLearnerDetail(id) {
     // Stats cards
     html += '<div class="stats-grid" style="margin-bottom: 20px;">';
     html += '<div class="stat-card"><div class="stat-value">' + (tierLabels[learner?.current_tier] || 'N/A') + '</div><div class="stat-label">Current Tier</div></div>';
-    html += '<div class="stat-card" data-action="open-adjust-credits" data-learner-id="' + id + '" data-balance="' + (learner?.balance_minutes || 0) + '" style="cursor:pointer;position:relative;">' +
+    html += '<div class="stat-card" style="position:relative;">' +
       '<div class="stat-value">' + fmtBalanceMins(learner?.balance_minutes || 0) + '</div>' +
       '<div class="stat-label">Hours Balance</div>' +
-      '<div style="font-size:0.7rem;color:var(--accent);margin-top:4px;">Click to adjust</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">' +
+        '<button class="btn btn-sm btn-primary" data-action="open-goodwill-credit" data-learner-id="' + id + '">Grant goodwill</button>' +
+        '<button class="btn btn-sm" data-action="open-adjust-credits" data-learner-id="' + id + '" data-balance="' + (learner?.balance_minutes || 0) + '">Legacy adjust</button>' +
+      '</div>' +
       '</div>';
     html += '<div class="stat-card"><div class="stat-value">' + (data.progress?.total_sessions || 0) + '</div><div class="stat-label">Sessions Logged</div></div>';
     html += '<div class="stat-card"><div class="stat-value">' + Math.round((data.progress?.total_minutes || 0) / 60 * 10) / 10 + 'h</div><div class="stat-label">Total Hours</div></div>';
@@ -1142,6 +1145,151 @@ async function submitAdjustCredits() {
     if (typeof loadLearners === 'function') loadLearners();
   } catch (err) {
     alert('Error: ' + err.message);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// GOODWILL CREDIT
+// ══════════════════════════════════════════════════════════════════
+// Goodwill credit grants use the Step 5.5 per-instructor endpoint. This is
+// intentionally separate from legacy pooled adjustments.
+let _goodwillLearnerId = null;
+
+async function ensureGoodwillInstructorOptions() {
+  if (!instructorsCache.length) {
+    const res = await fetchAdmin('/api/admin?action=all-instructors', { headers: HEADERS });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load instructors');
+    instructorsCache = data.instructors || [];
+  }
+
+  return instructorsCache
+    .filter(i => i && i.id && i.active !== false)
+    .map(i => '<option value="' + i.id + '">' + esc(i.name || ('Instructor #' + i.id)) + '</option>')
+    .join('');
+}
+
+async function openGoodwillCredit(learnerId) {
+  _goodwillLearnerId = parseInt(learnerId, 10);
+  const learner = allLearners.find(l => l.id === _goodwillLearnerId) || {};
+  let m = document.getElementById('goodwill-credit-modal');
+  if (m) m.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'goodwill-credit-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+  modal.innerHTML = `
+    <div style="background:var(--white,#fff);border-radius:16px;padding:28px;max-width:560px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+      <h3 style="font-family:var(--font-head);margin:0 0 6px;">Grant goodwill credit</h3>
+      <p style="color:var(--muted);font-size:0.85rem;margin:0 0 18px;">Learner: <strong>${esc(learner.name || learner.email || ('#' + _goodwillLearnerId))}</strong></p>
+      <div class="form-group">
+        <label>Instructor</label>
+        <select id="goodwill-instructor" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);font-size:0.9rem;">
+          <option value="">Loading instructors...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Minutes</label>
+        <input type="number" id="goodwill-minutes" min="1" step="15" value="90"
+          style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);font-size:0.9rem;">
+      </div>
+      <div class="form-group">
+        <label>Absorbed by</label>
+        <div style="display:grid;gap:8px;">
+          <label style="display:block;text-transform:none;letter-spacing:0;color:var(--primary);font-size:0.9rem;font-weight:600;border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;">
+            <input type="radio" name="goodwill-absorbed" value="platform" checked style="margin-right:8px;accent-color:var(--accent);">
+            Platform absorbed
+            <span style="display:block;color:var(--muted);font-size:0.78rem;font-weight:400;margin:4px 0 0 24px;">Learner gets free credit; instructor is still paid when the lesson is delivered.</span>
+          </label>
+          <label style="display:block;text-transform:none;letter-spacing:0;color:var(--primary);font-size:0.9rem;font-weight:600;border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;">
+            <input type="radio" name="goodwill-absorbed" value="instructor" style="margin-right:8px;accent-color:var(--accent);">
+            Instructor absorbed
+            <span style="display:block;color:var(--muted);font-size:0.78rem;font-weight:400;margin:4px 0 0 24px;">Learner gets free credit; the matching lesson is excluded from instructor payout.</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Reason</label>
+        <textarea id="goodwill-reason" placeholder="Why is this credit being granted?"
+          style="width:100%;min-height:80px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);font-size:0.9rem;resize:vertical;"></textarea>
+      </div>
+      <div id="goodwill-status" style="min-height:20px;font-size:0.85rem;color:var(--muted);margin-top:4px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;">
+        <button class="btn" data-action="close-goodwill-credit">Cancel</button>
+        <button class="btn btn-primary" data-action="submit-goodwill-credit" id="goodwill-submit-btn">Grant credit</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  try {
+    const options = await ensureGoodwillInstructorOptions();
+    const select = document.getElementById('goodwill-instructor');
+    select.innerHTML = options || '<option value="">No active instructors</option>';
+  } catch (err) {
+    setGoodwillStatus(err.message || 'Failed to load instructors', 'error');
+  }
+}
+
+function setGoodwillStatus(message, type) {
+  const status = document.getElementById('goodwill-status');
+  if (!status) return;
+  status.textContent = message || '';
+  status.style.color = type === 'error' ? '#991b1b' : (type === 'success' ? '#166534' : 'var(--muted)');
+}
+
+function closeGoodwillCredit() {
+  const m = document.getElementById('goodwill-credit-modal');
+  if (m) m.remove();
+  _goodwillLearnerId = null;
+}
+
+async function submitGoodwillCredit() {
+  const btn = document.getElementById('goodwill-submit-btn');
+  const instructorId = parseInt(document.getElementById('goodwill-instructor').value, 10);
+  const minutes = parseInt(document.getElementById('goodwill-minutes').value, 10);
+  const reason = document.getElementById('goodwill-reason').value.trim();
+  const absorbed = document.querySelector('input[name="goodwill-absorbed"]:checked')?.value;
+
+  if (!_goodwillLearnerId) return setGoodwillStatus('Select a learner first.', 'error');
+  if (!instructorId) return setGoodwillStatus('Choose an instructor.', 'error');
+  if (!minutes || minutes <= 0) return setGoodwillStatus('Enter a positive number of minutes.', 'error');
+  if (!reason) return setGoodwillStatus('Enter a reason for the audit log.', 'error');
+
+  btn.disabled = true;
+  btn.textContent = 'Granting...';
+  setGoodwillStatus('Granting goodwill credit...', '');
+
+  try {
+    const res = await fetchAdmin('/api/admin?action=credit-goodwill', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        learner_id: _goodwillLearnerId,
+        instructor_id: instructorId,
+        minutes,
+        absorbed_by: absorbed,
+        reason
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || data.error || 'Failed to grant goodwill credit');
+    }
+
+    setGoodwillStatus('Goodwill credit granted. New instructor balance: ' + fmtBalanceMins(data.learner_balance?.balance_minutes || 0) + '.', 'success');
+    toast('Goodwill credit granted', 'success');
+    const refreshId = _goodwillLearnerId;
+    setTimeout(function () {
+      closeGoodwillCredit();
+      showLearnerDetail(refreshId);
+      loadLearners();
+    }, 900);
+  } catch (err) {
+    setGoodwillStatus(err.message || 'Failed to grant goodwill credit', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Grant credit';
   }
 }
 
@@ -2010,10 +2158,13 @@ document.addEventListener('click', function (e) {
   else if (a === 'mark-complete') markComplete(parseInt(t.dataset.id, 10));
   else if (a === 'show-learner-detail') showLearnerDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-adjust-credits') openAdjustCredits(t.dataset.learnerId, parseInt(t.dataset.balance, 10));
+  else if (a === 'open-goodwill-credit') openGoodwillCredit(t.dataset.learnerId);
   else if (a === 'confirm-delete-learner') confirmDeleteLearner(t.dataset.id, t.dataset.name);
   else if (a === 'adj-type') setAdjustType(t.dataset.type);
   else if (a === 'close-adjust-credits') closeAdjustCredits();
   else if (a === 'submit-adjust-credits') submitAdjustCredits();
+  else if (a === 'close-goodwill-credit') closeGoodwillCredit();
+  else if (a === 'submit-goodwill-credit') submitGoodwillCredit();
   else if (a === 'filter-video-cat') filterVideoCat(t.dataset.cat);
   else if (a === 'edit-video') openEditVideo(parseInt(t.dataset.id, 10));
   else if (a === 'delete-video') deleteVideo(parseInt(t.dataset.id, 10));
