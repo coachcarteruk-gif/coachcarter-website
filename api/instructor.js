@@ -1839,7 +1839,7 @@ async function handleCreateBooking(req, res) {
 
     // WhatsApp to learner
     await sendWhatsApp(learner.phone,
-      `✅ Lesson booked!\n\n📅 ${dateStr}\n⏰ ${start_time} – ${end_time}\n🚗 Instructor: ${instrDetails.name}\n\n${payMethod === 'credit' ? `1 lesson deducted. ${updated.credit_balance} remaining.\n\n` : ''}Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
+      `✅ Lesson booked!\n\n📅 ${dateStr}\n⏰ ${start_time} – ${end_time}\n🚗 Instructor: ${instrDetails.name}\n\n${payMethod === 'credit' ? `${durationStr} deducted. ${balanceStr} remaining.\n\n` : ''}Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
     );
 
     return res.json({
@@ -1850,7 +1850,9 @@ async function handleCreateBooking(req, res) {
       start_time,
       end_time,
       payment_method: payMethod,
-      credit_balance: updated.credit_balance
+      credit_balance: updated.credit_balance,
+      balance_minutes: updated.balance_minutes || 0,
+      balance_hours: ((updated.balance_minutes || 0) / 60).toFixed(1)
     });
   } catch (err) {
     console.error('instructor create-booking error:', err);
