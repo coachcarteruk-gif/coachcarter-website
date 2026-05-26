@@ -22,7 +22,7 @@ test.describe('admin goodwill credit UI', () => {
     expect(portalJs).toContain('minutes,');
     expect(portalJs).toContain('absorbed_by: absorbed');
     expect(portalJs).toContain('reason');
-    expect(portalJs).not.toContain('credit-reconciliation');
+    expect(portalJs).not.toContain("fetchAdmin('/api/admin?action=credit-goodwill-inspection'");
   });
 
   test('pins operator copy for payout consequences and visible states', () => {

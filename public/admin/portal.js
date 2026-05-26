@@ -942,6 +942,8 @@ async function showLearnerDetail(id) {
     html += '<div class="stat-card"><div class="stat-value">' + Math.round((data.progress?.total_minutes || 0) / 60 * 10) / 10 + 'h</div><div class="stat-label">Total Hours</div></div>';
     html += '</div>';
 
+    html += renderCreditReconciliationInspectionCard();
+
     // Booking history
     html += '<h3 style="font-family:var(--font-head);margin-bottom:12px;">Booking History</h3>';
     if (data.bookings.length === 0) {
@@ -1151,6 +1153,144 @@ async function submitAdjustCredits() {
 // ══════════════════════════════════════════════════════════════════
 // GOODWILL CREDIT
 // ══════════════════════════════════════════════════════════════════
+function renderCreditReconciliationInspectionCard() {
+  return `
+    <div id="credit-reconciliation-inspection-card" style="border:1px solid var(--border);border-radius:8px;padding:16px;margin:0 0 24px;background:var(--white,#fff);">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px;">
+        <div>
+          <h3 style="font-family:var(--font-head);margin:0 0 4px;font-size:1rem;">Credit reconciliation inspection</h3>
+          <p style="color:var(--muted);font-size:0.82rem;margin:0;">Inspection only. This checks Stripe and existing credit transactions; no credit is granted.</p>
+        </div>
+        <span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:#92400e;background:#fef3c7;border-radius:999px;padding:5px 8px;font-weight:700;">Dry run</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+        <div class="form-group" style="margin:0;">
+          <label for="recon-pi-id">Stripe PaymentIntent ID</label>
+          <input id="recon-pi-id" type="text" autocomplete="off" placeholder="pi_..."
+            style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);font-size:0.88rem;">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label for="recon-session-id">Checkout Session ID</label>
+          <input id="recon-session-id" type="text" autocomplete="off" placeholder="cs_..."
+            style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);font-size:0.88rem;">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label for="recon-charge-id">Charge ID</label>
+          <input id="recon-charge-id" type="text" autocomplete="off" placeholder="ch_..."
+            style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);font-size:0.88rem;">
+        </div>
+      </div>
+      <div class="form-group" style="margin:10px 0 0;">
+        <label for="recon-reason">Reason/note</label>
+        <textarea id="recon-reason" placeholder="Optional operator note for this inspection"
+          style="width:100%;min-height:58px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);font-size:0.88rem;resize:vertical;"></textarea>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;margin-top:12px;">
+        <div id="recon-inspection-status" style="min-height:20px;font-size:0.84rem;color:var(--muted);">Paste at least one Stripe identity to inspect.</div>
+        <button class="btn btn-sm btn-primary" data-action="submit-credit-reconciliation-inspection" id="recon-inspection-btn">Inspect only</button>
+      </div>
+      <div id="recon-inspection-result" style="margin-top:12px;"></div>
+    </div>
+  `;
+}
+
+function setCreditReconciliationInspectionStatus(message, type) {
+  const status = document.getElementById('recon-inspection-status');
+  if (!status) return;
+  status.textContent = message || '';
+  status.style.color = type === 'error' ? '#991b1b' : (type === 'success' ? '#166534' : 'var(--muted)');
+}
+
+function renderReconKV(label, value) {
+  return '<div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">' + esc(label) + '</div>' +
+    '<div style="font-size:0.9rem;font-weight:700;color:var(--primary);word-break:break-word;">' + esc(value == null || value === '' ? '-' : value) + '</div></div>';
+}
+
+function renderCreditReconciliationInspectionResult(data) {
+  const result = document.getElementById('recon-inspection-result');
+  if (!result) return;
+
+  const code = data.code || (data.ok ? 'INSPECTION_COMPLETE' : 'MANUAL_REVIEW');
+  const message = data.message || 'Inspection complete. No credit was granted.';
+  const boxStyle = 'border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--bg);';
+  const footer = '<p style="margin:10px 0 0;color:var(--muted);font-size:0.82rem;font-weight:700;">Inspection only. No credit was granted.</p>';
+
+  if (data.ready && data.grant_preview) {
+    const p = data.grant_preview;
+    result.innerHTML = '<div style="' + boxStyle + '">' +
+      '<div style="font-weight:800;color:#166534;margin-bottom:8px;">Ready preview: ' + esc(code) + '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">' +
+        renderReconKV('Learner id', p.learner_id) +
+        renderReconKV('Instructor id', p.instructor_id) +
+        renderReconKV('Minutes', p.minutes) +
+        renderReconKV('Amount', fmtPence(Number(p.amount_pence || 0))) +
+        renderReconKV('Stripe fee', fmtPence(Number(p.stripe_fee_pence || 0))) +
+        renderReconKV('Session id', p.stripe_session_id || data.stripe?.session_id) +
+        renderReconKV('PaymentIntent id', p.stripe_payment_intent_id || data.stripe?.payment_intent_id) +
+        renderReconKV('Charge id', p.stripe_charge_id || data.stripe?.charge_id) +
+      '</div>' + footer + '</div>';
+    return;
+  }
+
+  if (data.noop || data.code === 'ALREADY_RECONCILED') {
+    result.innerHTML = '<div style="' + boxStyle + '">' +
+      '<div style="font-weight:800;color:#166534;margin-bottom:8px;">Already reconciled: ' + esc(code) + '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">' +
+        renderReconKV('Transaction id', data.transaction_id || data.existing_credit_transaction?.id) +
+        renderReconKV('Created at', data.created_at ? new Date(data.created_at).toLocaleString('en-GB') : data.existing_credit_transaction?.created_at) +
+      '</div>' + footer + '</div>';
+    return;
+  }
+
+  result.innerHTML = '<div style="' + boxStyle + '">' +
+    '<div style="font-weight:800;color:#92400e;margin-bottom:8px;">Manual review: ' + esc(code) + '</div>' +
+    '<p style="margin:0;color:var(--primary);font-size:0.9rem;">' + esc(message) + '</p>' +
+    footer +
+  '</div>';
+}
+
+async function submitCreditReconciliationInspection() {
+  const btn = document.getElementById('recon-inspection-btn');
+  const paymentIntentId = document.getElementById('recon-pi-id')?.value.trim() || '';
+  const sessionId = document.getElementById('recon-session-id')?.value.trim() || '';
+  const chargeId = document.getElementById('recon-charge-id')?.value.trim() || '';
+  const reason = document.getElementById('recon-reason')?.value.trim() || '';
+
+  if (!paymentIntentId && !sessionId && !chargeId) {
+    return setCreditReconciliationInspectionStatus('Provide a PaymentIntent, Checkout Session, or Charge ID.', 'error');
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Inspecting...';
+  setCreditReconciliationInspectionStatus('Inspecting only; no credit will be granted.', '');
+
+  try {
+    const res = await fetchAdmin('/api/admin?action=credit-reconciliation', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        dry_run: true,
+        payment_intent_id: paymentIntentId || undefined,
+        session_id: sessionId || undefined,
+        charge_id: chargeId || undefined,
+        reason: reason || undefined
+      })
+    });
+    const data = await res.json();
+    renderCreditReconciliationInspectionResult(data);
+    if (data.ready || data.noop) {
+      setCreditReconciliationInspectionStatus('Inspection complete. No credit was granted.', 'success');
+    } else {
+      setCreditReconciliationInspectionStatus((data.code || 'Manual review') + ': no credit was granted.', 'error');
+    }
+  } catch (err) {
+    setCreditReconciliationInspectionStatus(err.message || 'Inspection failed. No credit was granted.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Inspect only';
+  }
+}
+
 // Goodwill credit grants use the Step 5.5 per-instructor endpoint. This is
 // intentionally separate from legacy pooled adjustments.
 let _goodwillLearnerId = null;
@@ -2163,6 +2303,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'adj-type') setAdjustType(t.dataset.type);
   else if (a === 'close-adjust-credits') closeAdjustCredits();
   else if (a === 'submit-adjust-credits') submitAdjustCredits();
+  else if (a === 'submit-credit-reconciliation-inspection') submitCreditReconciliationInspection();
   else if (a === 'close-goodwill-credit') closeGoodwillCredit();
   else if (a === 'submit-goodwill-credit') submitGoodwillCredit();
   else if (a === 'filter-video-cat') filterVideoCat(t.dataset.cat);

@@ -736,6 +736,8 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 | `payout-overview` | GET | JWT | All instructors' connect status, upcoming estimates, recent payouts |
 | `process-payouts` | POST | JWT | Manual trigger for payout processing (same logic as cron) |
 | `instructor-payout-history` | GET | JWT | Payout history with line items for a specific instructor |
+| `credit-reconciliation` | POST | JWT | Admin reconciliation for a missed Stripe credit-purchase webhook. Dry-run/inspection requests (`dry_run: true` or `mode: 'inspect'`) are non-mutating and return `inspection_only: true`, `credit_granted: false`. Mutating mode requires a non-empty `reason`, runs Stripe/DB inspection plus `buildReconciliationGrantInput()` before any mutation, writes through the shared serialized LCB credit mutation path, and audit-logs `admin.credit_reconciliation`. The admin UI currently exposes inspection only; no apply/grant button has shipped. |
+| `credit-goodwill` | POST | JWT | Grant goodwill credits to a learner/instructor pair through the shared serialized LCB credit mutation path. Requires learner/instructor scope, minutes, reason, and `absorbed_by` (`platform` or `instructor`). Audit-logged as `admin.credit_goodwill_grant` |
 | `invite-learner` | POST | JWT | Create learner account and send 7-day magic link invite email |
 | `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type (same as instructor version but admin-scoped). Audit-logged |
 | `instructor-blackouts` | GET | JWT | Get future blackout dates for an instructor (`?instructor_id=X`) |

@@ -61,12 +61,16 @@ const {
   validateReconciliationRequest,
 } = require('./_admin-credit-contracts');
 const { grantGoodwillCredits } = require('./_admin-credit-goodwill');
+const { inspectCreditReconciliation, grantReconciliationCredits } = require('./_admin-credit-reconciliation');
 const { logAudit } = require('./_audit');
 const { deleteLearnerCascade } = require('./_gdpr');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+function createStripeClient() {
+  return require('stripe')(process.env.STRIPE_SECRET_KEY);
+}
 
 // Helper: derive schoolId from admin JWT (superadmins can pass ?school_id= to target a specific school)
 function getAdminSchoolId(admin, req) {
@@ -1197,7 +1201,7 @@ async function handleAdjustCredits(req, res) {
 }
 
 // Step 5.5 goodwill grant. Uses the shared LCB-serialised credit mutation
-// path; credit-reconciliation below deliberately remains unimplemented.
+// path; credit-reconciliation below is gated by inspection before mutation.
 async function handleCreditGoodwillContract(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -1240,8 +1244,24 @@ async function handleCreditGoodwillContract(req, res) {
   }
 }
 
-// Step 5.5 contract stub only. This endpoint must never call Stripe or write
-// credit rows until the real reconciliation writer is implemented.
+function isCreditReconciliationDryRun(body = {}) {
+  return body.dry_run === true || body.mode === 'inspect';
+}
+
+function decorateCreditReconciliationInspection(result = {}) {
+  const message = result.message
+    ? `Inspection only: ${result.message} No credit was granted.`
+    : 'Inspection only: no credit was granted.';
+  return {
+    ...result,
+    inspection_only: true,
+    credit_granted: false,
+    message,
+  };
+}
+
+// Step 5.5 reconciliation. Dry-run requests remain inspection-only; mutating
+// requests are gated by the same inspection preview before any credit write.
 async function handleCreditReconciliationContract(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -1258,11 +1278,62 @@ async function handleCreditReconciliationContract(req, res) {
     });
   }
 
-  return res.status(501).json({
-    error: true,
-    code: 'NOT_IMPLEMENTED',
-    message: 'credit-reconciliation contract is specified; writer is not implemented yet.',
-  });
+  if (isCreditReconciliationDryRun(req.body || {})) {
+    try {
+      const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
+      const stripeClient = req.stripeClient || req._stripe || createStripeClient();
+      const result = await inspectCreditReconciliation({
+        sql,
+        stripe: stripeClient,
+        schoolId,
+        input: validated.input,
+      });
+
+      return res.status(result.status || 200).json(decorateCreditReconciliationInspection(result));
+    } catch (err) {
+      console.error('admin credit-reconciliation inspection error:', err.message);
+      reportError('/api/admin', err);
+      return res.status(500).json({
+        error: true,
+        code: 'CREDIT_RECONCILIATION_INSPECTION_FAILED',
+        message: 'Inspection only: failed to inspect credit reconciliation. No credit was granted.',
+        inspection_only: true,
+        credit_granted: false,
+      });
+    }
+  }
+
+  if (!validated.input.reason) {
+    return res.status(400).json({
+      error: true,
+      code: 'INVALID_REASON',
+      message: 'reason is required.',
+    });
+  }
+
+  try {
+    const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
+    const stripeClient = req.stripeClient || req._stripe || createStripeClient();
+    const result = await grantReconciliationCredits({
+      sql,
+      stripe: stripeClient,
+      admin,
+      schoolId,
+      input: validated.input,
+      req,
+    });
+
+    return res.status(result.status || 200).json(result);
+  } catch (err) {
+    console.error('admin credit-reconciliation error:', err.message);
+    reportError('/api/admin', err);
+    return res.status(500).json({
+      error: true,
+      code: 'CREDIT_RECONCILIATION_FAILED',
+      message: 'Failed to reconcile credits.',
+      credit_granted: false,
+    });
+  }
 }
 
 // Body: { learner_id }
@@ -1501,7 +1572,7 @@ async function handlePlatformBalance(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const result = await computePlatformBalance(sql, stripe);
+    const result = await computePlatformBalance(sql, createStripeClient());
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('platform-balance error:', err);
@@ -1529,7 +1600,7 @@ async function handleProcessPayouts(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const results = await processAllPayouts(sql, stripe, schoolId ? { schoolId } : {});
+    const results = await processAllPayouts(sql, createStripeClient(), schoolId ? { schoolId } : {});
 
     // Send the same weekly summary email that the Friday cron sends so the
     // admin trigger and the cron produce identical artefacts. Fire-and-forget:

@@ -640,9 +640,10 @@ async function grantCreditsPhase2A({
 //   - magic-link.js welcome bonus
 //
 // The Stripe-session purchase paths (webhook.handleCreditPurchase plus the
-// offers.js handleFreeOffer credit grant) still go through grantCredits() —
-// that path writes Stripe linkage fields (session_id, payment_intent_id,
-// charge_id, effective rate) which this helper deliberately doesn't.
+// offers.js handleFreeOffer credit grant) still go through grantCredits() for
+// purchase idempotency and rate snapshot handling. This helper can also carry
+// optional Stripe linkage fields (session_id, payment_intent_id, charge_id)
+// for reconciliation-style ledger rows.
 // The slot-purchase net-zero pattern in webhook.handleSlotBooking and the
 // slot-pinned arm of webhook.handleOfferBooking use lockBalanceAdjustLCB
 // below (balance-only, no separate ledger row).
@@ -685,6 +686,9 @@ async function lockBalanceAndMutate(sql, args) {
   const stripeFeePence = toOptionalNonNegativeInteger(args.stripeFeePence, 'stripeFeePence');
   const creditsDelta   = Number.isInteger(args.creditsDelta) ? args.creditsDelta : 0;
   const allowOverdraft = Boolean(args.allowOverdraft);
+  const stripeSessionId       = toOptionalString(args.stripeSessionId, 'stripeSessionId');
+  const stripePaymentIntentId = toOptionalString(args.stripePaymentIntentId, 'stripePaymentIntentId');
+  const stripeChargeId        = toOptionalString(args.stripeChargeId, 'stripeChargeId');
 
   // Phase-2A optional fields. instructorId is REQUIRED when Phase 2A is live;
   // we mirror the dispatcher's grandfather behaviour so callers that haven't
@@ -699,6 +703,7 @@ async function lockBalanceAndMutate(sql, args) {
     return lockBalanceAndMutatePre2A({
       sql, learnerId, schoolId, delta, ledgerType, reason,
       amountPence, stripeFeePence, creditsDelta, allowOverdraft,
+      stripeSessionId, stripePaymentIntentId, stripeChargeId,
     });
   }
 
@@ -710,6 +715,7 @@ async function lockBalanceAndMutate(sql, args) {
     return lockBalanceAndMutatePre2A({
       sql, learnerId, schoolId, delta, ledgerType, reason,
       amountPence, stripeFeePence, creditsDelta, allowOverdraft,
+      stripeSessionId, stripePaymentIntentId, stripeChargeId,
     });
   }
 
@@ -722,12 +728,14 @@ async function lockBalanceAndMutate(sql, args) {
     sql, learnerId, instructorId, schoolId, delta, ledgerType, reason,
     amountPence, stripeFeePence, creditsDelta, allowOverdraft,
     effectiveRate, source, absorbedBy,
+    stripeSessionId, stripePaymentIntentId, stripeChargeId,
   });
 }
 
 async function lockBalanceAndMutatePre2A({
   sql, learnerId, schoolId, delta, ledgerType, reason,
   amountPence, stripeFeePence, creditsDelta, allowOverdraft,
+  stripeSessionId, stripePaymentIntentId, stripeChargeId,
 }) {
   // Insufficient-balance guard: deducts (delta < 0) require enough balance
   // to absorb the deduction without going negative. The UPDATE WHERE clause
@@ -746,9 +754,11 @@ async function lockBalanceAndMutatePre2A({
     ),
     inserted AS (
       INSERT INTO credit_transactions
-        (learner_id, type, minutes, credits, amount_pence, payment_method, school_id, stripe_fee_pence)
+        (learner_id, type, minutes, credits, amount_pence, payment_method, school_id, stripe_fee_pence,
+         stripe_session_id, stripe_payment_intent_id, stripe_charge_id)
       SELECT
-        ${learnerId}, ${ledgerType}, ${delta}, ${creditsDelta}, ${amountPence}, ${reason}, ${schoolId}, ${stripeFeePence}
+        ${learnerId}, ${ledgerType}, ${delta}, ${creditsDelta}, ${amountPence}, ${reason}, ${schoolId}, ${stripeFeePence},
+        ${stripeSessionId}, ${stripePaymentIntentId}, ${stripeChargeId}
       FROM locked
       WHERE ${deductGuard === null}::boolean
          OR (SELECT balance_minutes FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}) >= ${deductGuard}
@@ -794,6 +804,7 @@ async function lockBalanceAndMutatePhase2A({
   sql, learnerId, instructorId, schoolId, delta, ledgerType, reason,
   amountPence, stripeFeePence, creditsDelta, allowOverdraft,
   effectiveRate, source, absorbedBy,
+  stripeSessionId, stripePaymentIntentId, stripeChargeId,
 }) {
   // Phase-2A insufficient-balance guard reads the LCB row's balance_minutes,
   // not the pooled learner_users.balance_minutes — credits are scoped per
@@ -913,11 +924,13 @@ async function lockBalanceAndMutatePhase2A({
       INSERT INTO credit_transactions
         (learner_id, instructor_id, school_id, type, minutes, credits,
          amount_pence, payment_method, stripe_fee_pence,
-         effective_rate_pence_per_minute, source, absorbed_by)
+         effective_rate_pence_per_minute, source, absorbed_by,
+         stripe_session_id, stripe_payment_intent_id, stripe_charge_id)
       SELECT
         ${learnerId}, ${instructorId}, ${schoolId}, ${ledgerType}, ${delta}, ${creditsDelta},
         ${amountPence}, ${reason}, ${stripeFeePence},
-        ${effectiveRate}, ${resolvedSource}, ${absorbedBy}
+        ${effectiveRate}, ${resolvedSource}, ${absorbedBy},
+        ${stripeSessionId}, ${stripePaymentIntentId}, ${stripeChargeId}
       FROM lcb_write
       RETURNING id
     )
