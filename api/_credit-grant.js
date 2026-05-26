@@ -682,6 +682,7 @@ async function lockBalanceAndMutate(sql, args) {
   }
   const reason         = String(args.reason || ledgerType).slice(0, 255);
   const amountPence    = toNonNegativeInteger(args.amountPence || 0, 'amountPence');
+  const stripeFeePence = toOptionalNonNegativeInteger(args.stripeFeePence, 'stripeFeePence');
   const creditsDelta   = Number.isInteger(args.creditsDelta) ? args.creditsDelta : 0;
   const allowOverdraft = Boolean(args.allowOverdraft);
 
@@ -697,7 +698,7 @@ async function lockBalanceAndMutate(sql, args) {
   if (!PHASE_2A_IMPLEMENTED) {
     return lockBalanceAndMutatePre2A({
       sql, learnerId, schoolId, delta, ledgerType, reason,
-      amountPence, creditsDelta, allowOverdraft,
+      amountPence, stripeFeePence, creditsDelta, allowOverdraft,
     });
   }
 
@@ -708,7 +709,7 @@ async function lockBalanceAndMutate(sql, args) {
   if (!phase2A) {
     return lockBalanceAndMutatePre2A({
       sql, learnerId, schoolId, delta, ledgerType, reason,
-      amountPence, creditsDelta, allowOverdraft,
+      amountPence, stripeFeePence, creditsDelta, allowOverdraft,
     });
   }
 
@@ -719,14 +720,14 @@ async function lockBalanceAndMutate(sql, args) {
 
   return lockBalanceAndMutatePhase2A({
     sql, learnerId, instructorId, schoolId, delta, ledgerType, reason,
-    amountPence, creditsDelta, allowOverdraft,
+    amountPence, stripeFeePence, creditsDelta, allowOverdraft,
     effectiveRate, source, absorbedBy,
   });
 }
 
 async function lockBalanceAndMutatePre2A({
   sql, learnerId, schoolId, delta, ledgerType, reason,
-  amountPence, creditsDelta, allowOverdraft,
+  amountPence, stripeFeePence, creditsDelta, allowOverdraft,
 }) {
   // Insufficient-balance guard: deducts (delta < 0) require enough balance
   // to absorb the deduction without going negative. The UPDATE WHERE clause
@@ -745,9 +746,9 @@ async function lockBalanceAndMutatePre2A({
     ),
     inserted AS (
       INSERT INTO credit_transactions
-        (learner_id, type, minutes, credits, amount_pence, payment_method, school_id)
+        (learner_id, type, minutes, credits, amount_pence, payment_method, school_id, stripe_fee_pence)
       SELECT
-        ${learnerId}, ${ledgerType}, ${delta}, ${creditsDelta}, ${amountPence}, ${reason}, ${schoolId}
+        ${learnerId}, ${ledgerType}, ${delta}, ${creditsDelta}, ${amountPence}, ${reason}, ${schoolId}, ${stripeFeePence}
       FROM locked
       WHERE ${deductGuard === null}::boolean
          OR (SELECT balance_minutes FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}) >= ${deductGuard}
@@ -791,7 +792,7 @@ async function lockBalanceAndMutatePre2A({
 
 async function lockBalanceAndMutatePhase2A({
   sql, learnerId, instructorId, schoolId, delta, ledgerType, reason,
-  amountPence, creditsDelta, allowOverdraft,
+  amountPence, stripeFeePence, creditsDelta, allowOverdraft,
   effectiveRate, source, absorbedBy,
 }) {
   // Phase-2A insufficient-balance guard reads the LCB row's balance_minutes,
@@ -911,11 +912,11 @@ async function lockBalanceAndMutatePhase2A({
     inserted AS (
       INSERT INTO credit_transactions
         (learner_id, instructor_id, school_id, type, minutes, credits,
-         amount_pence, payment_method,
+         amount_pence, payment_method, stripe_fee_pence,
          effective_rate_pence_per_minute, source, absorbed_by)
       SELECT
         ${learnerId}, ${instructorId}, ${schoolId}, ${ledgerType}, ${delta}, ${creditsDelta},
-        ${amountPence}, ${reason},
+        ${amountPence}, ${reason}, ${stripeFeePence},
         ${effectiveRate}, ${resolvedSource}, ${absorbedBy}
       FROM lcb_write
       RETURNING id
