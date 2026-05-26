@@ -20,6 +20,9 @@ const {
   validateReconciliationRequest,
   evaluateReconciliationStripeState,
 } = require('../api/_admin-credit-contracts');
+const {
+  grantGoodwillCredits,
+} = require('../api/_admin-credit-goodwill');
 
 function makeRes() {
   return {
@@ -129,22 +132,137 @@ test.describe('admin Step 5.5 credit endpoints', () => {
       .toMatchObject({ ok: false, code: 'INVALID_ABSORBED_BY' });
     expect(validateGoodwillRequest({ learner_id: 10, instructor_id: 4, minutes: 60, absorbed_by: 'platform' }, { schoolId: null }))
       .toMatchObject({ ok: false, code: 'SCHOOL_SCOPE_REQUIRED' });
+    expect(validateGoodwillRequest({ learner_id: 10, instructor_id: 4, minutes: 60, absorbed_by: 'platform', reason: '   ' }, { schoolId: 1 }))
+      .toMatchObject({ ok: false, code: 'INVALID_REASON' });
   });
 
-  test('credit-goodwill valid requests stop at the non-mutating contract stub', async () => {
-    const res = await callAdmin('credit-goodwill', {
-      headers: csrfAuthedHeaders(),
-      body: { learner_id: 10, instructor_id: 4, minutes: 90, absorbed_by: 'instructor', reason: 'agreed goodwill' },
+  test('credit-goodwill grants through the shared credit mutation path and audit log', async () => {
+    const calls = [];
+    const sql = (strings, ...values) => {
+      calls.push({ text: strings.join('?'), values });
+      if (strings.join('?').includes('AS learner_ok')) {
+        return Promise.resolve([{ learner_ok: true, instructor_ok: true }]);
+      }
+      return Promise.resolve([]);
+    };
+    const mutationCalls = [];
+    const auditCalls = [];
+
+    const result = await grantGoodwillCredits({
+      sql,
+      admin: { id: 123, email: 'admin@example.test' },
+      schoolId: 1,
+      input: {
+        learnerId: 10,
+        instructorId: 4,
+        schoolId: 1,
+        minutes: 90,
+        absorbedBy: 'instructor',
+        reason: 'agreed goodwill',
+      },
+      req: { headers: {} },
+      rateGetter: async () => 92,
+      mutateCredits: async (sqlArg, args) => {
+        mutationCalls.push({ sqlArg, args });
+        return { ok: true, transactionId: 55, balanceMinutes: 150, instructorId: args.instructorId };
+      },
+      auditLogger: async (sqlArg, args) => {
+        auditCalls.push({ sqlArg, args });
+      },
     });
 
-    expect(res.statusCode).toBe(501);
-    expect(res.body).toMatchObject({ error: true, code: 'NOT_IMPLEMENTED' });
+    expect(result).toEqual({
+      ok: true,
+      credit_transaction: {
+        id: 55,
+        source: 'goodwill',
+        type: 'admin_add',
+        amount_pence: 0,
+        stripe_fee_pence: 0,
+        absorbed_by: 'instructor',
+      },
+      learner_balance: {
+        learner_id: 10,
+        instructor_id: 4,
+        school_id: 1,
+        balance_minutes: 150,
+      },
+      audit_action: 'admin.credit_goodwill_grant',
+    });
+    expect(calls[0].text).toContain('FROM learner_users');
+    expect(calls[0].text).toContain('FROM instructors');
+    expect(calls[0].values).toEqual([10, 1, 4, 1]);
+    expect(mutationCalls).toHaveLength(1);
+    expect(mutationCalls[0].args).toMatchObject({
+      learnerId: 10,
+      instructorId: 4,
+      schoolId: 1,
+      delta: 90,
+      ledgerType: 'admin_add',
+      amountPence: 0,
+      stripeFeePence: 0,
+      effectiveRatePencePerMinute: 92,
+      source: 'goodwill',
+      absorbedBy: 'instructor',
+      allowOverdraft: false,
+    });
+    expect(auditCalls).toHaveLength(1);
+    expect(auditCalls[0].args).toMatchObject({
+      adminId: 123,
+      adminEmail: 'admin@example.test',
+      action: 'admin.credit_goodwill_grant',
+      targetType: 'learner',
+      targetId: 10,
+      schoolId: 1,
+      details: {
+        learner_id: 10,
+        instructor_id: 4,
+        minutes: 90,
+        absorbed_by: 'instructor',
+        reason: 'agreed goodwill',
+        credit_transaction_id: 55,
+        effective_rate_pence_per_minute: 92,
+      },
+    });
+  });
+
+  test('credit-goodwill refuses unscoped learner/instructor pairs without mutating or auditing', async () => {
+    const sql = (strings) => {
+      if (strings.join('?').includes('AS learner_ok')) {
+        return Promise.resolve([{ learner_ok: false, instructor_ok: true }]);
+      }
+      return Promise.resolve([]);
+    };
+    let mutated = false;
+    let audited = false;
+
+    const result = await grantGoodwillCredits({
+      sql,
+      admin: { id: 123, email: 'admin@example.test' },
+      schoolId: 1,
+      input: {
+        learnerId: 999999,
+        instructorId: 4,
+        schoolId: 1,
+        minutes: 90,
+        absorbedBy: 'platform',
+        reason: 'service recovery',
+      },
+      mutateCredits: async () => { mutated = true; },
+      auditLogger: async () => { audited = true; },
+      rateGetter: async () => 92,
+    });
+
+    expect(result).toEqual({ ok: false, ...SCOPED_LOOKUP_REJECT });
+    expect(mutated).toBe(false);
+    expect(audited).toBe(false);
   });
 
   test('credit-goodwill pins the eventual ledger and audit shape', () => {
     expect(GOODWILL_EXPECTED_WRITE_SHAPE).toEqual({
       creditTransaction: {
         source: 'goodwill',
+        type: 'admin_add',
         amount_pence: 0,
         stripe_fee_pence: 0,
         absorbed_by: 'copied_from_request',

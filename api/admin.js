@@ -60,6 +60,7 @@ const {
   validateGoodwillRequest,
   validateReconciliationRequest,
 } = require('./_admin-credit-contracts');
+const { grantGoodwillCredits } = require('./_admin-credit-goodwill');
 const { logAudit } = require('./_audit');
 const { deleteLearnerCascade } = require('./_gdpr');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
@@ -1195,8 +1196,8 @@ async function handleAdjustCredits(req, res) {
   }
 }
 
-// Step 5.5 contract stub only. Auth + request validation are live; the money
-// writer remains intentionally unimplemented until the FIFO writer slice lands.
+// Step 5.5 goodwill grant. Uses the shared LCB-serialised credit mutation
+// path; credit-reconciliation below deliberately remains unimplemented.
 async function handleCreditGoodwillContract(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -1213,11 +1214,30 @@ async function handleCreditGoodwillContract(req, res) {
     });
   }
 
-  return res.status(501).json({
-    error: true,
-    code: 'NOT_IMPLEMENTED',
-    message: 'credit-goodwill contract is specified; writer is not implemented yet.',
-  });
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const result = await grantGoodwillCredits({
+      sql,
+      admin,
+      schoolId,
+      input: validated.input,
+      req,
+    });
+
+    if (!result.ok) {
+      return res.status(result.status || 500).json({
+        error: true,
+        code: result.code || 'CREDIT_GOODWILL_FAILED',
+        message: result.message || 'Failed to grant goodwill credits.',
+      });
+    }
+
+    return res.json(result);
+  } catch (err) {
+    console.error('admin credit-goodwill error:', err.message);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: true, code: 'CREDIT_GOODWILL_FAILED', message: 'Failed to grant goodwill credits.' });
+  }
 }
 
 // Step 5.5 contract stub only. This endpoint must never call Stripe or write

@@ -8,6 +8,7 @@ const GOODWILL_ABSORBERS = Object.freeze(['platform', 'instructor']);
 const GOODWILL_EXPECTED_WRITE_SHAPE = Object.freeze({
   creditTransaction: Object.freeze({
     source: 'goodwill',
+    type: 'admin_add',
     amount_pence: 0,
     stripe_fee_pence: 0,
     absorbed_by: 'copied_from_request',
@@ -78,6 +79,11 @@ function validateGoodwillRequest(body = {}, { schoolId } = {}) {
     return validationError('INVALID_ABSORBED_BY', "absorbed_by must be 'platform' or 'instructor'.");
   }
 
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+  if (!reason) {
+    return validationError('INVALID_REASON', 'reason is required.');
+  }
+
   return {
     ok: true,
     input: {
@@ -86,7 +92,7 @@ function validateGoodwillRequest(body = {}, { schoolId } = {}) {
       schoolId: Number(schoolId),
       minutes,
       absorbedBy: body.absorbed_by,
-      reason: typeof body.reason === 'string' ? body.reason.trim() : '',
+      reason,
     },
   };
 }
