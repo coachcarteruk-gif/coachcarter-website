@@ -63,12 +63,21 @@ function makeMockStripe({
   sessions = {},
   charges = {},
   sessionsByPaymentIntent = {},
+  rejectUnsupportedPaymentIntentExpand = false,
 } = {}) {
   const calls = [];
   const stripe = {
     paymentIntents: {
       retrieve: async (id, options) => {
         calls.push(['paymentIntents.retrieve', id, options]);
+        if (
+          rejectUnsupportedPaymentIntentExpand
+          && options
+          && Array.isArray(options.expand)
+          && options.expand.includes('charges.data.balance_transaction')
+        ) {
+          throw new Error('Unsupported expand: charges.data.balance_transaction');
+        }
         return paymentIntents[id] || null;
       },
     },
@@ -120,6 +129,9 @@ test.describe('admin credit-reconciliation Stripe inspection helper', () => {
       'paymentIntents.retrieve',
       'checkout.sessions.list',
     ]);
+    expect(stripe.calls[0][2]).toEqual({
+      expand: ['latest_charge.balance_transaction'],
+    });
 
     expect(evaluateReconciliationStripeState({
       paymentIntent: result.paymentIntent,
@@ -197,6 +209,39 @@ test.describe('admin credit-reconciliation Stripe inspection helper', () => {
       'paymentIntents.retrieve',
       'checkout.sessions.list',
       'charges.retrieve',
+    ]);
+  });
+
+  test('does not request unsupported PaymentIntent charges expansion and still resolves charge fallback', async () => {
+    const stripe = makeMockStripe({
+      paymentIntents: {
+        pi_mock: paymentIntent({ latest_charge: 'ch_mock' }),
+      },
+      sessionsByPaymentIntent: { pi_mock: [checkoutSession()] },
+      charges: { ch_mock: charge({ balance_transaction: { id: 'txn_mock', fee: 612 } }) },
+      rejectUnsupportedPaymentIntentExpand: true,
+    });
+
+    const result = await inspectReconciliationStripePayment({
+      stripe,
+      paymentIntentId: 'pi_mock',
+    });
+
+    expect(result).toMatchObject({
+      paymentIntentId: 'pi_mock',
+      sessionId: 'cs_mock',
+      chargeId: 'ch_mock',
+      stripeFeePence: 612,
+    });
+    expect(stripe.calls[0]).toEqual([
+      'paymentIntents.retrieve',
+      'pi_mock',
+      { expand: ['latest_charge.balance_transaction'] },
+    ]);
+    expect(stripe.calls.find((call) => call[0] === 'charges.retrieve')).toEqual([
+      'charges.retrieve',
+      'ch_mock',
+      { expand: ['payment_intent', 'balance_transaction'] },
     ]);
   });
 
