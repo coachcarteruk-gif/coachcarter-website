@@ -7,6 +7,7 @@ const { createTransporter } = require('./_auth-helpers');
 const { SCHEDULED, blocksSlot, isTerminal } = require('./_booking-status');
 const { fetchSessionFeePence } = require('./_stripe-fee');
 const { grantCredits, lockBalanceAdjustLCB } = require('./_credit-grant');
+const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 
 
 // Resolve school_id from Stripe metadata with a tenant-safe fallback.
@@ -735,6 +736,42 @@ async function ensureSlotBookingBcs(sql, {
   `;
 }
 
+async function ensureOfferSeriesBcs(sql, {
+  schoolId,
+  bookedLessons,
+  creditTransaction,
+  durationMins,
+}) {
+  const bookingTargets = bookedLessons.map(booking => ({
+    booking_id: booking.booking_id,
+    minutes: durationMins,
+  }));
+  const bcsRows = splitFifoPlanAcrossBookings({
+    plannedRows: [{
+      credit_transaction_id: creditTransaction.id,
+      minutes_drawn: creditTransaction.minutes,
+      rate_pence_per_minute: creditTransaction.effective_rate_pence_per_minute,
+      contribution_pence: creditTransaction.amount_pence,
+      stripe_fee_pence: creditTransaction.stripe_fee_pence ?? 0,
+      absorbed_by: null,
+      school_id: schoolId,
+    }],
+    bookingTargets,
+  });
+
+  for (const row of bcsRows) {
+    await sql`
+      INSERT INTO booking_credit_sources
+        (school_id, booking_id, credit_transaction_id, minutes_drawn,
+         rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
+      VALUES
+        (${row.school_id}, ${row.booking_id}, ${row.credit_transaction_id}, ${row.minutes_drawn},
+         ${row.rate_pence_per_minute}, ${row.contribution_pence}, ${row.stripe_fee_pence}, ${row.absorbed_by})
+      ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING
+    `;
+  }
+}
+
 // Generate .ics calendar file for slot bookings
 function generateICS(booking) {
   const dtStart = toICSDate(booking.scheduled_date, booking.start_time);
@@ -825,7 +862,7 @@ async function handleOfferBooking(session) {
     if (offer.status === 'accepted') {
       if (!isFlexible && repeatWeeks === 1 && offer.booking_id) {
         const [existingOfferCreditTx] = await sql`
-          SELECT id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute
+          SELECT id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute, minutes
             FROM credit_transactions
            WHERE stripe_session_id = ${session.id}
              AND type = 'slot_purchase'
@@ -932,7 +969,7 @@ async function handleOfferBooking(session) {
         VALUES
           (${learnerId}, 'slot_purchase', ${totalCredits}, ${totalAmountPence}, 'card', ${session.id}, ${totalMinutes}, ${schoolId},
            ${stripeFeePence}, ${instructorId}, ${effectiveRatePencePerMinute}, ${paymentIntentId}, 'stripe')
-        RETURNING id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute
+        RETURNING id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute, minutes
       `;
       offerCreditTx = creditTx;
     } catch (insertErr) {
@@ -1075,13 +1112,21 @@ async function handleOfferBooking(session) {
       return;
     }
 
-    // Step 5 narrow slice: only single-slot, non-flexible paid offer
-    // acceptances get BCS attribution here. Repeat, flexible, and free offers
-    // deliberately remain outside this writer until their dedicated slices.
+    // Step 5 narrow slice: paid, non-flexible, slot-pinned offers get BCS
+    // attribution once every requested repeat week has been booked. Partial
+    // repeats need a later CSA-aware slice because Stripe partially refunds
+    // unused weeks while the source CT remains immutable.
     if (!isFlexible && repeatWeeks === 1 && seriesResult.booked.length === 1) {
       await ensureSlotBookingBcs(sql, {
         schoolId,
         bookingId: seriesResult.booked[0].booking_id,
+        creditTransaction: offerCreditTx,
+        durationMins,
+      });
+    } else if (!isFlexible && repeatWeeks > 1 && seriesResult.booked.length === repeatWeeks) {
+      await ensureOfferSeriesBcs(sql, {
+        schoolId,
+        bookedLessons: seriesResult.booked,
         creditTransaction: offerCreditTx,
         durationMins,
       });

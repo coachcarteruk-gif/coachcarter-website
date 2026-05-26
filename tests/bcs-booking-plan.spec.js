@@ -96,6 +96,35 @@ test.describe('splitFifoPlanAcrossBookings', () => {
       ]);
   });
 
+  test('paid repeat offer series splits one source CT across every booked week exactly', () => {
+    const rows = splitFifoPlanAcrossBookings({
+      plannedRows: [
+        row({
+          credit_transaction_id: 42,
+          minutes_drawn: 270,
+          contribution_pence: 24750,
+          stripe_fee_pence: 431,
+          school_id: 2,
+          absorbed_by: null,
+        }),
+      ],
+      bookingTargets: [
+        { booking_id: 1101, minutes: 90 },
+        { booking_id: 1102, minutes: 90 },
+        { booking_id: 1103, minutes: 90 },
+      ],
+    });
+
+    expect(rows).toHaveLength(3);
+    expect(rows.map(r => r.booking_id)).toEqual([1101, 1102, 1103]);
+    expect(rows.every(r => r.credit_transaction_id === 42)).toBe(true);
+    expect(rows.every(r => r.school_id === 2)).toBe(true);
+    expect(rows.reduce((sum, r) => sum + r.minutes_drawn, 0)).toBe(270);
+    expect(rows.reduce((sum, r) => sum + r.contribution_pence, 0)).toBe(24750);
+    expect(rows.reduce((sum, r) => sum + r.stripe_fee_pence, 0)).toBe(431);
+    expect(rows.map(r => r.stripe_fee_pence)).toEqual([143, 143, 145]);
+  });
+
   test('absorbed_by and school_id propagate to every split row', () => {
     const rows = splitFifoPlanAcrossBookings({
       plannedRows: [
