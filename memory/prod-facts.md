@@ -82,13 +82,18 @@ Earlier markers exist for Steps 1c / 2 / 2.5 / Plan A / Plan B1 — re-query bef
 
 12 cron entrypoints total, all wrapped in `withCronLock` (PR #155).
 
-## Drift state (as of 2026-05-21 12:45:40 UTC)
+## Drift state (as of 2026-05-26 09:47:19 UTC)
 
 | Field | Value | Status |
 |---|---|---|
 | `drift_count` | 0 | verified |
+| `missing_bcs_count` | 0 | verified |
+| `pairs_scanned` | 30 | verified |
 | `drift_summary` | `[]` | verified |
+| `missing_bcs_summary` | `[]` | verified |
 | `alert_sent` | `false` | verified |
+
+Latest manual read-only `cron-credit-reconcile` trigger was run post-PR-#218 deploy at 2026-05-26T09:47:19.119Z. It returned full schema mode with BCS/CSA/grandfathering columns present: `ok=true`, `schema_mode=full`, `has_bcs=true`, `has_bcs_school_id=true`, `has_csa=true`, `has_grandfathered_at=true`, `grandfathered_count=0`, `missing_bcs_truncated=false`, and `drift_truncated=false`. No prod writes, migrations, payout crons, Neon/prod integration tests, live Stripe calls, Stripe mutations, goodwill grants, reconciliation grants, or UI apply/grant path were run.
 
 ## Bookings deliberately left in refund-without-credit-return shape
 

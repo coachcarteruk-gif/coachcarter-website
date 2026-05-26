@@ -18,7 +18,9 @@ Backend-only follow-up to the Step 5.5 reconciliation inspection slices. `POST /
 - Audit action: `admin.credit_reconciliation`.
 - Duplicate Stripe identity races are handled by re-inspection instead of retrying a grant.
 
-**No prod actions in this branch:** no prod writes, migrations, live Stripe calls, Stripe mutations, goodwill grants, reconciliation grants, payout crons, or UI grant path were run or added.
+**Deploy note:** PR #218 merged and deployed on 2026-05-26. Blocker fixes in pushed commit `48ebc07` reject refunded latest/resolved Stripe Charges via `charge.amount_refunded > 0` while keeping the PaymentIntent-level guard, and verify learner/instructor school scope before `lockBalanceAndMutate()`. Full local `npm.cmd test` after fixes passed: 193 passed / 169 skipped.
+
+**Post-deploy prod note:** read-only `cron-credit-reconcile` ran at 2026-05-26T09:47:19.119Z and returned clean: `pairs_scanned=30`, `drift_count=0`, `missing_bcs_count=0`, `grandfathered_count=0`, `alert_sent=false`, empty missing-BCS and drift summaries. No real-payment reconciliation grants, goodwill grants, UI apply/grant path, migrations, payout crons, Neon/prod integration tests, live Stripe calls, or Stripe mutations were run.
 
 **Files:** `api/admin.js`, `api/_admin-credit-reconciliation.js`, `api/_admin-credit-reconciliation-stripe.js`, `api/_credit-grant.js`, `tests/admin-credit-reconciliation-*.spec.js`, `tests/admin-credit-contract.spec.js`.
 
