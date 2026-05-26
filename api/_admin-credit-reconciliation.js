@@ -7,6 +7,7 @@
 
 const {
   evaluateReconciliationStripeState,
+  SCOPED_LOOKUP_REJECT,
 } = require('./_admin-credit-contracts');
 const { lockBalanceAndMutate } = require('./_credit-grant');
 const { logAudit } = require('./_audit');
@@ -229,6 +230,35 @@ function alreadyReconciledResult(result, existingCreditTransaction) {
   };
 }
 
+async function assertReconciliationScope(sql, { learnerId, instructorId, schoolId }) {
+  const [scope] = await sql`
+    SELECT
+      EXISTS (
+        SELECT 1
+          FROM learner_users
+         WHERE id = ${learnerId}
+           AND school_id = ${schoolId}
+      ) AS learner_ok,
+      EXISTS (
+        SELECT 1
+          FROM instructors
+         WHERE id = ${instructorId}
+           AND school_id = ${schoolId}
+      ) AS instructor_ok
+  `;
+
+  if (!scope || scope.learner_ok !== true || scope.instructor_ok !== true) {
+    return {
+      ok: false,
+      status: SCOPED_LOOKUP_REJECT.status,
+      code: SCOPED_LOOKUP_REJECT.code,
+      message: SCOPED_LOOKUP_REJECT.message,
+    };
+  }
+
+  return { ok: true };
+}
+
 function readyGrantPreviewResult({ schoolId, evaluation, stripeInspection }) {
   const input = evaluation.input;
   return {
@@ -400,6 +430,7 @@ async function inspectCreditReconciliation({
     existingCreditTransaction: existingLookup.existingCreditTransaction,
     paymentIntent: stripeInspection.paymentIntent,
     checkoutSession: stripeInspection.checkoutSession,
+    latestCharge: stripeInspection.latestCharge,
   });
 
   if (!evaluation.ok) {
@@ -423,6 +454,7 @@ async function grantReconciliationCredits({
   inspect = inspectCreditReconciliation,
   mutateCredits = lockBalanceAndMutate,
   auditLogger = logAudit,
+  scopeChecker = assertReconciliationScope,
 } = {}) {
   if (!sql) throw new Error('sql client required');
   if (!admin) throw new Error('admin required');
@@ -442,6 +474,18 @@ async function grantReconciliationCredits({
   });
   if (!built.ok) {
     return built;
+  }
+
+  const scope = await scopeChecker(sql, {
+    learnerId: built.mutationInput.learnerId,
+    instructorId: built.mutationInput.instructorId,
+    schoolId: built.mutationInput.schoolId,
+  });
+  if (!scope.ok) {
+    return {
+      ...scope,
+      credit_granted: false,
+    };
   }
 
   let mutation;
@@ -536,6 +580,7 @@ module.exports = {
   RECONCILIATION_BUILDER_ERRORS,
   RECONCILIATION_IDENTITY_CONFLICT,
   buildReconciliationGrantInput,
+  assertReconciliationScope,
   creditsDeltaForReconciliationMinutes,
   findExistingReconciliationCreditTransaction,
   grantReconciliationCredits,

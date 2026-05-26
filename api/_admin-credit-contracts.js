@@ -149,6 +149,7 @@ function evaluateReconciliationStripeState({
   existingCreditTransaction = null,
   paymentIntent = null,
   checkoutSession = null,
+  latestCharge: resolvedLatestCharge = null,
   expectedAmountPence = null,
 } = {}) {
   if (existingCreditTransaction) {
@@ -177,7 +178,11 @@ function evaluateReconciliationStripeState({
     return stripeReject('PAYMENT_REFUNDED', 'Payment has been refunded and cannot be reconciled.');
   }
 
-  const charge = latestCharge(paymentIntent);
+  const charge = resolvedLatestCharge || latestCharge(paymentIntent);
+  if (Number(charge && charge.amount_refunded || 0) > 0) {
+    return stripeReject('PAYMENT_REFUNDED', 'Payment has been refunded and cannot be reconciled.');
+  }
+
   if (charge && charge.disputed === true) {
     return stripeReject('PAYMENT_DISPUTED', 'Payment has an active dispute and cannot be reconciled.');
   }

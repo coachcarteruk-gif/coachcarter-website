@@ -46,6 +46,7 @@ function checkoutSession(overrides = {}) {
 function makeMockStripe({
   paymentIntents = {},
   sessionsByPaymentIntent = {},
+  charges = {},
 } = {}) {
   const calls = [];
   return {
@@ -73,7 +74,7 @@ function makeMockStripe({
     charges: {
       retrieve: async (id, options) => {
         calls.push(['charges.retrieve', id, options]);
-        return null;
+        return charges[id] || null;
       },
     },
     calls,
@@ -257,6 +258,19 @@ test.describe('admin credit-reconciliation inspection orchestrator', () => {
         expected: { status: 409, code: 'PAYMENT_REFUNDED' },
       },
       {
+        name: 'latest-charge-refunded',
+        paymentIntent: {
+          amount_refunded: undefined,
+          latest_charge: {
+            id: 'ch_inspect',
+            amount_refunded: 100,
+            disputed: false,
+            balance_transaction: { id: 'txn_inspect', fee: 514 },
+          },
+        },
+        expected: { status: 409, code: 'PAYMENT_REFUNDED' },
+      },
+      {
         name: 'disputed',
         paymentIntent: {
           latest_charge: {
@@ -301,5 +315,37 @@ test.describe('admin credit-reconciliation inspection orchestrator', () => {
       });
       expect(result, item.name).not.toHaveProperty('grant_preview');
     }
+  });
+
+  test('resolved latest charge refund rejects even when PaymentIntent refund field is absent', async () => {
+    const result = await inspect({
+      stripe: makeMockStripe({
+        paymentIntents: {
+          pi_inspect: paymentIntent({
+            amount_refunded: undefined,
+            latest_charge: 'ch_inspect',
+          }),
+        },
+        sessionsByPaymentIntent: { pi_inspect: [checkoutSession()] },
+        charges: {
+          ch_inspect: {
+            id: 'ch_inspect',
+            object: 'charge',
+            amount_refunded: 100,
+            disputed: false,
+            balance_transaction: { id: 'txn_inspect', fee: 514 },
+          },
+        },
+      }),
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      ready: false,
+      manual_review: true,
+      status: 409,
+      code: 'PAYMENT_REFUNDED',
+    });
+    expect(result).not.toHaveProperty('grant_preview');
   });
 });

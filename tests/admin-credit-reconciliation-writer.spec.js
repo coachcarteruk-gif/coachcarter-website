@@ -84,15 +84,24 @@ function csrfAuthedHeaders(schoolId = 1) {
 function makeMutationHarness({
   inspectionResults = [readyPreview()],
   mutateImpl = async (sqlArg, args) => ({ ok: true, transactionId: 77, balanceMinutes: 660, instructorId: args.instructorId }),
+  scopeRows = [{ learner_ok: true, instructor_ok: true }],
 } = {}) {
   const inspectCalls = [];
   const mutateCalls = [];
   const auditCalls = [];
-  const sql = { mocked: true };
+  const sqlCalls = [];
+  const sql = async (strings, ...values) => {
+    const text = strings.join('?');
+    sqlCalls.push({ text, values });
+    if (text.includes('AS learner_ok')) return scopeRows;
+    return [];
+  };
+  sql.calls = sqlCalls;
   let inspectionIndex = 0;
 
   return {
     sql,
+    sqlCalls,
     inspectCalls,
     mutateCalls,
     auditCalls,
@@ -431,6 +440,63 @@ test.describe('admin credit-reconciliation backend writer', () => {
     expect(harness.inspectCalls[0].schoolId).toBe(7);
     expect(harness.mutateCalls[0].args.schoolId).toBe(7);
     expect(harness.auditCalls[0].args.schoolId).toBe(7);
+  });
+
+  test('learner from a different school fails before credit mutation or audit', async () => {
+    const harness = makeMutationHarness({
+      scopeRows: [{ learner_ok: false, instructor_ok: true }],
+    });
+
+    const result = await grantReconciliationCredits({
+      sql: harness.sql,
+      stripe: {},
+      admin: { id: 123, email: 'admin@example.test' },
+      schoolId: 1,
+      input: { schoolId: 1, paymentIntentId: 'pi_writer', reason: 'wrong learner school' },
+      inspect: harness.inspect,
+      mutateCredits: harness.mutateCredits,
+      auditLogger: harness.auditLogger,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: 404,
+      code: 'CREDIT_SCOPE_NOT_AVAILABLE',
+      message: 'Credit action could not be applied for the requested scope.',
+      credit_granted: false,
+    });
+    expect(harness.sqlCalls).toHaveLength(1);
+    expect(harness.sqlCalls[0].text).toContain('FROM learner_users');
+    expect(harness.sqlCalls[0].text).toContain('FROM instructors');
+    expect(harness.sqlCalls[0].values).toEqual([10, 1, 4, 1]);
+    expect(harness.mutateCalls).toHaveLength(0);
+    expect(harness.auditCalls).toHaveLength(0);
+  });
+
+  test('instructor from a different school fails before credit mutation or audit', async () => {
+    const harness = makeMutationHarness({
+      scopeRows: [{ learner_ok: true, instructor_ok: false }],
+    });
+
+    const result = await grantReconciliationCredits({
+      sql: harness.sql,
+      stripe: {},
+      admin: { id: 123, email: 'admin@example.test' },
+      schoolId: 1,
+      input: { schoolId: 1, paymentIntentId: 'pi_writer', reason: 'wrong instructor school' },
+      inspect: harness.inspect,
+      mutateCredits: harness.mutateCredits,
+      auditLogger: harness.auditLogger,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      status: 404,
+      code: 'CREDIT_SCOPE_NOT_AVAILABLE',
+      credit_granted: false,
+    });
+    expect(harness.mutateCalls).toHaveLength(0);
+    expect(harness.auditCalls).toHaveLength(0);
   });
 
   test('dry-run remains inspection-only with credit_granted false', async () => {

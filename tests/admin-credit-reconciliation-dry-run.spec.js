@@ -341,4 +341,37 @@ test.describe('admin credit-reconciliation dry-run endpoint', () => {
     expect(res.body.message).toContain('No credit was granted.');
     expect(res.body).not.toHaveProperty('grant_preview');
   });
+
+  test('dry-run rejects a refunded latest charge without mutating', async () => {
+    const sql = makeSql([]);
+    const res = await callAdmin({
+      body: { dry_run: true, payment_intent_id: 'pi_dry_run' },
+      sql,
+      stripeClient: validStripe({
+        paymentIntent: {
+          amount_refunded: undefined,
+          latest_charge: {
+            id: 'ch_dry_run',
+            object: 'charge',
+            amount_refunded: 100,
+            disputed: false,
+            balance_transaction: { id: 'txn_dry_run', fee: 514 },
+          },
+        },
+      }),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({
+      ok: false,
+      ready: false,
+      manual_review: true,
+      code: 'PAYMENT_REFUNDED',
+      inspection_only: true,
+      credit_granted: false,
+    });
+    expect(sql.calls).toHaveLength(1);
+    expect(sql.calls[0].text).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
+    expect(res.body).not.toHaveProperty('grant_preview');
+  });
 });

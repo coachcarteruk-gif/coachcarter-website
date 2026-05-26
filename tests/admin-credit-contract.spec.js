@@ -339,6 +339,14 @@ test.describe('admin Step 5.5 credit endpoints', () => {
     })).toMatchObject({ ok: false, code: 'PAYMENT_REFUNDED' });
 
     expect(evaluateReconciliationStripeState({
+      paymentIntent: validPaymentIntent({
+        amount_refunded: undefined,
+        latest_charge: { id: 'ch_contract', amount_refunded: 100, disputed: false },
+      }),
+      checkoutSession: baseSession,
+    })).toMatchObject({ ok: false, code: 'PAYMENT_REFUNDED' });
+
+    expect(evaluateReconciliationStripeState({
       paymentIntent: validPaymentIntent({ latest_charge: { id: 'ch_contract', disputed: true } }),
       checkoutSession: baseSession,
     })).toMatchObject({ ok: false, code: 'PAYMENT_DISPUTED' });

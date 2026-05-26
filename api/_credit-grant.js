@@ -640,9 +640,10 @@ async function grantCreditsPhase2A({
 //   - magic-link.js welcome bonus
 //
 // The Stripe-session purchase paths (webhook.handleCreditPurchase plus the
-// offers.js handleFreeOffer credit grant) still go through grantCredits() —
-// that path writes Stripe linkage fields (session_id, payment_intent_id,
-// charge_id, effective rate) which this helper deliberately doesn't.
+// offers.js handleFreeOffer credit grant) still go through grantCredits() for
+// purchase idempotency and rate snapshot handling. This helper can also carry
+// optional Stripe linkage fields (session_id, payment_intent_id, charge_id)
+// for reconciliation-style ledger rows.
 // The slot-purchase net-zero pattern in webhook.handleSlotBooking and the
 // slot-pinned arm of webhook.handleOfferBooking use lockBalanceAdjustLCB
 // below (balance-only, no separate ledger row).
