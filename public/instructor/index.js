@@ -8,6 +8,13 @@ const MON_SHORT  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct',
 const MON_FULL   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAY_INDEX  = [1,2,3,4,5,6,0]; // Mon–Sun display order
 
+function formatBalanceMins(mins) {
+  const m = Number(mins || 0);
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem ? `${h}h ${rem}m` : `${h}h`;
+}
+
 // â”€â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let instructor = null;
 let currentView = 'agenda'; // 'monthly' | 'weekly' | 'agenda'
@@ -1375,9 +1382,9 @@ function filterAddLessonLearners() {
         ? '<span style="font-size:0.7rem;font-weight:600;color:var(--green,#1f8a4c);background:rgba(31,138,76,0.1);padding:1px 6px;border-radius:4px;margin-left:6px">Your learner</span>'
         : '<span style="font-size:0.7rem;font-weight:600;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px;margin-left:6px">New to you</span>';
       return `
-      <div class="learner-option" data-action="select-learner" data-id="${l.id}" data-name="${esc(l.name)}" data-phone="${esc(l.phone || l.email)}" data-balance="${l.credit_balance || 0}">
+      <div class="learner-option" data-action="select-learner" data-id="${l.id}" data-name="${esc(l.name)}" data-phone="${esc(l.phone || l.email)}" data-balance-minutes="${l.balance_minutes || 0}">
         <div class="learner-opt-name">${esc(l.name)}${tag}</div>
-        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? '·' : ''} ${esc(l.email || '')} · ${l.credit_balance || 0} credit${(l.credit_balance || 0) !== 1 ? 's' : ''}</div>
+        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? '·' : ''} ${esc(l.email || '')} · ${formatBalanceMins(l.balance_minutes || 0)}</div>
       </div>
     `;
     }).join('');
@@ -1385,7 +1392,7 @@ function filterAddLessonLearners() {
   dropdown.classList.add('open');
 }
 
-function selectLearner(id, name, detail, credits) {
+function selectLearner(id, name, detail, balanceMinutes) {
   selectedLearnerId = id;
   document.getElementById('addLessonSearch').value = '';
   document.getElementById('addLessonDropdown').classList.remove('open');
@@ -1394,7 +1401,7 @@ function selectLearner(id, name, detail, credits) {
   document.getElementById('addLessonSelectedDetail').textContent = detail;
 
   // Update credit note
-  updateCreditNote(credits);
+  updateCreditNote(balanceMinutes);
 }
 
 function clearSelectedLearner() {
@@ -1404,15 +1411,15 @@ function clearSelectedLearner() {
   document.getElementById('addLessonSearch').focus();
 }
 
-function updateCreditNote(credits) {
+function updateCreditNote(balanceMinutes) {
   const noteEl = document.getElementById('addLessonCreditNote');
   const payMethod = document.querySelector('input[name="addLessonPay"]:checked')?.value;
   if (payMethod === 'credit') {
     noteEl.style.display = 'block';
-    noteEl.textContent = credits > 0
-      ? `Learner has ${credits} lesson${credits !== 1 ? 's' : ''} remaining. 1 will be deducted.`
-      : 'Learner has no credits! Choose Cash or Free instead.';
-    noteEl.style.color = credits > 0 ? 'var(--muted)' : 'var(--red)';
+    noteEl.textContent = balanceMinutes > 0
+      ? `Learner has ${formatBalanceMins(balanceMinutes)} remaining.`
+      : 'Learner has no hours! Choose Cash or Free instead.';
+    noteEl.style.color = balanceMinutes > 0 ? 'var(--muted)' : 'var(--red)';
   } else {
     noteEl.style.display = 'none';
   }
@@ -1422,7 +1429,7 @@ function updateCreditNote(credits) {
 document.addEventListener('change', e => {
   if (e.target.name === 'addLessonPay' && selectedLearnerId) {
     const learner = addLessonLearners.find(l => l.id === selectedLearnerId);
-    if (learner) updateCreditNote(learner.credit_balance || 0);
+    if (learner) updateCreditNote(learner.balance_minutes || 0);
   }
 });
 
@@ -1999,7 +2006,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'history-book-lesson') { closeHistoryModal(); openAddLessonModal(); }
   else if (a === 'retry-booking-history') renderBookingHistory();
   else if (a === 'retry-current-view') renderCurrentView();
-  else if (a === 'select-learner') selectLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.phone, parseInt(t.dataset.balance, 10));
+  else if (a === 'select-learner') selectLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.phone, parseInt(t.dataset.balanceMinutes, 10));
   else if (a === 'cancel-pending-offer') cancelPendingOffer(parseInt(t.dataset.id, 10), t);
 });
 document.addEventListener('change', function (e) {

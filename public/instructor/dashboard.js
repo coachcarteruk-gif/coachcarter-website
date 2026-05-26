@@ -8,7 +8,14 @@ let instructor = null;
 let todayBookings = [];
 let allLearners = [];
 let selectedLearnerId = null;
-let selectedLearnerCredits = 0;
+let selectedLearnerBalanceMinutes = 0;
+
+function formatBalanceMins(mins) {
+  var m = Number(mins || 0);
+  var h = Math.floor(m / 60);
+  var rem = m % 60;
+  return rem ? h + 'h ' + rem + 'm' : h + 'h';
+}
 
 function init() {
   const session = ccAuth.getAuth();
@@ -155,7 +162,7 @@ async function openBookModal() {
   document.getElementById('bookSearch').value = '';
   document.getElementById('bookSelected').classList.remove('show');
   selectedLearnerId = null;
-  selectedLearnerCredits = 0;
+  selectedLearnerBalanceMinutes = 0;
 
   // Set defaults
   var now = new Date();
@@ -221,7 +228,7 @@ function filterLearners() {
       var tag = l.is_your_learner
         ? '<span style="font-size:0.7rem;font-weight:600;color:var(--green,#1f8a4c);background:rgba(31,138,76,0.1);padding:1px 6px;border-radius:4px;margin-left:6px">Your learner</span>'
         : '<span style="font-size:0.7rem;font-weight:600;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px;margin-left:6px">New to you</span>';
-      return '<div class="learner-option" data-action="select-learner" data-learner-id="' + l.id + '" data-name="' + esc(l.name) + '" data-det="' + esc(det) + '" data-balance="' + (l.credit_balance || 0) + '">' +
+      return '<div class="learner-option" data-action="select-learner" data-learner-id="' + l.id + '" data-name="' + esc(l.name) + '" data-det="' + esc(det) + '" data-balance-minutes="' + (l.balance_minutes || 0) + '">' +
         '<div class="learner-opt-name">' + esc(l.name) + tag + '</div>' +
         '<div class="learner-opt-detail">' + esc(det) + '</div>' +
       '</div>';
@@ -230,9 +237,9 @@ function filterLearners() {
   dd.classList.add('open');
 }
 
-function selectLearner(id, name, detail, credits) {
+function selectLearner(id, name, detail, balanceMinutes) {
   selectedLearnerId = id;
-  selectedLearnerCredits = credits;
+  selectedLearnerBalanceMinutes = balanceMinutes;
   document.getElementById('bookSearch').value = '';
   document.getElementById('bookDropdown').classList.remove('open');
   document.getElementById('bookSelectedName').textContent = name;
@@ -241,8 +248,8 @@ function selectLearner(id, name, detail, credits) {
 
   // Show credit note
   var note = document.getElementById('bookCreditNote');
-  if (credits > 0) {
-    note.textContent = 'Learner has ' + credits + ' credit(s) available.';
+  if (balanceMinutes > 0) {
+    note.textContent = 'Learner has ' + formatBalanceMins(balanceMinutes) + ' available.';
     note.style.display = 'block';
   } else {
     note.style.display = 'none';
@@ -251,7 +258,7 @@ function selectLearner(id, name, detail, credits) {
 
 function clearLearner() {
   selectedLearnerId = null;
-  selectedLearnerCredits = 0;
+  selectedLearnerBalanceMinutes = 0;
   document.getElementById('bookSelected').classList.remove('show');
   document.getElementById('bookCreditNote').style.display = 'none';
   document.getElementById('bookSearch').value = '';
@@ -520,7 +527,7 @@ document.addEventListener('click', function (e) {
   if (a === 'retry-load') loadDashboard();
   else if (a === 'open-book-modal') openBookModal();
   else if (a === 'open-detail') openDetail(parseInt(t.dataset.detailIdx, 10));
-  else if (a === 'select-learner') selectLearner(parseInt(t.dataset.learnerId, 10), t.dataset.name, t.dataset.det, parseInt(t.dataset.balance, 10));
+  else if (a === 'select-learner') selectLearner(parseInt(t.dataset.learnerId, 10), t.dataset.name, t.dataset.det, parseInt(t.dataset.balanceMinutes, 10));
   else if (a === 'cancel-from-detail') cancelFromDetail();
   else if (a === 'close-broadcast-batch') closeBroadcastBatch(t.dataset.batchId, t);
 });

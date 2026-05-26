@@ -887,7 +887,7 @@ function renderLearners() {
       '<td>' + esc(l.email || '-') + '</td>' +
       '<td>' + esc(l.phone || '-') + '</td>' +
       '<td><span class="badge ' + (tierClasses[tier] || 'badge-gray') + '">' + (tierLabels[tier] || 'T' + tier) + '</span></td>' +
-      '<td>' + (l.credit_balance || 0) + '</td>' +
+      '<td>' + fmtBalanceMins(l.balance_minutes || 0) + '</td>' +
       '<td>' + (l.total_bookings || 0) + (l.upcoming_bookings ? ' <span style="color:var(--green);font-size:0.78rem;">(' + l.upcoming_bookings + ' upcoming)</span>' : '') + '</td>' +
       '<td>' + (l.last_booking_date ? formatDate(l.last_booking_date) : '-') + '</td>' +
       '<td>' + (l.created_at ? formatDate(l.created_at.slice(0, 10)) : '-') + '</td>' +
