@@ -39,7 +39,7 @@ function firstChargeFromPaymentIntent(paymentIntent) {
 async function retrievePaymentIntent(stripe, paymentIntentId) {
   if (!paymentIntentId) return null;
   const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
-    expand: ['latest_charge.balance_transaction', 'charges.data.balance_transaction'],
+    expand: ['latest_charge.balance_transaction'],
   });
   if (!paymentIntent) {
     throw lookupError('PAYMENT_INTENT_NOT_FOUND', 'PaymentIntent could not be resolved.');
