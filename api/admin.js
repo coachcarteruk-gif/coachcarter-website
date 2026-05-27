@@ -79,6 +79,47 @@ function getAdminSchoolId(admin, req) {
   return (admin.school_id != null) ? admin.school_id : (parseInt(req.query?.school_id) || 1);
 }
 
+function buildScopedDurationCreditRefusal(delta, availableMinutes, style = 'admin') {
+  if (delta <= 0) return null;
+  const balance = Number(availableMinutes || 0);
+  if (balance >= delta) return null;
+  return style === 'instructor'
+    ? `Learner has insufficient balance. Needs ${delta} more minutes but has ${balance}.`
+    : `Learner has insufficient balance (needs ${delta} more minutes, has ${balance})`;
+}
+
+function resolveAdjustCreditsTarget({ learner, lcbRows, explicitInstructorId, explicitLcbRow }) {
+  let targetInstructorId = parseInt(explicitInstructorId, 10);
+  let preCheckBalance = Number(learner?.balance_minutes || 0);
+
+  if (!Number.isFinite(targetInstructorId) || targetInstructorId <= 0) {
+    const rows = Array.isArray(lcbRows) ? lcbRows : [];
+    if (rows.length === 0) {
+      return { ok: true, targetInstructorId: 1, preCheckBalance };
+    }
+    if (rows.length === 1) {
+      return {
+        ok: true,
+        targetInstructorId: rows[0].instructor_id,
+        preCheckBalance: Number(rows[0].balance_minutes || 0),
+      };
+    }
+    return {
+      ok: false,
+      code: 'AMBIGUOUS_INSTRUCTOR',
+      status: 409,
+      count: rows.length,
+      instructorIds: rows.map(r => r.instructor_id),
+    };
+  }
+
+  return {
+    ok: true,
+    targetInstructorId,
+    preCheckBalance: explicitLcbRow ? Number(explicitLcbRow.balance_minutes || 0) : 0,
+  };
+}
+
 function setCors(res) {
 }
 
@@ -435,7 +476,7 @@ async function handleEditBooking(req, res) {
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id,
              lb.scheduled_date::text AS scheduled_date, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
              lb.lesson_type_id, lb.minutes_deducted, lb.setmore_key,
-             lu.name AS learner_name, lu.email AS learner_email, lu.balance_minutes,
+             lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name,
              COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
              COALESCE(lt.duration_minutes, 90) AS type_duration_minutes
@@ -504,8 +545,18 @@ async function handleEditBooking(req, res) {
     const oldMinutes = parseInt(booking.minutes_deducted) || 0;
     const delta = newDuration - oldMinutes;
     if (delta !== 0 && oldMinutes > 0) {
-      if (delta > 0 && booking.balance_minutes < delta)
-        return res.status(402).json({ error: `Learner has insufficient balance (needs ${delta} more minutes, has ${booking.balance_minutes})` });
+      if (delta > 0) {
+        const [scopedBalance] = await sql`
+          SELECT balance_minutes
+            FROM learner_credit_balances
+           WHERE learner_id = ${booking.learner_id}
+             AND instructor_id = ${booking.instructor_id}
+             AND school_id = ${schoolId}
+        `;
+        const availableMinutes = scopedBalance ? Number(scopedBalance.balance_minutes || 0) : 0;
+        const refusal = buildScopedDurationCreditRefusal(delta, availableMinutes);
+        if (refusal) return res.status(402).json({ error: refusal });
+      }
       const adj = await lockBalanceAndMutate(sql, {
         learnerId: booking.learner_id,
         schoolId,
@@ -1112,27 +1163,27 @@ async function handleAdjustCredits(req, res) {
     //
     // Accept req.body.instructor_id when present so a future admin UI can
     // pass it explicitly and skip the auto-resolve.
-    let targetInstructorId = parseInt(req.body.instructor_id, 10);
-    let preCheckBalance = learner.balance_minutes || 0;
-    if (!Number.isFinite(targetInstructorId) || targetInstructorId <= 0) {
+    const explicitInstructorId = parseInt(req.body.instructor_id, 10);
+    let targetInstructorId;
+    let preCheckBalance;
+    if (!Number.isFinite(explicitInstructorId) || explicitInstructorId <= 0) {
       const lcbRows = await sql`
         SELECT instructor_id, balance_minutes
           FROM learner_credit_balances
          WHERE learner_id = ${learner_id}
+           AND school_id = ${schoolId}
          ORDER BY instructor_id
       `;
-      if (lcbRows.length === 0) {
-        targetInstructorId = 1; // grandfather, keep pooled pre-check
-      } else if (lcbRows.length === 1) {
-        targetInstructorId = lcbRows[0].instructor_id;
-        preCheckBalance = lcbRows[0].balance_minutes;
-      } else {
+      const resolved = resolveAdjustCreditsTarget({ learner, lcbRows, explicitInstructorId: req.body.instructor_id });
+      if (!resolved.ok) {
         return res.status(409).json({
           error: 'AMBIGUOUS_INSTRUCTOR',
-          message: `Learner has balances with ${lcbRows.length} instructors. Re-issue this request with an explicit instructor_id.`,
-          instructor_ids: lcbRows.map(r => r.instructor_id),
+          message: `Learner has balances with ${resolved.count} instructors. Re-issue this request with an explicit instructor_id.`,
+          instructor_ids: resolved.instructorIds,
         });
       }
+      targetInstructorId = resolved.targetInstructorId;
+      preCheckBalance = resolved.preCheckBalance;
     } else {
       // Explicit instructor — read THAT row's balance for the pre-check
       // so an admin can't accidentally take Fraser negative by passing
@@ -1140,9 +1191,17 @@ async function handleAdjustCredits(req, res) {
       const [lcbRow] = await sql`
         SELECT balance_minutes
           FROM learner_credit_balances
-         WHERE learner_id = ${learner_id} AND instructor_id = ${targetInstructorId}
+         WHERE learner_id = ${learner_id}
+           AND instructor_id = ${explicitInstructorId}
+           AND school_id = ${schoolId}
       `;
-      preCheckBalance = lcbRow ? lcbRow.balance_minutes : 0;
+      const resolved = resolveAdjustCreditsTarget({
+        learner,
+        explicitInstructorId: req.body.instructor_id,
+        explicitLcbRow: lcbRow,
+      });
+      targetInstructorId = resolved.targetInstructorId;
+      preCheckBalance = resolved.preCheckBalance;
     }
 
     // Prevent negative balance (now against the resolved target).
@@ -1187,7 +1246,7 @@ async function handleAdjustCredits(req, res) {
     }
     // Re-read for the response: lockBalanceAndMutate returns LCB balance
     // under Phase 2A, not pooled. The audit log expects pooled. Cheap read.
-    const [updated] = await sql`SELECT balance_minutes, credit_balance FROM learner_users WHERE id = ${learner_id}`;
+    const [updated] = await sql`SELECT balance_minutes, credit_balance FROM learner_users WHERE id = ${learner_id} AND school_id = ${schoolId}`;
 
     await logAudit(sql, { adminId: admin.id, adminEmail: admin.email, action: 'adjust-credits', targetType: 'learner', targetId: learner_id, details: { hours: hoursFloat, reason, previous: learner.balance_minutes || 0, new: updated.balance_minutes }, schoolId, req });
 
@@ -2317,3 +2376,6 @@ async function handleNotificationLog(req, res) {
     return res.status(500).json({ error: 'Failed to load notification log' });
   }
 }
+
+module.exports._resolveAdjustCreditsTarget = resolveAdjustCreditsTarget;
+module.exports._buildScopedDurationCreditRefusal = buildScopedDurationCreditRefusal;

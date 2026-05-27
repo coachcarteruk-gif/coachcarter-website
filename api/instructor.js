@@ -72,6 +72,13 @@ function abortInstructorBookingTransaction(result) {
   throw new InstructorBookingTransactionAbort(result);
 }
 
+function buildScopedDurationCreditRefusal(delta, availableMinutes) {
+  if (delta <= 0) return null;
+  const balance = Number(availableMinutes || 0);
+  if (balance >= delta) return null;
+  return `Learner has insufficient balance. Needs ${delta} more minutes but has ${balance}.`;
+}
+
 function setCors(res) {
 }
 
@@ -1249,7 +1256,7 @@ async function handleEditBooking(req, res) {
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
              lb.scheduled_date::text AS scheduled_date, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
              lb.lesson_type_id, lb.minutes_deducted, lb.setmore_key,
-             lu.name AS learner_name, lu.email AS learner_email, lu.balance_minutes,
+             lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name,
              COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
              COALESCE(lt.duration_minutes, 90) AS type_duration_minutes,
@@ -1349,8 +1356,18 @@ async function handleEditBooking(req, res) {
     let balanceAdjusted = false;
 
     if (delta !== 0 && oldMinutes > 0) {
-      if (delta > 0 && booking.balance_minutes < delta)
-        return res.status(402).json({ error: `Learner has insufficient balance. Needs ${delta} more minutes but has ${booking.balance_minutes}.` });
+      if (delta > 0) {
+        const [scopedBalance] = await sql`
+          SELECT balance_minutes
+            FROM learner_credit_balances
+           WHERE learner_id = ${booking.learner_id}
+             AND instructor_id = ${booking.instructor_id}
+             AND school_id = ${schoolId}
+        `;
+        const availableMinutes = scopedBalance ? Number(scopedBalance.balance_minutes || 0) : 0;
+        const refusal = buildScopedDurationCreditRefusal(delta, availableMinutes);
+        if (refusal) return res.status(402).json({ error: refusal });
+      }
       // Step 4 cutover: atomic balance + ledger via one CTE. Previously
       // the UPDATE and INSERT ran separately so a process kill between
       // them could move the balance without logging the adjustment.
@@ -3572,3 +3589,4 @@ async function handleRunningLate(req, res) {
 
 module.exports._createInstructorCreditBookingTransaction = createInstructorCreditBookingTransaction;
 module.exports._CREDIT_BOOKING_SOURCE_TYPES = CREDIT_BOOKING_SOURCE_TYPES;
+module.exports._buildScopedDurationCreditRefusal = buildScopedDurationCreditRefusal;
