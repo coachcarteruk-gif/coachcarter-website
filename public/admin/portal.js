@@ -2307,6 +2307,29 @@ const REFUND_SOURCE_COPY = {
   }
 };
 
+const REFUND_TYPE_GUIDANCE = {
+  direct_slot: {
+    meaning: 'Refund a normal paid lesson directly tied to a booking.',
+    example: 'Example: learner paid for a one-off lesson by card and that specific lesson needs refunding.'
+  },
+  direct_offer: {
+    meaning: 'Refund a lesson created from an accepted instructor offer.',
+    example: 'Example: instructor sent a one-off offer link, learner paid, then that offered lesson needs refunding.'
+  },
+  credit_purchase: {
+    meaning: 'Refund unused prepaid learner credit.',
+    example: 'Example: learner bought bulk credit, used only part of it, and the unused remainder needs refunding.'
+  },
+  repeat_offer_partial: {
+    meaning: 'Refund part of a multi-week or repeat offer series.',
+    example: 'Example: learner paid for several weekly offer lessons, but some weeks could not be booked or fulfilled.'
+  },
+  manual_record: {
+    meaning: 'Use the manual-only admin record path for cases not safe for automatic execution.',
+    example: 'Example: already-paid-out booking or another case requiring manual bank review.'
+  }
+};
+
 function resetRefundPreviewMessages() {
   const err = document.getElementById('refund-form-error');
   if (err) {
@@ -2321,9 +2344,14 @@ function updateRefundSourceFields() {
   const label = document.getElementById('refund-source-label');
   const input = document.getElementById('refund-source-id');
   const help = document.getElementById('refund-source-help');
+  const typeHelp = REFUND_TYPE_GUIDANCE[type] || REFUND_TYPE_GUIDANCE.direct_slot;
+  const typeMeaning = document.getElementById('refund-type-help-meaning');
+  const typeExample = document.getElementById('refund-type-help-example');
   if (label) label.textContent = copy.label;
   if (input) input.placeholder = copy.placeholder;
   if (help) help.textContent = copy.help;
+  if (typeMeaning) typeMeaning.textContent = typeHelp.meaning;
+  if (typeExample) typeExample.textContent = typeHelp.example;
   resetRefundPreviewMessages();
 }
 
@@ -2756,7 +2784,10 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   var refundForm = document.getElementById('refund-preview-form');
   if (refundForm) refundForm.addEventListener('submit', submitRefundPreview);
   var refundType = document.getElementById('refund-type');
-  if (refundType) refundType.addEventListener('change', updateRefundSourceFields);
+  if (refundType) {
+    refundType.addEventListener('change', updateRefundSourceFields);
+    updateRefundSourceFields();
+  }
   bind('btn-save-referral-config', saveReferralConfig);
   var refEnabled = document.getElementById('ref-enabled');
   if (refEnabled) refEnabled.addEventListener('change', function () { updateRefFieldsVisibility(this.checked); });

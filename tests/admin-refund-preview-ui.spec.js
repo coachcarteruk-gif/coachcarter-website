@@ -52,6 +52,19 @@ test.describe('admin refund preview UI', () => {
     expect(build).toContain('booking_credit_source_id');
   });
 
+  test('explains refund type choices with preview-only operator scenarios', () => {
+    const update = sourceFor('updateRefundSourceFields');
+
+    expect(portalHtml).toContain('id="refund-type-help"');
+    expect(portalHtml).toContain('This screen is preview-only and does not issue refunds.');
+    expect(portalJs).toContain('REFUND_TYPE_GUIDANCE');
+    expect(portalJs).toContain('Refund a normal paid lesson directly tied to a booking.');
+    expect(portalJs).toContain('Example: learner paid for a one-off lesson by card and that specific lesson needs refunding.');
+    expect(portalJs).toContain('Example: already-paid-out booking or another case requiring manual bank review.');
+    expect(update).toContain('typeMeaning.textContent = typeHelp.meaning');
+    expect(update).toContain('typeExample.textContent = typeHelp.example');
+  });
+
   test('renders success, blocked/manual review evidence, and returned server values', () => {
     const render = sourceFor('renderRefundPreviewResult');
 
