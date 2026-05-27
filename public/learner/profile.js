@@ -2,7 +2,7 @@
   'use strict';
 
 // â”€â”€ Auth â”€â”€
-let AUTH, PROGRESS;
+let AUTH, PROGRESS, BALANCE_DATA;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = ccAuth.getAuth();
@@ -12,7 +12,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (guestHint) guestHint.style.display = 'block';
     return;
   }
-  await loadProgress();
+  await Promise.all([loadProgress(), loadCreditBalances()]);
   render();
 });
 
@@ -24,6 +24,25 @@ async function loadProgress() {
     if (res.status === 401) { logout(); return; }
     PROGRESS = await res.json();
   } catch (e) { console.error(e); }
+}
+
+async function loadCreditBalances() {
+  try {
+    const res = await ccAuth.fetchAuthed('/api/credits?action=balance');
+    if (res.status === 401) { logout(); return; }
+    if (res.ok) BALANCE_DATA = await res.json();
+  } catch (e) { console.error('load-credit-balances error:', e); }
+}
+
+function formatHours(minutes) {
+  const hrs = (Number(minutes) || 0) / 60;
+  return hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, function(c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
 }
 
 function render() {
@@ -55,6 +74,44 @@ function render() {
     document.getElementById('stat-instructor').textContent = s.instructor_sessions;
     document.getElementById('stat-private').textContent = s.private_sessions;
   }
+
+  renderCreditBalances();
+}
+
+function renderCreditBalances() {
+  const totalEl = document.getElementById('creditBalanceTotal');
+  const rowsEl = document.getElementById('creditBalanceRows');
+  const badge = document.getElementById('creditBalanceBadge');
+  if (!totalEl || !rowsEl || !badge) return;
+
+  if (!BALANCE_DATA) {
+    totalEl.textContent = '0 hrs';
+    rowsEl.innerHTML = '<div class="credit-balance-empty">No lesson credits yet</div>';
+    badge.textContent = '0 hrs';
+    return;
+  }
+
+  const totalMinutes = BALANCE_DATA.balance_minutes || 0;
+  const totalHours = formatHours(totalMinutes);
+  totalEl.textContent = totalHours + ' hr' + (totalHours !== '1' ? 's' : '');
+  badge.textContent = totalHours + ' hr' + (totalHours !== '1' ? 's' : '') + ' total';
+
+  const rows = (BALANCE_DATA.balances || []).filter(function(row) {
+    return (row.balance_minutes || 0) > 0;
+  });
+
+  if (rows.length === 0) {
+    rowsEl.innerHTML = '<div class="credit-balance-empty">No lesson credits yet</div>';
+    return;
+  }
+
+  rowsEl.innerHTML = rows.map(function(row) {
+    var hours = formatHours(row.balance_minutes);
+    return '<div class="credit-balance-row">' +
+      '<span class="credit-balance-name">' + escapeHtml(row.instructor_name || 'Instructor') + '</span>' +
+      '<span class="credit-balance-hours">' + hours + ' hr' + (hours !== '1' ? 's' : '') + '</span>' +
+      '</div>';
+  }).join('');
 }
 
 // â”€â”€ Postcode address lookup â”€â”€

@@ -78,3 +78,41 @@ test.describe('learner booking modal instructor-aware credit balance', () => {
     expect(js).toContain('updateModalBuyCreditLinks();');
   });
 });
+
+test.describe('learner aggregate-safe balance displays', () => {
+  test('dashboard loads live aggregate balance and labels it across instructors', () => {
+    const html = read('public/learner/index.html');
+    const js = read('public/learner/index.js');
+    const glue = read('public/learner/index-page.js');
+
+    expect(html).toContain('<div class="stat-cell-label">Total hours</div>');
+    expect(html).toContain('<div class="stat-cell-sub" id="stat-balance-sub">across instructors</div>');
+    expect(js).toContain("ccAuth.fetchAuthed('/api/credits?action=balance')");
+    expect(js).toContain('BALANCE_DATA?.balance_minutes ?? AUTH?.user?.balance_minutes');
+    expect(js).toContain('total credit across instructors');
+    expect(glue).toContain("balSub.textContent = 'across instructors';");
+  });
+
+  test('profile fetches balance API and renders per-instructor rows', () => {
+    const html = read('public/learner/profile.html');
+    const js = read('public/learner/profile.js');
+
+    expect(html).toContain('Lesson credit balances');
+    expect(html).toContain('Total across instructors');
+    expect(html).toContain('id="creditBalanceRows"');
+    expect(js).toContain("ccAuth.fetchAuthed('/api/credits?action=balance')");
+    expect(js).toContain('const rows = (BALANCE_DATA.balances || []).filter');
+    expect(js).toContain("escapeHtml(row.instructor_name || 'Instructor')");
+    expect(js).toContain("'<span class=\"credit-balance-hours\">' + hours + ' hr'");
+    expect(js).toContain('No lesson credits yet');
+  });
+
+  test('sidebar balance copy is aggregate-safe', () => {
+    const js = read('public/sidebar.js');
+
+    expect(js).toContain("' total credit'");
+    expect(js).toContain("' hrs total credit'");
+    expect(js).not.toContain("' remaining'");
+    expect(js).not.toContain("' hrs remaining'");
+  });
+});
