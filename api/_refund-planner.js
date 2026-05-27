@@ -99,6 +99,34 @@ function proportionalRefundMinutes(grossPence, availablePence, availableMinutes)
   return Math.min(minutes, Math.ceil((minutes * gross) / pence));
 }
 
+function hasRefundTarget(stripe = {}, feeEvidence = {}) {
+  return Boolean(
+    stripe.stripePaymentIntentId
+    || stripe.paymentIntentId
+    || feeEvidence.paymentIntentId
+    || stripe.stripeChargeId
+    || stripe.chargeId
+    || feeEvidence.chargeId
+  );
+}
+
+function recommendedOperatorAction(preview) {
+  if (preview.code === 'BOOKING_ALREADY_PAID_OUT') return 'manual_bank_review_required';
+  if (preview.blocked) return 'blocked';
+  if (preview.manual_review_required) return 'manual_review_required';
+  if ((preview.lines || []).some((line) => line.booking_credit_source_id)) return 'manual_review_required';
+  if (Number(preview.net_refund_pence || 0) <= 0) return 'blocked';
+  if (!hasRefundTarget(preview.stripe, preview.fee_evidence)) return 'manual_review_required';
+  return 'execute_eligible';
+}
+
+function withOperatorRecommendation(preview) {
+  return {
+    ...preview,
+    recommended_operator_action: recommendedOperatorAction(preview),
+  };
+}
+
 function netPreview({
   refundType,
   grossRefundPence,
@@ -111,9 +139,10 @@ function netPreview({
   warnings = [],
   stripe = {},
   metadata = {},
+  context = {},
 }) {
   const netRefundPence = Math.max(0, grossRefundPence - processingFeeWithheldPence);
-  return {
+  return withOperatorRecommendation({
     ok: true,
     blocked,
     manual_review_required: manualReviewRequired,
@@ -132,7 +161,8 @@ function netPreview({
     reason,
     stripe,
     metadata,
-  };
+    ...context,
+  });
 }
 
 function blockedPreview({
@@ -145,24 +175,27 @@ function blockedPreview({
   feeEvidence = null,
   stripe = {},
   metadata = {},
+  context = {},
 }) {
-  return {
-    ...netPreview({
-      refundType,
-      grossRefundPence,
-      processingFeeWithheldPence: 0,
-      lines,
-      feeEvidence,
-      reason,
-      blocked: true,
-      manualReviewRequired: true,
-      warnings: [message],
-      stripe,
-      metadata: { ...metadata, code },
-    }),
+  const preview = netPreview({
+    refundType,
+    grossRefundPence,
+    processingFeeWithheldPence: 0,
+    lines,
+    feeEvidence,
+    reason,
+    blocked: true,
+    manualReviewRequired: true,
+    warnings: [message],
+    stripe,
+    metadata: { ...metadata, code },
+    context,
+  });
+  return withOperatorRecommendation({
+    ...preview,
     code,
     message,
-  };
+  });
 }
 
 function objectId(value) {
@@ -219,6 +252,32 @@ function sourceIdentities(row = {}) {
 function hasStripeIdentity(row = {}) {
   const ids = sourceIdentities(row);
   return Boolean(ids.stripePaymentIntentId || ids.stripeChargeId || ids.stripeSessionId);
+}
+
+function bookingStartAt(row = {}) {
+  if (row.booking_start_at) return row.booking_start_at;
+  if (!row.scheduled_date || !row.start_time) return null;
+  return `${row.scheduled_date} ${row.start_time}`;
+}
+
+function paymentContext(row = {}) {
+  const explicit = cleanText(row.payment_channel) || cleanText(row.payment_method);
+  if (explicit) return explicit;
+  if (hasStripeIdentity(row)) return 'stripe';
+  return null;
+}
+
+function operatorContext(row = {}) {
+  const channel = paymentContext(row);
+  return {
+    learner_name: row.learner_name || null,
+    learner_email: row.learner_email || null,
+    instructor_name: row.instructor_name || null,
+    booking_start_at: bookingStartAt(row),
+    booking_duration_minutes: row.booking_duration_minutes == null ? null : Number(row.booking_duration_minutes),
+    payment_source: row.payment_source || channel,
+    payment_channel: channel,
+  };
 }
 
 function positiveFee(value) {
@@ -302,13 +361,32 @@ async function sourceByBcs(sql, { schoolId, bookingCreditSourceId }) {
            ct.instructor_id,
            ct.amount_pence AS source_amount_pence,
            ct.stripe_fee_pence AS source_stripe_fee_pence,
+           ct.payment_method,
            ct.stripe_session_id,
            ct.stripe_payment_intent_id,
-           ct.stripe_charge_id
+           ct.stripe_charge_id,
+           lu.name AS learner_name,
+           lu.email AS learner_email,
+           i.name AS instructor_name,
+           (lb.scheduled_date + lb.start_time) AS booking_start_at,
+           COALESCE(lt.duration_minutes, EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int AS booking_duration_minutes,
+           'booking_credit_source' AS payment_source
       FROM booking_credit_sources bcs
       JOIN credit_transactions ct
         ON ct.id = bcs.credit_transaction_id
        AND ct.school_id = ${schoolId}
+      LEFT JOIN lesson_bookings lb
+        ON lb.id = bcs.booking_id
+       AND lb.school_id = ${schoolId}
+      LEFT JOIN learner_users lu
+        ON lu.id = ct.learner_id
+       AND lu.school_id = ${schoolId}
+      LEFT JOIN instructors i
+        ON i.id = ct.instructor_id
+       AND i.school_id = ${schoolId}
+      LEFT JOIN lesson_types lt
+        ON lt.id = lb.lesson_type_id
+       AND lt.school_id = ${schoolId}
      WHERE bcs.school_id = ${schoolId}
        AND bcs.id = ${bookingCreditSourceId}
        AND bcs.refunded_at IS NULL
@@ -326,9 +404,14 @@ async function sourceByCreditTransaction(sql, { schoolId, creditTransactionId })
            COALESCE(ct.minutes, 0)::int AS source_minutes,
            COALESCE(ct.amount_pence, 0)::int AS source_amount_pence,
            ct.stripe_fee_pence AS source_stripe_fee_pence,
+           ct.payment_method,
            ct.stripe_session_id,
            ct.stripe_payment_intent_id,
            ct.stripe_charge_id,
+           lu.name AS learner_name,
+           lu.email AS learner_email,
+           i.name AS instructor_name,
+           'credit_transaction' AS payment_source,
            (
              SELECT COALESCE(SUM(bcs.contribution_pence), 0)::int
                FROM booking_credit_sources bcs
@@ -361,6 +444,12 @@ async function sourceByCreditTransaction(sql, { schoolId, creditTransactionId })
               WHERE csa.credit_transaction_id = ct.id
            ) AS adjusted_minutes
       FROM credit_transactions ct
+      LEFT JOIN learner_users lu
+        ON lu.id = ct.learner_id
+       AND lu.school_id = ${schoolId}
+      LEFT JOIN instructors i
+        ON i.id = ct.instructor_id
+       AND i.school_id = ${schoolId}
      WHERE ct.school_id = ${schoolId}
        AND ct.id = ${creditTransactionId}
      LIMIT 1
@@ -375,8 +464,15 @@ async function directBooking(sql, { schoolId, lessonBookingId }) {
            lb.learner_id,
            lb.instructor_id,
            lb.payment_method,
+           lb.payment_method AS payment_channel,
            COALESCE(lb.list_price_pence, 0)::int AS list_price_pence,
            lb.stripe_fee_pence AS booking_stripe_fee_pence,
+           lu.name AS learner_name,
+           lu.email AS learner_email,
+           i.name AS instructor_name,
+           (lb.scheduled_date + lb.start_time) AS booking_start_at,
+           COALESCE(lt.duration_minutes, EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int AS booking_duration_minutes,
+           'lesson_booking' AS payment_source,
            COALESCE(SUM(bcs.contribution_pence) FILTER (WHERE bcs.refunded_at IS NULL), 0)::int AS bcs_contribution_pence,
            COALESCE(SUM(bcs.stripe_fee_pence) FILTER (WHERE bcs.refunded_at IS NULL), 0)::int AS bcs_stripe_fee_pence,
            MAX(ct.stripe_session_id) AS stripe_session_id,
@@ -389,6 +485,15 @@ async function directBooking(sql, { schoolId, lessonBookingId }) {
                 AND pli.booking_id = lb.id
            ) AS already_paid_out
       FROM lesson_bookings lb
+      LEFT JOIN learner_users lu
+        ON lu.id = lb.learner_id
+       AND lu.school_id = ${schoolId}
+      LEFT JOIN instructors i
+        ON i.id = lb.instructor_id
+       AND i.school_id = ${schoolId}
+      LEFT JOIN lesson_types lt
+        ON lt.id = lb.lesson_type_id
+       AND lt.school_id = ${schoolId}
       LEFT JOIN booking_credit_sources bcs
         ON bcs.booking_id = lb.id
        AND bcs.school_id = ${schoolId}
@@ -397,7 +502,7 @@ async function directBooking(sql, { schoolId, lessonBookingId }) {
        AND ct.school_id = ${schoolId}
      WHERE lb.school_id = ${schoolId}
        AND lb.id = ${lessonBookingId}
-     GROUP BY lb.id
+     GROUP BY lb.id, lu.name, lu.email, i.name, lt.duration_minutes
      LIMIT 1
   `;
   return rows[0] || null;
@@ -449,6 +554,8 @@ async function planBcsPreview({ sql, stripe, input }) {
       code: 'MISSING_PROCESSING_FEE',
       message: 'Processing fee evidence is missing; manual review is required.',
       stripe: sourceIdentities(row),
+      metadata: operatorContext(row),
+      context: operatorContext(row),
     });
   }
 
@@ -474,6 +581,7 @@ async function planBcsPreview({ sql, stripe, input }) {
     feeEvidence: feeResolution.evidence,
     reason: input.reason,
     stripe: sourceIdentities(row),
+    context: operatorContext(row),
   });
 }
 
@@ -523,6 +631,8 @@ async function planCreditTransactionPreview({ sql, stripe, input }) {
       code: 'MISSING_PROCESSING_FEE',
       message: 'Processing fee evidence is missing; manual review is required.',
       stripe: sourceIdentities(row),
+      metadata: operatorContext(row),
+      context: operatorContext(row),
     });
   }
 
@@ -538,6 +648,8 @@ async function planCreditTransactionPreview({ sql, stripe, input }) {
       code: 'REFUND_MINUTES_UNDERIVABLE',
       message: 'Refund minutes could not be derived from the trusted credit source; manual review is required.',
       stripe: sourceIdentities(row),
+      metadata: operatorContext(row),
+      context: operatorContext(row),
     });
   }
   const item = line({
@@ -565,6 +677,7 @@ async function planCreditTransactionPreview({ sql, stripe, input }) {
     },
     reason: input.reason,
     stripe: sourceIdentities(row),
+    context: operatorContext(row),
   });
 }
 
@@ -594,7 +707,8 @@ async function planDirectBookingPreview({ sql, stripe, input }) {
       code: 'GROSS_REFUND_OUT_OF_RANGE',
       message: 'gross_refund_pence must be positive and no more than the booking refundable value.',
       stripe: identities,
-      metadata: { max_gross_refund_pence: grossDefault },
+      metadata: { ...operatorContext(row), max_gross_refund_pence: grossDefault },
+      context: operatorContext(row),
     });
   }
 
@@ -614,6 +728,8 @@ async function planDirectBookingPreview({ sql, stripe, input }) {
       code: 'BOOKING_ALREADY_PAID_OUT',
       message: 'This booking has already been paid out. Record a manual bank refund instead of attempting an automatic Stripe refund.',
       stripe: identities,
+      metadata: operatorContext(row),
+      context: operatorContext(row),
     });
   }
 
@@ -648,6 +764,8 @@ async function planDirectBookingPreview({ sql, stripe, input }) {
       code: 'MISSING_PROCESSING_FEE',
       message: 'Processing fee evidence is missing; manual review is required.',
       stripe: identities,
+      metadata: operatorContext(row),
+      context: operatorContext(row),
     });
   }
 
@@ -668,6 +786,7 @@ async function planDirectBookingPreview({ sql, stripe, input }) {
     feeEvidence: evidence,
     reason: input.reason,
     stripe: identities,
+    context: operatorContext(row),
   });
 }
 

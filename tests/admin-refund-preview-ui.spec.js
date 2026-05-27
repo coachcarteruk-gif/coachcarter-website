@@ -61,6 +61,13 @@ test.describe('admin refund preview UI', () => {
     expect(render).toContain('Gross refund');
     expect(render).toContain('Processing fee');
     expect(render).toContain('Returned amount');
+    expect(render).toContain('Operator context');
+    expect(portalJs).toContain('Recommended action');
+    expect(portalJs).toContain('Learner email');
+    expect(portalJs).toContain('Payment channel');
+    expect(portalJs).toContain('manual_bank_review_required');
+    expect(portalJs).toContain('Manual bank review required');
+    expect(portalJs).toContain('Execute eligible');
     expect(render).toContain('Preview only. No refund has been issued.');
     expect(render).toContain('Ledger line evidence');
     expect(render).toContain('Fee evidence');
