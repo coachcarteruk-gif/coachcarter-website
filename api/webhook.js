@@ -282,8 +282,8 @@ async function handleCreditPurchase(session) {
           Book a lesson →
         </a></p>
         <p style="color:#888;font-size:0.85rem;">
-          Hours are fully refundable. Cancel 48+ hours before and the hours
-          return to your balance automatically.
+          Cancel 48+ hours before a lesson and the lesson credit returns to your balance automatically.
+          Approved refunds are returned to the original payment method where possible, minus any non-refundable payment processing fees charged by our payment provider.
         </p>
       `
     });
@@ -337,7 +337,8 @@ async function notifyBookingInsertFailed({ session, kind, learnerEmail, instruct
         <h2>We've received your payment</h2>
         <p>Thanks for booking with CoachCarter. Your payment of <strong>£${(amountPence / 100).toFixed(2)}</strong> was successful and the funds are safely with us.</p>
         <p>However, we hit a technical snag finalising the booking on our end. Nothing to worry about — your money is safe and the hours are on your account.</p>
-        <p><strong>What happens next:</strong> ${instructorName || 'Your instructor'} or our team will contact you within 24 hours to either confirm the slot manually or arrange a refund if it can't be honoured.</p>
+        <p><strong>What happens next:</strong> ${instructorName || 'Your instructor'} or our team will contact you within 24 hours to either confirm the slot manually or arrange an approved refund if it can't be honoured.</p>
+        <p>Approved refunds are returned to the original payment method where possible, minus any non-refundable payment processing fees charged by our payment provider.</p>
         <p>If you'd rather not wait, reply to this email or text us and we'll sort it straight away.</p>
         <p style="color:#888;font-size:0.85rem;margin-top:24px">
           Reference: ${session.id.slice(-12)}<br>
@@ -626,7 +627,7 @@ async function handleSlotBooking(session) {
           <tr><td><strong>Hours remaining:</strong></td><td>${balanceHrs} hrs</td></tr>
         </table>
         <p style="margin-top:16px;font-size:0.875rem;color:#797879">
-          Need to cancel? Do so at least 48 hours before and the hours return to your balance.
+          Need to cancel? Do so at least 48 hours before and the lesson credit returns to your balance.
         </p>
         <p>
           <a href="https://coachcarter.uk/learner/"
@@ -675,7 +676,7 @@ async function handleSlotBooking(session) {
 
     // WhatsApp notifications (non-blocking)
     sendWhatsApp(learner?.phone,
-      `✅ Lesson confirmed!\n\n📅 ${lessonDate}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructorName}\n\nNeed to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`,
+      `✅ Lesson confirmed!\n\n📅 ${lessonDate}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructorName}\n\nNeed to cancel? Do so at least 48 hours before and the lesson credit returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`,
       { purpose: 'booking.slot_confirmation_learner', learnerId, instructorId, schoolId }
     );
     sendWhatsApp(instructor?.phone,

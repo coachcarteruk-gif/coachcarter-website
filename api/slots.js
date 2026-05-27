@@ -1405,7 +1405,7 @@ async function handleBook(req, res) {
           <ol>${dateList}</ol>
           <p style="margin-top:16px;font-size:0.875rem;color:#797879">
             Need to cancel? You can cancel individual lessons or the whole series.
-            Cancel at least 48 hours before and the hours return to your balance.
+            Cancel at least 48 hours before and the lesson credit returns to your balance.
           </p>
           <p>
             <a href="https://coachcarter.uk/learner/"
@@ -1494,7 +1494,7 @@ async function handleBook(req, res) {
             <tr><td><strong>Hours remaining:</strong></td><td>${balanceStr}</td></tr>
           </table>
           <p style="margin-top:16px;font-size:0.875rem;color:#797879">
-            Need to cancel? Do so at least 48 hours before and the hours return to your balance.
+            Need to cancel? Do so at least 48 hours before and the lesson credit returns to your balance.
           </p>
           <p>
             <a href="https://coachcarter.uk/learner/"
@@ -1536,7 +1536,7 @@ async function handleBook(req, res) {
       }
 
       await sendWhatsApp(learner.phone,
-        `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n📋 ${lessonType.name} (${durationStr})\n\nNeed to cancel? Do so at least 48 hours before and the hours return to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
+        `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n📋 ${lessonType.name} (${durationStr})\n\nNeed to cancel? Do so at least 48 hours before and the lesson credit returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
       );
       if (!isDemoInstructor) {
         await sendWhatsApp(instructor.phone,
@@ -2990,7 +2990,7 @@ async function handleReschedule(req, res) {
         </table>
         <p style="margin-top:16px;font-size:0.875rem;color:#797879">
           You can reschedule ${MAX_RESCHEDULES - newBooking.reschedule_count} more time${MAX_RESCHEDULES - newBooking.reschedule_count !== 1 ? 's' : ''}.
-          Cancel at least 48 hours before and the hours return to your balance.
+          Cancel at least 48 hours before and the lesson credit returns to your balance.
         </p>
         <p>
           <a href="https://coachcarter.uk/learner/"
@@ -3231,7 +3231,7 @@ function generateICS(booking) {
     `DTSTART:${dtStart}`,
     `DTEND:${dtEnd}`,
     `SUMMARY:${booking.lesson_type_name || 'Driving Lesson'} — ${booking.instructor_name}`,
-    `DESCRIPTION:${booking.duration_str || '1.5 hours'} ${booking.lesson_type_name || 'driving lesson'} with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before and the hours return to your balance.`,
+    `DESCRIPTION:${booking.duration_str || '1.5 hours'} ${booking.lesson_type_name || 'driving lesson'} with ${booking.instructor_name}.\\n\\nManage your bookings: https://coachcarter.uk/learner/book.html\\n\\nNeed to cancel? Do so at least 48 hours before and the lesson credit returns to your balance.`,
     'STATUS:CONFIRMED',
     'BEGIN:VALARM',
     'TRIGGER:-PT2H',
