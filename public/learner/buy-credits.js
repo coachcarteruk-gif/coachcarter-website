@@ -36,9 +36,55 @@
   var isAuthed = false;
   var qty = 12;
   var params = new URLSearchParams(window.location.search);
+  var instructors = [];
+  var checkoutBusy = false;
   var currentInstructorId = parseInt(params.get('instructor_id'), 10);
   if (!Number.isInteger(currentInstructorId) || currentInstructorId <= 0) {
     currentInstructorId = null;
+  }
+
+  function selectedInstructor() {
+    if (!currentInstructorId) return null;
+    return instructors.find(function (inst) { return Number(inst.id) === Number(currentInstructorId); }) || null;
+  }
+
+  function selectedInstructorName() {
+    var inst = selectedInstructor();
+    return inst ? inst.name : '';
+  }
+
+  function buyCreditsPath() {
+    var path = '/learner/buy-credits.html';
+    if (currentInstructorId) path += '?instructor_id=' + encodeURIComponent(currentInstructorId);
+    return path;
+  }
+
+  function checkoutIsAllowed() {
+    return !!currentInstructorId && !checkoutBusy;
+  }
+
+  function updateCheckoutAvailability() {
+    var allowed = checkoutIsAllowed();
+    var checkoutBtn = document.getElementById('btnCheckout');
+    if (checkoutBtn) checkoutBtn.disabled = !allowed;
+    document.querySelectorAll('.sl-buy-btn').forEach(function (btn) {
+      btn.disabled = !allowed;
+    });
+
+    var help = document.getElementById('instructorHelp');
+    if (help) {
+      var name = selectedInstructorName();
+      help.textContent = name
+        ? 'Hours bought here will be held with ' + name + '.'
+        : 'Choose an instructor before checkout. Hours are held against that instructor.';
+    }
+  }
+
+  function requireInstructorSelection() {
+    if (currentInstructorId) return true;
+    showToast('Choose an instructor before checkout.', 'error');
+    updateCheckoutAvailability();
+    return false;
   }
 
   function initAuth() {
@@ -56,9 +102,10 @@
     var balanceCard = document.querySelector('.balance-card');
     if (balanceCard) balanceCard.style.display = 'none';
     var subtitle = document.querySelector('.subtitle');
+    var redirect = encodeURIComponent(buyCreditsPath());
     if (subtitle) {
       subtitle.innerHTML = 'Browse our pricing — '
-        + '<a href="/learner/login.html?redirect=/learner/buy-credits.html" style="color:var(--accent);font-weight:700">sign in</a>'
+        + '<a href="/learner/login.html?redirect=' + redirect + '" style="color:var(--accent);font-weight:700">sign in</a>'
         + ' or '
         + '<a href="/free-trial.html" style="color:var(--accent);font-weight:700">try a free lesson</a>'
         + ' first.';
@@ -67,16 +114,22 @@
 
   async function loadBalance() {
     try {
-      var res = await ccAuth.fetchAuthed('/api/credits?action=balance');
+      var url = '/api/credits?action=balance';
+      if (currentInstructorId) url += '&instructor_id=' + encodeURIComponent(currentInstructorId);
+      var res = await ccAuth.fetchAuthed(url);
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load balance');
 
-      var mins = data.balance_minutes != null ? data.balance_minutes : (data.credit_balance || 0) * 90;
+      var mins = currentInstructorId && data.selected_instructor_balance_minutes != null
+        ? data.selected_instructor_balance_minutes
+        : (data.balance_minutes != null ? data.balance_minutes : (data.credit_balance || 0) * 90);
       var hrs = (mins / 60);
       var hrsStr = hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
+      var label = document.getElementById('balanceLabel');
+      if (label) label.textContent = selectedInstructorName() ? 'Hours with ' + selectedInstructorName() : 'Hours on account';
       document.getElementById('balanceValue').textContent = hrsStr;
       document.getElementById('balanceUnit').textContent = 'hours';
-      if (window.posthog) posthog.capture('credits_page_viewed', { current_balance_hours: hrs });
+      if (window.posthog) posthog.capture('credits_page_viewed', { current_balance_hours: hrs, instructor_id: currentInstructorId || null });
     } catch (err) {
       document.getElementById('balanceValue').textContent = '?';
     }
@@ -117,6 +170,42 @@
     } catch (err) {
       console.error('Failed to load lesson types:', err);
       lessonTypes = [];
+    }
+  }
+
+  async function loadInstructors() {
+    var select = document.getElementById('instructorSelect');
+    try {
+      var res = await fetch('/api/instructors?action=list');
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load instructors');
+      instructors = Array.isArray(data.instructors) ? data.instructors : [];
+
+      var selectedExists = instructors.some(function (inst) { return Number(inst.id) === Number(currentInstructorId); });
+      if (currentInstructorId && !selectedExists) currentInstructorId = null;
+
+      if (select) {
+        select.innerHTML = '';
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Select an instructor';
+        select.appendChild(placeholder);
+
+        instructors.forEach(function (inst) {
+          var opt = document.createElement('option');
+          opt.value = String(inst.id);
+          opt.textContent = inst.name;
+          opt.selected = Number(inst.id) === Number(currentInstructorId);
+          select.appendChild(opt);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load instructors:', err);
+      instructors = [];
+      currentInstructorId = null;
+      if (select) select.innerHTML = '<option value="">Could not load instructors</option>';
+    } finally {
+      updateCheckoutAvailability();
     }
   }
 
@@ -177,18 +266,19 @@
 
   async function buySingleLesson(lessonTypeId, btn) {
     if (window.ccAuth && !window.ccAuth.requireAuth()) return;
+    if (!requireInstructorSelection()) return;
 
     var lt = lessonTypes.find(function (t) { return t.id === lessonTypeId; });
     if (!lt) return;
 
     var origText = btn.textContent;
+    checkoutBusy = true;
     btn.disabled = true;
     btn.textContent = 'Loading\u2026';
 
     try {
       var hours = lt.duration_minutes / 60;
-      var payload = { hours: hours };
-      if (currentInstructorId) payload.instructor_id = currentInstructorId;
+      var payload = { hours: hours, instructor_id: currentInstructorId };
       var res = await ccAuth.fetchAuthed('/api/credits?action=checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -199,8 +289,10 @@
       window.location.href = data.url;
     } catch (err) {
       showToast(err.message || 'Something went wrong. Please try again.', 'error');
+      checkoutBusy = false;
       btn.disabled = false;
       btn.textContent = origText;
+      updateCheckoutAvailability();
     }
   }
 
@@ -228,6 +320,7 @@
 
     document.getElementById('totalValue').textContent = fmt(totals.total);
     document.getElementById('btnLabel').textContent = 'Buy ' + hrsLabel + ' \u2014 ' + fmt(totals.total);
+    updateCheckoutAvailability();
   }
 
   // Event delegation for dynamically rendered pkg-card / buy-single buttons
@@ -246,19 +339,20 @@
 
   document.getElementById('btnCheckout').addEventListener('click', async function () {
     if (window.ccAuth && !window.ccAuth.requireAuth()) return;
+    if (!requireInstructorSelection()) return;
     var btn = document.getElementById('btnCheckout');
     var label = document.getElementById('btnLabel');
     var spinner = document.getElementById('btnSpinner');
 
+    checkoutBusy = true;
     btn.disabled = true;
     label.textContent = 'Redirecting to Stripe\u2026';
     spinner.style.display = 'block';
     var totals = calcTotal(qty);
-    if (window.posthog) posthog.capture('credits_checkout_initiated', { hours: qty, total_pence: totals.total });
+    if (window.posthog) posthog.capture('credits_checkout_initiated', { hours: qty, total_pence: totals.total, instructor_id: currentInstructorId });
 
     try {
-      var payload = { hours: qty };
-      if (currentInstructorId) payload.instructor_id = currentInstructorId;
+      var payload = { hours: qty, instructor_id: currentInstructorId };
       var res = await ccAuth.fetchAuthed('/api/credits?action=checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -270,13 +364,25 @@
       window.location.href = data.url;
     } catch (err) {
       showToast(err.message || 'Something went wrong. Please try again.', 'error');
+      checkoutBusy = false;
       btn.disabled = false;
       var t2 = calcTotal(qty);
       var hrsLabel = qty === 1 ? '1 hour' : (qty + ' hours');
       label.textContent = 'Buy ' + hrsLabel + ' \u2014 ' + fmt(t2.total);
       spinner.style.display = 'none';
+      updateCheckoutAvailability();
     }
   });
+
+  var instructorSelect = document.getElementById('instructorSelect');
+  if (instructorSelect) {
+    instructorSelect.addEventListener('change', function () {
+      var parsed = parseInt(instructorSelect.value, 10);
+      currentInstructorId = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+      updateCheckoutAvailability();
+      if (isAuthed) loadBalance();
+    });
+  }
 
   function showToast(msg, type) {
     var t = document.getElementById('toast');
@@ -323,12 +429,12 @@
   // otherwise the page would flash placeholder prices that disagree with the
   // server. Lesson types load in parallel — they're only used for card metadata
   // (name, colour), not for pricing.
-  Promise.all([loadBulkPricing(), loadLessonTypes()]).then(function () {
+  Promise.all([loadBulkPricing(), loadLessonTypes(), loadInstructors()]).then(function () {
     renderPackageCards();
     renderSingleLessonCards();
     selectPkg(qty); // re-render summary now that real prices are loaded
+    if (isAuthed) loadBalance();
   });
 
   loadProgrammePrice();
-  if (isAuthed) loadBalance();
 })();
