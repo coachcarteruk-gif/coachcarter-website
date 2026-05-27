@@ -93,6 +93,8 @@
 - `_travel-time.js` — postcodes.io geocoding + OpenRouteService drive-time estimates for slot fit checks
 - `_whatsapp.js` — WhatsApp Business API send wrapper
 
+Additional May 2026 shared server note: `_refund-planner.js` is the read-only admin refund preview planner. It computes net-of-original-processing-fee refund previews from credit sources, BCS attribution, direct booking snapshots, and Stripe fee evidence when available. It does not execute Stripe refunds.
+
 ### Shared Client Modules
 
 | File | Purpose |
@@ -115,7 +117,7 @@
 **Scheduling:** `instructor_availability`, `instructor_blackout_dates`, `instructor_external_events`, `lesson_bookings`, `slot_reservations`, `learner_availability`, ~~`lesson_confirmations`~~ *(dormant May 2026 — drop scheduled in follow-up migration once the rollback window has elapsed)*
 **Lesson catalogue:** `lesson_types`, `lesson_offers` (manual + broadcast, with `max_repeat_weeks` for recurring series)
 **Notifications:** `sent_reminders`
-**Payments:** `credit_transactions`, `instructor_payouts`, `payout_line_items`, `guarantee_pricing`
+**Payments:** `credit_transactions`, `booking_credit_sources`, `credit_source_adjustments`, `refund_events`, `refund_event_lines`, `instructor_payouts`, `payout_line_items`, `guarantee_pricing`
 **Learning:** `driving_sessions`, `skill_ratings`, `learner_onboarding`, `quiz_results`, `mock_tests`, `mock_test_faults`, `focused_practice_sessions`
 **Community:** `enquiries`, `availability_submissions`
 **Config:** `site_config`, `google_reviews`, `google_reviews_meta`
@@ -178,6 +180,12 @@
 - **Booking-status three-state restructure (15 May 2026)** — `lesson_bookings.status` collapsed from seven values to three: `scheduled` / `chargeable` / `refunded` (CHECK constraint enforced). New shared module `api/_booking-status.js` holds the constants + predicates. New column `lesson_bookings.credit_forfeited` records "no credit returned, instructor still paid" for sub-48h cancellations. Dual-confirmation flow deleted (`_confirmation-resolver.js`, `confirm-lesson.html`, prompt-confirmations + auto-confirm crons, admin `resolve-dispute`). New cron `api/cron-auto-complete.js` flips `scheduled → chargeable` at `end_time + 1 hour`. Payout filter (`api/_payout-helpers.js`) now `lb.status = 'chargeable'` only. **App port implication:** the status strings are part of the API contract — any TS port must use the same three literal values; reuse the constants module verbatim. See `BOOKING-STATUS-RESTRUCTURE-PLAN.md`, `docs/booking-statuses.md`.
 
 ### Critical Design Decisions Already Made
+
+**Refunds (preview foundation, May 2026):**
+- Approved card refunds are net of the original non-refundable Stripe processing fee; the learner absorbs that fee unless a later goodwill policy explicitly says otherwise.
+- `POST /api/admin?action=refund-preview` is read-only and school-scoped. It returns itemised gross lesson credit value, withheld processing fee, and amount returned.
+- Missing fee evidence and direct bookings already present in `payout_line_items` block automatic refund handling for manual review.
+- Execute-refund is not implemented yet; no Stripe refund mutation exists in this slice.
 
 **Navigation (app-mode design — do NOT deviate):**
 - Start page (`/`): Role selection only — "I'm a Learner" or "I'm an Instructor"

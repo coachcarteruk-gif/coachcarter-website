@@ -72,6 +72,11 @@ Post-PR-#222 production/current-state note: PR #222 "Plan partial repeat offer a
 - Post-PR #205 stale-BCS repair watch: learner_id=61 / instructor_id=4 recomputed cleanly after the 2026-05-26 08:30 UTC reconcile window (`actual_lcb=1170`, `computed=1170`, `drift=0`). The stale BCS diagnostic for refunded `credit_returned=TRUE` bookings returned 0 rows after repairing `bcs_id=4 / booking_id=235`. verified by read-only prod SELECT, 2026-05-26 08:45 UTC.
 - Email alert recipient: `ERROR_ALERT_EMAIL` (= `coachcarteruk@gmail.com` in prod).
 
+### Manual operational adjustments
+
+- 2026-05-26: Bhavitha's private/old Setmore Stripe payment was manually represented in CoachCarter after confirming the PaymentIntent was not visible to the CoachCarter platform Stripe account. This was **not** a failed CoachCarter webhook or platform reconciliation case. Operator action: legacy-adjusted the existing 1.5h balance down for a lesson delivered the prior week but not booked in-system, then granted 4.5h (3 x 1.5h) as instructor-absorbed credit for Fraser with note referencing the external Setmore/private Stripe payment `pi_3TaBO07H8ZdPfXlr0f3tH0Wz`. Future bookings funded by that source should not pay Fraser again through CoachCarter payouts.
+- 2026-05-26: Historical/pre-Connect Fraser payout exclusion applied after operator approval for bookings `213,225,218,228,138,227,216,229,219,238`. These bookings were already settled outside Connect (old Stripe links/platform flow, Bhavitha private Setmore Stripe, Courtney cash, Sophia bank transfer). Prod write inserted `instructor_payouts.id=3` with `status='skipped'`, 10 `payout_line_items`, and `audit_log.id=43`; no payout cron, payout processing, migrations, or Stripe calls were run. Post-apply verification: allowlist `payout_line_items` count = 10, mirrored `getEligibleBookings()` predicate for the allowlist returned 0 rows, Fraser preview risk from the allowlist = 0p.
+
 ### Known-but-deliberately-untouched data (do NOT auto-fix)
 
 Four bookings on grandfathered learners share the refund-without-credit-return shape (`status=refunded, credit_returned=FALSE, minutes_deducted=90`):

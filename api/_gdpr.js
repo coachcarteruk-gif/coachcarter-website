@@ -16,6 +16,7 @@
 // Behaviour:
 //   1. Anonymise `credit_transactions` (learner_id = NULL, anonymized = true)
 //   2. Anonymise `lesson_bookings` (learner_id = NULL, learner_anonymized = true).
+//   3. Nullify refund_events.learner_id (financial refund ledger retained).
 //      The migration drops the old ON DELETE CASCADE FK on
 //      lesson_bookings.learner_id and replaces it with ON DELETE SET NULL —
 //      belt-and-braces with the explicit UPDATE here.
@@ -46,6 +47,21 @@
 //
 // Returns { ok: true, learnerId, email }.
 
+async function refundLedgerTablesExist(sql) {
+  const [row] = await sql`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'refund_events'
+      ) AS has_refund_events,
+      EXISTS (
+        SELECT 1 FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'refund_event_lines'
+      ) AS has_refund_event_lines
+  `;
+  return Boolean(row?.has_refund_events && row?.has_refund_event_lines);
+}
+
 async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   if (!sql || !learnerId) {
     throw new Error('deleteLearnerCascade: sql and learnerId required');
@@ -59,6 +75,8 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
     const [row] = await sql`SELECT email FROM learner_users WHERE id = ${learnerId}`;
     email = row?.email || null;
   }
+
+  const hasRefundLedger = await refundLedgerTablesExist(sql);
 
   const txn = [
     // 1. Anonymise financial records (7-year retention).
@@ -97,6 +115,10 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
     sql`UPDATE cookie_consents SET learner_id = NULL WHERE learner_id = ${learnerId}`,
   ];
 
+  if (hasRefundLedger) {
+    txn.splice(2, 0, sql`UPDATE refund_events SET learner_id = NULL WHERE learner_id = ${learnerId}`);
+  }
+
   // Magic-link tokens key on email, not learner_id. Append conditionally.
   if (email) {
     txn.push(sql`DELETE FROM magic_link_tokens WHERE email = ${email}`);
@@ -112,4 +134,4 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   return { ok: true, learnerId, email };
 }
 
-module.exports = { deleteLearnerCascade };
+module.exports = { deleteLearnerCascade, refundLedgerTablesExist };
