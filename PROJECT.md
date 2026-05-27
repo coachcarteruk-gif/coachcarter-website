@@ -754,6 +754,8 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 | `referral-config` | GET | JWT | Current referral config for the school (enabled, welcome bonus, reward minutes) |
 | `update-referral-config` | POST | JWT | Update referral config. Body: `{ referral_enabled, referral_welcome_bonus_minutes, referral_reward_minutes }`. Audit-logged |
 
+Refund operations runbook: [`docs/refund-operator-runbook.md`](docs/refund-operator-runbook.md).
+
 **`admin_users`** table: email, bcrypt password_hash, role (`admin` / `superadmin`).
 
 ---
