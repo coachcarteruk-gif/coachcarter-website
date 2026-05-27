@@ -108,9 +108,14 @@ test.describe('admin refund-preview endpoint', () => {
       source_minutes: 90,
       source_amount_pence: 8250,
       source_stripe_fee_pence: 144,
+      payment_method: 'card',
       stripe_session_id: 'cs_credit',
       stripe_payment_intent_id: 'pi_credit',
       stripe_charge_id: 'ch_credit',
+      learner_name: 'Beatriz Example',
+      learner_email: 'beatriz@example.test',
+      instructor_name: 'Fraser Carter',
+      payment_source: 'credit_transaction',
       active_contribution_pence: 0,
       active_stripe_fee_pence: 0,
       active_minutes_drawn: 0,
@@ -138,6 +143,12 @@ test.describe('admin refund-preview endpoint', () => {
       gross_refund_pence: 8250,
       processing_fee_withheld_pence: 144,
       net_refund_pence: 8106,
+      recommended_operator_action: 'execute_eligible',
+      learner_name: 'Beatriz Example',
+      learner_email: 'beatriz@example.test',
+      instructor_name: 'Fraser Carter',
+      payment_source: 'credit_transaction',
+      payment_channel: 'card',
     });
     expect(res.body.admin_display_copy).toContain('Refund summary:');
     expect(res.body.admin_display_copy).toContain('Payment processing fee: -£1.44');

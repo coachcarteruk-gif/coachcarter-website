@@ -30,9 +30,14 @@ function creditSourceRow(overrides = {}) {
     source_minutes: 90,
     source_amount_pence: 8250,
     source_stripe_fee_pence: 144,
+    payment_method: 'card',
     stripe_session_id: 'cs_credit',
     stripe_payment_intent_id: 'pi_credit',
     stripe_charge_id: 'ch_credit',
+    learner_name: 'Beatriz Example',
+    learner_email: 'beatriz@example.test',
+    instructor_name: 'Fraser Carter',
+    payment_source: 'credit_transaction',
     active_contribution_pence: 0,
     active_stripe_fee_pence: 0,
     active_minutes_drawn: 0,
@@ -58,6 +63,13 @@ function bcsRow(overrides = {}) {
     stripe_session_id: 'cs_bcs',
     stripe_payment_intent_id: 'pi_bcs',
     stripe_charge_id: 'ch_bcs',
+    payment_method: 'card',
+    learner_name: 'Beatriz Example',
+    learner_email: 'beatriz@example.test',
+    instructor_name: 'Fraser Carter',
+    booking_start_at: '2026-06-01 10:00:00',
+    booking_duration_minutes: 90,
+    payment_source: 'booking_credit_source',
     ...overrides,
   };
 }
@@ -69,8 +81,15 @@ function bookingRow(overrides = {}) {
     learner_id: 61,
     instructor_id: 4,
     payment_method: 'card',
+    payment_channel: 'card',
     list_price_pence: 8250,
     booking_stripe_fee_pence: 144,
+    learner_name: 'Beatriz Example',
+    learner_email: 'beatriz@example.test',
+    instructor_name: 'Fraser Carter',
+    booking_start_at: '2026-06-01 10:00:00',
+    booking_duration_minutes: 90,
+    payment_source: 'lesson_booking',
     bcs_contribution_pence: 0,
     bcs_stripe_fee_pence: 0,
     stripe_session_id: null,
@@ -119,6 +138,12 @@ test.describe('refund preview planner', () => {
       gross_refund_pence: 8250,
       processing_fee_withheld_pence: 144,
       net_refund_pence: 8106,
+      recommended_operator_action: 'execute_eligible',
+      learner_name: 'Beatriz Example',
+      learner_email: 'beatriz@example.test',
+      instructor_name: 'Fraser Carter',
+      payment_source: 'credit_transaction',
+      payment_channel: 'card',
       fee_evidence: {
         source: 'credit_transactions.stripe_fee_pence',
         pence: 144,
@@ -173,6 +198,16 @@ test.describe('refund preview planner', () => {
       source: 'booking_credit_sources.stripe_fee_pence',
       pence: 123,
       preferred_bcs_attribution: true,
+    });
+    expect(result).toMatchObject({
+      recommended_operator_action: 'manual_review_required',
+      learner_name: 'Beatriz Example',
+      learner_email: 'beatriz@example.test',
+      instructor_name: 'Fraser Carter',
+      booking_start_at: '2026-06-01 10:00:00',
+      booking_duration_minutes: 90,
+      payment_source: 'booking_credit_source',
+      payment_channel: 'card',
     });
   });
 
@@ -233,6 +268,7 @@ test.describe('refund preview planner', () => {
       manual_review_required: true,
       code: 'MISSING_PROCESSING_FEE',
       gross_refund_pence: 8250,
+      recommended_operator_action: 'blocked',
     });
     expect(result.processing_fee_withheld_pence).toBe(0);
     expect(result.warnings[0]).toContain('Processing fee evidence is missing');
@@ -295,6 +331,7 @@ test.describe('refund preview planner', () => {
       code: 'MISSING_PROCESSING_FEE',
       gross_refund_pence: 8250,
       net_refund_pence: 8250,
+      recommended_operator_action: 'blocked',
     });
     expect(result.warnings[0]).toContain('Processing fee evidence is missing');
   });
@@ -314,6 +351,14 @@ test.describe('refund preview planner', () => {
       blocked: true,
       manual_review_required: true,
       code: 'BOOKING_ALREADY_PAID_OUT',
+      recommended_operator_action: 'manual_bank_review_required',
+      learner_name: 'Beatriz Example',
+      learner_email: 'beatriz@example.test',
+      instructor_name: 'Fraser Carter',
+      booking_start_at: '2026-06-01 10:00:00',
+      booking_duration_minutes: 90,
+      payment_source: 'lesson_booking',
+      payment_channel: 'card',
     });
     expect(result.message).toContain('manual bank refund');
   });
@@ -359,7 +404,31 @@ test.describe('refund preview planner', () => {
     });
     expect(sql.calls).toHaveLength(1);
     expect(sql.calls[0].text).toContain('WHERE ct.school_id = ?');
+    expect(sql.calls[0].text).toContain('lu.school_id = ?');
+    expect(sql.calls[0].text).toContain('i.school_id = ?');
     expect(sql.calls[0].values).toEqual(expect.arrayContaining([2, 101]));
+  });
+
+  test('marks clean previews without a Stripe refund target for manual review', async () => {
+    const sql = makeSql(() => [creditSourceRow({
+      stripe_session_id: null,
+      stripe_payment_intent_id: null,
+      stripe_charge_id: null,
+    })]);
+
+    const result = await plan({
+      schoolId: 1,
+      refundType: 'credit_purchase',
+      creditTransactionId: 101,
+      reason: 'manual target review',
+    }, sql);
+
+    expect(result).toMatchObject({
+      ok: true,
+      blocked: false,
+      manual_review_required: false,
+      recommended_operator_action: 'manual_review_required',
+    });
   });
 
   test('validates the pragmatic admin request shapes', () => {

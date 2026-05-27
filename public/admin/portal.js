@@ -2359,6 +2359,30 @@ function refundObjectRows(obj) {
   return entries.map(([key, value]) => refundKv(key, typeof value === 'object' ? JSON.stringify(value) : value)).join('');
 }
 
+function refundActionLabel(action) {
+  const labels = {
+    execute_eligible: 'Execute eligible',
+    manual_review_required: 'Manual review required',
+    blocked: 'Blocked',
+    manual_bank_review_required: 'Manual bank review required'
+  };
+  return labels[action] || action || '-';
+}
+
+function renderRefundOperatorContext(data) {
+  const rows = [
+    ['Recommended action', refundActionLabel(data.recommended_operator_action)],
+    ['Learner', data.learner_name],
+    ['Learner email', data.learner_email],
+    ['Instructor', data.instructor_name],
+    ['Booking start', data.booking_start_at],
+    ['Duration', data.booking_duration_minutes ? data.booking_duration_minutes + ' minutes' : null],
+    ['Payment source', data.payment_source],
+    ['Payment channel', data.payment_channel]
+  ];
+  return rows.map(([label, value]) => refundKv(label, value)).join('');
+}
+
 function renderRefundLines(lines) {
   if (!Array.isArray(lines) || lines.length === 0) {
     return '<div style="color:var(--muted);font-size:0.86rem;">No ledger lines returned by the planner.</div>';
@@ -2439,6 +2463,10 @@ function renderRefundPreviewResult(data) {
       '<div class="stat-card"><div class="stat-value" style="font-size:1.6rem;">' + fmtPence(Number(data.net_refund_pence || 0)) + '</div><div class="stat-label">Returned amount</div></div>' +
     '</div>' +
     previewOnlyCopy +
+    '<div style="margin-bottom:18px;">' +
+      '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Operator context</h3>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px;">' + renderRefundOperatorContext(data) + '</div>' +
+    '</div>' +
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;">' +
       '<button class="btn" disabled style="opacity:0.55;cursor:not-allowed;">Execution is coming in a later reviewed slice</button>' +
       '<span style="font-size:0.82rem;color:var(--muted);">This screen is preview-only and cannot mutate Stripe, bookings, credits, payouts, or refund ledger rows.</span>' +
