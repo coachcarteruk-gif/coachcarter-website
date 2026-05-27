@@ -1321,3 +1321,5 @@ async function getRawBody(req) {
     req.on('error', reject);
   });
 }
+
+module.exports._handleCreditPurchase = handleCreditPurchase;

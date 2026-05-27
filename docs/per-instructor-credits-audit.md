@@ -38,9 +38,9 @@ currently defaults missing `instructor_id` to Fraser / instructor `1`.
 | Area | File/function | Current data source | Per-instructor safe? | Notes |
 |---|---|---|---|---|
 | Shared grants | `api/_credit-grant.js` `grantCredits`, `lockBalanceAndMutate`, `lockBalanceAdjustLCB` | LCB in Phase 2A | Mostly yes | Good core helper; LCB writes/guards now include `school_id`. Missing `instructorId` still grandfather-routes to instructor `1` by design during cutover. |
-| Credit checkout | `api/credits.js` `handleCheckout` | Request `instructor_id`, fallback `1`; school bulk pricing | Partial | Does not require instructor. Pricing does not pass instructor/learner to `calcBulkTotal`, so per-instructor rates/bulk opt-in are not honoured. |
-| Credit balance API | `api/credits.js` `handleBalance` | Sum of school-scoped LCB rows | Partial | Better than pooled column, but returns aggregate only, no per-instructor breakdown. |
-| Credit verify/webhook | `api/webhook.js` `handleCreditPurchase` | Stripe metadata + `grantCredits` | Mostly yes | Safe if metadata includes instructor. Legacy/missing metadata goes to instructor `1`. |
+| Credit checkout | `api/credits.js` `handleCheckout` | Required request `instructor_id`; school bulk pricing | Mostly yes | New learner-facing checkout rejects missing, cross-school, inactive, or hidden/demo instructors and writes `instructor_id` to Stripe metadata. Pricing still uses school bulk pricing only; per-instructor rate/bulk opt-in remains Thread B. |
+| Credit balance API | `api/credits.js` `handleBalance` | School-scoped LCB rows joined to same-school instructors | Yes | Preserves aggregate `balance_minutes`/`balance_hours`/`credit_balance`, adds per-instructor `balances`, and supports optional validated `instructor_id` with selected balance fields. |
+| Credit verify/webhook | `api/webhook.js` `handleCreditPurchase` | Stripe metadata + `grantCredits` | Mostly yes | Purchase completion consumes metadata `instructor_id` and grants to that instructor's LCB row. Legacy/missing metadata still goes to instructor `1` through the shared helper for old Stripe retries. |
 | Learner credit booking | `api/slots.js` credit transaction path | LCB + FIFO `credit_transactions` by instructor | Yes | Locks/decrements chosen instructor row, writes BCS and list price. |
 | Instructor-created credit booking | `api/instructor.js` credit transaction path | LCB + FIFO CT by instructor | Yes | Same safe shape as learner booking. |
 | Cancellations | `api/slots.js`, `api/instructor.js` cancel paths | Booking `instructor_id` + `lockBalanceAdjustLCB` | Mostly yes | Returns credit to original instructor row and marks BCS refunded. Not fully transactional with booking update. |
@@ -49,7 +49,7 @@ currently defaults missing `instructor_id` to Fraser / instructor `1`.
 | Admin adjust credits | `api/admin.js` `handleAdjustCredits` | School-scoped LCB auto-resolve or explicit instructor | Mostly yes | Server guard is scoped: 0 rows grandfathers to instructor `1`, 1 row auto-resolves, 2+ rows returns `AMBIGUOUS_INSTRUCTOR`, explicit `instructor_id` reads that exact LCB row. Current UI still does not pass instructor. Response/audit still pooled. |
 | Goodwill/reconciliation | `api/_admin-credit-goodwill.js`, `api/_admin-credit-reconciliation.js` | Explicit learner/instructor/school + shared helper | Yes | Strongest admin path; tests already pin scope and mutation shape. |
 | Refund executor | `api/_refund-executor.js` | Planner lines + `lockBalanceAdjustLCB` | Mostly yes | Uses `instructor_id` from trusted plan lines. BCS execution intentionally disabled. |
-| Learner buy UI | `public/learner/buy-credits.js` | Aggregate balance + school bulk pricing | No | No instructor picker; checkout body omits `instructor_id`, causing default `1`. |
+| Learner buy UI | `public/learner/buy-credits.js` | Aggregate balance + school bulk pricing; optional query instructor passthrough | Partial | No instructor picker yet. If opened with `?instructor_id=...`, checkout sends it; otherwise the API now rejects checkout instead of defaulting to `1`. |
 | Learner booking UI | `public/learner/book.js` | Aggregate balance | Partial | Server safe, UI can show credit path for Instructor B using Instructor A credits. |
 | Admin/instructor displays | `public/admin/portal.js`, `public/instructor/index.js`, `public/instructor/dashboard.js` | Mostly pooled `balance_minutes` | Partial / no | Display-only in places, but edit/create modals use it to guide operators. |
 | Platform balance | `api/_platform-balance.js` | Pooled balance valued at school rate | Partial | Advisory only, but not accurate for per-instructor effective rates or goodwill absorber. |
@@ -89,17 +89,25 @@ Primary files:
 
 ### Slice 2: Make Purchase And Balance APIs Instructor-Aware
 
-Status: Not started.
+Status: API complete in `codex/instructor-aware-credit-apis` (2026-05-27); learner UI picker still deferred to Slice 3.
 
 Scope:
 
-- Require or deliberately resolve `instructor_id` in
-  `POST /api/credits?action=checkout`.
-- Return per-instructor balances from `GET /api/credits?action=balance`, for
-  example:
-  `{ balance_minutes, balances: [{ instructor_id, instructor_name, balance_minutes }] }`.
-- Add an optional selected-instructor balance read for the learner booking page.
-- Keep pricing server-side and React Native-portable.
+Landed behaviour:
+
+- `POST /api/credits?action=checkout` requires explicit `instructor_id` for
+  normal learner purchases and rejects missing/cross-school/inactive/hidden
+  instructors.
+- Stripe Checkout metadata includes `instructor_id` for credit purchases.
+- `GET /api/credits?action=balance` keeps aggregate fields and returns
+  `balances: [{ instructor_id, instructor_name, balance_minutes, balance_hours }]`.
+- `GET /api/credits?action=balance&instructor_id=...` validates school scope
+  and returns selected-instructor balance fields.
+- Webhook purchase completion already grants through metadata instructor scope;
+  tests now pin that call shape. Legacy missing-metadata Stripe retries remain
+  grandfathered by `_credit-grant.js` to instructor `1`.
+- `public/learner/buy-credits.js` has only a tiny
+  `?instructor_id=...` pass-through hook; no UI picker/redesign landed here.
 
 Primary files:
 
@@ -168,32 +176,35 @@ Primary files:
 
 ## Recommended Next Code PR
 
-Recommended next PR: Slice 2.
+Recommended next PR: Slice 3.
 
 Exact files to change:
 
-- `api/credits.js`
-- `api/_pricing-helpers.js`
-- `public/learner/book.js`
+- `public/learner/buy-credits.html`
 - `public/learner/buy-credits.js`
+- `public/learner/book.js`
+- `public/learner/index.js`
+- `public/learner/profile.js`
 
 Exact behaviour to change:
 
-- Require or deliberately resolve `instructor_id` in checkout rather than
-  silently depending on the legacy default.
-- Return per-instructor balances from the balance API while preserving the
-  aggregate total for existing UI.
-- Let learner booking/buy-credit UI decide credit eligibility from the selected
-  instructor balance.
+- Buy-credits should require the learner to choose, or arrive with, an
+  instructor before enabling checkout, then pass `instructor_id`.
+- Booking modal should decide credit eligibility from
+  `selected_instructor_balance_minutes` for the selected slot's instructor,
+  not aggregate balance.
+- Dashboard/profile can keep the aggregate total but should display the new
+  per-instructor `balances` rows clearly.
 
 Why this next:
 
-- Slice 1 closed the wrong-instructor server control-flow checks.
-- The remaining highest risk is learner-facing purchase/display ambiguity:
-  checkout still allows missing `instructor_id` and defaults to instructor `1`,
-  while balance display is aggregate-only.
-- This can still be done without touching refund math, payout behaviour, or DB
-  schema.
+- Slice 2 closed the API ambiguity: new checkout cannot silently default to
+  instructor `1`, and balance responses now expose scoped rows.
+- The remaining highest risk is learner-facing display/choice ambiguity: the UI
+  still needs to choose an instructor before checkout and use selected
+  instructor balance for booking decisions.
+- This remains a frontend/data-consumption slice; do not touch refund math,
+  payout behaviour, pricing fallback, or DB schema.
 
 ## Test Plan
 
@@ -218,9 +229,11 @@ Remaining risks / missing scenarios:
 - `credits?action=checkout` without instructor is rejected or deliberately
   resolved; no silent default for new UI.
 - Cancellation returns credit only to the original booking instructor.
-- Checkout without instructor is still accepted and defaults to instructor `1`.
-- Balance API remains aggregate-only, so UI can still imply Instructor A credits
-  are usable with Instructor B until Slice 2/3 lands.
+- Buy-credits page still has no instructor picker; direct visits without
+  `?instructor_id=` now fail checkout until Slice 3 supplies instructor
+  selection.
+- Booking UI may still imply Instructor A credits are usable with Instructor B
+  until it consumes the selected-instructor balance fields.
 - Refund executor decrements the refunded source's instructor balance.
 - Cross-school LCB rows are never read without `school_id`.
 

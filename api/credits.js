@@ -11,6 +11,42 @@ function verifyAuth(req) {
   return requireAuth(req, { roles: ['learner', 'admin'] });
 }
 
+function parsePositiveInteger(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+async function resolveCheckoutInstructor(sql, { instructorId, schoolId }) {
+  if (!instructorId) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'INSTRUCTOR_REQUIRED',
+      message: 'instructor_id is required for credit checkout'
+    };
+  }
+
+  const [instructor] = await sql`
+    SELECT id, name
+      FROM instructors
+     WHERE id = ${instructorId}
+       AND school_id = ${schoolId}
+       AND active = true
+       AND email != 'demo@coachcarter.uk'
+  `;
+
+  if (!instructor) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'INVALID_INSTRUCTOR',
+      message: 'Instructor is not available for credit checkout'
+    };
+  }
+
+  return { ok: true, instructor };
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   const action = req.query.action;
@@ -59,6 +95,13 @@ async function handleBalance(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const selectedInstructorId = req.query.instructor_id
+      ? parsePositiveInteger(req.query.instructor_id)
+      : null;
+
+    if (req.query.instructor_id && !selectedInstructorId) {
+      return res.status(400).json({ error: 'Invalid instructor_id' });
+    }
 
     // Step 4 / Phase 2A: profile-balance read sums learner_credit_balances
     // across instructors instead of reading learner_users.balance_minutes
@@ -83,6 +126,42 @@ async function handleBalance(req, res) {
 
     if (!balanceRow) return res.status(404).json({ error: 'Learner not found' });
 
+    let selectedInstructorBalanceMinutes = null;
+    if (selectedInstructorId) {
+      const [instructor] = await sql`
+        SELECT id
+          FROM instructors
+         WHERE id = ${selectedInstructorId}
+           AND school_id = ${schoolId}
+      `;
+      if (!instructor) {
+        return res.status(404).json({ error: 'Instructor not found' });
+      }
+
+      const [selectedBalance] = await sql`
+        SELECT COALESCE(balance_minutes, 0)::int AS balance_minutes
+          FROM learner_credit_balances
+         WHERE learner_id = ${user.id}
+           AND instructor_id = ${selectedInstructorId}
+           AND school_id = ${schoolId}
+      `;
+      selectedInstructorBalanceMinutes = selectedBalance?.balance_minutes || 0;
+    }
+
+    const balances = await sql`
+      SELECT lcb.instructor_id,
+             i.name AS instructor_name,
+             COALESCE(lcb.balance_minutes, 0)::int AS balance_minutes,
+             i.active AS instructor_active
+        FROM learner_credit_balances lcb
+        JOIN instructors i
+          ON i.id = lcb.instructor_id
+         AND i.school_id = lcb.school_id
+       WHERE lcb.learner_id = ${user.id}
+         AND lcb.school_id = ${schoolId}
+       ORDER BY i.active DESC, i.name ASC, lcb.instructor_id ASC
+    `;
+
     const transactions = await sql`
       SELECT id, type, credits, minutes, amount_pence, payment_method, created_at
       FROM credit_transactions
@@ -91,12 +170,27 @@ async function handleBalance(req, res) {
       LIMIT 20
     `;
 
-    return res.json({
+    const payload = {
       credit_balance:  balanceRow.credit_balance,
       balance_minutes: balanceRow.balance_minutes || 0,
       balance_hours:   ((balanceRow.balance_minutes || 0) / 60).toFixed(1),
+      balances: balances.map(row => ({
+        instructor_id: row.instructor_id,
+        instructor_name: row.instructor_name,
+        balance_minutes: row.balance_minutes || 0,
+        balance_hours: ((row.balance_minutes || 0) / 60).toFixed(1),
+        instructor_active: row.instructor_active !== false
+      })),
       transactions
-    });
+    };
+
+    if (selectedInstructorId) {
+      payload.selected_instructor_id = selectedInstructorId;
+      payload.selected_instructor_balance_minutes = selectedInstructorBalanceMinutes;
+      payload.selected_instructor_balance_hours = (selectedInstructorBalanceMinutes / 60).toFixed(1);
+    }
+
+    return res.json(payload);
   } catch (err) {
     console.error('credits balance error:', err);
     reportError('/api/credits', err);
@@ -141,18 +235,18 @@ async function handleCheckout(req, res) {
   const minutes = Math.round(hours * 60);
   const lessonEquiv = Math.round(hours / 1.5); // for backwards compat metadata
 
-  // Step 4 / Phase 2A: scope credits to a specific instructor at purchase
-  // time. Accept instructor_id from the request body when provided (future
-  // multi-instructor learner UI); default to 1 (Fraser) when missing so
-  // current buy-credits.html callers continue to work without change. The
-  // webhook reads metadata.instructor_id and routes the LCB upsert there.
-  const instructorIdRaw = parseInt(req.body.instructor_id, 10);
-  const instructorId = Number.isFinite(instructorIdRaw) && instructorIdRaw > 0
-    ? instructorIdRaw
-    : 1;
+  const instructorId = parsePositiveInteger(req.body.instructor_id);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const instructorResult = await resolveCheckoutInstructor(sql, { instructorId, schoolId });
+    if (!instructorResult.ok) {
+      return res.status(instructorResult.status).json({
+        error: instructorResult.message,
+        code: instructorResult.code
+      });
+    }
+
     const { fullPence, discountPct, discountAmt, totalPence, pricePerHourPence } = await calcBulkTotal(sql, schoolId, hours);
     const origin = req.headers.origin || 'https://coachcarter.uk';
 
@@ -323,3 +417,7 @@ async function handleVerify(req, res) {
     return res.status(500).json({ error: true, code: 'VERIFY_FAILED', message: 'Failed to verify checkout session' });
   }
 }
+
+module.exports._handleBalance = handleBalance;
+module.exports._handleCheckout = handleCheckout;
+module.exports._resolveCheckoutInstructor = resolveCheckoutInstructor;

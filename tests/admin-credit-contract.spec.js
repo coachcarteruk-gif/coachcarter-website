@@ -145,10 +145,10 @@ test.describe('per-instructor credit safety slice', () => {
 
   test('LCB reads added in this safety slice are school scoped', () => {
     const repoRoot = path.resolve(__dirname, '..');
-    const adminSource = fs.readFileSync(path.join(repoRoot, 'api', 'admin.js'), 'utf8');
-    const instructorSource = fs.readFileSync(path.join(repoRoot, 'api', 'instructor.js'), 'utf8');
-    const creditsSource = fs.readFileSync(path.join(repoRoot, 'api', 'credits.js'), 'utf8');
-    const creditGrantSource = fs.readFileSync(path.join(repoRoot, 'api', '_credit-grant.js'), 'utf8');
+    const adminSource = fs.readFileSync(path.join(repoRoot, 'api', 'admin.js'), 'utf8').replace(/\r\n/g, '\n');
+    const instructorSource = fs.readFileSync(path.join(repoRoot, 'api', 'instructor.js'), 'utf8').replace(/\r\n/g, '\n');
+    const creditsSource = fs.readFileSync(path.join(repoRoot, 'api', 'credits.js'), 'utf8').replace(/\r\n/g, '\n');
+    const creditGrantSource = fs.readFileSync(path.join(repoRoot, 'api', '_credit-grant.js'), 'utf8').replace(/\r\n/g, '\n');
 
     expect(adminSource).toContain('FROM learner_credit_balances\n         WHERE learner_id = ${learner_id}\n           AND school_id = ${schoolId}');
     expect(adminSource).toContain('AND instructor_id = ${explicitInstructorId}\n           AND school_id = ${schoolId}');
