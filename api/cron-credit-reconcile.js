@@ -8,7 +8,7 @@
 // Step 4.5 from PER-INSTRUCTOR-CREDITS-PLAN.md.
 //
 // Compare learner_credit_balances.balance_minutes against the source-of-truth
-// ledger reconcile, per (learner_id, instructor_id) pair:
+// ledger reconcile, per (learner_id, instructor_id, school_id) scope:
 //
 //   expected_balance_minutes
 //     =  SUM(credit_transactions.minutes)                                          (always — credit purchases)
@@ -155,7 +155,8 @@ async function probeSchemaMode(sql) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Reconcile query builders.
 //
-// Each returns the full list of (learner_id, instructor_id) drift rows.
+// Each returns the full list of school-scoped (learner_id, instructor_id)
+// drift rows for SCHOOL_ID.
 // They differ only in which CTE columns are subtracted. We pre-build them as
 // three separate functions rather than templating into one query, because
 // referring to a missing table inside a CTE — even unreached — would fail
@@ -308,7 +309,8 @@ async function reconcileCtPlusBcs(sql, { hasGrandfatheredAt } = {}) {
           SUM(bcs.minutes_drawn)::int AS minutes
         FROM booking_credit_sources bcs
         JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
-        WHERE bcs.refunded_at IS NULL
+        WHERE bcs.school_id = ${SCHOOL_ID}
+          AND bcs.refunded_at IS NULL
           AND ct.school_id = ${SCHOOL_ID}
           AND ct.instructor_id IS NOT NULL
         GROUP BY ct.learner_id, ct.instructor_id
@@ -335,7 +337,8 @@ async function reconcileCtPlusBcs(sql, { hasGrandfatheredAt } = {}) {
           AND lb.minutes_deducted > 0
           AND NOT EXISTS (
             SELECT 1 FROM booking_credit_sources bcs2
-             WHERE bcs2.booking_id = lb.id
+             WHERE bcs2.school_id = lb.school_id
+               AND bcs2.booking_id = lb.id
           )
         GROUP BY lb.learner_id, lb.instructor_id
       ),
@@ -386,7 +389,8 @@ async function reconcileCtPlusBcs(sql, { hasGrandfatheredAt } = {}) {
         SUM(bcs.minutes_drawn)::int AS minutes
       FROM booking_credit_sources bcs
       JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
-      WHERE bcs.refunded_at IS NULL
+      WHERE bcs.school_id = ${SCHOOL_ID}
+        AND bcs.refunded_at IS NULL
         AND ct.school_id = ${SCHOOL_ID}
         AND ct.instructor_id IS NOT NULL
       GROUP BY ct.learner_id, ct.instructor_id
@@ -413,7 +417,8 @@ async function reconcileCtPlusBcs(sql, { hasGrandfatheredAt } = {}) {
         AND lb.minutes_deducted > 0
         AND NOT EXISTS (
           SELECT 1 FROM booking_credit_sources bcs2
-           WHERE bcs2.booking_id = lb.id
+           WHERE bcs2.school_id = lb.school_id
+             AND bcs2.booking_id = lb.id
         )
       GROUP BY lb.learner_id, lb.instructor_id
     ),
@@ -467,7 +472,8 @@ async function reconcileFull(sql, { hasGrandfatheredAt } = {}) {
           SUM(bcs.minutes_drawn)::int AS minutes
         FROM booking_credit_sources bcs
         JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
-        WHERE bcs.refunded_at IS NULL
+        WHERE bcs.school_id = ${SCHOOL_ID}
+          AND bcs.refunded_at IS NULL
           AND ct.school_id = ${SCHOOL_ID}
           AND ct.instructor_id IS NOT NULL
         GROUP BY ct.learner_id, ct.instructor_id
@@ -505,7 +511,8 @@ async function reconcileFull(sql, { hasGrandfatheredAt } = {}) {
           AND lb.minutes_deducted > 0
           AND NOT EXISTS (
             SELECT 1 FROM booking_credit_sources bcs2
-             WHERE bcs2.booking_id = lb.id
+             WHERE bcs2.school_id = lb.school_id
+               AND bcs2.booking_id = lb.id
           )
         GROUP BY lb.learner_id, lb.instructor_id
       ),
@@ -564,7 +571,8 @@ async function reconcileFull(sql, { hasGrandfatheredAt } = {}) {
         SUM(bcs.minutes_drawn)::int AS minutes
       FROM booking_credit_sources bcs
       JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
-      WHERE bcs.refunded_at IS NULL
+      WHERE bcs.school_id = ${SCHOOL_ID}
+        AND bcs.refunded_at IS NULL
         AND ct.school_id = ${SCHOOL_ID}
         AND ct.instructor_id IS NOT NULL
       GROUP BY ct.learner_id, ct.instructor_id
@@ -602,7 +610,8 @@ async function reconcileFull(sql, { hasGrandfatheredAt } = {}) {
         AND lb.minutes_deducted > 0
         AND NOT EXISTS (
           SELECT 1 FROM booking_credit_sources bcs2
-           WHERE bcs2.booking_id = lb.id
+           WHERE bcs2.school_id = lb.school_id
+             AND bcs2.booking_id = lb.id
         )
       GROUP BY lb.learner_id, lb.instructor_id
     ),
@@ -717,7 +726,9 @@ async function countGrandfatheredSuppressedCtPlusBcs(sql) {
          AND lb.minutes_deducted IS NOT NULL
          AND lb.minutes_deducted > 0
          AND NOT EXISTS (
-           SELECT 1 FROM booking_credit_sources bcs2 WHERE bcs2.booking_id = lb.id
+           SELECT 1 FROM booking_credit_sources bcs2
+            WHERE bcs2.school_id = ${SCHOOL_ID}
+              AND bcs2.booking_id = lb.id
          )
        GROUP BY lb.learner_id, lb.instructor_id
     ),
@@ -725,7 +736,8 @@ async function countGrandfatheredSuppressedCtPlusBcs(sql) {
       SELECT ct.learner_id, ct.instructor_id
         FROM booking_credit_sources bcs
         JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
-       WHERE bcs.refunded_at IS NULL
+       WHERE bcs.school_id = ${SCHOOL_ID}
+         AND bcs.refunded_at IS NULL
          AND ct.school_id = ${SCHOOL_ID}
          AND ct.instructor_id IS NOT NULL
        GROUP BY ct.learner_id, ct.instructor_id
@@ -765,7 +777,9 @@ async function countGrandfatheredSuppressedFull(sql) {
          AND lb.minutes_deducted IS NOT NULL
          AND lb.minutes_deducted > 0
          AND NOT EXISTS (
-           SELECT 1 FROM booking_credit_sources bcs2 WHERE bcs2.booking_id = lb.id
+           SELECT 1 FROM booking_credit_sources bcs2
+            WHERE bcs2.school_id = ${SCHOOL_ID}
+              AND bcs2.booking_id = lb.id
          )
        GROUP BY lb.learner_id, lb.instructor_id
     ),
@@ -773,7 +787,8 @@ async function countGrandfatheredSuppressedFull(sql) {
       SELECT ct.learner_id, ct.instructor_id
         FROM booking_credit_sources bcs
         JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
-       WHERE bcs.refunded_at IS NULL
+       WHERE bcs.school_id = ${SCHOOL_ID}
+         AND bcs.refunded_at IS NULL
          AND ct.school_id = ${SCHOOL_ID}
          AND ct.instructor_id IS NOT NULL
        GROUP BY ct.learner_id, ct.instructor_id

@@ -77,10 +77,13 @@ async function computePlatformBalance(sql, stripe) {
           : 'unknown'
   }));
 
-  // 4. Advisory — "if learners refunded today" worst case. Net cash inflow
-  // per non-test learner (purchases + slot_purchases minus refunds), capped
-  // at the live learner_credit valuation. Anything spent on lessons isn't
-  // refundable, so the live balance is the natural ceiling.
+  // 4. Advisory — "if learners refunded today" worst case. This still uses
+  // the legacy aggregate learner balance at the school rate, so it is a
+  // conservative dashboard signal rather than a per-instructor accounting
+  // model. Per-instructor effective-rate and goodwill absorber valuation are
+  // deferred until the pricing/refund/payout policy is designed together.
+  // Anything spent on lessons isn't refundable, so the live balance is the
+  // natural ceiling.
   //
   // Filter is intent-based: stripe_session_id IS NOT NULL captures every
   // row that originated from a Stripe checkout, regardless of which
