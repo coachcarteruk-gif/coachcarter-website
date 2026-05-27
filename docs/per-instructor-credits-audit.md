@@ -18,12 +18,14 @@ Maintenance rule:
 - Treat this file as the living tracker for per-instructor credits.
 - Any implementation slice that changes credit purchase, booking, cancellation,
   refund, reconciliation, admin adjustment, or balance display behaviour should
-  update the current-state table and the recommended next slice before commit.
+  update the current-state table and remaining deferred items before commit.
 
 ## Executive Summary
 
 Per-instructor credits are implemented across the main learner and operator
-credit paths.
+credit paths. This tracker is now in closeout state for Thread A: future edits
+should be for regressions, small clarity updates, or the deliberately deferred
+pricing/refund-liability design items below.
 
 The core server booking paths use `learner_credit_balances` and
 `booking_credit_sources`, and learner-facing purchase/booking/display surfaces
@@ -31,10 +33,35 @@ now carry instructor context. Admin/operator credit surfaces are scoped, and
 the refund/reconciliation cleanup has pinned the remaining back-office
 contracts.
 
-Biggest risk: platform-balance refund exposure remains advisory. The dashboard
-and snapshot now label it as a legacy aggregate exposure signal, but the number
-still values the legacy aggregate balance shadow at the school rate rather than
-valuing each instructor-scoped credit source at its effective rate.
+Final audit sweep result: no remaining active checkout, booking, admin
+mutation, refund execution, or credit-reconciliation control flow reads from
+pooled `learner_users.balance_minutes` were found. The remaining pooled-shadow
+uses are compatibility/display/advisory only.
+
+Biggest deliberate deferral: platform-balance refund exposure remains advisory.
+The dashboard and snapshot now label it as a legacy aggregate exposure signal,
+but the number still values the legacy aggregate balance shadow at the school
+rate rather than valuing each instructor-scoped credit source at its effective
+rate.
+
+## Final Audit Sweep
+
+Completed: 2026-05-27 in `codex/per-instructor-credit-audit-closeout`.
+
+Searches run:
+
+- `rg -n "balance_minutes|credit_balance|learner_credit_balances|hours on account|remaining|credit balance|credits remaining|refund exposure|pooled|instructor_id" api public docs tests PROJECT.md MIGRATION-PLAN.md FRANCHISE-MODEL-PLAN.md`
+- `rg -n "learner_users\\.balance_minutes|lu\\.balance_minutes|balanceMinutes|creditBalance" api public tests`
+- `rg -n "Buy hours|Buy Credits|adjust credits|admin_add|admin_remove|AMBIGUOUS_INSTRUCTOR|selected_instructor_balance" api public tests docs`
+
+Classification:
+
+| Classification | Remaining examples | Closeout decision |
+|---|---|---|
+| Safe aggregate display | Learner dashboard/profile/sidebar total credit, admin learner list total hours, no-credit banner shown only when aggregate total is zero | Safe as aggregate copy; not used to approve booking credit. |
+| Legacy compatibility shadow, read-only sync, or fallback | `learner_users.balance_minutes` aggregate response/audit fields, `_credit-grant.js` Pre-2A fallback branches, migration/backfill scripts and trigger tests | Kept for old sessions, migrations, and display compatibility. New Phase 2A paths write/read LCB. |
+| Advisory read model, clearly labelled | `_platform-balance.js` refund exposure and daily balance snapshot | Kept advisory. Exact per-instructor/source valuation is deferred and design-needed. |
+| Real bug/control-flow risk | None found in this sweep | No code patch required. |
 
 ## Current State Table
 
@@ -183,7 +210,8 @@ Primary files:
 
 ### Slice 5: Refund, Reconciliation, Docs, And Tests Cleanup
 
-Status: In progress in `codex/per-instructor-credit-cleanup` (2026-05-27).
+Status: Complete in `codex/per-instructor-credit-cleanup` and verified by the
+closeout sweep (2026-05-27).
 
 Scope:
 
@@ -212,7 +240,9 @@ Primary files:
 
 ### Slice 6: Platform Balance Advisory Cleanup
 
-Status: In progress in `codex/platform-balance-advisory` (2026-05-27).
+Status: Complete as advisory-labelling cleanup in
+`codex/platform-balance-advisory`; exact valuation remains deferred by design
+(2026-05-27).
 
 Scope:
 
@@ -238,10 +268,20 @@ Primary files:
 - `public/admin/portal.js`
 - `tests/payout-read-model.spec.js`
 
-## Recommended Next Code PR
+## Remaining Deferred Items
 
-Recommended next PR: exact per-instructor refund-liability policy/design or
-manual refund ledger UI, depending on operational priority.
+There is no required next per-instructor-credit safety PR from this closeout
+sweep. Remaining items are non-blocking design/product work:
+
+- Exact platform-balance refund-liability valuation: design whether to value
+  live credits from LCB/source attribution, `effective_rate_pence_per_minute`,
+  and goodwill absorber/source treatment instead of the legacy aggregate shadow.
+- Manual refund ledger UI: keep this separate from automatic Stripe execution
+  and from BCS execution capability.
+- Thread B pricing work: per-instructor hourly-rate fallback and bulk-tier
+  opt-in remain outside this Thread A closeout.
+- Thread C franchise-tier/admin configurability remains outside this Thread A
+  closeout.
 
 Exact behaviour to verify:
 
@@ -254,7 +294,7 @@ Exact behaviour to verify:
 - Continue treating BCS automatic refund execution as disabled unless a
   payout-safe design/test slice explicitly broadens it.
 
-Why this next:
+Why these remain deferred:
 
 - Learner, operator, refund, reconciliation, and cron guardrail surfaces now
   carry or verify instructor context without changing refund math or payout
@@ -277,23 +317,25 @@ Existing useful coverage:
 - `tests/cron-credit-reconcile.integration.spec.js`
 - `tests/learner-credit-ui.spec.js`
 
-Remaining risks / missing scenarios:
+Regression coverage highlights:
 
-- Learner has 90 minutes with Instructor A and 0 with Instructor B; booking B by
-  credit is refused.
-- Booking UI/API balance for selected Instructor B returns 0 even if aggregate
-  total is 90.
-- `credits?action=checkout` without instructor is rejected or deliberately
-  resolved; no silent default for new UI.
-- Cancellation returns credit only to the original booking instructor.
-- Cross-school LCB rows are never read without `school_id`.
-- Platform balance refund exposure is explicitly labelled advisory and
+- Learner UI tests pin selected-instructor balance reads and prevent aggregate
+  `balanceMinutes` from driving booking-modal credit eligibility.
+- Credit API tests pin checkout `instructor_id` validation, selected instructor
+  balance fields, and missing-instructor rejection for new checkout sessions.
+- Booking/refund/reconciliation tests pin LCB mutation scope, BCS attribution,
+  cancellation credit return, refund execution scope, and cron reconciliation
+  school filters.
+- Admin/operator UI tests pin explicit instructor selection, ambiguity handling,
+  and instructor-scoped balance copy.
+- Platform-balance tests pin that refund exposure is labelled advisory and
   aggregate-valued; exact per-source/per-instructor liability remains deferred.
 
 ## Open Questions
 
-No hard blockers if this assumption is accepted:
+No hard blockers remain for Thread A closeout.
 
 - Legacy/missing instructor credit during the cutover continues to grandfather
-  to Fraser / instructor `1`, but all new learner-facing purchase UI should
-  require an explicit instructor before checkout.
+  to Fraser / instructor `1` through shared helper fallback branches. Treat
+  those branches as compatibility only; all new learner-facing purchase UI
+  requires an explicit instructor before checkout.
