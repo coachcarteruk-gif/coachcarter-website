@@ -2299,8 +2299,7 @@ CREATE INDEX IF NOT EXISTS idx_csa_credit_tx ON credit_source_adjustments(credit
 
 -- Refund ledger foundation (May 2026). Preview is read-only for now; these
 -- tables are the accounting substrate for a later explicitly approved
--- execute-refund slice. Status deliberately excludes executed states until a
--- real Stripe-refund writer exists.
+-- execute-refund slice.
 CREATE TABLE IF NOT EXISTS refund_events (
   id                                  SERIAL PRIMARY KEY,
   school_id                           INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
@@ -2309,7 +2308,7 @@ CREATE TABLE IF NOT EXISTS refund_events (
   refund_type                         TEXT NOT NULL CHECK (
     refund_type IN ('credit_purchase', 'repeat_offer_partial', 'direct_slot', 'direct_offer', 'manual_record')
   ),
-  status                              TEXT NOT NULL CHECK (status IN ('previewed', 'manual_review', 'blocked')),
+  status                              TEXT NOT NULL CHECK (status IN ('previewed', 'manual_review', 'blocked', 'executed')),
   gross_refund_pence                  INTEGER NOT NULL CHECK (gross_refund_pence >= 0),
   processing_fee_withheld_pence       INTEGER NOT NULL CHECK (processing_fee_withheld_pence >= 0),
   net_refund_pence                    INTEGER NOT NULL CHECK (net_refund_pence >= 0),
@@ -2324,6 +2323,29 @@ CREATE TABLE IF NOT EXISTS refund_events (
   CHECK (processing_fee_withheld_pence <= gross_refund_pence),
   CHECK (net_refund_pence = gross_refund_pence - processing_fee_withheld_pence)
 );
+DO $$
+DECLARE
+  existing_status_constraint TEXT;
+BEGIN
+  IF to_regclass('public.refund_events') IS NOT NULL THEN
+    SELECT conname
+      INTO existing_status_constraint
+      FROM pg_constraint
+     WHERE conrelid = 'public.refund_events'::regclass
+       AND contype = 'c'
+       AND pg_get_constraintdef(oid) ILIKE '%status%'
+       AND pg_get_constraintdef(oid) ILIKE '%previewed%'
+     LIMIT 1;
+
+    IF existing_status_constraint IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE refund_events DROP CONSTRAINT %I', existing_status_constraint);
+    END IF;
+
+    ALTER TABLE refund_events
+      ADD CONSTRAINT refund_events_status_check
+      CHECK (status IN ('previewed', 'manual_review', 'blocked', 'executed'));
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_refund_events_school ON refund_events(school_id);
 CREATE INDEX IF NOT EXISTS idx_refund_events_learner ON refund_events(learner_id);
 CREATE INDEX IF NOT EXISTS idx_refund_events_created_by ON refund_events(created_by);

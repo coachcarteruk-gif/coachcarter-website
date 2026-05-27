@@ -89,6 +89,16 @@ function proportionalFee(grossPence, availablePence, availableFeePence) {
   return Math.round((availableFeePence * grossPence) / availablePence);
 }
 
+function proportionalRefundMinutes(grossPence, availablePence, availableMinutes) {
+  const gross = Number(grossPence || 0);
+  const pence = Number(availablePence || 0);
+  const minutes = Number(availableMinutes || 0);
+  if (!Number.isInteger(gross) || !Number.isInteger(pence) || !Number.isInteger(minutes)) return null;
+  if (gross <= 0 || pence <= 0 || minutes <= 0) return null;
+  if (gross >= pence) return minutes;
+  return Math.min(minutes, Math.ceil((minutes * gross) / pence));
+}
+
 function netPreview({
   refundType,
   grossRefundPence,
@@ -395,6 +405,8 @@ async function directBooking(sql, { schoolId, lessonBookingId }) {
 
 function line(row) {
   return {
+    learner_id: row.learner_id || null,
+    instructor_id: row.instructor_id || null,
     credit_transaction_id: row.credit_transaction_id || null,
     booking_credit_source_id: row.booking_credit_source_id || null,
     lesson_booking_id: row.lesson_booking_id || row.booking_id || null,
@@ -443,6 +455,8 @@ async function planBcsPreview({ sql, stripe, input }) {
   const attributedFee = feeResolution.feePence;
   const withheld = proportionalFee(gross, Number(row.contribution_pence), attributedFee);
   const item = line({
+    learner_id: row.learner_id,
+    instructor_id: row.instructor_id,
     booking_credit_source_id: row.booking_credit_source_id,
     credit_transaction_id: row.credit_transaction_id,
     booking_id: row.booking_id,
@@ -515,12 +529,25 @@ async function planCreditTransactionPreview({ sql, stripe, input }) {
   const activeFee = Number(row.active_stripe_fee_pence || 0);
   const availableFee = Math.max(0, sourceFee - activeFee);
   const withheld = proportionalFee(gross, availablePence, availableFee);
+  const trustedMinutes = proportionalRefundMinutes(gross, availablePence, availableMinutes);
+  if (trustedMinutes == null) {
+    return blockedPreview({
+      refundType: input.refundType,
+      grossRefundPence: gross,
+      reason: input.reason,
+      code: 'REFUND_MINUTES_UNDERIVABLE',
+      message: 'Refund minutes could not be derived from the trusted credit source; manual review is required.',
+      stripe: sourceIdentities(row),
+    });
+  }
   const item = line({
+    learner_id: row.learner_id,
+    instructor_id: row.instructor_id,
     credit_transaction_id: row.credit_transaction_id,
     gross_pence_removed: gross,
     source_fee_pence_used: availableFee,
     fee_withheld_pence: withheld,
-    minutes_adjusted: input.refundedMinutes || availableMinutes || 0,
+    minutes_adjusted: trustedMinutes,
   });
 
   return netPreview({
@@ -532,6 +559,9 @@ async function planCreditTransactionPreview({ sql, stripe, input }) {
       ...evidence,
       available_fee_pence: availableFee,
       active_bcs_fee_pence: activeFee,
+      trusted_available_pence: availablePence,
+      trusted_available_minutes: availableMinutes,
+      caller_refunded_minutes_ignored: input.refundedMinutes != null ? input.refundedMinutes : null,
     },
     reason: input.reason,
     stripe: sourceIdentities(row),
@@ -573,6 +603,8 @@ async function planDirectBookingPreview({ sql, stripe, input }) {
       refundType: input.refundType,
       grossRefundPence: gross,
       lines: [line({
+        learner_id: row.learner_id,
+        instructor_id: row.instructor_id,
         lesson_booking_id: row.lesson_booking_id,
         gross_pence_removed: gross,
         source_fee_pence_used: 0,
@@ -605,6 +637,8 @@ async function planDirectBookingPreview({ sql, stripe, input }) {
       refundType: input.refundType,
       grossRefundPence: gross,
       lines: [line({
+        learner_id: row.learner_id,
+        instructor_id: row.instructor_id,
         lesson_booking_id: row.lesson_booking_id,
         gross_pence_removed: gross,
         source_fee_pence_used: 0,
@@ -624,6 +658,8 @@ async function planDirectBookingPreview({ sql, stripe, input }) {
     grossRefundPence: gross,
     processingFeeWithheldPence: withheld,
     lines: [line({
+      learner_id: row.learner_id,
+      instructor_id: row.instructor_id,
       lesson_booking_id: row.lesson_booking_id,
       gross_pence_removed: gross,
       source_fee_pence_used: fee,

@@ -93,7 +93,7 @@
 - `_travel-time.js` — postcodes.io geocoding + OpenRouteService drive-time estimates for slot fit checks
 - `_whatsapp.js` — WhatsApp Business API send wrapper
 
-Additional May 2026 shared server note: `_refund-planner.js` is the read-only admin refund preview planner. It computes net-of-original-processing-fee refund previews from credit sources, BCS attribution, direct booking snapshots, and Stripe fee evidence when available. It does not execute Stripe refunds.
+Additional May 2026 shared server note: `_refund-planner.js` computes net-of-original-processing-fee refund previews from credit sources, BCS attribution, direct booking snapshots, and Stripe fee evidence when available. `_refund-executor.js` is the tightly gated admin execution orchestrator; it re-runs the planner, blocks manual-review cases, uses injected Stripe refunds, writes refund ledger rows, and applies supported CSA/LCB adjustments server-side.
 
 ### Shared Client Modules
 
@@ -181,11 +181,11 @@ Additional May 2026 shared server note: `_refund-planner.js` is the read-only ad
 
 ### Critical Design Decisions Already Made
 
-**Refunds (preview foundation, May 2026):**
+**Refunds (preview/execute foundation, May 2026):**
 - Approved card refunds are net of the original non-refundable Stripe processing fee; the learner absorbs that fee unless a later goodwill policy explicitly says otherwise.
 - `POST /api/admin?action=refund-preview` is read-only and school-scoped. It returns itemised gross lesson credit value, withheld processing fee, and amount returned.
-- Missing fee evidence and direct bookings already present in `payout_line_items` block automatic refund handling for manual review.
-- Execute-refund is not implemented yet; no Stripe refund mutation exists in this slice.
+- `POST /api/admin?action=execute-refund` is school-scoped and requires explicit `operator_go` plus `idempotency_key`. It re-runs server planning before Stripe, writes `refund_events(status='executed')` / lines, and audit-logs `admin.execute_refund`.
+- Missing fee evidence and direct bookings already present in `payout_line_items` block automatic refund handling for manual review. Automatic booking-credit-source line execution remains deliberately disabled pending a payout-safe slice.
 
 **Navigation (app-mode design — do NOT deviate):**
 - Start page (`/`): Role selection only — "I'm a Learner" or "I'm an Instructor"

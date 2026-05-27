@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.105 — Tightly Gated Admin Execute Refund Foundation (27 May 2026)
+
+Added the next refund slice after preview: `POST /api/admin?action=execute-refund`, backed by new `api/_refund-executor.js`. The executor requires an explicit operator confirmation token and idempotency key, re-runs the trusted server-side planner before Stripe, rejects blocked/manual-review plans, calls `stripe.refunds.create` only through an injectable Stripe client, writes executed refund ledger rows/lines, creates CSA rows plus locked balance decrements for supported unused credit-source refunds, and audit-logs `admin.execute_refund`.
+
+Safety boundaries preserved: no prod command was run, no live Stripe mutation was called, already-paid-out direct bookings remain blocked, missing fee evidence remains manual-review, booking/payout rows are not mutated, and booking-credit-source-line execution is deliberately still blocked pending a payout-safe slice.
+
+**Files:** `api/_refund-executor.js`, `api/_refund-planner.js`, `api/admin.js`, `db/migration.sql`, `tests/admin-execute-refund.spec.js`, `tests/refund-ledger-schema.spec.js`, `docs/stripe-connect.md`, `PROJECT.md`, `MIGRATION-PLAN.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.104 — Refund Ledger + Read-Only Admin Refund Preview (27 May 2026)
 
 Added the first safe refund-accounting foundation for net-of-processing-fee refunds. This slice adds `refund_events` / `refund_event_lines` schema, a server-side refund planner, and `POST /api/admin?action=refund-preview` for read-only admin previews. The preview itemises lesson credit value, withheld original processing fee, and returned amount; it prefers BCS-attributed Stripe fee evidence, blocks missing-fee cases for manual review, and blocks automatic Stripe refunds for direct bookings already present in `payout_line_items`.
