@@ -14,6 +14,7 @@ const DEFAULT_PRICE_PENCE = 8250; // fallback if lesson-types API fails
 let auth          = null; // null when browsing as guest; { user, ... } when logged in
 let creditBalance = 0;
 let balanceMinutes = 0;
+let selectedInstructorBalanceMinutes = 0;
 let paymentsEnabled = true; // assume true until balance API tells us otherwise
 let instructors   = [];
 let lessonTypes   = [];
@@ -202,9 +203,35 @@ async function loadBalance() {
   } catch {}
 }
 
+async function loadSelectedInstructorBalance(slot) {
+  selectedInstructorBalanceMinutes = 0;
+  if (!auth || !slot || !slot.instructor_id) return;
+  try {
+    const res = await ccAuth.fetchAuthed(`/api/credits?action=balance&instructor_id=${encodeURIComponent(slot.instructor_id)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load instructor balance');
+    selectedInstructorBalanceMinutes = data.selected_instructor_balance_minutes || 0;
+    if (data.payments_enabled !== undefined) paymentsEnabled = !!data.payments_enabled;
+  } catch {
+    selectedInstructorBalanceMinutes = 0;
+  }
+}
+
 function formatBalanceHours(mins) {
   const hrs = mins / 60;
   return hrs % 1 === 0 ? `${hrs} hr${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hrs`;
+}
+
+function buyCreditsUrlForSlot(slot) {
+  if (!slot || !slot.instructor_id) return '/learner/buy-credits.html';
+  return `/learner/buy-credits.html?instructor_id=${encodeURIComponent(slot.instructor_id)}`;
+}
+
+function updateModalBuyCreditLinks() {
+  const href = buyCreditsUrlForSlot(pendingSlot);
+  document.querySelectorAll('#modalCreditPath a[href^="/learner/buy-credits.html"], #modalPayPath a[href^="/learner/buy-credits.html"]').forEach(link => {
+    link.href = href;
+  });
 }
 
 function updateCreditBadge() {
@@ -742,7 +769,7 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
     document.getElementById('bookSpinner').style.display = 'none';
     document.getElementById('btnConfirmBook').disabled = false;
   } else {
-    const hasCreds = balanceMinutes >= ltDuration;
+    const hasCreds = selectedInstructorBalanceMinutes >= ltDuration;
     document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
     document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
     if (hasCreds) {
@@ -783,6 +810,8 @@ function openBookModal(el) {
     end_time:        el.dataset.end, // grid end-time; will be overwritten when duration is picked
     instructor_name: el.dataset.instructorName
   };
+  selectedInstructorBalanceMinutes = 0;
+  updateModalBuyCreditLinks();
   const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
   document.getElementById('mdDate').textContent = dateDisplay;
@@ -854,12 +883,14 @@ function openBookModal(el) {
 async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
   const select = document.getElementById('mdLessonTypeSelect');
   try {
+    const selectedBalancePromise = isGuest ? Promise.resolve() : loadSelectedInstructorBalance(slot);
     let url = `/api/slots?action=durations-for-slot&instructor_id=${encodeURIComponent(slot.instructor_id)}&date=${encodeURIComponent(slot.date)}&start_time=${encodeURIComponent(slot.start_time)}`;
     const pc = getLearnerPostcode();
     if (pc) url += `&pickup_postcode=${encodeURIComponent(pc)}`;
     const res = await fetch(url);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load durations');
+    await selectedBalancePromise;
 
     const durations = (data.durations || []).slice().sort((a, b) => a.duration_minutes - b.duration_minutes);
     const fitting = durations.filter(d => d.fits);
@@ -1124,7 +1155,7 @@ function updateDeductDisplay() {
     // Update deduction text to indicate free booking
     document.getElementById('mdDeductHours').textContent = 'free "” no credits required';
   } else {
-    const hasCreds = balanceMinutes >= totalMins;
+    const hasCreds = selectedInstructorBalanceMinutes >= totalMins;
     document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
     document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
     updateBalanceLine(totalMins);
@@ -1135,8 +1166,10 @@ function updateBalanceLine(deductMins) {
   const el = document.getElementById('mdBalanceLine');
   if (!el) return;
   const fmt = m => (m / 60).toFixed(1).replace(/\.0$/, '') + 'h';
-  const after = Math.max(0, balanceMinutes - deductMins);
-  el.textContent = `You have ${fmt(balanceMinutes)} "” ${fmt(after)} remaining after this booking.`;
+  const balance = selectedInstructorBalanceMinutes || 0;
+  const after = Math.max(0, balance - deductMins);
+  const instructor = pendingSlot && pendingSlot.instructor_name ? ` with ${pendingSlot.instructor_name}` : '';
+  el.textContent = `You have ${fmt(balance)}${instructor} - ${fmt(after)} remaining after this booking.`;
 }
 
 function updateBookButtonState() {
@@ -1190,6 +1223,7 @@ async function confirmBookWithCredit() {
 
     creditBalance = data.credit_balance;
     balanceMinutes = data.balance_minutes || 0;
+    selectedInstructorBalanceMinutes = data.balance_minutes || 0;
     lastBookingId = data.booking_id;
     updateCreditBadge();
     setLastLessonType(selectedLessonType);
@@ -1321,8 +1355,9 @@ function showBookSuccess(weeks, dates) {
   document.getElementById('successInstructor').textContent = pendingSlot.instructor_name;
 
   const balanceEl = document.getElementById('successBalance');
-  if (balanceEl && balanceMinutes > 0) {
-    balanceEl.textContent = `Hours remaining: ${(balanceMinutes / 60).toFixed(1)}h`;
+  if (balanceEl && selectedInstructorBalanceMinutes > 0) {
+    const instructor = pendingSlot && pendingSlot.instructor_name ? ` with ${pendingSlot.instructor_name}` : '';
+    balanceEl.textContent = `Hours remaining${instructor}: ${(selectedInstructorBalanceMinutes / 60).toFixed(1)}h`;
     balanceEl.style.display = 'block';
   } else if (balanceEl) {
     balanceEl.style.display = 'none';
