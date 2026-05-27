@@ -2071,7 +2071,9 @@ async function handleSchoolLearners(req, res) {
     const learners = await sql`
       SELECT
         lu.id, lu.name, lu.email, lu.phone,
-        lu.credit_balance, lu.balance_minutes,
+        lu.credit_balance,
+        COALESCE(lcb.balance_minutes, 0)::int AS balance_minutes,
+        lu.balance_minutes AS total_balance_minutes,
         EXISTS (
           SELECT 1 FROM lesson_bookings lb
           WHERE lb.learner_id = lu.id
@@ -2079,6 +2081,10 @@ async function handleSchoolLearners(req, res) {
             AND lb.school_id = ${schoolId}
         ) AS is_your_learner
       FROM learner_users lu
+      LEFT JOIN learner_credit_balances lcb
+        ON lcb.learner_id = lu.id
+       AND lcb.instructor_id = ${instructor.id}
+       AND lcb.school_id = ${schoolId}
       WHERE lu.school_id = ${schoolId}
         AND lu.archived_at IS NULL
       ORDER BY lu.name ASC

@@ -25,13 +25,13 @@ Maintenance rule:
 Per-instructor credits are partially implemented.
 
 The core server booking paths mostly use `learner_credit_balances` and
-`booking_credit_sources`, but purchase, display, and some admin/operator
-surfaces still behave as if credit is pooled.
+`booking_credit_sources`, and learner-facing purchase/booking/display surfaces
+now carry instructor context. Admin/operator credit surfaces are mostly scoped;
+the remaining work is refund/reconciliation/test cleanup.
 
-Biggest risk: a learner can see or buy "hours on account" without an instructor
-context, then try to book a different instructor. The server usually prevents
-the wrong deduction, but the UI and checkout can mislead, and buy-credits
-currently defaults missing `instructor_id` to Fraser / instructor `1`.
+Biggest risk: refund/reconciliation and older display contracts still need a
+final pass to make sure every credit-facing report, message, and test fixture
+is explicit about instructor scope.
 
 ## Current State Table
 
@@ -46,13 +46,13 @@ currently defaults missing `instructor_id` to Fraser / instructor `1`.
 | Cancellations | `api/slots.js`, `api/instructor.js` cancel paths | Booking `instructor_id` + `lockBalanceAdjustLCB` | Mostly yes | Returns credit to original instructor row and marks BCS refunded. Not fully transactional with booking update. |
 | Reschedule | `api/slots.js`, `api/instructor.js` reschedule paths | Carries original booking/BCS | Yes | No new balance mutation; copies attribution. |
 | Edit booking duration | `api/admin.js`, `api/instructor.js` edit-booking paths | Booking instructor's school-scoped LCB row; mutation uses scoped helper | Mostly yes | Extra-duration precheck no longer reads pooled learner balance. Response text preserved. |
-| Admin adjust credits | `api/admin.js` `handleAdjustCredits` | School-scoped LCB auto-resolve or explicit instructor | Mostly yes | Server guard is scoped: 0 rows grandfathers to instructor `1`, 1 row auto-resolves, 2+ rows returns `AMBIGUOUS_INSTRUCTOR`, explicit `instructor_id` reads that exact LCB row. Current UI still does not pass instructor. Response/audit still pooled. |
+| Admin adjust credits | `api/admin.js` `handleAdjustCredits`, `public/admin/portal.js` | UI requires explicit instructor; server uses school-scoped LCB auto-resolve/explicit instructor | Mostly yes | Server guard is scoped: 0 rows grandfathers to instructor `1`, 1 row auto-resolves, 2+ rows returns `AMBIGUOUS_INSTRUCTOR`, explicit `instructor_id` reads that exact LCB row. Admin UI now chooses an instructor and posts `instructor_id`; response/audit still includes pooled totals for compatibility. |
 | Goodwill/reconciliation | `api/_admin-credit-goodwill.js`, `api/_admin-credit-reconciliation.js` | Explicit learner/instructor/school + shared helper | Yes | Strongest admin path; tests already pin scope and mutation shape. |
 | Refund executor | `api/_refund-executor.js` | Planner lines + `lockBalanceAdjustLCB` | Mostly yes | Uses `instructor_id` from trusted plan lines. BCS execution intentionally disabled. |
 | Learner dashboard/profile/sidebar displays | `public/learner/index.js`, `public/learner/profile.js`, `public/sidebar.js` | Aggregate + per-instructor `GET /api/credits?action=balance` data; sidebar localStorage fallback copy | Mostly yes | Dashboard labels aggregate as total across instructors and fetches live balance; profile shows total plus per-instructor rows; sidebar says total credit instead of implying a universally spendable balance. |
 | Learner buy UI | `public/learner/buy-credits.js` | Selected public instructor + selected/aggregate balance read | Mostly yes | Direct visits show an instructor selector from `/api/instructors?action=list`; `?instructor_id=...` preselects when valid; package and single-lesson checkout stay blocked until selected and send `instructor_id`. |
 | Learner booking UI | `public/learner/book.js` | Selected slot instructor balance | Mostly yes | Booking modal reads `/api/credits?action=balance&instructor_id=<slot instructor>` before showing credit eligibility, uses `selected_instructor_balance_minutes`, and carries the slot instructor into buy-credits links. Aggregate balance remains elsewhere. |
-| Admin/instructor displays | `public/admin/portal.js`, `public/instructor/index.js`, `public/instructor/dashboard.js` | Mostly pooled `balance_minutes` | Partial / no | Display-only in places, but edit/create modals use it to guide operators. |
+| Admin/instructor displays | `api/instructor.js`, `public/admin/portal.js`, `public/instructor/index.js`, `public/instructor/dashboard.js`, `public/shared/instructor-booking-actions.js` | Admin adjust selector + current-instructor LCB balance for booking helper pickers | Mostly yes | Admin adjust no longer looks pooled. Instructor `school-learners` aliases current instructor LCB minutes as `balance_minutes` for existing picker code, and helper copy says "with you" / "with this instructor". |
 | Platform balance | `api/_platform-balance.js` | Pooled balance valued at school rate | Partial | Advisory only, but not accurate for per-instructor effective rates or goodwill absorber. |
 
 ## Required Implementation Slices
@@ -152,15 +152,21 @@ Primary files:
 
 ### Slice 4: Admin And Instructor Operator Surfaces
 
-Status: Not started.
+Status: Implemented in `codex/admin-operator-credit-surfaces` (2026-05-27).
 
 Scope:
 
-- Admin adjust-credits modal should require instructor when multiple balances
-  exist.
-- Instructor learner pickers should show "balance with you", not total pooled
-  balance.
-- Avoid broad admin abstractions; update the existing surfaces.
+Landed behaviour:
+
+- Admin adjust-credits modal requires an instructor selection, reuses the
+  existing admin instructor list, posts `instructor_id`, and handles
+  `AMBIGUOUS_INSTRUCTOR` with choose-instructor copy.
+- Instructor booking helper pickers use the signed-in instructor's LCB balance
+  from `api/instructor.js?action=school-learners`.
+- Instructor helper copy says "with you" / "with this instructor" rather than
+  implying an aggregate balance can be spent anywhere.
+- Refund math, payout logic, DB schema, and booking mutation paths were left
+  unchanged.
 
 Primary files:
 
@@ -169,6 +175,7 @@ Primary files:
 - `public/admin/portal.js`
 - `public/instructor/index.js`
 - `public/instructor/dashboard.js`
+- `public/shared/instructor-booking-actions.js`
 
 ### Slice 5: Refund, Reconciliation, Docs, And Tests Cleanup
 
@@ -191,32 +198,24 @@ Primary files:
 
 ## Recommended Next Code PR
 
-Recommended next PR: Slice 4.
+Recommended next PR: Slice 5 refund/reconciliation/test cleanup.
 
-Exact files to change:
+Exact behaviour to verify:
 
-- `public/admin/portal.js`
-- `public/instructor/index.js`
-- `public/instructor/dashboard.js`
-
-Exact behaviour to change:
-
-- Admin adjust-credits UI should require or pass instructor context when needed,
-  matching the server's `AMBIGUOUS_INSTRUCTOR` contract.
-- Instructor learner pickers and create/edit booking helper copy should show
-  "balance with you" where that data is available, not a pooled-looking total.
-- Keep admin/operator changes narrow and avoid refund math, payout logic,
-  checkout, or booking control-flow changes.
+- Refund executor decrements the refunded source's instructor balance and keeps
+  net-of-fee refund math unchanged.
+- Admin reconciliation/goodwill paths keep explicit learner/instructor/school
+  scope and do not revive pooled credit assumptions in operator copy.
+- Source-level tests that mention `balance_minutes` distinguish aggregate
+  totals from current-instructor LCB balances.
 
 Why this next:
 
-- Learner buy, booking, dashboard, profile, and sidebar displays no longer rely
-  on a pooled-looking balance as their primary learner-facing story.
-- Remaining ambiguity is now operator-facing: admin/instructor surfaces still
-  show or act on `balance_minutes` in places where per-instructor context
-  matters.
-- This should remain an admin/operator UI slice; do not touch refund math,
-  payout behaviour, pricing fallback, or DB schema.
+- Learner and operator control surfaces now carry instructor context for
+  purchase, booking, display, and manual adjustment.
+- Remaining risk is mostly back-office correctness and audit confidence:
+  refunds, reconciliation, and legacy fixture/test language need a final
+  per-instructor pass without changing payout behaviour.
 
 ## Test Plan
 
@@ -242,8 +241,6 @@ Remaining risks / missing scenarios:
 - `credits?action=checkout` without instructor is rejected or deliberately
   resolved; no silent default for new UI.
 - Cancellation returns credit only to the original booking instructor.
-- Admin/operator adjust-credit and booking helper UIs still need clearer
-  instructor-scoped balance wording/control.
 - Refund executor decrements the refunded source's instructor balance.
 - Cross-school LCB rows are never read without `school_id`.
 

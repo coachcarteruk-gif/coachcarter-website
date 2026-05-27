@@ -10,7 +10,7 @@ test.describe('admin goodwill credit UI', () => {
     expect(portalHtml).toContain('id="section-learners"');
     expect(portalJs).toContain('data-action="open-goodwill-credit"');
     expect(portalJs).toContain('Grant goodwill');
-    expect(portalJs).toContain('Legacy adjust');
+    expect(portalJs).toContain('Adjust instructor balance');
     expect(portalHtml).not.toContain('data-section="credit-goodwill"');
   });
 
@@ -31,5 +31,24 @@ test.describe('admin goodwill credit UI', () => {
     expect(portalJs).toContain('Granting goodwill credit...');
     expect(portalJs).toContain('Goodwill credit granted. New instructor balance: ');
     expect(portalJs).toContain('Failed to grant goodwill credit');
+  });
+});
+
+test.describe('admin instructor-scoped credit adjustment UI', () => {
+  test('adjust-credits modal requires an instructor and sends instructor_id', () => {
+    expect(portalJs).toContain('Adjust instructor credit balance');
+    expect(portalJs).toContain('Instructor balance to adjust');
+    expect(portalJs).toContain('Credit is scoped per instructor. Choose the instructor whose balance should change.');
+    expect(portalJs).toContain("const options = await ensureGoodwillInstructorOptions();");
+    expect(portalJs).toContain("const instructorId = parseInt(document.getElementById('adj-instructor-select')?.value, 10);");
+    expect(portalJs).toContain("if (!instructorId) return alert('Choose the instructor balance to adjust');");
+    expect(portalJs).toContain('instructor_id: instructorId');
+  });
+
+  test('adjust-credits ambiguity response asks the admin to choose an instructor', () => {
+    expect(portalJs).toContain("data.error === 'AMBIGUOUS_INSTRUCTOR'");
+    expect(portalJs).toContain("data.code === 'AMBIGUOUS_INSTRUCTOR'");
+    expect(portalJs).toContain("Choose the instructor balance to adjust, then try again.");
+    expect(portalJs).toContain('New total across instructors: ');
   });
 });
