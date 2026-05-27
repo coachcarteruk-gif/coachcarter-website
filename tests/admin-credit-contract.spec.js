@@ -11,6 +11,9 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'admin-credit-contract-test-s
 process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_admin_credit_contract';
 
 const adminHandler = require('../api/admin');
+const instructorHandler = require('../api/instructor');
+const fs = require('fs');
+const path = require('path');
 const {
   GOODWILL_EXPECTED_WRITE_SHAPE,
   RECONCILIATION_EXPECTED_WRITE_SHAPE,
@@ -23,6 +26,14 @@ const {
 const {
   grantGoodwillCredits,
 } = require('../api/_admin-credit-goodwill');
+
+const {
+  _resolveAdjustCreditsTarget: resolveAdjustCreditsTarget,
+  _buildScopedDurationCreditRefusal: buildAdminScopedDurationCreditRefusal,
+} = adminHandler;
+const {
+  _buildScopedDurationCreditRefusal: buildInstructorScopedDurationCreditRefusal,
+} = instructorHandler;
 
 function makeRes() {
   return {
@@ -89,6 +100,65 @@ function validPaymentIntent(overrides = {}) {
     ...overrides,
   };
 }
+
+test.describe('per-instructor credit safety slice', () => {
+  test('admin adjust-credits with multiple LCB rows requires an explicit instructor', () => {
+    const resolved = resolveAdjustCreditsTarget({
+      learner: { balance_minutes: 180 },
+      lcbRows: [
+        { instructor_id: 1, balance_minutes: 120 },
+        { instructor_id: 7, balance_minutes: 60 },
+      ],
+    });
+
+    expect(resolved).toEqual({
+      ok: false,
+      code: 'AMBIGUOUS_INSTRUCTOR',
+      status: 409,
+      count: 2,
+      instructorIds: [1, 7],
+    });
+  });
+
+  test('admin adjust-credits explicit instructor uses that instructor scoped LCB balance', () => {
+    const resolved = resolveAdjustCreditsTarget({
+      learner: { balance_minutes: 240 },
+      explicitInstructorId: 7,
+      explicitLcbRow: { balance_minutes: 30 },
+    });
+
+    expect(resolved).toEqual({
+      ok: true,
+      targetInstructorId: 7,
+      preCheckBalance: 30,
+    });
+  });
+
+  test('admin and instructor edit-booking duration prechecks refuse cross-instructor credit', () => {
+    expect(buildAdminScopedDurationCreditRefusal(30, 0))
+      .toBe('Learner has insufficient balance (needs 30 more minutes, has 0)');
+    expect(buildInstructorScopedDurationCreditRefusal(30, 0))
+      .toBe('Learner has insufficient balance. Needs 30 more minutes but has 0.');
+    expect(buildAdminScopedDurationCreditRefusal(30, 90)).toBeNull();
+    expect(buildInstructorScopedDurationCreditRefusal(30, 90)).toBeNull();
+  });
+
+  test('LCB reads added in this safety slice are school scoped', () => {
+    const repoRoot = path.resolve(__dirname, '..');
+    const adminSource = fs.readFileSync(path.join(repoRoot, 'api', 'admin.js'), 'utf8').replace(/\r\n/g, '\n');
+    const instructorSource = fs.readFileSync(path.join(repoRoot, 'api', 'instructor.js'), 'utf8').replace(/\r\n/g, '\n');
+    const creditsSource = fs.readFileSync(path.join(repoRoot, 'api', 'credits.js'), 'utf8').replace(/\r\n/g, '\n');
+    const creditGrantSource = fs.readFileSync(path.join(repoRoot, 'api', '_credit-grant.js'), 'utf8').replace(/\r\n/g, '\n');
+
+    expect(adminSource).toContain('FROM learner_credit_balances\n         WHERE learner_id = ${learner_id}\n           AND school_id = ${schoolId}');
+    expect(adminSource).toContain('AND instructor_id = ${explicitInstructorId}\n           AND school_id = ${schoolId}');
+    expect(adminSource).toContain('AND instructor_id = ${booking.instructor_id}\n             AND school_id = ${schoolId}');
+    expect(instructorSource).toContain('AND instructor_id = ${booking.instructor_id}\n             AND school_id = ${schoolId}');
+    expect(creditsSource).toContain('WHERE lcb.learner_id = lu.id\n                  AND lcb.school_id = ${schoolId}');
+    expect(creditGrantSource).toContain('WHERE learner_credit_balances.school_id = ${schoolId}');
+    expect(creditGrantSource).toContain('AND school_id = ${schoolId}');
+  });
+});
 
 test.describe('admin Step 5.5 credit endpoints', () => {
   for (const action of ['credit-goodwill', 'credit-reconciliation']) {

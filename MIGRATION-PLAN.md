@@ -301,11 +301,11 @@ The web uses Stripe Checkout (redirect). The app needs a PaymentSheet flow:
 ```javascript
 // api/credits.js — add new action:
 // POST ?action=create-payment-intent
-// Body: { hours }    (learner_id resolved from JWT, same as ?action=checkout)
+// Body: { hours, instructor_id }    (learner_id resolved from JWT, same as ?action=checkout)
 // Returns: { clientSecret, ephemeralKey, customerId }
 ```
 
-Keep the existing `/api/credits?action=checkout` action working for web (it returns a Stripe Checkout URL). The new in-app action shares the same `calcBulkTotal` server-side pricing and same `credit_purchase` webhook metadata.
+Keep the existing `/api/credits?action=checkout` action working for web (it returns a Stripe Checkout URL), but preserve the Slice 2 contract: learner-facing purchases must pass an explicit same-school active `instructor_id`, and the metadata must carry that instructor through the `credit_purchase` webhook. The new in-app action shares the same `calcBulkTotal` server-side pricing and same `credit_purchase` webhook metadata.
 
 ---
 
@@ -551,7 +551,7 @@ npx expo install @stripe/stripe-react-native
 ```
 
 Use PaymentSheet flow instead of Checkout redirect:
-1. App calls `POST /api/credits?action=create-payment-intent`
+1. App calls `POST /api/credits?action=create-payment-intent` with `hours` and `instructor_id`
 2. API returns `{ clientSecret, ephemeralKey, customerId }`
 3. App presents PaymentSheet
 4. On success, credits are added via webhook (same as current flow)

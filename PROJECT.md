@@ -388,8 +388,8 @@ Replaced the retired `api/waitlist.js` (May 2026). Weekly availability is now th
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `balance` | GET | Yes | Returns `balance_minutes`, `balance_hours`, `credit_balance` + recent transactions |
-| `checkout` | POST | Yes | Creates Stripe checkout for hours purchase. Body: `{ hours }` (or legacy `{ quantity }` for lesson count). Discount tiers: 6h=5%, 12h=10%, 18h=15%, 24h=20%, 30h=25% |
+| `balance` | GET | Yes | Returns aggregate `balance_minutes`, `balance_hours`, `credit_balance`, recent transactions, and per-instructor `balances: [{ instructor_id, instructor_name, balance_minutes, balance_hours }]`. Optional `instructor_id` validates school scope and adds `selected_instructor_balance_minutes` / `selected_instructor_balance_hours`. |
+| `checkout` | POST | Yes | Creates Stripe checkout for hours purchase. Body: `{ hours, instructor_id }` (or legacy `{ quantity, instructor_id }` for lesson count). New learner-facing purchases require an active same-school instructor; Stripe metadata includes `instructor_id`. Discount tiers: 6h=5%, 12h=10%, 18h=15%, 24h=20%, 30h=25% |
 | `verify` | GET | Yes | Post-checkout safety net. Params: `session_id` (Stripe checkout session ID). Checks Stripe payment status and grants credits idempotently if webhook missed them. Returns `{ ok, already_processed }` or `{ ok, granted, hours, minutes }`. Referrer rewards are NOT issued here — `cron-referral-rewards.js` handles them per completed lesson |
 
 ### API — `api/r.js` (referral short URL)
