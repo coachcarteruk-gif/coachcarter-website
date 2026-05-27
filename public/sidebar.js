@@ -855,10 +855,10 @@
           if (typeof learner.balance_minutes !== 'undefined') {
             var hrs = (learner.balance_minutes / 60);
             var hrsStr = hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
-            creditsEl.textContent = hrsStr + ' hr' + (hrs !== 1 ? 's' : '') + ' remaining';
+            creditsEl.textContent = hrsStr + ' hr' + (hrs !== 1 ? 's' : '') + ' total credit';
           } else if (typeof learner.credits !== 'undefined') {
             var fallbackHrs = (learner.credits * 1.5);
-            creditsEl.textContent = fallbackHrs + ' hrs remaining';
+            creditsEl.textContent = fallbackHrs + ' hrs total credit';
           }
         }
       } catch(e) {}
