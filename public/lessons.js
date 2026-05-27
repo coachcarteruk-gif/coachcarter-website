@@ -248,6 +248,7 @@ loadConfig();
 // PACKAGE DATA
 const PACKAGES = [];
 let currentPkgIndex = 2;
+const LEGACY_MARKETING_INSTRUCTOR_ID = 1;
 
 function fmt(n) {
   return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -317,10 +318,12 @@ function openSetmoreBooking() {
 //   • Login wall: anonymous visitors are bounced to /learner/login.html and
 //     returned to #packages after sign-in. We need learner_id + school_id
 //     in the Stripe metadata before the webhook can credit the right balance.
-//   • Server-priced: the only thing we send is hours. api/credits.js
+//   • Server-priced: the only pricing input we send is hours. api/credits.js
 //     ?action=checkout re-prices via calcBulkTotal() — the slider price the
 //     user sees is rendered from the same /api/credits?action=bulk-pricing
 //     endpoint, so what's shown matches what's charged.
+//   • Instructor-scoped: this legacy public marketing funnel is CoachCarter /
+//     Fraser-specific until Slice 3 adds learner-facing instructor selection.
 //   • Lands on /learner/?hours_added=N&session_id=... — the same post-purchase
 //     verify-and-toast path the in-app buy-credits flow uses.
 async function startBulkCheckout(pkgIndex) {
@@ -350,7 +353,7 @@ async function startBulkCheckout(pkgIndex) {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hours: pkg.hrs })
+      body: JSON.stringify({ hours: pkg.hrs, instructor_id: LEGACY_MARKETING_INSTRUCTOR_ID })
     });
 
     if (response.status === 401) {

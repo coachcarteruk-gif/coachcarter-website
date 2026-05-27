@@ -6,6 +6,7 @@
 // covered by the dedicated integration tests.
 
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 
@@ -127,7 +128,7 @@ function checkoutSql({ validInstructor = true } = {}) {
   };
 }
 
-function balanceSql({ selectedInstructorExists = true } = {}) {
+function balanceSql({ selectedInstructorExists = true, selectedBalanceRows = [{ balance_minutes: 90 }] } = {}) {
   return async (strings) => {
     const text = strings.join('?');
     if (text.includes('SELECT lu.credit_balance')) {
@@ -137,7 +138,7 @@ function balanceSql({ selectedInstructorExists = true } = {}) {
       return selectedInstructorExists ? [{ id: 4 }] : [];
     }
     if (text.includes('SELECT COALESCE(balance_minutes, 0)::int AS balance_minutes')) {
-      return [{ balance_minutes: 90 }];
+      return selectedBalanceRows;
     }
     if (text.includes('SELECT lcb.instructor_id')) {
       return [
@@ -194,6 +195,7 @@ test.describe('instructor-aware credit checkout API', () => {
       instructor_id: '4',
       payment_type: 'credit_purchase',
     });
+    expect(stripeCalls[0].cancel_url).toBe('https://coachcarter.uk/learner/buy-credits.html?cancelled=true&instructor_id=4');
   });
 
   test('checkout with cross-school or inactive instructor is rejected', async () => {
@@ -213,6 +215,13 @@ test.describe('instructor-aware credit checkout API', () => {
     expect(res.statusCode).toBe(400);
     expect(res.body).toMatchObject({ code: 'INVALID_INSTRUCTOR' });
     expect(stripeCalls).toHaveLength(0);
+  });
+
+  test('checkout resolver excludes hidden demo instructor using the public-list convention', async () => {
+    const repoRoot = path.resolve(__dirname, '..');
+    const creditsSource = fs.readFileSync(path.join(repoRoot, 'api', 'credits.js'), 'utf8').replace(/\r\n/g, '\n');
+
+    expect(creditsSource).toContain("AND email != 'demo@coachcarter.uk'");
   });
 });
 
@@ -252,6 +261,33 @@ test.describe('instructor-aware credit balance API', () => {
     expect(res.body.selected_instructor_id).toBe(4);
     expect(res.body.selected_instructor_balance_minutes).toBe(90);
     expect(res.body.selected_instructor_balance_hours).toBe('1.5');
+  });
+
+  test('balance with instructor_id returns zero when no selected LCB row exists', async () => {
+    const credits = withMockedModules({ sql: balanceSql({ selectedBalanceRows: [] }) }, () => require('../api/credits'));
+
+    const res = await call(credits, {
+      method: 'GET',
+      query: { action: 'balance', instructor_id: '4' },
+      headers: learnerHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.balance_minutes).toBe(150);
+    expect(res.body.selected_instructor_id).toBe(4);
+    expect(res.body.selected_instructor_balance_minutes).toBe(0);
+    expect(res.body.selected_instructor_balance_hours).toBe('0.0');
+  });
+});
+
+test.describe('public lessons bulk checkout instructor context', () => {
+  test('lessons.html bulk checkout sends the explicit legacy instructor context', () => {
+    const repoRoot = path.resolve(__dirname, '..');
+    const lessonsSource = fs.readFileSync(path.join(repoRoot, 'public', 'lessons.js'), 'utf8').replace(/\r\n/g, '\n');
+
+    expect(lessonsSource).toContain('const LEGACY_MARKETING_INSTRUCTOR_ID = 1;');
+    expect(lessonsSource).toContain('instructor_id: LEGACY_MARKETING_INSTRUCTOR_ID');
+    expect(lessonsSource).toContain('legacy public marketing funnel is CoachCarter');
   });
 });
 

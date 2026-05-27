@@ -292,7 +292,7 @@ async function handleCheckout(req, res) {
       billing_address_collection: 'required',
       allow_promotion_codes: true,
       success_url: `${origin}/learner/?hours_added=${hours}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `${origin}/learner/buy-credits.html?cancelled=true`
+      cancel_url:  `${origin}/learner/buy-credits.html?cancelled=true&instructor_id=${instructorId}`
     });
 
     return res.json({ url: session.url });
