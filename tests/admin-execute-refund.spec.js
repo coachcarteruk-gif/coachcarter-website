@@ -312,6 +312,42 @@ test.describe('admin execute-refund endpoint', () => {
     expect(sql.calls.some((call) => /INSERT INTO audit_log/i.test(call.text))).toBe(true);
   });
 
+  test('uses the planner-derived learner/instructor/school tuple for the LCB decrement', async () => {
+    const sql = makeSql({
+      sourceRow: creditSourceRow({
+        learner_id: 77,
+        instructor_id: 9,
+        school_id: 1,
+      }),
+    });
+    const balanceCalls = [];
+
+    const res = await callExecute({
+      body: executeBody({
+        instructor_id: 12345,
+        learner_id: 54321,
+        school_id: 999,
+        idempotency_key: 'refund-test-key-trusted-line-scope',
+      }),
+      sql,
+      stripeClient: makeStripe(),
+      adjustCreditBalance: async (_sql, args) => {
+        balanceCalls.push(args);
+        return { ok: true, balanceMinutes: 0 };
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(balanceCalls).toEqual([{
+      learnerId: 77,
+      instructorId: 9,
+      schoolId: 1,
+      delta: -90,
+      creditsDelta: -2,
+      allowOverdraft: false,
+    }]);
+  });
+
   test('idempotent replay returns existing event without another Stripe refund or ledger write', async () => {
     const existingEvent = {
       id: 777,
