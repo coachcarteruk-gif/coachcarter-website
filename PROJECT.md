@@ -285,8 +285,9 @@ Base rate: **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Learners 
 
 ### Cancellation policy
 
-- 48+ hours notice — credit returned automatically
+- 48+ hours notice — lesson credit returned to the learner balance automatically
 - Under 48 hours — credit forfeited, learner informed at time of cancellation
+- Approved cash/card refunds are separate from cancellation credit returns. Customer copy should say: "Where a refund is approved, it will be returned to the original payment method where possible. Any non-refundable payment processing fees charged by our payment provider will be deducted from the refunded amount." Solicitor review is still recommended before treating this as final legal copy.
 
 ---
 
@@ -986,7 +987,7 @@ When a learner is deleted, data is handled as follows:
 
 ## What's still to build
 
-- **Refund flow** — learner requests cash refund, admin approves, Stripe reverses
+- **Refund flow** — learner requests cash/card refund, admin approves, Stripe reverses. Approved refunds should be returned to the original payment method where possible, minus any non-refundable payment processing fees charged by the payment provider.
 - **Automated reminders** — 24-hour email/SMS before lessons (Vercel cron)
 - **Waiting list** — capture leads when fully booked
 - **Referral system** — unique links, credit bonuses for both parties

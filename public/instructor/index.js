@@ -1094,7 +1094,7 @@ async function confirmCancel() {
     if (!res.ok) throw new Error(data.error);
 
     closeCancelModal();
-    showToast('Lesson cancelled — learner notified and credit refunded', 'success');
+    showToast('Lesson cancelled — learner notified and credit returned', 'success');
     await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to cancel', 'error');
@@ -1227,7 +1227,7 @@ function updateEditEndTime() {
       infoEl.style.color = 'var(--red)';
       infoEl.style.display = 'block';
     } else if (delta < 0) {
-      infoEl.textContent = Math.abs(delta) + ' minutes will be refunded to the learner\'s balance.';
+      infoEl.textContent = Math.abs(delta) + ' minutes will be returned to the learner\'s balance.';
       infoEl.style.color = 'var(--green, #16a34a)';
       infoEl.style.display = 'block';
     } else {

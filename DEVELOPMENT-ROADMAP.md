@@ -6,6 +6,12 @@ This document tracks the development of the **Coach Carter driving school platfo
 
 ---
 
+## 2.103 — Refund Policy Copy Clarification (27 May 2026)
+
+Clarified refund-policy copy without changing refund, credit, Stripe, payout, or ledger behaviour. Learner-facing wording now separates 48+ hour lesson-credit returns from approved cash/card refunds, and the terms/email copy states that approved refunds return to the original payment method where possible minus any non-refundable payment processing fees charged by the payment provider. Internal docs flag solicitor review before treating the wording as final legal copy.
+
+**Files:** `public/terms.html`, `public/learner/buy-credits.html`, `public/learner/book.html`, `public/learner/book.js`, `public/learner/lessons.js`, `api/webhook.js`, `api/slots.js`, `public/instructor/index.html`, `public/instructor/index.js`, `docs/stripe-connect.md`, `PROJECT.md`.
+
 ## 2.102 — Repeat Offer BCS Attribution for Fully Booked Series (26 May 2026)
 
 PR #220 shipped BCS attribution for paid, non-flexible, slot-pinned repeat offer series when every requested repeat week is successfully booked. The webhook now splits the single `slot_purchase` credit transaction across all booked lessons using the existing BCS booking-plan helper.
@@ -882,7 +888,7 @@ PWA push notifications for lesson reminders, quiz nudges, and new message alerts
 
 ### 3.3 — Refund Flow
 
-Learner requests cash refund from dashboard, admin approves in portal, Stripe processes reversal.
+Learner requests approved cash/card refund from dashboard, admin approves in portal, Stripe processes reversal net of any non-refundable payment processing fees charged by the payment provider.
 
 ### 3.4 — Referral System
 

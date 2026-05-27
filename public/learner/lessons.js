@@ -339,7 +339,7 @@
     var policyEl = document.getElementById('cancelPolicyNote');
     policyEl.className = 'cancel-policy' + (willGet ? ' safe' : '');
     policyEl.innerHTML = willGet
-      ? '&#x2713; You are cancelling more than 48 hours before the lesson. <strong>Your lesson will be returned automatically.</strong>'
+      ? '&#x2713; You are cancelling more than 48 hours before the lesson. <strong>Your lesson credit will be returned to your balance automatically.</strong>'
       : '&#x26A0; This lesson is within 48 hours. <strong>Your lesson will be forfeited</strong> in line with the cancellation policy.';
 
     var ackLabel = document.getElementById('cancelAckLabel');
@@ -357,7 +357,7 @@
         seriesCheck.checked = true;
         toggleCancelSeriesInfo();
         policyEl.className = 'cancel-policy safe';
-        policyEl.innerHTML = '&#x2713; Each lesson in the series will be assessed individually. Lessons 48+ hours away will be refunded.';
+        policyEl.innerHTML = '&#x2713; Each lesson in the series will be assessed individually. Lesson credit for lessons 48+ hours away will be returned to your balance.';
       }
     } else {
       seriesOption.style.display = 'none';
@@ -373,7 +373,7 @@
     document.getElementById('cancelSeriesInfo').style.display = checked ? 'block' : 'none';
     document.getElementById('cancelBtnLabel').textContent = checked ? 'Cancel series' : 'Cancel lesson';
     if (checked) {
-      document.getElementById('cancelSeriesInfo').textContent = 'All remaining lessons in this weekly series will be cancelled. Refunds apply per the 48-hour policy.';
+      document.getElementById('cancelSeriesInfo').textContent = 'All remaining lessons in this weekly series will be cancelled. Lesson credit returns apply per the 48-hour policy.';
       document.getElementById('btnConfirmCancel').disabled = false;
     }
   }
