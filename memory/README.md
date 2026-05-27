@@ -17,6 +17,8 @@ Expanded:
 5. Use `decision-log.md` to understand *why* the current shape exists before proposing changes. Superseded decisions are kept on purpose — do not re-litigate.
 6. **If your change moves shipped state, alters a prod fact, advances migration status, or resolves/creates a chip, update the matching `memory/*.md` file in the same PR.** The folder is only useful if it stays current.
 
+For coding-coach sessions, also read `memory/coding-coach.md` before advising on worker prompts, reviews, PRs, or merges.
+
 ## What this folder is NOT
 
 - Not a changelog (that's `DEVELOPMENT-ROADMAP.md`).
