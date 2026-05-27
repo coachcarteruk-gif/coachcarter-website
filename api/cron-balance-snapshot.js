@@ -7,6 +7,8 @@
 // platform_balance_snapshots, then run the trailing-30d Stripe-inflow vs
 // payout-outflow comparison (Trigger B). The row also acts as the lookup
 // target for Trigger A (failure-path alert in api/_payout-helpers.js).
+// The stored refund_exposure_pence is the widget's advisory legacy aggregate
+// signal, not an exact per-instructor refund liability.
 //
 // Why this exists: the widget (api/admin.js handlePlatformBalance) is a
 // dashboard gauge. Without a daily snapshot, two failure modes are silent:

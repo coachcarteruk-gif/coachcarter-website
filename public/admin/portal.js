@@ -2147,9 +2147,9 @@ async function loadPlatformBalance() {
       ${excludedHtml}
 
       <div style="margin-top:14px;padding:10px 12px;background:#f9fafb;border-left:3px solid #d1d5db;border-radius:4px;font-size:0.82rem;color:#4b5563;">
-        <strong style="color:#374151;">Advisory:</strong> if every learner refunded today,
-        additional cash needed ≈ <strong>${fmtPence(data.refund_exposure_pence)}</strong>.
-        Informational only — not part of payout viability above.
+        <strong style="color:#374151;">Advisory:</strong> legacy aggregate credit exposure signal
+        ≈ <strong>${fmtPence(data.refund_exposure_pence)}</strong>.
+        Uses the pooled learner balance shadow at the school rate; not an exact per-instructor refund liability and not part of payout viability above.
       </div>
 
       <p style="margin:12px 0 0;color:#6b7280;font-size:0.78rem;">

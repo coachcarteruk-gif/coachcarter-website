@@ -178,6 +178,45 @@ test.describe('payout Step 5 read model', () => {
     expect(calls.some(call => call.text.includes('SELECT lb.id AS booking_id'))).toBe(true);
   });
 
+  test('refund exposure remains explicitly advisory legacy aggregate valuation', async () => {
+    const { sql, calls } = makePlatformBalanceSqlMock();
+    const stripe = {
+      balance: {
+        retrieve: async () => ({
+          available: [{ currency: 'gbp', amount: 20000 }],
+          pending: [],
+        }),
+      },
+    };
+
+    const result = await computePlatformBalance(sql, stripe);
+    const exposureQuery = calls.find(call => call.text.includes('live_credit_pence'));
+
+    expect(result.refund_exposure_basis).toMatchObject({
+      kind: 'advisory_legacy_aggregate_shadow',
+      exact_refund_liability: false,
+      balance_source: 'learner_users.balance_minutes',
+    });
+    expect(result.refund_exposure_basis.deferred).toEqual(expect.arrayContaining([
+      'learner_credit_balances per-instructor valuation',
+      'credit_transactions effective_rate_pence_per_minute source valuation',
+      'goodwill absorbed_by treatment',
+    ]));
+    expect(exposureQuery.text).toContain('lu.balance_minutes');
+    expect(exposureQuery.text).toContain("s.config -> 'pricing' ->> 'bulk_hourly_pence'");
+    expect(exposureQuery.text).toContain('stripe_session_id IS NOT NULL');
+    expect(exposureQuery.text).not.toContain('learner_credit_balances');
+    expect(exposureQuery.text).not.toContain('effective_rate_pence_per_minute');
+  });
+
+  test('admin platform balance copy does not present refund exposure as exact cash needed', () => {
+    const portal = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin', 'portal.js'), 'utf8');
+
+    expect(portal).toContain('legacy aggregate credit exposure signal');
+    expect(portal).toContain('not an exact per-instructor refund liability');
+    expect(portal).not.toContain('additional cash needed');
+  });
+
   test('processPayoutForInstructor and simulatePayoutForInstructor use the same eligible-bookings query and math', async () => {
     const processSql = makeSqlMock({ eligibleRows: [eligibleBcsFundedBooking] });
     const simulateSql = makeSqlMock({ eligibleRows: [eligibleBcsFundedBooking] });
