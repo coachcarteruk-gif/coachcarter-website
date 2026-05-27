@@ -415,7 +415,7 @@
         : '<span style="font-size:0.7rem;font-weight:600;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px;margin-left:6px">New to you</span>';
       return '<div class="ba-learner-row" data-id="' + l.id + '" data-name="' + _esc(name) + '" data-detail="' + _esc(detail) + '" data-balance-minutes="' + balanceMinutes + '" style="padding:8px 12px;cursor:pointer;font-size:0.85rem;border-bottom:1px solid var(--border)">' +
         '<div style="font-weight:600">' + _esc(name) + tag + '</div>' +
-        '<div style="font-size:0.78rem;color:var(--muted)">' + _esc(detail) + ' · ' + formatBalanceMins(balanceMinutes) + '</div></div>';
+        '<div style="font-size:0.78rem;color:var(--muted)">' + _esc(detail) + ' · ' + formatBalanceMins(balanceMinutes) + ' with this instructor</div></div>';
     }).join('');
 
     // Wire up per-row click + hover (previously inline onclick / onmouseover / onmouseout)
@@ -459,7 +459,7 @@
     const pay = document.querySelector('input[name="ba-add-pay"]:checked')?.value;
     const note = document.getElementById('ba-add-credit-note');
     if (pay === 'credit' && addLessonSelectedId) {
-      note.textContent = 'Hours available: ' + formatBalanceMins(addLessonSelectedBalanceMinutes);
+      note.textContent = 'Hours with this instructor: ' + formatBalanceMins(addLessonSelectedBalanceMinutes);
       note.style.display = 'block';
     } else {
       note.style.display = 'none';

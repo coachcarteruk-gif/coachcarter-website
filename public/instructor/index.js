@@ -1384,7 +1384,7 @@ function filterAddLessonLearners() {
       return `
       <div class="learner-option" data-action="select-learner" data-id="${l.id}" data-name="${esc(l.name)}" data-phone="${esc(l.phone || l.email)}" data-balance-minutes="${l.balance_minutes || 0}">
         <div class="learner-opt-name">${esc(l.name)}${tag}</div>
-        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? '·' : ''} ${esc(l.email || '')} · ${formatBalanceMins(l.balance_minutes || 0)}</div>
+        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? '·' : ''} ${esc(l.email || '')} · ${formatBalanceMins(l.balance_minutes || 0)} with you</div>
       </div>
     `;
     }).join('');
@@ -1417,8 +1417,8 @@ function updateCreditNote(balanceMinutes) {
   if (payMethod === 'credit') {
     noteEl.style.display = 'block';
     noteEl.textContent = balanceMinutes > 0
-      ? `Learner has ${formatBalanceMins(balanceMinutes)} remaining.`
-      : 'Learner has no hours! Choose Cash or Free instead.';
+      ? `Learner has ${formatBalanceMins(balanceMinutes)} with you.`
+      : 'Learner has no hours with you. Choose Cash or Free instead.';
     noteEl.style.color = balanceMinutes > 0 ? 'var(--muted)' : 'var(--red)';
   } else {
     noteEl.style.display = 'none';

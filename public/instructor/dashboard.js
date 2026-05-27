@@ -249,7 +249,7 @@ function selectLearner(id, name, detail, balanceMinutes) {
   // Show credit note
   var note = document.getElementById('bookCreditNote');
   if (balanceMinutes > 0) {
-    note.textContent = 'Learner has ' + formatBalanceMins(balanceMinutes) + ' available.';
+    note.textContent = 'Learner has ' + formatBalanceMins(balanceMinutes) + ' with you.';
     note.style.display = 'block';
   } else {
     note.style.display = 'none';
