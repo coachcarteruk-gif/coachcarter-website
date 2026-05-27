@@ -166,11 +166,15 @@
       var res = await ccAuth.fetchAuthed('/api/lesson-types?action=list');
       var data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      lessonTypes = (data.lesson_types || []).filter(function (lt) { return lt.active !== false; });
+      lessonTypes = (data.lesson_types || []).filter(isPaidLessonType);
     } catch (err) {
       console.error('Failed to load lesson types:', err);
       lessonTypes = [];
     }
+  }
+
+  function isPaidLessonType(lt) {
+    return !!lt && lt.active !== false && lt.slug !== 'trial';
   }
 
   async function loadInstructors() {
@@ -270,6 +274,10 @@
 
     var lt = lessonTypes.find(function (t) { return t.id === lessonTypeId; });
     if (!lt) return;
+    if (!isPaidLessonType(lt)) {
+      showToast('Free trials are booked from the free trial page.', 'error');
+      return;
+    }
 
     var origText = btn.textContent;
     checkoutBusy = true;

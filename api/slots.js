@@ -80,6 +80,16 @@ function formatHours(minutes) {
   return hrs % 1 === 0 ? `${hrs} hour${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hours`;
 }
 
+function isFreeTrialLessonType(lessonType) {
+  return lessonType && lessonType.slug === 'trial';
+}
+
+function rejectFreeTrialOnPaidPath(res) {
+  return res.status(400).json({
+    error: 'Use the free trial page to book a trial.'
+  });
+}
+
 
 // verifyAuth delegates to centralised _auth.js.
 // All handlers in slots.js (handleBook, handleCheckoutSlot, handleCancel,
@@ -1163,6 +1173,7 @@ async function handleBook(req, res) {
     // 0. Look up lesson type
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);
     const durationMins = lessonType.duration_minutes;
 
     // Validate slot duration matches lesson type
@@ -1607,6 +1618,7 @@ async function handleCheckoutSlot(req, res) {
     // 0. Look up lesson type for pricing
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);
     const durationMins = lessonType.duration_minutes;
     let pricePence     = lessonType.price_pence;
     const durationStr  = formatHours(durationMins);
@@ -1846,6 +1858,7 @@ async function handleCheckoutSlotGuest(req, res) {
 
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);
     const durationMins = lessonType.duration_minutes;
     let pricePence     = lessonType.price_pence;
     const durationStr  = formatHours(durationMins);

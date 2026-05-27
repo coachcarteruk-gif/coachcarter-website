@@ -36,6 +36,15 @@ test.describe('learner instructor-aware credit purchase UI', () => {
     expect(js).not.toContain('var payload = { hours: hours };\n      if (currentInstructorId)');
   });
 
+  test('buy-credits excludes free-trial lesson type from paid single-lesson cards', () => {
+    const js = read('public/learner/buy-credits.js');
+
+    expect(js).toContain('function isPaidLessonType(lt)');
+    expect(js).toContain("lt.slug !== 'trial'");
+    expect(js).toContain('lessonTypes = (data.lesson_types || []).filter(isPaidLessonType);');
+    expect(js).toContain("showToast('Free trials are booked from the free trial page.', 'error')");
+  });
+
   test('buy-credits login redirect preserves instructor context', () => {
     const js = read('public/learner/buy-credits.js');
 
@@ -76,6 +85,29 @@ test.describe('learner booking modal instructor-aware credit balance', () => {
     expect(js).toContain('/learner/buy-credits.html?instructor_id=${encodeURIComponent(slot.instructor_id)}');
     expect(js).toContain('function updateModalBuyCreditLinks()');
     expect(js).toContain('updateModalBuyCreditLinks();');
+  });
+
+  test('booking modal excludes trial durations but keeps the guest free-trial CTA link', () => {
+    const js = read('public/learner/book.js');
+    const html = read('public/learner/book.html');
+
+    expect(js).toContain(".filter(d => d && d.slug !== 'trial')");
+    expect(js).toContain("hasFreeTrialSlot = lessonTypes.some(lt => lt && lt.slug === 'trial')");
+    expect(js).toContain("claimCta.style.display = 'block'");
+    expect(js).toContain("params.set('instructor_id', pendingSlot.instructor_id)");
+    expect(js).toContain("params.set('date', pendingSlot.date)");
+    expect(js).toContain("window.location.href = '/free-trial.html'");
+    expect(html).toContain('id="claimTrialCta"');
+    expect(html).toContain('id="claimTrialLink"');
+  });
+
+  test('paid booking server paths reject the free-trial lesson type', () => {
+    const js = read('api/slots.js');
+
+    expect(js).toContain('function rejectFreeTrialOnPaidPath(res)');
+    expect(js).toContain('Use the free trial page to book a trial.');
+    expect(js).toContain('if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);');
+    expect(js).toContain("AND slug != 'trial'");
   });
 });
 
