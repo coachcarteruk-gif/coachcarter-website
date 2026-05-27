@@ -63,6 +63,7 @@ const {
 const { grantGoodwillCredits } = require('./_admin-credit-goodwill');
 const { inspectCreditReconciliation, grantReconciliationCredits } = require('./_admin-credit-reconciliation');
 const { planAdminRefundPreview, validateRefundPreviewRequest } = require('./_refund-planner');
+const { executeAdminRefund, validateRefundExecuteRequest } = require('./_refund-executor');
 const { logAudit } = require('./_audit');
 const { deleteLearnerCascade } = require('./_gdpr');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
@@ -112,6 +113,7 @@ module.exports = async (req, res) => {
   if (action === 'credit-goodwill')    return handleCreditGoodwillContract(req, res);
   if (action === 'credit-reconciliation') return handleCreditReconciliationContract(req, res);
   if (action === 'refund-preview')      return handleRefundPreview(req, res);
+  if (action === 'execute-refund')      return handleExecuteRefund(req, res);
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
   if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
   if (action === 'toggle-payout-pause')  return handleTogglePayoutPause(req, res);
@@ -1381,6 +1383,65 @@ async function handleRefundPreview(req, res) {
       error: true,
       code: 'REFUND_PREVIEW_FAILED',
       message: 'Failed to prepare refund preview.',
+    });
+  }
+}
+
+// Tightly gated refund execution. This re-runs the trusted server-side planner
+// and only calls Stripe through an injected/created client after all blockers
+// have cleared. Do not run against prod without a future explicit operator go.
+async function handleExecuteRefund(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const validated = validateRefundExecuteRequest(req.body || {}, { schoolId });
+  if (!validated.ok) {
+    return res.status(validated.status).json({
+      error: true,
+      code: validated.code,
+      message: validated.message,
+    });
+  }
+
+  try {
+    const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
+    const stripeClient = req.stripeClient || req._stripe || createStripeClient();
+    const result = await executeAdminRefund({
+      sql,
+      stripe: stripeClient,
+      admin,
+      schoolId,
+      input: validated.input,
+      req,
+      adjustCreditBalance: req.adjustCreditBalance || req._adjustCreditBalance,
+      auditLogger: req.auditLogger || req._auditLogger,
+      connectionString: (req.sql || req._sql) ? req.connectionString : process.env.POSTGRES_URL,
+      transactionRunner: req.transactionRunner || req._transactionRunner,
+    });
+
+    if (!result.ok) {
+      return res.status(result.status || 400).json({
+        error: true,
+        code: result.code || 'REFUND_EXECUTE_FAILED',
+        message: result.message || 'Refund could not be executed.',
+        refund_executed: false,
+        stripe_refund_id: result.stripe_refund_id,
+        refund_event_id: result.refund_event_id,
+      });
+    }
+
+    return res.status(result.status || 200).json(result);
+  } catch (err) {
+    console.error('admin execute-refund error:', err.message);
+    reportError('/api/admin', err);
+    return res.status(500).json({
+      error: true,
+      code: 'REFUND_EXECUTE_FAILED',
+      message: 'Failed to execute refund.',
+      refund_executed: false,
     });
   }
 }

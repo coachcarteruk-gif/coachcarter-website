@@ -19,15 +19,17 @@ Instructors are paid via Stripe Connect Express accounts. Money flows: learner p
 - Admin can pause/resume individual instructor payouts from admin portal
 - Customer refund wording must distinguish credit returns from approved cash/card refunds. 48+ hour lesson cancellations return lesson credit to the learner balance; they are not automatic cash refunds. Where a refund is approved, it should be returned to the original payment method where possible, minus any non-refundable payment processing fees charged by the payment provider. This wording should be solicitor-reviewed before being treated as final legal copy.
 
-## Refund Preview Policy
+## Refund Preview / Execute Policy
 
 Approved card refunds are net of the original non-refundable Stripe processing fee. The learner absorbs that original processing fee; no goodwill exception is assumed by default.
 
 For partial refunds, the withheld fee is the refunded portion's attributed/proportional share of the original Stripe fee. Prefer exact BCS attribution (`booking_credit_sources.stripe_fee_pence`) where it exists; otherwise use the source or booking fee snapshot (`credit_transactions.stripe_fee_pence`, `lesson_bookings.stripe_fee_pence`) or a Stripe balance transaction lookup. If fee evidence cannot be found, automatic refund preview/execution must block and return manual review rather than assuming zero.
 
-Already-paid-out direct bookings must not be automatically Stripe-refunded. Once a lesson appears in `payout_line_items`, Fraser should handle any approved refund manually from the bank account and record it in the refund ledger in a later execute/manual-record slice. The read-only admin preview returns this as blocked guidance.
+Already-paid-out direct bookings must not be automatically Stripe-refunded. Once a lesson appears in `payout_line_items`, Fraser should handle any approved refund manually from the bank account and record it in the refund ledger in a later execute/manual-record slice. Admin preview and execute both return this as blocked guidance.
 
 The first implementation slice is `POST /api/admin?action=refund-preview`: read-only, admin-authenticated, school-scoped, and itemised as gross lesson credit value, withheld processing fee, and amount returned. It does not call `stripe.refunds.create`.
+
+The second implementation slice is `POST /api/admin?action=execute-refund`: admin-authenticated, school-scoped, and tightly gated by an explicit `operator_go` confirmation plus caller-supplied idempotency key. Execute re-runs the trusted server-side planner before any Stripe mutation, rejects blocked/manual-review plans, calls `stripe.refunds.create` only through an injected/created Stripe client, writes `refund_events(status='executed')` and `refund_event_lines`, audit-logs `admin.execute_refund`, and creates `credit_source_adjustments` plus locked balance decrements for supported unused credit-source refunds. It must not be run against production without a future explicit operator go.
 
 ## Fee models
 

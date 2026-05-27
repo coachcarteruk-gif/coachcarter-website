@@ -553,7 +553,7 @@ Allowed `type` values (enforced by `credit_transactions_type_check`):
 
 **`credit_source_adjustments`** — additive source-level adjustment ledger for cash refunds, admin corrections, and dispute clawbacks. Columns: `credit_transaction_id`, `kind`, `minutes_adjusted`, `pence_adjusted`, `reason`, `stripe_refund_id`, `created_at`, `created_by`. Never mutates `credit_transactions.minutes` / `amount_pence`.
 
-**`refund_events`** — dedicated refund accounting ledger for approved/manual refund work. Columns: `school_id`, `learner_id`, `created_by`, `refund_type` (`credit_purchase`, `repeat_offer_partial`, `direct_slot`, `direct_offer`, `manual_record`), `status` (`previewed`, `manual_review`, `blocked` for the preview-only slice), gross/fee/net pence, Stripe identities, idempotency key, reason, metadata, created_at. Execute-refund is not implemented yet.
+**`refund_events`** — dedicated refund accounting ledger for approved/manual refund work. Columns: `school_id`, `learner_id`, `created_by`, `refund_type` (`credit_purchase`, `repeat_offer_partial`, `direct_slot`, `direct_offer`, `manual_record`), `status` (`previewed`, `manual_review`, `blocked`, `executed`), gross/fee/net pence, Stripe identities, idempotency key, reason, metadata, created_at.
 
 **`refund_event_lines`** — itemised refund ledger lines keyed to source rows. Columns: `school_id`, `refund_event_id`, optional `credit_transaction_id`, `booking_credit_source_id`, `lesson_booking_id`, `credit_source_adjustment_id`, gross/source-fee/withheld/net pence, `minutes_adjusted`, created_at.
 
@@ -744,6 +744,7 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 | `credit-reconciliation` | POST | JWT | Admin reconciliation for a missed Stripe credit-purchase webhook. Dry-run/inspection requests (`dry_run: true` or `mode: 'inspect'`) are non-mutating and return `inspection_only: true`, `credit_granted: false`. Mutating mode requires a non-empty `reason`, runs Stripe/DB inspection plus `buildReconciliationGrantInput()` before any mutation, writes through the shared serialized LCB credit mutation path, and audit-logs `admin.credit_reconciliation`. The admin UI currently exposes inspection only; no apply/grant button has shipped. |
 | `credit-goodwill` | POST | JWT | Grant goodwill credits to a learner/instructor pair through the shared serialized LCB credit mutation path. Requires learner/instructor scope, minutes, reason, and `absorbed_by` (`platform` or `instructor`). Audit-logged as `admin.credit_goodwill_grant` |
 | `refund-preview` | POST | JWT | Read-only admin refund planner for net-of-processing-fee refunds. Supports credit purchase/source previews, partial repeat-offer unused value previews, and direct slot/offer booking previews. It itemises gross lesson credit value, withheld original processing fee, and net amount returned; blocks missing-fee cases and already-paid-out direct bookings for manual review. It does not write `refund_events`, mutate credit balances/CSA, or call `stripe.refunds.create`. |
+| `execute-refund` | POST | JWT | Tightly gated admin refund executor. Requires `idempotency_key` and `operator_go: "EXECUTE_REFUND_CONFIRMED"`, re-runs `_refund-planner.js`, blocks manual-review plans, calls `stripe.refunds.create` through an injectable Stripe client, writes `refund_events(status='executed')` / `refund_event_lines`, creates CSA + locked balance decrements for supported unused credit-source refunds, and audit-logs `admin.execute_refund`. Already-paid-out direct bookings remain blocked. |
 | `invite-learner` | POST | JWT | Create learner account and send 7-day magic link invite email |
 | `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type (same as instructor version but admin-scoped). Audit-logged |
 | `instructor-blackouts` | GET | JWT | Get future blackout dates for an instructor (`?instructor_id=X`) |
@@ -992,7 +993,7 @@ When a learner is deleted, data is handled as follows:
 
 ## What's still to build
 
-- **Refund flow** — learner requests cash/card refund, admin approves, Stripe reverses. Approved refunds should be returned to the original payment method where possible, minus any non-refundable payment processing fees charged by the payment provider.
+- **Refund flow UI/manual record** — backend preview and tightly gated execute foundation exists, but learner request UI, admin approval UI, and manual bank-refund record flows are still to build.
 - **Automated reminders** — 24-hour email/SMS before lessons (Vercel cron)
 - **Waiting list** — capture leads when fully booked
 - **Referral system** — unique links, credit bonuses for both parties

@@ -11,7 +11,7 @@ test.describe('refund ledger schema', () => {
     expect(migrationSql).toContain('CREATE TABLE IF NOT EXISTS refund_events');
     expect(migrationSql).toContain('school_id                           INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id)');
     expect(migrationSql).toContain("refund_type IN ('credit_purchase', 'repeat_offer_partial', 'direct_slot', 'direct_offer', 'manual_record')");
-    expect(migrationSql).toContain("status IN ('previewed', 'manual_review', 'blocked')");
+    expect(migrationSql).toContain("status IN ('previewed', 'manual_review', 'blocked', 'executed')");
     expect(migrationSql).toContain('gross_refund_pence                  INTEGER NOT NULL CHECK (gross_refund_pence >= 0)');
     expect(migrationSql).toContain('processing_fee_withheld_pence       INTEGER NOT NULL CHECK (processing_fee_withheld_pence >= 0)');
     expect(migrationSql).toContain('net_refund_pence                    INTEGER NOT NULL CHECK (net_refund_pence >= 0)');
@@ -22,6 +22,10 @@ test.describe('refund ledger schema', () => {
     expect(migrationSql).toContain('CREATE INDEX IF NOT EXISTS idx_refund_events_learner ON refund_events(learner_id)');
     expect(migrationSql).toContain('CREATE INDEX IF NOT EXISTS idx_refund_events_created_by ON refund_events(created_by)');
     expect(migrationSql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_events_idempotency_key');
+    expect(migrationSql).toContain("IF to_regclass('public.refund_events') IS NOT NULL THEN");
+    expect(migrationSql).toContain("ALTER TABLE refund_events DROP CONSTRAINT");
+    expect(migrationSql).toContain('ADD CONSTRAINT refund_events_status_check');
+    expect(migrationSql).toContain("CHECK (status IN ('previewed', 'manual_review', 'blocked', 'executed'))");
 
     expect(migrationSql).toContain('CREATE TABLE IF NOT EXISTS refund_event_lines');
     expect(migrationSql).toContain('school_id                           INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id)');
