@@ -35,6 +35,11 @@
 
   var isAuthed = false;
   var qty = 12;
+  var params = new URLSearchParams(window.location.search);
+  var currentInstructorId = parseInt(params.get('instructor_id'), 10);
+  if (!Number.isInteger(currentInstructorId) || currentInstructorId <= 0) {
+    currentInstructorId = null;
+  }
 
   function initAuth() {
     // Spectator mode: prices and pricing tiers are public — only the buy
@@ -182,10 +187,12 @@
 
     try {
       var hours = lt.duration_minutes / 60;
+      var payload = { hours: hours };
+      if (currentInstructorId) payload.instructor_id = currentInstructorId;
       var res = await ccAuth.fetchAuthed('/api/credits?action=checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hours: hours })
+        body: JSON.stringify(payload)
       });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Checkout failed');
@@ -250,10 +257,12 @@
     if (window.posthog) posthog.capture('credits_checkout_initiated', { hours: qty, total_pence: totals.total });
 
     try {
+      var payload = { hours: qty };
+      if (currentInstructorId) payload.instructor_id = currentInstructorId;
       var res = await ccAuth.fetchAuthed('/api/credits?action=checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hours: qty })
+        body: JSON.stringify(payload)
       });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Checkout failed');
@@ -279,7 +288,6 @@
   }
 
   // ── Check for ?cancelled=true ─────────────────────────────────────────────
-  var params = new URLSearchParams(window.location.search);
   if (params.get('cancelled') === 'true') {
     showToast('Payment cancelled — your balance is unchanged.', 'cancelled');
   }
