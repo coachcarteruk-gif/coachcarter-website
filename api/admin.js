@@ -1152,16 +1152,16 @@ async function handleAdjustCredits(req, res) {
     //
     //   - 0 LCB rows  → grandfather to instructor 1 (Fraser). Same as the
     //                   dispatcher's default; explicit here for audit. The
-    //                   negative-balance pre-check below uses pooled
+    //                   negative-balance pre-check uses the aggregate shadow
     //                   because there's no LCB row to read.
     //   - 1 LCB row   → use that instructor. Pre-check reads that row's
     //                   balance directly.
     //   - 2+ LCB rows → AMBIGUOUS_INSTRUCTOR. Admin must re-issue with an
     //                   explicit instructor_id. Without this guard, a
-    //                   pooled pre-check could pass while the LCB write
+    //                   aggregate pre-check could pass while the LCB write
     //                   minted a negative balance on the wrong row.
     //
-    // Accept req.body.instructor_id when present so a future admin UI can
+    // Accept req.body.instructor_id when present so the admin UI can
     // pass it explicitly and skip the auto-resolve.
     const explicitInstructorId = parseInt(req.body.instructor_id, 10);
     let targetInstructorId;
@@ -1244,8 +1244,8 @@ async function handleAdjustCredits(req, res) {
       console.error('admin adjust-credits failed:', adj.code);
       return res.status(500).json({ error: 'Failed to adjust learner balance' });
     }
-    // Re-read for the response: lockBalanceAndMutate returns LCB balance
-    // under Phase 2A, not pooled. The audit log expects pooled. Cheap read.
+    // Re-read the aggregate shadow for the response/audit compatibility
+    // fields. lockBalanceAndMutate returns the scoped LCB balance.
     const [updated] = await sql`SELECT balance_minutes, credit_balance FROM learner_users WHERE id = ${learner_id} AND school_id = ${schoolId}`;
 
     await logAudit(sql, { adminId: admin.id, adminEmail: admin.email, action: 'adjust-credits', targetType: 'learner', targetId: learner_id, details: { hours: hoursFloat, reason, previous: learner.balance_minutes || 0, new: updated.balance_minutes }, schoolId, req });

@@ -252,7 +252,7 @@ The site uses a unified competency framework (10 DL25 categories, 39 sub-skills)
 
 ### How credits work
 
-Each credit = one 1.5-hour lesson. Credits are stored as a balance on the learner's account and purchased via Stripe (Klarna available). Bulk discounts apply automatically:
+Each credit = one 1.5-hour lesson. Credits are stored per learner/instructor in `learner_credit_balances` and purchased via Stripe (Klarna available). Bulk discounts apply automatically:
 
 | Credits | Hours | Discount |
 |---|---|---|
@@ -262,7 +262,7 @@ Each credit = one 1.5-hour lesson. Credits are stored as a balance on the learne
 | 16 | 24hrs | 20% off |
 | 20 | 30hrs | 25% off |
 
-Base rate: **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Learners buy hours, not lesson credits. Balance stored as `balance_minutes` internally.
+Base rate: **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Learners buy hours, not lesson credits. Instructor-scoped balances are stored as `learner_credit_balances.balance_minutes`; the legacy `learner_users.balance_minutes` column is an aggregate/display shadow.
 
 **Lesson types** (managed via admin portal):
 - Standard Lesson — 90 min / £82.50
@@ -275,7 +275,7 @@ Base rate: **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Learners 
 - The slot engine (`api/slots.js`) generates slots based on the selected lesson type's duration
 - Learners select a lesson type (if multiple exist), browse the calendar, filter by instructor (optional), and book
 - Booking is instant — no instructor approval needed
-- **With hours balance:** Duration deducted from `balance_minutes` on booking; returned automatically on 48+ hour cancellations
+- **With hours balance:** Duration deducted from the selected instructor's `learner_credit_balances.balance_minutes` row on booking; returned automatically to the booking instructor's row on 48+ hour cancellations
 - **Without balance (pay-per-slot):** Slot reserved for 10 minutes during Stripe Checkout; on payment, hours added + deducted atomically, booking created, .ics calendar attachment sent to both parties
 - **Guest checkout (no account):** Unauthenticated learners can book via `checkout-slot-guest`. They provide name, email, phone, and pickup address in the booking modal. The API creates a learner account immediately (find-or-create by email), reserves the slot with the real learner_id, then redirects to Stripe. The existing webhook handles the rest unchanged. Rate limited by IP and phone number. Guest bookings tagged with `created_by = 'guest_checkout'`
 - **Spectator mode (April 2026):** `/learner/book.html` is publicly accessible — every "Book" CTA across the marketing surface routes there directly (no login redirect). Logged-out visitors see a `#guestBanner` and a guest-aware sidebar (Buy Credits, Upcoming, Profile filtered out via `authOnly`). Inside the booking modal, when the school's lesson types include a row with `slug='trial'`, an inline CTA "Claim this as your free trial →" redirects to `/free-trial.html?instructor_id=…&date=…`. The slot is not force-converted; the trial handler enforces strict duration matching, so the guest re-picks a real trial slot on the dedicated page (which honours the hints by filtering and scrolling).
@@ -285,7 +285,7 @@ Base rate: **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Learners 
 
 ### Cancellation policy
 
-- 48+ hours notice — lesson credit returned to the learner balance automatically
+- 48+ hours notice — lesson credit returned automatically to the learner's balance with the booking instructor
 - Under 48 hours — credit forfeited, learner informed at time of cancellation
 - Approved cash/card refunds are separate from cancellation credit returns. Customer copy should say: "Where a refund is approved, it will be returned to the original payment method where possible. Any non-refundable payment processing fees charged by our payment provider will be deducted from the refunded amount." Solicitor review is still recommended before treating this as final legal copy.
 
@@ -406,7 +406,7 @@ Bound to `/r/:code` via a `vercel.json` rewrite. No `?action=` routing — this 
 |---|---|---|---|
 | `available` | GET | No | Available slots for a lesson type duration. Params: `from`, `to`, `instructor_id?`, `lesson_type_id?`, `pickup_postcode?`, `min_duration_only?`. When `min_duration_only=1`, the API treats `lesson_type_id` as grid-spacing only and skips the `offered_lesson_types` filter — used by the slot-first feed where the instructor list isn't yet narrowed by duration. |
 | `durations-for-slot` | GET | No | Slot-first companion to `available`. For a given `instructor_id` + `date` + `start_time`, returns every active lesson type for the school (excluding `slug='trial'`) with a `fits` boolean + `reason` (`window`/`notice`/`not_offered`/`clash`/`travel`/`null`). Optional `pickup_postcode` runs the same travel-time heuristic as the slot feed. Used by `book.html` when the user clicks a slot to populate the modal duration dropdown. |
-| `book` | POST | Yes | Book a slot — deducts `duration_minutes` from `balance_minutes`. Body includes `lesson_type_id` |
+| `book` | POST | Yes | Book a slot — deducts `duration_minutes` from the selected instructor's LCB row. Body includes `lesson_type_id` |
 | `checkout-slot` | POST | Yes | Pay-per-slot: reserves slot, creates Stripe Checkout at lesson type's price |
 | `checkout-slot-guest` | POST | No | Guest checkout: validates guest fields (name, email, phone, pickup), finds-or-creates learner account, reserves slot, creates Stripe Checkout. Rate limited: 10/IP/hr + 5/phone/hr |
 | `book-free-trial` | POST | No | Self-serve free trial booking. No Stripe. Body matches `checkout-slot-guest` plus optional `referral_code`. Resolves the `trial` lesson type (id 37, school 1), runs a one-trial-per-learner guard (email OR phone, any status), creates a `scheduled` booking with `payment_method='free'`, generates a 7-day magic-link token, emails learner + instructor. Rate limited: 10/IP/hr + 3/phone/hr |
@@ -664,7 +664,7 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `ical-status` | GET | JWT | Returns iCal sync status (url, last_synced, error, event_count) |
 | `cancel-booking` | POST | JWT | Cancel a scheduled booking (always refunds learner credit — instructor-initiated cancellations bypass the 48h rule). Body: `{ booking_id, reason?, notify? }` — `notify: false` skips learner email |
 | `reschedule-booking` | POST | JWT | Move a booking to a new slot (no time restriction, no count limit) |
-| `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type. Body: `{ booking_id, scheduled_date?, start_time?, lesson_type_id?, force?, notify? }`. Adjusts learner balance if duration changes. Returns conflict details if overlapping (with `can_force: true`). Sets `edited_at`, Setmore sync skips edited bookings |
+| `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type. Body: `{ booking_id, scheduled_date?, start_time?, lesson_type_id?, force?, notify? }`. Adjusts the learner's balance with that booking's instructor if duration changes. Returns conflict details if overlapping (with `can_force: true`). Sets `edited_at`, Setmore sync skips edited bookings |
 | `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/free payment) |
 | `blackout-dates` | GET | JWT | Returns active/future blackout date ranges. Response: `{ blackout_dates: [{ id, start_date, end_date, reason }] }` |
 | `set-blackout-dates` | POST | JWT | Replace all future blackout ranges. Body: `{ ranges: [{ start_date, end_date, reason? }] }`. Validates no overlaps, max 365-day span |
@@ -718,7 +718,7 @@ Two alarm triggers:
 
 **`payout_line_items`** — id, payout_id, booking_id (UNIQUE — prevents double-payment), price_pence, instructor_amount_pence, commission_rate
 
-**`platform_balance_snapshots`** — id, captured_at, status ('green'/'red'), available_pence, pending_pence, total_payout_pence, balance_after_payout_pence, refund_exposure_pence, payout_preview_json (per-instructor breakdown of the dry-run), trailing_30d_stripe_inflow_pence, trailing_30d_payout_outflow_pence. Written daily by `cron-balance-snapshot.js`. Index on `captured_at DESC` for the Trigger A 24h lookup. Read by `_payout-helpers.js` (Trigger A) and the cron itself (Trigger B). The widget compute lives in `api/_platform-balance.js` and is the single source of truth for both the dashboard and the snapshot.
+**`platform_balance_snapshots`** — id, captured_at, status ('green'/'red'), available_pence, pending_pence, total_payout_pence, balance_after_payout_pence, refund_exposure_pence, payout_preview_json (per-instructor breakdown of the dry-run), trailing_30d_stripe_inflow_pence, trailing_30d_payout_outflow_pence. Written daily by `cron-balance-snapshot.js`. Index on `captured_at DESC` for the Trigger A 24h lookup. Read by `_payout-helpers.js` (Trigger A) and the cron itself (Trigger B). The widget compute lives in `api/_platform-balance.js` and is the single source of truth for both the dashboard and the snapshot. Refund exposure is advisory and still values the legacy aggregate balance at the school rate; per-instructor rates/goodwill absorber treatment are deferred.
 
 ---
 

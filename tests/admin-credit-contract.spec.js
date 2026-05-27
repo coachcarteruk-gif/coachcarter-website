@@ -158,6 +158,18 @@ test.describe('per-instructor credit safety slice', () => {
     expect(creditGrantSource).toContain('WHERE learner_credit_balances.school_id = ${schoolId}');
     expect(creditGrantSource).toContain('AND school_id = ${schoolId}');
   });
+
+  test('credit reconcile cron compares BCS/CSA ledger rows within the school-scoped instructor balance tuple', () => {
+    const repoRoot = path.resolve(__dirname, '..');
+    const cronSource = fs.readFileSync(path.join(repoRoot, 'api', 'cron-credit-reconcile.js'), 'utf8').replace(/\r\n/g, '\n');
+
+    expect(cronSource).toContain('per (learner_id, instructor_id, school_id) scope');
+    expect(cronSource).toContain('WHERE bcs.school_id = ${SCHOOL_ID}\n          AND bcs.refunded_at IS NULL');
+    expect(cronSource).toContain('WHERE bcs.school_id = ${SCHOOL_ID}\n        AND bcs.refunded_at IS NULL');
+    expect(cronSource).toContain('WHERE bcs2.school_id = lb.school_id\n               AND bcs2.booking_id = lb.id');
+    expect(cronSource).toContain('WHERE bcs2.school_id = lb.school_id\n             AND bcs2.booking_id = lb.id');
+    expect(cronSource).toContain('FROM credit_source_adjustments csa\n        JOIN credit_transactions ct ON ct.id = csa.credit_transaction_id\n        WHERE ct.school_id = ${SCHOOL_ID}');
+  });
 });
 
 test.describe('admin Step 5.5 credit endpoints', () => {
