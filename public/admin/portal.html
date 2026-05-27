@@ -308,10 +308,17 @@ body {
 
 /* ── Responsive table wrapper ─────────────────────────────────── */
 .table-wrap { overflow-x: auto; }
+.refund-preview-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
 
 @media (max-width: 900px) {
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .avail-grid { grid-template-columns: repeat(3, 1fr); }
+  .refund-preview-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
   .main { padding: 16px; }
@@ -378,6 +385,9 @@ body {
     </a>
     <a href="#" data-section="payouts">
       <span class="nav-icon">&#x1f4b8;</span> Payouts
+    </a>
+    <a href="#" data-section="refund-preview">
+      <span class="nav-icon">&pound;</span> Refund Preview
     </a>
     <a href="#" data-section="referrals">
       <span class="nav-icon">&#x1f517;</span> Referrals
@@ -684,6 +694,57 @@ body {
   </div>
 
   <!-- ═══════════ REFERRALS ═══════════ -->
+  <!-- Refund preview section -->
+  <div class="section" id="section-refund-preview">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Refund Preview</div>
+        <div class="page-subtitle">Read-only refund planning for an approved booking or credit source</div>
+      </div>
+    </div>
+
+    <div class="refund-preview-grid">
+      <div class="panel-card">
+        <div class="panel-card-header">
+          <span class="panel-card-title">Request Preview</span>
+        </div>
+        <form id="refund-preview-form" style="padding:20px;">
+          <div class="form-group" style="margin-bottom:14px;">
+            <label for="refund-type" style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);margin-bottom:6px;">Refund type</label>
+            <select id="refund-type" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fafafa;font-size:0.9rem;">
+              <option value="direct_slot">Lesson booking</option>
+              <option value="direct_offer">Offer booking</option>
+              <option value="credit_purchase">Credit purchase</option>
+              <option value="repeat_offer_partial">Repeat offer partial</option>
+              <option value="manual_record">Manual record</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label for="refund-source-id" id="refund-source-label" style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);margin-bottom:6px;">Lesson booking ID</label>
+            <input id="refund-source-id" inputmode="numeric" autocomplete="off" placeholder="e.g. 7001" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fafafa;font-size:0.9rem;">
+            <div id="refund-source-help" style="font-size:0.78rem;color:var(--muted);line-height:1.4;margin-top:6px;">Enter the lesson_bookings.id for the booking being reviewed.</div>
+          </div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label for="refund-reason" style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);margin-bottom:6px;">Operator note</label>
+            <textarea id="refund-reason" placeholder="Short reason for this preview" style="width:100%;min-height:88px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fafafa;font-size:0.9rem;font-family:var(--font-body);resize:vertical;"></textarea>
+          </div>
+          <div id="refund-form-error" role="alert" style="display:none;margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--red-bg);color:#991b1b;font-size:0.85rem;"></div>
+          <button type="submit" class="btn btn-primary" id="btn-refund-preview" style="width:100%;justify-content:center;">Preview refund</button>
+        </form>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-card-header">
+          <span class="panel-card-title">Planner Result</span>
+          <span class="badge badge-gray" id="refund-preview-state">Not run</span>
+        </div>
+        <div id="refund-preview-result" style="padding:20px;">
+          <div class="empty-state" style="padding:28px 16px;">Enter an identifier and request a preview. No refund will be executed from this screen.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="section" id="section-referrals">
     <div class="page-header">
       <div>

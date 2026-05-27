@@ -86,6 +86,7 @@ function showSection(name) {
   if (name === 'learners')      loadLearners();
   if (name === 'lesson-types')  loadLessonTypes();
   if (name === 'payouts')       loadPayouts();
+  if (name === 'refund-preview') resetRefundPreviewMessages();
   if (name === 'referrals')     loadReferrals();
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
@@ -704,6 +705,7 @@ function renderBookings() {
       '<td style="white-space:nowrap">' +
         (canEdit ? '<button class="btn btn-sm" data-action="edit-booking" data-id="' + b.id + '" style="margin-right:4px">Edit</button>' : '') +
         (canComplete ? '<button class="btn btn-sm btn-success" data-action="mark-complete" data-id="' + b.id + '">Complete</button>' : '') +
+        '<button class="btn btn-sm" data-action="open-refund-preview" data-id="' + b.id + '" style="margin-left:4px">Refund preview</button>' +
       '</td>' +
     '</tr>';
   }).join('');
@@ -2275,6 +2277,265 @@ async function processPayoutsNow() {
 }
 
 // â”€â”€ Initial load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Refund preview is deliberately read-only: it asks the server-side planner for
+// trusted values and never exposes an execution action.
+const REFUND_SOURCE_COPY = {
+  direct_slot: {
+    label: 'Lesson booking ID',
+    placeholder: 'e.g. 7001',
+    help: 'Enter the lesson_bookings.id for the booking being reviewed.'
+  },
+  direct_offer: {
+    label: 'Lesson booking ID',
+    placeholder: 'e.g. 7001',
+    help: 'Enter the lesson_bookings.id created by the accepted offer.'
+  },
+  credit_purchase: {
+    label: 'Credit transaction ID',
+    placeholder: 'e.g. 101',
+    help: 'Enter the credit_transactions.id for the original credit purchase.'
+  },
+  repeat_offer_partial: {
+    label: 'Booking credit source ID',
+    placeholder: 'e.g. 55',
+    help: 'Enter the booking_credit_sources.id for the unused repeat-offer allocation.'
+  },
+  manual_record: {
+    label: 'Reference ID',
+    placeholder: 'Optional internal reference',
+    help: 'Manual ledger records are not automatically previewed yet; the planner will return manual review guidance.'
+  }
+};
+
+function resetRefundPreviewMessages() {
+  const err = document.getElementById('refund-form-error');
+  if (err) {
+    err.style.display = 'none';
+    err.textContent = '';
+  }
+}
+
+function updateRefundSourceFields() {
+  const type = document.getElementById('refund-type')?.value || 'direct_slot';
+  const copy = REFUND_SOURCE_COPY[type] || REFUND_SOURCE_COPY.direct_slot;
+  const label = document.getElementById('refund-source-label');
+  const input = document.getElementById('refund-source-id');
+  const help = document.getElementById('refund-source-help');
+  if (label) label.textContent = copy.label;
+  if (input) input.placeholder = copy.placeholder;
+  if (help) help.textContent = copy.help;
+  resetRefundPreviewMessages();
+}
+
+function refundStateBadge(data) {
+  if (!data || data.error) return { text: 'Error', cls: 'badge-red' };
+  if (data.blocked) return { text: 'Blocked', cls: 'badge-red' };
+  if (data.manual_review_required) return { text: 'Manual review', cls: 'badge-amber' };
+  return { text: 'Preview ready', cls: 'badge-green' };
+}
+
+function setRefundPreviewState(data) {
+  const badge = document.getElementById('refund-preview-state');
+  if (!badge) return;
+  const state = typeof data === 'string'
+    ? { text: data, cls: data === 'Loading' ? 'badge-blue' : 'badge-gray' }
+    : refundStateBadge(data);
+  badge.textContent = state.text;
+  badge.className = 'badge ' + state.cls;
+}
+
+function refundKv(label, value) {
+  const display = value == null || value === '' ? '-' : value;
+  return '<div style="padding:10px 0;border-bottom:1px solid var(--border);">' +
+    '<div style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">' + esc(label) + '</div>' +
+    '<div style="font-size:0.92rem;font-weight:700;margin-top:2px;word-break:break-word;">' + esc(display) + '</div>' +
+  '</div>';
+}
+
+function refundObjectRows(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return '<div style="color:var(--muted);font-size:0.86rem;">None returned</div>';
+  const entries = Object.entries(obj);
+  if (entries.length === 0) return '<div style="color:var(--muted);font-size:0.86rem;">None returned</div>';
+  return entries.map(([key, value]) => refundKv(key, typeof value === 'object' ? JSON.stringify(value) : value)).join('');
+}
+
+function renderRefundLines(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return '<div style="color:var(--muted);font-size:0.86rem;">No ledger lines returned by the planner.</div>';
+  }
+  return '<div class="table-wrap"><table class="data-table"><thead><tr>' +
+    '<th>Booking</th><th>Credit tx</th><th>BCS</th><th>Learner</th><th>Instructor</th><th>Gross</th><th>Fee used</th><th>Fee withheld</th><th>Returned</th><th>Minutes</th>' +
+    '</tr></thead><tbody>' +
+    lines.map(function (line) {
+      return '<tr>' +
+        '<td>' + esc(line.lesson_booking_id || '-') + '</td>' +
+        '<td>' + esc(line.credit_transaction_id || '-') + '</td>' +
+        '<td>' + esc(line.booking_credit_source_id || '-') + '</td>' +
+        '<td>' + esc(line.learner_id || '-') + '</td>' +
+        '<td>' + esc(line.instructor_id || '-') + '</td>' +
+        '<td>' + fmtPence(Number(line.gross_pence_removed || 0)) + '</td>' +
+        '<td>' + fmtPence(Number(line.source_fee_pence_used || 0)) + '</td>' +
+        '<td>' + fmtPence(Number(line.fee_withheld_pence || 0)) + '</td>' +
+        '<td>' + fmtPence(Number(line.net_refund_pence || 0)) + '</td>' +
+        '<td>' + esc(line.minutes_adjusted || 0) + '</td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody></table></div>';
+}
+
+function renderRefundPreviewResult(data) {
+  const result = document.getElementById('refund-preview-result');
+  if (!result) return;
+  setRefundPreviewState(data);
+
+  if (data && data.error) {
+    result.innerHTML = '<div style="border:1px solid rgba(239,68,68,0.28);background:var(--red-bg);color:#991b1b;border-radius:8px;padding:14px 16px;font-weight:700;">' +
+      esc(data.message || 'Refund preview failed.') +
+      (data.code ? '<div style="font-size:0.78rem;margin-top:6px;font-weight:600;">Code: ' + esc(data.code) + '</div>' : '') +
+    '</div>';
+    return;
+  }
+
+  const blocked = Boolean(data.blocked);
+  const manual = Boolean(data.manual_review_required);
+  const tone = blocked ? {
+    bg: 'var(--red-bg)',
+    border: 'rgba(239,68,68,0.30)',
+    fg: '#991b1b',
+    title: 'Blocked',
+    body: data.message || 'The planner blocked automatic refund handling.'
+  } : manual ? {
+    bg: 'var(--amber-bg)',
+    border: 'rgba(245,158,11,0.35)',
+    fg: '#92400e',
+    title: 'Manual review required',
+    body: data.message || 'The planner requires manual review before any later execution slice.'
+  } : {
+    bg: 'var(--green-bg)',
+    border: 'rgba(34,197,94,0.32)',
+    fg: '#166534',
+    title: 'Preview ready',
+    body: 'Server-side planner returned an itemised preview. Execution is not available in this slice.'
+  };
+
+  const warnings = Array.isArray(data.warnings) && data.warnings.length
+    ? '<div style="margin-top:12px;"><div style="font-size:0.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Warnings</div>' +
+      data.warnings.map(w => '<div style="padding:8px 10px;border-radius:6px;background:#fff7ed;color:#9a3412;font-size:0.86rem;margin-bottom:6px;">' + esc(w) + '</div>').join('') +
+      '</div>'
+    : '';
+  const previewOnlyCopy = (!blocked && !manual)
+    ? '<div style="margin:-6px 0 18px;padding:10px 12px;border-radius:8px;background:#f0fdf4;color:#166534;font-size:0.88rem;font-weight:700;">Preview only. No refund has been issued.</div>'
+    : '';
+
+  result.innerHTML =
+    '<div style="border:1px solid ' + tone.border + ';background:' + tone.bg + ';color:' + tone.fg + ';border-radius:8px;padding:14px 16px;margin-bottom:16px;">' +
+      '<div style="font-weight:800;font-size:1rem;">' + esc(tone.title) + '</div>' +
+      '<div style="font-size:0.88rem;line-height:1.45;margin-top:4px;">' + esc(tone.body) + '</div>' +
+      (data.code ? '<div style="font-size:0.78rem;font-weight:700;margin-top:8px;">Code: ' + esc(data.code) + '</div>' : '') +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;">' +
+      '<div class="stat-card"><div class="stat-value" style="font-size:1.6rem;">' + fmtPence(Number(data.gross_refund_pence || 0)) + '</div><div class="stat-label">Gross refund</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="font-size:1.6rem;">' + fmtPence(Number(data.processing_fee_withheld_pence || 0)) + '</div><div class="stat-label">Processing fee</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="font-size:1.6rem;">' + fmtPence(Number(data.net_refund_pence || 0)) + '</div><div class="stat-label">Returned amount</div></div>' +
+    '</div>' +
+    previewOnlyCopy +
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;">' +
+      '<button class="btn" disabled style="opacity:0.55;cursor:not-allowed;">Execution is coming in a later reviewed slice</button>' +
+      '<span style="font-size:0.82rem;color:var(--muted);">This screen is preview-only and cannot mutate Stripe, bookings, credits, payouts, or refund ledger rows.</span>' +
+    '</div>' +
+    '<div style="margin-bottom:18px;">' +
+      '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger line evidence</h3>' +
+      renderRefundLines(data.lines) +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">' +
+      '<div><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Fee evidence</h3>' + refundObjectRows(data.fee_evidence) + '</div>' +
+      '<div><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Stripe references</h3>' + refundObjectRows(data.stripe) + '</div>' +
+      '<div><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Metadata</h3>' + refundObjectRows(data.metadata) + '</div>' +
+    '</div>' +
+    warnings;
+}
+
+function buildRefundPreviewPayload() {
+  const type = document.getElementById('refund-type')?.value || '';
+  const rawId = (document.getElementById('refund-source-id')?.value || '').trim();
+  const numericId = parseInt(rawId, 10);
+  const reason = (document.getElementById('refund-reason')?.value || '').trim();
+  const body = { refund_type: type };
+  if (reason) body.reason = reason;
+
+  if (type === 'direct_slot' || type === 'direct_offer') body.lesson_booking_id = numericId;
+  if (type === 'credit_purchase') body.credit_transaction_id = numericId;
+  if (type === 'repeat_offer_partial') body.booking_credit_source_id = numericId;
+  return body;
+}
+
+function openRefundPreviewFromBooking(bookingId) {
+  showSection('refund-preview');
+  const type = document.getElementById('refund-type');
+  const source = document.getElementById('refund-source-id');
+  if (type) type.value = 'direct_slot';
+  updateRefundSourceFields();
+  if (source) source.value = String(bookingId || '');
+  const reason = document.getElementById('refund-reason');
+  if (reason && !reason.value.trim()) reason.value = 'Admin refund preview for booking #' + bookingId;
+}
+
+async function submitRefundPreview(e) {
+  if (e) e.preventDefault();
+  resetRefundPreviewMessages();
+  const err = document.getElementById('refund-form-error');
+  const btn = document.getElementById('btn-refund-preview');
+  const type = document.getElementById('refund-type')?.value || '';
+  const requiresId = type !== 'manual_record';
+  const rawId = (document.getElementById('refund-source-id')?.value || '').trim();
+  if (requiresId && (!/^\d+$/.test(rawId) || parseInt(rawId, 10) <= 0)) {
+    if (err) {
+      err.textContent = 'Enter a valid positive numeric identifier before requesting a preview.';
+      err.style.display = 'block';
+    }
+    return;
+  }
+
+  const result = document.getElementById('refund-preview-result');
+  if (result) {
+    result.innerHTML = '<div class="empty-state" style="padding:28px 16px;">Preparing refund preview...</div>';
+  }
+  setRefundPreviewState('Loading');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Previewing...';
+  }
+
+  try {
+    const res = await fetchAdmin('/api/admin?action=refund-preview', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify(buildRefundPreviewPayload())
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      renderRefundPreviewResult({
+        error: true,
+        code: data.code || 'REFUND_PREVIEW_FAILED',
+        message: data.message || data.error || 'Refund preview failed.'
+      });
+      return;
+    }
+    renderRefundPreviewResult(data);
+  } catch (error) {
+    renderRefundPreviewResult({
+      error: true,
+      code: 'REFUND_PREVIEW_FAILED',
+      message: error.message || 'Refund preview failed.'
+    });
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Preview refund';
+    }
+  }
+}
+
 loadDashboard();
 
 // â”€â”€ Delegated error listener "” replaces inline onerror on dynamically
@@ -2295,6 +2556,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'remove-window') removeWindow(parseInt(t.dataset.idx, 10));
   else if (a === 'remove-blackout') removeBlackout(parseInt(t.dataset.idx, 10));
   else if (a === 'edit-booking') openAdminEditBooking(parseInt(t.dataset.id, 10));
+  else if (a === 'open-refund-preview') openRefundPreviewFromBooking(parseInt(t.dataset.id, 10));
   else if (a === 'mark-complete') markComplete(parseInt(t.dataset.id, 10));
   else if (a === 'show-learner-detail') showLearnerDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-adjust-credits') openAdjustCredits(t.dataset.learnerId, parseInt(t.dataset.balance, 10));
@@ -2463,6 +2725,10 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-save-learner', saveEditLearner);
   bind('btn-open-add-lesson-type', openAddLessonType);
   bind('btn-process-payouts', processPayoutsNow);
+  var refundForm = document.getElementById('refund-preview-form');
+  if (refundForm) refundForm.addEventListener('submit', submitRefundPreview);
+  var refundType = document.getElementById('refund-type');
+  if (refundType) refundType.addEventListener('change', updateRefundSourceFields);
   bind('btn-save-referral-config', saveReferralConfig);
   var refEnabled = document.getElementById('ref-enabled');
   if (refEnabled) refEnabled.addEventListener('change', function () { updateRefFieldsVisibility(this.checked); });
