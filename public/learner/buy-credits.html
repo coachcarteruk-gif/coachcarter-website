@@ -113,6 +113,47 @@
     }
     .balance-icon svg { width: 100%; height: 100%; }
 
+    /* Instructor selector */
+    .instructor-context {
+      display: grid;
+      gap: 10px;
+      padding: 16px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    .instructor-context-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .instructor-label {
+      font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      font-weight: 700;
+    }
+    .instructor-select {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--primary);
+      font: inherit;
+    }
+    .instructor-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    .instructor-help {
+      font-size: 0.86rem;
+      color: var(--muted);
+      line-height: 1.45;
+      margin: 0;
+    }
+
     /* ── SECTION LABEL ── */
     .section-label {
       display: flex; align-items: center; gap: 10px;
@@ -590,6 +631,17 @@
     <p class="subtitle">Stock up on lesson hours and book any time. Bigger bundles unlock bigger savings — every package comes off the same hourly rate.</p>
   </section>
 
+  <!-- Instructor context -->
+  <section class="instructor-context" aria-labelledby="instructorSelectorLabel">
+    <div class="instructor-context-row">
+      <label class="instructor-label" id="instructorSelectorLabel" for="instructorSelect">Choose instructor</label>
+      <select class="instructor-select" id="instructorSelect">
+        <option value="">Loading instructors...</option>
+      </select>
+    </div>
+    <p class="instructor-help" id="instructorHelp">Hours are held against the instructor you choose here.</p>
+  </section>
+
   <!-- Current balance -->
   <div class="balance-card">
     <div class="balance-icon">
@@ -598,7 +650,7 @@
       </svg>
     </div>
     <div>
-      <div class="balance-label">Hours on account</div>
+      <div class="balance-label" id="balanceLabel">Hours on account</div>
       <div class="balance-value" id="balanceValue">—</div>
       <div class="balance-unit" id="balanceUnit">hours</div>
     </div>

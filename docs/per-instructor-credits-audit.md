@@ -49,8 +49,8 @@ currently defaults missing `instructor_id` to Fraser / instructor `1`.
 | Admin adjust credits | `api/admin.js` `handleAdjustCredits` | School-scoped LCB auto-resolve or explicit instructor | Mostly yes | Server guard is scoped: 0 rows grandfathers to instructor `1`, 1 row auto-resolves, 2+ rows returns `AMBIGUOUS_INSTRUCTOR`, explicit `instructor_id` reads that exact LCB row. Current UI still does not pass instructor. Response/audit still pooled. |
 | Goodwill/reconciliation | `api/_admin-credit-goodwill.js`, `api/_admin-credit-reconciliation.js` | Explicit learner/instructor/school + shared helper | Yes | Strongest admin path; tests already pin scope and mutation shape. |
 | Refund executor | `api/_refund-executor.js` | Planner lines + `lockBalanceAdjustLCB` | Mostly yes | Uses `instructor_id` from trusted plan lines. BCS execution intentionally disabled. |
-| Learner buy UI | `public/learner/buy-credits.js` | Aggregate balance + school bulk pricing; optional query instructor passthrough | Partial | No instructor picker yet. If opened with `?instructor_id=...`, checkout sends it; otherwise the API now rejects checkout instead of defaulting to `1`. |
-| Learner booking UI | `public/learner/book.js` | Aggregate balance | Partial | Server safe, UI can show credit path for Instructor B using Instructor A credits. |
+| Learner buy UI | `public/learner/buy-credits.js` | Selected public instructor + selected/aggregate balance read | Mostly yes | Direct visits show an instructor selector from `/api/instructors?action=list`; `?instructor_id=...` preselects when valid; package and single-lesson checkout stay blocked until selected and send `instructor_id`. |
+| Learner booking UI | `public/learner/book.js` | Selected slot instructor balance | Mostly yes | Booking modal reads `/api/credits?action=balance&instructor_id=<slot instructor>` before showing credit eligibility, uses `selected_instructor_balance_minutes`, and carries the slot instructor into buy-credits links. Aggregate balance remains elsewhere. |
 | Admin/instructor displays | `public/admin/portal.js`, `public/instructor/index.js`, `public/instructor/dashboard.js` | Mostly pooled `balance_minutes` | Partial / no | Display-only in places, but edit/create modals use it to guide operators. |
 | Platform balance | `api/_platform-balance.js` | Pooled balance valued at school rate | Partial | Advisory only, but not accurate for per-instructor effective rates or goodwill absorber. |
 
@@ -118,14 +118,26 @@ Primary files:
 
 ### Slice 3: Update Learner UI Displays
 
-Status: Not started.
+Status: Buy-credits and booking modal complete in `codex/learner-credit-instructor-ui` (2026-05-27); dashboard/profile per-instructor rows deferred.
 
 Scope:
 
-- Buy-credits must choose or receive an instructor and pass `instructor_id`.
-- Booking modal must decide credit eligibility from the selected slot's
-  instructor balance, not aggregate balance.
-- Dashboard/profile can show total balance plus per-instructor rows.
+Landed behaviour:
+
+- Buy-credits chooses or receives an instructor and passes `instructor_id`.
+- Buy-credits direct visits show an instructor selector sourced from the public
+  instructor list; checkout buttons remain blocked until an instructor is
+  selected.
+- Buy-credits login links preserve `?instructor_id=...` when present.
+- Booking modal decides credit eligibility from the selected slot instructor's
+  `selected_instructor_balance_minutes`, not aggregate balance.
+- Booking modal "buy more hours" / "buy a bundle" links pass the selected slot
+  `instructor_id`.
+
+Deferred:
+
+- Dashboard/profile can keep the aggregate total for now; showing per-instructor
+  balance rows is the recommended next UI slice.
 
 Primary files:
 
@@ -176,33 +188,26 @@ Primary files:
 
 ## Recommended Next Code PR
 
-Recommended next PR: Slice 3.
+Recommended next PR: Slice 3b.
 
 Exact files to change:
 
-- `public/learner/buy-credits.html`
-- `public/learner/buy-credits.js`
-- `public/learner/book.js`
 - `public/learner/index.js`
 - `public/learner/profile.js`
 
 Exact behaviour to change:
 
-- Buy-credits should require the learner to choose, or arrive with, an
-  instructor before enabling checkout, then pass `instructor_id`.
-- Booking modal should decide credit eligibility from
-  `selected_instructor_balance_minutes` for the selected slot's instructor,
-  not aggregate balance.
 - Dashboard/profile can keep the aggregate total but should display the new
   per-instructor `balances` rows clearly.
+- Keep this display-only: do not change refund math, payout logic, checkout, or
+  booking control flow.
 
 Why this next:
 
-- Slice 2 closed the API ambiguity: new checkout cannot silently default to
-  instructor `1`, and balance responses now expose scoped rows.
-- The remaining highest risk is learner-facing display/choice ambiguity: the UI
-  still needs to choose an instructor before checkout and use selected
-  instructor balance for booking decisions.
+- Buy-credits and booking now consume the Slice 2 selected-instructor API shape.
+- Remaining learner ambiguity is display-only: dashboard/profile still show the
+  aggregate balance without the per-instructor breakdown already returned by
+  `credits?action=balance`.
 - This remains a frontend/data-consumption slice; do not touch refund math,
   payout behaviour, pricing fallback, or DB schema.
 
@@ -229,11 +234,8 @@ Remaining risks / missing scenarios:
 - `credits?action=checkout` without instructor is rejected or deliberately
   resolved; no silent default for new UI.
 - Cancellation returns credit only to the original booking instructor.
-- Buy-credits page still has no instructor picker; direct visits without
-  `?instructor_id=` now fail checkout until Slice 3 supplies instructor
-  selection.
-- Booking UI may still imply Instructor A credits are usable with Instructor B
-  until it consumes the selected-instructor balance fields.
+- Dashboard/profile still need per-instructor balance rows so learners can see
+  where their aggregate hours sit without entering the booking or buy flow.
 - Refund executor decrements the refunded source's instructor balance.
 - Cross-school LCB rows are never read without `school_id`.
 
