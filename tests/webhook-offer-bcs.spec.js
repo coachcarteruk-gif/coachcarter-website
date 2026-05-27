@@ -213,6 +213,41 @@ test.describe('webhook paid offer BCS attribution', () => {
     expect(body).not.toContain('seriesResult.booked.length < repeatWeeks && ensureOfferSeriesBcs');
   });
 
+  test('partial repeat refund failure is reported and fails before success emails', () => {
+    const body = getOfferBookingBody();
+
+    const partialRefundIndex = body.indexOf('if (bookedCount < repeatWeeks) {');
+    const refundCreateIndex = body.indexOf('await stripe.refunds.create({', partialRefundIndex);
+    const reportIndex = body.indexOf("reportError('/api/webhook (lesson_offer partial repeat refund failed)'", partialRefundIndex);
+    const throwIndex = body.indexOf('throw partialRefundError;', partialRefundIndex);
+    const offerUpdateIndex = body.indexOf('UPDATE lesson_offers', partialRefundIndex);
+    const learnerEmailIndex = body.indexOf('purpose: \'offer.accepted_learner\'', partialRefundIndex);
+
+    expect(partialRefundIndex).toBeGreaterThanOrEqual(0);
+    expect(refundCreateIndex).toBeGreaterThan(partialRefundIndex);
+    expect(reportIndex).toBeGreaterThan(refundCreateIndex);
+    expect(throwIndex).toBeGreaterThan(reportIndex);
+    expect(offerUpdateIndex).toBeGreaterThan(throwIndex);
+    expect(learnerEmailIndex).toBeGreaterThan(throwIndex);
+    expect(body).toContain('Missing payment_intent for partial repeat-offer refund');
+    expect(body).toContain('refund_amount_pence=${amountPence * unused}');
+  });
+
+  test('retry after mid-flight offer failure does not become a clean duplicate no-op', () => {
+    const body = getOfferBookingBody();
+
+    const duplicateIndex = body.indexOf("insertErr.message?.includes('uq_credit_tx_session')");
+    const errorIndex = body.indexOf('const duplicatePendingError = new Error(', duplicateIndex);
+    const throwIndex = body.indexOf('throw duplicatePendingError;', duplicateIndex);
+    const offerAcceptedUpdateIndex = body.indexOf('UPDATE lesson_offers', duplicateIndex);
+
+    expect(duplicateIndex).toBeGreaterThanOrEqual(0);
+    expect(errorIndex).toBeGreaterThan(duplicateIndex);
+    expect(throwIndex).toBeGreaterThan(errorIndex);
+    expect(offerAcceptedUpdateIndex).toBeGreaterThan(throwIndex);
+    expect(body).toContain('previous webhook attempt likely failed mid-flight');
+  });
+
   test('accepted retry can repair a missing BCS only for single non-flex paid offers', () => {
     const body = getOfferBookingBody();
     const acceptedIndex = body.indexOf("if (offer.status === 'accepted') {");
