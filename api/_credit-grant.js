@@ -600,6 +600,7 @@ async function grantCreditsPhase2A({
       SET balance_minutes = learner_credit_balances.balance_minutes
                           + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
           updated_at = NOW()
+      WHERE learner_credit_balances.school_id = ${schoolId}
     RETURNING
       learner_credit_balances.balance_minutes,
       (SELECT id FROM inserted)            AS transaction_id,
@@ -912,12 +913,16 @@ async function lockBalanceAndMutatePhase2A({
                SELECT 1 FROM learner_credit_balances
                 WHERE learner_id = ${learnerId}
                   AND instructor_id = ${instructorId}
+                  AND school_id = ${schoolId}
              )
       ON CONFLICT (learner_id, instructor_id) DO UPDATE
         SET balance_minutes = learner_credit_balances.balance_minutes + ${delta},
             updated_at = NOW()
-        WHERE NOT ${isDeduct}::boolean
-           OR learner_credit_balances.balance_minutes + ${delta} >= 0
+        WHERE learner_credit_balances.school_id = ${schoolId}
+          AND (
+            NOT ${isDeduct}::boolean
+            OR learner_credit_balances.balance_minutes + ${delta} >= 0
+          )
       RETURNING balance_minutes
     ),
     inserted AS (
@@ -948,7 +953,9 @@ async function lockBalanceAndMutatePhase2A({
     const [lcb] = await sql`
       SELECT balance_minutes
         FROM learner_credit_balances
-       WHERE learner_id = ${learnerId} AND instructor_id = ${instructorId}
+       WHERE learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
     `;
     return {
       ok: false,
@@ -1115,12 +1122,16 @@ async function lockBalanceAdjustPhase2A({
             SELECT 1 FROM learner_credit_balances
              WHERE learner_id = ${learnerId}
                AND instructor_id = ${instructorId}
+               AND school_id = ${schoolId}
           )
     ON CONFLICT (learner_id, instructor_id) DO UPDATE
       SET balance_minutes = learner_credit_balances.balance_minutes + ${delta},
           updated_at = NOW()
-      WHERE NOT ${isDeduct}::boolean
-         OR learner_credit_balances.balance_minutes + ${delta} >= 0
+      WHERE learner_credit_balances.school_id = ${schoolId}
+        AND (
+          NOT ${isDeduct}::boolean
+          OR learner_credit_balances.balance_minutes + ${delta} >= 0
+        )
     RETURNING learner_credit_balances.balance_minutes
   `;
 
@@ -1128,7 +1139,9 @@ async function lockBalanceAdjustPhase2A({
     const [lcb] = await sql`
       SELECT balance_minutes
         FROM learner_credit_balances
-       WHERE learner_id = ${learnerId} AND instructor_id = ${instructorId}
+       WHERE learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
     `;
     return {
       ok: false,

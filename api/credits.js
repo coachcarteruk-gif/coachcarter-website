@@ -74,6 +74,7 @@ async function handleBalance(req, res) {
                SELECT SUM(lcb.balance_minutes)::int
                  FROM learner_credit_balances lcb
                 WHERE lcb.learner_id = lu.id
+                  AND lcb.school_id = ${schoolId}
              ), lu.balance_minutes, 0) AS balance_minutes
         FROM learner_users lu
        WHERE lu.id = ${user.id}
