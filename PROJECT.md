@@ -690,7 +690,7 @@ Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment. See `do
 
 ### API — `api/cron-balance-snapshot.js` (Vercel Cron — daily 08:00 UTC)
 
-Captures a daily snapshot of the Next Payout Preview widget's state into `platform_balance_snapshots`. Auth: CRON_SECRET. Reuses the widget's compute logic via the shared `api/_platform-balance.js` so the snapshot and the dashboard always show identical numbers.
+Captures a daily snapshot of the Next Payout Preview widget's state into `platform_balance_snapshots`. Auth: CRON_SECRET. Reuses the widget's compute logic via the shared `api/_platform-balance.js` so the snapshot and the dashboard always show identical numbers. The stored `refund_exposure_pence` is the widget's advisory legacy aggregate exposure signal, not an exact per-instructor refund liability.
 
 Two alarm triggers:
 - **Trigger A** (in `_payout-helpers.js`) — after a Stripe `transfers.create` failure, looks back at the last 24h of snapshots; if any reported `status='green'`, emails `ERROR_ALERT_EMAIL` with both the snapshot and the Stripe error so a "widget said green, reality was red" mismatch is never silent.
@@ -716,7 +716,7 @@ Two alarm triggers:
 
 **`payout_line_items`** — id, payout_id, booking_id (UNIQUE — prevents double-payment), price_pence, instructor_amount_pence, commission_rate
 
-**`platform_balance_snapshots`** — id, captured_at, status ('green'/'red'), available_pence, pending_pence, total_payout_pence, balance_after_payout_pence, refund_exposure_pence, payout_preview_json (per-instructor breakdown of the dry-run), trailing_30d_stripe_inflow_pence, trailing_30d_payout_outflow_pence. Written daily by `cron-balance-snapshot.js`. Index on `captured_at DESC` for the Trigger A 24h lookup. Read by `_payout-helpers.js` (Trigger A) and the cron itself (Trigger B). The widget compute lives in `api/_platform-balance.js` and is the single source of truth for both the dashboard and the snapshot. Refund exposure is advisory and still values the legacy aggregate balance at the school rate; per-instructor rates/goodwill absorber treatment are deferred.
+**`platform_balance_snapshots`** — id, captured_at, status ('green'/'red'), available_pence, pending_pence, total_payout_pence, balance_after_payout_pence, refund_exposure_pence, payout_preview_json (per-instructor breakdown of the dry-run), trailing_30d_stripe_inflow_pence, trailing_30d_payout_outflow_pence. Written daily by `cron-balance-snapshot.js`. Index on `captured_at DESC` for the Trigger A 24h lookup. Read by `_payout-helpers.js` (Trigger A) and the cron itself (Trigger B). The widget compute lives in `api/_platform-balance.js` and is the single source of truth for both the dashboard and the snapshot. Refund exposure is advisory and still values the legacy aggregate `learner_users.balance_minutes` shadow at the school rate, capped by Stripe-originated net cash-in; per-instructor rates, source effective rates, and goodwill absorber treatment are deferred.
 
 ---
 

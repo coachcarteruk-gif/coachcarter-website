@@ -1732,9 +1732,11 @@ async function handlePayoutOverview(req, res) {
 // Advisory section (separate, does NOT affect headline status):
 //   - excluded_instructors: instructors with chargeable lessons who would
 //     NOT be paid this Friday (paused / no Connect / onboarding incomplete).
-//   - refund_exposure_pence: rough "if everyone refunded today" worst case,
-//     using net cash inflow (purchases - refunds) capped at the live
-//     learner_credit valuation. Test accounts excluded.
+//   - refund_exposure_pence: advisory legacy aggregate exposure signal. It
+//     uses learner_users.balance_minutes valued at the school bulk rate and
+//     caps that by Stripe-originated net cash-in. It is NOT an exact refund
+//     liability under per-instructor credits/source pricing/goodwill absorber
+//     attribution. Test accounts excluded.
 async function handlePlatformBalance(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });

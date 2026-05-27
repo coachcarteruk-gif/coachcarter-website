@@ -7,6 +7,11 @@
  * { ok: true, ...result }; the snapshot cron persists it into
  * platform_balance_snapshots.
  *
+ * refund_exposure_pence is deliberately advisory. It is still the legacy
+ * aggregate learner balance shadow valued at the school bulk rate, capped by
+ * Stripe-originated net cash-in. It is not a per-instructor/source-level refund
+ * liability model.
+ *
  * Invariant: this function must stay in lockstep with the cron path
  * simulatePayoutForInstructor + processPayoutForInstructor in _payout-helpers.js.
  * If you change what the widget shows, the snapshot must change with it, and
@@ -129,6 +134,18 @@ async function computePlatformBalance(sql, stripe) {
     balance_after_payout_pence: balanceAfterPayoutPence,
     excluded_instructors: excludedInstructors,
     refund_exposure_pence: refundExposurePence,
+    refund_exposure_basis: {
+      kind: 'advisory_legacy_aggregate_shadow',
+      exact_refund_liability: false,
+      balance_source: 'learner_users.balance_minutes',
+      valuation: 'school bulk_hourly_pence fallback 5500 pence/hour',
+      cap_source: 'Stripe-originated net credit_transactions cash in',
+      deferred: [
+        'learner_credit_balances per-instructor valuation',
+        'credit_transactions effective_rate_pence_per_minute source valuation',
+        'goodwill absorbed_by treatment'
+      ]
+    },
     status
   };
 }
