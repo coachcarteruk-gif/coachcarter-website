@@ -335,6 +335,58 @@
     }
     .stat-pill .lbl { font-size: 0.68rem; color: var(--muted); margin-top: 4px; font-weight: 500; }
 
+    /* CREDIT BALANCES */
+    .credit-balance-summary {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 0 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    .credit-balance-total-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .credit-balance-total {
+      font-family: var(--font-head);
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .credit-balance-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px dashed var(--border);
+    }
+    .credit-balance-row:last-child { border-bottom: none; }
+    .credit-balance-name {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .credit-balance-hours {
+      font-family: var(--font-mono, monospace);
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--accent);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .credit-balance-empty {
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 4px 0 0;
+    }
+
     /* AVAILABILITY CARD */
     .avail-explainer {
       font-size: 0.82rem; color: var(--muted); margin-bottom: 14px; line-height: 1.4;
@@ -541,6 +593,28 @@
           <input type="checkbox" id="contactToggle">
           <span class="toggle-slider"></span>
         </label>
+      </div>
+    </div>
+  </details>
+
+  <!-- LESSON CREDIT BALANCES -->
+  <details class="acc-section" id="credit-balances-card" open>
+    <summary>
+      <span class="acc-summary-left">
+        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+        Lesson credit balances
+      </span>
+      <span class="acc-summary-right">
+        <span class="acc-status is-accent" id="creditBalanceBadge">Loading</span>
+      </span>
+    </summary>
+    <div class="acc-body">
+      <div class="credit-balance-summary">
+        <span class="credit-balance-total-label">Total across instructors</span>
+        <span class="credit-balance-total" id="creditBalanceTotal">&mdash;</span>
+      </div>
+      <div id="creditBalanceRows">
+        <div class="credit-balance-empty">Loading lesson credits...</div>
       </div>
     </div>
   </details>

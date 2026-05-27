@@ -24,7 +24,7 @@
       var m = raw.match(/([\d.]+)\s*hrs?/i);
       if (m) {
         balVal.textContent = m[1];
-        balSub.textContent = (m[1] === '1' ? 'hour remaining' : 'hours remaining');
+        balSub.textContent = 'across instructors';
       } else if (raw) {
         balVal.textContent = raw;
         balSub.textContent = '';
