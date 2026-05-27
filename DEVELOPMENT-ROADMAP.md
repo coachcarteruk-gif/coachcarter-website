@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.104 — Refund Ledger + Read-Only Admin Refund Preview (27 May 2026)
+
+Added the first safe refund-accounting foundation for net-of-processing-fee refunds. This slice adds `refund_events` / `refund_event_lines` schema, a server-side refund planner, and `POST /api/admin?action=refund-preview` for read-only admin previews. The preview itemises lesson credit value, withheld original processing fee, and returned amount; it prefers BCS-attributed Stripe fee evidence, blocks missing-fee cases for manual review, and blocks automatic Stripe refunds for direct bookings already present in `payout_line_items`.
+
+No execute-refund path shipped: no credit balances or CSA rows are mutated, no `refund_events` rows are written by preview, and `stripe.refunds.create` is not called.
+
+**Files:** `db/migration.sql`, `api/_refund-planner.js`, `api/admin.js`, `tests/refund-planner.spec.js`, `tests/admin-refund-preview.spec.js`, `tests/refund-ledger-schema.spec.js`, `docs/stripe-connect.md`, `PROJECT.md`, `MIGRATION-PLAN.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## Overview
 
 This document tracks the development of the **Coach Carter driving school platform** — a comprehensive web application for booking lessons, processing payments, tracking learner competency, and providing AI-powered learning tools. The platform includes a learner portal, instructor portal, admin portal, Stripe-integrated payments (with Klarna), a DL25-aligned 17-skill competency framework, AI chat features powered by Claude, and full Progressive Web App (PWA) support for installable, offline-capable access.

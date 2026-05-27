@@ -5,7 +5,7 @@ const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
 const { checkRateLimit } = require('./_rate-limit');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
-const { deleteLearnerCascade } = require('./_gdpr');
+const { deleteLearnerCascade, refundLedgerTablesExist } = require('./_gdpr');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 // Every handler in this file operates on learner-owned data (skill ratings,
@@ -1226,6 +1226,17 @@ async function handleExportData(req, res) {
        WHERE ct.learner_id = ${user.id} AND ct.school_id = ${schoolId}
        ORDER BY csa.created_at DESC`;
 
+    const hasRefundLedger = await refundLedgerTablesExist(sql);
+    const refundEvents = hasRefundLedger
+      ? await sql`
+          SELECT refund_type, status, gross_refund_pence,
+                 processing_fee_withheld_pence, net_refund_pence,
+                 reason, metadata, created_at
+            FROM refund_events
+           WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+           ORDER BY created_at DESC`
+      : null;
+
     // Offers sent to this learner (by learner_id once they signed up, or by
     // email before signup). Exclude the token itself — it's an active secret.
     const learnerEmail = profile?.email || null;
@@ -1261,7 +1272,8 @@ async function handleExportData(req, res) {
           'availability', 'instructor_notes_about_me',
           'cookie_consents', 'deletion_requests',
           'lesson_confirmations', 'offers_received',
-          'credit_balances', 'booking_credit_sources', 'credit_adjustments'
+          'credit_balances', 'booking_credit_sources', 'credit_adjustments',
+          ...(hasRefundLedger ? ['refund_events'] : [])
         ]
       },
       profile: profile || {},
@@ -1285,6 +1297,7 @@ async function handleExportData(req, res) {
       credit_balances: creditBalances,
       booking_credit_sources: bookingCreditSources,
       credit_adjustments: creditAdjustments,
+      ...(hasRefundLedger ? { refund_events: refundEvents } : {}),
     };
 
     const dateStr = new Date().toISOString().slice(0, 10);

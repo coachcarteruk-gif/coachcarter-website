@@ -2296,3 +2296,70 @@ CREATE TABLE IF NOT EXISTS credit_source_adjustments (
   UNIQUE (stripe_refund_id)
 );
 CREATE INDEX IF NOT EXISTS idx_csa_credit_tx ON credit_source_adjustments(credit_transaction_id);
+
+-- Refund ledger foundation (May 2026). Preview is read-only for now; these
+-- tables are the accounting substrate for a later explicitly approved
+-- execute-refund slice. Status deliberately excludes executed states until a
+-- real Stripe-refund writer exists.
+CREATE TABLE IF NOT EXISTS refund_events (
+  id                                  SERIAL PRIMARY KEY,
+  school_id                           INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  learner_id                          INTEGER REFERENCES learner_users(id),
+  created_by                          INTEGER REFERENCES admin_users(id),
+  refund_type                         TEXT NOT NULL CHECK (
+    refund_type IN ('credit_purchase', 'repeat_offer_partial', 'direct_slot', 'direct_offer', 'manual_record')
+  ),
+  status                              TEXT NOT NULL CHECK (status IN ('previewed', 'manual_review', 'blocked')),
+  gross_refund_pence                  INTEGER NOT NULL CHECK (gross_refund_pence >= 0),
+  processing_fee_withheld_pence       INTEGER NOT NULL CHECK (processing_fee_withheld_pence >= 0),
+  net_refund_pence                    INTEGER NOT NULL CHECK (net_refund_pence >= 0),
+  stripe_payment_intent_id            TEXT,
+  stripe_charge_id                    TEXT,
+  stripe_refund_id                    TEXT,
+  stripe_balance_transaction_id       TEXT,
+  idempotency_key                     TEXT,
+  reason                              TEXT NOT NULL,
+  metadata                            JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at                          TIMESTAMPTZ DEFAULT NOW(),
+  CHECK (processing_fee_withheld_pence <= gross_refund_pence),
+  CHECK (net_refund_pence = gross_refund_pence - processing_fee_withheld_pence)
+);
+CREATE INDEX IF NOT EXISTS idx_refund_events_school ON refund_events(school_id);
+CREATE INDEX IF NOT EXISTS idx_refund_events_learner ON refund_events(learner_id);
+CREATE INDEX IF NOT EXISTS idx_refund_events_created_by ON refund_events(created_by);
+CREATE INDEX IF NOT EXISTS idx_refund_events_payment_intent
+  ON refund_events(stripe_payment_intent_id)
+  WHERE stripe_payment_intent_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_refund_events_charge
+  ON refund_events(stripe_charge_id)
+  WHERE stripe_charge_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_refund_events_refund
+  ON refund_events(stripe_refund_id)
+  WHERE stripe_refund_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_events_idempotency_key
+  ON refund_events(idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS refund_event_lines (
+  id                                  SERIAL PRIMARY KEY,
+  school_id                           INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  refund_event_id                     INTEGER NOT NULL REFERENCES refund_events(id),
+  credit_transaction_id               INTEGER REFERENCES credit_transactions(id),
+  booking_credit_source_id            INTEGER REFERENCES booking_credit_sources(id),
+  lesson_booking_id                   INTEGER REFERENCES lesson_bookings(id),
+  credit_source_adjustment_id         INTEGER REFERENCES credit_source_adjustments(id),
+  gross_pence_removed                 INTEGER NOT NULL CHECK (gross_pence_removed >= 0),
+  source_fee_pence_used               INTEGER NOT NULL CHECK (source_fee_pence_used >= 0),
+  fee_withheld_pence                  INTEGER NOT NULL CHECK (fee_withheld_pence >= 0),
+  net_refund_pence                    INTEGER NOT NULL CHECK (net_refund_pence >= 0),
+  minutes_adjusted                    INTEGER NOT NULL DEFAULT 0 CHECK (minutes_adjusted >= 0),
+  created_at                          TIMESTAMPTZ DEFAULT NOW(),
+  CHECK (fee_withheld_pence <= gross_pence_removed),
+  CHECK (net_refund_pence = gross_pence_removed - fee_withheld_pence)
+);
+CREATE INDEX IF NOT EXISTS idx_refund_event_lines_school ON refund_event_lines(school_id);
+CREATE INDEX IF NOT EXISTS idx_refund_event_lines_event ON refund_event_lines(refund_event_id);
+CREATE INDEX IF NOT EXISTS idx_refund_event_lines_credit_tx ON refund_event_lines(credit_transaction_id);
+CREATE INDEX IF NOT EXISTS idx_refund_event_lines_bcs ON refund_event_lines(booking_credit_source_id);
+CREATE INDEX IF NOT EXISTS idx_refund_event_lines_booking ON refund_event_lines(lesson_booking_id);
+CREATE INDEX IF NOT EXISTS idx_refund_event_lines_csa ON refund_event_lines(credit_source_adjustment_id);

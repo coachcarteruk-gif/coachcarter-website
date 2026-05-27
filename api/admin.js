@@ -62,6 +62,7 @@ const {
 } = require('./_admin-credit-contracts');
 const { grantGoodwillCredits } = require('./_admin-credit-goodwill');
 const { inspectCreditReconciliation, grantReconciliationCredits } = require('./_admin-credit-reconciliation');
+const { planAdminRefundPreview, validateRefundPreviewRequest } = require('./_refund-planner');
 const { logAudit } = require('./_audit');
 const { deleteLearnerCascade } = require('./_gdpr');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
@@ -110,6 +111,7 @@ module.exports = async (req, res) => {
   if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
   if (action === 'credit-goodwill')    return handleCreditGoodwillContract(req, res);
   if (action === 'credit-reconciliation') return handleCreditReconciliationContract(req, res);
+  if (action === 'refund-preview')      return handleRefundPreview(req, res);
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
   if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
   if (action === 'toggle-payout-pause')  return handleTogglePayoutPause(req, res);
@@ -1332,6 +1334,53 @@ async function handleCreditReconciliationContract(req, res) {
       code: 'CREDIT_RECONCILIATION_FAILED',
       message: 'Failed to reconcile credits.',
       credit_granted: false,
+    });
+  }
+}
+
+// Read-only refund planner. This deliberately does not create refund_events,
+// mutate credit balances, update CSA, or call stripe.refunds.create.
+async function handleRefundPreview(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const validated = validateRefundPreviewRequest(req.body || {}, { schoolId });
+  if (!validated.ok) {
+    return res.status(validated.status).json({
+      error: true,
+      code: validated.code,
+      message: validated.message,
+    });
+  }
+
+  try {
+    const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
+    const stripeClient = req.stripeClient || req._stripe || createStripeClient();
+    const result = await planAdminRefundPreview({
+      sql,
+      stripe: stripeClient,
+      input: validated.input,
+    });
+
+    if (!result.ok) {
+      return res.status(result.status || 400).json({
+        error: true,
+        code: result.code || 'REFUND_PREVIEW_FAILED',
+        message: result.message || 'Refund preview could not be prepared.',
+      });
+    }
+
+    return res.status(result.status || 200).json(result);
+  } catch (err) {
+    console.error('admin refund-preview error:', err.message);
+    reportError('/api/admin', err);
+    return res.status(500).json({
+      error: true,
+      code: 'REFUND_PREVIEW_FAILED',
+      message: 'Failed to prepare refund preview.',
     });
   }
 }
