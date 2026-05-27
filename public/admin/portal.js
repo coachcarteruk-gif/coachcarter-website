@@ -937,7 +937,7 @@ async function showLearnerDetail(id) {
       '<div class="stat-label">Hours Balance</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">' +
         '<button class="btn btn-sm btn-primary" data-action="open-goodwill-credit" data-learner-id="' + id + '">Grant goodwill</button>' +
-        '<button class="btn btn-sm" data-action="open-adjust-credits" data-learner-id="' + id + '" data-balance="' + (learner?.balance_minutes || 0) + '">Legacy adjust</button>' +
+        '<button class="btn btn-sm" data-action="open-adjust-credits" data-learner-id="' + id + '" data-balance="' + (learner?.balance_minutes || 0) + '">Adjust instructor balance</button>' +
       '</div>' +
       '</div>';
     html += '<div class="stat-card"><div class="stat-value">' + (data.progress?.total_sessions || 0) + '</div><div class="stat-label">Sessions Logged</div></div>';
@@ -1072,8 +1072,9 @@ function fmtBalanceMins(mins) {
   return rem ? h + 'h ' + rem + 'm' : h + 'h';
 }
 
-function openAdjustCredits(learnerId, balanceMinutes) {
+async function openAdjustCredits(learnerId, balanceMinutes) {
   _adjustLearnerId = learnerId;
+  const learner = allLearners.find(l => l.id === parseInt(learnerId, 10)) || {};
   let m = document.getElementById('adjust-credits-modal');
   if (m) m.remove();
 
@@ -1081,9 +1082,16 @@ function openAdjustCredits(learnerId, balanceMinutes) {
   modal.id = 'adjust-credits-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
   modal.innerHTML = `
-    <div style="background:var(--card);border-radius:16px;padding:32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
-      <h3 style="font-family:var(--font-head);margin:0 0 8px;">Adjust Hours Balance</h3>
-      <p style="color:var(--muted);font-size:0.85rem;margin:0 0 20px;">Current balance: <strong>${fmtBalanceMins(balanceMinutes)}</strong></p>
+    <div style="background:var(--card);border-radius:16px;padding:32px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+      <h3 style="font-family:var(--font-head);margin:0 0 8px;">Adjust instructor credit balance</h3>
+      <p style="color:var(--muted);font-size:0.85rem;margin:0 0 16px;">Learner: <strong>${esc(learner.name || learner.email || ('#' + learnerId))}</strong><br>Total across instructors: <strong>${fmtBalanceMins(balanceMinutes)}</strong></p>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label for="adj-instructor-select">Instructor balance to adjust</label>
+        <select id="adj-instructor-select" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;box-sizing:border-box;">
+          <option value="">Loading instructors...</option>
+        </select>
+        <div style="color:var(--muted);font-size:0.78rem;margin-top:6px;">Credit is scoped per instructor. Choose the instructor whose balance should change.</div>
+      </div>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <button data-action="adj-type" data-type="add" id="adj-add-btn" style="flex:1;padding:10px;border-radius:8px;border:2px solid var(--accent);background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">+ Add</button>
         <button data-action="adj-type" data-type="remove" id="adj-remove-btn" style="flex:1;padding:10px;border-radius:8px;border:2px solid #ef4444;background:transparent;color:#ef4444;font-weight:600;cursor:pointer;">âˆ’ Remove</button>
@@ -1101,6 +1109,15 @@ function openAdjustCredits(learnerId, balanceMinutes) {
   document.body.appendChild(modal);
   modal.querySelector('#adj-hours-input').focus();
   window._adjustType = 'add';
+
+  try {
+    const options = await ensureGoodwillInstructorOptions();
+    const select = document.getElementById('adj-instructor-select');
+    if (select) select.innerHTML = '<option value="">Choose instructor...</option>' + (options || '');
+  } catch (err) {
+    const select = document.getElementById('adj-instructor-select');
+    if (select) select.innerHTML = '<option value="">Failed to load instructors</option>';
+  }
 }
 
 function setAdjustType(type) {
@@ -1128,6 +1145,8 @@ function closeAdjustCredits() {
 async function submitAdjustCredits() {
   const hoursInput = parseFloat(document.getElementById('adj-hours-input').value);
   const reason = document.getElementById('adj-reason-input').value.trim();
+  const instructorId = parseInt(document.getElementById('adj-instructor-select')?.value, 10);
+  if (!instructorId) return alert('Choose the instructor balance to adjust');
   if (!hoursInput || hoursInput <= 0) return alert('Enter a valid number of hours');
 
   const hours = window._adjustType === 'add' ? hoursInput : -hoursInput;
@@ -1136,14 +1155,19 @@ async function submitAdjustCredits() {
     const res = await fetchAdmin('/api/admin?action=adjust-credits', {
       method: 'POST',
       headers: HEADERS,
-      body: JSON.stringify({ learner_id: _adjustLearnerId, hours, reason: reason || undefined })
+      body: JSON.stringify({ learner_id: _adjustLearnerId, instructor_id: instructorId, hours, reason: reason || undefined })
     });
     const data = await res.json();
-    if (!res.ok) return alert(data.error || 'Failed to adjust hours');
+    if (!res.ok) {
+      if (data.error === 'AMBIGUOUS_INSTRUCTOR' || data.code === 'AMBIGUOUS_INSTRUCTOR') {
+        return alert('Choose the instructor balance to adjust, then try again.');
+      }
+      return alert(data.error || 'Failed to adjust instructor credit balance');
+    }
 
     const refreshId = _adjustLearnerId;
     const newBalance = fmtBalanceMins(data.new_balance_minutes);
-    alert((hours > 0 ? 'Added ' : 'Removed ') + Math.abs(hours) + 'h. New balance: ' + newBalance);
+    alert((hours > 0 ? 'Added ' : 'Removed ') + Math.abs(hours) + 'h. New total across instructors: ' + newBalance);
     closeAdjustCredits();
     showLearnerDetail(refreshId);
     if (typeof loadLearners === 'function') loadLearners();

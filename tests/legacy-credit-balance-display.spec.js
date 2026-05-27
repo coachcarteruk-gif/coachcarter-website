@@ -29,6 +29,23 @@ test.describe('legacy credit_balance display deprecation', () => {
     }
   });
 
+  test('instructor booking helper labels scoped instructor balances', () => {
+    const indexJs = read('public/instructor/index.js');
+    const dashboardJs = read('public/instructor/dashboard.js');
+    const sharedActionsJs = read('public/shared/instructor-booking-actions.js');
+    const instructorApi = read('api/instructor.js');
+
+    expect(indexJs).toContain('with you');
+    expect(indexJs).not.toContain('Learner has ${formatBalanceMins(balanceMinutes)} remaining.');
+    expect(dashboardJs).toContain("' with you.'");
+    expect(sharedActionsJs).toContain('with this instructor');
+    expect(sharedActionsJs).toContain('Hours with this instructor: ');
+    expect(instructorApi).toContain('COALESCE(lcb.balance_minutes, 0)::int AS balance_minutes');
+    expect(instructorApi).toContain('LEFT JOIN learner_credit_balances lcb');
+    expect(instructorApi).toContain('AND lcb.instructor_id = ${instructor.id}');
+    expect(instructorApi).toContain('AND lcb.school_id = ${schoolId}');
+  });
+
   test('instructor booking confirmation messages use minute-derived balance', () => {
     const instructorApi = read('api/instructor.js');
 
