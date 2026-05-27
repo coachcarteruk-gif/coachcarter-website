@@ -31,8 +31,9 @@ now carry instructor context. Admin/operator credit surfaces are scoped, and
 the refund/reconciliation cleanup has pinned the remaining back-office
 contracts.
 
-Biggest risk: platform-balance refund exposure remains advisory because it
-still values the legacy aggregate balance at the school rate rather than
+Biggest risk: platform-balance refund exposure remains advisory. The dashboard
+and snapshot now label it as a legacy aggregate exposure signal, but the number
+still values the legacy aggregate balance shadow at the school rate rather than
 valuing each instructor-scoped credit source at its effective rate.
 
 ## Current State Table
@@ -56,7 +57,7 @@ valuing each instructor-scoped credit source at its effective rate.
 | Learner booking UI | `public/learner/book.js` | Selected slot instructor balance | Mostly yes | Booking modal reads `/api/credits?action=balance&instructor_id=<slot instructor>` before showing credit eligibility, uses `selected_instructor_balance_minutes`, and carries the slot instructor into buy-credits links. Aggregate balance remains elsewhere. |
 | Admin/instructor displays | `api/instructor.js`, `public/admin/portal.js`, `public/instructor/index.js`, `public/instructor/dashboard.js`, `public/shared/instructor-booking-actions.js` | Admin adjust selector + current-instructor LCB balance for booking helper pickers | Mostly yes | Admin adjust no longer looks pooled. Instructor `school-learners` aliases current instructor LCB minutes as `balance_minutes` for existing picker code, and helper copy says "with you" / "with this instructor". |
 | Credit reconcile cron | `api/cron-credit-reconcile.js` | Ledger vs LCB by learner/instructor within `SCHOOL_ID` | Yes | Compares school-scoped ledger rows against LCB, including explicit `school_id` filters on BCS/CSA source reads. |
-| Platform balance | `api/_platform-balance.js` | Legacy aggregate balance valued at school rate | Partial | Advisory only, but not accurate for per-instructor effective rates or goodwill absorber. Left deferred because changing it requires pricing/refund/payout policy design. |
+| Platform balance | `api/_platform-balance.js`, `public/admin/portal.js`, `api/cron-balance-snapshot.js` | Legacy aggregate balance valued at school rate, capped by Stripe-originated net cash-in | Partial | API returns `refund_exposure_basis` and admin copy labels the value as an advisory legacy aggregate exposure signal, not exact liability. It still does not value LCB/source rows by per-source effective rate or goodwill absorber, which remains deferred pending pricing/refund/payout policy design. |
 
 ## Required Implementation Slices
 
@@ -209,15 +210,45 @@ Primary files:
 - `tests/admin-credit-contract.spec.js`
 - `tests/slots-credit-bcs.integration.spec.js`
 
+### Slice 6: Platform Balance Advisory Cleanup
+
+Status: In progress in `codex/platform-balance-advisory` (2026-05-27).
+
+Scope:
+
+Landed behaviour:
+
+- `refund_exposure_pence` calculation remains unchanged: legacy aggregate
+  `learner_users.balance_minutes` valued at school bulk hourly pricing and
+  capped by Stripe-originated net cash-in.
+- The platform-balance API now returns `refund_exposure_basis` metadata so
+  consumers can distinguish the advisory signal from exact refund liability.
+- Admin portal copy calls the value a legacy aggregate exposure signal instead
+  of "additional cash needed".
+- Daily snapshot comments clarify that persisted `refund_exposure_pence` is the
+  same advisory widget value.
+- Refund math, payout logic, DB schema, Stripe refund behaviour, and BCS refund
+  execution remain unchanged.
+
+Primary files:
+
+- `api/_platform-balance.js`
+- `api/admin.js`
+- `api/cron-balance-snapshot.js`
+- `public/admin/portal.js`
+- `tests/payout-read-model.spec.js`
+
 ## Recommended Next Code PR
 
-Recommended next PR: platform-balance advisory redesign or manual refund
-ledger UI, depending on operational priority.
+Recommended next PR: exact per-instructor refund-liability policy/design or
+manual refund ledger UI, depending on operational priority.
 
 Exact behaviour to verify:
 
 - Decide whether platform balance should value per-instructor live credits from
   LCB/source attribution rather than the legacy aggregate shadow.
+- Decide how goodwill absorber/source attribution should affect any exact
+  liability number before changing the dashboard calculation.
 - Keep manual bank-refund ledger-only recording separate from automatic Stripe
   refund execution.
 - Continue treating BCS automatic refund execution as disabled unless a
@@ -256,7 +287,8 @@ Remaining risks / missing scenarios:
   resolved; no silent default for new UI.
 - Cancellation returns credit only to the original booking instructor.
 - Cross-school LCB rows are never read without `school_id`.
-- Platform balance refund exposure is still advisory and aggregate-valued.
+- Platform balance refund exposure is explicitly labelled advisory and
+  aggregate-valued; exact per-source/per-instructor liability remains deferred.
 
 ## Open Questions
 
