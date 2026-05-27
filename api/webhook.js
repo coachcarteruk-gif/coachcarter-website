@@ -975,8 +975,11 @@ async function handleOfferBooking(session) {
       offerCreditTx = creditTx;
     } catch (insertErr) {
       if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
-        console.log(`⏭  lesson_offer ${session.id} — already processed (uq_credit_tx_session)`);
-        return;
+        const duplicatePendingError = new Error(
+          `lesson_offer ${session.id} already has a credit_transaction but offer ${offerId} is not accepted; previous webhook attempt likely failed mid-flight`
+        );
+        console.error('❌ lesson_offer: duplicate credit transaction on pending offer', duplicatePendingError.message);
+        throw duplicatePendingError;
       }
       throw insertErr;
     }
@@ -1142,16 +1145,23 @@ async function handleOfferBooking(session) {
     if (bookedCount < repeatWeeks) {
       const unused = repeatWeeks - bookedCount;
       try {
-        if (session.payment_intent) {
-          await stripe.refunds.create({
-            payment_intent: session.payment_intent,
-            amount: amountPence * unused,
-            reason: 'requested_by_customer',
-            metadata: { offer_id: String(offerId), unused_weeks: String(unused) }
-          });
+        if (!session.payment_intent) {
+          throw new Error(`Missing payment_intent for partial repeat-offer refund on session ${session.id}`);
         }
+
+        await stripe.refunds.create({
+          payment_intent: session.payment_intent,
+          amount: amountPence * unused,
+          reason: 'requested_by_customer',
+          metadata: { offer_id: String(offerId), unused_weeks: String(unused) }
+        });
       } catch (refundErr) {
         console.error('❌ lesson_offer: partial refund failed', refundErr.message);
+        const partialRefundError = new Error(
+          `Partial repeat-offer refund failed for session ${session.id}, offer ${offerId}, unused_weeks=${unused}, refund_amount_pence=${amountPence * unused}: ${refundErr.message}`
+        );
+        reportError('/api/webhook (lesson_offer partial repeat refund failed)', partialRefundError);
+        throw partialRefundError;
       }
     }
 
