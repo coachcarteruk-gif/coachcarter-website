@@ -46,12 +46,12 @@ function makeMockSql(canned) {
 }
 
 // Default school config row used by getBulkPricing's first SELECT.
-function schoolRow(bulkHourlyPence) {
+function schoolRow(bulkHourlyPence, tiers) {
   return {
     config: {
       pricing: {
         bulk_hourly_pence: bulkHourlyPence,
-        bulk_discount_tiers: [
+        bulk_discount_tiers: tiers || [
           { min_hours: 20, discount_pct: 7.5 },
           { min_hours: 10, discount_pct: 5 },
           { min_hours: 5,  discount_pct: 2.5 },
@@ -202,6 +202,7 @@ test('calcBulkTotal with { instructorId, learnerId } uses level-1 rate AND appli
     // Per-pair rate £65/hr (6500p), 10 hours → £650 full, 5% tier → £617.50.
     const { sql } = makeMockSql([
       { match: 'instructor_learner_notes', rows: [{ custom_hourly_rate_pence: 6500 }] },
+      { match: 'SELECT bulk_tiers_enabled', rows: [{ bulk_tiers_enabled: true }] },
       // getBulkPricing also gets called once more inside calcBulkTotal to pull the tiers.
       { match: 'FROM schools', rows: [schoolRow(5500)] },
     ]);
@@ -212,3 +213,87 @@ test('calcBulkTotal with { instructorId, learnerId } uses level-1 rate AND appli
     expect(result.discountAmt).toBe(3250);
     expect(result.totalPence).toBe(61750);
   });
+
+test('calcBulkTotal with bulk_tiers_enabled=false applies no discount even when school tiers exist', async () => {
+  const { sql } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [] },
+    { match: 'SELECT hourly_rate_pence', rows: [{ hourly_rate_pence: 6000 }] },
+    { match: 'SELECT bulk_tiers_enabled', rows: [{ bulk_tiers_enabled: false }] },
+    { match: 'FROM schools', rows: [schoolRow(5500, [{ min_hours: 12, discount_pct: 5 }])] },
+  ]);
+
+  const result = await calcBulkTotal(sql, 1, 12, { instructorId: 8, learnerId: 42 });
+
+  expect(result.pricePerHourPence).toBe(6000);
+  expect(result.bulkTiersEnabled).toBe(false);
+  expect(result.discountTiers).toEqual([]);
+  expect(result.discountPct).toBe(0);
+  expect(result.discountAmt).toBe(0);
+  expect(result.totalPence).toBe(72000);
+});
+
+test('calcBulkTotal with bulk_tiers_enabled=true applies school tier percentages to effective rate', async () => {
+  const { sql } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [] },
+    { match: 'SELECT hourly_rate_pence', rows: [{ hourly_rate_pence: 6000 }] },
+    { match: 'SELECT bulk_tiers_enabled', rows: [{ bulk_tiers_enabled: true }] },
+    { match: 'FROM schools', rows: [schoolRow(5500, [{ min_hours: 24, discount_pct: 5 }])] },
+  ]);
+
+  const result = await calcBulkTotal(sql, 1, 24, { instructorId: 8, learnerId: 42 });
+
+  expect(result.pricePerHourPence).toBe(6000);
+  expect(result.bulkTiersEnabled).toBe(true);
+  expect(result.discountTiers).toEqual([{ min_hours: 24, discount_pct: 5 }]);
+  expect(result.fullPence).toBe(144000);
+  expect(result.discountPct).toBe(5);
+  expect(result.discountAmt).toBe(7200);
+  expect(result.totalPence).toBe(136800);
+});
+
+test('Sarah at 60/hr bulk off: 1.5 hours is 90 pounds and checkout ppm is 100', async () => {
+  const { sql } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [] },
+    { match: 'SELECT hourly_rate_pence', rows: [{ hourly_rate_pence: 6000 }] },
+    { match: 'SELECT bulk_tiers_enabled', rows: [{ bulk_tiers_enabled: false }] },
+    { match: 'FROM schools', rows: [schoolRow(5500, [{ min_hours: 1.5, discount_pct: 5 }])] },
+  ]);
+
+  const result = await calcBulkTotal(sql, 1, 1.5, { instructorId: 8, learnerId: 42 });
+
+  expect(result.totalPence).toBe(9000);
+  expect(Math.round(result.totalPence / 90)).toBe(100);
+});
+
+test('custom learner rate wins over instructor rate', async () => {
+  const { sql } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [{ custom_hourly_rate_pence: 5200 }] },
+    { match: 'SELECT hourly_rate_pence', rows: [{ hourly_rate_pence: 6000 }] },
+    { match: 'SELECT bulk_tiers_enabled', rows: [{ bulk_tiers_enabled: false }] },
+    { match: 'FROM schools', rows: [schoolRow(5500)] },
+  ]);
+
+  const result = await calcBulkTotal(sql, 1, 1.5, { instructorId: 8, learnerId: 42 });
+
+  expect(result.pricePerHourPence).toBe(5200);
+  expect(result.rateSource).toBe('custom_learner_rate');
+  expect(result.totalPence).toBe(7800);
+});
+
+test('instructor rate and bulk queries include school_id filters', async () => {
+  const { sql, calls } = makeMockSql([
+    { match: 'instructor_learner_notes', rows: [] },
+    { match: 'SELECT hourly_rate_pence', rows: [{ hourly_rate_pence: 6000 }] },
+    { match: 'SELECT bulk_tiers_enabled', rows: [{ bulk_tiers_enabled: false }] },
+    { match: 'FROM schools', rows: [schoolRow(5500)] },
+  ]);
+
+  await calcBulkTotal(sql, 3, 1.5, { instructorId: 8, learnerId: 42 });
+
+  const rateCall = calls.find(c => c.text.includes('SELECT hourly_rate_pence'));
+  const bulkCall = calls.find(c => c.text.includes('SELECT bulk_tiers_enabled'));
+  expect(rateCall.text).toMatch(/school_id/);
+  expect(rateCall.values).toContain(3);
+  expect(bulkCall.text).toMatch(/school_id/);
+  expect(bulkCall.values).toContain(3);
+});

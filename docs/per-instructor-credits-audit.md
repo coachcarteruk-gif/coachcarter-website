@@ -23,9 +23,9 @@ Maintenance rule:
 ## Executive Summary
 
 Per-instructor credits are implemented across the main learner and operator
-credit paths. This tracker is now in closeout state for Thread A: future edits
-should be for regressions, small clarity updates, or the deliberately deferred
-pricing/refund-liability design items below.
+credit paths. Thread B's server pricing contract has also landed: new credit
+purchases use per-learner/instructor/school rate precedence and apply school
+bulk tiers only when the selected instructor has opted in.
 
 The core server booking paths use `learner_credit_balances` and
 `booking_credit_sources`, and learner-facing purchase/booking/display surfaces
@@ -68,7 +68,7 @@ Classification:
 | Area | File/function | Current data source | Per-instructor safe? | Notes |
 |---|---|---|---|---|
 | Shared grants | `api/_credit-grant.js` `grantCredits`, `lockBalanceAndMutate`, `lockBalanceAdjustLCB` | LCB in Phase 2A | Mostly yes | Good core helper; LCB writes/guards now include `school_id`. Missing `instructorId` still grandfather-routes to instructor `1` by design during cutover. |
-| Credit checkout | `api/credits.js` `handleCheckout` | Required request `instructor_id`; school bulk pricing | Mostly yes | New learner-facing checkout rejects missing, cross-school, inactive, or hidden/demo instructors and writes `instructor_id` to Stripe metadata. Pricing still uses school bulk pricing only; per-instructor rate/bulk opt-in remains Thread B. |
+| Credit checkout | `api/credits.js` `handleCheckout` | Required request `instructor_id`; instructor-aware `calcBulkTotal` | Yes | New learner-facing checkout rejects missing, cross-school, inactive, or hidden/demo instructors and writes `instructor_id` to Stripe metadata. Pricing uses custom learner rate → instructor hourly rate → school default, with bulk tiers only if `instructors.bulk_tiers_enabled = TRUE`. |
 | Credit balance API | `api/credits.js` `handleBalance` | School-scoped LCB rows joined to same-school instructors | Yes | Preserves aggregate `balance_minutes`/`balance_hours`/`credit_balance`, adds per-instructor `balances`, and supports optional validated `instructor_id` with selected balance fields. |
 | Credit verify/webhook | `api/webhook.js` `handleCreditPurchase` | Stripe metadata + `grantCredits` | Mostly yes | Purchase completion consumes metadata `instructor_id` and grants to that instructor's LCB row. Legacy/missing metadata still goes to instructor `1` through the shared helper for old Stripe retries. |
 | Learner credit booking | `api/slots.js` credit transaction path | LCB + FIFO `credit_transactions` by instructor | Yes | Locks/decrements chosen instructor row, writes BCS and list price. |
@@ -278,8 +278,11 @@ sweep. Remaining items are non-blocking design/product work:
   and goodwill absorber/source treatment instead of the legacy aggregate shadow.
 - Manual refund ledger UI: keep this separate from automatic Stripe execution
   and from BCS execution capability.
-- Thread B pricing work: per-instructor hourly-rate fallback and bulk-tier
-  opt-in remain outside this Thread A closeout.
+- Learner UI Slice B polish: the buy-credits page now can fetch
+  instructor-aware pricing, but a fuller display pass should make opt-in/off
+  state and per-instructor rates obvious.
+- Admin/instructor controls for `bulk_tiers_enabled` and hourly-rate management
+  remain outside this server-contract slice.
 - Thread C franchise-tier/admin configurability remains outside this Thread A
   closeout.
 

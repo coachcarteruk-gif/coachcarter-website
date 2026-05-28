@@ -17,6 +17,16 @@ test.describe('learner instructor-aware credit purchase UI', () => {
     expect(js).toContain('opt.selected = Number(inst.id) === Number(currentInstructorId)');
   });
 
+  test('buy-credits fetches bulk pricing for the selected instructor', () => {
+    const js = read('public/learner/buy-credits.js');
+
+    expect(js).toContain("var url = '/api/credits?action=bulk-pricing&t=' + Date.now();");
+    expect(js).toContain("url += '&instructor_id=' + encodeURIComponent(currentInstructorId)");
+    expect(js).toContain('await loadBulkPricing();');
+    expect(js).toContain('renderPackageCards();');
+    expect(js).toContain('selectPkg(qty);');
+  });
+
   test('buy-credits blocks checkout until an instructor is selected', () => {
     const js = read('public/learner/buy-credits.js');
 

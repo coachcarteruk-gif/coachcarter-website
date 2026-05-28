@@ -9,10 +9,9 @@
  * standard 90-min lesson type's implicit hourly rate (price_pence / 1.5).
  * If no tiers configured, no bulk discount is applied.
  *
- * Per-learner custom rates (instructor_learner_notes.custom_hourly_rate_pence)
- * deliberately do NOT apply to bulk credits — credits are paid up-front into a
- * balance, not tied to a specific instructor at purchase time. Custom rates
- * still apply at slot-booking time inside api/slots.js.
+ * Instructor-scoped credit purchases use the same rate precedence as booking:
+ * custom learner rate, then instructor rate, then school default. School tiers
+ * apply only when the selected instructor has bulk_tiers_enabled.
  */
 
 const MAX_HOURS_PER_PURCHASE = 36;
@@ -104,6 +103,11 @@ function getDiscountPct(hours, discountTiers) {
  * Returns an integer pence/hour. Never throws.
  */
 async function getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId } = {}) {
+  const pricing = await getEffectiveHourlyPricing(sql, { schoolId, instructorId, learnerId });
+  return pricing.hourlyPence;
+}
+
+async function getEffectiveHourlyPricing(sql, { schoolId, instructorId, learnerId } = {}) {
   const sid = parseInt(schoolId) || 1;
   const iid = parseInt(instructorId) || null;
   const lid = parseInt(learnerId)    || null;
@@ -118,7 +122,7 @@ async function getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId 
          AND school_id     = ${sid}
     `;
     if (pair?.custom_hourly_rate_pence > 0) {
-      return pair.custom_hourly_rate_pence;
+      return { hourlyPence: pair.custom_hourly_rate_pence, source: 'custom_learner_rate' };
     }
   }
 
@@ -131,13 +135,13 @@ async function getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId 
          AND school_id = ${sid}
     `;
     if (inst?.hourly_rate_pence > 0) {
-      return inst.hourly_rate_pence;
+      return { hourlyPence: inst.hourly_rate_pence, source: 'instructor_rate' };
     }
   }
 
   // Level 3: school default
-  const { hourlyPence } = await getBulkPricing(sql, sid);
-  return hourlyPence;
+  const { hourlyPence, source } = await getBulkPricing(sql, sid);
+  return { hourlyPence, source: source === 'config' ? 'school_default' : source };
 }
 
 /**
@@ -147,6 +151,20 @@ async function getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId 
 async function getEffectiveRatePencePerMinute(sql, { schoolId, instructorId, learnerId } = {}) {
   const hourly = await getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId });
   return Math.round(hourly / 60);
+}
+
+async function getInstructorBulkTiersEnabled(sql, { schoolId, instructorId } = {}) {
+  const sid = parseInt(schoolId) || 1;
+  const iid = parseInt(instructorId) || null;
+  if (!iid) return true;
+
+  const [inst] = await sql`
+    SELECT bulk_tiers_enabled
+      FROM instructors
+     WHERE id = ${iid}
+       AND school_id = ${sid}
+  `;
+  return inst?.bulk_tiers_enabled === true;
 }
 
 /**
@@ -162,10 +180,13 @@ async function calcBulkTotal(sql, schoolId, hours, { instructorId, learnerId } =
   const useFallback = instructorId != null || learnerId != null;
   let hourlyPence;
   let source;
+  let bulkTiersEnabled = true;
 
   if (useFallback) {
-    hourlyPence = await getEffectiveHourlyPence(sql, { schoolId, instructorId, learnerId });
-    source = 'effective';
+    const effective = await getEffectiveHourlyPricing(sql, { schoolId, instructorId, learnerId });
+    hourlyPence = effective.hourlyPence;
+    source = effective.source;
+    bulkTiersEnabled = await getInstructorBulkTiersEnabled(sql, { schoolId, instructorId });
   } else {
     const bulk = await getBulkPricing(sql, schoolId);
     hourlyPence = bulk.hourlyPence;
@@ -173,8 +194,9 @@ async function calcBulkTotal(sql, schoolId, hours, { instructorId, learnerId } =
   }
 
   const { discountTiers } = await getBulkPricing(sql, schoolId);
+  const applicableDiscountTiers = bulkTiersEnabled ? discountTiers : [];
   const fullPence = Math.round(hourlyPence * hours);
-  const discountPct = getDiscountPct(hours, discountTiers);
+  const discountPct = getDiscountPct(hours, applicableDiscountTiers);
   const discountAmt = Math.round(fullPence * discountPct / 100);
   return {
     fullPence,
@@ -182,6 +204,12 @@ async function calcBulkTotal(sql, schoolId, hours, { instructorId, learnerId } =
     discountAmt,
     totalPence: fullPence - discountAmt,
     pricePerHourPence: hourlyPence,
+    hourlyPence,
+    discountTiers: applicableDiscountTiers,
+    schoolDiscountTiers: discountTiers,
+    bulkTiersEnabled,
+    source,
+    rateSource: source,
     _source: source
   };
 }
@@ -228,7 +256,9 @@ module.exports = {
   getDiscountPct,
   calcBulkTotal,
   getEffectiveHourlyPence,
+  getEffectiveHourlyPricing,
   getEffectiveRatePencePerMinute,
+  getInstructorBulkTiersEnabled,
   validateBulkPricingConfig,
   MAX_HOURS_PER_PURCHASE,
 };

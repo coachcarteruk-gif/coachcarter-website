@@ -141,7 +141,9 @@
   // uses the SAME source, so what's rendered here is exactly what Stripe charges.
   async function loadBulkPricing() {
     try {
-      var res = await fetch('/api/credits?action=bulk-pricing&t=' + Date.now());
+      var url = '/api/credits?action=bulk-pricing&t=' + Date.now();
+      if (currentInstructorId) url += '&instructor_id=' + encodeURIComponent(currentInstructorId);
+      var res = await fetch(url);
       var data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
       PRICE_PER_HOUR_PENCE = data.hourly_pence;
@@ -384,10 +386,14 @@
 
   var instructorSelect = document.getElementById('instructorSelect');
   if (instructorSelect) {
-    instructorSelect.addEventListener('change', function () {
+    instructorSelect.addEventListener('change', async function () {
       var parsed = parseInt(instructorSelect.value, 10);
       currentInstructorId = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
       updateCheckoutAvailability();
+      await loadBulkPricing();
+      renderPackageCards();
+      renderSingleLessonCards();
+      selectPkg(qty);
       if (isAuthed) loadBalance();
     });
   }
@@ -437,7 +443,9 @@
   // otherwise the page would flash placeholder prices that disagree with the
   // server. Lesson types load in parallel — they're only used for card metadata
   // (name, colour), not for pricing.
-  Promise.all([loadBulkPricing(), loadLessonTypes(), loadInstructors()]).then(function () {
+  Promise.all([loadInstructors(), loadLessonTypes()]).then(function () {
+    return loadBulkPricing();
+  }).then(function () {
     renderPackageCards();
     renderSingleLessonCards();
     selectPkg(qty); // re-render summary now that real prices are loaded
