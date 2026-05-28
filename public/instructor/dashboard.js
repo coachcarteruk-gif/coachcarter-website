@@ -177,8 +177,11 @@ async function openBookModal() {
   document.getElementById('bookDropoff').value = '';
   document.getElementById('bookNotes').value = '';
   document.getElementById('bookCreditNote').style.display = 'none';
+  document.getElementById('bookPaymentLinkNote').style.display = 'none';
+  clearPaymentLinkSuccess();
   document.getElementById('bookBtn').disabled = false;
   document.getElementById('bookBtn').textContent = 'Book lesson';
+  updateBookPaymentUi();
 
   // Load learners and lesson types
   try {
@@ -201,6 +204,7 @@ async function openBookModal() {
 }
 
 function closeBookModal() {
+  clearPaymentLinkSuccess();
   document.getElementById('bookModal').classList.remove('open');
 }
 
@@ -238,6 +242,7 @@ function filterLearners() {
 }
 
 function selectLearner(id, name, detail, balanceMinutes) {
+  clearPaymentLinkSuccess();
   selectedLearnerId = id;
   selectedLearnerBalanceMinutes = balanceMinutes;
   document.getElementById('bookSearch').value = '';
@@ -257,6 +262,7 @@ function selectLearner(id, name, detail, balanceMinutes) {
 }
 
 function clearLearner() {
+  clearPaymentLinkSuccess();
   selectedLearnerId = null;
   selectedLearnerBalanceMinutes = 0;
   document.getElementById('bookSelected').classList.remove('show');
@@ -264,23 +270,132 @@ function clearLearner() {
   document.getElementById('bookSearch').value = '';
 }
 
+function updateBookPaymentUi() {
+  var payMethod = document.querySelector('input[name="bookPay"]:checked')?.value || 'cash';
+  var linkNote = document.getElementById('bookPaymentLinkNote');
+  var btn = document.getElementById('bookBtn');
+  if (linkNote) linkNote.style.display = payMethod === 'payment_link' ? 'block' : 'none';
+  if (btn && !btn.disabled) btn.textContent = payMethod === 'payment_link' ? 'Send payment link' : 'Book lesson';
+}
+
+function clearPaymentLinkSuccess() {
+  var successEl = document.getElementById('bookOfferSuccess');
+  if (!successEl) return;
+  successEl.style.display = 'none';
+  successEl.innerHTML = '';
+}
+
+function renderBookOfferSuccess(data) {
+  var successEl = document.getElementById('bookOfferSuccess');
+  if (!successEl) return;
+  var shareUrl = data.accept_url || '';
+  var selectedName = document.getElementById('bookSelectedName').textContent || data.learner_name || 'learner';
+  var safeName = esc(selectedName);
+  var emailAvailable = data.email_available === true;
+  var messageAvailable = data.message_available === true;
+  var emailSent = data.email_sent === true;
+  var messageSent = data.message_sent === true;
+  var deliveryParts = [];
+  if (emailSent) deliveryParts.push('email');
+  if (messageSent) deliveryParts.push('text message');
+  var failedParts = [];
+  if (emailAvailable && !emailSent) failedParts.push('email');
+  if (messageAvailable && !messageSent) failedParts.push('text message');
+  var missingParts = [];
+  if (!emailAvailable) missingParts.push('no email saved');
+  if (!messageAvailable) missingParts.push('no phone saved');
+
+  var statusLine;
+  if (deliveryParts.length > 0) {
+    var deliveryText = deliveryParts.length === 2 ? deliveryParts[0] + ' and ' + deliveryParts[1] : deliveryParts[0];
+    var failedText = failedParts.length
+      ? ' ' + (failedParts.length === 2 ? failedParts[0] + ' and ' + failedParts[1] : failedParts[0]) + ' delivery did not complete.'
+      : '';
+    var missingText = missingParts.length ? ' (' + missingParts.join(', ') + ')' : '';
+    statusLine = 'Payment link sent to ' + safeName + ' by ' + deliveryText + '. The slot is held as a pending offer for 24 hours and will only be booked after they accept and pay.' + missingText + failedText;
+  } else if (failedParts.length > 0) {
+    var failed = failedParts.length === 2 ? failedParts[0] + ' and ' + failedParts[1] : failedParts[0];
+    statusLine = 'Payment link created for ' + safeName + ', but ' + failed + ' delivery did not complete. The slot is held as a pending offer for 24 hours.';
+  } else if (missingParts.length > 0) {
+    statusLine = 'Payment link created for ' + safeName + '; the selected learner has ' + missingParts.join(' and ') + '. The slot is held as a pending offer for 24 hours.';
+  } else {
+    statusLine = 'Payment link created for ' + safeName + '. The slot is held as a pending offer for 24 hours.';
+  }
+
+  successEl.innerHTML =
+    '<div>' + statusLine + '</div>' +
+    '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+      '<input type="text" id="bookOfferShareUrl" readonly style="flex:1;min-width:0;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.78rem;background:var(--white);color:var(--primary)">' +
+      '<button id="bookOfferCopyBtn" style="padding:6px 14px;border:1.5px solid var(--accent);background:var(--accent-lt);color:var(--accent);border-radius:6px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap">Copy link</button>' +
+    '</div>';
+  document.getElementById('bookOfferShareUrl').value = shareUrl;
+  document.getElementById('bookOfferCopyBtn').addEventListener('click', function () {
+    var copyBtn = this;
+    var urlInput = document.getElementById('bookOfferShareUrl');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareUrl).then(function () {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(function () { copyBtn.textContent = 'Copy link'; }, 2000);
+      }).catch(function () {
+        urlInput.select();
+        document.execCommand('copy');
+        copyBtn.textContent = 'Copied!';
+        setTimeout(function () { copyBtn.textContent = 'Copy link'; }, 2000);
+      });
+    } else {
+      urlInput.select();
+      document.execCommand('copy');
+      copyBtn.textContent = 'Copied!';
+      setTimeout(function () { copyBtn.textContent = 'Copy link'; }, 2000);
+    }
+  });
+  successEl.style.display = 'block';
+}
+
 async function confirmBook() {
   if (!selectedLearnerId) { showToast('Please select a learner', 'error'); return; }
   var date = document.getElementById('bookDate').value;
   var time = document.getElementById('bookTime').value;
   if (!date || !time) { showToast('Please fill in date and time', 'error'); return; }
+  var payMethod = document.querySelector('input[name="bookPay"]:checked').value;
+  var isPaymentLink = payMethod === 'payment_link';
 
   var btn = document.getElementById('bookBtn');
   btn.disabled = true;
-  btn.textContent = 'Booking...';
+  btn.textContent = isPaymentLink ? 'Sending...' : 'Booking...';
+  clearPaymentLinkSuccess();
 
   try {
+    if (isPaymentLink) {
+      var offerBody = {
+        learner_id: selectedLearnerId,
+        scheduled_date: date,
+        start_time: time.slice(0,5),
+        lesson_type_id: parseInt(document.getElementById('bookType').value)
+      };
+
+      var offerRes = await ccAuth.fetchAuthed('/api/instructor?action=create-offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(offerBody)
+      });
+      var offerData = await offerRes.json();
+      if (!offerRes.ok) throw new Error(offerData.error || 'Failed to send payment link');
+
+      renderBookOfferSuccess(offerData);
+      showToast('Payment link created. The slot is held for 24 hours.', 'success');
+      loadDashboard();
+      btn.disabled = false;
+      btn.textContent = 'Send payment link';
+      return;
+    }
+
     var body = {
       learner_id: selectedLearnerId,
       scheduled_date: date,
       start_time: time.slice(0,5),
       lesson_type_id: parseInt(document.getElementById('bookType').value),
-      payment_method: document.querySelector('input[name="bookPay"]:checked').value,
+      payment_method: payMethod,
       notes: document.getElementById('bookNotes').value.trim() || null,
       dropoff_address: document.getElementById('bookDropoff').value.trim() || null
     };
@@ -297,9 +412,9 @@ async function confirmBook() {
     showToast('Lesson booked with ' + (data.learner_name || 'learner'), 'success');
     loadDashboard(); // Refresh
   } catch (err) {
-    showToast(err.message || 'Booking failed', 'error');
+    showToast(err.message || (isPaymentLink ? 'Failed to send payment link' : 'Booking failed'), 'error');
     btn.disabled = false;
-    btn.textContent = 'Book lesson';
+    btn.textContent = isPaymentLink ? 'Send payment link' : 'Book lesson';
   }
 }
 
@@ -646,6 +761,16 @@ async function closeBroadcastBatch(batchId, btn) {
   bind('btn-clear-learner', clearLearner);
   bind('btn-close-book', closeBookModal);
   bind('bookBtn', confirmBook);
+  document.querySelectorAll('input[name="bookPay"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      clearPaymentLinkSuccess();
+      updateBookPaymentUi();
+    });
+  });
+  ['bookDate', 'bookTime', 'bookType'].forEach(function (id) {
+    var field = document.getElementById(id);
+    if (field) field.addEventListener('change', clearPaymentLinkSuccess);
+  });
   var detailModal = document.getElementById('detailModal');
   if (detailModal) detailModal.addEventListener('click', function (e) { if (e.target === detailModal) closeDetail(); });
   bind('btn-close-detail', closeDetail);

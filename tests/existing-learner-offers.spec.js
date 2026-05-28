@@ -153,7 +153,7 @@ test.describe('existing learner lesson offers', () => {
     expect(body).toContain('metadata learner_id ${metadataLearnerId} does not match offer.learner_id ${offer.learner_id}');
     expect(body).toContain('if (metadataLearnerId !== offer.learner_id) {');
     expect(body).toContain('const boundLearnerId = offer.learner_id');
-    expect(body).toContain('} else {\n      [existingLearner] = await sql`');
+    expect(body.replace(/\r\n/g, '\n')).toContain('} else {\n      [existingLearner] = await sql`');
   });
 
   test('instructor UI exposes existing/new learner modes and posts learner_id for existing learners', () => {
