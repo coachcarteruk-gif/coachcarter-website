@@ -267,6 +267,7 @@ Direct pay-and-book uses the same effective hourly fallback for the selected ins
 Instructor-created paid offers now freeze their final per-lesson price into `lesson_offers.offer_price_pence` at creation. Explicit `offer_price_pence` wins, including £0 free offers; otherwise the server computes custom learner rate → instructor hourly rate → school default for the lesson duration, then applies the offer's `discount_pct`. Bulk-tier opt-in never discounts offers. Repeat-offer Stripe checkout uses the stored per-lesson price as `unit_amount` and the selected repeat count as `quantity`, so accepted offers do not reprice later.
 
 **Lesson types** (managed via admin portal):
+- 1-Hour Lesson — 60 min / £55.00 (active, instructor opt-in only)
 - Standard Lesson — 90 min / £82.50
 - 2-Hour Lesson — 120 min / £110.00
 - More types can be added via admin portal (`api/lesson-types.js`)
@@ -455,7 +456,7 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 
 **DB columns:** `instructors.max_travel_minutes` — per-instructor threshold (default 30 mins), editable from admin portal
 
-**DB columns:** `instructors.offered_lesson_types` JSONB — array of lesson type slugs the instructor offers (e.g. `["standard","2hr"]`). NULL means all active lesson types. Controls which pills appear on `/book/:slug` and filters `/api/lesson-types?action=list` when `instructor_id` is passed.
+**DB columns:** `instructors.offered_lesson_types` JSONB — array of lesson type slugs the instructor offers (e.g. `["standard","2hr"]`). NULL means the default active lesson set; opt-in-only slugs such as `"1hr"` are excluded until explicitly saved in the array. Controls which pills appear on `/book/:slug` and filters `/api/lesson-types?action=list` when `instructor_id` is passed.
 
 ### API — `api/offers.js`
 

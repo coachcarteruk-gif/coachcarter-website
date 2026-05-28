@@ -48,7 +48,7 @@
 | `admin.js` | admin | Dashboard, bookings, instructor CRUD, learner management, credit adjustment, set-instructor-password, forgot-password code flow |
 | `slots.js` | mostly learner | available (12-wk cap), durations-for-slot, book (+ `repeat_weeks` 1–8), checkout-slot, checkout-slot-guest, book-free-trial, cancel (+ cancel_series), reschedule, my-bookings, series-info |
 | `offers.js` | public (token) | get-offer, accept-offer (with `repeat_weeks`), expire-offers (cron). Exports `bookOfferSeries()` for the webhook |
-| `lesson-types.js` | mixed | CRUD for lesson types per school |
+| `lesson-types.js` | mixed | CRUD for lesson types per school; instructor-scoped list filters opt-in-only lesson types such as paid `1hr` unless explicitly enabled |
 | `schools.js` | superadmin | School onboarding + config (per-school feature flags via `schools.config` JSONB) |
 | `videos.js` | mixed | CRUD, upload-url, categories, bulk ops |
 | `credits.js` | learner | balance, checkout |

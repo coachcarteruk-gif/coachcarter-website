@@ -6,6 +6,7 @@ const { calcBulkTotal, getBulkPricing, MAX_HOURS_PER_PURCHASE } = require('./_pr
 const { grantCredits } = require('./_credit-grant');
 
 const STANDARD_LESSON_MINUTES = 90;
+const MIN_HOURS_PER_PURCHASE = 1;
 
 function verifyAuth(req) {
   return requireAuth(req, { roles: ['learner', 'admin'] });
@@ -260,7 +261,7 @@ async function handleBalance(req, res) {
 
 // ── POST /api/credits?action=checkout ────────────────────────────────────────
 // Creates a Stripe checkout session for buying hours.
-// Body: { hours: number } — hours to purchase (e.g., 1.5, 3, 6, 12, etc.)
+// Body: { hours: number } — hours to purchase (e.g., 1, 1.5, 3, 6, 12, etc.)
 // Also accepts { quantity: number } for backwards compatibility (treats as lessons, converts to hours)
 async function handleCheckout(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -284,9 +285,9 @@ async function handleCheckout(req, res) {
     hours = parseInt(req.body.quantity, 10) * 1.5;
   }
 
-  if (!hours || hours < 1.5 || hours > MAX_HOURS_PER_PURCHASE) {
+  if (!hours || hours < MIN_HOURS_PER_PURCHASE || hours > MAX_HOURS_PER_PURCHASE) {
     return res.status(400).json({
-      error: `Hours must be between 1.5 and ${MAX_HOURS_PER_PURCHASE}`
+      error: `Hours must be between ${MIN_HOURS_PER_PURCHASE} and ${MAX_HOURS_PER_PURCHASE}`
     });
   }
 

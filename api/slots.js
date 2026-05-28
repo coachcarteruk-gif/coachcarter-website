@@ -39,6 +39,7 @@ const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { calcDirectLessonPrice } = require('./_pricing-helpers');
+const { isOptInOnlyLessonTypeSlug, isLessonTypeOffered } = require('./_lesson-type-helpers');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -88,6 +89,12 @@ function isFreeTrialLessonType(lessonType) {
 function rejectFreeTrialOnPaidPath(res) {
   return res.status(400).json({
     error: 'Use the free trial page to book a trial.'
+  });
+}
+
+function rejectLessonTypeNotOffered(res) {
+  return res.status(400).json({
+    error: 'This instructor does not currently offer that lesson length.'
   });
 }
 
@@ -186,6 +193,7 @@ async function handleAvailable(req, res) {
     // the slot feed shows everyone, and per-duration filtering happens in
     // handleDurationsForSlot when the user clicks a slot.
     const offeredFilterJson = JSON.stringify([lessonType.slug]);
+    const implicitOfferAllowed = !isOptInOnlyLessonTypeSlug(lessonType.slug);
     const windows = instructor_id
       ? (minDurationOnly
         ? await sql`
@@ -220,7 +228,7 @@ async function handleAvailable(req, res) {
               AND ia.active = true
               AND i.active  = true
               AND i.school_id = ${schoolId}
-              AND (i.offered_lesson_types IS NULL OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
+              AND ((${implicitOfferAllowed} AND i.offered_lesson_types IS NULL) OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
             ORDER BY ia.day_of_week, ia.start_time
           `)
       : (minDurationOnly
@@ -256,7 +264,7 @@ async function handleAvailable(req, res) {
               AND i.active  = true
               AND i.email  != 'demo@coachcarter.uk'
               AND i.school_id = ${schoolId}
-              AND (i.offered_lesson_types IS NULL OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
+              AND ((${implicitOfferAllowed} AND i.offered_lesson_types IS NULL) OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
             ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
           `);
 
@@ -706,7 +714,7 @@ async function handleDurationsForSlot(req, res) {
 
     const slotStart = timeToMinutes(start_time);
     const buffer = parseInt(instructor.buffer_minutes) || 0;
-    const offered = instructor.offered_lesson_types; // null = all, otherwise JSONB array of slugs
+    const offered = instructor.offered_lesson_types; // null = default set, otherwise JSONB array of slugs
 
     // Find the availability window covering this start time (so we know how
     // long the door is open for).
@@ -819,7 +827,7 @@ async function handleDurationsForSlot(req, res) {
         fits = false; reason = 'window';
       } else if (violatesNotice) {
         fits = false; reason = 'notice';
-      } else if (offered != null && Array.isArray(offered) && !offered.includes(lt.slug)) {
+      } else if (!isLessonTypeOffered(offered, lt.slug)) {
         fits = false; reason = 'not_offered';
       } else if (blocks.some(b => slotStart < (b.end + buffer) && slotEnd > b.start)) {
         fits = false; reason = 'clash';
@@ -1202,11 +1210,14 @@ async function handleBook(req, res) {
 
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
-      SELECT id, name, email, phone, max_travel_minutes FROM instructors
+      SELECT id, name, email, phone, max_travel_minutes, offered_lesson_types FROM instructors
       WHERE id = ${instructor_id} AND active = true AND school_id = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found or unavailable' });
+    if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
+      return rejectLessonTypeNotOffered(res);
+    }
 
     // Demo instructor bookings are free (no deduction)
     const isDemoInstructor = instructor.email === 'demo@coachcarter.uk';
@@ -1690,13 +1701,16 @@ async function handleCheckoutSlot(req, res) {
 
     // Check instructor is valid (and belongs to this school)
     const [instructor] = await sql`
-      SELECT id, name FROM instructors
+      SELECT id, name, offered_lesson_types FROM instructors
       WHERE id = ${instructor_id}
         AND active = true
         AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found' });
+    if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
+      return rejectLessonTypeNotOffered(res);
+    }
 
     // Get learner email
     const [learner] = await sql`SELECT email FROM learner_users WHERE id = ${user.id}`;
@@ -1913,13 +1927,16 @@ async function handleCheckoutSlotGuest(req, res) {
     } catch (e) { /* table may not exist yet */ }
 
     const [instructor] = await sql`
-      SELECT id, name FROM instructors
+      SELECT id, name, offered_lesson_types FROM instructors
       WHERE id = ${instructor_id}
         AND active = true
         AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found' });
+    if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
+      return rejectLessonTypeNotOffered(res);
+    }
 
     // ── Find or create learner ──
     let learnerId;

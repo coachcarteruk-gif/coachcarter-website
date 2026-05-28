@@ -273,8 +273,12 @@
   // computed from the bulk hourly rate × duration — NOT from lt.price_pence —
   // to keep page = receipt.
   async function loadLessonTypes() {
+    if (!currentInstructorId) {
+      lessonTypes = [];
+      return;
+    }
     try {
-      var res = await ccAuth.fetchAuthed('/api/lesson-types?action=list');
+      var res = await ccAuth.fetchAuthed('/api/lesson-types?action=list&instructor_id=' + encodeURIComponent(currentInstructorId));
       var data = await res.json();
       if (!res.ok) throw new Error(data.error);
       lessonTypes = (data.lesson_types || []).filter(isPaidLessonType);
@@ -525,6 +529,7 @@
       currentInstructorId = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
       updateCheckoutAvailability();
       await loadBulkPricing();
+      await loadLessonTypes();
       renderPackageCards();
       renderSingleLessonCards();
       selectPkg(qty);
@@ -573,11 +578,12 @@
   initGuestUI();
   selectPkg(12); // pre-renders summary with placeholder hourly rate
 
-  // Bulk pricing must resolve before package cards / single-lesson cards render,
-  // otherwise the page would flash placeholder prices that disagree with the
-  // server. Lesson types load in parallel — they're only used for card metadata
-  // (name, colour), not for pricing.
-  Promise.all([loadInstructors(), loadLessonTypes()]).then(function () {
+  // Bulk pricing and instructor-scoped lesson types must resolve before package
+  // cards render, otherwise the page could show prices or lesson cards that do
+  // not match the selected instructor.
+  loadInstructors().then(function () {
+    return loadLessonTypes();
+  }).then(function () {
     return loadBulkPricing();
   }).then(function () {
     renderPackageCards();
