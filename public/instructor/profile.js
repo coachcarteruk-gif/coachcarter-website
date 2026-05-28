@@ -3,7 +3,17 @@
 
   let currentProfileId = null;
   let currentProfileSlug = null;
-  let currentOfferedTypes = null; // null = all; array of slugs = explicit list
+  let currentOfferedTypes = null; // null = default set; array of slugs = explicit list
+  const OPT_IN_ONLY_LESSON_TYPE_SLUGS = ['1hr'];
+
+  function isOptInOnlyLessonType(slug) {
+    return OPT_IN_ONLY_LESSON_TYPE_SLUGS.includes(String(slug || ''));
+  }
+
+  function isLessonTypeEnabledByProfile(slug) {
+    if (Array.isArray(currentOfferedTypes)) return currentOfferedTypes.includes(slug);
+    return !isOptInOnlyLessonType(slug);
+  }
 
   function init() {
     if (!ccAuth.getAuth()) { window.location.href = '/instructor/login.html'; return; }
@@ -40,6 +50,10 @@
     const avatarHtml = p.photo_url
       ? `<img src="${esc(p.photo_url)}" alt="${esc(p.name)}" data-fallback-initials="${initials}">`
       : initials;
+    const hourlyRatePence = Number(p.effective_hourly_rate_pence || 0);
+    const hourlyRateCopy = hourlyRatePence > 0
+      ? `Your hourly rate: ${formatPence(hourlyRatePence)}/hr`
+      : 'Your hourly rate is managed by admin.';
 
     document.getElementById('profileContent').innerHTML = `
       <div class="avatar-row">
@@ -215,6 +229,22 @@
       </div>
 
       <div class="form-card">
+        <div class="form-card-title">Bulk packages</div>
+
+        <div class="form-group">
+          <div style="font-size:1rem;font-weight:700;color:var(--primary);margin-bottom:12px">${hourlyRateCopy}</div>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--primary);font-size:0.9rem;font-weight:700;">
+            <input type="checkbox" id="inputBulkTiersEnabled" ${p.bulk_tiers_enabled ? 'checked' : ''}
+              style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin-top:1px">
+            <span>
+              Apply school bulk discounts to my credit purchases
+              <span class="field-hint" style="display:block;margin-top:5px;font-weight:400">Enabling this applies the school bulk discounts to future credit purchases for you. Existing credits keep their original rate.</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-card">
         <div class="form-card-title">Last-minute broadcasts</div>
 
         <div class="form-group">
@@ -305,7 +335,7 @@
 
       // Build a toggle + copy-link row per lesson type
       var rows = types.map(function(lt) {
-        var isEnabled = !currentOfferedTypes || currentOfferedTypes.includes(lt.slug);
+        var isEnabled = isLessonTypeEnabledByProfile(lt.slug);
         var url = window.location.origin + '/book/' + slug + '?type=' + encodeURIComponent(lt.slug);
         return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">'
           + '<label style="display:flex;align-items:center;gap:0;cursor:pointer;position:relative;width:40px;height:22px;flex-shrink:0">'
@@ -383,8 +413,10 @@
     var allSlugs = Array.from(checkboxes).map(function(cb) { return cb.dataset.ltSlug; });
     var enabledSlugs = Array.from(checkboxes).filter(function(cb) { return cb.checked; }).map(function(cb) { return cb.dataset.ltSlug; });
 
-    // null means "all" "” only send an explicit array if some are disabled
-    var offeredPayload = (enabledSlugs.length === allSlugs.length) ? null : enabledSlugs;
+    var optInOnlyEnabled = enabledSlugs.some(isOptInOnlyLessonType);
+    // null means the default set, which deliberately excludes opt-in-only
+    // lesson types such as 1hr. Send an explicit array when those are enabled.
+    var offeredPayload = (enabledSlugs.length === allSlugs.length && !optInOnlyEnabled) ? null : enabledSlugs;
 
     btn.disabled = true;
     btn.textContent = 'Saving…';
@@ -487,6 +519,7 @@
     const reminder_hours = parseInt(document.getElementById('inputReminderHours').value);
     const daily_schedule_email = document.getElementById('inputDailySchedule').checked;
     const broadcast_offers_enabled = document.getElementById('inputBroadcastEnabled').checked;
+    const bulk_tiers_enabled = document.getElementById('inputBulkTiersEnabled').checked;
 
     // New profile fields
     const adi_grade      = document.getElementById('inputAdiGrade').value.trim() || null;
@@ -519,7 +552,7 @@
         body:    JSON.stringify({
           name, phone: phone || null, bio: bio || null, photo_url: photo_url || null,
           buffer_minutes, reminder_hours, daily_schedule_email,
-          broadcast_offers_enabled,
+          broadcast_offers_enabled, bulk_tiers_enabled,
           adi_grade, pass_rate, years_experience, specialisms,
           vehicle_make, vehicle_model, transmission_type, dual_controls,
           service_areas, languages, ical_feed_url
@@ -594,6 +627,14 @@
 
   function esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function formatPence(pence) {
+    const pounds = Number(pence || 0) / 100;
+    return '\u00a3' + pounds.toLocaleString('en-GB', {
+      minimumFractionDigits: Number.isInteger(pounds) ? 0 : 2,
+      maximumFractionDigits: 2
+    });
   }
 
   init();

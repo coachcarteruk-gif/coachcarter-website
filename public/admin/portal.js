@@ -267,6 +267,8 @@ function openAddInstructor() {
   document.getElementById('inst-commission').value = '85';
   document.getElementById('inst-fee-model').value = 'commission';
   document.getElementById('inst-franchise-fee').value = '';
+  document.getElementById('inst-hourly-rate').value = '';
+  document.getElementById('inst-bulk-tiers-enabled').checked = false;
   toggleFeeModelFields();
   openModal('modal-instructor');
 }
@@ -288,6 +290,8 @@ function openEditInstructor(id) {
   const hasFranchise = i.weekly_franchise_fee_pence != null;
   document.getElementById('inst-fee-model').value = hasFranchise ? 'franchise' : 'commission';
   document.getElementById('inst-franchise-fee').value = hasFranchise ? (i.weekly_franchise_fee_pence / 100).toFixed(0) : '';
+  document.getElementById('inst-hourly-rate').value = i.hourly_rate_pence != null ? formatPoundsInput(i.hourly_rate_pence) : '';
+  document.getElementById('inst-bulk-tiers-enabled').checked = i.bulk_tiers_enabled === true;
   toggleFeeModelFields();
   openModal('modal-instructor');
 }
@@ -309,7 +313,12 @@ async function saveInstructor() {
     photo_url: document.getElementById('inst-photo').value.trim() || null,
     buffer_minutes: parseInt(document.getElementById('inst-buffer').value) || 30,
     max_travel_minutes: parseInt(document.getElementById('inst-max-travel').value) || 30,
+    bulk_tiers_enabled: document.getElementById('inst-bulk-tiers-enabled').checked,
   };
+  const hourlyRate = parseHourlyRateOverride();
+  if (hourlyRate.error) { toast(hourlyRate.error, 'error'); return; }
+  body.hourly_rate_pence = hourlyRate.value;
+
   if (feeModel === 'franchise') {
     const feeGbp = parseFloat(document.getElementById('inst-franchise-fee').value);
     if (isNaN(feeGbp) || feeGbp < 0) { toast('Enter a valid franchise fee', 'error'); return; }
@@ -332,7 +341,7 @@ async function saveInstructor() {
       payload = body;
     }
 
-    const res = await fetch(url, {
+    const res = await fetchAdmin(url, {
       method: 'POST', headers: HEADERS,
       body: JSON.stringify(payload)
     });
@@ -345,6 +354,24 @@ async function saveInstructor() {
   } catch (err) {
     toast(err.message, 'error');
   }
+}
+
+function formatPoundsInput(pence) {
+  const pounds = Number(pence) / 100;
+  return Number.isFinite(pounds) ? pounds.toFixed(2).replace(/\.00$/, '') : '';
+}
+
+function parseHourlyRateOverride() {
+  const raw = document.getElementById('inst-hourly-rate').value.trim();
+  if (!raw) return { value: null };
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
+    return { error: 'Hourly rate must be a valid pounds amount, e.g. 60 or 60.00' };
+  }
+  const pounds = Number(raw);
+  if (!Number.isFinite(pounds) || pounds <= 0 || pounds > 500) {
+    return { error: 'Hourly rate override must be more than £0 and no more than £500' };
+  }
+  return { value: Math.round(pounds * 100) };
 }
 
 async function toggleInstructor(id, active) {
@@ -2823,6 +2850,7 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-add-category', addCategory);
   var feeModel = document.getElementById('inst-fee-model');
   if (feeModel) feeModel.addEventListener('change', toggleFeeModelFields);
+  bind('btn-reset-hourly-rate', function () { document.getElementById('inst-hourly-rate').value = ''; });
   bind('btn-save-instructor', saveInstructor);
   bind('btn-add-window', addWindow);
   bind('btn-clear-bulk', clearBulkSelection);

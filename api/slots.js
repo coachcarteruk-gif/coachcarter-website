@@ -38,6 +38,8 @@ const { lockBalanceAdjustLCB } = require('./_credit-grant');
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
+const { calcDirectLessonPrice } = require('./_pricing-helpers');
+const { isOptInOnlyLessonTypeSlug, isLessonTypeOffered } = require('./_lesson-type-helpers');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -78,6 +80,74 @@ async function getLessonType(sql, lessonTypeId, schoolId) {
 function formatHours(minutes) {
   const hrs = minutes / 60;
   return hrs % 1 === 0 ? `${hrs} hour${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hours`;
+}
+
+function isFreeTrialLessonType(lessonType) {
+  return lessonType && lessonType.slug === 'trial';
+}
+
+function rejectFreeTrialOnPaidPath(res) {
+  return res.status(400).json({
+    error: 'Use the free trial page to book a trial.'
+  });
+}
+
+function rejectLessonTypeNotOffered(res) {
+  return res.status(400).json({
+    error: 'This instructor does not currently offer that lesson length.'
+  });
+}
+
+function hasBufferedSlotConflict(slotStart, slotEnd, blockStart, blockEnd, bufferMinutes = 0) {
+  const buffer = Math.max(0, parseInt(bufferMinutes, 10) || 0);
+  return slotStart < (blockEnd + buffer) && (slotEnd + buffer) > blockStart;
+}
+
+function normalisePostcode(postcode) {
+  return postcode ? String(postcode).toUpperCase().replace(/\s+/g, ' ') : null;
+}
+
+function findAdjacentTravelSpacingConflict({ slotStart, slotEnd, pickupPostcode, bookedSlots, coordMap = {} }) {
+  const learnerPostcode = normalisePostcode(pickupPostcode);
+  if (!learnerPostcode) return null;
+
+  let closestBefore = null;
+  let closestAfter = null;
+  for (const b of bookedSlots || []) {
+    if (b.end <= slotStart && b.postcode) {
+      if (!closestBefore || b.end > closestBefore.end) closestBefore = b;
+    }
+    if (b.start >= slotEnd && b.postcode) {
+      if (!closestAfter || b.start < closestAfter.start) closestAfter = b;
+    }
+  }
+
+  function driveMinutesBetween(fromPostcode, toPostcode) {
+    const from = normalisePostcode(fromPostcode);
+    const to = normalisePostcode(toPostcode);
+    if (!from || !to) return null;
+    if (from.replace(/\s/g, '') === to.replace(/\s/g, '')) return 0;
+    const fromCoord = coordMap[from];
+    const toCoord = coordMap[to];
+    if (!fromCoord || !toCoord) return null;
+    return estimateDriveMinutes(fromCoord.lat, fromCoord.lon, toCoord.lat, toCoord.lon);
+  }
+
+  if (closestBefore) {
+    const driveMinutes = driveMinutesBetween(closestBefore.postcode, learnerPostcode);
+    if (driveMinutes != null && (slotStart - closestBefore.end) < driveMinutes + TRAVEL_BUFFER_MINUTES) {
+      return { direction: 'before', gap_minutes: slotStart - closestBefore.end, travel_minutes: driveMinutes };
+    }
+  }
+
+  if (closestAfter) {
+    const driveMinutes = driveMinutesBetween(learnerPostcode, closestAfter.postcode);
+    if (driveMinutes != null && (closestAfter.start - slotEnd) < driveMinutes + TRAVEL_BUFFER_MINUTES) {
+      return { direction: 'after', gap_minutes: closestAfter.start - slotEnd, travel_minutes: driveMinutes };
+    }
+  }
+
+  return null;
 }
 
 
@@ -175,6 +245,7 @@ async function handleAvailable(req, res) {
     // the slot feed shows everyone, and per-duration filtering happens in
     // handleDurationsForSlot when the user clicks a slot.
     const offeredFilterJson = JSON.stringify([lessonType.slug]);
+    const implicitOfferAllowed = !isOptInOnlyLessonTypeSlug(lessonType.slug);
     const windows = instructor_id
       ? (minDurationOnly
         ? await sql`
@@ -209,7 +280,7 @@ async function handleAvailable(req, res) {
               AND ia.active = true
               AND i.active  = true
               AND i.school_id = ${schoolId}
-              AND (i.offered_lesson_types IS NULL OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
+              AND ((${implicitOfferAllowed} AND i.offered_lesson_types IS NULL) OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
             ORDER BY ia.day_of_week, ia.start_time
           `)
       : (minDurationOnly
@@ -245,7 +316,7 @@ async function handleAvailable(req, res) {
               AND i.active  = true
               AND i.email  != 'demo@coachcarter.uk'
               AND i.school_id = ${schoolId}
-              AND (i.offered_lesson_types IS NULL OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
+              AND ((${implicitOfferAllowed} AND i.offered_lesson_types IS NULL) OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
             ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
           `);
 
@@ -452,7 +523,7 @@ async function handleAvailable(req, res) {
           name:           w.instructor_name,
           photo_url:      w.photo_url,
           bio:            w.bio,
-          buffer_minutes: parseInt(w.buffer_minutes) || 30,
+          buffer_minutes: w.buffer_minutes != null ? Math.max(0, parseInt(w.buffer_minutes, 10) || 0) : 30,
           min_booking_notice_hours: parseInt(w.min_booking_notice_hours) || 24,
           max_travel_minutes: w.max_travel_minutes != null ? parseInt(w.max_travel_minutes) : DEFAULT_MAX_TRAVEL_MINUTES,
           windows:        []
@@ -528,9 +599,10 @@ async function handleAvailable(req, res) {
               }
             }
 
-            // Check if this slot overlaps any booked slot (including buffer after each booking)
+            // Check if this slot overlaps any booked slot, including the required
+            // gap between the earlier booking and whichever blocked item follows.
             const isBooked = bookedSlots.some(
-              b => slotStart < (b.end + buffer) && slotEnd > b.start
+              b => hasBufferedSlotConflict(slotStart, slotEnd, b.start, b.end, buffer)
             );
 
             if (isBooked) {
@@ -539,37 +611,14 @@ async function handleAvailable(req, res) {
             }
 
             // Travel time filter — hide slots where instructor can't travel in time
-            if (learnerPostcode && coordMap[learnerPostcode]) {
-              const learnerCoord = coordMap[learnerPostcode];
-              let travelBlocked = false;
-
-              // Find closest booking BEFORE this slot (with a pickup postcode)
-              let closestBefore = null;
-              let closestAfter = null;
-              for (const b of bookedSlots) {
-                if (b.end <= slotStart && b.postcode && coordMap[b.postcode]) {
-                  if (!closestBefore || b.end > closestBefore.end) closestBefore = b;
-                }
-                if (b.start >= slotEnd && b.postcode && coordMap[b.postcode]) {
-                  if (!closestAfter || b.start < closestAfter.start) closestAfter = b;
-                }
-              }
-
-              // Check gap before: can instructor get from previous booking's pickup to learner's pickup?
-              if (closestBefore) {
-                const prevCoord = coordMap[closestBefore.postcode];
-                const driveMinutes = estimateDriveMinutes(prevCoord.lat, prevCoord.lon, learnerCoord.lat, learnerCoord.lon);
-                const gapMinutes = slotStart - closestBefore.end;
-                if (gapMinutes < driveMinutes + TRAVEL_BUFFER_MINUTES) travelBlocked = true;
-              }
-
-              // Check gap after: can instructor get from learner's pickup to next booking's pickup?
-              if (!travelBlocked && closestAfter) {
-                const nextCoord = coordMap[closestAfter.postcode];
-                const driveMinutes = estimateDriveMinutes(learnerCoord.lat, learnerCoord.lon, nextCoord.lat, nextCoord.lon);
-                const gapMinutes = closestAfter.start - slotEnd;
-                if (gapMinutes < driveMinutes + TRAVEL_BUFFER_MINUTES) travelBlocked = true;
-              }
+            if (learnerPostcode) {
+              const travelBlocked = !!findAdjacentTravelSpacingConflict({
+                slotStart,
+                slotEnd,
+                pickupPostcode: learnerPostcode,
+                bookedSlots,
+                coordMap
+              });
 
               if (travelBlocked) {
                 travelHiddenCount++;
@@ -695,7 +744,7 @@ async function handleDurationsForSlot(req, res) {
 
     const slotStart = timeToMinutes(start_time);
     const buffer = parseInt(instructor.buffer_minutes) || 0;
-    const offered = instructor.offered_lesson_types; // null = all, otherwise JSONB array of slugs
+    const offered = instructor.offered_lesson_types; // null = default set, otherwise JSONB array of slugs
 
     // Find the availability window covering this start time (so we know how
     // long the door is open for).
@@ -786,6 +835,17 @@ async function handleDurationsForSlot(req, res) {
     }
 
     // For each lesson type, decide fits + reason.
+    const directPrices = new Map();
+    for (const lt of lessonTypes) {
+      const direct = await calcDirectLessonPrice(sql, {
+        schoolId,
+        instructorId,
+        learnerId: parseInt(req.query.learner_id) || null,
+        durationMinutes: lt.duration_minutes
+      });
+      directPrices.set(lt.id, direct.pricePence);
+    }
+
     const durations = lessonTypes.map(lt => {
       const slotEnd = slotStart + lt.duration_minutes;
       let fits = true;
@@ -797,9 +857,9 @@ async function handleDurationsForSlot(req, res) {
         fits = false; reason = 'window';
       } else if (violatesNotice) {
         fits = false; reason = 'notice';
-      } else if (offered != null && Array.isArray(offered) && !offered.includes(lt.slug)) {
+      } else if (!isLessonTypeOffered(offered, lt.slug)) {
         fits = false; reason = 'not_offered';
-      } else if (blocks.some(b => slotStart < (b.end + buffer) && slotEnd > b.start)) {
+      } else if (blocks.some(b => hasBufferedSlotConflict(slotStart, slotEnd, b.start, b.end, buffer))) {
         fits = false; reason = 'clash';
       } else if (learnerPostcode && coordMap[learnerPostcode]) {
         const learnerCoord = coordMap[learnerPostcode];
@@ -829,7 +889,7 @@ async function handleDurationsForSlot(req, res) {
         slug: lt.slug,
         name: lt.name,
         duration_minutes: lt.duration_minutes,
-        price_pence: lt.price_pence,
+        price_pence: directPrices.get(lt.id) || lt.price_pence,
         colour: lt.colour,
         fits,
         reason
@@ -1163,6 +1223,7 @@ async function handleBook(req, res) {
     // 0. Look up lesson type
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);
     const durationMins = lessonType.duration_minutes;
 
     // Validate slot duration matches lesson type
@@ -1179,11 +1240,14 @@ async function handleBook(req, res) {
 
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
-      SELECT id, name, email, phone, max_travel_minutes FROM instructors
+      SELECT id, name, email, phone, max_travel_minutes, offered_lesson_types FROM instructors
       WHERE id = ${instructor_id} AND active = true AND school_id = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found or unavailable' });
+    if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
+      return rejectLessonTypeNotOffered(res);
+    }
 
     // Demo instructor bookings are free (no deduction)
     const isDemoInstructor = instructor.email === 'demo@coachcarter.uk';
@@ -1607,18 +1671,16 @@ async function handleCheckoutSlot(req, res) {
     // 0. Look up lesson type for pricing
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);
     const durationMins = lessonType.duration_minutes;
-    let pricePence     = lessonType.price_pence;
+    const directPrice  = await calcDirectLessonPrice(sql, {
+      schoolId,
+      instructorId: instructor_id,
+      learnerId: user.id,
+      durationMinutes: durationMins
+    });
+    const pricePence   = directPrice.pricePence;
     const durationStr  = formatHours(durationMins);
-
-    // Check for per-learner custom hourly rate
-    const [customRate] = await sql`
-      SELECT custom_hourly_rate_pence FROM instructor_learner_notes
-      WHERE instructor_id = ${instructor_id} AND learner_id = ${user.id}
-    `;
-    if (customRate?.custom_hourly_rate_pence) {
-      pricePence = Math.round(customRate.custom_hourly_rate_pence * durationMins / 60);
-    }
 
     // Validate slot duration matches lesson type
     if (endMins - startMins !== durationMins)
@@ -1669,13 +1731,16 @@ async function handleCheckoutSlot(req, res) {
 
     // Check instructor is valid (and belongs to this school)
     const [instructor] = await sql`
-      SELECT id, name FROM instructors
+      SELECT id, name, offered_lesson_types FROM instructors
       WHERE id = ${instructor_id}
         AND active = true
         AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found' });
+    if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
+      return rejectLessonTypeNotOffered(res);
+    }
 
     // Get learner email
     const [learner] = await sql`SELECT email FROM learner_users WHERE id = ${user.id}`;
@@ -1846,8 +1911,8 @@ async function handleCheckoutSlotGuest(req, res) {
 
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);
     const durationMins = lessonType.duration_minutes;
-    let pricePence     = lessonType.price_pence;
     const durationStr  = formatHours(durationMins);
 
     if (endMins - startMins !== durationMins)
@@ -1892,13 +1957,16 @@ async function handleCheckoutSlotGuest(req, res) {
     } catch (e) { /* table may not exist yet */ }
 
     const [instructor] = await sql`
-      SELECT id, name FROM instructors
+      SELECT id, name, offered_lesson_types FROM instructors
       WHERE id = ${instructor_id}
         AND active = true
         AND COALESCE(school_id, 1) = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found' });
+    if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
+      return rejectLessonTypeNotOffered(res);
+    }
 
     // ── Find or create learner ──
     let learnerId;
@@ -1947,14 +2015,13 @@ async function handleCheckoutSlotGuest(req, res) {
       }
     }
 
-    // Check for per-learner custom hourly rate (existing learners only)
-    const [guestCustomRate] = await sql`
-      SELECT custom_hourly_rate_pence FROM instructor_learner_notes
-      WHERE instructor_id = ${instructor_id} AND learner_id = ${learnerId}
-    `;
-    if (guestCustomRate?.custom_hourly_rate_pence) {
-      pricePence = Math.round(guestCustomRate.custom_hourly_rate_pence * durationMins / 60);
-    }
+    const directPrice = await calcDirectLessonPrice(sql, {
+      schoolId,
+      instructorId: instructor_id,
+      learnerId,
+      durationMinutes: durationMins
+    });
+    const pricePence = directPrice.pricePence;
 
     // ── Create Stripe Checkout session ──
     const origin = req.headers.origin || 'https://coachcarter.uk';
@@ -2146,6 +2213,8 @@ async function handleBookFreeTrial(req, res) {
       SELECT lb.id FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       WHERE lb.lesson_type_id = ${trialType.id}
+        AND lb.school_id = ${schoolId}
+        AND lu.school_id = ${schoolId}
         AND (
           LOWER(lu.email) = ${cleanEmail}
           OR lu.phone = ANY(${phoneVariants})
@@ -2175,54 +2244,96 @@ async function handleBookFreeTrial(req, res) {
     // ── Slot conflict checks ──
     await sql`DELETE FROM slot_reservations WHERE expires_at < NOW()`;
 
-    const [existingBooking] = await sql`
-      SELECT id FROM lesson_bookings
-      WHERE instructor_id = ${instructor_id}
-        AND scheduled_date = ${date}
-        AND start_time = ${start_time}::time
-        AND status = ${SCHEDULED}
-    `;
-    if (existingBooking)
-      return res.status(409).json({ error: 'Sorry, that slot is already booked.' });
-
-    const [existingReservation] = await sql`
-      SELECT id FROM slot_reservations
-      WHERE instructor_id = ${instructor_id}
-        AND scheduled_date = ${date}
-        AND start_time = ${start_time}::time
-        AND expires_at > NOW()
-    `;
-    if (existingReservation)
-      return res.status(409).json({ error: 'Someone else is currently booking this slot. Try another or wait a few minutes.' });
-
-    try {
-      const [existingOffer] = await sql`
-        SELECT id FROM lesson_offers
-        WHERE instructor_id = ${instructor_id}
-          AND scheduled_date = ${date}
-          AND start_time = ${start_time}::time
-          AND status = 'pending'
-          AND expires_at > NOW()
-      `;
-      if (existingOffer)
-        return res.status(409).json({ error: 'This slot is currently held for a pending lesson offer.' });
-    } catch (e) { /* table may not exist yet */ }
-
     const [instructor] = await sql`
-      SELECT id, name, email, phone FROM instructors
+      SELECT id, name, email, phone, COALESCE(buffer_minutes, 30) AS buffer_minutes,
+             max_travel_minutes, offered_lesson_types
+      FROM instructors
       WHERE id = ${instructor_id} AND active = true AND school_id = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found' });
-
-    // ── Verify the instructor offers free trials ──
-    const [instructorOffers] = await sql`
-      SELECT 1 FROM instructors
-      WHERE id = ${instructor_id}
-        AND (offered_lesson_types IS NULL OR offered_lesson_types @> '["trial"]'::jsonb)
-    `;
-    if (!instructorOffers)
+    if (!isLessonTypeOffered(instructor.offered_lesson_types, trialType.slug)) {
       return res.status(400).json({ error: 'This instructor does not offer free trials.' });
+    }
+
+    const bufferMinutes = parseInt(instructor.buffer_minutes, 10) || 0;
+
+    const existingBookings = await sql`
+      SELECT id, start_time::text AS start_time, end_time::text AS end_time, pickup_address
+      FROM lesson_bookings
+      WHERE instructor_id = ${instructor_id}
+        AND scheduled_date = ${date}
+        AND status = ANY(${BLOCKING_STATUSES}::text[])
+        AND school_id = ${schoolId}
+    `;
+    const bookingBlocks = existingBookings.map(b => ({
+      id: b.id,
+      start: timeToMinutes(b.start_time),
+      end: timeToMinutes(b.end_time),
+      postcode: b.pickup_address ? extractPostcode(b.pickup_address) : null
+    }));
+    if (bookingBlocks.some(b => hasBufferedSlotConflict(startMins, endMins, b.start, b.end, bufferMinutes)))
+      return res.status(409).json({ error: 'Sorry, that slot is already booked.' });
+
+    const existingReservations = await sql`
+      SELECT id, start_time::text AS start_time, end_time::text AS end_time
+      FROM slot_reservations
+      WHERE instructor_id = ${instructor_id}
+        AND scheduled_date = ${date}
+        AND expires_at > NOW()
+        AND school_id = ${schoolId}
+    `;
+    if (existingReservations.some(r => hasBufferedSlotConflict(
+      startMins,
+      endMins,
+      timeToMinutes(r.start_time),
+      timeToMinutes(r.end_time),
+      bufferMinutes
+    )))
+      return res.status(409).json({ error: 'Someone else is currently booking this slot. Try another or wait a few minutes.' });
+
+    try {
+      const existingOffers = await sql`
+        SELECT id, start_time::text AS start_time, end_time::text AS end_time
+        FROM lesson_offers
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ${date}
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND school_id = ${schoolId}
+      `;
+      if (existingOffers.some(o => hasBufferedSlotConflict(
+        startMins,
+        endMins,
+        timeToMinutes(o.start_time),
+        timeToMinutes(o.end_time),
+        bufferMinutes
+      )))
+        return res.status(409).json({ error: 'This slot is currently held for a pending lesson offer.' });
+    } catch (e) { /* table may not exist yet */ }
+
+    const pickupPostcode = extractPostcode(cleanAddr);
+    if (pickupPostcode) {
+      let coordMap = {};
+      try {
+        const postcodes = new Set([normalisePostcode(pickupPostcode)]);
+        for (const b of bookingBlocks) {
+          if (b.postcode) postcodes.add(normalisePostcode(b.postcode));
+        }
+        coordMap = await bulkGeocodeUK([...postcodes]);
+      } catch { /* graceful — same-postcode checks still work without geocoding */ }
+
+      const travelConflict = findAdjacentTravelSpacingConflict({
+        slotStart: startMins,
+        slotEnd: endMins,
+        pickupPostcode,
+        bookedSlots: bookingBlocks,
+        coordMap
+      });
+      if (travelConflict) {
+        return res.status(409).json({ error: 'Sorry, that slot does not leave enough travel time from another booking.' });
+      }
+    }
 
     // ── Find or create learner (mirrors offers.js findOrCreateLearner) ──
     let learnerId;
@@ -2293,7 +2404,7 @@ async function handleBookFreeTrial(req, res) {
       `;
       booking = b;
     } catch (insertErr) {
-      if (insertErr.message?.includes('uq_booking_slot')) {
+      if (insertErr.message?.includes('uq_booking_slot') || insertErr.message?.includes('uq_instructor_slot')) {
         return res.status(409).json({ error: 'Sorry, that slot was just taken.' });
       }
       throw insertErr;
@@ -3307,3 +3418,5 @@ function formatDateDisplay(str) {
 
 module.exports._bookCreditFundedSlotsTransaction = bookCreditFundedSlotsTransaction;
 module.exports._CREDIT_BOOKING_SOURCE_TYPES = CREDIT_BOOKING_SOURCE_TYPES;
+module.exports._hasBufferedSlotConflict = hasBufferedSlotConflict;
+module.exports._findAdjacentTravelSpacingConflict = findAdjacentTravelSpacingConflict;

@@ -731,7 +731,7 @@ function showError(msg) { document.getElementById('calContent').innerHTML = `<di
 // when only one option fits). Pure UI write "” no side effects beyond the DOM
 // and selectedLessonType.
 function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
-  selectedLessonType = lt;
+  selectedLessonType = { ...lt, id: lt.id || lt.lesson_type_id };
   const ltDuration = lt.duration_minutes;
   // Recompute pendingSlot.end_time to match the picked duration. Backend
   // handlers (handleBook, handleCheckoutSlot, handleCheckoutSlotGuest) read
@@ -885,6 +885,7 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
   try {
     const selectedBalancePromise = isGuest ? Promise.resolve() : loadSelectedInstructorBalance(slot);
     let url = `/api/slots?action=durations-for-slot&instructor_id=${encodeURIComponent(slot.instructor_id)}&date=${encodeURIComponent(slot.date)}&start_time=${encodeURIComponent(slot.start_time)}`;
+    if (!isGuest && auth && auth.user && auth.user.id) url += `&learner_id=${encodeURIComponent(auth.user.id)}`;
     const pc = getLearnerPostcode();
     if (pc) url += `&pickup_postcode=${encodeURIComponent(pc)}`;
     const res = await fetch(url);
@@ -892,7 +893,10 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
     if (!res.ok) throw new Error(data.error || 'Failed to load durations');
     await selectedBalancePromise;
 
-    const durations = (data.durations || []).slice().sort((a, b) => a.duration_minutes - b.duration_minutes);
+    const durations = (data.durations || [])
+      .filter(d => d && d.slug !== 'trial')
+      .slice()
+      .sort((a, b) => a.duration_minutes - b.duration_minutes);
     const fitting = durations.filter(d => d.fits);
 
     document.getElementById('mdLoadingRow').style.display = 'none';

@@ -20,6 +20,8 @@ const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
 const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
+const { calcDirectLessonPrice } = require('./_pricing-helpers');
+const { isLessonTypeOffered } = require('./_lesson-type-helpers');
 
 function setCors(res) {
 }
@@ -58,26 +60,26 @@ async function handleList(req, res) {
     // Filter to only the lesson types this instructor offers (if they've configured it)
     if (instructorId) {
       const [instr] = await sql`
-        SELECT offered_lesson_types FROM instructors WHERE id = ${instructorId}
+        SELECT offered_lesson_types FROM instructors
+        WHERE id = ${instructorId} AND school_id = ${schoolId}
       `;
-      if (instr?.offered_lesson_types) {
-        const offered = instr.offered_lesson_types;
-        rows = rows.filter(lt => offered.includes(lt.slug));
+      if (instr) {
+        rows = rows.filter(lt => isLessonTypeOffered(instr.offered_lesson_types, lt.slug));
       }
     }
 
-    // If learner + instructor provided, check for custom hourly rate override
+    // If an instructor is provided, show the same direct-pay price checkout will use.
     const learnerId = parseInt(req.query.learner_id);
-    if (learnerId && instructorId) {
-      const [custom] = await sql`
-        SELECT custom_hourly_rate_pence FROM instructor_learner_notes
-        WHERE instructor_id = ${instructorId} AND learner_id = ${learnerId}
-      `;
-      if (custom?.custom_hourly_rate_pence) {
-        const rate = custom.custom_hourly_rate_pence;
-        for (const lt of rows) {
-          lt.price_pence = Math.round(rate * lt.duration_minutes / 60);
-        }
+    if (instructorId) {
+      for (const lt of rows) {
+        if (lt.slug === 'trial') continue;
+        const direct = await calcDirectLessonPrice(sql, {
+          schoolId,
+          instructorId,
+          learnerId,
+          durationMinutes: lt.duration_minutes
+        });
+        lt.price_pence = direct.pricePence;
       }
     }
 

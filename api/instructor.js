@@ -49,6 +49,8 @@ const { lockBalanceAndMutate, lockBalanceAdjustLCB } = require('./_credit-grant'
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
+const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-helpers');
+const { isLessonTypeOffered } = require('./_lesson-type-helpers');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -589,6 +591,7 @@ async function handleProfile(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -606,11 +609,18 @@ async function handleProfile(req, res) {
              COALESCE(languages, '["English"]'::jsonb) AS languages,
              ical_feed_url, ical_last_synced_at, ical_sync_error,
              offered_lesson_types,
-             COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled
-      FROM instructors WHERE id = ${instructor.id}
+             COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled,
+             COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled
+      FROM instructors
+      WHERE id = ${instructor.id}
+        AND school_id = ${schoolId}
     `;
 
     if (!profile) return res.status(404).json({ error: 'Instructor not found' });
+    profile.effective_hourly_rate_pence = await getEffectiveHourlyPence(sql, {
+      schoolId,
+      instructorId: instructor.id,
+    });
 
     return res.json({ instructor: profile });
 
@@ -629,18 +639,22 @@ async function handleUpdateProfile(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const {
     name, phone, bio, photo_url, buffer_minutes, calendar_start_hour, reminder_hours, daily_schedule_email,
     adi_grade, pass_rate, years_experience, specialisms,
     vehicle_make, vehicle_model, transmission_type, dual_controls,
     service_areas, languages, ical_feed_url, offered_lesson_types,
-    broadcast_offers_enabled
+    broadcast_offers_enabled, bulk_tiers_enabled
   } = req.body;
 
   // Validate broadcast_offers_enabled if provided
   if (broadcast_offers_enabled !== undefined && broadcast_offers_enabled !== null && typeof broadcast_offers_enabled !== 'boolean') {
     return res.status(400).json({ error: 'broadcast_offers_enabled must be true or false' });
+  }
+  if (bulk_tiers_enabled !== undefined && bulk_tiers_enabled !== null && typeof bulk_tiers_enabled !== 'boolean') {
+    return res.status(400).json({ error: 'bulk_tiers_enabled must be true or false' });
   }
 
   // Validate buffer_minutes if provided
@@ -701,9 +715,9 @@ async function handleUpdateProfile(req, res) {
     }
   }
 
-  // Validate offered_lesson_types: null (all types) or array of slug strings
+  // Validate offered_lesson_types: null (default lesson set) or array of slug strings
   // TODO: dynamicise from lesson_types table — this list drifts from DB.
-  const validSlugs = ['standard', '2hr', '3hr', 'trial'];
+  const validSlugs = ['standard', '2hr', '3hr', 'trial', '1hr'];
   if (offered_lesson_types !== undefined && offered_lesson_types !== null) {
     if (!Array.isArray(offered_lesson_types) || !offered_lesson_types.every(s => validSlugs.includes(s))) {
       return res.status(400).json({ error: 'offered_lesson_types must be null or an array of valid lesson type slugs' });
@@ -744,6 +758,8 @@ async function handleUpdateProfile(req, res) {
       ? daily_schedule_email : null;
     const broVal = (broadcast_offers_enabled !== undefined && broadcast_offers_enabled !== null)
       ? broadcast_offers_enabled : null;
+    const bulkVal = (bulk_tiers_enabled !== undefined && bulk_tiers_enabled !== null)
+      ? bulk_tiers_enabled : null;
     const prVal = (pass_rate !== undefined && pass_rate !== null)
       ? parseFloat(pass_rate) : null;
     const yeVal = (years_experience !== undefined && years_experience !== null)
@@ -761,7 +777,7 @@ async function handleUpdateProfile(req, res) {
     const icalChanged = icalUrlClean !== undefined;
     const icalVal = icalUrlClean === '' ? null : (icalUrlClean || null);
 
-    // offered_lesson_types: undefined = don't touch; null = offer all; array = explicit list
+    // offered_lesson_types: undefined = don't touch; null = default lesson set; array = explicit list
     const offeredChanged = offered_lesson_types !== undefined;
     const offeredVal = (offered_lesson_types !== undefined && offered_lesson_types !== null)
       ? JSON.stringify(offered_lesson_types) : null;
@@ -790,8 +806,10 @@ async function handleUpdateProfile(req, res) {
         ical_last_synced_at  = CASE WHEN ${icalChanged} THEN NULL ELSE ical_last_synced_at END,
         ical_sync_error      = CASE WHEN ${icalChanged} THEN NULL ELSE ical_sync_error END,
         offered_lesson_types = CASE WHEN ${offeredChanged} THEN ${offeredVal}::jsonb ELSE offered_lesson_types END,
-        broadcast_offers_enabled = COALESCE(${broVal}, broadcast_offers_enabled)
+        broadcast_offers_enabled = COALESCE(${broVal}, broadcast_offers_enabled),
+        bulk_tiers_enabled = COALESCE(${bulkVal}, bulk_tiers_enabled)
       WHERE id = ${instructor.id}
+        AND school_id = ${schoolId}
       RETURNING id, name, email, phone, bio, photo_url,
                 COALESCE(buffer_minutes, 30) AS buffer_minutes,
                 COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
@@ -806,8 +824,15 @@ async function handleUpdateProfile(req, res) {
                 COALESCE(languages, '["English"]'::jsonb) AS languages,
                 ical_feed_url, ical_last_synced_at, ical_sync_error,
                 offered_lesson_types,
-                COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled
+                COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled,
+                COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled
     `;
+    if (updated) {
+      updated.effective_hourly_rate_pence = await getEffectiveHourlyPence(sql, {
+        schoolId,
+        instructorId: instructor.id,
+      });
+    }
 
     return res.json({ success: true, instructor: updated });
 
@@ -2624,11 +2649,12 @@ async function handleIcalStatus(req, res) {
 }
 
 // ── POST /api/instructor?action=create-offer ──────────────────────────────────
-// Body: { learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, max_repeat_weeks? }
-// Creates a lesson offer. If learner_email is provided, emails the learner an accept link.
+// Body: { learner_id?, learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, discount_pct?, max_repeat_weeks? }
+// Creates a lesson offer. If learner_id is provided, binds the offer to that existing school learner.
+// If learner_email is provided, emails the learner an accept link.
 // If only learner_name is provided, creates a link-only offer (no email sent).
 // Slot fields are optional — omit for "flexible" offers where learner picks their own time.
-// offer_price_pence overrides the lesson-type price; omit to use lesson-type default.
+// offer_price_pence overrides effective pricing; otherwise the final price is snapshotted from effective hourly fallback.
 // max_repeat_weeks (1..18, default null = single lesson): caps how many weekly
 // repeats the learner can choose on the accept page. Slot-pinned only.
 async function handleCreateOffer(req, res) {
@@ -2637,9 +2663,12 @@ async function handleCreateOffer(req, res) {
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence, max_repeat_weeks } = req.body;
-  if (!learner_email && !learner_name)
-    return res.status(400).json({ error: 'Either learner_email or learner_name is required' });
+  const { learner_id, learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence, discount_pct, max_repeat_weeks } = req.body;
+  const learnerIdClean = learner_id != null && learner_id !== '' ? parseInt(learner_id, 10) : null;
+  if (learnerIdClean != null && (!Number.isInteger(learnerIdClean) || learnerIdClean <= 0))
+    return res.status(400).json({ error: 'learner_id must be a positive integer' });
+  if (!learnerIdClean && !learner_email && !learner_name)
+    return res.status(400).json({ error: 'Either learner_id, learner_email, or learner_name is required' });
 
   const isFlexible = !scheduled_date && !start_time;
 
@@ -2648,6 +2677,9 @@ async function handleCreateOffer(req, res) {
     const p = parseInt(offer_price_pence);
     if (isNaN(p) || p < 0) return res.status(400).json({ error: 'offer_price_pence must be a non-negative integer' });
   }
+  const discountPctClean = (discount_pct === undefined || discount_pct === null || discount_pct === '') ? 0 : parseInt(discount_pct, 10);
+  if (![0, 25, 50, 75, 100].includes(discountPctClean))
+    return res.status(400).json({ error: 'discount_pct must be 0, 25, 50, 75, or 100' });
 
   // Validate max_repeat_weeks if provided. Range 1..18 (1 = single lesson, no
   // repeat option shown; 2..18 = learner picks count on accept page). Only
@@ -2697,7 +2729,7 @@ async function handleCreateOffer(req, res) {
     }
     if (!lessonType) {
       const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = 'standard' AND active = true AND school_id = ${schoolId}`;
-      lessonType = lt || { id: null, duration_minutes: 90, name: 'Standard Lesson', price_pence: 8250 };
+      lessonType = lt || { id: null, slug: 'standard', duration_minutes: 90, name: 'Standard Lesson', price_pence: 8250 };
     }
     const durationMins = lessonType.duration_minutes;
 
@@ -2712,9 +2744,14 @@ async function handleCreateOffer(req, res) {
 
     // Get instructor details
     const [instrDetails] = await sql`
-      SELECT id, name, email, phone FROM instructors WHERE id = ${instructor.id}
+      SELECT id, name, email, phone, offered_lesson_types FROM instructors
+      WHERE id = ${instructor.id}
+        AND school_id = ${schoolId}
     `;
     if (!instrDetails) return res.status(404).json({ error: 'Instructor not found' });
+    if (!isLessonTypeOffered(instrDetails.offered_lesson_types, lessonType.slug)) {
+      return res.status(400).json({ error: 'This instructor does not offer that lesson type' });
+    }
 
     // Slot conflict checks (only for slot-pinned offers)
     if (!isFlexible) {
@@ -2724,6 +2761,7 @@ async function handleCreateOffer(req, res) {
           AND scheduled_date = ${scheduled_date}
           AND start_time = ${start_time}::time
           AND status = ANY(${BLOCKING_STATUSES}::text[])
+          AND school_id = ${schoolId}
       `;
       if (existingBooking)
         return res.status(409).json({ error: 'That slot is already booked.' });
@@ -2735,6 +2773,7 @@ async function handleCreateOffer(req, res) {
           AND start_time = ${start_time}::time
           AND status = 'pending'
           AND expires_at > NOW()
+          AND school_id = ${schoolId}
       `;
       if (existingOffer)
         return res.status(409).json({ error: 'There is already a pending offer for that slot.' });
@@ -2747,6 +2786,7 @@ async function handleCreateOffer(req, res) {
             AND scheduled_date = ${scheduled_date}
             AND start_time = ${start_time}::time
             AND expires_at > NOW()
+            AND school_id = ${schoolId}
         `;
         hasReservation = !!existingRes;
       } catch (e) { /* table may not exist */ }
@@ -2754,11 +2794,23 @@ async function handleCreateOffer(req, res) {
         return res.status(409).json({ error: 'Someone is currently booking that slot. Try again shortly.' });
     }
 
-    // Check if learner already exists (only when email provided)
     let existingLearner = null;
-    if (learner_email) {
+    if (learnerIdClean) {
       const [found] = await sql`
-        SELECT id, name, email FROM learner_users WHERE LOWER(email) = LOWER(${learner_email})
+        SELECT id, name, email, phone, pickup_address
+        FROM learner_users
+        WHERE id = ${learnerIdClean}
+          AND school_id = ${schoolId}
+          AND archived_at IS NULL
+      `;
+      if (!found)
+        return res.status(404).json({ error: 'Learner not found in your school' });
+      existingLearner = found;
+    } else if (learner_email) {
+      const [found] = await sql`
+        SELECT id, name, email, phone, pickup_address FROM learner_users
+        WHERE LOWER(email) = LOWER(${learner_email})
+          AND school_id = ${schoolId}
       `;
       existingLearner = found || null;
     }
@@ -2766,24 +2818,34 @@ async function handleCreateOffer(req, res) {
     // Generate offer token
     const token = generateToken();
 
-    // Determine price to store
-    const customPricePence = offer_price_pence != null ? parseInt(offer_price_pence) : null;
+    // Freeze the per-lesson price now. Link-only/flexible offers with no
+    // learner id skip the custom-pair tier and use instructor -> school.
+    const offerPricing = await calcOfferLessonPrice(sql, {
+      schoolId,
+      instructorId: instructor.id,
+      learnerId: existingLearner?.id || null,
+      durationMinutes: durationMins,
+      explicitPricePence: offer_price_pence,
+      discountPct: discountPctClean,
+    });
 
     // Insert offer
-    const offerName = learner_name || existingLearner?.name || null;
+    const resolvedEmail = existingLearner?.email || (learner_email ? learner_email.toLowerCase() : null);
+    const resolvedPhone = existingLearner?.phone || null;
+    const offerName = existingLearner?.name || learner_name || null;
     const [offer] = await sql`
       INSERT INTO lesson_offers
         (token, instructor_id, learner_email, learner_name, learner_id, scheduled_date, start_time, end_time,
-         lesson_type_id, discount_pct, offer_price_pence, max_repeat_weeks, status, expires_at)
+         lesson_type_id, discount_pct, offer_price_pence, max_repeat_weeks, status, expires_at, school_id)
       VALUES
-        (${token}, ${instructor.id}, ${learner_email ? learner_email.toLowerCase() : null}, ${offerName}, ${existingLearner?.id || null},
+        (${token}, ${instructor.id}, ${resolvedEmail}, ${offerName}, ${existingLearner?.id || null},
          ${scheduled_date || null}, ${start_time || null}, ${end_time},
-         ${lessonType.id}, ${0}, ${customPricePence}, ${maxRepeatWeeksClean}, 'pending', NOW() + INTERVAL '24 hours')
+         ${lessonType.id}, ${discountPctClean}, ${offerPricing.pricePence}, ${maxRepeatWeeksClean}, 'pending', NOW() + INTERVAL '24 hours', ${schoolId})
       RETURNING id, expires_at
     `;
 
     // Determine final price for email
-    const pricePence = customPricePence != null ? customPricePence : lessonType.price_pence;
+    const pricePence = offerPricing.pricePence;
     const priceStr = pricePence === 0 ? 'FREE' : `£${(pricePence / 100).toFixed(2)}`;
     const durationStr = durationMins >= 60
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
@@ -2792,10 +2854,11 @@ async function handleCreateOffer(req, res) {
     const acceptUrl = `${baseUrl}/accept-offer.html?token=${token}`;
     const firstName = existingLearner ? (existingLearner.name || '').split(' ')[0] || 'there' : 'there';
 
-    // Build email content — slot-pinned vs flexible
-    let emailSubject, emailSlotRows;
+    // Build notification content — slot-pinned vs flexible
+    let emailSubject, emailSlotRows, messageOfferSummary;
     if (isFlexible) {
       emailSubject = `Driving lesson offer from ${instrDetails.name}`;
+      messageOfferSummary = `${durationStr} driving lesson at a time you choose`;
       emailSlotRows = `
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">When</td><td style="padding:6px 0">Pick a time that suits you</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Duration</td><td style="padding:6px 0">${durationStr}</td></tr>
@@ -2809,6 +2872,7 @@ async function handleCreateOffer(req, res) {
       const repeatRow = maxRepeatWeeksClean && maxRepeatWeeksClean > 1
         ? `<tr><td style="padding:6px 16px 6px 0;font-weight:bold">Weekly repeats</td><td style="padding:6px 0">Pick up to ${maxRepeatWeeksClean} weekly lessons on the accept page</td></tr>`
         : '';
+      messageOfferSummary = `${dateStr} at ${start_time} - ${end_time} (${durationStr})${maxRepeatWeeksClean && maxRepeatWeeksClean > 1 ? `, with up to ${maxRepeatWeeksClean} weekly lessons available` : ''}`;
       emailSlotRows = `
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Date</td><td style="padding:6px 0">${dateStr}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Time</td><td style="padding:6px 0">${start_time} – ${end_time}</td></tr>
@@ -2817,14 +2881,41 @@ async function handleCreateOffer(req, res) {
         ${repeatRow}`;
     }
 
+    // Send offer SMS (only when a stored learner phone is available). Delivery
+    // failures must not block offer creation; instructors can always copy the link.
+    let messageSent = false;
+    let messageError = null;
+    if (resolvedPhone) {
+      try {
+        const messageResult = await sendWhatsApp(
+          resolvedPhone,
+          `Hi ${firstName}, ${instrDetails.name} has sent you a driving lesson offer.\n\n` +
+          `${messageOfferSummary}\n` +
+          `Price: ${priceStr}${maxRepeatWeeksClean && maxRepeatWeeksClean > 1 ? ' per lesson' : ''}\n\n` +
+          `Accept within 24 hours: ${acceptUrl}`,
+          {
+            purpose: 'offer.created_learner',
+            learnerId: existingLearner?.id,
+            instructorId: instructor.id,
+            schoolId,
+          }
+        );
+        messageSent = !!messageResult?.ok;
+        messageError = messageResult?.ok ? null : (messageResult?.error || 'Message delivery failed');
+      } catch (messageErr) {
+        console.error('Failed to send offer message:', messageErr);
+        messageError = messageErr.message || 'Message delivery failed';
+      }
+    }
+
     // Send offer email (only when email is provided)
     let emailSent = false;
-    if (learner_email) {
+    if (resolvedEmail) {
       try {
         const mailer = createTransporter();
         await mailer.sendMail({
           from: 'CoachCarter <bookings@coachcarter.uk>',
-          to: learner_email,
+          to: resolvedEmail,
           subject: emailSubject,
           html: `
             <div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto">
@@ -2859,7 +2950,11 @@ async function handleCreateOffer(req, res) {
       expires_at: offer.expires_at,
       learner_exists: !!existingLearner,
       learner_name: offerName,
+      email_available: !!resolvedEmail,
+      message_available: !!resolvedPhone,
       email_sent: emailSent,
+      message_sent: messageSent,
+      message_error: messageError,
       accept_url: acceptUrl
     });
   } catch (err) {
@@ -3142,23 +3237,30 @@ async function handleCreateBroadcastOffer(req, res) {
     const offerRows = [];
     for (const lu of validLearners) {
       const token = crypto.randomBytes(24).toString('hex');
+      const offerPricing = await calcOfferLessonPrice(sql, {
+        schoolId,
+        instructorId: instructor.id,
+        learnerId: lu.id,
+        durationMinutes: durationMins,
+        discountPct: dp,
+      });
       try {
         const [row] = await sql`
           INSERT INTO lesson_offers
             (token, instructor_id, learner_email, learner_id, learner_name,
              scheduled_date, start_time, end_time,
-             lesson_type_id, discount_pct, status,
+             lesson_type_id, discount_pct, offer_price_pence, status,
              kind, batch_id, trigger,
              expires_at, school_id)
           VALUES
             (${token}, ${instructor.id}, ${lu.email || null}, ${lu.id}, ${lu.name || null},
              ${scheduled_date}, ${start_time}, ${end_time},
-             ${lessonType.id}, ${dp}, 'pending',
+             ${lessonType.id}, ${dp}, ${offerPricing.pricePence}, 'pending',
              'broadcast', ${batchId}, 'instructor_manual',
              ${expiresAt.toISOString()}, ${schoolId})
           RETURNING id, token
         `;
-        offerRows.push({ ...row, learner: lu });
+        offerRows.push({ ...row, learner: lu, pricing: offerPricing });
       } catch (err) {
         console.warn('broadcast offer insert failed for learner', lu.id, err.message);
       }
@@ -3184,19 +3286,16 @@ async function handleCreateBroadcastOffer(req, res) {
       return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, '0')}${ampm}`;
     }
     const timeStr = fmtTime(start_time);
-    const originalPricePence = lessonType.price_pence || 8250;
-    const finalPricePence = Math.round(originalPricePence * (100 - dp) / 100);
-    const priceStr = finalPricePence === 0 ? 'FREE' : `£${(finalPricePence / 100).toFixed(2)}`;
-    const wasStr = `£${(originalPricePence / 100).toFixed(2)}`;
-    const discountLabel = dp > 0 ? ` at ${dp}% off (${priceStr} instead of ${wasStr})` : ` for ${priceStr}`;
-
     const [instrRow] = await sql`SELECT name FROM instructors WHERE id = ${instructor.id}`;
     const instructorName = instrRow?.name || 'Your instructor';
 
     const mailer = createTransporter();
 
-    for (const { token, learner } of offerRows) {
+    for (const { token, learner, pricing } of offerRows) {
       const acceptLink = `${baseUrl}/accept-offer.html?token=${token}`;
+      const priceStr = pricing.pricePence === 0 ? 'FREE' : `£${(pricing.pricePence / 100).toFixed(2)}`;
+      const wasStr = `£${(pricing.basePricePence / 100).toFixed(2)}`;
+      const discountLabel = dp > 0 ? ` at ${dp}% off (${priceStr} instead of ${wasStr})` : ` for ${priceStr}`;
       const waMsg = `${instructorName} has a ${timeStr} slot on ${dateStr}${discountLabel}.\n\nFirst come, first served. Click to book: ${acceptLink}`;
 
       if (learner.phone) {

@@ -71,15 +71,18 @@ async function handleAvailability(req, res) {
 
   const { instructor_id } = req.query;
   if (!instructor_id) return res.status(400).json({ error: 'instructor_id required' });
+  const schoolId = parseInt(req.query.school_id) || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const windows = await sql`
-      SELECT id, day_of_week, start_time, end_time, active
-      FROM instructor_availability
-      WHERE instructor_id = ${instructor_id}
-        AND active = true
-      ORDER BY day_of_week ASC, start_time ASC
+      SELECT ia.id, ia.day_of_week, ia.start_time, ia.end_time, ia.active
+      FROM instructor_availability ia
+      JOIN instructors i ON i.id = ia.instructor_id
+      WHERE ia.instructor_id = ${instructor_id}
+        AND ia.active = true
+        AND i.school_id = ${schoolId}
+      ORDER BY ia.day_of_week ASC, ia.start_time ASC
     `;
     return res.json({ windows });
   } catch (err) {
@@ -96,8 +99,13 @@ async function handleCreate(req, res) {
   if (!payload) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = getSchoolId(payload, req);
 
-  const { name, email, phone, bio, photo_url, buffer_minutes } = req.body;
+  const { name, email, phone, bio, photo_url, buffer_minutes, bulk_tiers_enabled } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'name and email are required' });
+  if (bulk_tiers_enabled !== undefined && typeof bulk_tiers_enabled !== 'boolean') {
+    return res.status(400).json({ error: 'bulk_tiers_enabled must be true or false' });
+  }
+  const hourlyRate = parseHourlyRatePence(req.body?.hourly_rate_pence);
+  if (hourlyRate.error) return res.status(400).json({ error: hourlyRate.error });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -109,7 +117,7 @@ async function handleCreate(req, res) {
     const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null) ? parseInt(buffer_minutes) : 30;
 
     const [instructor] = await sql`
-      INSERT INTO instructors (name, email, phone, bio, photo_url, buffer_minutes, school_id)
+      INSERT INTO instructors (name, email, phone, bio, photo_url, buffer_minutes, bulk_tiers_enabled, hourly_rate_pence, school_id)
       VALUES (
         ${name.trim()},
         ${email.toLowerCase().trim()},
@@ -117,9 +125,11 @@ async function handleCreate(req, res) {
         ${bio || null},
         ${photo_url || null},
         ${bufVal},
+        ${bulk_tiers_enabled === true},
+        ${hourlyRate.value},
         ${schoolId}
       )
-      RETURNING id, name, email, phone, bio, photo_url, active, created_at, buffer_minutes
+      RETURNING id, name, email, phone, bio, photo_url, active, created_at, buffer_minutes, hourly_rate_pence, COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled
     `;
     return res.status(201).json({ instructor });
   } catch (err) {
@@ -136,17 +146,24 @@ async function handleUpdate(req, res) {
   if (!payload) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = getSchoolId(payload, req);
 
-  const { id, name, email, phone, bio, photo_url, active, buffer_minutes, commission_rate, max_travel_minutes } = req.body;
+  const { id, name, email, phone, bio, photo_url, active, buffer_minutes, commission_rate, max_travel_minutes, bulk_tiers_enabled } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required' });
+  if (bulk_tiers_enabled !== undefined && typeof bulk_tiers_enabled !== 'boolean') {
+    return res.status(400).json({ error: 'bulk_tiers_enabled must be true or false' });
+  }
 
   const hasFranchiseFee = 'weekly_franchise_fee_pence' in (req.body || {});
   const franchiseFeeVal = hasFranchiseFee ? req.body.weekly_franchise_fee_pence : undefined;
+  const hourlyRate = parseHourlyRatePence(req.body?.hourly_rate_pence, { allowOmitted: true });
+  if (hourlyRate.error) return res.status(400).json({ error: hourlyRate.error });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null) ? parseInt(buffer_minutes) : null;
     const rateVal = (commission_rate !== undefined && commission_rate !== null) ? parseFloat(commission_rate) : null;
     const travelVal = (max_travel_minutes !== undefined && max_travel_minutes !== null) ? parseInt(max_travel_minutes) : null;
+    const hasBulkTiers = bulk_tiers_enabled !== undefined;
+    const hasHourlyRate = hourlyRate.present;
 
     const [instructor] = await sql`
       UPDATE instructors SET
@@ -159,9 +176,11 @@ async function handleUpdate(req, res) {
         buffer_minutes  = COALESCE(${bufVal}, buffer_minutes),
         max_travel_minutes = COALESCE(${travelVal}, max_travel_minutes),
         commission_rate = COALESCE(${rateVal}, commission_rate),
-        weekly_franchise_fee_pence = CASE WHEN ${hasFranchiseFee} THEN ${franchiseFeeVal != null ? parseInt(franchiseFeeVal) : null}::integer ELSE weekly_franchise_fee_pence END
+        bulk_tiers_enabled = CASE WHEN ${hasBulkTiers} THEN ${bulk_tiers_enabled === true} ELSE bulk_tiers_enabled END,
+        weekly_franchise_fee_pence = CASE WHEN ${hasFranchiseFee} THEN ${franchiseFeeVal != null ? parseInt(franchiseFeeVal) : null}::integer ELSE weekly_franchise_fee_pence END,
+        hourly_rate_pence = CASE WHEN ${hasHourlyRate} THEN ${hourlyRate.value}::integer ELSE hourly_rate_pence END
       WHERE id = ${id} AND school_id = ${schoolId}
-      RETURNING id, name, email, phone, bio, photo_url, active, COALESCE(buffer_minutes, 30) AS buffer_minutes, max_travel_minutes, COALESCE(commission_rate, 0.85) AS commission_rate, weekly_franchise_fee_pence
+      RETURNING id, name, email, phone, bio, photo_url, active, COALESCE(buffer_minutes, 30) AS buffer_minutes, max_travel_minutes, COALESCE(commission_rate, 0.85) AS commission_rate, weekly_franchise_fee_pence, hourly_rate_pence, COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled
     `;
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
     return res.json({ instructor });
@@ -208,7 +227,11 @@ async function handleSetAvailability(req, res) {
 
     // Delete existing windows and insert new ones in one go
     await sql`
-      DELETE FROM instructor_availability WHERE instructor_id = ${instructor_id}
+      DELETE FROM instructor_availability ia
+      USING instructors i
+      WHERE ia.instructor_id = ${instructor_id}
+        AND i.id = ia.instructor_id
+        AND i.school_id = ${schoolId}
     `;
 
     if (windows.length > 0) {
@@ -222,10 +245,12 @@ async function handleSetAvailability(req, res) {
 
     // Return the saved windows
     const saved = await sql`
-      SELECT id, day_of_week, start_time, end_time, active
-      FROM instructor_availability
-      WHERE instructor_id = ${instructor_id}
-      ORDER BY day_of_week ASC, start_time ASC
+      SELECT ia.id, ia.day_of_week, ia.start_time, ia.end_time, ia.active
+      FROM instructor_availability ia
+      JOIN instructors i ON i.id = ia.instructor_id
+      WHERE ia.instructor_id = ${instructor_id}
+        AND i.school_id = ${schoolId}
+      ORDER BY ia.day_of_week ASC, ia.start_time ASC
     `;
     return res.json({ success: true, windows: saved });
   } catch (err) {
@@ -308,4 +333,17 @@ async function handleSetPassword(req, res) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function isValidTime(t) {
   return typeof t === 'string' && /^\d{2}:\d{2}$/.test(t);
+}
+
+function parseHourlyRatePence(value, { allowOmitted = false } = {}) {
+  if (value === undefined) {
+    return allowOmitted ? { present: false, value: undefined } : { present: true, value: null };
+  }
+  if (value === null || value === '') return { present: true, value: null };
+
+  const rate = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(rate) || rate <= 0 || rate > 50000) {
+    return { present: true, error: 'hourly_rate_pence must be null or an integer between 1 and 50000' };
+  }
+  return { present: true, value: rate };
 }

@@ -252,19 +252,22 @@ The site uses a unified competency framework (10 DL25 categories, 39 sub-skills)
 
 ### How credits work
 
-Each credit = one 1.5-hour lesson. Credits are stored per learner/instructor in `learner_credit_balances` and purchased via Stripe (Klarna available). Bulk discounts apply automatically:
+Learners buy hours, stored per learner/instructor in `learner_credit_balances`, via Stripe (Klarna available). New credit purchases are priced server-side for the selected instructor:
 
-| Credits | Hours | Discount |
-|---|---|---|
-| 4 | 6hrs | 5% off |
-| 8 | 12hrs | 10% off |
-| 12 | 18hrs | 15% off |
-| 16 | 24hrs | 20% off |
-| 20 | 30hrs | 25% off |
+Rate precedence is learner/instructor custom rate → instructor hourly rate → school default `schools.config.pricing.bulk_hourly_pence`. School-wide tiers live in `schools.config.pricing.bulk_discount_tiers`, but apply only when the selected instructor has `instructors.bulk_tiers_enabled = TRUE`. New instructors default off; Fraser is grandfathered on. Existing credit rows keep their snapshotted `effective_rate_pence_per_minute`.
 
-Base rate: **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Learners buy hours, not lesson credits. Instructor-scoped balances are stored as `learner_credit_balances.balance_minutes`; the legacy `learner_users.balance_minutes` column is an aggregate/display shadow.
+The school default is currently **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Instructor-scoped balances are stored as `learner_credit_balances.balance_minutes`; the legacy `learner_users.balance_minutes` column is an aggregate/display shadow.
+
+Admins can set `instructors.hourly_rate_pence` when creating/editing instructors; leaving it blank stores NULL and inherits the school default. Admins can also set `bulk_tiers_enabled`, and instructors can manage the same opt-in from their profile.
+
+`/learner/buy-credits.html` is selected-instructor-aware: learners must choose an instructor before checkout, the page fetches `/api/credits?action=bulk-pricing&instructor_id=...`, labels the balance as hours with that instructor, shows the effective hourly rate returned by the server, and only shows discount/savings copy when that instructor has opted into bulk tiers. Checkout still posts `{ hours, instructor_id }`; the server remains the pricing source of truth.
+
+Direct pay-and-book uses the same effective hourly fallback for the selected instructor and lesson duration: learner/instructor custom rate → instructor hourly rate → school default `bulk_hourly_pence`. Bulk discount tiers do not apply to direct single-slot payments. The booking modal gets these prices from server APIs and checkout sends only slot/instructor/lesson-type context, not a client-side amount.
+
+Instructor-created paid offers now freeze their final per-lesson price into `lesson_offers.offer_price_pence` at creation. Explicit `offer_price_pence` wins, including £0 free offers; otherwise the server computes custom learner rate → instructor hourly rate → school default for the lesson duration, then applies the offer's `discount_pct`. Bulk-tier opt-in never discounts offers. Repeat-offer Stripe checkout uses the stored per-lesson price as `unit_amount` and the selected repeat count as `quantity`, so accepted offers do not reprice later.
 
 **Lesson types** (managed via admin portal):
+- 1-Hour Lesson — 60 min / £55.00 (active, instructor opt-in only)
 - Standard Lesson — 90 min / £82.50
 - 2-Hour Lesson — 120 min / £110.00
 - More types can be added via admin portal (`api/lesson-types.js`)
@@ -358,7 +361,7 @@ Kept for SMS code login, password-reset emails, and the migration code flow. Mag
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `preview-broadcast-audience` | GET | Instructor | `?scheduled_date=YYYY-MM-DD&start_time=HH:MM&end_time=HH:MM` — returns learners with active weekly availability covering the slot. Each learner row includes their full availability windows so the picker can show "Mon · Wed eves" alongside the name. |
-| `create-broadcast-offer` | POST | Instructor | Body: `{ scheduled_date, start_time, lesson_type_id?, discount_pct? (0/25/50/75/100), learner_ids[] }`. Mints `lesson_offers` rows with `kind='broadcast'`, `trigger='instructor_manual'`, shared `batch_id`. Sends WhatsApp + email per recipient. |
+| `create-broadcast-offer` | POST | Instructor | Body: `{ scheduled_date, start_time, lesson_type_id?, discount_pct? (0/25/50/75/100), learner_ids[] }`. Mints `lesson_offers` rows with `kind='broadcast'`, `trigger='instructor_manual'`, shared `batch_id`, and per-recipient frozen `offer_price_pence` from effective instructor pricing. Sends WhatsApp + email per recipient. |
 | `close-broadcast-offer` | POST | Instructor | Body: `{ batch_id }`. Cancels all pending siblings via `supersedeBroadcastSiblings()` and sends "no longer available" follow-up. Slot is implicitly freed. |
 | `my-broadcast-batches` | GET | Instructor | Returns active broadcast batches with pending counts for the dashboard card. |
 
@@ -368,7 +371,7 @@ Internal module (no public actions). Two exports:
 
 **`notifyAvailableLearners({ instructor_id, instructor_name, scheduled_date, start_time, end_time, lesson_type_id, school_id })`** — called from `api/slots.js` after a cancellation. Finds every learner with an active `learner_availability` window covering the freed slot and either:
 - Sends a plain "slot opened" WhatsApp + email (default), OR
-- Mints a broadcast offer batch in `lesson_offers` at 25% off and emails per-recipient single-use tokens to `/accept-offer.html?token=…`. Triggered when the cancellation is <48h before lesson start AND `instructors.broadcast_offers_enabled = TRUE`.
+- Mints a broadcast offer batch in `lesson_offers` at 25% off effective instructor pricing and emails per-recipient single-use tokens to `/accept-offer.html?token=…`. Triggered when the cancellation is <48h before lesson start AND `instructors.broadcast_offers_enabled = TRUE`.
 
 **`supersedeBroadcastSiblings({ instructor_id, scheduled_date, start_time, school_id, winnerOfferId, batchId })`** — called from booking paths (Stripe webhook for offer accept, `slots.js?action=book`, webhook `handleSlotBooking`). Marks all pending broadcast offers on the slot/batch except the winner as `'superseded'` and sends a "no longer available" WhatsApp + email follow-up.
 
@@ -389,7 +392,8 @@ Replaced the retired `api/waitlist.js` (May 2026). Weekly availability is now th
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `balance` | GET | Yes | Returns aggregate `balance_minutes`, `balance_hours`, `credit_balance`, recent transactions, and per-instructor `balances: [{ instructor_id, instructor_name, balance_minutes, balance_hours }]`. Optional `instructor_id` validates school scope and adds `selected_instructor_balance_minutes` / `selected_instructor_balance_hours`. |
-| `checkout` | POST | Yes | Creates Stripe checkout for hours purchase. Body: `{ hours, instructor_id }` (or legacy `{ quantity, instructor_id }` for lesson count). New learner-facing purchases require an active same-school instructor; Stripe metadata includes `instructor_id`. Discount tiers: 6h=5%, 12h=10%, 18h=15%, 24h=20%, 30h=25% |
+| `checkout` | POST | Yes | Creates Stripe checkout for hours purchase. Body: `{ hours, instructor_id }` (or legacy `{ quantity, instructor_id }` for lesson count). New learner-facing purchases require an active same-school instructor; Stripe metadata includes `instructor_id`, `amount_pence`, `discount_pct`, and `effective_rate_pence_per_minute` from the instructor-aware server total. |
+| `bulk-pricing` | GET | No | Public pricing contract for buy-credits UI. Optional `instructor_id` validates same-school active non-demo instructor and returns instructor-aware `hourly_pence`, applicable `discount_tiers`, `bulk_tiers_enabled`, and `rate_source`; optional `hours` also returns `full_pence`, `discount_pct`, `discount_amount_pence`, and `total_pence`. |
 | `verify` | GET | Yes | Post-checkout safety net. Params: `session_id` (Stripe checkout session ID). Checks Stripe payment status and grants credits idempotently if webhook missed them. Returns `{ ok, already_processed }` or `{ ok, granted, hours, minutes }`. Referrer rewards are NOT issued here — `cron-referral-rewards.js` handles them per completed lesson |
 
 ### API — `api/r.js` (referral short URL)
@@ -452,7 +456,7 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 
 **DB columns:** `instructors.max_travel_minutes` — per-instructor threshold (default 30 mins), editable from admin portal
 
-**DB columns:** `instructors.offered_lesson_types` JSONB — array of lesson type slugs the instructor offers (e.g. `["standard","2hr"]`). NULL means all active lesson types. Controls which pills appear on `/book/:slug` and filters `/api/lesson-types?action=list` when `instructor_id` is passed.
+**DB columns:** `instructors.offered_lesson_types` JSONB — array of lesson type slugs the instructor offers (e.g. `["standard","2hr"]`). NULL means the default active lesson set; opt-in-only slugs such as `"1hr"` are excluded until explicitly saved in the array. Controls which pills appear on `/book/:slug` and filters `/api/lesson-types?action=list` when `instructor_id` is passed.
 
 ### API — `api/offers.js`
 
@@ -466,7 +470,7 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `create-offer` | POST | Instructor JWT | Creates lesson offer, sends email to learner. Body: `{ learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, max_repeat_weeks? (1-18) }`. `max_repeat_weeks > 1` lets the learner book a recurring weekly series via the accept page (skip-clash, may exceed the 12-week self-serve cap). |
+| `create-offer` | POST | Instructor JWT | Creates lesson offer, sends email to learner. Body: `{ learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, discount_pct?, max_repeat_weeks? (1-18) }`. New paid offers snapshot final `offer_price_pence`: explicit pence wins, otherwise effective instructor pricing with optional offer discount. `max_repeat_weeks > 1` lets the learner book a recurring weekly series via the accept page (skip-clash, may exceed the 12-week self-serve cap). |
 | `list-offers` | GET | Instructor JWT | Lists instructor's offers with status filter |
 | `cancel-offer` | POST | Instructor JWT | Cancels a pending offer |
 
@@ -513,7 +517,7 @@ id SERIAL PRIMARY KEY
 name TEXT NOT NULL                  -- 'Standard Lesson', '2-Hour Lesson'
 slug TEXT NOT NULL UNIQUE           -- 'standard', '2hr'
 duration_minutes INTEGER NOT NULL   -- 90, 120
-price_pence INTEGER NOT NULL        -- 8250, 11000
+price_pence INTEGER NOT NULL        -- admin catalogue/base price; direct selected-instructor checkout recalculates from effective hourly pricing
 colour TEXT DEFAULT '#3b82f6'       -- hex for calendar colour-coding
 active BOOLEAN DEFAULT TRUE
 sort_order INTEGER DEFAULT 0
@@ -658,8 +662,8 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `schedule-range` | GET | JWT | Bookings in date range for calendar views. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
 | `availability` | GET | JWT | Current weekly availability windows |
 | `set-availability` | POST | JWT | Update weekly availability windows |
-| `profile` | GET | JWT | Profile details |
-| `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages, ical_feed_url |
+| `profile` | GET | JWT | Profile details, including `bulk_tiers_enabled` and read-only `effective_hourly_rate_pence` |
+| `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages, ical_feed_url, and `bulk_tiers_enabled` |
 | `ical-test` | POST | JWT | Test-fetch an iCal feed URL, returns event count |
 | `ical-status` | GET | JWT | Returns iCal sync status (url, last_synced, error, event_count) |
 | `cancel-booking` | POST | JWT | Cancel a scheduled booking (always refunds learner credit — instructor-initiated cancellations bypass the 48h rule). Body: `{ booking_id, reason?, notify? }` — `notify: false` skips learner email |
@@ -700,9 +704,11 @@ Two alarm triggers:
 
 ### Database tables
 
-**`instructors`** — name, email, phone, bio, photo_url, active flag, slug (unique, auto-generated from first name — used for clean booking URLs like `/book/fraser`), buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error, stripe_account_id, stripe_onboarding_complete, payouts_paused, weekly_franchise_fee_pence (NULL = commission model, non-NULL = fixed weekly fee)
+**`instructors`** — name, email, phone, bio, photo_url, active flag, slug (unique, auto-generated from first name — used for clean booking URLs like `/book/fraser`), buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error, stripe_account_id, stripe_onboarding_complete, payouts_paused, weekly_franchise_fee_pence (NULL = commission model, non-NULL = fixed weekly fee), hourly_rate_pence (NULL = inherit school default, non-NULL = admin-set instructor hourly override)
 
-**`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). Used by booking checkout, lesson-types API, earnings view, and payout calculations.
+`instructors.hourly_rate_pence` is the admin-editable per-instructor lesson rate override used after any learner/instructor custom rate and before the school default. `instructors.bulk_tiers_enabled` controls whether school-defined bulk discounts apply to future credit purchases for that instructor; when true, the instructor absorbs the discount. It does not discount direct pay-and-book single-slot payments.
+
+**`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). Used by direct booking checkout, lesson-types/duration pricing APIs, credit checkout, earnings view, and payout calculations. Direct pay-and-book pricing uses custom learner rate → instructor hourly rate → school `bulk_hourly_pence`; bulk discounts remain credit-package only.
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
 
@@ -710,7 +716,7 @@ Two alarm triggers:
 
 **`instructor_external_events`** — synced events from instructor's personal iCal feed (event_date, start_time, end_time, is_all_day, uid_hash for dedup). Indexed on (instructor_id, event_date). Used by slot generation to block slots that conflict with personal events.
 
-**`lesson_offers`** — instructor-initiated lesson offers pending learner acceptance + payment. Two modes: **slot-pinned** (instructor picks date/time) and **flexible** (learner picks from available slots). Fields: token (unique, 64-char hex), instructor_id, learner_email, learner_id (nullable — set when learner exists or after payment creates account), scheduled_date (nullable — NULL for flexible offers), start_time (nullable), end_time (nullable), lesson_type_id, discount_pct, offer_price_pence (nullable — exact price in pence set by instructor; when set, takes precedence over discount_pct calculation), status ('pending'/'accepted'/'expired'/'cancelled'), booking_id (set by webhook after payment), stripe_session_id, expires_at (24h from creation), accepted_at. Partial unique index on (instructor_id, scheduled_date, start_time) WHERE status='pending' AND scheduled_date IS NOT NULL prevents duplicate pending offers for the same slot. Slot-pinned pending offers block slot availability; flexible offers do not block any slot until the learner picks one.
+**`lesson_offers`** — instructor-initiated lesson offers pending learner acceptance + payment. Two modes: **slot-pinned** (instructor picks date/time) and **flexible** (learner picks from available slots). Fields: token (unique, 64-char hex), instructor_id, learner_email, learner_id (nullable — set when learner exists or after payment creates account), scheduled_date (nullable — NULL for flexible offers), start_time (nullable), end_time (nullable), lesson_type_id, discount_pct, offer_price_pence (nullable for legacy pending offers; new paid/free offers store the frozen final per-lesson pence), status ('pending'/'accepted'/'expired'/'cancelled'), booking_id (set by webhook after payment), stripe_session_id, expires_at (24h from creation), accepted_at. New offer pricing uses explicit `offer_price_pence` if supplied, otherwise effective instructor pricing (custom learner rate → instructor hourly rate → school default) with `discount_pct` applied to that base; bulk tiers are credit-package only and never affect offers. Partial unique index on (instructor_id, scheduled_date, start_time) WHERE status='pending' AND scheduled_date IS NOT NULL prevents duplicate pending offers for the same slot. Slot-pinned pending offers block slot availability; flexible offers do not block any slot until the learner picks one.
 
 **`instructor_login_tokens`** — magic-link tokens with expiry and used flag
 

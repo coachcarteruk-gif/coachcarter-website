@@ -109,7 +109,8 @@ test.describe('webhook paid offer BCS attribution', () => {
     const body = getOfferBookingBody();
     const bcsBody = getBcsBody();
 
-    expect(body).toContain('const schoolId = await resolveSchoolId(sql, metadata, session.id)');
+    expect(body).toContain('SELECT id, status, booking_id, learner_id, school_id FROM lesson_offers');
+    expect(body).toContain('const schoolId = offer.school_id');
     expect(body).toContain('schoolId,');
     expect(bcsBody).toContain('(school_id, booking_id, credit_transaction_id, minutes_drawn,');
     expect(bcsBody).toContain('(${schoolId}, ${bookingId}, ${creditTransaction.id}, ${durationMins}');

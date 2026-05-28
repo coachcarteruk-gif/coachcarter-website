@@ -203,6 +203,16 @@ module.exports.bookOfferSeries = bookOfferSeries;
 // ── Shared: find or create a learner by email/phone ─────────────────────────
 // Handles phone format mismatches and unique constraint races gracefully.
 async function findOrCreateLearner(sql, email, details, schoolId) {
+  const preferredLearnerId = parseInt(details.learner_id, 10);
+  if (preferredLearnerId) {
+    const [bound] = await sql`
+      SELECT id FROM learner_users
+      WHERE id = ${preferredLearnerId}
+        AND school_id = ${schoolId}
+    `;
+    if (bound) return bound.id;
+  }
+
   // Normalize phone: strip spaces/dashes, convert 07→+447
   let cleanPhone = (details.phone || '').replace(/[\s\-()]/g, '');
   if (cleanPhone.startsWith('07') && cleanPhone.length === 11) cleanPhone = '+44' + cleanPhone.slice(1);
@@ -358,10 +368,14 @@ async function handleGetOffer(req, res) {
     const isFlexible = !offer.scheduled_date && !offer.start_time;
     const originalPricePence = offer.price_pence ?? 8250;
 
-    // offer_price_pence (custom price) takes precedence over discount_pct
+    // offer_price_pence is the frozen final price for new offers. Since this
+    // first slice deliberately does not store base/source columns, only legacy
+    // null-price offers expose a lesson-type "original" price for was/now UI.
     let finalPricePence;
+    let displayOriginalPricePence = originalPricePence;
     if (offer.offer_price_pence != null) {
       finalPricePence = offer.offer_price_pence;
+      displayOriginalPricePence = finalPricePence;
     } else {
       const discountPct = offer.discount_pct || 0;
       finalPricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
@@ -379,7 +393,7 @@ async function handleGetOffer(req, res) {
         lesson_type_name: offer.lesson_type_name || 'Standard Lesson',
         duration_minutes: offer.duration_minutes || 90,
         price_pence: finalPricePence,
-        original_price_pence: originalPricePence,
+        original_price_pence: displayOriginalPricePence,
         discount_pct: offer.discount_pct || 0,
         kind: offer.kind || 'manual',
         trigger: offer.trigger || null,
@@ -439,20 +453,41 @@ async function handleAcceptOffer(req, res) {
       return res.status(404).json({ error: true, code: 'NOT_FOUND', message: 'Offer not found, expired, or already accepted' });
     }
 
-    // Validate required details
-    if (!name || !name.trim())
+    // Derive school_id from instructor
+    const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
+    const schoolId = instrRow?.school_id || 1;
+
+    let boundLearner = null;
+    if (offer.learner_id) {
+      const [learner] = await sql`
+        SELECT id, name, email, phone, pickup_address
+        FROM learner_users
+        WHERE id = ${offer.learner_id}
+          AND school_id = ${schoolId}
+      `;
+      if (!learner)
+        return res.status(400).json({ error: 'Offer learner is no longer available' });
+      boundLearner = learner;
+    }
+
+    // Resolve learner details. Existing-learner offers prefer the stored
+    // learner record while still letting the accept form fill missing fields.
+    const resolvedName = (name && name.trim()) || boundLearner?.name || offer.learner_name || '';
+    if (!resolvedName)
       return res.status(400).json({ error: 'Name is required' });
 
-    // Resolve learner email: offer's email takes priority, fall back to form input
-    const resolvedEmail = offer.learner_email || (email ? email.trim().toLowerCase() : null);
+    const resolvedEmail = offer.learner_email || boundLearner?.email || (email ? email.trim().toLowerCase() : null);
     if (!resolvedEmail)
       return res.status(400).json({ error: 'Email address is required' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resolvedEmail))
       return res.status(400).json({ error: 'Invalid email address' });
 
-    // Derive school_id from instructor
-    const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
-    const schoolId = instrRow?.school_id || 1;
+    const learnerDetails = {
+      learner_id: boundLearner?.id || null,
+      name: resolvedName,
+      phone: (phone || boundLearner?.phone || '').trim(),
+      pickup_address: (pickup_address || boundLearner?.pickup_address || '').trim()
+    };
 
     const isFlexible = !offer.scheduled_date && !offer.start_time;
     const originalPricePence = offer.price_pence ?? 8250;
@@ -494,13 +529,12 @@ async function handleAcceptOffer(req, res) {
 
     // Free offer → skip Stripe, confirm directly (only for slot-pinned offers)
     if (pricePence === 0 && !isFlexible) {
-      return await handleFreeOffer(sql, offer, { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() }, baseUrl, token, res, resolvedEmail, repeatWeeksClean);
+      return await handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, resolvedEmail, repeatWeeksClean);
     }
 
     // Flexible + free → create/find learner, add credit, redirect to success
     if (pricePence === 0 && isFlexible) {
       const { createTransporter } = require('./_auth-helpers');
-      const learnerDetails = { name: name.trim(), phone: (phone || '').trim(), pickup_address: (pickup_address || '').trim() };
 
       const learnerId = await findOrCreateLearner(sql, resolvedEmail, learnerDetails, schoolId);
 
@@ -541,6 +575,7 @@ async function handleAcceptOffer(req, res) {
       await sql`
         UPDATE lesson_offers SET status = 'accepted', learner_id = ${learnerId}, accepted_at = NOW()
         WHERE id = ${offer.id}
+          AND school_id = ${schoolId}
       `;
 
       // 4. Send confirmation email
@@ -603,9 +638,10 @@ async function handleAcceptOffer(req, res) {
         instructor_id:     String(offer.instructor_id),
         instructor_name:   offer.instructor_name,
         learner_email:     resolvedEmail,
-        learner_name:      name.trim(),
-        learner_phone:     (phone || '').trim(),
-        pickup_address:    (pickup_address || '').trim(),
+        learner_id:        boundLearner?.id ? String(boundLearner.id) : '',
+        learner_name:      learnerDetails.name,
+        learner_phone:     learnerDetails.phone,
+        pickup_address:    learnerDetails.pickup_address,
         scheduled_date:    offer.scheduled_date || '',
         start_time:        offer.start_time || '',
         end_time:          offer.end_time || '',
@@ -633,6 +669,7 @@ async function handleAcceptOffer(req, res) {
     await sql`
       UPDATE lesson_offers SET stripe_session_id = ${session.id}
       WHERE id = ${offer.id}
+        AND school_id = ${schoolId}
     `;
 
     return res.json({ ok: true, url: session.url });
@@ -703,6 +740,7 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
     UPDATE lesson_offers
     SET status = 'accepted', booking_id = ${booking.id}, learner_id = ${learnerId}, accepted_at = NOW()
     WHERE id = ${offer.id}
+      AND school_id = ${schoolId}
   `;
 
   // 4. Send confirmation emails

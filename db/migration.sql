@@ -801,6 +801,17 @@ VALUES
   ('Free Trial',    'trial', 60, 0, '#10b981', false, 5)
 ON CONFLICT (slug) DO NOTHING;
 
+-- Paid 1-hour lessons are active, but application logic treats them as
+-- opt-in-only for instructors whose offered_lesson_types is still NULL.
+UPDATE lesson_types
+   SET name = '1-Hour Lesson',
+       duration_minutes = 60,
+       price_pence = 5500,
+       colour = COALESCE(colour, '#f59e0b'),
+       active = true,
+       sort_order = COALESCE(sort_order, 4)
+ WHERE slug = '1hr';
+
 -- Track which Setmore appointment each booking came from (idempotent sync)
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS setmore_key TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_setmore_key
@@ -2103,6 +2114,22 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS list_price_source TEXT
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS hourly_rate_pence INTEGER
   CHECK (hourly_rate_pence IS NULL OR (hourly_rate_pence > 0 AND hourly_rate_pence <= 50000));
+
+-- Credits Thread B: per-instructor opt-in for school-wide bulk discount tiers.
+-- New instructors default OFF; Fraser is grandfathered ON because his live
+-- CoachCarter offer already includes bulk packages. Use identity fields rather
+-- than a fragile id: historical credit backfills confused fixture id=1 with
+-- Fraser's real instructor row (currently id=4 in production).
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS bulk_tiers_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE instructors
+   SET bulk_tiers_enabled = TRUE
+ WHERE school_id = 1
+   AND active = TRUE
+   AND (
+     LOWER(email) IN ('fraser@coachcarter.uk', 'coachcarteruk@gmail.com')
+     OR LOWER(name) IN ('fraser carter', 'fraser')
+     OR LOWER(slug) = 'fraser'
+   );
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Credits Step 1c: migration_markers table (May 2026)

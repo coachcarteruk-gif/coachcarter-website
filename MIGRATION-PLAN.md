@@ -12,7 +12,7 @@
 **Multi-tenancy:** Every tenant-scoped table has `school_id INTEGER NOT NULL REFERENCES schools(id) DEFAULT 1`. Every SQL query filters by `school_id`. Every JWT carries `school_id`. School #1 is CoachCarter; new schools onboard via the superadmin portal. See `docs/multi-tenancy.md`.
 **Branding:** Two front doors share the same backend — `coachcarter.uk` (driving school) and `instructorbook.co.uk` (national SaaS for instructors). See `INSTRUCTORBOOK-PLAN.md`.
 **Auth:** JWT in httpOnly cookies (display blob in localStorage). All three roles use **email + password** sign-in (May 2026). `api/learner-auth.js` for learners, `api/instructor-auth.js` for instructors, `api/admin.js` for admins. Magic-link login retired. Magic-link infrastructure (`api/magic-link.js`) survives only for SMS code login, learner password-reset codes, and the email-code migration path for legacy learner accounts. Instructors are invite-only — admin sets/resets their password via the admin portal; instructor is forced to change it on first sign-in. Password helpers live in `api/_password.js`. Audit log via `api/_audit.js`.
-**Payments:** Stripe Checkout sessions + webhook handler. Klarna enabled. Stripe Connect for instructor payouts (Model D: 0.75% fee on weekly automated payouts).
+**Payments:** Stripe Checkout sessions + webhook handler. Klarna enabled. Stripe Connect for instructor payouts (Model D: 0.75% fee on weekly automated payouts). Native app parity note: direct pay-and-book and offer-acceptance clients must treat the server as the price source of truth. For a chosen instructor, direct slot pricing is custom learner hourly rate → instructor hourly rate → school `bulk_hourly_pence`, multiplied by duration; bulk discounts are credit-package only and are not applied to direct single-slot checkout or instructor-created offers. New offers snapshot final `offer_price_pence` at creation and acceptance uses that stored price.
 **Booking:** 12-week (84-day) advance cap for self-serve. Slot-first UX on `book.html` (no calendar views, no lesson-type pill bar — pick slot first, then duration in modal). Offer-driven recurring series (`lesson_offers.max_repeat_weeks` 1–18) is the only path that may exceed the 12-week cap.
 **AI:** Direct Anthropic API calls (ask-examiner + advisor endpoints, both hidden in v1)
 **Analytics:** PostHog (loaded via `posthog-loader.js` after cookie consent)
@@ -48,7 +48,7 @@
 | `admin.js` | admin | Dashboard, bookings, instructor CRUD, learner management, credit adjustment, set-instructor-password, forgot-password code flow |
 | `slots.js` | mostly learner | available (12-wk cap), durations-for-slot, book (+ `repeat_weeks` 1–8), checkout-slot, checkout-slot-guest, book-free-trial, cancel (+ cancel_series), reschedule, my-bookings, series-info |
 | `offers.js` | public (token) | get-offer, accept-offer (with `repeat_weeks`), expire-offers (cron). Exports `bookOfferSeries()` for the webhook |
-| `lesson-types.js` | mixed | CRUD for lesson types per school |
+| `lesson-types.js` | mixed | CRUD for lesson types per school; instructor-scoped list filters opt-in-only lesson types such as paid `1hr` unless explicitly enabled |
 | `schools.js` | superadmin | School onboarding + config (per-school feature flags via `schools.config` JSONB) |
 | `videos.js` | mixed | CRUD, upload-url, categories, bulk ops |
 | `credits.js` | learner | balance, checkout |
@@ -305,9 +305,13 @@ The web uses Stripe Checkout (redirect). The app needs a PaymentSheet flow:
 // Returns: { clientSecret, ephemeralKey, customerId }
 ```
 
-Keep the existing `/api/credits?action=checkout` action working for web (it returns a Stripe Checkout URL), but preserve the Slice 2 contract: learner-facing purchases must pass an explicit same-school active `instructor_id`, and the metadata must carry that instructor through the `credit_purchase` webhook. The new in-app action shares the same `calcBulkTotal` server-side pricing and same `credit_purchase` webhook metadata.
+Keep the existing `/api/credits?action=checkout` action working for web (it returns a Stripe Checkout URL), but preserve the Slice 2/Thread B contract: learner-facing purchases must pass an explicit same-school active `instructor_id`; `calcBulkTotal` must price server-side using custom learner rate → instructor hourly rate → school default; school bulk tiers apply only when that instructor has `bulk_tiers_enabled = TRUE`; and the metadata must carry `instructor_id`, `amount_pence`, `discount_pct`, and `effective_rate_pence_per_minute` through the `credit_purchase` webhook. The new in-app action shares that same pricing helper and webhook metadata.
+
+Native buy-credits screens should mirror the web Slice B contract before creating a payment intent: require a selected instructor, fetch `/api/credits?action=bulk-pricing&instructor_id=...` for display-only hourly/package state, reload the selected instructor balance with `/api/credits?action=balance&instructor_id=...`, and avoid showing bulk savings when `bulk_tiers_enabled` is false. Payment creation still relies on the server-priced `{ hours, instructor_id }` request.
 
 ---
+
+Instructor native profile screens should preserve the web profile contract: `GET /api/instructor?action=profile` returns `bulk_tiers_enabled` plus read-only `effective_hourly_rate_pence`, and `POST /api/instructor?action=update-profile` accepts a boolean `bulk_tiers_enabled`.
 
 ## Phase 1: React Native Project Scaffolding
 

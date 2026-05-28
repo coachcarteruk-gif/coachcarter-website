@@ -88,7 +88,7 @@ These are the values the franchise tiers and pricing would launch with **if onbo
 - **Bulk tiers**: 12hr at 2.5% off, 24hr at 5% off, 36hr at 7.5% off. Set in `schools.config.pricing.bulk_discount_tiers`.
 - **Full Franchise**: £195/week. Includes car, decals, dual control. 12-month contract. Will be a `franchise_tiers` row.
 - **Part Franchise**: £70/week. Includes decals, dual control (instructor sources own kit). 12-month contract. Will be a `franchise_tiers` row.
-- **Lesson durations**: 1.5h, 2h, 2.5h, 3h. Already configured in `lesson_types`.
+- **Lesson durations**: 1h, 1.5h, 2h, 2.5h, 3h. The paid 1h lesson type is active but opt-in-only per instructor; null `offered_lesson_types` uses the default active set and excludes `"1hr"` until the instructor enables it.
 
 **Sanity-check note**: Full Franchise is on the edge of CoachCarter's margin if real car costs land at the higher end. Verify lease + insurance quotes for a specific car before locking. Numbers will shift; what matters is that changing them is admin-editable, not a deploy.
 

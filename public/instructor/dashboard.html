@@ -495,9 +495,12 @@
         <label><input type="radio" name="bookPay" value="cash" checked><span>Cash</span></label>
         <label><input type="radio" name="bookPay" value="credit"><span>Deduct credit</span></label>
         <label><input type="radio" name="bookPay" value="free"><span>Free</span></label>
+        <label><input type="radio" name="bookPay" value="payment_link"><span>Send payment link</span></label>
       </div>
       <div id="bookCreditNote" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:4px;"></div>
+      <div id="bookPaymentLinkNote" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:6px;line-height:1.35;">Sends a payment link instead of booking now. The slot is held as a pending offer for 24 hours and is booked only after the learner accepts and pays. We'll email/text them if contact details exist, and you can copy the link.</div>
     </div>
+    <div id="bookOfferSuccess" class="offer-success" style="display:none;padding:10px 12px;background:rgba(31,138,76,0.08);border:1px solid rgba(31,138,76,0.22);border-radius:8px;color:var(--primary);font-size:0.82rem;line-height:1.4;"></div>
     <div class="modal-field">
       <div class="modal-label">Drop-off (optional)</div>
       <input type="text" class="modal-input" id="bookDropoff" placeholder="e.g. School, work, test centre...">

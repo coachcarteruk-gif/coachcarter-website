@@ -21,6 +21,7 @@ async function sendWhatsApp(to, message, meta = {}) {
   const auth = process.env.TWILIO_AUTH;
   const from = process.env.TWILIO_WHATSAPP_FROM;
   if (!sid || !auth || !from || !to) {
+    const errorMessage = 'Twilio not configured or recipient missing';
     // No-op path — record as skipped so support can tell config-missing apart
     // from "we tried but it failed". Only logs if a recipient was supplied.
     if (to) {
@@ -29,14 +30,14 @@ async function sendWhatsApp(to, message, meta = {}) {
         purpose: meta.purpose || 'other',
         recipient: to,
         deliveryStatus: 'skipped',
-        errorMessage: 'Twilio not configured or recipient missing',
+        errorMessage,
         payloadSummary: summarise(message),
         learnerId: meta.learnerId,
         instructorId: meta.instructorId,
         schoolId: meta.schoolId,
       });
     }
-    return;
+    return { ok: false, status: 'skipped', error: errorMessage };
   }
 
   // Normalise to E.164: UK numbers starting with 0 → +44
@@ -57,19 +58,22 @@ async function sendWhatsApp(to, message, meta = {}) {
       instructorId: meta.instructorId,
       schoolId: meta.schoolId,
     });
+    return { ok: true, status: 'sent' };
   } catch (err) {
     console.warn('SMS failed:', err.code, err.message, '→ to:', phone);
+    const errorMessage = `[${err.code || 'ERR'}] ${err.message}`;
     await logNotification({
       channel: 'sms',
       purpose: meta.purpose || 'other',
       recipient: phone,
       deliveryStatus: 'failed',
-      errorMessage: `[${err.code || 'ERR'}] ${err.message}`,
+      errorMessage,
       payloadSummary: summarise(message),
       learnerId: meta.learnerId,
       instructorId: meta.instructorId,
       schoolId: meta.schoolId,
     });
+    return { ok: false, status: 'failed', error: errorMessage };
   }
 }
 

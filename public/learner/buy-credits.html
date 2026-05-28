@@ -153,6 +153,24 @@
       line-height: 1.45;
       margin: 0;
     }
+    .pricing-context {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .pricing-rate {
+      font-family: var(--font-head);
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--primary);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
 
     /* ── SECTION LABEL ── */
     .section-label {
@@ -227,6 +245,12 @@
     .packages {
       display: flex; flex-direction: column; gap: 8px;
       margin-bottom: 28px;
+    }
+    .packages-note {
+      margin: -4px 0 14px;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
     }
     .pkg-card {
       display: grid;
@@ -627,8 +651,8 @@
 
   <section class="credits-hero">
     <div class="hero-eyebrow">Pay-as-you-learn</div>
-    <h1>Buy <em>hours</em>. Save as you go.</h1>
-    <p class="subtitle">Stock up on lesson hours and book any time. Bigger bundles unlock bigger savings — every package comes off the same hourly rate.</p>
+    <h1 id="creditsTitle">Choose an <em>instructor</em>.</h1>
+    <p class="subtitle" id="creditsSubtitle">Select an instructor to see their current hourly rate and available credit packages.</p>
   </section>
 
   <!-- Instructor context -->
@@ -640,6 +664,10 @@
       </select>
     </div>
     <p class="instructor-help" id="instructorHelp">Hours are held against the instructor you choose here.</p>
+    <div class="pricing-context" id="pricingContext">
+      <span>Selected hourly rate</span>
+      <span class="pricing-rate" id="pricingRateValue">Choose instructor</span>
+    </div>
   </section>
 
   <!-- Current balance -->
@@ -666,14 +694,15 @@
 
   <div class="section-divider" id="packagesDivider" style="display:none">
     <span class="section-divider-line"></span>
-    <span>Or save with hour packages</span>
+    <span id="packagesDividerText">Or choose hour packages</span>
     <span class="section-divider-line"></span>
   </div>
 
   <!-- If no single-lesson section is shown, still label the packages.
        When the divider above IS shown (i.e. lesson types loaded), we hide
        this label via CSS to avoid two consecutive section headers. -->
-  <div class="section-label" id="packagesLabel">Choose a package</div>
+  <div class="section-label" id="packagesLabel">Choose an instructor</div>
+  <p class="packages-note" id="packagesNote">Credit pricing appears after you choose an instructor.</p>
 
   <!-- Package cards (rendered dynamically from API prices) -->
   <div class="packages" id="packages"></div>
