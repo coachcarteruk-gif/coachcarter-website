@@ -2648,8 +2648,9 @@ async function handleIcalStatus(req, res) {
 }
 
 // ── POST /api/instructor?action=create-offer ──────────────────────────────────
-// Body: { learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, discount_pct?, max_repeat_weeks? }
-// Creates a lesson offer. If learner_email is provided, emails the learner an accept link.
+// Body: { learner_id?, learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, discount_pct?, max_repeat_weeks? }
+// Creates a lesson offer. If learner_id is provided, binds the offer to that existing school learner.
+// If learner_email is provided, emails the learner an accept link.
 // If only learner_name is provided, creates a link-only offer (no email sent).
 // Slot fields are optional — omit for "flexible" offers where learner picks their own time.
 // offer_price_pence overrides effective pricing; otherwise the final price is snapshotted from effective hourly fallback.
@@ -2661,9 +2662,12 @@ async function handleCreateOffer(req, res) {
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence, discount_pct, max_repeat_weeks } = req.body;
-  if (!learner_email && !learner_name)
-    return res.status(400).json({ error: 'Either learner_email or learner_name is required' });
+  const { learner_id, learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence, discount_pct, max_repeat_weeks } = req.body;
+  const learnerIdClean = learner_id != null && learner_id !== '' ? parseInt(learner_id, 10) : null;
+  if (learnerIdClean != null && (!Number.isInteger(learnerIdClean) || learnerIdClean <= 0))
+    return res.status(400).json({ error: 'learner_id must be a positive integer' });
+  if (!learnerIdClean && !learner_email && !learner_name)
+    return res.status(400).json({ error: 'Either learner_id, learner_email, or learner_name is required' });
 
   const isFlexible = !scheduled_date && !start_time;
 
@@ -2739,7 +2743,9 @@ async function handleCreateOffer(req, res) {
 
     // Get instructor details
     const [instrDetails] = await sql`
-      SELECT id, name, email, phone FROM instructors WHERE id = ${instructor.id}
+      SELECT id, name, email, phone FROM instructors
+      WHERE id = ${instructor.id}
+        AND school_id = ${schoolId}
     `;
     if (!instrDetails) return res.status(404).json({ error: 'Instructor not found' });
 
@@ -2751,6 +2757,7 @@ async function handleCreateOffer(req, res) {
           AND scheduled_date = ${scheduled_date}
           AND start_time = ${start_time}::time
           AND status = ANY(${BLOCKING_STATUSES}::text[])
+          AND school_id = ${schoolId}
       `;
       if (existingBooking)
         return res.status(409).json({ error: 'That slot is already booked.' });
@@ -2762,6 +2769,7 @@ async function handleCreateOffer(req, res) {
           AND start_time = ${start_time}::time
           AND status = 'pending'
           AND expires_at > NOW()
+          AND school_id = ${schoolId}
       `;
       if (existingOffer)
         return res.status(409).json({ error: 'There is already a pending offer for that slot.' });
@@ -2774,6 +2782,7 @@ async function handleCreateOffer(req, res) {
             AND scheduled_date = ${scheduled_date}
             AND start_time = ${start_time}::time
             AND expires_at > NOW()
+            AND school_id = ${schoolId}
         `;
         hasReservation = !!existingRes;
       } catch (e) { /* table may not exist */ }
@@ -2781,11 +2790,21 @@ async function handleCreateOffer(req, res) {
         return res.status(409).json({ error: 'Someone is currently booking that slot. Try again shortly.' });
     }
 
-    // Check if learner already exists (only when email provided)
     let existingLearner = null;
-    if (learner_email) {
+    if (learnerIdClean) {
       const [found] = await sql`
-        SELECT id, name, email FROM learner_users
+        SELECT id, name, email, phone, pickup_address
+        FROM learner_users
+        WHERE id = ${learnerIdClean}
+          AND school_id = ${schoolId}
+          AND archived_at IS NULL
+      `;
+      if (!found)
+        return res.status(404).json({ error: 'Learner not found in your school' });
+      existingLearner = found;
+    } else if (learner_email) {
+      const [found] = await sql`
+        SELECT id, name, email, phone, pickup_address FROM learner_users
         WHERE LOWER(email) = LOWER(${learner_email})
           AND school_id = ${schoolId}
       `;
@@ -2807,15 +2826,16 @@ async function handleCreateOffer(req, res) {
     });
 
     // Insert offer
-    const offerName = learner_name || existingLearner?.name || null;
+    const resolvedEmail = existingLearner?.email || (learner_email ? learner_email.toLowerCase() : null);
+    const offerName = existingLearner?.name || learner_name || null;
     const [offer] = await sql`
       INSERT INTO lesson_offers
         (token, instructor_id, learner_email, learner_name, learner_id, scheduled_date, start_time, end_time,
-         lesson_type_id, discount_pct, offer_price_pence, max_repeat_weeks, status, expires_at)
+         lesson_type_id, discount_pct, offer_price_pence, max_repeat_weeks, status, expires_at, school_id)
       VALUES
-        (${token}, ${instructor.id}, ${learner_email ? learner_email.toLowerCase() : null}, ${offerName}, ${existingLearner?.id || null},
+        (${token}, ${instructor.id}, ${resolvedEmail}, ${offerName}, ${existingLearner?.id || null},
          ${scheduled_date || null}, ${start_time || null}, ${end_time},
-         ${lessonType.id}, ${discountPctClean}, ${offerPricing.pricePence}, ${maxRepeatWeeksClean}, 'pending', NOW() + INTERVAL '24 hours')
+         ${lessonType.id}, ${discountPctClean}, ${offerPricing.pricePence}, ${maxRepeatWeeksClean}, 'pending', NOW() + INTERVAL '24 hours', ${schoolId})
       RETURNING id, expires_at
     `;
 
@@ -2856,12 +2876,12 @@ async function handleCreateOffer(req, res) {
 
     // Send offer email (only when email is provided)
     let emailSent = false;
-    if (learner_email) {
+    if (resolvedEmail) {
       try {
         const mailer = createTransporter();
         await mailer.sendMail({
           from: 'CoachCarter <bookings@coachcarter.uk>',
-          to: learner_email,
+          to: resolvedEmail,
           subject: emailSubject,
           html: `
             <div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto">

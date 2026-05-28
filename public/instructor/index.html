@@ -866,6 +866,35 @@
       <!-- Pane: One specific learner (existing fields) -->
       <div id="offerOneLearnerPane">
       <div>
+        <div class="notes-label">Learner type</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:0.88rem;">
+            <input type="radio" name="offerLearnerMode" value="existing" id="offerModeExisting"
+              style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+            Existing learner
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:0.88rem;">
+            <input type="radio" name="offerLearnerMode" value="new" id="offerModeNew" checked
+              style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+            New learner
+          </label>
+        </div>
+      </div>
+      <div id="offerExistingLearnerFields" style="display:none;margin-top:12px">
+        <div class="notes-label">Find learner *</div>
+        <div class="learner-search-wrap" style="position:relative;">
+          <input type="text" id="offerLearnerSearch" placeholder="Search by name, email or phone"
+            style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
+          <div id="offerLearnerDropdown" class="learner-dropdown"></div>
+        </div>
+        <div id="offerLearnerSelected" style="display:none;margin-top:8px;padding:8px 10px;background:var(--accent-lt);border-radius:8px;font-size:0.85rem;">
+          <strong id="offerLearnerSelectedName"></strong>
+          <div id="offerLearnerSelectedDetail" style="color:var(--muted);font-size:0.78rem;margin-top:2px"></div>
+          <button type="button" id="btn-clear-offer-learner" style="margin-top:6px;border:0;background:none;color:var(--accent);font-weight:700;cursor:pointer;padding:0;font-size:0.78rem;">Change learner</button>
+        </div>
+      </div>
+      <div id="offerNewLearnerFields" style="margin-top:12px">
+      <div>
         <div class="notes-label">Learner name *</div>
         <input type="text" id="offerName" placeholder="e.g. John Smith" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
       </div>
@@ -878,6 +907,7 @@
       <div id="offerEmailRow" style="display:none;margin-top:12px">
         <div class="notes-label">Learner email *</div>
         <input type="email" id="offerEmail" placeholder="e.g. john@example.com" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
+      </div>
       </div>
       </div>
       <!-- /pane -->

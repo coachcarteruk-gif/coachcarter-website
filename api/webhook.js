@@ -828,8 +828,10 @@ async function handleOfferBooking(session) {
   const metadata       = session.metadata || {};
   const offerToken     = metadata.offer_token;
   const offerId        = parseInt(metadata.offer_id, 10);
+  const metadataSchoolId = parseInt(metadata.school_id, 10) || null;
   const instructorId   = parseInt(metadata.instructor_id, 10);
   const instructorName = metadata.instructor_name;
+  const metadataLearnerId = parseInt(metadata.learner_id, 10) || null;
   const learnerEmail   = metadata.learner_email || session.customer_email;
   const learnerName    = metadata.learner_name || session.customer_details?.name || '';
   const learnerPhone   = metadata.learner_phone || '';
@@ -850,16 +852,50 @@ async function handleOfferBooking(session) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const schoolId = await resolveSchoolId(sql, metadata, session.id);
 
-    // Idempotency — check offer hasn't already been processed
+    // Trust boundary: metadata is advisory. The token points at the canonical
+    // pending-payment row, and that DB row owns tenant + learner binding.
     const [offer] = await sql`
-      SELECT id, status, booking_id FROM lesson_offers WHERE token = ${offerToken}
+      SELECT id, status, booking_id, learner_id, school_id FROM lesson_offers
+      WHERE token = ${offerToken}
     `;
     if (!offer) {
       console.error('❌ lesson_offer webhook: offer not found for token', offerToken);
       return;
     }
+
+    const schoolId = offer.school_id;
+    const rejectOfferMetadata = (reason) => {
+      const err = new Error(`lesson_offer ${session.id}: ${reason}`);
+      console.error('❌ lesson_offer metadata mismatch:', err.message, {
+        offer_id: offer.id,
+        offer_token: offerToken,
+        metadata_offer_id: metadata.offer_id,
+        metadata_school_id: metadata.school_id,
+        metadata_learner_id: metadata.learner_id,
+      });
+      reportError('/api/webhook (lesson_offer metadata mismatch)', err);
+      return true;
+    };
+
+    if (metadata.school_id && metadataSchoolId !== schoolId) {
+      return rejectOfferMetadata(`metadata school_id ${metadata.school_id} does not match offer.school_id ${schoolId}`);
+    }
+    if (metadata.offer_id && offerId !== offer.id) {
+      return rejectOfferMetadata(`metadata offer_id ${metadata.offer_id} does not match offer.id ${offer.id}`);
+    }
+    if (metadata.learner_id) {
+      if (!metadataLearnerId) {
+        return rejectOfferMetadata(`metadata learner_id ${metadata.learner_id} is invalid`);
+      }
+      if (!offer.learner_id) {
+        return rejectOfferMetadata(`metadata learner_id ${metadataLearnerId} was supplied for unbound offer ${offer.id}`);
+      }
+      if (metadataLearnerId !== offer.learner_id) {
+        return rejectOfferMetadata(`metadata learner_id ${metadataLearnerId} does not match offer.learner_id ${offer.learner_id}`);
+      }
+    }
+
     if (offer.status === 'accepted') {
       if (!isFlexible && repeatWeeks === 1 && offer.booking_id) {
         const [existingOfferCreditTx] = await sql`
@@ -886,9 +922,27 @@ async function handleOfferBooking(session) {
 
     // 1. Find or create learner
     let learnerId;
-    const [existingLearner] = await sql`
-      SELECT id, name, phone, pickup_address FROM learner_users WHERE LOWER(email) = LOWER(${learnerEmail})
-    `;
+    let existingLearner = null;
+    const boundLearnerId = offer.learner_id;
+    if (boundLearnerId) {
+      const [bound] = await sql`
+        SELECT id, name, email, phone, pickup_address
+        FROM learner_users
+        WHERE id = ${boundLearnerId}
+          AND school_id = ${schoolId}
+      `;
+      if (!bound) {
+        throw new Error(`lesson_offer ${session.id}: bound learner ${boundLearnerId} not found in school ${schoolId}`);
+      }
+      existingLearner = bound;
+    } else {
+      [existingLearner] = await sql`
+        SELECT id, name, phone, pickup_address
+        FROM learner_users
+        WHERE LOWER(email) = LOWER(${learnerEmail})
+          AND school_id = ${schoolId}
+      `;
+    }
 
     if (existingLearner) {
       learnerId = existingLearner.id;
@@ -905,6 +959,7 @@ async function handleOfferBooking(session) {
             phone = COALESCE(phone, ${updates.phone || null}),
             pickup_address = COALESCE(NULLIF(pickup_address, ''), ${updates.pickup_address || null})
           WHERE id = ${learnerId}
+            AND school_id = ${schoolId}
         `;
       }
     } else {
@@ -976,7 +1031,7 @@ async function handleOfferBooking(session) {
     } catch (insertErr) {
       if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
         const duplicatePendingError = new Error(
-          `lesson_offer ${session.id} already has a credit_transaction but offer ${offerId} is not accepted; previous webhook attempt likely failed mid-flight`
+          `lesson_offer ${session.id} already has a credit_transaction but offer ${offer.id} is not accepted; previous webhook attempt likely failed mid-flight`
         );
         console.error('❌ lesson_offer: duplicate credit transaction on pending offer', duplicatePendingError.message);
         throw duplicatePendingError;
@@ -997,11 +1052,12 @@ async function handleOfferBooking(session) {
       await sql`
         UPDATE lesson_offers
         SET status = 'accepted', learner_id = ${learnerId}, accepted_at = NOW()
-        WHERE id = ${offerId}
+        WHERE id = ${offer.id}
+          AND school_id = ${schoolId}
       `;
 
-      const [instructor] = await sql`SELECT name, email FROM instructors WHERE id = ${instructorId}`;
-      const [learner] = await sql`SELECT name FROM learner_users WHERE id = ${learnerId}`;
+      const [instructor] = await sql`SELECT name, email FROM instructors WHERE id = ${instructorId} AND school_id = ${schoolId}`;
+      const [learner] = await sql`SELECT name FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}`;
       const transporter = createTransporter();
       const firstName = (learner?.name || '').split(' ')[0] || 'there';
       const durationStr = durationMins >= 60
@@ -1106,7 +1162,7 @@ async function handleOfferBooking(session) {
         delta: totalMinutes, creditsDelta: totalCredits,
       });
       console.error('❌ lesson_offer: insert failed, hours refunded to learner balance', insertErr.message);
-      await sql`UPDATE lesson_offers SET status = 'cancelled' WHERE id = ${offerId}`;
+      await sql`UPDATE lesson_offers SET status = 'cancelled' WHERE id = ${offer.id} AND school_id = ${schoolId}`;
       await notifyBookingInsertFailed({
         session, kind: 'lesson_offer',
         learnerEmail, instructorName,
@@ -1153,12 +1209,12 @@ async function handleOfferBooking(session) {
           payment_intent: session.payment_intent,
           amount: amountPence * unused,
           reason: 'requested_by_customer',
-          metadata: { offer_id: String(offerId), unused_weeks: String(unused) }
+          metadata: { offer_id: String(offer.id), unused_weeks: String(unused) }
         });
       } catch (refundErr) {
         console.error('❌ lesson_offer: partial refund failed', refundErr.message);
         const partialRefundError = new Error(
-          `Partial repeat-offer refund failed for session ${session.id}, offer ${offerId}, unused_weeks=${unused}, refund_amount_pence=${amountPence * unused}: ${refundErr.message}`
+          `Partial repeat-offer refund failed for session ${session.id}, offer ${offer.id}, unused_weeks=${unused}, refund_amount_pence=${amountPence * unused}: ${refundErr.message}`
         );
         reportError('/api/webhook (lesson_offer partial repeat refund failed)', partialRefundError);
         throw partialRefundError;
@@ -1170,7 +1226,8 @@ async function handleOfferBooking(session) {
       UPDATE lesson_offers
       SET status = 'accepted', booking_id = ${booking.id}, learner_id = ${learnerId},
           accepted_at = NOW()
-      WHERE id = ${offerId}
+      WHERE id = ${offer.id}
+        AND school_id = ${schoolId}
       RETURNING kind, batch_id
     `;
 
@@ -1183,14 +1240,14 @@ async function handleOfferBooking(session) {
         scheduled_date: scheduledDate,
         start_time: startTime,
         school_id: schoolId,
-        winnerOfferId: offerId,
+        winnerOfferId: offer.id,
         batchId: acceptedOffer.batch_id
       }).catch(err => console.warn('supersede siblings failed:', err.message));
     }
 
     // 5. Send confirmation emails
-    const [instructor] = await sql`SELECT name, email, phone FROM instructors WHERE id = ${instructorId}`;
-    const [learner] = await sql`SELECT name, email, phone FROM learner_users WHERE id = ${learnerId}`;
+    const [instructor] = await sql`SELECT name, email, phone FROM instructors WHERE id = ${instructorId} AND school_id = ${schoolId}`;
+    const [learner] = await sql`SELECT name, email, phone FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}`;
 
     const durationStr = durationMins >= 60
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
