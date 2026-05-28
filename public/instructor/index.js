@@ -1313,6 +1313,8 @@ async function openAddLessonModal() {
   document.getElementById('addLessonNotes').value = '';
   document.getElementById('addLessonDropoff').value = '';
   document.getElementById('addLessonCreditNote').style.display = 'none';
+  document.getElementById('addLessonPaymentLinkNote').style.display = 'none';
+  clearPaymentLinkSuccess();
   document.getElementById('addLessonBtn').disabled = false;
   document.getElementById('addLessonBtn').textContent = 'Book lesson';
 
@@ -1330,6 +1332,7 @@ async function openAddLessonModal() {
 
   // Reset payment to cash
   document.querySelector('input[name="addLessonPay"][value="cash"]').checked = true;
+  updateAddLessonPaymentUi();
 
   // Fetch learners + lesson types in parallel
   try {
@@ -1355,6 +1358,7 @@ async function openAddLessonModal() {
 }
 
 function closeAddLessonModal() {
+  clearPaymentLinkSuccess();
   document.getElementById('addLessonModal').classList.remove('open');
   document.getElementById('addLessonDropdown').classList.remove('open');
 }
@@ -1393,6 +1397,7 @@ function filterAddLessonLearners() {
 }
 
 function selectLearner(id, name, detail, balanceMinutes) {
+  clearPaymentLinkSuccess();
   selectedLearnerId = id;
   document.getElementById('addLessonSearch').value = '';
   document.getElementById('addLessonDropdown').classList.remove('open');
@@ -1405,6 +1410,7 @@ function selectLearner(id, name, detail, balanceMinutes) {
 }
 
 function clearSelectedLearner() {
+  clearPaymentLinkSuccess();
   selectedLearnerId = null;
   document.getElementById('addLessonSelected').style.display = 'none';
   document.getElementById('addLessonCreditNote').style.display = 'none';
@@ -1425,11 +1431,103 @@ function updateCreditNote(balanceMinutes) {
   }
 }
 
-// Update credit note when payment method changes
-document.addEventListener('change', e => {
-  if (e.target.name === 'addLessonPay' && selectedLearnerId) {
+function updateAddLessonPaymentUi() {
+  const payMethod = document.querySelector('input[name="addLessonPay"]:checked')?.value || 'cash';
+  const linkNote = document.getElementById('addLessonPaymentLinkNote');
+  const btn = document.getElementById('addLessonBtn');
+  if (linkNote) linkNote.style.display = payMethod === 'payment_link' ? 'block' : 'none';
+  if (btn && !btn.disabled) btn.textContent = payMethod === 'payment_link' ? 'Send payment link' : 'Book lesson';
+  if (payMethod === 'credit' && selectedLearnerId) {
     const learner = addLessonLearners.find(l => l.id === selectedLearnerId);
     if (learner) updateCreditNote(learner.balance_minutes || 0);
+  } else {
+    const creditNote = document.getElementById('addLessonCreditNote');
+    if (creditNote) creditNote.style.display = 'none';
+  }
+}
+
+function clearPaymentLinkSuccess() {
+  const successEl = document.getElementById('addLessonOfferSuccess');
+  if (!successEl) return;
+  successEl.style.display = 'none';
+  successEl.innerHTML = '';
+}
+
+function renderAddLessonOfferSuccess(data) {
+  const successEl = document.getElementById('addLessonOfferSuccess');
+  if (!successEl) return;
+  const shareUrl = data.accept_url || '';
+  const selectedName = document.getElementById('addLessonSelectedName').textContent || data.learner_name || 'learner';
+  const safeName = esc(selectedName);
+  const emailAvailable = data.email_available === true;
+  const messageAvailable = data.message_available === true;
+  const emailSent = data.email_sent === true;
+  const messageSent = data.message_sent === true;
+  const deliveryParts = [];
+  if (emailSent) deliveryParts.push('email');
+  if (messageSent) deliveryParts.push('text message');
+  const failedParts = [];
+  if (emailAvailable && !emailSent) failedParts.push('email');
+  if (messageAvailable && !messageSent) failedParts.push('text message');
+  const missingParts = [];
+  if (!emailAvailable) missingParts.push('no email saved');
+  if (!messageAvailable) missingParts.push('no phone saved');
+
+  let statusLine;
+  if (deliveryParts.length > 0) {
+    const deliveryText = deliveryParts.length === 2 ? `${deliveryParts[0]} and ${deliveryParts[1]}` : deliveryParts[0];
+    const failedText = failedParts.length
+      ? ` ${failedParts.length === 2 ? `${failedParts[0]} and ${failedParts[1]}` : failedParts[0]} delivery did not complete.`
+      : '';
+    const missingText = missingParts.length ? ` (${missingParts.join(', ')})` : '';
+    statusLine = `Payment link sent to ${safeName} by ${deliveryText}. The slot is held as a pending offer for 24 hours and will only be booked after they accept and pay.${missingText}${failedText}`;
+  } else if (failedParts.length > 0) {
+    const failedText = failedParts.length === 2 ? `${failedParts[0]} and ${failedParts[1]}` : failedParts[0];
+    statusLine = `Payment link created for ${safeName}, but ${failedText} delivery did not complete. The slot is held as a pending offer for 24 hours.`;
+  } else if (missingParts.length > 0) {
+    statusLine = `Payment link created for ${safeName}; the selected learner has ${missingParts.join(' and ')}. The slot is held as a pending offer for 24 hours.`;
+  } else {
+    statusLine = `Payment link created for ${safeName}. The slot is held as a pending offer for 24 hours.`;
+  }
+
+  successEl.innerHTML = `
+    <div>${statusLine}</div>
+    <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <input type="text" id="addLessonOfferShareUrl" readonly
+        style="flex:1;min-width:0;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.78rem;background:var(--white);color:var(--primary)">
+      <button id="addLessonOfferCopyBtn"
+        style="padding:6px 14px;border:1.5px solid var(--accent);background:var(--accent-lt);color:var(--accent);border-radius:6px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap">Copy link</button>
+    </div>
+  `;
+  document.getElementById('addLessonOfferShareUrl').value = shareUrl;
+  document.getElementById('addLessonOfferCopyBtn').addEventListener('click', function () {
+    var copyBtn = this;
+    var urlInput = document.getElementById('addLessonOfferShareUrl');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareUrl).then(function () {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(function () { copyBtn.textContent = 'Copy link'; }, 2000);
+      }).catch(function () {
+        urlInput.select();
+        document.execCommand('copy');
+        copyBtn.textContent = 'Copied!';
+        setTimeout(function () { copyBtn.textContent = 'Copy link'; }, 2000);
+      });
+    } else {
+      urlInput.select();
+      document.execCommand('copy');
+      copyBtn.textContent = 'Copied!';
+      setTimeout(function () { copyBtn.textContent = 'Copy link'; }, 2000);
+    }
+  });
+  successEl.style.display = 'block';
+}
+
+// Update credit note when payment method changes
+document.addEventListener('change', e => {
+  if (e.target.name === 'addLessonPay') {
+    clearPaymentLinkSuccess();
+    updateAddLessonPaymentUi();
   }
 });
 
@@ -1449,6 +1547,7 @@ async function confirmCreateBooking() {
 
   const payMethod = document.querySelector('input[name="addLessonPay"]:checked')?.value || 'cash';
   const notes = document.getElementById('addLessonNotes').value.trim();
+  const isPaymentLink = payMethod === 'payment_link';
 
   // Outside-availability second-confirm (catches the Beatriz-style mistake:
   // booking a slot the learner can't pay for without seeing it on the calendar).
@@ -1457,16 +1556,39 @@ async function confirmCreateBooking() {
   if (!_slotInsideAvailability(newDate, newTime.slice(0, 5), lessonTypeMins)) {
     const proceed = confirm(
       "Heads up — this slot is outside your weekly availability for that day.\n\n" +
-      "Booking it will still work, but it won't appear on your normal availability and the learner won't see it in their slot feed.\n\n" +
+      (isPaymentLink
+        ? "Sending the payment link will still hold the slot as a pending offer, but it won't appear in your normal availability and the learner won't see it in their slot feed.\n\n"
+        : "Booking it will still work, but it won't appear on your normal availability and the learner won't see it in their slot feed.\n\n") +
       "Continue?"
     );
     if (!proceed) return;
   }
 
   const btn = document.getElementById('addLessonBtn');
-  btn.disabled = true; btn.textContent = 'Booking…';
+  btn.disabled = true; btn.textContent = isPaymentLink ? 'Sending...' : 'Booking…';
+  clearPaymentLinkSuccess();
 
   try {
+    if (isPaymentLink) {
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=create-offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          learner_id: selectedLearnerId,
+          scheduled_date: newDate,
+          start_time: newTime.slice(0, 5),
+          lesson_type_id: parseInt(document.getElementById('addLessonType').value) || null
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send payment link');
+
+      renderAddLessonOfferSuccess(data);
+      showToast('Payment link created. The slot is held for 24 hours.', 'success');
+      await refreshSchedule(true);
+      return;
+    }
+
     const res = await ccAuth.fetchAuthed('/api/instructor?action=create-booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1487,9 +1609,9 @@ async function confirmCreateBooking() {
     showToast(`Lesson booked for ${data.learner_name || 'learner'} — they've been notified`, 'success');
     await refreshSchedule(true);
   } catch (err) {
-    showToast(err.message || 'Failed to create booking', 'error');
+    showToast(err.message || (isPaymentLink ? 'Failed to send payment link' : 'Failed to create booking'), 'error');
   } finally {
-    btn.disabled = false; btn.textContent = 'Book lesson';
+    btn.disabled = false; btn.textContent = isPaymentLink ? 'Send payment link' : 'Book lesson';
   }
 }
 
@@ -2197,6 +2319,10 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
   bind('btn-clear-selected-learner', clearSelectedLearner);
   bind('btn-close-add-lesson', closeAddLessonModal);
   bind('addLessonBtn', confirmCreateBooking);
+  ['addLessonDate', 'addLessonTime', 'addLessonType'].forEach(function (id) {
+    var field = document.getElementById(id);
+    if (field) field.addEventListener('change', clearPaymentLinkSuccess);
+  });
   var offerModal = document.getElementById('offerLessonModal');
   var offerMouseDownTarget = null;
   if (offerModal) {

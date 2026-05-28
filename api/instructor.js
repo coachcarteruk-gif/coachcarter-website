@@ -50,6 +50,7 @@ const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-helpers');
+const { isLessonTypeOffered } = require('./_lesson-type-helpers');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -2728,7 +2729,7 @@ async function handleCreateOffer(req, res) {
     }
     if (!lessonType) {
       const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = 'standard' AND active = true AND school_id = ${schoolId}`;
-      lessonType = lt || { id: null, duration_minutes: 90, name: 'Standard Lesson', price_pence: 8250 };
+      lessonType = lt || { id: null, slug: 'standard', duration_minutes: 90, name: 'Standard Lesson', price_pence: 8250 };
     }
     const durationMins = lessonType.duration_minutes;
 
@@ -2743,11 +2744,14 @@ async function handleCreateOffer(req, res) {
 
     // Get instructor details
     const [instrDetails] = await sql`
-      SELECT id, name, email, phone FROM instructors
+      SELECT id, name, email, phone, offered_lesson_types FROM instructors
       WHERE id = ${instructor.id}
         AND school_id = ${schoolId}
     `;
     if (!instrDetails) return res.status(404).json({ error: 'Instructor not found' });
+    if (!isLessonTypeOffered(instrDetails.offered_lesson_types, lessonType.slug)) {
+      return res.status(400).json({ error: 'This instructor does not offer that lesson type' });
+    }
 
     // Slot conflict checks (only for slot-pinned offers)
     if (!isFlexible) {
