@@ -25,7 +25,9 @@ Maintenance rule:
 Per-instructor credits are implemented across the main learner and operator
 credit paths. Thread B's server pricing contract has also landed: new credit
 purchases use per-learner/instructor/school rate precedence and apply school
-bulk tiers only when the selected instructor has opted in.
+bulk tiers only when the selected instructor has opted in. Slice B learner UI
+polish is also live: the buy-credits page now renders the selected instructor's
+server-priced hourly rate, scoped balance label, and bulk/no-bulk package state.
 
 The core server booking paths use `learner_credit_balances` and
 `booking_credit_sources`, and learner-facing purchase/booking/display surfaces
@@ -80,7 +82,7 @@ Classification:
 | Goodwill/reconciliation | `api/_admin-credit-goodwill.js`, `api/_admin-credit-reconciliation.js` | Explicit learner/instructor/school + shared helper | Yes | Strongest admin path; tests already pin scope and mutation shape. |
 | Refund executor | `api/_refund-executor.js` | Planner lines + `lockBalanceAdjustLCB` | Yes | Uses `learner_id`/`instructor_id` from trusted plan lines and `school_id` from the admin scope for the LCB decrement; tests pin that caller-supplied scope fields are ignored. BCS execution intentionally disabled. |
 | Learner dashboard/profile/sidebar displays | `public/learner/index.js`, `public/learner/profile.js`, `public/sidebar.js` | Aggregate + per-instructor `GET /api/credits?action=balance` data; sidebar localStorage fallback copy | Mostly yes | Dashboard labels aggregate as total across instructors and fetches live balance; profile shows total plus per-instructor rows; sidebar says total credit instead of implying a universally spendable balance. |
-| Learner buy UI | `public/learner/buy-credits.js` | Selected public instructor + selected/aggregate balance read | Mostly yes | Direct visits show an instructor selector from `/api/instructors?action=list`; `?instructor_id=...` preselects when valid; package and single-lesson checkout stay blocked until selected and send `instructor_id`. |
+| Learner buy UI | `public/learner/buy-credits.js` | Selected public instructor + selected balance read + `/api/credits?action=bulk-pricing&instructor_id=...` | Yes | Direct visits show an instructor selector from `/api/instructors?action=list`; `?instructor_id=...` preselects when valid; pricing and balance reload on instructor changes; package and single-lesson checkout stay blocked until selected pricing loads and send `instructor_id`. The page labels "Credits for [Instructor]", shows their effective hourly rate, and renders discount copy only when `bulk_tiers_enabled = TRUE`. |
 | Learner booking UI | `public/learner/book.js` | Selected slot instructor balance | Mostly yes | Booking modal reads `/api/credits?action=balance&instructor_id=<slot instructor>` before showing credit eligibility, uses `selected_instructor_balance_minutes`, and carries the slot instructor into buy-credits links. Aggregate balance remains elsewhere. |
 | Admin/instructor displays | `api/instructor.js`, `public/admin/portal.js`, `public/instructor/index.js`, `public/instructor/dashboard.js`, `public/shared/instructor-booking-actions.js` | Admin adjust selector + current-instructor LCB balance for booking helper pickers | Mostly yes | Admin adjust no longer looks pooled. Instructor `school-learners` aliases current instructor LCB minutes as `balance_minutes` for existing picker code, and helper copy says "with you" / "with this instructor". |
 | Credit reconcile cron | `api/cron-credit-reconcile.js` | Ledger vs LCB by learner/instructor within `SCHOOL_ID` | Yes | Compares school-scoped ledger rows against LCB, including explicit `school_id` filters on BCS/CSA source reads. |
@@ -281,9 +283,8 @@ sweep. Remaining items are non-blocking design/product work:
 - Slice C1 bulk-tier controls landed: admin create/edit and instructor profile
   can manage `bulk_tiers_enabled`; instructor profile also shows the
   server-computed effective hourly rate read-only.
-- Learner UI Slice B polish remains: the buy-credits page can fetch
-  instructor-aware pricing, but a fuller display pass should make opt-in/off
-  state and per-instructor rates obvious.
+- Learner UI Slice B polish landed: buy-credits now makes selected-instructor
+  pricing, balance scope, and bulk opt-in/off state explicit.
 - Admin hourly-rate editing remains a follow-up.
 - Thread C franchise-tier/admin configurability remains outside this Thread A
   closeout.

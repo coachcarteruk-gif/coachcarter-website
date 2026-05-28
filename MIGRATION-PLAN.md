@@ -305,6 +305,8 @@ The web uses Stripe Checkout (redirect). The app needs a PaymentSheet flow:
 
 Keep the existing `/api/credits?action=checkout` action working for web (it returns a Stripe Checkout URL), but preserve the Slice 2/Thread B contract: learner-facing purchases must pass an explicit same-school active `instructor_id`; `calcBulkTotal` must price server-side using custom learner rate → instructor hourly rate → school default; school bulk tiers apply only when that instructor has `bulk_tiers_enabled = TRUE`; and the metadata must carry `instructor_id`, `amount_pence`, `discount_pct`, and `effective_rate_pence_per_minute` through the `credit_purchase` webhook. The new in-app action shares that same pricing helper and webhook metadata.
 
+Native buy-credits screens should mirror the web Slice B contract before creating a payment intent: require a selected instructor, fetch `/api/credits?action=bulk-pricing&instructor_id=...` for display-only hourly/package state, reload the selected instructor balance with `/api/credits?action=balance&instructor_id=...`, and avoid showing bulk savings when `bulk_tiers_enabled` is false. Payment creation still relies on the server-priced `{ hours, instructor_id }` request.
+
 ---
 
 Instructor native profile screens should preserve the web profile contract: `GET /api/instructor?action=profile` returns `bulk_tiers_enabled` plus read-only `effective_hourly_rate_pence`, and `POST /api/instructor?action=update-profile` accepts a boolean `bulk_tiers_enabled`.

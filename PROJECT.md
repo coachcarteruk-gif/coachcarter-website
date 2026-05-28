@@ -260,6 +260,8 @@ The school default is currently **£55 per hour** (£82.50 for a standard 1.5-ho
 
 Admins can set `bulk_tiers_enabled` when creating/editing instructors, and instructors can manage the same opt-in from their profile.
 
+`/learner/buy-credits.html` is selected-instructor-aware: learners must choose an instructor before checkout, the page fetches `/api/credits?action=bulk-pricing&instructor_id=...`, labels the balance as hours with that instructor, shows the effective hourly rate returned by the server, and only shows discount/savings copy when that instructor has opted into bulk tiers. Checkout still posts `{ hours, instructor_id }`; the server remains the pricing source of truth.
+
 **Lesson types** (managed via admin portal):
 - Standard Lesson — 90 min / £82.50
 - 2-Hour Lesson — 120 min / £110.00
