@@ -38,6 +38,7 @@ const { lockBalanceAdjustLCB } = require('./_credit-grant');
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
+const { calcDirectLessonPrice } = require('./_pricing-helpers');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -796,6 +797,17 @@ async function handleDurationsForSlot(req, res) {
     }
 
     // For each lesson type, decide fits + reason.
+    const directPrices = new Map();
+    for (const lt of lessonTypes) {
+      const direct = await calcDirectLessonPrice(sql, {
+        schoolId,
+        instructorId,
+        learnerId: parseInt(req.query.learner_id) || null,
+        durationMinutes: lt.duration_minutes
+      });
+      directPrices.set(lt.id, direct.pricePence);
+    }
+
     const durations = lessonTypes.map(lt => {
       const slotEnd = slotStart + lt.duration_minutes;
       let fits = true;
@@ -839,7 +851,7 @@ async function handleDurationsForSlot(req, res) {
         slug: lt.slug,
         name: lt.name,
         duration_minutes: lt.duration_minutes,
-        price_pence: lt.price_pence,
+        price_pence: directPrices.get(lt.id) || lt.price_pence,
         colour: lt.colour,
         fits,
         reason
@@ -1620,17 +1632,14 @@ async function handleCheckoutSlot(req, res) {
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);
     const durationMins = lessonType.duration_minutes;
-    let pricePence     = lessonType.price_pence;
+    const directPrice  = await calcDirectLessonPrice(sql, {
+      schoolId,
+      instructorId: instructor_id,
+      learnerId: user.id,
+      durationMinutes: durationMins
+    });
+    const pricePence   = directPrice.pricePence;
     const durationStr  = formatHours(durationMins);
-
-    // Check for per-learner custom hourly rate
-    const [customRate] = await sql`
-      SELECT custom_hourly_rate_pence FROM instructor_learner_notes
-      WHERE instructor_id = ${instructor_id} AND learner_id = ${user.id}
-    `;
-    if (customRate?.custom_hourly_rate_pence) {
-      pricePence = Math.round(customRate.custom_hourly_rate_pence * durationMins / 60);
-    }
 
     // Validate slot duration matches lesson type
     if (endMins - startMins !== durationMins)
@@ -1860,7 +1869,6 @@ async function handleCheckoutSlotGuest(req, res) {
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);
     const durationMins = lessonType.duration_minutes;
-    let pricePence     = lessonType.price_pence;
     const durationStr  = formatHours(durationMins);
 
     if (endMins - startMins !== durationMins)
@@ -1960,14 +1968,13 @@ async function handleCheckoutSlotGuest(req, res) {
       }
     }
 
-    // Check for per-learner custom hourly rate (existing learners only)
-    const [guestCustomRate] = await sql`
-      SELECT custom_hourly_rate_pence FROM instructor_learner_notes
-      WHERE instructor_id = ${instructor_id} AND learner_id = ${learnerId}
-    `;
-    if (guestCustomRate?.custom_hourly_rate_pence) {
-      pricePence = Math.round(guestCustomRate.custom_hourly_rate_pence * durationMins / 60);
-    }
+    const directPrice = await calcDirectLessonPrice(sql, {
+      schoolId,
+      instructorId: instructor_id,
+      learnerId,
+      durationMinutes: durationMins
+    });
+    const pricePence = directPrice.pricePence;
 
     // ── Create Stripe Checkout session ──
     const origin = req.headers.origin || 'https://coachcarter.uk';

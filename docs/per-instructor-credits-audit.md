@@ -28,6 +28,10 @@ purchases use per-learner/instructor/school rate precedence and apply school
 bulk tiers only when the selected instructor has opted in. Slice B learner UI
 polish is also live: the buy-credits page now renders the selected instructor's
 server-priced hourly rate, scoped balance label, and bulk/no-bulk package state.
+Slice D direct booking pricing alignment has landed too: pay-per-slot checkout
+and the booking modal's duration prices now use the same effective hourly
+fallback for the selected instructor, while bulk discounts remain credit-package
+only.
 
 The core server booking paths use `learner_credit_balances` and
 `booking_credit_sources`, and learner-facing purchase/booking/display surfaces
@@ -71,6 +75,7 @@ Classification:
 |---|---|---|---|---|
 | Shared grants | `api/_credit-grant.js` `grantCredits`, `lockBalanceAndMutate`, `lockBalanceAdjustLCB` | LCB in Phase 2A | Mostly yes | Good core helper; LCB writes/guards now include `school_id`. Missing `instructorId` still grandfather-routes to instructor `1` by design during cutover. |
 | Credit checkout | `api/credits.js` `handleCheckout` | Required request `instructor_id`; instructor-aware `calcBulkTotal` | Yes | New learner-facing checkout rejects missing, cross-school, inactive, or hidden/demo instructors and writes `instructor_id` to Stripe metadata. Pricing uses custom learner rate → instructor hourly rate → school default, with bulk tiers only if `instructors.bulk_tiers_enabled = TRUE`. |
+| Direct pay-and-book checkout | `api/slots.js` `checkout-slot`, `checkout-slot-guest`; `api/lesson-types.js`; `durations-for-slot` | Server-side `calcDirectLessonPrice` using custom learner rate → instructor hourly rate → school default | Yes | Stripe amount and metadata now come from the selected instructor's effective hourly rate × duration. Bulk-tier opt-in is ignored for direct single-slot payments; it only affects prepaid credit packages. Trial lesson types remain excluded/rejected on paid booking paths. |
 | Credit balance API | `api/credits.js` `handleBalance` | School-scoped LCB rows joined to same-school instructors | Yes | Preserves aggregate `balance_minutes`/`balance_hours`/`credit_balance`, adds per-instructor `balances`, and supports optional validated `instructor_id` with selected balance fields. |
 | Credit verify/webhook | `api/webhook.js` `handleCreditPurchase` | Stripe metadata + `grantCredits` | Mostly yes | Purchase completion consumes metadata `instructor_id` and grants to that instructor's LCB row. Legacy/missing metadata still goes to instructor `1` through the shared helper for old Stripe retries. |
 | Learner credit booking | `api/slots.js` credit transaction path | LCB + FIFO `credit_transactions` by instructor | Yes | Locks/decrements chosen instructor row, writes BCS and list price. |

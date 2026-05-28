@@ -153,6 +153,22 @@ async function getEffectiveRatePencePerMinute(sql, { schoolId, instructorId, lea
   return Math.round(hourly / 60);
 }
 
+/**
+ * Direct pay-and-book lesson pricing. This uses the same hourly fallback as
+ * credit purchases, but deliberately applies no bulk-package discounts.
+ */
+async function calcDirectLessonPrice(sql, { schoolId, instructorId, learnerId, durationMinutes } = {}) {
+  const minutes = parseInt(durationMinutes, 10) || 0;
+  const effective = await getEffectiveHourlyPricing(sql, { schoolId, instructorId, learnerId });
+  const pricePence = Math.round(effective.hourlyPence * minutes / 60);
+  return {
+    pricePence,
+    hourlyPence: effective.hourlyPence,
+    source: effective.source,
+    _source: effective.source,
+  };
+}
+
 async function getInstructorBulkTiersEnabled(sql, { schoolId, instructorId } = {}) {
   const sid = parseInt(schoolId) || 1;
   const iid = parseInt(instructorId) || null;
@@ -255,6 +271,7 @@ module.exports = {
   getBulkPricing,
   getDiscountPct,
   calcBulkTotal,
+  calcDirectLessonPrice,
   getEffectiveHourlyPence,
   getEffectiveHourlyPricing,
   getEffectiveRatePencePerMinute,
