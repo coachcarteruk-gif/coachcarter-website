@@ -31,7 +31,10 @@ server-priced hourly rate, scoped balance label, and bulk/no-bulk package state.
 Slice D direct booking pricing alignment has landed too: pay-per-slot checkout
 and the booking modal's duration prices now use the same effective hourly
 fallback for the selected instructor, while bulk discounts remain credit-package
-only.
+only. Offer pricing alignment has also landed for new instructor-created offers:
+`offer_price_pence` is now the frozen final per-lesson price, computed from the
+same effective fallback unless an explicit offer price is supplied. Bulk-tier
+opt-in remains credit-package only.
 
 The core server booking paths use `learner_credit_balances` and
 `booking_credit_sources`, and learner-facing purchase/booking/display surfaces

@@ -27,6 +27,7 @@ const { neon } = require('@neondatabase/serverless');
 const crypto = require('crypto');
 const { sendWhatsApp } = require('./_whatsapp');
 const { createTransporter } = require('./_auth-helpers');
+const { calcOfferLessonPrice } = require('./_pricing-helpers');
 
 const FLASH_DISCOUNT_PCT = 25;
 const FLASH_WINDOW_HOURS = 48; // cancellations within this window trigger the discount path
@@ -192,9 +193,6 @@ async function sendBroadcastOffer({
     lessonType = lt || { id: null, name: 'Standard Lesson', duration_minutes: 90, price_pence: 8250 };
   }
 
-  const originalPricePence = lessonType.price_pence || 8250;
-  const discountedPricePence = Math.round(originalPricePence * (100 - FLASH_DISCOUNT_PCT) / 100);
-
   // All offers in this fan-out share the same batch_id. Expire at lesson start.
   const batchId = crypto.randomUUID();
   const expiresAt = new Date(`${scheduled_date}T${start_time}:00Z`);
@@ -203,23 +201,30 @@ async function sendBroadcastOffer({
   const offerRows = [];
   for (const m of matches) {
     const token = generateToken();
+    const offerPricing = await calcOfferLessonPrice(sql, {
+      schoolId: school_id,
+      instructorId: instructor_id,
+      learnerId: m.learner_id,
+      durationMinutes: lessonType.duration_minutes,
+      discountPct: FLASH_DISCOUNT_PCT,
+    });
     try {
       const [row] = await sql`
         INSERT INTO lesson_offers
           (token, instructor_id, learner_email, learner_id, learner_name,
            scheduled_date, start_time, end_time,
-           lesson_type_id, discount_pct, status,
+           lesson_type_id, discount_pct, offer_price_pence, status,
            kind, batch_id, trigger,
            expires_at, school_id)
         VALUES
           (${token}, ${instructor_id}, ${m.email || null}, ${m.learner_id}, ${m.name || null},
            ${scheduled_date}, ${start_time}, ${end_time},
-           ${lessonType.id}, ${FLASH_DISCOUNT_PCT}, 'pending',
+           ${lessonType.id}, ${FLASH_DISCOUNT_PCT}, ${offerPricing.pricePence}, 'pending',
            'broadcast', ${batchId}, 'cancellation',
            ${expiresAt.toISOString()}, ${school_id})
         RETURNING id, token
       `;
-      offerRows.push({ ...row, learner: m });
+      offerRows.push({ ...row, learner: m, pricing: offerPricing });
     } catch (err) {
       console.warn('broadcast offer insert failed for learner', m.learner_id, err.message);
     }
@@ -230,13 +235,12 @@ async function sendBroadcastOffer({
   // Send WhatsApp + email to each recipient with their own accept link.
   const dateStr = formatDateDisplay(scheduled_date);
   const timeStr = formatTime12(start_time);
-  const priceStr = `£${(discountedPricePence / 100).toFixed(2)}`;
-  const wasStr = `£${(originalPricePence / 100).toFixed(2)}`;
-
   const mailer = createTransporter();
 
-  for (const { token, learner } of offerRows) {
+  for (const { token, learner, pricing } of offerRows) {
     const acceptLink = `${BASE_URL}/accept-offer.html?token=${token}`;
+    const priceStr = `£${(pricing.pricePence / 100).toFixed(2)}`;
+    const wasStr = `£${(pricing.basePricePence / 100).toFixed(2)}`;
 
     const waMsg =
       `We've had a last-minute cancellation — ${instructor_name} has a ${timeStr} slot on ${dateStr} at ${FLASH_DISCOUNT_PCT}% off (${priceStr} instead of ${wasStr}).\n\n` +

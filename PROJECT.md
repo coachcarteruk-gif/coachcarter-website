@@ -264,6 +264,8 @@ Admins can set `bulk_tiers_enabled` when creating/editing instructors, and instr
 
 Direct pay-and-book uses the same effective hourly fallback for the selected instructor and lesson duration: learner/instructor custom rate → instructor hourly rate → school default `bulk_hourly_pence`. Bulk discount tiers do not apply to direct single-slot payments. The booking modal gets these prices from server APIs and checkout sends only slot/instructor/lesson-type context, not a client-side amount.
 
+Instructor-created paid offers now freeze their final per-lesson price into `lesson_offers.offer_price_pence` at creation. Explicit `offer_price_pence` wins, including £0 free offers; otherwise the server computes custom learner rate → instructor hourly rate → school default for the lesson duration, then applies the offer's `discount_pct`. Bulk-tier opt-in never discounts offers. Repeat-offer Stripe checkout uses the stored per-lesson price as `unit_amount` and the selected repeat count as `quantity`, so accepted offers do not reprice later.
+
 **Lesson types** (managed via admin portal):
 - Standard Lesson — 90 min / £82.50
 - 2-Hour Lesson — 120 min / £110.00
@@ -358,7 +360,7 @@ Kept for SMS code login, password-reset emails, and the migration code flow. Mag
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `preview-broadcast-audience` | GET | Instructor | `?scheduled_date=YYYY-MM-DD&start_time=HH:MM&end_time=HH:MM` — returns learners with active weekly availability covering the slot. Each learner row includes their full availability windows so the picker can show "Mon · Wed eves" alongside the name. |
-| `create-broadcast-offer` | POST | Instructor | Body: `{ scheduled_date, start_time, lesson_type_id?, discount_pct? (0/25/50/75/100), learner_ids[] }`. Mints `lesson_offers` rows with `kind='broadcast'`, `trigger='instructor_manual'`, shared `batch_id`. Sends WhatsApp + email per recipient. |
+| `create-broadcast-offer` | POST | Instructor | Body: `{ scheduled_date, start_time, lesson_type_id?, discount_pct? (0/25/50/75/100), learner_ids[] }`. Mints `lesson_offers` rows with `kind='broadcast'`, `trigger='instructor_manual'`, shared `batch_id`, and per-recipient frozen `offer_price_pence` from effective instructor pricing. Sends WhatsApp + email per recipient. |
 | `close-broadcast-offer` | POST | Instructor | Body: `{ batch_id }`. Cancels all pending siblings via `supersedeBroadcastSiblings()` and sends "no longer available" follow-up. Slot is implicitly freed. |
 | `my-broadcast-batches` | GET | Instructor | Returns active broadcast batches with pending counts for the dashboard card. |
 
@@ -368,7 +370,7 @@ Internal module (no public actions). Two exports:
 
 **`notifyAvailableLearners({ instructor_id, instructor_name, scheduled_date, start_time, end_time, lesson_type_id, school_id })`** — called from `api/slots.js` after a cancellation. Finds every learner with an active `learner_availability` window covering the freed slot and either:
 - Sends a plain "slot opened" WhatsApp + email (default), OR
-- Mints a broadcast offer batch in `lesson_offers` at 25% off and emails per-recipient single-use tokens to `/accept-offer.html?token=…`. Triggered when the cancellation is <48h before lesson start AND `instructors.broadcast_offers_enabled = TRUE`.
+- Mints a broadcast offer batch in `lesson_offers` at 25% off effective instructor pricing and emails per-recipient single-use tokens to `/accept-offer.html?token=…`. Triggered when the cancellation is <48h before lesson start AND `instructors.broadcast_offers_enabled = TRUE`.
 
 **`supersedeBroadcastSiblings({ instructor_id, scheduled_date, start_time, school_id, winnerOfferId, batchId })`** — called from booking paths (Stripe webhook for offer accept, `slots.js?action=book`, webhook `handleSlotBooking`). Marks all pending broadcast offers on the slot/batch except the winner as `'superseded'` and sends a "no longer available" WhatsApp + email follow-up.
 
@@ -467,7 +469,7 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `create-offer` | POST | Instructor JWT | Creates lesson offer, sends email to learner. Body: `{ learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, max_repeat_weeks? (1-18) }`. `max_repeat_weeks > 1` lets the learner book a recurring weekly series via the accept page (skip-clash, may exceed the 12-week self-serve cap). |
+| `create-offer` | POST | Instructor JWT | Creates lesson offer, sends email to learner. Body: `{ learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, discount_pct?, max_repeat_weeks? (1-18) }`. New paid offers snapshot final `offer_price_pence`: explicit pence wins, otherwise effective instructor pricing with optional offer discount. `max_repeat_weeks > 1` lets the learner book a recurring weekly series via the accept page (skip-clash, may exceed the 12-week self-serve cap). |
 | `list-offers` | GET | Instructor JWT | Lists instructor's offers with status filter |
 | `cancel-offer` | POST | Instructor JWT | Cancels a pending offer |
 
@@ -711,7 +713,7 @@ Two alarm triggers:
 
 **`instructor_external_events`** — synced events from instructor's personal iCal feed (event_date, start_time, end_time, is_all_day, uid_hash for dedup). Indexed on (instructor_id, event_date). Used by slot generation to block slots that conflict with personal events.
 
-**`lesson_offers`** — instructor-initiated lesson offers pending learner acceptance + payment. Two modes: **slot-pinned** (instructor picks date/time) and **flexible** (learner picks from available slots). Fields: token (unique, 64-char hex), instructor_id, learner_email, learner_id (nullable — set when learner exists or after payment creates account), scheduled_date (nullable — NULL for flexible offers), start_time (nullable), end_time (nullable), lesson_type_id, discount_pct, offer_price_pence (nullable — exact price in pence set by instructor; when set, takes precedence over discount_pct calculation), status ('pending'/'accepted'/'expired'/'cancelled'), booking_id (set by webhook after payment), stripe_session_id, expires_at (24h from creation), accepted_at. Partial unique index on (instructor_id, scheduled_date, start_time) WHERE status='pending' AND scheduled_date IS NOT NULL prevents duplicate pending offers for the same slot. Slot-pinned pending offers block slot availability; flexible offers do not block any slot until the learner picks one.
+**`lesson_offers`** — instructor-initiated lesson offers pending learner acceptance + payment. Two modes: **slot-pinned** (instructor picks date/time) and **flexible** (learner picks from available slots). Fields: token (unique, 64-char hex), instructor_id, learner_email, learner_id (nullable — set when learner exists or after payment creates account), scheduled_date (nullable — NULL for flexible offers), start_time (nullable), end_time (nullable), lesson_type_id, discount_pct, offer_price_pence (nullable for legacy pending offers; new paid/free offers store the frozen final per-lesson pence), status ('pending'/'accepted'/'expired'/'cancelled'), booking_id (set by webhook after payment), stripe_session_id, expires_at (24h from creation), accepted_at. New offer pricing uses explicit `offer_price_pence` if supplied, otherwise effective instructor pricing (custom learner rate → instructor hourly rate → school default) with `discount_pct` applied to that base; bulk tiers are credit-package only and never affect offers. Partial unique index on (instructor_id, scheduled_date, start_time) WHERE status='pending' AND scheduled_date IS NOT NULL prevents duplicate pending offers for the same slot. Slot-pinned pending offers block slot availability; flexible offers do not block any slot until the learner picks one.
 
 **`instructor_login_tokens`** — magic-link tokens with expiry and used flag
 

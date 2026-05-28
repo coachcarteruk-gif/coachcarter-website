@@ -358,10 +358,14 @@ async function handleGetOffer(req, res) {
     const isFlexible = !offer.scheduled_date && !offer.start_time;
     const originalPricePence = offer.price_pence ?? 8250;
 
-    // offer_price_pence (custom price) takes precedence over discount_pct
+    // offer_price_pence is the frozen final price for new offers. Since this
+    // first slice deliberately does not store base/source columns, only legacy
+    // null-price offers expose a lesson-type "original" price for was/now UI.
     let finalPricePence;
+    let displayOriginalPricePence = originalPricePence;
     if (offer.offer_price_pence != null) {
       finalPricePence = offer.offer_price_pence;
+      displayOriginalPricePence = finalPricePence;
     } else {
       const discountPct = offer.discount_pct || 0;
       finalPricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
@@ -379,7 +383,7 @@ async function handleGetOffer(req, res) {
         lesson_type_name: offer.lesson_type_name || 'Standard Lesson',
         duration_minutes: offer.duration_minutes || 90,
         price_pence: finalPricePence,
-        original_price_pence: originalPricePence,
+        original_price_pence: displayOriginalPricePence,
         discount_pct: offer.discount_pct || 0,
         kind: offer.kind || 'manual',
         trigger: offer.trigger || null,
