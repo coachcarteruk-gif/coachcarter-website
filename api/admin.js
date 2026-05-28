@@ -88,6 +88,19 @@ function buildScopedDurationCreditRefusal(delta, availableMinutes, style = 'admi
     : `Learner has insufficient balance (needs ${delta} more minutes, has ${balance})`;
 }
 
+function parseHourlyRatePence(value, { allowOmitted = false } = {}) {
+  if (value === undefined) {
+    return allowOmitted ? { present: false, value: undefined } : { present: true, value: null };
+  }
+  if (value === null || value === '') return { present: true, value: null };
+
+  const rate = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(rate) || rate <= 0 || rate > 50000) {
+    return { present: true, error: 'hourly_rate_pence must be null or an integer between 1 and 50000' };
+  }
+  return { present: true, value: rate };
+}
+
 function resolveAdjustCreditsTarget({ learner, lcbRows, explicitInstructorId, explicitLcbRow }) {
   let targetInstructorId = parseInt(explicitInstructorId, 10);
   let preCheckBalance = Number(learner?.balance_minutes || 0);
@@ -711,6 +724,7 @@ async function handleAllInstructors(req, res) {
         i.max_travel_minutes,
         COALESCE(i.commission_rate, 0.85) AS commission_rate,
         i.weekly_franchise_fee_pence,
+        i.hourly_rate_pence,
         COALESCE(i.bulk_tiers_enabled, FALSE) AS bulk_tiers_enabled,
         (i.password_hash IS NOT NULL) AS has_password,
         (i.stripe_account_id IS NOT NULL) AS connect_has_account,
@@ -768,6 +782,8 @@ async function handleCreateInstructor(req, res) {
   if (bulk_tiers_enabled !== undefined && typeof bulk_tiers_enabled !== 'boolean') {
     return res.status(400).json({ error: 'bulk_tiers_enabled must be true or false' });
   }
+  const hourlyRate = parseHourlyRatePence(req.body?.hourly_rate_pence);
+  if (hourlyRate.error) return res.status(400).json({ error: hourlyRate.error });
 
   const normalised = email.trim().toLowerCase();
 
@@ -779,7 +795,7 @@ async function handleCreateInstructor(req, res) {
     if (existing.length > 0) return res.status(409).json({ error: 'An instructor with that email already exists' });
 
     const rows = await sql`
-      INSERT INTO instructors (name, email, phone, bio, photo_url, active, bulk_tiers_enabled, school_id)
+      INSERT INTO instructors (name, email, phone, bio, photo_url, active, bulk_tiers_enabled, hourly_rate_pence, school_id)
       VALUES (
         ${name.trim()},
         ${normalised},
@@ -788,9 +804,10 @@ async function handleCreateInstructor(req, res) {
         ${photo_url?.trim() || null},
         true,
         ${bulk_tiers_enabled === true},
+        ${hourlyRate.value},
         ${schoolId}
       )
-      RETURNING id, name, email, phone, bio, photo_url, active, created_at, COALESCE(bulk_tiers_enabled, FALSE) AS bulk_tiers_enabled
+      RETURNING id, name, email, phone, bio, photo_url, active, created_at, hourly_rate_pence, COALESCE(bulk_tiers_enabled, FALSE) AS bulk_tiers_enabled
     `;
 
     const instructor = rows[0];
@@ -871,6 +888,8 @@ async function handleUpdateInstructor(req, res) {
   const hasCommission = 'commission_rate' in body;
   const hasFranchiseFee = 'weekly_franchise_fee_pence' in body;
   const hasBulkTiers = 'bulk_tiers_enabled' in body;
+  const hourlyRate = parseHourlyRatePence(body.hourly_rate_pence, { allowOmitted: true });
+  if (hourlyRate.error) return res.status(400).json({ error: hourlyRate.error });
   if (hasBulkTiers && typeof body.bulk_tiers_enabled !== 'boolean') {
     return res.status(400).json({ error: 'bulk_tiers_enabled must be true or false' });
   }
@@ -893,9 +912,10 @@ async function handleUpdateInstructor(req, res) {
           photo_url = ${photo_url?.trim() || null},
           commission_rate = CASE WHEN ${hasCommission} THEN ${hasCommission ? (parseFloat(body.commission_rate) || 0.85) : 0.85} ELSE commission_rate END,
           bulk_tiers_enabled = CASE WHEN ${hasBulkTiers} THEN ${body.bulk_tiers_enabled === true} ELSE bulk_tiers_enabled END,
-          weekly_franchise_fee_pence = CASE WHEN ${hasFranchiseFee} THEN ${hasFranchiseFee ? body.weekly_franchise_fee_pence : null}::integer ELSE weekly_franchise_fee_pence END
+          weekly_franchise_fee_pence = CASE WHEN ${hasFranchiseFee} THEN ${hasFranchiseFee ? body.weekly_franchise_fee_pence : null}::integer ELSE weekly_franchise_fee_pence END,
+          hourly_rate_pence = CASE WHEN ${hourlyRate.present} THEN ${hourlyRate.value}::integer ELSE hourly_rate_pence END
       WHERE id = ${id} AND school_id = ${schoolId}
-      RETURNING id, name, email, phone, bio, photo_url, active, commission_rate, weekly_franchise_fee_pence, COALESCE(bulk_tiers_enabled, FALSE) AS bulk_tiers_enabled
+      RETURNING id, name, email, phone, bio, photo_url, active, commission_rate, weekly_franchise_fee_pence, hourly_rate_pence, COALESCE(bulk_tiers_enabled, FALSE) AS bulk_tiers_enabled
     `;
 
     if (rows.length === 0) return res.status(404).json({ error: 'Instructor not found' });

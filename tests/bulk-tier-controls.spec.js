@@ -11,7 +11,7 @@ test.describe('Slice C1 bulk-tier admin controls', () => {
     const adminApi = read('api/admin.js');
 
     expect(instructorsApi).toContain('bulk_tiers_enabled !== undefined && typeof bulk_tiers_enabled !== \'boolean\'');
-    expect(instructorsApi).toContain('INSERT INTO instructors (name, email, phone, bio, photo_url, buffer_minutes, bulk_tiers_enabled, school_id)');
+    expect(instructorsApi).toContain('INSERT INTO instructors (name, email, phone, bio, photo_url, buffer_minutes, bulk_tiers_enabled, hourly_rate_pence, school_id)');
     expect(instructorsApi).toContain('${bulk_tiers_enabled === true}');
     expect(instructorsApi).toContain('bulk_tiers_enabled = CASE WHEN ${hasBulkTiers}');
     expect(instructorsApi).toContain('WHERE id = ${id} AND school_id = ${schoolId}');
@@ -42,7 +42,7 @@ test.describe('Slice C1 bulk-tier instructor controls', () => {
   test('instructor profile API returns bulk opt-in and server-computed hourly rate', () => {
     const api = read('api/instructor.js');
 
-    expect(api).toContain("const { getEffectiveHourlyPence } = require('./_pricing-helpers');");
+    expect(api).toContain("const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-helpers');");
     expect(api).toContain('COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled');
     expect(api).toContain('profile.effective_hourly_rate_pence = await getEffectiveHourlyPence(sql, {');
     expect(api).toContain('schoolId,');
