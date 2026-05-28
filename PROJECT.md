@@ -252,17 +252,11 @@ The site uses a unified competency framework (10 DL25 categories, 39 sub-skills)
 
 ### How credits work
 
-Each credit = one 1.5-hour lesson. Credits are stored per learner/instructor in `learner_credit_balances` and purchased via Stripe (Klarna available). Bulk discounts apply automatically:
+Learners buy hours, stored per learner/instructor in `learner_credit_balances`, via Stripe (Klarna available). New credit purchases are priced server-side for the selected instructor:
 
-| Credits | Hours | Discount |
-|---|---|---|
-| 4 | 6hrs | 5% off |
-| 8 | 12hrs | 10% off |
-| 12 | 18hrs | 15% off |
-| 16 | 24hrs | 20% off |
-| 20 | 30hrs | 25% off |
+Rate precedence is learner/instructor custom rate → instructor hourly rate → school default `schools.config.pricing.bulk_hourly_pence`. School-wide tiers live in `schools.config.pricing.bulk_discount_tiers`, but apply only when the selected instructor has `instructors.bulk_tiers_enabled = TRUE`. New instructors default off; Fraser is grandfathered on. Existing credit rows keep their snapshotted `effective_rate_pence_per_minute`.
 
-Base rate: **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Learners buy hours, not lesson credits. Instructor-scoped balances are stored as `learner_credit_balances.balance_minutes`; the legacy `learner_users.balance_minutes` column is an aggregate/display shadow.
+The school default is currently **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Instructor-scoped balances are stored as `learner_credit_balances.balance_minutes`; the legacy `learner_users.balance_minutes` column is an aggregate/display shadow.
 
 **Lesson types** (managed via admin portal):
 - Standard Lesson — 90 min / £82.50
@@ -389,7 +383,8 @@ Replaced the retired `api/waitlist.js` (May 2026). Weekly availability is now th
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `balance` | GET | Yes | Returns aggregate `balance_minutes`, `balance_hours`, `credit_balance`, recent transactions, and per-instructor `balances: [{ instructor_id, instructor_name, balance_minutes, balance_hours }]`. Optional `instructor_id` validates school scope and adds `selected_instructor_balance_minutes` / `selected_instructor_balance_hours`. |
-| `checkout` | POST | Yes | Creates Stripe checkout for hours purchase. Body: `{ hours, instructor_id }` (or legacy `{ quantity, instructor_id }` for lesson count). New learner-facing purchases require an active same-school instructor; Stripe metadata includes `instructor_id`. Discount tiers: 6h=5%, 12h=10%, 18h=15%, 24h=20%, 30h=25% |
+| `checkout` | POST | Yes | Creates Stripe checkout for hours purchase. Body: `{ hours, instructor_id }` (or legacy `{ quantity, instructor_id }` for lesson count). New learner-facing purchases require an active same-school instructor; Stripe metadata includes `instructor_id`, `amount_pence`, `discount_pct`, and `effective_rate_pence_per_minute` from the instructor-aware server total. |
+| `bulk-pricing` | GET | No | Public pricing contract for buy-credits UI. Optional `instructor_id` validates same-school active non-demo instructor and returns instructor-aware `hourly_pence`, applicable `discount_tiers`, `bulk_tiers_enabled`, and `rate_source`; optional `hours` also returns `full_pence`, `discount_pct`, `discount_amount_pence`, and `total_pence`. |
 | `verify` | GET | Yes | Post-checkout safety net. Params: `session_id` (Stripe checkout session ID). Checks Stripe payment status and grants credits idempotently if webhook missed them. Returns `{ ok, already_processed }` or `{ ok, granted, hours, minutes }`. Referrer rewards are NOT issued here — `cron-referral-rewards.js` handles them per completed lesson |
 
 ### API — `api/r.js` (referral short URL)

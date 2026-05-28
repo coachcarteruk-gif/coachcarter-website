@@ -303,7 +303,7 @@ The web uses Stripe Checkout (redirect). The app needs a PaymentSheet flow:
 // Returns: { clientSecret, ephemeralKey, customerId }
 ```
 
-Keep the existing `/api/credits?action=checkout` action working for web (it returns a Stripe Checkout URL), but preserve the Slice 2 contract: learner-facing purchases must pass an explicit same-school active `instructor_id`, and the metadata must carry that instructor through the `credit_purchase` webhook. The new in-app action shares the same `calcBulkTotal` server-side pricing and same `credit_purchase` webhook metadata.
+Keep the existing `/api/credits?action=checkout` action working for web (it returns a Stripe Checkout URL), but preserve the Slice 2/Thread B contract: learner-facing purchases must pass an explicit same-school active `instructor_id`; `calcBulkTotal` must price server-side using custom learner rate → instructor hourly rate → school default; school bulk tiers apply only when that instructor has `bulk_tiers_enabled = TRUE`; and the metadata must carry `instructor_id`, `amount_pence`, `discount_pct`, and `effective_rate_pence_per_minute` through the `credit_purchase` webhook. The new in-app action shares that same pricing helper and webhook metadata.
 
 ---
 

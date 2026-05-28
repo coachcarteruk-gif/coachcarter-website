@@ -1,7 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
-const { requireAuth } = require('./_auth');
+const { decodeToken, requireAuth, SESSION_COOKIE_NAMES } = require('./_auth');
 const { calcBulkTotal, getBulkPricing, MAX_HOURS_PER_PURCHASE } = require('./_pricing-helpers');
 const { grantCredits } = require('./_credit-grant');
 
@@ -47,6 +47,15 @@ async function resolveCheckoutInstructor(sql, { instructorId, schoolId }) {
   return { ok: true, instructor };
 }
 
+function getOptionalLearnerContext(req, schoolId) {
+  const payload = decodeToken(req, { preferredCookies: [SESSION_COOKIE_NAMES.learner] });
+  if (!payload) return null;
+  const role = payload.role || 'learner';
+  const tokenSchoolId = payload.school_id || 1;
+  if (role !== 'learner' || tokenSchoolId !== schoolId) return null;
+  return payload;
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   const action = req.query.action;
@@ -69,12 +78,63 @@ async function handleBulkPricing(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = parseInt(req.query.school_id) || 1;
+    const instructorId = req.query.instructor_id
+      ? parsePositiveInteger(req.query.instructor_id)
+      : null;
+
+    if (req.query.instructor_id && !instructorId) {
+      return res.status(400).json({ error: 'Invalid instructor_id' });
+    }
+
+    if (instructorId) {
+      const instructorResult = await resolveCheckoutInstructor(sql, { instructorId, schoolId });
+      if (!instructorResult.ok) {
+        return res.status(instructorResult.status).json({
+          error: instructorResult.message,
+          code: instructorResult.code
+        });
+      }
+    }
+
+    const learner = instructorId ? getOptionalLearnerContext(req, schoolId) : null;
+    const hours = req.query.hours ? parseFloat(req.query.hours) : null;
+
+    if (instructorId) {
+      const pricing = await calcBulkTotal(sql, schoolId, hours || 1.5, {
+        instructorId,
+        learnerId: learner?.id
+      });
+      const payload = {
+        ok: true,
+        hourly_pence: pricing.pricePerHourPence,
+        price_per_hour_pence: pricing.pricePerHourPence,
+        discount_tiers: pricing.discountTiers,
+        school_discount_tiers: pricing.schoolDiscountTiers,
+        bulk_tiers_enabled: pricing.bulkTiersEnabled,
+        max_hours: MAX_HOURS_PER_PURCHASE,
+        rate_source: pricing.rateSource,
+        _source: pricing._source
+      };
+      if (hours) {
+        payload.hours = hours;
+        payload.full_pence = pricing.fullPence;
+        payload.discount_pct = pricing.discountPct;
+        payload.discount_amount_pence = pricing.discountAmt;
+        payload.total_pence = pricing.totalPence;
+      }
+      return res.json(payload);
+    }
+
     const { hourlyPence, discountTiers, source } = await getBulkPricing(sql, schoolId);
     return res.json({
       ok: true,
       hourly_pence: hourlyPence,
+      price_per_hour_pence: hourlyPence,
       discount_tiers: discountTiers, // sorted descending by min_hours; first match wins
+      school_discount_tiers: discountTiers,
+      bulk_tiers_enabled: true,
       max_hours: MAX_HOURS_PER_PURCHASE,
+      rate_source: source,
       _source: source
     });
   } catch (err) {
@@ -247,7 +307,10 @@ async function handleCheckout(req, res) {
       });
     }
 
-    const { fullPence, discountPct, discountAmt, totalPence, pricePerHourPence } = await calcBulkTotal(sql, schoolId, hours);
+    const { fullPence, discountPct, discountAmt, totalPence, pricePerHourPence } = await calcBulkTotal(sql, schoolId, hours, {
+      instructorId,
+      learnerId: user.id
+    });
     const origin = req.headers.origin || 'https://coachcarter.uk';
 
     const productName = discountPct > 0
