@@ -12,6 +12,9 @@ test.describe('learner instructor-aware credit purchase UI', () => {
 
     expect(html).toContain('id="instructorSelect"');
     expect(html).toContain('Choose instructor');
+    expect(html).toContain('id="creditsTitle"');
+    expect(html).toContain('id="pricingRateValue"');
+    expect(html).toContain('id="packagesNote"');
     expect(js).toContain("fetch('/api/instructors?action=list')");
     expect(js).toContain("parseInt(params.get('instructor_id'), 10)");
     expect(js).toContain('opt.selected = Number(inst.id) === Number(currentInstructorId)');
@@ -21,10 +24,49 @@ test.describe('learner instructor-aware credit purchase UI', () => {
     const js = read('public/learner/buy-credits.js');
 
     expect(js).toContain("var url = '/api/credits?action=bulk-pricing&t=' + Date.now();");
+    expect(js).toContain("if (!currentInstructorId) {");
     expect(js).toContain("url += '&instructor_id=' + encodeURIComponent(currentInstructorId)");
+    expect(js).toContain('BULK_TIERS_ENABLED = data.bulk_tiers_enabled === true;');
+    expect(js).toContain('PRICING_LOADED = Number.isFinite(PRICE_PER_HOUR_PENCE) && PRICE_PER_HOUR_PENCE > 0;');
     expect(js).toContain('await loadBulkPricing();');
     expect(js).toContain('renderPackageCards();');
     expect(js).toContain('selectPkg(qty);');
+  });
+
+  test('buy-credits changing instructor reloads pricing, packages, summary, and balance', () => {
+    const js = read('public/learner/buy-credits.js');
+
+    expect(js).toContain("instructorSelect.addEventListener('change', async function ()");
+    expect(js).toContain('currentInstructorId = Number.isInteger(parsed) && parsed > 0 ? parsed : null;');
+    expect(js).toContain('await loadBulkPricing();');
+    expect(js).toContain('renderPackageCards();');
+    expect(js).toContain('renderSingleLessonCards();');
+    expect(js).toContain('selectPkg(qty);');
+    expect(js).toContain('if (isAuthed) loadBalance();');
+    expect(js).toContain('if (requestId !== pricingRequestSeq) return;');
+  });
+
+  test('buy-credits selected instructor copy shows rate and scoped balance labels', () => {
+    const js = read('public/learner/buy-credits.js');
+
+    expect(js).toContain("setText('creditsTitle', 'Credits for ' + name)");
+    expect(js).toContain("setText('balanceLabel', 'Hours with ' + name)");
+    expect(js).toContain("setText('pricingRateValue', PRICING_LOADED ? fmt(PRICE_PER_HOUR_PENCE) + '/hr' : 'Loading...')");
+    expect(js).toContain("setText('packagesNote', 'Credit pricing appears after you choose an instructor.')");
+    expect(js).toContain('function renderNeutralBalance()');
+    expect(js).toContain("if (!currentInstructorId) {\n      renderNeutralBalance();\n      return;\n    }");
+    expect(js).toContain('var mins = data.selected_instructor_balance_minutes != null ? data.selected_instructor_balance_minutes : 0;');
+  });
+
+  test('buy-credits handles bulk tiers disabled without savings copy', () => {
+    const js = read('public/learner/buy-credits.js');
+
+    expect(js).toContain('BULK_TIERS_ENABLED = data.bulk_tiers_enabled === true;');
+    expect(js).toContain('if (BULK_TIERS_ENABLED) {');
+    expect(js).toContain("does not currently offer bulk discounts");
+    expect(js).toContain("var isPopular = BULK_TIERS_ENABLED && h === 12;");
+    expect(js).toContain("var savePill = totals.pct > 0 ? '<span class=\"pkg-save\">Save ' + totals.pct + '%</span>' : '';");
+    expect(js).toContain("discountRow.style.display = 'none';");
   });
 
   test('buy-credits blocks checkout until an instructor is selected', () => {
@@ -33,6 +75,7 @@ test.describe('learner instructor-aware credit purchase UI', () => {
     expect(js).toContain('function requireInstructorSelection()');
     expect(js).toContain("showToast('Choose an instructor before checkout.', 'error')");
     expect(js).toContain('if (!requireInstructorSelection()) return;');
+    expect(js).toContain('return !!currentInstructorId && PRICING_LOADED && !checkoutBusy;');
     expect(js).toContain('checkoutBtn.disabled = !allowed');
     expect(js).toContain("document.querySelectorAll('.sl-buy-btn')");
   });
