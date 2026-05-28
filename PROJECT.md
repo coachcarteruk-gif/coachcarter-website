@@ -258,7 +258,7 @@ Rate precedence is learner/instructor custom rate → instructor hourly rate →
 
 The school default is currently **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Instructor-scoped balances are stored as `learner_credit_balances.balance_minutes`; the legacy `learner_users.balance_minutes` column is an aggregate/display shadow.
 
-Admins can set `bulk_tiers_enabled` when creating/editing instructors, and instructors can manage the same opt-in from their profile.
+Admins can set `instructors.hourly_rate_pence` when creating/editing instructors; leaving it blank stores NULL and inherits the school default. Admins can also set `bulk_tiers_enabled`, and instructors can manage the same opt-in from their profile.
 
 `/learner/buy-credits.html` is selected-instructor-aware: learners must choose an instructor before checkout, the page fetches `/api/credits?action=bulk-pricing&instructor_id=...`, labels the balance as hours with that instructor, shows the effective hourly rate returned by the server, and only shows discount/savings copy when that instructor has opted into bulk tiers. Checkout still posts `{ hours, instructor_id }`; the server remains the pricing source of truth.
 
@@ -701,9 +701,9 @@ Two alarm triggers:
 
 ### Database tables
 
-**`instructors`** — name, email, phone, bio, photo_url, active flag, slug (unique, auto-generated from first name — used for clean booking URLs like `/book/fraser`), buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error, stripe_account_id, stripe_onboarding_complete, payouts_paused, weekly_franchise_fee_pence (NULL = commission model, non-NULL = fixed weekly fee)
+**`instructors`** — name, email, phone, bio, photo_url, active flag, slug (unique, auto-generated from first name — used for clean booking URLs like `/book/fraser`), buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error, stripe_account_id, stripe_onboarding_complete, payouts_paused, weekly_franchise_fee_pence (NULL = commission model, non-NULL = fixed weekly fee), hourly_rate_pence (NULL = inherit school default, non-NULL = admin-set instructor hourly override)
 
-`instructors.bulk_tiers_enabled` controls whether school-defined bulk discounts apply to future credit purchases for that instructor; when true, the instructor absorbs the discount. It does not discount direct pay-and-book single-slot payments.
+`instructors.hourly_rate_pence` is the admin-editable per-instructor lesson rate override used after any learner/instructor custom rate and before the school default. `instructors.bulk_tiers_enabled` controls whether school-defined bulk discounts apply to future credit purchases for that instructor; when true, the instructor absorbs the discount. It does not discount direct pay-and-book single-slot payments.
 
 **`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). Used by direct booking checkout, lesson-types/duration pricing APIs, credit checkout, earnings view, and payout calculations. Direct pay-and-book pricing uses custom learner rate → instructor hourly rate → school `bulk_hourly_pence`; bulk discounts remain credit-package only.
 

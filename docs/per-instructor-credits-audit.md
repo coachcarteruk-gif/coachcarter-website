@@ -291,9 +291,11 @@ sweep. Remaining items are non-blocking design/product work:
 - Slice C1 bulk-tier controls landed: admin create/edit and instructor profile
   can manage `bulk_tiers_enabled`; instructor profile also shows the
   server-computed effective hourly rate read-only.
+- Admin hourly-rate editing landed: admin create/edit can set a positive
+  `instructors.hourly_rate_pence` override or clear it back to NULL so the
+  instructor inherits the school default.
 - Learner UI Slice B polish landed: buy-credits now makes selected-instructor
   pricing, balance scope, and bulk opt-in/off state explicit.
-- Admin hourly-rate editing remains a follow-up.
 - Thread C franchise-tier/admin configurability remains outside this Thread A
   closeout.
 
