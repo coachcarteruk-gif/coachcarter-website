@@ -3,7 +3,17 @@
 
   let currentProfileId = null;
   let currentProfileSlug = null;
-  let currentOfferedTypes = null; // null = all; array of slugs = explicit list
+  let currentOfferedTypes = null; // null = default set; array of slugs = explicit list
+  const OPT_IN_ONLY_LESSON_TYPE_SLUGS = ['1hr'];
+
+  function isOptInOnlyLessonType(slug) {
+    return OPT_IN_ONLY_LESSON_TYPE_SLUGS.includes(String(slug || ''));
+  }
+
+  function isLessonTypeEnabledByProfile(slug) {
+    if (Array.isArray(currentOfferedTypes)) return currentOfferedTypes.includes(slug);
+    return !isOptInOnlyLessonType(slug);
+  }
 
   function init() {
     if (!ccAuth.getAuth()) { window.location.href = '/instructor/login.html'; return; }
@@ -325,7 +335,7 @@
 
       // Build a toggle + copy-link row per lesson type
       var rows = types.map(function(lt) {
-        var isEnabled = !currentOfferedTypes || currentOfferedTypes.includes(lt.slug);
+        var isEnabled = isLessonTypeEnabledByProfile(lt.slug);
         var url = window.location.origin + '/book/' + slug + '?type=' + encodeURIComponent(lt.slug);
         return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">'
           + '<label style="display:flex;align-items:center;gap:0;cursor:pointer;position:relative;width:40px;height:22px;flex-shrink:0">'
@@ -403,8 +413,10 @@
     var allSlugs = Array.from(checkboxes).map(function(cb) { return cb.dataset.ltSlug; });
     var enabledSlugs = Array.from(checkboxes).filter(function(cb) { return cb.checked; }).map(function(cb) { return cb.dataset.ltSlug; });
 
-    // null means "all" "” only send an explicit array if some are disabled
-    var offeredPayload = (enabledSlugs.length === allSlugs.length) ? null : enabledSlugs;
+    var optInOnlyEnabled = enabledSlugs.some(isOptInOnlyLessonType);
+    // null means the default set, which deliberately excludes opt-in-only
+    // lesson types such as 1hr. Send an explicit array when those are enabled.
+    var offeredPayload = (enabledSlugs.length === allSlugs.length && !optInOnlyEnabled) ? null : enabledSlugs;
 
     btn.disabled = true;
     btn.textContent = 'Saving…';

@@ -801,6 +801,17 @@ VALUES
   ('Free Trial',    'trial', 60, 0, '#10b981', false, 5)
 ON CONFLICT (slug) DO NOTHING;
 
+-- Paid 1-hour lessons are active, but application logic treats them as
+-- opt-in-only for instructors whose offered_lesson_types is still NULL.
+UPDATE lesson_types
+   SET name = '1-Hour Lesson',
+       duration_minutes = 60,
+       price_pence = 5500,
+       colour = COALESCE(colour, '#f59e0b'),
+       active = true,
+       sort_order = COALESCE(sort_order, 4)
+ WHERE slug = '1hr';
+
 -- Track which Setmore appointment each booking came from (idempotent sync)
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS setmore_key TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_setmore_key

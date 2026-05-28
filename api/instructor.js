@@ -714,9 +714,9 @@ async function handleUpdateProfile(req, res) {
     }
   }
 
-  // Validate offered_lesson_types: null (all types) or array of slug strings
+  // Validate offered_lesson_types: null (default lesson set) or array of slug strings
   // TODO: dynamicise from lesson_types table — this list drifts from DB.
-  const validSlugs = ['standard', '2hr', '3hr', 'trial'];
+  const validSlugs = ['standard', '2hr', '3hr', 'trial', '1hr'];
   if (offered_lesson_types !== undefined && offered_lesson_types !== null) {
     if (!Array.isArray(offered_lesson_types) || !offered_lesson_types.every(s => validSlugs.includes(s))) {
       return res.status(400).json({ error: 'offered_lesson_types must be null or an array of valid lesson type slugs' });
@@ -776,7 +776,7 @@ async function handleUpdateProfile(req, res) {
     const icalChanged = icalUrlClean !== undefined;
     const icalVal = icalUrlClean === '' ? null : (icalUrlClean || null);
 
-    // offered_lesson_types: undefined = don't touch; null = offer all; array = explicit list
+    // offered_lesson_types: undefined = don't touch; null = default lesson set; array = explicit list
     const offeredChanged = offered_lesson_types !== undefined;
     const offeredVal = (offered_lesson_types !== undefined && offered_lesson_types !== null)
       ? JSON.stringify(offered_lesson_types) : null;

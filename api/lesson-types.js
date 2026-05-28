@@ -21,6 +21,7 @@ const jwt      = require('jsonwebtoken');
 const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
 const { calcDirectLessonPrice } = require('./_pricing-helpers');
+const { isLessonTypeOffered } = require('./_lesson-type-helpers');
 
 function setCors(res) {
 }
@@ -62,9 +63,8 @@ async function handleList(req, res) {
         SELECT offered_lesson_types FROM instructors
         WHERE id = ${instructorId} AND school_id = ${schoolId}
       `;
-      if (instr?.offered_lesson_types) {
-        const offered = instr.offered_lesson_types;
-        rows = rows.filter(lt => offered.includes(lt.slug));
+      if (instr) {
+        rows = rows.filter(lt => isLessonTypeOffered(instr.offered_lesson_types, lt.slug));
       }
     }
 
