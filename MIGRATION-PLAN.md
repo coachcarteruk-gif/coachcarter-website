@@ -307,6 +307,8 @@ Keep the existing `/api/credits?action=checkout` action working for web (it retu
 
 ---
 
+Instructor native profile screens should preserve the web profile contract: `GET /api/instructor?action=profile` returns `bulk_tiers_enabled` plus read-only `effective_hourly_rate_pence`, and `POST /api/instructor?action=update-profile` accepts a boolean `bulk_tiers_enabled`.
+
 ## Phase 1: React Native Project Scaffolding
 
 > **Goal:** Bootable Expo app with navigation, theming, and auth — matching the existing app-mode UX.

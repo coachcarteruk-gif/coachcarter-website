@@ -258,6 +258,8 @@ Rate precedence is learner/instructor custom rate → instructor hourly rate →
 
 The school default is currently **£55 per hour** (£82.50 for a standard 1.5-hour lesson). Instructor-scoped balances are stored as `learner_credit_balances.balance_minutes`; the legacy `learner_users.balance_minutes` column is an aggregate/display shadow.
 
+Admins can set `bulk_tiers_enabled` when creating/editing instructors, and instructors can manage the same opt-in from their profile.
+
 **Lesson types** (managed via admin portal):
 - Standard Lesson — 90 min / £82.50
 - 2-Hour Lesson — 120 min / £110.00
@@ -651,8 +653,8 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `schedule-range` | GET | JWT | Bookings in date range for calendar views. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
 | `availability` | GET | JWT | Current weekly availability windows |
 | `set-availability` | POST | JWT | Update weekly availability windows |
-| `profile` | GET | JWT | Profile details |
-| `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages, ical_feed_url |
+| `profile` | GET | JWT | Profile details, including `bulk_tiers_enabled` and read-only `effective_hourly_rate_pence` |
+| `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages, ical_feed_url, and `bulk_tiers_enabled` |
 | `ical-test` | POST | JWT | Test-fetch an iCal feed URL, returns event count |
 | `ical-status` | GET | JWT | Returns iCal sync status (url, last_synced, error, event_count) |
 | `cancel-booking` | POST | JWT | Cancel a scheduled booking (always refunds learner credit — instructor-initiated cancellations bypass the 48h rule). Body: `{ booking_id, reason?, notify? }` — `notify: false` skips learner email |
@@ -694,6 +696,8 @@ Two alarm triggers:
 ### Database tables
 
 **`instructors`** — name, email, phone, bio, photo_url, active flag, slug (unique, auto-generated from first name — used for clean booking URLs like `/book/fraser`), buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error, stripe_account_id, stripe_onboarding_complete, payouts_paused, weekly_franchise_fee_pence (NULL = commission model, non-NULL = fixed weekly fee)
+
+`instructors.bulk_tiers_enabled` controls whether school-defined bulk discounts apply to future credit purchases for that instructor; when true, the instructor absorbs the discount.
 
 **`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). Used by booking checkout, lesson-types API, earnings view, and payout calculations.
 

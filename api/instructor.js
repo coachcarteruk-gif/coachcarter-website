@@ -49,6 +49,7 @@ const { lockBalanceAndMutate, lockBalanceAdjustLCB } = require('./_credit-grant'
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
+const { getEffectiveHourlyPence } = require('./_pricing-helpers');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -589,6 +590,7 @@ async function handleProfile(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -606,11 +608,18 @@ async function handleProfile(req, res) {
              COALESCE(languages, '["English"]'::jsonb) AS languages,
              ical_feed_url, ical_last_synced_at, ical_sync_error,
              offered_lesson_types,
-             COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled
-      FROM instructors WHERE id = ${instructor.id}
+             COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled,
+             COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled
+      FROM instructors
+      WHERE id = ${instructor.id}
+        AND school_id = ${schoolId}
     `;
 
     if (!profile) return res.status(404).json({ error: 'Instructor not found' });
+    profile.effective_hourly_rate_pence = await getEffectiveHourlyPence(sql, {
+      schoolId,
+      instructorId: instructor.id,
+    });
 
     return res.json({ instructor: profile });
 
@@ -629,18 +638,22 @@ async function handleUpdateProfile(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const {
     name, phone, bio, photo_url, buffer_minutes, calendar_start_hour, reminder_hours, daily_schedule_email,
     adi_grade, pass_rate, years_experience, specialisms,
     vehicle_make, vehicle_model, transmission_type, dual_controls,
     service_areas, languages, ical_feed_url, offered_lesson_types,
-    broadcast_offers_enabled
+    broadcast_offers_enabled, bulk_tiers_enabled
   } = req.body;
 
   // Validate broadcast_offers_enabled if provided
   if (broadcast_offers_enabled !== undefined && broadcast_offers_enabled !== null && typeof broadcast_offers_enabled !== 'boolean') {
     return res.status(400).json({ error: 'broadcast_offers_enabled must be true or false' });
+  }
+  if (bulk_tiers_enabled !== undefined && bulk_tiers_enabled !== null && typeof bulk_tiers_enabled !== 'boolean') {
+    return res.status(400).json({ error: 'bulk_tiers_enabled must be true or false' });
   }
 
   // Validate buffer_minutes if provided
@@ -744,6 +757,8 @@ async function handleUpdateProfile(req, res) {
       ? daily_schedule_email : null;
     const broVal = (broadcast_offers_enabled !== undefined && broadcast_offers_enabled !== null)
       ? broadcast_offers_enabled : null;
+    const bulkVal = (bulk_tiers_enabled !== undefined && bulk_tiers_enabled !== null)
+      ? bulk_tiers_enabled : null;
     const prVal = (pass_rate !== undefined && pass_rate !== null)
       ? parseFloat(pass_rate) : null;
     const yeVal = (years_experience !== undefined && years_experience !== null)
@@ -790,8 +805,10 @@ async function handleUpdateProfile(req, res) {
         ical_last_synced_at  = CASE WHEN ${icalChanged} THEN NULL ELSE ical_last_synced_at END,
         ical_sync_error      = CASE WHEN ${icalChanged} THEN NULL ELSE ical_sync_error END,
         offered_lesson_types = CASE WHEN ${offeredChanged} THEN ${offeredVal}::jsonb ELSE offered_lesson_types END,
-        broadcast_offers_enabled = COALESCE(${broVal}, broadcast_offers_enabled)
+        broadcast_offers_enabled = COALESCE(${broVal}, broadcast_offers_enabled),
+        bulk_tiers_enabled = COALESCE(${bulkVal}, bulk_tiers_enabled)
       WHERE id = ${instructor.id}
+        AND school_id = ${schoolId}
       RETURNING id, name, email, phone, bio, photo_url,
                 COALESCE(buffer_minutes, 30) AS buffer_minutes,
                 COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
@@ -806,8 +823,15 @@ async function handleUpdateProfile(req, res) {
                 COALESCE(languages, '["English"]'::jsonb) AS languages,
                 ical_feed_url, ical_last_synced_at, ical_sync_error,
                 offered_lesson_types,
-                COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled
+                COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled,
+                COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled
     `;
+    if (updated) {
+      updated.effective_hourly_rate_pence = await getEffectiveHourlyPence(sql, {
+        schoolId,
+        instructorId: instructor.id,
+      });
+    }
 
     return res.json({ success: true, instructor: updated });
 

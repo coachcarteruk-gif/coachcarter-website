@@ -278,11 +278,13 @@ sweep. Remaining items are non-blocking design/product work:
   and goodwill absorber/source treatment instead of the legacy aggregate shadow.
 - Manual refund ledger UI: keep this separate from automatic Stripe execution
   and from BCS execution capability.
-- Learner UI Slice B polish: the buy-credits page now can fetch
+- Slice C1 bulk-tier controls landed: admin create/edit and instructor profile
+  can manage `bulk_tiers_enabled`; instructor profile also shows the
+  server-computed effective hourly rate read-only.
+- Learner UI Slice B polish remains: the buy-credits page can fetch
   instructor-aware pricing, but a fuller display pass should make opt-in/off
   state and per-instructor rates obvious.
-- Admin/instructor controls for `bulk_tiers_enabled` and hourly-rate management
-  remain outside this server-contract slice.
+- Admin hourly-rate editing remains a follow-up.
 - Thread C franchise-tier/admin configurability remains outside this Thread A
   closeout.
 
