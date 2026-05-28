@@ -52,11 +52,11 @@
       "stats": [
         {
           "value": "£55",
-          "label": "Per hour, pay as you go"
+          "label": "From per hour, school default"
         },
         {
           "value": "21%",
-          "label": "Max discount on bulk packages"
+          "label": "Package savings vary by instructor"
         },
         {
           "value": "£2,400",
@@ -75,7 +75,7 @@
       },
       "packages": {
         "title": "Bulk Hour Packages",
-        "subtitle": "Buy more hours up front and save up to 21%. The more committed you are, the better the deal."
+        "subtitle": "Buy hours up front for a selected instructor. Live checkout shows the final instructor-specific rate and any available package saving."
       },
       "guarantee": {
         "title": "Test Ready Guarantee",

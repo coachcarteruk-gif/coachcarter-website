@@ -3,13 +3,15 @@
 
 // CONFIG SYSTEM
 let SITE_CONFIG = {};
+const LEGACY_MARKETING_INSTRUCTOR_ID = 1;
 
-// Pull live per-hour rate from /api/lesson-types — same source the learner hub
-// uses when booking a slot, so this page never drifts from real prices.
+// Pull live per-hour rate from /api/lesson-types for the legacy CoachCarter
+// marketing instructor. Final booking prices are confirmed by the live
+// booking/checkout flow for the selected instructor.
 // Falls back to whatever config.json says if the API is unavailable.
 async function loadLivePricing() {
   try {
-    const res = await fetch('/api/lesson-types?school_id=1&t=' + Date.now());
+    const res = await fetch('/api/lesson-types?action=list&school_id=1&instructor_id=' + encodeURIComponent(LEGACY_MARKETING_INSTRUCTOR_ID) + '&t=' + Date.now());
     if (!res.ok) return null;
     const data = await res.json();
     const types = Array.isArray(data) ? data : (data.lesson_types || data.types || []);
@@ -29,15 +31,16 @@ async function loadLivePricing() {
   }
 }
 
-// Pull live bulk-credit pricing from the same endpoint api/credits.js uses
-// server-side. This is what handleCheckout will actually charge the buyer,
-// so the slider/cards on this page MUST mirror it (PR-J — pre-PR-J the
-// numbers came from public/config.json which can drift from
+// Pull live bulk-credit pricing from the same selected-instructor endpoint
+// api/credits.js uses server-side. This mirrors the legacy CoachCarter
+// marketing checkout context; learners choosing another instructor see their
+// final rate in the booking/buy-credit flow. Pre-PR-J the numbers came from
+// public/config.json, which can drift from
 // schools.config.pricing). Falls back to config.json's bulk_packages if the
 // API is unavailable, which is the pre-PR-J behaviour.
 async function loadLiveBulkPricing() {
   try {
-    const res = await fetch('/api/credits?action=bulk-pricing&school_id=1&t=' + Date.now());
+    const res = await fetch('/api/credits?action=bulk-pricing&school_id=1&instructor_id=' + encodeURIComponent(LEGACY_MARKETING_INSTRUCTOR_ID) + '&t=' + Date.now());
     if (!res.ok) return null;
     const data = await res.json();
     if (!data || !data.ok || !data.hourly_pence) return null;
@@ -97,7 +100,8 @@ async function loadConfig() {
     }
   }
 
-  // Overlay live pricing from lesson_types so the page mirrors what learners actually pay.
+  // Overlay live pricing for the public CoachCarter instructor. Final selected-
+  // instructor pricing is confirmed inside the live booking/buy-credit flows.
   // Fetch both overlays in parallel — both are independent of each other and of configData.
   const [live, liveBulk] = await Promise.all([loadLivePricing(), loadLiveBulkPricing()]);
   if (configData && live) {
@@ -144,13 +148,14 @@ function applyConfig() {
   if (paygPriceEl) paygPriceEl.textContent = '£' + paygLessonPrice;
 
   // Hero stats reduced 2026-04-28 — TRG hidden, so stats 3 & 4 now show "Free trial"
-  // and "DVSA approved" instead of programme price/duration. Stat 1 shows the live
-  // hourly rate from /api/lesson-types (the same price learners pay when booking).
+  // and "DVSA approved" instead of programme price/duration. Stat 1 shows the
+  // public CoachCarter school-default rate; selected-instructor flows confirm
+  // the final price before checkout.
   const hourly = p.payg_hourly || (p.payg_lesson_price ? p.payg_lesson_price / 1.5 : 60);
   const stat1El = document.getElementById('hero-stat-1-value');
   const stat1LabelEl = document.getElementById('hero-stat-1-label');
   if (stat1El) stat1El.textContent = '£' + hourly;
-  if (stat1LabelEl) stat1LabelEl.innerHTML = 'Per hour,<br>standard rate';
+  if (stat1LabelEl) stat1LabelEl.innerHTML = 'From per hour,<br>school default';
 
   // TRG / Core Programme / calculator addon DOM was removed from lessons.html
   // 2026-04-28 (TRG hidden) and the JS hooks were retired 2026-05-19 (PR-J).
@@ -248,8 +253,6 @@ loadConfig();
 // PACKAGE DATA
 const PACKAGES = [];
 let currentPkgIndex = 2;
-const LEGACY_MARKETING_INSTRUCTOR_ID = 1;
-
 function fmt(n) {
   return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }

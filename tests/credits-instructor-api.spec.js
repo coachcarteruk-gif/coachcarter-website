@@ -73,8 +73,13 @@ function withMockedModules({ sql, stripe, pricing, grantCredits, fetchSessionFee
     path.join(repoRoot, 'api', 'credits.js'),
     path.join(repoRoot, 'api', 'webhook.js'),
   ];
+  const originals = new Map();
   for (const p of modulePaths) {
-    try { delete require.cache[require.resolve(p)]; } catch (_) { /* ignore */ }
+    try {
+      const resolved = require.resolve(p);
+      originals.set(resolved, require.cache[resolved]);
+      delete require.cache[resolved];
+    } catch (_) { /* ignore */ }
   }
 
   require.cache[require.resolve('@neondatabase/serverless')] = {
@@ -120,7 +125,18 @@ function withMockedModules({ sql, stripe, pricing, grantCredits, fetchSessionFee
     };
   }
 
-  return load();
+  const loaded = load();
+  for (const p of modulePaths) {
+    try {
+      const resolved = require.resolve(p);
+      if (originals.has(resolved) && originals.get(resolved)) {
+        require.cache[resolved] = originals.get(resolved);
+      } else {
+        delete require.cache[resolved];
+      }
+    } catch (_) { /* ignore */ }
+  }
+  return loaded;
 }
 
 function checkoutSql({ validInstructor = true } = {}) {
