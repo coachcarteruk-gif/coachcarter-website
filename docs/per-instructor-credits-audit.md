@@ -96,7 +96,7 @@ Classification:
 | Learner booking UI | `public/learner/book.js` | Selected slot instructor balance | Mostly yes | Booking modal reads `/api/credits?action=balance&instructor_id=<slot instructor>` before showing credit eligibility, uses `selected_instructor_balance_minutes`, and carries the slot instructor into buy-credits links. Aggregate balance remains elsewhere. |
 | Admin/instructor displays | `api/instructor.js`, `public/admin/portal.js`, `public/instructor/index.js`, `public/instructor/dashboard.js`, `public/shared/instructor-booking-actions.js` | Admin adjust selector + current-instructor LCB balance for booking helper pickers | Mostly yes | Admin adjust no longer looks pooled. Instructor `school-learners` aliases current instructor LCB minutes as `balance_minutes` for existing picker code, and helper copy says "with you" / "with this instructor". |
 | Credit reconcile cron | `api/cron-credit-reconcile.js` | Ledger vs LCB by learner/instructor within `SCHOOL_ID` | Yes | Compares school-scoped ledger rows against LCB, including explicit `school_id` filters on BCS/CSA source reads. |
-| Platform balance | `api/_platform-balance.js`, `public/admin/portal.js`, `api/cron-balance-snapshot.js` | Legacy aggregate balance valued at school rate, capped by Stripe-originated net cash-in | Partial | API returns `refund_exposure_basis` and admin copy labels the value as an advisory legacy aggregate exposure signal, not exact liability. It still does not value LCB/source rows by per-source effective rate or goodwill absorber, which remains deferred pending pricing/refund/payout policy design. |
+| Platform balance | `api/_platform-balance.js`, `public/admin/portal.js`, `api/cron-balance-snapshot.js` | Exact source-attributed LCB exposure plus legacy aggregate advisory value | Mostly yes | API now exposes `exact_refund_exposure_pence` / `exact_refund_exposure` from school-scoped `learner_credit_balances`, source rates, BCS usage, CSA adjustments, and `absorbed_by` buckets. The legacy aggregate `refund_exposure_pence` remains available as `legacy_advisory_refund_exposure_pence` and is still used by the existing snapshot column. |
 
 ## Required Implementation Slices
 
@@ -285,11 +285,9 @@ Primary files:
 There is no required next per-instructor-credit safety PR from this closeout
 sweep. Remaining items are non-blocking design/product work:
 
-- Exact platform-balance refund-liability valuation: design whether to value
-  live credits from LCB/source attribution, `effective_rate_pence_per_minute`,
-  and goodwill absorber/source treatment instead of the legacy aggregate shadow.
-  See [`docs/refund-exposure-valuation-audit.md`](docs/refund-exposure-valuation-audit.md)
-  for the proposed policy and future implementation plan.
+- Exact platform-balance refund-liability valuation: read-model slice landed.
+  The remaining product/accounting questions are how to display or act on
+  instructor-absorbed goodwill and legacy unknown absorber buckets.
 - Manual refund ledger UI: keep this separate from automatic Stripe execution
   and from BCS execution capability.
 - Slice C1 bulk-tier controls landed: admin create/edit and instructor profile
