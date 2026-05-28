@@ -49,7 +49,7 @@ const { lockBalanceAndMutate, lockBalanceAdjustLCB } = require('./_credit-grant'
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
-const { getEffectiveHourlyPence } = require('./_pricing-helpers');
+const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-helpers');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -2648,11 +2648,11 @@ async function handleIcalStatus(req, res) {
 }
 
 // ── POST /api/instructor?action=create-offer ──────────────────────────────────
-// Body: { learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, max_repeat_weeks? }
+// Body: { learner_email?, learner_name?, scheduled_date?, start_time?, lesson_type_id?, offer_price_pence?, discount_pct?, max_repeat_weeks? }
 // Creates a lesson offer. If learner_email is provided, emails the learner an accept link.
 // If only learner_name is provided, creates a link-only offer (no email sent).
 // Slot fields are optional — omit for "flexible" offers where learner picks their own time.
-// offer_price_pence overrides the lesson-type price; omit to use lesson-type default.
+// offer_price_pence overrides effective pricing; otherwise the final price is snapshotted from effective hourly fallback.
 // max_repeat_weeks (1..18, default null = single lesson): caps how many weekly
 // repeats the learner can choose on the accept page. Slot-pinned only.
 async function handleCreateOffer(req, res) {
@@ -2661,7 +2661,7 @@ async function handleCreateOffer(req, res) {
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence, max_repeat_weeks } = req.body;
+  const { learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence, discount_pct, max_repeat_weeks } = req.body;
   if (!learner_email && !learner_name)
     return res.status(400).json({ error: 'Either learner_email or learner_name is required' });
 
@@ -2672,6 +2672,9 @@ async function handleCreateOffer(req, res) {
     const p = parseInt(offer_price_pence);
     if (isNaN(p) || p < 0) return res.status(400).json({ error: 'offer_price_pence must be a non-negative integer' });
   }
+  const discountPctClean = (discount_pct === undefined || discount_pct === null || discount_pct === '') ? 0 : parseInt(discount_pct, 10);
+  if (![0, 25, 50, 75, 100].includes(discountPctClean))
+    return res.status(400).json({ error: 'discount_pct must be 0, 25, 50, 75, or 100' });
 
   // Validate max_repeat_weeks if provided. Range 1..18 (1 = single lesson, no
   // repeat option shown; 2..18 = learner picks count on accept page). Only
@@ -2782,7 +2785,9 @@ async function handleCreateOffer(req, res) {
     let existingLearner = null;
     if (learner_email) {
       const [found] = await sql`
-        SELECT id, name, email FROM learner_users WHERE LOWER(email) = LOWER(${learner_email})
+        SELECT id, name, email FROM learner_users
+        WHERE LOWER(email) = LOWER(${learner_email})
+          AND school_id = ${schoolId}
       `;
       existingLearner = found || null;
     }
@@ -2790,8 +2795,16 @@ async function handleCreateOffer(req, res) {
     // Generate offer token
     const token = generateToken();
 
-    // Determine price to store
-    const customPricePence = offer_price_pence != null ? parseInt(offer_price_pence) : null;
+    // Freeze the per-lesson price now. Link-only/flexible offers with no
+    // learner id skip the custom-pair tier and use instructor -> school.
+    const offerPricing = await calcOfferLessonPrice(sql, {
+      schoolId,
+      instructorId: instructor.id,
+      learnerId: existingLearner?.id || null,
+      durationMinutes: durationMins,
+      explicitPricePence: offer_price_pence,
+      discountPct: discountPctClean,
+    });
 
     // Insert offer
     const offerName = learner_name || existingLearner?.name || null;
@@ -2802,12 +2815,12 @@ async function handleCreateOffer(req, res) {
       VALUES
         (${token}, ${instructor.id}, ${learner_email ? learner_email.toLowerCase() : null}, ${offerName}, ${existingLearner?.id || null},
          ${scheduled_date || null}, ${start_time || null}, ${end_time},
-         ${lessonType.id}, ${0}, ${customPricePence}, ${maxRepeatWeeksClean}, 'pending', NOW() + INTERVAL '24 hours')
+         ${lessonType.id}, ${discountPctClean}, ${offerPricing.pricePence}, ${maxRepeatWeeksClean}, 'pending', NOW() + INTERVAL '24 hours')
       RETURNING id, expires_at
     `;
 
     // Determine final price for email
-    const pricePence = customPricePence != null ? customPricePence : lessonType.price_pence;
+    const pricePence = offerPricing.pricePence;
     const priceStr = pricePence === 0 ? 'FREE' : `£${(pricePence / 100).toFixed(2)}`;
     const durationStr = durationMins >= 60
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
@@ -3166,23 +3179,30 @@ async function handleCreateBroadcastOffer(req, res) {
     const offerRows = [];
     for (const lu of validLearners) {
       const token = crypto.randomBytes(24).toString('hex');
+      const offerPricing = await calcOfferLessonPrice(sql, {
+        schoolId,
+        instructorId: instructor.id,
+        learnerId: lu.id,
+        durationMinutes: durationMins,
+        discountPct: dp,
+      });
       try {
         const [row] = await sql`
           INSERT INTO lesson_offers
             (token, instructor_id, learner_email, learner_id, learner_name,
              scheduled_date, start_time, end_time,
-             lesson_type_id, discount_pct, status,
+             lesson_type_id, discount_pct, offer_price_pence, status,
              kind, batch_id, trigger,
              expires_at, school_id)
           VALUES
             (${token}, ${instructor.id}, ${lu.email || null}, ${lu.id}, ${lu.name || null},
              ${scheduled_date}, ${start_time}, ${end_time},
-             ${lessonType.id}, ${dp}, 'pending',
+             ${lessonType.id}, ${dp}, ${offerPricing.pricePence}, 'pending',
              'broadcast', ${batchId}, 'instructor_manual',
              ${expiresAt.toISOString()}, ${schoolId})
           RETURNING id, token
         `;
-        offerRows.push({ ...row, learner: lu });
+        offerRows.push({ ...row, learner: lu, pricing: offerPricing });
       } catch (err) {
         console.warn('broadcast offer insert failed for learner', lu.id, err.message);
       }
@@ -3208,19 +3228,16 @@ async function handleCreateBroadcastOffer(req, res) {
       return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, '0')}${ampm}`;
     }
     const timeStr = fmtTime(start_time);
-    const originalPricePence = lessonType.price_pence || 8250;
-    const finalPricePence = Math.round(originalPricePence * (100 - dp) / 100);
-    const priceStr = finalPricePence === 0 ? 'FREE' : `£${(finalPricePence / 100).toFixed(2)}`;
-    const wasStr = `£${(originalPricePence / 100).toFixed(2)}`;
-    const discountLabel = dp > 0 ? ` at ${dp}% off (${priceStr} instead of ${wasStr})` : ` for ${priceStr}`;
-
     const [instrRow] = await sql`SELECT name FROM instructors WHERE id = ${instructor.id}`;
     const instructorName = instrRow?.name || 'Your instructor';
 
     const mailer = createTransporter();
 
-    for (const { token, learner } of offerRows) {
+    for (const { token, learner, pricing } of offerRows) {
       const acceptLink = `${baseUrl}/accept-offer.html?token=${token}`;
+      const priceStr = pricing.pricePence === 0 ? 'FREE' : `£${(pricing.pricePence / 100).toFixed(2)}`;
+      const wasStr = `£${(pricing.basePricePence / 100).toFixed(2)}`;
+      const discountLabel = dp > 0 ? ` at ${dp}% off (${priceStr} instead of ${wasStr})` : ` for ${priceStr}`;
       const waMsg = `${instructorName} has a ${timeStr} slot on ${dateStr}${discountLabel}.\n\nFirst come, first served. Click to book: ${acceptLink}`;
 
       if (learner.phone) {

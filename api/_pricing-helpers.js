@@ -169,6 +169,55 @@ async function calcDirectLessonPrice(sql, { schoolId, instructorId, learnerId, d
   };
 }
 
+/**
+ * Instructor-created offer pricing. Offers snapshot their final per-lesson
+ * price at creation time, so later rate changes do not alter pending offers.
+ *
+ * Explicit offer_price_pence wins, including 0 for free offers. Otherwise the
+ * base is effective hourly fallback x duration, with only the offer's own
+ * discount_pct applied. Bulk credit tiers are deliberately ignored here.
+ */
+async function calcOfferLessonPrice(sql, {
+  schoolId,
+  instructorId,
+  learnerId,
+  durationMinutes,
+  explicitPricePence,
+  discountPct,
+} = {}) {
+  if (explicitPricePence !== undefined && explicitPricePence !== null && explicitPricePence !== '') {
+    const explicit = parseInt(explicitPricePence, 10);
+    if (Number.isInteger(explicit) && explicit >= 0) {
+      return {
+        pricePence: explicit,
+        basePricePence: explicit,
+        discountPct: 0,
+        discountAmtPence: 0,
+        hourlyPence: null,
+        source: 'explicit_offer_price',
+        _source: 'explicit_offer_price',
+      };
+    }
+  }
+
+  const minutes = parseInt(durationMinutes, 10) || 0;
+  const discount = Number.isFinite(Number(discountPct)) ? Number(discountPct) : 0;
+  const effective = await getEffectiveHourlyPricing(sql, { schoolId, instructorId, learnerId });
+  const basePricePence = Math.round(effective.hourlyPence * minutes / 60);
+  const discountAmtPence = Math.round(basePricePence * discount / 100);
+  const pricePence = Math.max(0, basePricePence - discountAmtPence);
+
+  return {
+    pricePence,
+    basePricePence,
+    discountPct: discount,
+    discountAmtPence,
+    hourlyPence: effective.hourlyPence,
+    source: effective.source,
+    _source: effective.source,
+  };
+}
+
 async function getInstructorBulkTiersEnabled(sql, { schoolId, instructorId } = {}) {
   const sid = parseInt(schoolId) || 1;
   const iid = parseInt(instructorId) || null;
@@ -272,6 +321,7 @@ module.exports = {
   getDiscountPct,
   calcBulkTotal,
   calcDirectLessonPrice,
+  calcOfferLessonPrice,
   getEffectiveHourlyPence,
   getEffectiveHourlyPricing,
   getEffectiveRatePencePerMinute,
