@@ -13,7 +13,10 @@ const {
   processPayoutForInstructor,
   simulatePayoutForInstructor,
 } = require('../api/_payout-helpers');
-const { computePlatformBalance } = require('../api/_platform-balance');
+const {
+  computePlatformBalance,
+  describeRefundExposureValuationPolicy,
+} = require('../api/_platform-balance');
 
 const helperPath = path.join(__dirname, '..', 'api', '_payout-helpers.js');
 
@@ -207,6 +210,42 @@ test.describe('payout Step 5 read model', () => {
     expect(exposureQuery.text).toContain('stripe_session_id IS NOT NULL');
     expect(exposureQuery.text).not.toContain('learner_credit_balances');
     expect(exposureQuery.text).not.toContain('effective_rate_pence_per_minute');
+  });
+
+  test('refund exposure policy helper marks current widget advisory and future exact contract separate', () => {
+    const policy = describeRefundExposureValuationPolicy();
+
+    expect(policy.current).toMatchObject({
+      kind: 'advisory_legacy_aggregate_shadow',
+      exact_refund_liability: false,
+      balance_source: 'learner_users.balance_minutes',
+    });
+    expect(policy.future_exact_contract).toMatchObject({
+      exact_refund_liability: true,
+      balance_source: 'learner_credit_balances',
+    });
+    expect(policy.future_exact_contract.forbidden_balance_sources)
+      .toContain('learner_users.balance_minutes');
+  });
+
+  test('future exact refund exposure contract requires source-aware school-scoped valuation', () => {
+    const { future_exact_contract: exact } = describeRefundExposureValuationPolicy();
+
+    expect(exact.required_school_scoped_sources).toEqual(expect.arrayContaining([
+      'learner_credit_balances',
+      'credit_transactions',
+      'booking_credit_sources',
+      'refund_events',
+      'refund_event_lines',
+    ]));
+    expect(exact.valuation_sources).toEqual(expect.arrayContaining([
+      'credit_transactions.effective_rate_pence_per_minute',
+      'booking_credit_sources.rate_pence_per_minute',
+      'credit_source_adjustments',
+      'absorbed_by',
+      'Stripe-originated purchase/refund rows',
+    ]));
+    expect(exact.cash_cap_policy).toContain('without discarding source-level liability rows');
   });
 
   test('admin platform balance copy does not present refund exposure as exact cash needed', () => {

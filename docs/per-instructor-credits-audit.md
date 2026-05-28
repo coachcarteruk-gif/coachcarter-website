@@ -51,7 +51,8 @@ Biggest deliberate deferral: platform-balance refund exposure remains advisory.
 The dashboard and snapshot now label it as a legacy aggregate exposure signal,
 but the number still values the legacy aggregate balance shadow at the school
 rate rather than valuing each instructor-scoped credit source at its effective
-rate.
+rate. The design/audit note for the exact valuation slice lives in
+[`docs/refund-exposure-valuation-audit.md`](docs/refund-exposure-valuation-audit.md).
 
 ## Final Audit Sweep
 
@@ -287,6 +288,8 @@ sweep. Remaining items are non-blocking design/product work:
 - Exact platform-balance refund-liability valuation: design whether to value
   live credits from LCB/source attribution, `effective_rate_pence_per_minute`,
   and goodwill absorber/source treatment instead of the legacy aggregate shadow.
+  See [`docs/refund-exposure-valuation-audit.md`](docs/refund-exposure-valuation-audit.md)
+  for the proposed policy and future implementation plan.
 - Manual refund ledger UI: keep this separate from automatic Stripe execution
   and from BCS execution capability.
 - Slice C1 bulk-tier controls landed: admin create/edit and instructor profile
