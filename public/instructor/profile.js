@@ -40,6 +40,10 @@
     const avatarHtml = p.photo_url
       ? `<img src="${esc(p.photo_url)}" alt="${esc(p.name)}" data-fallback-initials="${initials}">`
       : initials;
+    const hourlyRatePence = Number(p.effective_hourly_rate_pence || 0);
+    const hourlyRateCopy = hourlyRatePence > 0
+      ? `Your hourly rate: ${formatPence(hourlyRatePence)}/hr`
+      : 'Your hourly rate is managed by admin.';
 
     document.getElementById('profileContent').innerHTML = `
       <div class="avatar-row">
@@ -211,6 +215,22 @@
             Send me a daily schedule email
           </label>
           <p class="field-hint">Receive an email at 7pm each evening with your next day's lessons.</p>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">Bulk packages</div>
+
+        <div class="form-group">
+          <div style="font-size:1rem;font-weight:700;color:var(--primary);margin-bottom:12px">${hourlyRateCopy}</div>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--primary);font-size:0.9rem;font-weight:700;">
+            <input type="checkbox" id="inputBulkTiersEnabled" ${p.bulk_tiers_enabled ? 'checked' : ''}
+              style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin-top:1px">
+            <span>
+              Apply school bulk discounts to my credit purchases
+              <span class="field-hint" style="display:block;margin-top:5px;font-weight:400">Enabling this applies the school bulk discounts to future credit purchases for you. Existing credits keep their original rate.</span>
+            </span>
+          </label>
         </div>
       </div>
 
@@ -487,6 +507,7 @@
     const reminder_hours = parseInt(document.getElementById('inputReminderHours').value);
     const daily_schedule_email = document.getElementById('inputDailySchedule').checked;
     const broadcast_offers_enabled = document.getElementById('inputBroadcastEnabled').checked;
+    const bulk_tiers_enabled = document.getElementById('inputBulkTiersEnabled').checked;
 
     // New profile fields
     const adi_grade      = document.getElementById('inputAdiGrade').value.trim() || null;
@@ -519,7 +540,7 @@
         body:    JSON.stringify({
           name, phone: phone || null, bio: bio || null, photo_url: photo_url || null,
           buffer_minutes, reminder_hours, daily_schedule_email,
-          broadcast_offers_enabled,
+          broadcast_offers_enabled, bulk_tiers_enabled,
           adi_grade, pass_rate, years_experience, specialisms,
           vehicle_make, vehicle_model, transmission_type, dual_controls,
           service_areas, languages, ical_feed_url
@@ -594,6 +615,14 @@
 
   function esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function formatPence(pence) {
+    const pounds = Number(pence || 0) / 100;
+    return '\u00a3' + pounds.toLocaleString('en-GB', {
+      minimumFractionDigits: Number.isInteger(pounds) ? 0 : 2,
+      maximumFractionDigits: 2
+    });
   }
 
   init();

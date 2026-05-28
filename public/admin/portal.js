@@ -267,6 +267,7 @@ function openAddInstructor() {
   document.getElementById('inst-commission').value = '85';
   document.getElementById('inst-fee-model').value = 'commission';
   document.getElementById('inst-franchise-fee').value = '';
+  document.getElementById('inst-bulk-tiers-enabled').checked = false;
   toggleFeeModelFields();
   openModal('modal-instructor');
 }
@@ -288,6 +289,7 @@ function openEditInstructor(id) {
   const hasFranchise = i.weekly_franchise_fee_pence != null;
   document.getElementById('inst-fee-model').value = hasFranchise ? 'franchise' : 'commission';
   document.getElementById('inst-franchise-fee').value = hasFranchise ? (i.weekly_franchise_fee_pence / 100).toFixed(0) : '';
+  document.getElementById('inst-bulk-tiers-enabled').checked = i.bulk_tiers_enabled === true;
   toggleFeeModelFields();
   openModal('modal-instructor');
 }
@@ -309,6 +311,7 @@ async function saveInstructor() {
     photo_url: document.getElementById('inst-photo').value.trim() || null,
     buffer_minutes: parseInt(document.getElementById('inst-buffer').value) || 30,
     max_travel_minutes: parseInt(document.getElementById('inst-max-travel').value) || 30,
+    bulk_tiers_enabled: document.getElementById('inst-bulk-tiers-enabled').checked,
   };
   if (feeModel === 'franchise') {
     const feeGbp = parseFloat(document.getElementById('inst-franchise-fee').value);
@@ -332,7 +335,7 @@ async function saveInstructor() {
       payload = body;
     }
 
-    const res = await fetch(url, {
+    const res = await fetchAdmin(url, {
       method: 'POST', headers: HEADERS,
       body: JSON.stringify(payload)
     });

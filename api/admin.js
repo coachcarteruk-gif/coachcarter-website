@@ -711,6 +711,7 @@ async function handleAllInstructors(req, res) {
         i.max_travel_minutes,
         COALESCE(i.commission_rate, 0.85) AS commission_rate,
         i.weekly_franchise_fee_pence,
+        COALESCE(i.bulk_tiers_enabled, FALSE) AS bulk_tiers_enabled,
         (i.password_hash IS NOT NULL) AS has_password,
         (i.stripe_account_id IS NOT NULL) AS connect_has_account,
         COALESCE(i.stripe_onboarding_complete, FALSE) AS connect_onboarding_complete,
@@ -762,8 +763,11 @@ async function handleCreateInstructor(req, res) {
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = getAdminSchoolId(admin, req);
 
-  const { name, email, phone, bio, photo_url } = req.body || {};
+  const { name, email, phone, bio, photo_url, bulk_tiers_enabled } = req.body || {};
   if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+  if (bulk_tiers_enabled !== undefined && typeof bulk_tiers_enabled !== 'boolean') {
+    return res.status(400).json({ error: 'bulk_tiers_enabled must be true or false' });
+  }
 
   const normalised = email.trim().toLowerCase();
 
@@ -775,7 +779,7 @@ async function handleCreateInstructor(req, res) {
     if (existing.length > 0) return res.status(409).json({ error: 'An instructor with that email already exists' });
 
     const rows = await sql`
-      INSERT INTO instructors (name, email, phone, bio, photo_url, active, school_id)
+      INSERT INTO instructors (name, email, phone, bio, photo_url, active, bulk_tiers_enabled, school_id)
       VALUES (
         ${name.trim()},
         ${normalised},
@@ -783,9 +787,10 @@ async function handleCreateInstructor(req, res) {
         ${bio?.trim() || null},
         ${photo_url?.trim() || null},
         true,
+        ${bulk_tiers_enabled === true},
         ${schoolId}
       )
-      RETURNING id, name, email, phone, bio, photo_url, active, created_at
+      RETURNING id, name, email, phone, bio, photo_url, active, created_at, COALESCE(bulk_tiers_enabled, FALSE) AS bulk_tiers_enabled
     `;
 
     const instructor = rows[0];
@@ -865,6 +870,10 @@ async function handleUpdateInstructor(req, res) {
   const body = req.body || {};
   const hasCommission = 'commission_rate' in body;
   const hasFranchiseFee = 'weekly_franchise_fee_pence' in body;
+  const hasBulkTiers = 'bulk_tiers_enabled' in body;
+  if (hasBulkTiers && typeof body.bulk_tiers_enabled !== 'boolean') {
+    return res.status(400).json({ error: 'bulk_tiers_enabled must be true or false' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -883,9 +892,10 @@ async function handleUpdateInstructor(req, res) {
           bio       = ${bio?.trim() || null},
           photo_url = ${photo_url?.trim() || null},
           commission_rate = CASE WHEN ${hasCommission} THEN ${hasCommission ? (parseFloat(body.commission_rate) || 0.85) : 0.85} ELSE commission_rate END,
+          bulk_tiers_enabled = CASE WHEN ${hasBulkTiers} THEN ${body.bulk_tiers_enabled === true} ELSE bulk_tiers_enabled END,
           weekly_franchise_fee_pence = CASE WHEN ${hasFranchiseFee} THEN ${hasFranchiseFee ? body.weekly_franchise_fee_pence : null}::integer ELSE weekly_franchise_fee_pence END
       WHERE id = ${id} AND school_id = ${schoolId}
-      RETURNING id, name, email, phone, bio, photo_url, active, commission_rate, weekly_franchise_fee_pence
+      RETURNING id, name, email, phone, bio, photo_url, active, commission_rate, weekly_franchise_fee_pence, COALESCE(bulk_tiers_enabled, FALSE) AS bulk_tiers_enabled
     `;
 
     if (rows.length === 0) return res.status(404).json({ error: 'Instructor not found' });
