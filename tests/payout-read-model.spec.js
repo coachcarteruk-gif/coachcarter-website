@@ -16,6 +16,7 @@ const {
 const {
   computePlatformBalance,
   describeRefundExposureValuationPolicy,
+  summarizeExactRefundExposureRows,
 } = require('../api/_platform-balance');
 
 const helperPath = path.join(__dirname, '..', 'api', '_payout-helpers.js');
@@ -45,12 +46,23 @@ function makeSqlMock({ eligibleRows = [] } = {}) {
   return { sql, calls };
 }
 
-function makePlatformBalanceSqlMock({ instructors = [], eligibleRows = [] } = {}) {
+function makePlatformBalanceSqlMock({
+  instructors = [],
+  eligibleRows = [],
+  exactRows = [],
+  exactNetCashInPence = 0,
+} = {}) {
   const calls = [];
   const sql = (strings, ...values) => {
     const text = strings.join('?');
     calls.push({ text, values });
 
+    if (text.includes('exact_refund_exposure_sources')) {
+      return Promise.resolve(exactRows);
+    }
+    if (text.includes('stripe_net_cash_in_pence')) {
+      return Promise.resolve([{ stripe_net_cash_in_pence: exactNetCashInPence }]);
+    }
     if (text.includes('FROM instructors') && text.includes('stripe_onboarding_complete = TRUE')) {
       return Promise.resolve(instructors);
     }
@@ -66,6 +78,30 @@ function makePlatformBalanceSqlMock({ instructors = [], eligibleRows = [] } = {}
     return Promise.resolve([]);
   };
   return { sql, calls };
+}
+
+function exactSource(overrides = {}) {
+  return {
+    school_id: 1,
+    learner_id: 77,
+    instructor_id: 44,
+    lcb_balance_minutes: 90,
+    credit_transaction_id: 7001,
+    created_at: '2026-05-01T09:00:00.000Z',
+    source_minutes: 120,
+    source_amount_pence: 12000,
+    effective_rate_pence_per_minute: 100,
+    source: 'stripe',
+    absorbed_by: null,
+    stripe_session_id: 'cs_paid',
+    stripe_payment_intent_id: 'pi_paid',
+    stripe_charge_id: 'ch_paid',
+    active_minutes_drawn: 30,
+    active_contribution_pence: 3000,
+    adjusted_minutes: 0,
+    adjusted_pence: 0,
+    ...overrides,
+  };
 }
 
 const instructor = {
@@ -210,6 +246,146 @@ test.describe('payout Step 5 read model', () => {
     expect(exposureQuery.text).toContain('stripe_session_id IS NOT NULL');
     expect(exposureQuery.text).not.toContain('learner_credit_balances');
     expect(exposureQuery.text).not.toContain('effective_rate_pence_per_minute');
+    expect(result.legacy_advisory_refund_exposure_pence).toBe(result.refund_exposure_pence);
+    expect(result.exact_refund_exposure_basis).toMatchObject({
+      exact_refund_liability: true,
+      balance_source: 'learner_credit_balances',
+    });
+  });
+
+  test('exact refund exposure values live instructor-scoped credit at source rate', () => {
+    const result = summarizeExactRefundExposureRows([
+      exactSource(),
+    ], { schoolId: 1, netCashInPence: 20000 });
+
+    expect(result).toMatchObject({
+      exact_refund_liability: true,
+      platform_refund_exposure_pence: 9000,
+      gross_source_liability_pence: 9000,
+      stripe_cash_backed_pence: 9000,
+      stripe_cash_backed_capped_pence: 9000,
+      platform_goodwill_pence: 0,
+      instructor_absorbed_pence: 0,
+    });
+    expect(result.sources).toEqual([expect.objectContaining({
+      credit_transaction_id: 7001,
+      classification: 'stripe_cash_backed',
+      valued_minutes: 90,
+      value_pence: 9000,
+      rate_pence_per_minute: 100,
+      valuation_basis: 'credit_transactions.effective_rate_pence_per_minute',
+    })]);
+  });
+
+  test('exact refund exposure separates platform and instructor absorbed goodwill', () => {
+    const result = summarizeExactRefundExposureRows([
+      exactSource({
+        learner_id: 80,
+        instructor_id: 4,
+        credit_transaction_id: 8001,
+        source: 'goodwill',
+        absorbed_by: 'platform',
+        stripe_session_id: null,
+        stripe_payment_intent_id: null,
+        stripe_charge_id: null,
+        source_minutes: 60,
+        lcb_balance_minutes: 60,
+        active_minutes_drawn: 0,
+        source_amount_pence: 0,
+      }),
+      exactSource({
+        learner_id: 81,
+        instructor_id: 5,
+        credit_transaction_id: 8002,
+        source: 'goodwill',
+        absorbed_by: 'instructor',
+        stripe_session_id: null,
+        stripe_payment_intent_id: null,
+        stripe_charge_id: null,
+        source_minutes: 60,
+        lcb_balance_minutes: 60,
+        active_minutes_drawn: 0,
+        source_amount_pence: 0,
+      }),
+    ], { schoolId: 1, netCashInPence: 0 });
+
+    expect(result).toMatchObject({
+      platform_refund_exposure_pence: 6000,
+      platform_goodwill_pence: 6000,
+      instructor_absorbed_pence: 6000,
+      stripe_cash_backed_pence: 0,
+    });
+    expect(result.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ credit_transaction_id: 8001, classification: 'platform_goodwill' }),
+      expect.objectContaining({ credit_transaction_id: 8002, classification: 'instructor_absorbed' }),
+    ]));
+  });
+
+  test('exact refund exposure classifies legacy missing absorber and unpriced fallback separately', () => {
+    const result = summarizeExactRefundExposureRows([
+      exactSource({
+        learner_id: 90,
+        instructor_id: 7,
+        credit_transaction_id: 9001,
+        source: 'goodwill',
+        absorbed_by: null,
+        stripe_session_id: null,
+        stripe_payment_intent_id: null,
+        stripe_charge_id: null,
+        effective_rate_pence_per_minute: 0,
+        source_minutes: 120,
+        lcb_balance_minutes: 60,
+        active_minutes_drawn: 0,
+        active_contribution_pence: 0,
+        source_amount_pence: 12000,
+      }),
+    ], { schoolId: 1, netCashInPence: 0 });
+
+    expect(result).toMatchObject({
+      platform_refund_exposure_pence: 0,
+      legacy_unknown_absorber_pence: 6000,
+      legacy_unpriced_pence: 6000,
+      gross_source_liability_pence: 6000,
+    });
+    expect(result.sources[0]).toMatchObject({
+      classification: 'legacy_unknown_absorber',
+      valuation_basis: 'legacy_source_remaining_pence_fallback',
+      legacy_unpriced: true,
+    });
+  });
+
+  test('exact refund exposure SQL is school-scoped and never uses learner_users balance as source of truth', async () => {
+    const { sql, calls } = makePlatformBalanceSqlMock({
+      exactRows: [exactSource({ school_id: 2 })],
+      exactNetCashInPence: 20000,
+    });
+    const stripe = {
+      balance: {
+        retrieve: async () => ({
+          available: [{ currency: 'gbp', amount: 20000 }],
+          pending: [],
+        }),
+      },
+    };
+
+    const result = await computePlatformBalance(sql, stripe, { schoolId: 2 });
+    const exactQuery = calls.find(call => call.text.includes('exact_refund_exposure_sources'));
+    const exactCashQuery = calls.find(call => call.text.includes('stripe_net_cash_in_pence'));
+
+    expect(result.exact_refund_exposure_pence).toBe(9000);
+    expect(result.legacy_advisory_refund_exposure_pence).toBe(0);
+    expect(result.refund_exposure_pence).toBe(0);
+    expect(exactQuery.text).toContain('lcb.school_id = ?');
+    expect(exactQuery.text).toContain('ct.school_id = ?');
+    expect(exactQuery.text).toContain('bcs.school_id = ?');
+    expect(exactQuery.text).toContain('lu.school_id = ?');
+    expect(exactQuery.text).toContain('i.school_id = ?');
+    expect(exactQuery.text).toContain('lcb.balance_minutes::int AS lcb_balance_minutes');
+    expect(exactQuery.text).not.toContain('lu.balance_minutes');
+    expect(exactQuery.values).toEqual(expect.arrayContaining([2]));
+    expect(exactCashQuery.text).toContain('ct.school_id = ?');
+    expect(exactCashQuery.text).toContain('lu.school_id = ?');
+    expect(exactCashQuery.values).toEqual(expect.arrayContaining([2]));
   });
 
   test('refund exposure policy helper marks current widget advisory and future exact contract separate', () => {
@@ -251,9 +427,23 @@ test.describe('payout Step 5 read model', () => {
   test('admin platform balance copy does not present refund exposure as exact cash needed', () => {
     const portal = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin', 'portal.js'), 'utf8');
 
-    expect(portal).toContain('legacy aggregate credit exposure signal');
-    expect(portal).toContain('not an exact per-instructor refund liability');
+    expect(portal).toContain('Exact unused-credit exposure');
+    expect(portal).toContain('source-attributed instructor balances');
+    expect(portal).toContain('Legacy advisory');
+    expect(portal).toContain('trend/advisory comparator');
     expect(portal).not.toContain('additional cash needed');
+  });
+
+  test('platform balance read model does not call refund, Stripe refund, or payout mutation code', () => {
+    const platformBalanceSource = fs.readFileSync(path.join(__dirname, '..', 'api', '_platform-balance.js'), 'utf8');
+
+    expect(platformBalanceSource).not.toContain('_refund-executor');
+    expect(platformBalanceSource).not.toContain('stripe.refunds.create');
+    expect(platformBalanceSource).not.toContain('refunds.create');
+    expect(platformBalanceSource).not.toContain('transfers.create');
+    expect(platformBalanceSource).not.toContain('INSERT INTO instructor_payouts');
+    expect(platformBalanceSource).not.toContain('UPDATE lesson_bookings');
+    expect(platformBalanceSource).not.toContain('UPDATE learner_credit_balances');
   });
 
   test('processPayoutForInstructor and simulatePayoutForInstructor use the same eligible-bookings query and math', async () => {
