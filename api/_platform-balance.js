@@ -19,6 +19,51 @@
  */
 const { simulatePayoutForInstructor } = require('./_payout-helpers');
 
+const REFUND_EXPOSURE_VALUATION_POLICY = Object.freeze({
+  current: Object.freeze({
+    kind: 'advisory_legacy_aggregate_shadow',
+    exact_refund_liability: false,
+    balance_source: 'learner_users.balance_minutes',
+    valuation: 'school bulk_hourly_pence fallback 5500 pence/hour',
+    cap_source: 'Stripe-originated net credit_transactions cash in',
+    deferred: Object.freeze([
+      'learner_credit_balances per-instructor valuation',
+      'credit_transactions effective_rate_pence_per_minute source valuation',
+      'goodwill absorbed_by treatment',
+    ]),
+  }),
+  future_exact_contract: Object.freeze({
+    exact_refund_liability: true,
+    balance_source: 'learner_credit_balances',
+    forbidden_balance_sources: Object.freeze([
+      'learner_users.balance_minutes',
+    ]),
+    required_school_scoped_sources: Object.freeze([
+      'learner_credit_balances',
+      'credit_transactions',
+      'booking_credit_sources',
+      'refund_events',
+      'refund_event_lines',
+    ]),
+    valuation_sources: Object.freeze([
+      'credit_transactions.effective_rate_pence_per_minute',
+      'booking_credit_sources.rate_pence_per_minute',
+      'credit_source_adjustments',
+      'absorbed_by',
+      'Stripe-originated purchase/refund rows',
+    ]),
+    cash_cap_policy: 'cap headline collectability by real Stripe-originated net cash-in without discarding source-level liability rows',
+  }),
+});
+
+function clonePolicy(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function describeRefundExposureValuationPolicy() {
+  return clonePolicy(REFUND_EXPOSURE_VALUATION_POLICY);
+}
+
 async function computePlatformBalance(sql, stripe) {
   // 1. Stripe balance (GBP only).
   const balance = await stripe.balance.retrieve();
@@ -134,20 +179,12 @@ async function computePlatformBalance(sql, stripe) {
     balance_after_payout_pence: balanceAfterPayoutPence,
     excluded_instructors: excludedInstructors,
     refund_exposure_pence: refundExposurePence,
-    refund_exposure_basis: {
-      kind: 'advisory_legacy_aggregate_shadow',
-      exact_refund_liability: false,
-      balance_source: 'learner_users.balance_minutes',
-      valuation: 'school bulk_hourly_pence fallback 5500 pence/hour',
-      cap_source: 'Stripe-originated net credit_transactions cash in',
-      deferred: [
-        'learner_credit_balances per-instructor valuation',
-        'credit_transactions effective_rate_pence_per_minute source valuation',
-        'goodwill absorbed_by treatment'
-      ]
-    },
+    refund_exposure_basis: describeRefundExposureValuationPolicy().current,
     status
   };
 }
 
-module.exports = { computePlatformBalance };
+module.exports = {
+  computePlatformBalance,
+  describeRefundExposureValuationPolicy,
+};
