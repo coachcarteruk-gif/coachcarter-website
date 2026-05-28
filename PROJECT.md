@@ -266,7 +266,7 @@ Direct pay-and-book uses the same effective hourly fallback for the selected ins
 
 Instructor-created paid offers now freeze their final per-lesson price into `lesson_offers.offer_price_pence` at creation. Explicit `offer_price_pence` wins, including £0 free offers; otherwise the server computes custom learner rate → instructor hourly rate → school default for the lesson duration, then applies the offer's `discount_pct`. Bulk-tier opt-in never discounts offers. Repeat-offer Stripe checkout uses the stored per-lesson price as `unit_amount` and the selected repeat count as `quantity`, so accepted offers do not reprice later.
 
-**Lesson types** (managed via admin portal):
+**Lesson type catalogue defaults** (managed via admin portal; selected-instructor checkout recalculates the final payable price):
 - 1-Hour Lesson — 60 min / £55.00 (active, instructor opt-in only)
 - Standard Lesson — 90 min / £82.50
 - 2-Hour Lesson — 120 min / £110.00
@@ -411,8 +411,8 @@ Bound to `/r/:code` via a `vercel.json` rewrite. No `?action=` routing — this 
 | `available` | GET | No | Available slots for a lesson type duration. Params: `from`, `to`, `instructor_id?`, `lesson_type_id?`, `pickup_postcode?`, `min_duration_only?`. When `min_duration_only=1`, the API treats `lesson_type_id` as grid-spacing only and skips the `offered_lesson_types` filter — used by the slot-first feed where the instructor list isn't yet narrowed by duration. |
 | `durations-for-slot` | GET | No | Slot-first companion to `available`. For a given `instructor_id` + `date` + `start_time`, returns every active lesson type for the school (excluding `slug='trial'`) with a `fits` boolean + `reason` (`window`/`notice`/`not_offered`/`clash`/`travel`/`null`). Optional `pickup_postcode` runs the same travel-time heuristic as the slot feed. Used by `book.html` when the user clicks a slot to populate the modal duration dropdown. |
 | `book` | POST | Yes | Book a slot — deducts `duration_minutes` from the selected instructor's LCB row. Body includes `lesson_type_id` |
-| `checkout-slot` | POST | Yes | Pay-per-slot: reserves slot, creates Stripe Checkout at lesson type's price |
-| `checkout-slot-guest` | POST | No | Guest checkout: validates guest fields (name, email, phone, pickup), finds-or-creates learner account, reserves slot, creates Stripe Checkout. Rate limited: 10/IP/hr + 5/phone/hr |
+| `checkout-slot` | POST | Yes | Pay-per-slot: reserves slot, creates Stripe Checkout from effective instructor hourly pricing × lesson duration. Bulk tiers are ignored. |
+| `checkout-slot-guest` | POST | No | Guest checkout: validates guest fields (name, email, phone, pickup), finds-or-creates learner account, reserves slot, creates Stripe Checkout from effective instructor hourly pricing × lesson duration. Bulk tiers are ignored. Rate limited: 10/IP/hr + 5/phone/hr |
 | `book-free-trial` | POST | No | Self-serve free trial booking. No Stripe. Body matches `checkout-slot-guest` plus optional `referral_code`. Resolves the `trial` lesson type (id 37, school 1), runs a one-trial-per-learner guard (email OR phone, any status), creates a `scheduled` booking with `payment_method='free'`, generates a 7-day magic-link token, emails learner + instructor. Rate limited: 10/IP/hr + 3/phone/hr |
 | `cancel` | POST | Yes | Cancel a booking. 48h+ notice → status flips to `refunded` and `minutes_deducted` returned to balance. <48h notice → status stays `scheduled` with `credit_forfeited = TRUE` so the hourly cron later flips it to `chargeable` and the instructor is still paid. See `docs/booking-statuses.md`. |
 | `reschedule` | POST | Yes | Move a scheduled booking to a new slot (48hr+ notice, max 2 per chain, no balance change) |
