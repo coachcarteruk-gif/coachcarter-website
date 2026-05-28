@@ -2827,6 +2827,7 @@ async function handleCreateOffer(req, res) {
 
     // Insert offer
     const resolvedEmail = existingLearner?.email || (learner_email ? learner_email.toLowerCase() : null);
+    const resolvedPhone = existingLearner?.phone || null;
     const offerName = existingLearner?.name || learner_name || null;
     const [offer] = await sql`
       INSERT INTO lesson_offers
@@ -2849,10 +2850,11 @@ async function handleCreateOffer(req, res) {
     const acceptUrl = `${baseUrl}/accept-offer.html?token=${token}`;
     const firstName = existingLearner ? (existingLearner.name || '').split(' ')[0] || 'there' : 'there';
 
-    // Build email content — slot-pinned vs flexible
-    let emailSubject, emailSlotRows;
+    // Build notification content — slot-pinned vs flexible
+    let emailSubject, emailSlotRows, messageOfferSummary;
     if (isFlexible) {
       emailSubject = `Driving lesson offer from ${instrDetails.name}`;
+      messageOfferSummary = `${durationStr} driving lesson at a time you choose`;
       emailSlotRows = `
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">When</td><td style="padding:6px 0">Pick a time that suits you</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Duration</td><td style="padding:6px 0">${durationStr}</td></tr>
@@ -2866,12 +2868,40 @@ async function handleCreateOffer(req, res) {
       const repeatRow = maxRepeatWeeksClean && maxRepeatWeeksClean > 1
         ? `<tr><td style="padding:6px 16px 6px 0;font-weight:bold">Weekly repeats</td><td style="padding:6px 0">Pick up to ${maxRepeatWeeksClean} weekly lessons on the accept page</td></tr>`
         : '';
+      messageOfferSummary = `${dateStr} at ${start_time} - ${end_time} (${durationStr})${maxRepeatWeeksClean && maxRepeatWeeksClean > 1 ? `, with up to ${maxRepeatWeeksClean} weekly lessons available` : ''}`;
       emailSlotRows = `
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Date</td><td style="padding:6px 0">${dateStr}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Time</td><td style="padding:6px 0">${start_time} – ${end_time}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Duration</td><td style="padding:6px 0">${durationStr}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceStr}${maxRepeatWeeksClean && maxRepeatWeeksClean > 1 ? ' per lesson' : ''}</td></tr>
         ${repeatRow}`;
+    }
+
+    // Send offer SMS (only when a stored learner phone is available). Delivery
+    // failures must not block offer creation; instructors can always copy the link.
+    let messageSent = false;
+    let messageError = null;
+    if (resolvedPhone) {
+      try {
+        const messageResult = await sendWhatsApp(
+          resolvedPhone,
+          `Hi ${firstName}, ${instrDetails.name} has sent you a driving lesson offer.\n\n` +
+          `${messageOfferSummary}\n` +
+          `Price: ${priceStr}${maxRepeatWeeksClean && maxRepeatWeeksClean > 1 ? ' per lesson' : ''}\n\n` +
+          `Accept within 24 hours: ${acceptUrl}`,
+          {
+            purpose: 'offer.created_learner',
+            learnerId: existingLearner?.id,
+            instructorId: instructor.id,
+            schoolId,
+          }
+        );
+        messageSent = !!messageResult?.ok;
+        messageError = messageResult?.ok ? null : (messageResult?.error || 'Message delivery failed');
+      } catch (messageErr) {
+        console.error('Failed to send offer message:', messageErr);
+        messageError = messageErr.message || 'Message delivery failed';
+      }
     }
 
     // Send offer email (only when email is provided)
@@ -2916,7 +2946,11 @@ async function handleCreateOffer(req, res) {
       expires_at: offer.expires_at,
       learner_exists: !!existingLearner,
       learner_name: offerName,
+      email_available: !!resolvedEmail,
+      message_available: !!resolvedPhone,
       email_sent: emailSent,
+      message_sent: messageSent,
+      message_error: messageError,
       accept_url: acceptUrl
     });
   } catch (err) {

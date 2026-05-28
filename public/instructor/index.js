@@ -2007,10 +2007,33 @@ async function sendOffer() {
     const selectedOfferName = existingMode ? document.getElementById('offerLearnerSelectedName').textContent : offerName;
     const safeName = selectedOfferName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+    const emailAvailable = data.email_available === true;
+    const messageAvailable = data.message_available === true;
+    const emailSent = data.email_sent === true;
+    const messageSent = data.message_sent === true;
+    const deliveryParts = [];
+    if (emailSent) deliveryParts.push('email');
+    if (messageSent) deliveryParts.push('text message');
+    const failedParts = [];
+    if (emailAvailable && !emailSent) failedParts.push('email');
+    if (messageAvailable && !messageSent) failedParts.push('text message');
+    const missingParts = [];
+    if (existingMode && !emailAvailable) missingParts.push('no email saved');
+    if (existingMode && !messageAvailable) missingParts.push('no phone saved');
+
     let statusLine;
-    if (sendEmail || existingMode) {
-      const safeEmail = (existingMode ? 'the selected learner' : email).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      statusLine = `Offer sent to ${safeEmail}${priceMsg}${flexMsg}! They have 24 hours to accept.`;
+    if (deliveryParts.length > 0) {
+      const deliveryText = deliveryParts.length === 2 ? `${deliveryParts[0]} and ${deliveryParts[1]}` : deliveryParts[0];
+      const missingText = missingParts.length ? ` (${missingParts.join(', ')})` : '';
+      const failedText = failedParts.length
+        ? ` ${failedParts.length === 2 ? `${failedParts[0]} and ${failedParts[1]}` : failedParts[0]} delivery did not complete.`
+        : '';
+      statusLine = `Offer sent to ${safeName} by ${deliveryText}${priceMsg}${flexMsg}! They have 24 hours to accept.${missingText}${failedText} Copy link is still available below.`;
+    } else if (failedParts.length > 0) {
+      const failedText = failedParts.length === 2 ? `${failedParts[0]} and ${failedParts[1]}` : failedParts[0];
+      statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg}, but ${failedText} delivery did not complete. Use Copy link below.`;
+    } else if (missingParts.length > 0) {
+      statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg}; the selected learner has ${missingParts.join(' and ')}. Use Copy link below.`;
     } else {
       statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg} — share the link below.`;
     }

@@ -41,6 +41,47 @@ test.describe('existing learner lesson offers', () => {
     expect(body).toContain('accept_url: acceptUrl');
   });
 
+  test('create-offer sends an SMS accept link when a learner phone exists', () => {
+    const body = functionBody(read('api/instructor.js'), 'handleCreateOffer');
+
+    expect(body).toContain('const resolvedPhone = existingLearner?.phone || null');
+    expect(body).toContain('if (resolvedPhone) {');
+    expect(body).toContain('const messageResult = await sendWhatsApp(');
+    expect(body).toContain('Accept within 24 hours: ${acceptUrl}');
+    expect(body).toContain("purpose: 'offer.created_learner'");
+    expect(body).toContain('learnerId: existingLearner?.id');
+    expect(body).toContain('message_available: !!resolvedPhone');
+    expect(body).toContain('message_sent: messageSent');
+  });
+
+  test('create-offer still returns the copyable accept link if SMS delivery fails', () => {
+    const body = functionBody(read('api/instructor.js'), 'handleCreateOffer');
+
+    const sendIndex = body.indexOf('const messageResult = await sendWhatsApp(');
+    const catchIndex = body.indexOf("console.error('Failed to send offer message:'");
+    const responseIndex = body.indexOf('return res.json({');
+    expect(sendIndex).toBeGreaterThanOrEqual(0);
+    expect(catchIndex).toBeGreaterThan(sendIndex);
+    expect(responseIndex).toBeGreaterThan(catchIndex);
+    expect(body).toContain("messageError = messageErr.message || 'Message delivery failed'");
+    expect(body).toContain('message_error: messageError');
+    expect(body).toContain('accept_url: acceptUrl');
+  });
+
+  test('create-offer does not attempt SMS without a learner phone', () => {
+    const body = functionBody(read('api/instructor.js'), 'handleCreateOffer');
+
+    const resolvedPhoneIndex = body.indexOf('const resolvedPhone = existingLearner?.phone || null');
+    const phoneGuardIndex = body.indexOf('if (resolvedPhone) {');
+    const sendIndex = body.indexOf('const messageResult = await sendWhatsApp(');
+    expect(resolvedPhoneIndex).toBeGreaterThanOrEqual(0);
+    expect(phoneGuardIndex).toBeGreaterThan(resolvedPhoneIndex);
+    expect(sendIndex).toBeGreaterThan(phoneGuardIndex);
+    expect(body).toContain('message_available: !!resolvedPhone');
+    expect(body).toContain('message_sent: messageSent');
+    expect(body).toContain('accept_url: acceptUrl');
+  });
+
   test('offer creation conflict checks stay school scoped and keep pending offers blocking the slot', () => {
     const body = functionBody(read('api/instructor.js'), 'handleCreateOffer');
 
@@ -129,5 +170,19 @@ test.describe('existing learner lesson offers', () => {
     expect(sendOffer).toContain('const existingMode = document.getElementById(\'offerModeExisting\').checked');
     expect(sendOffer).toContain('payload.learner_id = selectedOfferLearnerId');
     expect(sendOffer).toContain('payload.learner_name = offerName');
+  });
+
+  test('instructor UI reports offer delivery state and keeps manual copy fallback visible', () => {
+    const js = read('public/instructor/index.js');
+    const sendOffer = functionBody(js, 'sendOffer');
+
+    expect(sendOffer).toContain('const emailAvailable = data.email_available === true');
+    expect(sendOffer).toContain('const messageAvailable = data.message_available === true');
+    expect(sendOffer).toContain('if (messageSent) deliveryParts.push(\'text message\')');
+    expect(sendOffer).toContain('delivery did not complete.');
+    expect(sendOffer).toContain('but ${failedText} delivery did not complete. Use Copy link below.');
+    expect(sendOffer).toContain('the selected learner has ${missingParts.join(\' and \')}. Use Copy link below.');
+    expect(sendOffer).toContain('Copy link is still available below.');
+    expect(sendOffer).toContain('id="offerCopyBtn"');
   });
 });
