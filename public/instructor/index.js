@@ -1494,9 +1494,16 @@ async function confirmCreateBooking() {
 }
 
 // â”€â”€ Offer Lesson Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let offerLearners = [];
+let selectedOfferLearnerId = null;
+
 async function openOfferModal(prefillEmail, prefillName) {
+  selectedOfferLearnerId = null;
   document.getElementById('offerName').value = prefillName || '';
   document.getElementById('offerEmail').value = prefillEmail || '';
+  document.getElementById('offerLearnerSearch').value = '';
+  document.getElementById('offerLearnerDropdown').classList.remove('open');
+  document.getElementById('offerLearnerSelected').style.display = 'none';
   document.getElementById('offerError').style.display = 'none';
   document.getElementById('offerSuccess').style.display = 'none';
   document.getElementById('offerSendBtn').disabled = false;
@@ -1518,6 +1525,33 @@ async function openOfferModal(prefillEmail, prefillName) {
     emailRow.style.display = emailCb.checked ? '' : 'none';
     sendBtn.textContent = emailCb.checked ? 'Send offer' : 'Create link';
   };
+
+  const modeExisting = document.getElementById('offerModeExisting');
+  const modeNew = document.getElementById('offerModeNew');
+  const existingFields = document.getElementById('offerExistingLearnerFields');
+  const newFields = document.getElementById('offerNewLearnerFields');
+  modeExisting.checked = false;
+  modeNew.checked = true;
+  existingFields.style.display = 'none';
+  newFields.style.display = '';
+  const switchLearnerMode = () => {
+    const existing = modeExisting.checked;
+    existingFields.style.display = existing ? '' : 'none';
+    newFields.style.display = existing ? 'none' : '';
+    if (existing) {
+      emailCb.checked = true;
+      emailRow.style.display = 'none';
+      sendBtn.textContent = 'Send offer';
+      filterOfferLearners();
+    } else {
+      selectedOfferLearnerId = null;
+      document.getElementById('offerLearnerSelected').style.display = 'none';
+      emailRow.style.display = emailCb.checked ? '' : 'none';
+      sendBtn.textContent = emailCb.checked ? 'Send offer' : 'Create link';
+    }
+  };
+  modeExisting.onchange = switchLearnerMode;
+  modeNew.onchange = switchLearnerMode;
 
   // Default date to current calendar date
   const d = cursor || new Date();
@@ -1582,10 +1616,15 @@ async function openOfferModal(prefillEmail, prefillName) {
   // Lesson type change matters for end_time (which decides who's free for the full window)
   // — wired below where we already attach updateOfferPrice.
 
-  // Fetch lesson types
+  // Fetch lesson types and existing learners for the picker
   try {
-    const typesRes = await ccAuth.fetchAuthed('/api/lesson-types?action=list');
+    const [typesRes, learnersRes] = await Promise.all([
+      ccAuth.fetchAuthed('/api/lesson-types?action=list'),
+      ccAuth.fetchAuthed('/api/instructor?action=school-learners')
+    ]);
     const typesData = await typesRes.json();
+    const learnersData = await learnersRes.json();
+    offerLearners = learnersData.learners || [];
     const types = typesData.lesson_types || [];
     window._offerLessonTypes = types; // used by loadBroadcastAudience() to compute end_time
     const sel = document.getElementById('offerLessonType');
@@ -1595,7 +1634,7 @@ async function openOfferModal(prefillEmail, prefillName) {
       const price = (lt.price_pence / 100).toFixed(2);
       return `<option value="${lt.id}" data-price="${lt.price_pence}">${lt.name} (${hrsStr}) — £${price}</option>`;
     }).join('');
-  } catch { /* fallback — select will be empty */ }
+  } catch { offerLearners = []; /* fallback — select will be empty */ }
 
   document.getElementById('offerLessonModal').classList.add('open');
   // Reset custom price
@@ -1639,6 +1678,55 @@ function updateOfferPrice() {
 
 function closeOfferModal() {
   document.getElementById('offerLessonModal').classList.remove('open');
+  document.getElementById('offerLearnerDropdown').classList.remove('open');
+}
+
+function filterOfferLearners() {
+  const search = (document.getElementById('offerLearnerSearch').value || '').toLowerCase();
+  const dropdown = document.getElementById('offerLearnerDropdown');
+  const filtered = offerLearners.filter(l =>
+    (l.name || '').toLowerCase().includes(search) ||
+    (l.email || '').toLowerCase().includes(search) ||
+    (l.phone || '').toLowerCase().includes(search)
+  );
+  filtered.sort((a, b) => {
+    if (!!a.is_your_learner !== !!b.is_your_learner) return a.is_your_learner ? -1 : 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  const shown = filtered.slice(0, 20);
+
+  if (shown.length === 0) {
+    dropdown.innerHTML = '<div class="learner-option" style="color:var(--muted)">No learners found</div>';
+  } else {
+    dropdown.innerHTML = shown.map(l => {
+      const tag = l.is_your_learner
+        ? '<span style="font-size:0.7rem;font-weight:600;color:var(--green,#1f8a4c);background:rgba(31,138,76,0.1);padding:1px 6px;border-radius:4px;margin-left:6px">Your learner</span>'
+        : '<span style="font-size:0.7rem;font-weight:600;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px;margin-left:6px">New to you</span>';
+      return `
+      <div class="learner-option" data-action="offer-select-learner" data-id="${l.id}" data-name="${esc(l.name)}" data-detail="${esc(l.phone || l.email || '')}">
+        <div class="learner-opt-name">${esc(l.name)}${tag}</div>
+        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? 'Â·' : ''} ${esc(l.email || '')}</div>
+      </div>
+    `;
+    }).join('');
+  }
+  dropdown.classList.add('open');
+}
+
+function selectOfferLearner(id, name, detail) {
+  selectedOfferLearnerId = id;
+  document.getElementById('offerLearnerSearch').value = '';
+  document.getElementById('offerLearnerDropdown').classList.remove('open');
+  document.getElementById('offerLearnerSelected').style.display = 'block';
+  document.getElementById('offerLearnerSelectedName').textContent = name;
+  document.getElementById('offerLearnerSelectedDetail').textContent = detail;
+}
+
+function clearOfferLearner() {
+  selectedOfferLearnerId = null;
+  document.getElementById('offerLearnerSelected').style.display = 'none';
+  document.getElementById('offerLearnerSearch').focus();
+  filterOfferLearners();
 }
 
 // ── Broadcast audience picker ──
@@ -1830,6 +1918,7 @@ async function sendOffer() {
   if (isBroadcast) {
     return sendBroadcastOffer();
   }
+  const existingMode = document.getElementById('offerModeExisting').checked;
   const offerName = document.getElementById('offerName').value.trim();
   const sendEmail = document.getElementById('offerSendEmail').checked;
   const email = document.getElementById('offerEmail').value.trim();
@@ -1845,8 +1934,9 @@ async function sendOffer() {
   errorEl.style.display = 'none';
   successEl.style.display = 'none';
 
-  if (!offerName) { errorEl.textContent = 'Please enter the learner\'s name.'; errorEl.style.display = 'block'; return; }
-  if (sendEmail && !email) { errorEl.textContent = 'Please enter the learner\'s email address.'; errorEl.style.display = 'block'; return; }
+  if (existingMode && !selectedOfferLearnerId) { errorEl.textContent = 'Please select an existing learner.'; errorEl.style.display = 'block'; return; }
+  if (!existingMode && !offerName) { errorEl.textContent = 'Please enter the learner\'s name.'; errorEl.style.display = 'block'; return; }
+  if (!existingMode && sendEmail && !email) { errorEl.textContent = 'Please enter the learner\'s email address.'; errorEl.style.display = 'block'; return; }
   if (!flexible && !date) { errorEl.textContent = 'Please select a date, or tick "Flexible".'; errorEl.style.display = 'block'; return; }
   if (!flexible && !time) { errorEl.textContent = 'Please select a start time, or tick "Flexible".'; errorEl.style.display = 'block'; return; }
 
@@ -1875,7 +1965,7 @@ async function sendOffer() {
   }
 
   btn.disabled = true;
-  btn.textContent = sendEmail ? 'Sending…' : 'Creating…';
+  btn.textContent = (sendEmail || existingMode) ? 'Sending…' : 'Creating…';
 
   // Weekly-repeats cap (1 = single lesson, 2..18 = learner picks count on accept page).
   // Only valid for slot-pinned offers; the API rejects flexible+repeat anyway.
@@ -1884,10 +1974,14 @@ async function sendOffer() {
 
   try {
     const payload = {
-      learner_name: offerName,
       lesson_type_id: lessonTypeId ? parseInt(lessonTypeId) : undefined
     };
-    if (sendEmail) payload.learner_email = email;
+    if (existingMode) {
+      payload.learner_id = selectedOfferLearnerId;
+    } else {
+      payload.learner_name = offerName;
+      if (sendEmail) payload.learner_email = email;
+    }
     if (!flexible) {
       payload.scheduled_date = date;
       payload.start_time = time;
@@ -1910,11 +2004,12 @@ async function sendOffer() {
 
     // Use the accept URL (token-based) — carries the offer price
     const shareUrl = data.accept_url;
-    const safeName = offerName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const selectedOfferName = existingMode ? document.getElementById('offerLearnerSelectedName').textContent : offerName;
+    const safeName = selectedOfferName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
     let statusLine;
-    if (sendEmail) {
-      const safeEmail = email.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (sendEmail || existingMode) {
+      const safeEmail = (existingMode ? 'the selected learner' : email).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       statusLine = `Offer sent to ${safeEmail}${priceMsg}${flexMsg}! They have 24 hours to accept.`;
     } else {
       statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg} — share the link below.`;
@@ -1953,7 +2048,7 @@ async function sendOffer() {
       }
     });
     successEl.style.display = 'block';
-    btn.textContent = sendEmail ? 'Sent ✓' : 'Created ✓';
+    btn.textContent = (sendEmail || existingMode) ? 'Sent ✓' : 'Created ✓';
 
     // Refresh schedule to show blocked slot (if slot-pinned)
     if (!flexible) renderCurrentView();
@@ -1961,7 +2056,7 @@ async function sendOffer() {
     errorEl.textContent = err.message;
     errorEl.style.display = 'block';
     btn.disabled = false;
-    btn.textContent = sendEmail ? 'Send offer' : 'Create link';
+    btn.textContent = (sendEmail || existingMode) ? 'Send offer' : 'Create link';
   }
 }
 
@@ -2007,6 +2102,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'retry-booking-history') renderBookingHistory();
   else if (a === 'retry-current-view') renderCurrentView();
   else if (a === 'select-learner') selectLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.phone, parseInt(t.dataset.balanceMinutes, 10));
+  else if (a === 'offer-select-learner') selectOfferLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.detail);
   else if (a === 'cancel-pending-offer') cancelPendingOffer(parseInt(t.dataset.id, 10), t);
 });
 document.addEventListener('change', function (e) {
@@ -2091,6 +2187,12 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
     var bcastRadio = document.getElementById('offerAudienceBroadcast');
     if (bcastRadio && bcastRadio.checked) loadBroadcastAudience();
   });
+  var offerLearnerSearch = document.getElementById('offerLearnerSearch');
+  if (offerLearnerSearch) {
+    offerLearnerSearch.addEventListener('input', filterOfferLearners);
+    offerLearnerSearch.addEventListener('focus', function () { filterOfferLearners(); });
+  }
+  bind('btn-clear-offer-learner', clearOfferLearner);
   bind('btn-close-offer', closeOfferModal);
   bind('offerSendBtn', sendOffer);
 })();
