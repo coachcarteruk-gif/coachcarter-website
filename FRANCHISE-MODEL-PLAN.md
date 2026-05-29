@@ -237,6 +237,9 @@ These are seeds. Edit any time via admin UI without a deploy.
 This phase has three threads that ship together:
 
 **Thread A — Per-instructor credit scoping.**
+
+Current implementation note: much of this historical checklist has now shipped. Use [`docs/per-instructor-credits-audit.md`](docs/per-instructor-credits-audit.md) as the current state before treating any item below as open work.
+
 - [ ] `api/credits.js`: checkout requires `instructor_id`; metadata includes `instructor_id` and computed `effective_rate_pence_per_minute`.
 - [ ] `api/webhook.js` `handleCreditPurchase`: inserts `credit_transactions` row with `instructor_id` and `effective_rate_pence_per_minute`. Upserts `learner_credit_balances` for `(learner_id, instructor_id)`.
 - [ ] `api/webhook.js` `handleSlotBooking`: same per-instructor scoping. Calculates `effective_rate_pence_per_minute` from slot price and snapshots `lesson_bookings.list_price_pence`.
