@@ -42,7 +42,7 @@ Untracked docs excluded from the main audit:
 
 | Area | Planned Work | Status | Completion % | Priority | Confidence | Why It Matters | Evidence | Recommended Next Slice |
 |---|---|---:|---:|---:|---|---|---|---|
-| Refunds | Refund preview, ledger, and tightly gated execution | partially shipped | 65% | P0 | high | Live-money safety: bad refunds create cash, payout, trust, and accounting damage. | `DEVELOPMENT-ROADMAP.md:3-19`, `docs/refund-operator-runbook.md:19-31`; code has `_refund-planner.js`, `_refund-executor.js`, and `admin?action=execute-refund`. | Add operator UI for safe execute from preview, still blocking BCS/manual-review cases. |
+| Refunds | Refund preview, ledger, and tightly gated execution | shipped | 90% | P0 | high | Live-money safety: bad refunds create cash, payout, trust, and accounting damage. | `DEVELOPMENT-ROADMAP.md:3-19`, `docs/refund-operator-runbook.md:19-31`; PR #264 / merge `d3a3ae1` added admin execute UI from preview, backend execute eligibility guards, and BCS/manual-review refusal coverage. | Keep stable; optional stale-preview UI cleanup only. Remaining refund roadmap is tracked by the manual bank-refund ledger-only row. |
 | Refunds | Manual bank-refund ledger-only flow | planned / not started | 10% | P1 | high | Paid-out bookings and missing-fee evidence need a clean audit trail instead of spreadsheet memory. | `docs/refund-operator-runbook.md:93-105`, `166-173`. | Add "record manual refund" backend and admin form, with no Stripe call. |
 | Credits / Bookings | Booking credit source attribution, FIFO, and CSA-aware edge cases | partially shipped | 80% | P0 | high | This is the spine for refund correctness, instructor payout fairness, and per-instructor credit trust. | `docs/per-instructor-credits-audit.md:23-99`, `memory/current-state.md:42-55`, `memory/prod-facts.md:98-107`. | Finish partial repeat-offer CSA-aware writer and any remaining non-BCS booking paths. |
 | Credits | Remove hardcoded `instructor_id = 1` fallback and seed-instructor assumptions | partially shipped | 25% | P1 | medium | Fine for one school; dangerous for InstructorBook, multi-school, and native checkout attribution. | `memory/chips.md:9-21`, `docs/per-instructor-credits-audit.md:76-99`. | Add a migration gate: reject missing instructor metadata after a cutoff, with an explicit legacy-only handler. |
@@ -69,35 +69,37 @@ Untracked docs excluded from the main audit:
 
 ## Top 5 Recommended Next Slices
 
-### 1. Refund Operator Completion
+### 1. Manual Bank Refund Ledger-Only Flow
 
 What to do:
 
-- Add admin execute UI from refund preview.
-- Add a separate manual-bank-refund ledger path.
+- Add a backend/admin path to record approved manual bank refunds.
+- Keep it ledger-only: no Stripe call, no booking-status mutation, no payout-row mutation, and no manual credit mutation.
+- Require preview evidence, operator reason, and duplicate/idempotency protection.
 
 Why now:
 
-- Highest money, trust, and accounting impact.
-- Backend foundations exist, but operators still need a safe workflow.
+- Highest remaining refund operator gap after PR #264 shipped clean automatic execute from preview.
+- Paid-out bookings, missing-fee evidence, and unsupported refund targets still need a clean audit trail instead of spreadsheet memory.
 
 Smallest safe PR:
 
-- UI can execute only clean previews already supported by backend.
-- Manual ledger remains no-Stripe-call.
+- Record one reviewed manual refund event shape from admin tooling.
+- Display the ledger result back to the operator.
+- Leave automatic Stripe execution and BCS execution unchanged.
 
 Risks and edge cases:
 
 - Duplicate refunds.
-- BCS ambiguity.
-- Paid-out direct bookings.
-- Missing Stripe fee evidence.
+- Recording a ledger event before the real bank transfer is approved/completed.
+- Confusing manual ledger recording with automatic Stripe execution.
+- Paid-out direct bookings and missing Stripe fee evidence.
 
 Likely files:
 
 - `api/admin.js`
 - `api/_refund-planner.js`
-- `api/_refund-executor.js`
+- new or existing refund ledger helper
 - `public/admin/portal.html`
 - `public/admin/portal.js`
 - refund-related tests
@@ -264,7 +266,7 @@ These are major foundations that should not be treated as greenfield roadmap wor
 - Direct booking pricing alignment.
 - Offer pricing alignment.
 - Booking credit source attribution foundations.
-- Refund preview, ledger, and execute backend foundation.
+- Refund preview, ledger, gated execute backend foundation, and admin execute UI.
 - GDPR consent, export, deletion, and audit foundations.
 - Cron locks.
 - Notification log.
