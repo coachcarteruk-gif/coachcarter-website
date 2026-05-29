@@ -658,6 +658,25 @@ test.describe('admin execute-refund endpoint', () => {
     expect(sql.calls).toHaveLength(0);
   });
 
+  test('idempotency key is required before planning, Stripe, or SQL mutation', async () => {
+    const sql = makeSql();
+    const stripeClient = makeStripe();
+
+    const res = await callExecute({
+      body: executeBody({ idempotency_key: '' }),
+      sql,
+      stripeClient,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({
+      error: true,
+      code: 'IDEMPOTENCY_KEY_REQUIRED',
+    });
+    expect(stripeClient.calls).toHaveLength(0);
+    expect(sql.calls).toHaveLength(0);
+  });
+
   test('tenant scope is carried into planner and ledger writes', async () => {
     const sql = makeSql({ sourceRow: null });
     const stripeClient = makeStripe();

@@ -2611,6 +2611,37 @@ function renderRefundExecutePanel(data, payload, executeResult) {
   '</div>';
 }
 
+function refundPreviewExecutionCopy(executeResult) {
+  if (!executeResult) {
+    return {
+      text: 'Preview complete. No refund has been issued yet.',
+      bg: '#f0fdf4',
+      fg: '#166534',
+    };
+  }
+  if (!executeResult.error) {
+    return {
+      text: executeResult.idempotent_replay
+        ? 'Execute returned an existing idempotent refund. Review the result evidence below.'
+        : 'Execute response received. Review the Stripe and ledger evidence below.',
+      bg: '#f0fdf4',
+      fg: '#166534',
+    };
+  }
+  if (executeResult.stripe_refund_id) {
+    return {
+      text: 'Execute failed after a Stripe refund id was returned. Treat this as an incident and follow the runbook before retrying.',
+      bg: 'var(--red-bg)',
+      fg: '#991b1b',
+    };
+  }
+  return {
+    text: 'Execute failed. Review the backend response below before retrying.',
+    bg: 'var(--amber-bg)',
+    fg: '#92400e',
+  };
+}
+
 function renderRefundOperatorContext(data) {
   const rows = [
     ['Recommended action', refundActionLabel(data.recommended_operator_action)],
@@ -2692,7 +2723,10 @@ function renderRefundPreviewResult(data) {
       '</div>'
     : '';
   const previewOnlyCopy = (!blocked && !manual)
-    ? '<div style="margin:-6px 0 18px;padding:10px 12px;border-radius:8px;background:#f0fdf4;color:#166534;font-size:0.88rem;font-weight:700;">Preview complete. No refund has been issued yet.</div>'
+    ? (function () {
+      const copy = refundPreviewExecutionCopy();
+      return '<div style="margin:-6px 0 18px;padding:10px 12px;border-radius:8px;background:' + copy.bg + ';color:' + copy.fg + ';font-size:0.88rem;font-weight:700;">' + esc(copy.text) + '</div>';
+    })()
     : '';
 
   result.innerHTML =
@@ -2759,6 +2793,8 @@ function rerenderRefundPreviewWithExecuteResult(executeResult) {
       '</div>'
     : '';
 
+  const executionCopy = refundPreviewExecutionCopy(executeResult);
+
   result.innerHTML =
     '<div style="border:1px solid ' + tone.border + ';background:' + tone.bg + ';color:' + tone.fg + ';border-radius:8px;padding:14px 16px;margin-bottom:16px;">' +
       '<div style="font-weight:800;font-size:1rem;">' + esc(tone.title) + '</div>' +
@@ -2770,7 +2806,7 @@ function rerenderRefundPreviewWithExecuteResult(executeResult) {
       '<div class="stat-card"><div class="stat-value" style="font-size:1.6rem;">' + fmtPence(Number(data.processing_fee_withheld_pence || 0)) + '</div><div class="stat-label">Processing fee</div></div>' +
       '<div class="stat-card"><div class="stat-value" style="font-size:1.6rem;">' + fmtPence(Number(data.net_refund_pence || 0)) + '</div><div class="stat-label">Returned amount</div></div>' +
     '</div>' +
-    '<div style="margin:-6px 0 18px;padding:10px 12px;border-radius:8px;background:#f0fdf4;color:#166534;font-size:0.88rem;font-weight:700;">Preview complete. No refund has been issued yet.</div>' +
+    '<div style="margin:-6px 0 18px;padding:10px 12px;border-radius:8px;background:' + executionCopy.bg + ';color:' + executionCopy.fg + ';font-size:0.88rem;font-weight:700;">' + esc(executionCopy.text) + '</div>' +
     '<div style="margin-bottom:18px;">' +
       '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Operator context</h3>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px;">' + renderRefundOperatorContext(data) + '</div>' +
