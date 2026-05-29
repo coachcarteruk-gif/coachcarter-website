@@ -701,7 +701,7 @@ Captures a daily snapshot of the Next Payout Preview widget's state into `platfo
 
 Two alarm triggers:
 - **Trigger A** (in `_payout-helpers.js`) — after a Stripe `transfers.create` failure, looks back at the last 24h of snapshots; if any reported `status='green'`, emails `ERROR_ALERT_EMAIL` with both the snapshot and the Stripe error so a "widget said green, reality was red" mismatch is never silent.
-- **Trigger B** (in this cron) — after writing the snapshot, compares trailing-30d Stripe inflow (`credit_transactions WHERE stripe_session_id IS NOT NULL`) vs trailing-30d payout outflow (`instructor_payouts.amount_pence + stripe_fees_pence WHERE status='completed'`). If outflow > inflow + £100, emails the gap with the five most recent driving payouts. £100 floor exists to suppress noise on quiet weeks.
+- **Trigger B** (in this cron) — after writing the snapshot, compares trailing-30d Stripe inflow (`credit_transactions` with a Checkout Session, PaymentIntent, or Charge identity) vs trailing-30d payout outflow (`instructor_payouts.amount_pence + stripe_fees_pence WHERE status='completed'`). If outflow > inflow + £100, emails the gap with the five most recent driving payouts. £100 floor exists to suppress noise on quiet weeks.
 
 ### Database tables
 

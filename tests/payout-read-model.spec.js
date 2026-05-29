@@ -217,6 +217,52 @@ test.describe('payout Step 5 read model', () => {
     expect(calls.some(call => call.text.includes('SELECT lb.id AS booking_id'))).toBe(true);
   });
 
+  test('cron/global platform balance preview does not default omitted schoolId to school 1', async () => {
+    const schoolTwoInstructor = {
+      ...instructor,
+      id: 55,
+      name: 'School Two Instructor',
+    };
+    const { sql, calls } = makePlatformBalanceSqlMock({
+      instructors: [schoolTwoInstructor],
+      eligibleRows: [eligibleBcsFundedBooking],
+    });
+    const stripe = {
+      balance: {
+        retrieve: async () => ({
+          available: [{ currency: 'gbp', amount: 20000 }],
+          pending: [],
+        }),
+      },
+    };
+
+    const result = await computePlatformBalance(sql, stripe);
+    const instructorQuery = calls.find(call =>
+      call.text.includes('FROM instructors') &&
+      call.text.includes('stripe_onboarding_complete = TRUE')
+    );
+    const exactQuery = calls.find(call => call.text.includes('exact_refund_exposure_sources'));
+    const exactCashQuery = calls.find(call => call.text.includes('stripe_net_cash_in_pence'));
+
+    expect(result.total_payout_pence).toBe(9679);
+    expect(result.exact_refund_exposure).toMatchObject({
+      scope: 'global',
+      school_id: null,
+    });
+    expect(result.payout_preview[0]).toMatchObject({
+      instructor_id: schoolTwoInstructor.id,
+      amount_pence: 9679,
+    });
+    expect(instructorQuery.text).not.toContain('school_id = ?');
+    expect(instructorQuery.values).toEqual([]);
+    expect(exactQuery.text).toContain('lu.school_id = lcb.school_id');
+    expect(exactQuery.text).toContain('i.school_id = lcb.school_id');
+    expect(exactQuery.text).toContain('ct.school_id = lcb.school_id');
+    expect(exactQuery.text).toContain('bcs.school_id = lcb.school_id');
+    expect(exactCashQuery.text).toContain('lu.school_id = ct.school_id');
+    expect(exactCashQuery.values).toEqual([]);
+  });
+
   test('refund exposure remains explicitly advisory legacy aggregate valuation', async () => {
     const { sql, calls } = makePlatformBalanceSqlMock();
     const stripe = {
@@ -244,6 +290,8 @@ test.describe('payout Step 5 read model', () => {
     expect(exposureQuery.text).toContain('lu.balance_minutes');
     expect(exposureQuery.text).toContain("s.config -> 'pricing' ->> 'bulk_hourly_pence'");
     expect(exposureQuery.text).toContain('stripe_session_id IS NOT NULL');
+    expect(exposureQuery.text).toContain('stripe_payment_intent_id IS NOT NULL');
+    expect(exposureQuery.text).toContain('stripe_charge_id IS NOT NULL');
     expect(exposureQuery.text).not.toContain('learner_credit_balances');
     expect(exposureQuery.text).not.toContain('effective_rate_pence_per_minute');
     expect(result.legacy_advisory_refund_exposure_pence).toBe(result.refund_exposure_pence);
@@ -369,12 +417,18 @@ test.describe('payout Step 5 read model', () => {
     };
 
     const result = await computePlatformBalance(sql, stripe, { schoolId: 2 });
+    const instructorQuery = calls.find(call =>
+      call.text.includes('FROM instructors') &&
+      call.text.includes('stripe_onboarding_complete = TRUE')
+    );
     const exactQuery = calls.find(call => call.text.includes('exact_refund_exposure_sources'));
     const exactCashQuery = calls.find(call => call.text.includes('stripe_net_cash_in_pence'));
 
     expect(result.exact_refund_exposure_pence).toBe(9000);
     expect(result.legacy_advisory_refund_exposure_pence).toBe(0);
     expect(result.refund_exposure_pence).toBe(0);
+    expect(instructorQuery.text).toContain('school_id = ?');
+    expect(instructorQuery.values).toContain(2);
     expect(exactQuery.text).toContain('lcb.school_id = ?');
     expect(exactQuery.text).toContain('ct.school_id = ?');
     expect(exactQuery.text).toContain('bcs.school_id = ?');
@@ -385,7 +439,55 @@ test.describe('payout Step 5 read model', () => {
     expect(exactQuery.values).toEqual(expect.arrayContaining([2]));
     expect(exactCashQuery.text).toContain('ct.school_id = ?');
     expect(exactCashQuery.text).toContain('lu.school_id = ?');
+    expect(exactCashQuery.text).toContain('ct.stripe_session_id IS NOT NULL');
+    expect(exactCashQuery.text).toContain('ct.stripe_payment_intent_id IS NOT NULL');
+    expect(exactCashQuery.text).toContain('ct.stripe_charge_id IS NOT NULL');
     expect(exactCashQuery.values).toEqual(expect.arrayContaining([2]));
+  });
+
+  test('exact refund exposure cash cap counts PaymentIntent-only and Charge-only Stripe rows', async () => {
+    const { sql, calls } = makePlatformBalanceSqlMock({
+      exactRows: [
+        exactSource({
+          credit_transaction_id: 7101,
+          stripe_session_id: null,
+          stripe_payment_intent_id: 'pi_only',
+          stripe_charge_id: null,
+        }),
+        exactSource({
+          learner_id: 78,
+          credit_transaction_id: 7102,
+          stripe_session_id: null,
+          stripe_payment_intent_id: null,
+          stripe_charge_id: 'ch_only',
+        }),
+      ],
+      exactNetCashInPence: 12000,
+    });
+    const stripe = {
+      balance: {
+        retrieve: async () => ({
+          available: [{ currency: 'gbp', amount: 30000 }],
+          pending: [],
+        }),
+      },
+    };
+
+    const result = await computePlatformBalance(sql, stripe, { schoolId: 1 });
+    const exactCashQuery = calls.find(call => call.text.includes('stripe_net_cash_in_pence'));
+
+    expect(result.exact_refund_exposure).toMatchObject({
+      stripe_cash_backed_pence: 18000,
+      stripe_cash_backed_capped_pence: 12000,
+      platform_refund_exposure_pence: 12000,
+      stripe_originated_net_cash_in_pence: 12000,
+    });
+    expect(result.exact_refund_exposure.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ credit_transaction_id: 7101, classification: 'stripe_cash_backed' }),
+      expect.objectContaining({ credit_transaction_id: 7102, classification: 'stripe_cash_backed' }),
+    ]));
+    expect(exactCashQuery.text).toContain('ct.stripe_payment_intent_id IS NOT NULL');
+    expect(exactCashQuery.text).toContain('ct.stripe_charge_id IS NOT NULL');
   });
 
   test('refund exposure policy helper marks current widget advisory and future exact contract separate', () => {

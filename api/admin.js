@@ -1770,6 +1770,9 @@ async function handlePayoutOverview(req, res) {
 async function handlePlatformBalance(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  // Admin widget is deliberately school-scoped: school admins are locked to
+  // their JWT school, and superadmins may target one school via ?school_id=.
+  // Omitted-school global mode is reserved for the snapshot cron.
   const schoolId = getAdminSchoolId(admin, req);
 
   try {

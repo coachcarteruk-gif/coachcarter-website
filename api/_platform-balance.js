@@ -16,6 +16,9 @@
  * simulatePayoutForInstructor + processPayoutForInstructor in _payout-helpers.js.
  * If you change what the widget shows, the snapshot must change with it, and
  * the eligibility filter must keep matching processAllPayouts.
+ *
+ * Scope: passing schoolId computes one school. Omitting schoolId is deliberate
+ * global/all-school snapshot mode for cron, not a fallback to school 1.
  */
 const { simulatePayoutForInstructor } = require('./_payout-helpers');
 
@@ -25,7 +28,7 @@ const REFUND_EXPOSURE_VALUATION_POLICY = Object.freeze({
     exact_refund_liability: false,
     balance_source: 'learner_users.balance_minutes',
     valuation: 'school bulk_hourly_pence fallback 5500 pence/hour',
-    cap_source: 'Stripe-originated net credit_transactions cash in',
+    cap_source: 'Stripe-originated net credit_transactions cash in by Checkout Session, PaymentIntent, or Charge identity',
     deferred: Object.freeze([
       'learner_credit_balances per-instructor valuation',
       'credit_transactions effective_rate_pence_per_minute source valuation',
@@ -62,6 +65,13 @@ function toPositiveInteger(value, name) {
     throw new Error(`${name} must be a positive integer`);
   }
   return n;
+}
+
+function resolveBalanceScope({ schoolId } = {}) {
+  if (schoolId === undefined || schoolId === null) {
+    return { schoolId: null, isGlobal: true };
+  }
+  return { schoolId: toPositiveInteger(schoolId, 'schoolId'), isGlobal: false };
 }
 
 function clonePolicy(value) {
@@ -140,10 +150,11 @@ function valueSourceMinutes(row, valuedMinutes, remaining) {
   };
 }
 
-function emptyExactExposure({ schoolId, netCashInPence = 0 } = {}) {
+function emptyExactExposure({ schoolId = null, isGlobal = false, netCashInPence = 0 } = {}) {
   return {
     kind: 'source_attributed_instructor_scoped',
     exact_refund_liability: true,
+    scope: isGlobal ? 'global' : 'school',
     school_id: schoolId,
     platform_refund_exposure_pence: 0,
     gross_source_liability_pence: 0,
@@ -173,8 +184,8 @@ function emptyExactExposure({ schoolId, netCashInPence = 0 } = {}) {
   };
 }
 
-function summarizeExactRefundExposureRows(rows = [], { schoolId, netCashInPence = 0 } = {}) {
-  const summary = emptyExactExposure({ schoolId, netCashInPence });
+function summarizeExactRefundExposureRows(rows = [], { schoolId = null, isGlobal = false, netCashInPence = 0 } = {}) {
+  const summary = emptyExactExposure({ schoolId, isGlobal, netCashInPence });
   const groups = new Map();
 
   for (const row of rows || []) {
@@ -262,6 +273,67 @@ function summarizeExactRefundExposureRows(rows = [], { schoolId, netCashInPence 
 }
 
 async function loadExactRefundExposureRows(sql, { schoolId }) {
+  if (schoolId === null || schoolId === undefined) {
+    // Intentional global snapshot mode: row-level outputs carry school_id, and
+    // tenant-scoped tables are joined through matching school_id.
+    return sql`
+      WITH exact_refund_exposure_sources AS (
+        SELECT
+          lcb.school_id,
+          lcb.learner_id,
+          lcb.instructor_id,
+          lcb.balance_minutes::int AS lcb_balance_minutes,
+          ct.id AS credit_transaction_id,
+          ct.created_at,
+          COALESCE(ct.minutes, 0)::int AS source_minutes,
+          COALESCE(ct.amount_pence, 0)::int AS source_amount_pence,
+          COALESCE(ct.effective_rate_pence_per_minute, 0)::int AS effective_rate_pence_per_minute,
+          ct.source,
+          ct.absorbed_by,
+          ct.stripe_session_id,
+          ct.stripe_payment_intent_id,
+          ct.stripe_charge_id,
+          COALESCE(bcs.active_minutes_drawn, 0)::int AS active_minutes_drawn,
+          COALESCE(bcs.active_contribution_pence, 0)::int AS active_contribution_pence,
+          COALESCE(csa.adjusted_minutes, 0)::int AS adjusted_minutes,
+          COALESCE(csa.adjusted_pence, 0)::int AS adjusted_pence
+        FROM learner_credit_balances lcb
+        JOIN learner_users lu
+          ON lu.id = lcb.learner_id
+         AND lu.school_id = lcb.school_id
+        JOIN instructors i
+          ON i.id = lcb.instructor_id
+         AND i.school_id = lcb.school_id
+        LEFT JOIN credit_transactions ct
+          ON ct.learner_id = lcb.learner_id
+         AND ct.instructor_id = lcb.instructor_id
+         AND ct.school_id = lcb.school_id
+         AND COALESCE(ct.minutes, 0) > 0
+        LEFT JOIN LATERAL (
+          SELECT
+            COALESCE(SUM(minutes_drawn), 0)::int AS active_minutes_drawn,
+            COALESCE(SUM(contribution_pence), 0)::int AS active_contribution_pence
+          FROM booking_credit_sources bcs
+          WHERE bcs.school_id = lcb.school_id
+            AND bcs.credit_transaction_id = ct.id
+            AND bcs.refunded_at IS NULL
+        ) bcs ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT
+            COALESCE(SUM(minutes_adjusted), 0)::int AS adjusted_minutes,
+            COALESCE(SUM(pence_adjusted), 0)::int AS adjusted_pence
+          FROM credit_source_adjustments csa
+          WHERE csa.credit_transaction_id = ct.id
+        ) csa ON TRUE
+        WHERE lcb.balance_minutes > 0
+          AND COALESCE(lu.is_test_account, FALSE) = FALSE
+      )
+      SELECT *
+        FROM exact_refund_exposure_sources
+       ORDER BY school_id, learner_id, instructor_id, created_at ASC NULLS LAST, credit_transaction_id ASC NULLS LAST
+    `;
+  }
+
   const resolvedSchoolId = toPositiveInteger(schoolId, 'schoolId');
   return sql`
     WITH exact_refund_exposure_sources AS (
@@ -323,6 +395,27 @@ async function loadExactRefundExposureRows(sql, { schoolId }) {
 }
 
 async function loadStripeOriginatedNetCashIn(sql, { schoolId }) {
+  if (schoolId === null || schoolId === undefined) {
+    // Intentional global cash cap for cron/snapshot mode. The learner join is
+    // same-school to avoid counting cross-tenant id collisions.
+    const [row] = await sql`
+      SELECT COALESCE(SUM(
+        CASE WHEN ct.type IN ('purchase', 'slot_purchase') THEN ct.amount_pence
+             WHEN ct.type = 'refund' THEN -ct.amount_pence
+             ELSE 0 END
+      ), 0)::bigint AS stripe_net_cash_in_pence
+        FROM credit_transactions ct
+        JOIN learner_users lu
+          ON lu.id = ct.learner_id
+         AND lu.school_id = ct.school_id
+       WHERE (ct.stripe_session_id IS NOT NULL
+          OR ct.stripe_payment_intent_id IS NOT NULL
+          OR ct.stripe_charge_id IS NOT NULL)
+         AND COALESCE(lu.is_test_account, FALSE) = FALSE
+    `;
+    return Math.max(0, intValue(row?.stripe_net_cash_in_pence));
+  }
+
   const resolvedSchoolId = toPositiveInteger(schoolId, 'schoolId');
   const [row] = await sql`
     SELECT COALESCE(SUM(
@@ -335,24 +428,27 @@ async function loadStripeOriginatedNetCashIn(sql, { schoolId }) {
         ON lu.id = ct.learner_id
        AND lu.school_id = ${resolvedSchoolId}
      WHERE ct.school_id = ${resolvedSchoolId}
-       AND ct.stripe_session_id IS NOT NULL
+       AND (ct.stripe_session_id IS NOT NULL
+        OR ct.stripe_payment_intent_id IS NOT NULL
+        OR ct.stripe_charge_id IS NOT NULL)
        AND COALESCE(lu.is_test_account, FALSE) = FALSE
   `;
   return Math.max(0, intValue(row?.stripe_net_cash_in_pence));
 }
 
-async function computeExactRefundExposure(sql, { schoolId = 1 } = {}) {
-  const resolvedSchoolId = toPositiveInteger(schoolId, 'schoolId');
-  const rows = await loadExactRefundExposureRows(sql, { schoolId: resolvedSchoolId });
-  const netCashInPence = await loadStripeOriginatedNetCashIn(sql, { schoolId: resolvedSchoolId });
+async function computeExactRefundExposure(sql, opts = {}) {
+  const scope = resolveBalanceScope(opts);
+  const rows = await loadExactRefundExposureRows(sql, { schoolId: scope.schoolId });
+  const netCashInPence = await loadStripeOriginatedNetCashIn(sql, { schoolId: scope.schoolId });
   return summarizeExactRefundExposureRows(rows, {
-    schoolId: resolvedSchoolId,
+    schoolId: scope.schoolId,
+    isGlobal: scope.isGlobal,
     netCashInPence,
   });
 }
 
-async function computePlatformBalance(sql, stripe, { schoolId = 1 } = {}) {
-  const resolvedSchoolId = toPositiveInteger(schoolId, 'schoolId');
+async function computePlatformBalance(sql, stripe, opts = {}) {
+  const scope = resolveBalanceScope(opts);
   // 1. Stripe balance (GBP only).
   const balance = await stripe.balance.retrieve();
   const pickGbp = (arr) => {
@@ -363,16 +459,26 @@ async function computePlatformBalance(sql, stripe, { schoolId = 1 } = {}) {
   const pendingPence   = pickGbp(balance.pending);
 
   // 2. Per-instructor payout dry-run. Filter MUST match processAllPayouts.
-  const eligibleInstructors = await sql`
-    SELECT id, name, email, commission_rate, weekly_franchise_fee_pence,
-           stripe_account_id, payouts_start_date
-      FROM instructors
-     WHERE active = TRUE
-       AND stripe_onboarding_complete = TRUE
-       AND payouts_paused = FALSE
-       AND stripe_account_id IS NOT NULL
-       AND school_id = ${resolvedSchoolId}
-  `;
+  const eligibleInstructors = scope.isGlobal
+    ? await sql`
+        SELECT id, name, email, commission_rate, weekly_franchise_fee_pence,
+               stripe_account_id, payouts_start_date
+          FROM instructors
+         WHERE active = TRUE
+           AND stripe_onboarding_complete = TRUE
+           AND payouts_paused = FALSE
+           AND stripe_account_id IS NOT NULL
+      `
+    : await sql`
+        SELECT id, name, email, commission_rate, weekly_franchise_fee_pence,
+               stripe_account_id, payouts_start_date
+          FROM instructors
+         WHERE active = TRUE
+           AND stripe_onboarding_complete = TRUE
+           AND payouts_paused = FALSE
+           AND stripe_account_id IS NOT NULL
+           AND school_id = ${scope.schoolId}
+      `;
 
   const payoutPreview = [];
   let totalPayoutPence = 0;
@@ -388,25 +494,48 @@ async function computePlatformBalance(sql, stripe, { schoolId = 1 } = {}) {
 
   // 3. Advisory — instructors with chargeable lessons who would NOT be paid
   // this Friday. Helps Fraser see what's stuck without affecting the headline.
-  const blockedRows = await sql`
-    SELECT i.id, i.name,
-           i.active, i.stripe_onboarding_complete, i.payouts_paused,
-           i.stripe_account_id,
-           COUNT(lb.id)::int AS chargeable_lessons
-      FROM instructors i
-      JOIN lesson_bookings lb ON lb.instructor_id = i.id AND lb.status = 'chargeable'
-      LEFT JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = ${resolvedSchoolId}
-      LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
-     WHERE pli.id IS NULL
-       AND i.school_id = ${resolvedSchoolId}
-       AND lb.school_id = ${resolvedSchoolId}
-       AND COALESCE(lu.is_test_account, FALSE) = FALSE
-       AND NOT (i.active = TRUE AND i.stripe_onboarding_complete = TRUE
-                AND i.payouts_paused = FALSE AND i.stripe_account_id IS NOT NULL)
-     GROUP BY i.id, i.name, i.active, i.stripe_onboarding_complete,
-              i.payouts_paused, i.stripe_account_id
-     ORDER BY chargeable_lessons DESC
-  `;
+  const blockedRows = scope.isGlobal
+    ? await sql`
+        SELECT i.id, i.name,
+               i.active, i.stripe_onboarding_complete, i.payouts_paused,
+               i.stripe_account_id,
+               COUNT(lb.id)::int AS chargeable_lessons
+          FROM instructors i
+          JOIN lesson_bookings lb
+            ON lb.instructor_id = i.id
+           AND lb.school_id = i.school_id
+           AND lb.status = 'chargeable'
+          LEFT JOIN learner_users lu
+            ON lu.id = lb.learner_id
+           AND lu.school_id = lb.school_id
+          LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
+         WHERE pli.id IS NULL
+           AND COALESCE(lu.is_test_account, FALSE) = FALSE
+           AND NOT (i.active = TRUE AND i.stripe_onboarding_complete = TRUE
+                    AND i.payouts_paused = FALSE AND i.stripe_account_id IS NOT NULL)
+         GROUP BY i.id, i.name, i.active, i.stripe_onboarding_complete,
+                  i.payouts_paused, i.stripe_account_id
+         ORDER BY chargeable_lessons DESC
+      `
+    : await sql`
+        SELECT i.id, i.name,
+               i.active, i.stripe_onboarding_complete, i.payouts_paused,
+               i.stripe_account_id,
+               COUNT(lb.id)::int AS chargeable_lessons
+          FROM instructors i
+          JOIN lesson_bookings lb ON lb.instructor_id = i.id AND lb.status = 'chargeable'
+          LEFT JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = ${scope.schoolId}
+          LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
+         WHERE pli.id IS NULL
+           AND i.school_id = ${scope.schoolId}
+           AND lb.school_id = ${scope.schoolId}
+           AND COALESCE(lu.is_test_account, FALSE) = FALSE
+           AND NOT (i.active = TRUE AND i.stripe_onboarding_complete = TRUE
+                    AND i.payouts_paused = FALSE AND i.stripe_account_id IS NOT NULL)
+         GROUP BY i.id, i.name, i.active, i.stripe_onboarding_complete,
+                  i.payouts_paused, i.stripe_account_id
+         ORDER BY chargeable_lessons DESC
+      `;
   const excludedInstructors = blockedRows.map(r => ({
     instructor_id: r.id,
     name: r.name,
@@ -426,42 +555,72 @@ async function computePlatformBalance(sql, stripe, { schoolId = 1 } = {}) {
   // Anything spent on lessons isn't refundable, so the live balance is the
   // natural ceiling.
   //
-  // Filter is intent-based: stripe_session_id IS NOT NULL captures every
-  // row that originated from a Stripe checkout, regardless of which
-  // card/wallet type ended up in payment_method. The previous filter
-  // (payment_method='stripe') matched zero rows because the webhook writes
+  // Filter is identity-based: any Checkout Session, PaymentIntent, or Charge
+  // id means the row originated from Stripe, regardless of which card/wallet
+  // type ended up in payment_method. The previous filter (payment_method =
+  // 'stripe') matched zero rows because the webhook writes
   // session.payment_method_types[0] (typically 'card'), so the advisory
   // silently read £0 since v2 (#142) shipped.
-  const [refundExposureRow] = await sql`
-    SELECT
-      COALESCE(SUM(
-        lu.balance_minutes
-        * COALESCE((s.config -> 'pricing' ->> 'bulk_hourly_pence')::int, 5500)
-        / 60.0
-      ), 0)::bigint AS live_credit_pence,
-      COALESCE((
-        SELECT SUM(
-          CASE WHEN ct.type IN ('purchase', 'slot_purchase') THEN ct.amount_pence
-               WHEN ct.type = 'refund' THEN -ct.amount_pence
-               ELSE 0 END
-        )
-        FROM credit_transactions ct
-        JOIN learner_users lu2 ON lu2.id = ct.learner_id
-        WHERE ct.school_id = ${resolvedSchoolId}
-          AND lu2.school_id = ${resolvedSchoolId}
-          AND ct.stripe_session_id IS NOT NULL
-          AND lu2.is_test_account = FALSE
-      ), 0)::bigint AS net_cash_in_pence
-    FROM learner_users lu
-    JOIN schools s ON s.id = lu.school_id
-    WHERE lu.balance_minutes > 0
-      AND lu.school_id = ${resolvedSchoolId}
-      AND lu.is_test_account = FALSE
-  `;
+  const [refundExposureRow] = scope.isGlobal
+    ? await sql`
+        SELECT
+          COALESCE(SUM(
+            lu.balance_minutes
+            * COALESCE((s.config -> 'pricing' ->> 'bulk_hourly_pence')::int, 5500)
+            / 60.0
+          ), 0)::bigint AS live_credit_pence,
+          COALESCE((
+            SELECT SUM(
+              CASE WHEN ct.type IN ('purchase', 'slot_purchase') THEN ct.amount_pence
+                   WHEN ct.type = 'refund' THEN -ct.amount_pence
+                   ELSE 0 END
+            )
+            FROM credit_transactions ct
+            JOIN learner_users lu2
+              ON lu2.id = ct.learner_id
+             AND lu2.school_id = ct.school_id
+            WHERE (ct.stripe_session_id IS NOT NULL
+               OR ct.stripe_payment_intent_id IS NOT NULL
+               OR ct.stripe_charge_id IS NOT NULL)
+              AND lu2.is_test_account = FALSE
+          ), 0)::bigint AS net_cash_in_pence
+        FROM learner_users lu
+        JOIN schools s ON s.id = lu.school_id
+        WHERE lu.balance_minutes > 0
+          AND lu.is_test_account = FALSE
+      `
+    : await sql`
+        SELECT
+          COALESCE(SUM(
+            lu.balance_minutes
+            * COALESCE((s.config -> 'pricing' ->> 'bulk_hourly_pence')::int, 5500)
+            / 60.0
+          ), 0)::bigint AS live_credit_pence,
+          COALESCE((
+            SELECT SUM(
+              CASE WHEN ct.type IN ('purchase', 'slot_purchase') THEN ct.amount_pence
+                   WHEN ct.type = 'refund' THEN -ct.amount_pence
+                   ELSE 0 END
+            )
+            FROM credit_transactions ct
+            JOIN learner_users lu2 ON lu2.id = ct.learner_id
+            WHERE ct.school_id = ${scope.schoolId}
+              AND lu2.school_id = ${scope.schoolId}
+              AND (ct.stripe_session_id IS NOT NULL
+               OR ct.stripe_payment_intent_id IS NOT NULL
+               OR ct.stripe_charge_id IS NOT NULL)
+              AND lu2.is_test_account = FALSE
+          ), 0)::bigint AS net_cash_in_pence
+        FROM learner_users lu
+        JOIN schools s ON s.id = lu.school_id
+        WHERE lu.balance_minutes > 0
+          AND lu.school_id = ${scope.schoolId}
+          AND lu.is_test_account = FALSE
+      `;
   const liveCreditPence = parseInt(refundExposureRow.live_credit_pence) || 0;
   const netCashInPence  = Math.max(0, parseInt(refundExposureRow.net_cash_in_pence) || 0);
   const refundExposurePence = Math.min(liveCreditPence, netCashInPence);
-  const exactRefundExposure = await computeExactRefundExposure(sql, { schoolId: resolvedSchoolId });
+  const exactRefundExposure = await computeExactRefundExposure(sql, { schoolId: scope.schoolId });
 
   // 5. Status — strictly binary. Friday either works or it doesn't.
   const status = balanceAfterPayoutPence >= 0 ? 'green' : 'red';
