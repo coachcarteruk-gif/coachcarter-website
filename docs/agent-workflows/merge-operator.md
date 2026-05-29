@@ -58,9 +58,23 @@ Output format:
 - Final git status:
 - Planned-work-register update needed by Director: yes/no
 
-## Notes
+## Handoff To Director
 
-- Residual risk:
-- Follow-up:
+Target branch:
+
+Source branch / PR:
+
+Merge method:
+
+Merge SHA:
+
+Checks confirmed:
+- ...
+
+Final git status:
+
+Planned-work-register update needed: yes/no
+
+Residual risk or follow-up:
+- ...
 ```
-
