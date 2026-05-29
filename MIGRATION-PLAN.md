@@ -95,6 +95,8 @@
 
 Additional May 2026 shared server note: `_refund-planner.js` computes net-of-original-processing-fee refund previews from credit sources, BCS attribution, direct booking snapshots, and Stripe fee evidence when available. `_refund-executor.js` is the tightly gated admin execution orchestrator; it re-runs the planner, blocks manual-review cases, uses injected Stripe refunds, writes refund ledger rows, and applies supported CSA/LCB adjustments server-side.
 
+Per-instructor credit portability note: [`docs/per-instructor-credits-audit.md`](docs/per-instructor-credits-audit.md) is the current implementation tracker for scoped `learner_credit_balances`. Native payment and booking screens should preserve the `instructor_id`, `school_id`, server-pricing, and LCB mutation contracts recorded there.
+
 ### Shared Client Modules
 
 | File | Purpose |
