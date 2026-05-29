@@ -224,8 +224,11 @@ function normalizeGrantArgs(args) {
   if (!args || typeof args !== 'object') throw new Error('grantCredits args required');
   if (!args.sql) throw new Error('sql client required');
 
-  const sessionId = String(args.sessionId || '').trim();
-  if (!sessionId) throw new Error('sessionId required');
+  const sessionId = toOptionalString(args.sessionId, 'sessionId');
+  const paymentIntentId = toOptionalString(args.paymentIntentId, 'paymentIntentId');
+  if (!sessionId && !paymentIntentId) {
+    throw new Error('sessionId or paymentIntentId required');
+  }
 
   return {
     sql: args.sql,
@@ -242,7 +245,7 @@ function normalizeGrantArgs(args) {
     // required-when-Phase-2A semantics for instructorId before routing).
     instructorId:                  toOptionalInteger(args.instructorId, 'instructorId'),
     effectiveRatePencePerMinute:   toOptionalNonNegativeInteger(args.effectiveRatePencePerMinute, 'effectiveRatePencePerMinute'),
-    paymentIntentId:               toOptionalString(args.paymentIntentId, 'paymentIntentId'),
+    paymentIntentId,
     chargeId:                      toOptionalString(args.chargeId, 'chargeId'),
     source:                        toOptionalEnum(args.source, 'source', ALLOWED_SOURCES),
     absorbedBy:                    toOptionalEnum(args.absorbedBy, 'absorbedBy', ALLOWED_ABSORBED_BY),
@@ -335,6 +338,9 @@ async function grantCredits(args) {
   // flip true, the dispatcher would route to grantCreditsPhase2A, and the
   // stub would throw on every webhook + verify + book call).
   if (!PHASE_2A_IMPLEMENTED) {
+    if (!normalized.sessionId) {
+      throw new Error('sessionId required when Phase 2A is unavailable');
+    }
     return grantCreditsPre2A(normalized);
   }
 
@@ -353,6 +359,9 @@ async function grantCredits(args) {
       normalized.legacyPreCutover = true;
     }
     return grantCreditsPhase2A(normalized);
+  }
+  if (!normalized.sessionId) {
+    throw new Error('sessionId required when Phase 2A is unavailable');
   }
   return grantCreditsPre2A(normalized);
 }
@@ -576,36 +585,67 @@ async function grantCreditsPhase2A({
   // for arbiter inference. Other unique indexes (payment_intent, charge) raise
   // 23505 as exceptions; callers (webhook.js handleCreditPurchase) swallow
   // those exactly as in the Pre-2A path.
-  const [row] = await sql`
-    WITH inserted AS (
-      INSERT INTO credit_transactions
-        (learner_id, instructor_id, school_id, type, credits, minutes,
-         amount_pence, payment_method, stripe_session_id, stripe_fee_pence,
-         stripe_payment_intent_id, stripe_charge_id,
-         effective_rate_pence_per_minute, source, absorbed_by)
-      VALUES
-        (${learnerId}, ${instructorId}, ${schoolId}, 'purchase', ${credits}, ${minutes},
-         ${amountPence}, ${paymentMethod}, ${sessionId}, ${stripeFeePence},
-         ${paymentIntentId}, ${chargeId},
-         ${effectiveRatePencePerMinute}, ${resolvedSource}, ${absorbedBy})
-      ON CONFLICT (stripe_session_id) WHERE stripe_session_id IS NOT NULL DO NOTHING
-      RETURNING id, minutes
-    )
-    INSERT INTO learner_credit_balances
-      (learner_id, instructor_id, school_id, balance_minutes)
-    SELECT
-      ${learnerId}, ${instructorId}, ${schoolId},
-      COALESCE((SELECT SUM(minutes)::int FROM inserted), 0)
-    ON CONFLICT (learner_id, instructor_id) DO UPDATE
-      SET balance_minutes = learner_credit_balances.balance_minutes
-                          + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
-          updated_at = NOW()
-      WHERE learner_credit_balances.school_id = ${schoolId}
-    RETURNING
-      learner_credit_balances.balance_minutes,
-      (SELECT id FROM inserted)            AS transaction_id,
-      ((SELECT id FROM inserted) IS NULL)  AS already_processed
-  `;
+  const [row] = sessionId
+    ? await sql`
+      WITH inserted AS (
+        INSERT INTO credit_transactions
+          (learner_id, instructor_id, school_id, type, credits, minutes,
+           amount_pence, payment_method, stripe_session_id, stripe_fee_pence,
+           stripe_payment_intent_id, stripe_charge_id,
+           effective_rate_pence_per_minute, source, absorbed_by)
+        VALUES
+          (${learnerId}, ${instructorId}, ${schoolId}, 'purchase', ${credits}, ${minutes},
+           ${amountPence}, ${paymentMethod}, ${sessionId}, ${stripeFeePence},
+           ${paymentIntentId}, ${chargeId},
+           ${effectiveRatePencePerMinute}, ${resolvedSource}, ${absorbedBy})
+        ON CONFLICT (stripe_session_id) WHERE stripe_session_id IS NOT NULL DO NOTHING
+        RETURNING id, minutes
+      )
+      INSERT INTO learner_credit_balances
+        (learner_id, instructor_id, school_id, balance_minutes)
+      SELECT
+        ${learnerId}, ${instructorId}, ${schoolId},
+        COALESCE((SELECT SUM(minutes)::int FROM inserted), 0)
+      ON CONFLICT (learner_id, instructor_id) DO UPDATE
+        SET balance_minutes = learner_credit_balances.balance_minutes
+                            + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
+            updated_at = NOW()
+        WHERE learner_credit_balances.school_id = ${schoolId}
+      RETURNING
+        learner_credit_balances.balance_minutes,
+        (SELECT id FROM inserted)            AS transaction_id,
+        ((SELECT id FROM inserted) IS NULL)  AS already_processed
+    `
+    : await sql`
+      WITH inserted AS (
+        INSERT INTO credit_transactions
+          (learner_id, instructor_id, school_id, type, credits, minutes,
+           amount_pence, payment_method, stripe_session_id, stripe_fee_pence,
+           stripe_payment_intent_id, stripe_charge_id,
+           effective_rate_pence_per_minute, source, absorbed_by)
+        VALUES
+          (${learnerId}, ${instructorId}, ${schoolId}, 'purchase', ${credits}, ${minutes},
+           ${amountPence}, ${paymentMethod}, ${sessionId}, ${stripeFeePence},
+           ${paymentIntentId}, ${chargeId},
+           ${effectiveRatePencePerMinute}, ${resolvedSource}, ${absorbedBy})
+        ON CONFLICT (stripe_payment_intent_id) WHERE stripe_payment_intent_id IS NOT NULL DO NOTHING
+        RETURNING id, minutes
+      )
+      INSERT INTO learner_credit_balances
+        (learner_id, instructor_id, school_id, balance_minutes)
+      SELECT
+        ${learnerId}, ${instructorId}, ${schoolId},
+        COALESCE((SELECT SUM(minutes)::int FROM inserted), 0)
+      ON CONFLICT (learner_id, instructor_id) DO UPDATE
+        SET balance_minutes = learner_credit_balances.balance_minutes
+                            + COALESCE((SELECT SUM(minutes)::int FROM inserted), 0),
+            updated_at = NOW()
+        WHERE learner_credit_balances.school_id = ${schoolId}
+      RETURNING
+        learner_credit_balances.balance_minutes,
+        (SELECT id FROM inserted)            AS transaction_id,
+        ((SELECT id FROM inserted) IS NULL)  AS already_processed
+    `;
 
   if (!row) {
     return {

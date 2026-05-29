@@ -271,6 +271,136 @@ test.describe('instructor-aware credit checkout API', () => {
   });
 });
 
+test.describe('native credit PaymentIntent API', () => {
+  test('create-payment-intent without instructor_id rejects and does not call Stripe', async () => {
+    const stripeCalls = [];
+    const credits = withMockedModules({
+      sql: checkoutSql(),
+      stripe: {
+        paymentIntents: {
+          create: async (payload) => {
+            stripeCalls.push(payload);
+            return { id: 'pi_unused', client_secret: 'secret_unused' };
+          },
+        },
+      },
+    }, () => require('../api/credits'));
+
+    const res = await call(credits, {
+      method: 'POST',
+      query: { action: 'create-payment-intent' },
+      body: { hours: 1.5 },
+      headers: learnerHeaders({ method: 'POST' }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ code: 'INSTRUCTOR_REQUIRED' });
+    expect(stripeCalls).toHaveLength(0);
+  });
+
+  test('create-payment-intent with cross-school or inactive instructor rejects', async () => {
+    const stripeCalls = [];
+    const credits = withMockedModules({
+      sql: checkoutSql({ validInstructor: false }),
+      stripe: {
+        paymentIntents: {
+          create: async (payload) => {
+            stripeCalls.push(payload);
+            return { id: 'pi_unused', client_secret: 'secret_unused' };
+          },
+        },
+      },
+    }, () => require('../api/credits'));
+
+    const res = await call(credits, {
+      method: 'POST',
+      query: { action: 'create-payment-intent' },
+      body: { hours: 3, instructor_id: 999 },
+      headers: learnerHeaders({ method: 'POST' }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ code: 'INVALID_INSTRUCTOR' });
+    expect(stripeCalls).toHaveLength(0);
+  });
+
+  test('valid create-payment-intent uses calcBulkTotal and writes Checkout-compatible metadata', async () => {
+    const stripeCalls = [];
+    const calcCalls = [];
+    const credits = withMockedModules({
+      sql: checkoutSql({ validInstructor: true }),
+      stripe: {
+        paymentIntents: {
+          create: async (payload) => {
+            stripeCalls.push(payload);
+            return { id: 'pi_credit_native', client_secret: 'pi_credit_native_secret' };
+          },
+        },
+      },
+      pricing: {
+        MAX_HOURS_PER_PURCHASE: 36,
+        getBulkPricing: async () => ({ hourlyPence: 5500, discountTiers: [], source: 'mock' }),
+        calcBulkTotal: async (_sql, schoolId, hours, context) => {
+          calcCalls.push({ schoolId, hours, context });
+          return {
+            fullPence: 65000,
+            discountPct: 5,
+            discountAmt: 3250,
+            totalPence: 61750,
+            pricePerHourPence: 6500,
+            discountTiers: [{ min_hours: 10, discount_pct: 5 }],
+            schoolDiscountTiers: [{ min_hours: 10, discount_pct: 5 }],
+            bulkTiersEnabled: true,
+            rateSource: 'custom_learner_rate',
+            _source: 'custom_learner_rate',
+          };
+        },
+      },
+    }, () => require('../api/credits'));
+
+    const res = await call(credits, {
+      method: 'POST',
+      query: { action: 'create-payment-intent' },
+      body: { hours: 10, instructor_id: 4, amount_pence: 1 },
+      headers: learnerHeaders({ method: 'POST', schoolId: 2 }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(calcCalls).toEqual([{ schoolId: 2, hours: 10, context: { instructorId: 4, learnerId: 10 } }]);
+    expect(stripeCalls).toHaveLength(1);
+    expect(stripeCalls[0]).toMatchObject({
+      amount: 61750,
+      currency: 'gbp',
+      automatic_payment_methods: { enabled: true },
+    });
+    expect(stripeCalls[0].metadata).toMatchObject({
+      payment_type: 'credit_purchase',
+      learner_id: '10',
+      school_id: '2',
+      instructor_id: '4',
+      minutes_purchased: '600',
+      hours_purchased: '10',
+      amount_pence: '61750',
+      discount_pct: '5',
+      effective_rate_pence_per_minute: '103',
+      credits_purchased: '7',
+    });
+    expect(res.body).toMatchObject({
+      ok: true,
+      clientSecret: 'pi_credit_native_secret',
+      paymentIntentId: 'pi_credit_native',
+      amount_pence: 61750,
+      full_pence: 65000,
+      discount_pct: 5,
+      discount_amount_pence: 3250,
+      price_per_hour_pence: 6500,
+      effective_rate_pence_per_minute: 103,
+      bulk_tiers_enabled: true,
+      rate_source: 'custom_learner_rate',
+    });
+  });
+});
+
 test.describe('instructor-aware public bulk pricing API', () => {
   test('bulk-pricing with instructor_id returns instructor-aware rate, tiers, and source fields', async () => {
     const calcCalls = [];
@@ -439,6 +569,51 @@ test.describe('credit purchase webhook instructor metadata', () => {
       sessionId: 'cs_credit_metadata',
       paymentIntentId: 'pi_credit_metadata',
       stripeFeePence: 123,
+      source: 'stripe',
+    });
+  });
+
+  test('payment_intent.succeeded credit purchase grants via PaymentIntent idempotency', async () => {
+    const grantCalls = [];
+    const webhook = withMockedModules({
+      sql: async () => [],
+      grantCredits: async (args) => {
+        grantCalls.push(args);
+        return { ok: true, alreadyProcessed: false };
+      },
+      fetchSessionFeePence: async () => ({ feePence: 234 }),
+      createTransporter: () => ({ sendMail: async () => {} }),
+    }, () => require('../api/webhook'));
+
+    await webhook._handleCreditPurchase(webhook._paymentIntentToCreditSession({
+      id: 'pi_credit_native',
+      status: 'succeeded',
+      payment_method_types: ['card'],
+      receipt_email: 'learner@example.test',
+      metadata: {
+        payment_type: 'credit_purchase',
+        learner_id: '10',
+        learner_email: 'learner@example.test',
+        credits_purchased: '2',
+        minutes_purchased: '180',
+        amount_pence: '16500',
+        school_id: '2',
+        instructor_id: '4',
+        effective_rate_pence_per_minute: '92',
+      },
+    }));
+
+    expect(grantCalls).toHaveLength(1);
+    expect(grantCalls[0]).toMatchObject({
+      learnerId: 10,
+      schoolId: 2,
+      instructorId: 4,
+      paymentIntentId: 'pi_credit_native',
+      sessionId: null,
+      minutes: 180,
+      amountPence: 16500,
+      effectiveRatePencePerMinute: 92,
+      stripeFeePence: 234,
       source: 'stripe',
     });
   });
