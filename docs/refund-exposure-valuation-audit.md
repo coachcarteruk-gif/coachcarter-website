@@ -21,7 +21,7 @@ Today it:
   `schools.config.pricing.bulk_hourly_pence`, falling back to 5500 pence/hour;
 - excludes test learners;
 - caps the value by Stripe-originated net cash-in from `credit_transactions`
-  rows with `stripe_session_id IS NOT NULL`;
+  rows with a Checkout Session, PaymentIntent, or Charge identity;
 - returns `refund_exposure_basis.exact_refund_liability === false`.
 
 This is useful as a rough dashboard warning, but it must not be presented as

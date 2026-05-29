@@ -40,13 +40,14 @@ module.exports = async (req, res) => {
   // floor gives plenty of headroom while still letting a crashed run
   // recover quickly on the next daily firing.
   return withCronLock(req, res, 'cron-balance-snapshot', 300, async (sql) => {
-    // 1. Compute the widget shape via the shared helper.
+    // 1. Compute the widget shape via the shared helper. Omitted schoolId is
+    // intentional global/all-school snapshot mode, matching Friday payout
+    // preview semantics rather than defaulting to school 1.
     const widget = await computePlatformBalance(sql, stripe);
 
-    // 2. Trailing-30d Stripe inflow. stripe_session_id IS NOT NULL is the
-    // intent-based filter (catches every Stripe-originated row regardless of
-    // payment_method = 'card'/'stripe' inconsistency in the webhook write
-    // path — see follow-up tracked in INSTRUCTOR-PAYMENTS-PLAN.md).
+    // 2. Trailing-30d Stripe inflow. Any Checkout Session, PaymentIntent, or
+    // Charge id marks a Stripe-originated row regardless of payment_method
+    // write-path differences.
     const [inflowRow] = await sql`
       SELECT COALESCE(SUM(
         CASE WHEN type IN ('purchase', 'slot_purchase') THEN amount_pence
@@ -54,7 +55,9 @@ module.exports = async (req, res) => {
              ELSE 0 END
       ), 0)::int AS pence
         FROM credit_transactions
-       WHERE stripe_session_id IS NOT NULL
+       WHERE (stripe_session_id IS NOT NULL
+          OR stripe_payment_intent_id IS NOT NULL
+          OR stripe_charge_id IS NOT NULL)
          AND created_at > NOW() - INTERVAL '30 days'
     `;
     const trailingInflowPence = inflowRow.pence || 0;
@@ -113,7 +116,7 @@ module.exports = async (req, res) => {
       const txt = [
         `Trailing 30d payout outflow exceeds Stripe inflow by £${(gapPence/100).toFixed(2)}.`,
         ``,
-        `Inflow (credit_transactions, stripe_session_id IS NOT NULL): £${(trailingInflowPence/100).toFixed(2)}`,
+        `Inflow (credit_transactions, Stripe identity present):       £${(trailingInflowPence/100).toFixed(2)}`,
         `Outflow (instructor_payouts.completed + Stripe fees):         £${(trailingOutflowPence/100).toFixed(2)}`,
         `Gap:                                                          £${(gapPence/100).toFixed(2)}  (floor £${(TRIGGER_B_FLOOR_PENCE/100).toFixed(2)})`,
         ``,
@@ -128,7 +131,7 @@ module.exports = async (req, res) => {
       const html = `
         <h3 style="color:#b45309;">Trailing 30d payouts exceed Stripe cash inflow by £${(gapPence/100).toFixed(2)}</h3>
         <table style="border-collapse:collapse;font-family:monospace;font-size:13px;">
-          <tr><td style="padding:4px 12px;">Inflow (stripe sessions, 30d)</td><td style="padding:4px 12px;text-align:right;">£${(trailingInflowPence/100).toFixed(2)}</td></tr>
+          <tr><td style="padding:4px 12px;">Inflow (Stripe identity present, 30d)</td><td style="padding:4px 12px;text-align:right;">£${(trailingInflowPence/100).toFixed(2)}</td></tr>
           <tr><td style="padding:4px 12px;">Outflow (completed payouts + fees, 30d)</td><td style="padding:4px 12px;text-align:right;">£${(trailingOutflowPence/100).toFixed(2)}</td></tr>
           <tr><td style="padding:4px 12px;border-top:1px solid #ccc;"><b>Gap</b></td><td style="padding:4px 12px;border-top:1px solid #ccc;text-align:right;"><b>£${(gapPence/100).toFixed(2)}</b></td></tr>
           <tr><td style="padding:4px 12px;">Floor</td><td style="padding:4px 12px;text-align:right;">£${(TRIGGER_B_FLOOR_PENCE/100).toFixed(2)}</td></tr>
