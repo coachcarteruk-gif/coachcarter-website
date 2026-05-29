@@ -18,26 +18,31 @@ function sourceFor(name) {
 }
 
 test.describe('admin refund preview UI', () => {
-  test('adds a preview-only admin surface in the portal', () => {
+  test('adds a guarded refund preview and execute surface in the portal', () => {
     expect(portalHtml).toContain('data-section="refund-preview"');
     expect(portalHtml).toContain('id="section-refund-preview"');
     expect(portalHtml).toContain('Refund Preview');
     expect(portalHtml).toContain('id="refund-preview-form"');
     expect(portalHtml).toContain('id="refund-preview-result"');
-    expect(portalJs).toContain('Execution is coming in a later reviewed slice');
+    expect(portalHtml).toContain('Execution controls appear only for clean supported previews.');
+    expect(portalJs).toContain('REFUND_EXECUTE_CONFIRMATION');
+    expect(portalJs).toContain('EXECUTE_REFUND_CONFIRMED');
     expect(portalHtml).toContain('cookie-consent.js');
     expect(portalHtml).toContain('posthog-loader.js');
   });
 
-  test('calls only the read-only refund-preview endpoint', () => {
+  test('previews through the read-only refund-preview endpoint and executes only through the gated endpoint', () => {
     const submit = sourceFor('submitRefundPreview');
+    const execute = sourceFor('submitRefundExecute');
 
     expect(submit).toContain("fetchAdmin('/api/admin?action=refund-preview'");
     expect(submit).toContain("method: 'POST'");
-    expect(submit).toContain('body: JSON.stringify(buildRefundPreviewPayload())');
-    expect(portalJs).not.toContain("fetchAdmin('/api/admin?action=execute-refund'");
-    expect(portalJs).not.toContain('data-action="execute-refund"');
-    expect(portalJs).not.toContain('operator_go');
+    expect(submit).toContain('body: JSON.stringify(payload)');
+    expect(execute).toContain("fetchAdmin('/api/admin?action=execute-refund'");
+    expect(execute).toContain("method: 'POST'");
+    expect(execute).toContain('body: JSON.stringify(payload)');
+    expect(portalJs).toContain('data-action="execute-refund"');
+    expect(sourceFor('buildRefundExecutePayload')).toContain('operator_go');
   });
 
   test('does not collect or calculate refund amounts client-side', () => {
@@ -56,7 +61,7 @@ test.describe('admin refund preview UI', () => {
     const update = sourceFor('updateRefundSourceFields');
 
     expect(portalHtml).toContain('id="refund-type-help"');
-    expect(portalHtml).toContain('This screen is preview-only and does not issue refunds.');
+    expect(portalHtml).toContain('Preview first. Clean supported previews can then be executed through the gated backend path.');
     expect(portalJs).toContain('REFUND_TYPE_GUIDANCE');
     expect(portalJs).toContain('Refund a normal paid lesson directly tied to a booking.');
     expect(portalJs).toContain('Example: learner paid for a one-off lesson by card and that specific lesson needs refunding.');
@@ -76,17 +81,60 @@ test.describe('admin refund preview UI', () => {
     expect(render).toContain('Returned amount');
     expect(render).toContain('Operator context');
     expect(portalJs).toContain('Recommended action');
+    expect(portalJs).toContain('Reason');
     expect(portalJs).toContain('Learner email');
     expect(portalJs).toContain('Payment channel');
     expect(portalJs).toContain('manual_bank_review_required');
     expect(portalJs).toContain('Manual bank review required');
     expect(portalJs).toContain('Execute eligible');
-    expect(render).toContain('Preview only. No refund has been issued.');
+    expect(render).toContain('Preview complete. No refund has been issued yet.');
     expect(render).toContain('Ledger line evidence');
     expect(render).toContain('Fee evidence');
     expect(render).toContain('Stripe references');
     expect(render).toContain('Metadata');
-    expect(render).toContain('This screen is preview-only and cannot mutate Stripe, bookings, credits, payouts, or refund ledger rows.');
+    expect(portalJs).toContain('This UI does not directly mutate bookings, payouts, credits, refund ledgers, or credit-source adjustments.');
+  });
+
+  test('allows clean execute only when the latest preview is supported by the backend', () => {
+    const blocker = sourceFor('refundPreviewExecuteBlocker');
+    const panel = sourceFor('renderRefundExecutePanel');
+
+    expect(blocker).toContain('data.blocked');
+    expect(blocker).toContain('Blocked previews cannot execute from the admin UI.');
+    expect(blocker).toContain('data.manual_review_required');
+    expect(blocker).toContain('Manual-review previews cannot execute from the admin UI.');
+    expect(blocker).toContain("data.recommended_operator_action !== 'execute_eligible'");
+    expect(blocker).toContain('booking_credit_source_id');
+    expect(blocker).toContain('Booking-credit-source-line execution is not enabled in this slice.');
+    expect(panel).toContain('Execution blocked in UI');
+    expect(panel).toContain('Execute clean preview');
+  });
+
+  test('requires exact confirmation and visible stable idempotency before execute', () => {
+    const keyBuilder = sourceFor('buildRefundExecuteIdempotencyKey');
+    const buildExecute = sourceFor('buildRefundExecutePayload');
+    const submitExecute = sourceFor('submitRefundExecute');
+
+    expect(keyBuilder).toContain('refund-execute-v1-');
+    expect(keyBuilder).toContain('simpleRefundHash(fingerprint)');
+    expect(portalJs).toContain('id="refund-execute-idempotency-key" readonly');
+    expect(buildExecute).toContain('idempotency_key: idempotencyKey');
+    expect(buildExecute).toContain('operator_go: confirmation');
+    expect(submitExecute).toContain('A visible idempotency key is required before execution.');
+    expect(submitExecute).toContain('payload.operator_go !== REFUND_EXECUTE_CONFIRMATION');
+    expect(submitExecute).toContain('Enter the exact confirmation phrase before executing.');
+  });
+
+  test('renders post-execute Stripe, ledger, CSA, and duplicate replay evidence', () => {
+    const render = sourceFor('renderRefundExecuteResult');
+
+    expect(render).toContain('Stripe refund');
+    expect(render).toContain('Refund event');
+    expect(render).toContain('Returned amount');
+    expect(render).toContain('CSA adjustment');
+    expect(render).toContain('Executed ledger lines');
+    expect(render).toContain('Idempotent replay returned existing refund');
+    expect(render).toContain('idempotent_replay');
   });
 
   test('lets booking rows prefill the preview without executing anything', () => {
