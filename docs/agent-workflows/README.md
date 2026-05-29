@@ -5,7 +5,7 @@ This folder contains copy-paste ready prompts for running CoachCarter roadmap wo
 The intended hierarchy is:
 
 ```text
-Director -> Prompt Maker -> Code Worker -> optional Reviewer -> Merge Operator
+Director -> Prompt Maker -> Code Worker -> optional Reviewer -> Director -> Merge Operator -> Director
 ```
 
 Use `docs/planned-work-register.md` as the central roadmap source of truth. These prompts keep strategy, prompt creation, implementation, review, and merge mechanics separate so each session has a narrow job.
@@ -31,6 +31,18 @@ Use `docs/planned-work-register.md` as the central roadmap source of truth. Thes
 7. Director decides whether the work is ready to merge.
 8. Merge Operator performs the mechanical merge checklist.
 9. Director updates `docs/planned-work-register.md` after the work is genuinely shipped.
+
+## Handoff Rule
+
+Every role must end with a labelled handoff block:
+
+```text
+## Handoff To [Next Role]
+```
+
+The handoff must be copy-paste ready for the next role in the chain. It should contain only the context the next role needs to act safely. The role may also include notes for the current user, but the handoff block should be clean, self-contained, and ready to paste into the next session.
+
+For P0/P1 money, credit, refund, payout, auth, tenancy, GDPR, or database work, handoffs must preserve the risk class and reviewer requirement. Do not let those safety requirements disappear as work moves between roles.
 
 ## P0/P1 Safety Rule
 

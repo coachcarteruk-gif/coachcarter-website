@@ -55,16 +55,62 @@ Verification:
 - If tests require network/secrets/escalation, report clearly.
 - For UI changes, run or inspect the local UI where practical.
 
-Completion report:
-- Branch:
-- Files changed:
-- What shipped:
-- What did not ship:
-- Tests run and results:
-- Risks / follow-ups:
-- Suggested docs/register update for Director:
-
 Do not merge.
 For P0/P1 money, credit, refund, payout, auth, tenancy, GDPR, or database work, expect a separate Reviewer pass.
-```
 
+Completion report:
+
+## Implementation Summary
+
+- Branch:
+- Commit:
+- PR:
+- What shipped:
+- What did not ship:
+
+If there is no PR yet, still provide branch and commit details.
+
+## Verification
+
+- Tests run:
+- Results:
+- Tests not run:
+- Reason:
+
+## Handoff To Reviewer
+
+Review target:
+- PR:
+- Branch:
+- Commit:
+
+Risk class and area:
+
+Original goal:
+
+Director slice summary:
+
+What changed:
+- ...
+
+Files changed:
+- ...
+
+Tests run and results:
+- ...
+
+Known risks / edge cases:
+- ...
+
+Out of scope:
+- ...
+
+Specific reviewer focus:
+- ...
+
+Previous reviewer findings addressed:
+- Not applicable / yes / no
+- Details:
+
+Suggested status: ready for review / blocked / needs Director decision
+```

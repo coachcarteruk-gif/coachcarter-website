@@ -53,13 +53,14 @@ When asked "what should we do next":
 3. Read only the most relevant supporting docs for the top candidate slices.
 4. Rank options by product/business/safety impact.
 5. Choose one recommended next slice, plus one backup.
-6. Produce a slice brief, not an implementation prompt.
+6. Produce a slice brief ending with `## Handoff To Prompt Maker`, not an implementation prompt.
 
 Slice brief format:
 
 ## Recommended Slice
 
 Name:
+Risk class:
 Priority:
 Status in planned-work-register:
 Recommended now because:
@@ -85,13 +86,42 @@ Out of scope:
 
 - ...
 
+## Tests Likely Needed
+
+- ...
+
 ## Risks / Stop Conditions
 
 - ...
 
+## Reviewer Requirement
+
+Reviewer required: yes/no
+Reason:
+
 ## Handoff To Prompt Maker
 
-Ask the Prompt Maker to turn this slice brief into one scoped Code Worker prompt. The Prompt Maker should not change the strategy or expand scope.
+Turn this slice brief into one scoped Code Worker prompt. Do not change the strategy or expand scope.
+
+Chosen slice:
+Risk class:
+Priority:
+Success criteria:
+- ...
+In scope:
+- ...
+Out of scope:
+- ...
+Docs to read:
+- ...
+Likely files:
+- ...
+Tests likely needed:
+- ...
+Stop conditions:
+- ...
+Reviewer required: yes/no
+Reviewer requirement reason:
 
 When asked to update docs/planned-work-register.md:
 1. Read the worker/reviewer/merge outputs.
@@ -99,21 +129,54 @@ When asked to update docs/planned-work-register.md:
 3. Update only relevant rows and stale-doc notes.
 4. If confidence is low, mark status as unclear or partially shipped.
 5. Keep the register decision-ready, not bloated.
+6. Report the register change using `## Planned Work Register Update`.
+
+Planned work register update format:
+
+## Planned Work Register Update
+
+- Slice / register row:
+- Previous status:
+- New status:
+- Evidence used:
+- Files/docs updated:
+- Remaining follow-up:
+- Confidence:
 
 When asked whether a PR is ready to merge:
 1. Review the stated goal and slice brief.
 2. Review test output and reviewer findings.
 3. Check whether any P0/P1 safety gate applies.
 4. Decide: ready to merge, needs changes, or needs human decision.
-5. If ready, produce a short merge approval note for the Merge Operator.
+5. If ready, produce a short merge approval note ending with `## Handoff To Merge Operator`.
 
 Merge approval note format:
 
-Approved for Merge Operator:
-- Branch / PR:
-- Scope approved:
-- Required checks passed:
-- Known residual risk:
-- Planned-work-register update needed after merge: yes/no
+## Merge Readiness Decision
+
+Decision: ready to merge / needs changes / needs human decision
+Branch / PR:
+Risk class:
+Reviewer required: yes/no
+Reviewer verdict:
+Required checks passed:
+Known residual risk:
+Planned-work-register update needed after merge: yes/no
+
+## Handoff To Merge Operator
+
+Merge only the approved scope below.
+
+Target branch:
+Source branch / PR:
+Approved scope:
+- ...
+Required checks to confirm:
+- ...
+Required reviewer output:
+- ...
+Merge method:
+Known residual risk:
+Planned-work-register update needed after merge: yes/no
 ```
 
