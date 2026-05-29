@@ -314,6 +314,77 @@ test.describe('Phase 2A SQL shape — integration', () => {
     expect(ledger).toHaveLength(1);
   });
 
+  test('T3b: duplicate native PaymentIntent credit purchase — idempotent without Checkout session id', async () => {
+    await resetState();
+    const paymentIntentId = `pi_test_native_credit_${crypto.randomBytes(8).toString('hex')}`;
+
+    const grantArgs = {
+      sql,
+      learnerId: testLearnerId,
+      instructorId: INSTRUCTOR_ID,
+      schoolId: SCHOOL_ID,
+      credits: 2,
+      minutes: 180,
+      amountPence: 16500,
+      paymentMethod: 'card',
+      sessionId: null,
+      paymentIntentId,
+      stripeFeePence: 234,
+      effectiveRatePencePerMinute: 92,
+    };
+
+    const first = await grantCredits(grantArgs);
+    expect(first.ok).toBe(true);
+    expect(first.alreadyProcessed).toBe(false);
+    expect(first.transactionId).toBeTruthy();
+    expect(first.balanceMinutes).toBe(180);
+
+    const second = await grantCredits(grantArgs);
+    expect(second.ok).toBe(true);
+    expect(second.alreadyProcessed).toBe(true);
+    expect(second.transactionId).toBeNull();
+    expect(second.balanceMinutes).toBe(180);
+
+    const ledger = await sql`
+      SELECT
+        id,
+        learner_id,
+        school_id,
+        instructor_id,
+        stripe_session_id,
+        stripe_payment_intent_id,
+        amount_pence,
+        minutes,
+        effective_rate_pence_per_minute
+      FROM credit_transactions
+      WHERE learner_id = ${testLearnerId}
+        AND school_id = ${SCHOOL_ID}
+        AND instructor_id = ${INSTRUCTOR_ID}
+        AND stripe_payment_intent_id = ${paymentIntentId}
+        AND type = 'purchase'
+    `;
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]).toMatchObject({
+      learner_id: testLearnerId,
+      school_id: SCHOOL_ID,
+      instructor_id: INSTRUCTOR_ID,
+      stripe_payment_intent_id: paymentIntentId,
+      amount_pence: 16500,
+      minutes: 180,
+      effective_rate_pence_per_minute: 92,
+    });
+    expect(ledger[0].stripe_session_id).toBeNull();
+
+    const [lcb] = await sql`
+      SELECT balance_minutes
+      FROM learner_credit_balances
+      WHERE learner_id = ${testLearnerId}
+        AND school_id = ${SCHOOL_ID}
+        AND instructor_id = ${INSTRUCTOR_ID}
+    `;
+    expect(lcb.balance_minutes).toBe(180);
+  });
+
   // ───────────────────────────────────────────────────────────────────────────
   // T4: Concurrent first-write race — both grants succeed, balance = sum.
   // ───────────────────────────────────────────────────────────────────────────

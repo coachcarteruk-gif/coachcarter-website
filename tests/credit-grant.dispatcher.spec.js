@@ -309,6 +309,39 @@ test.describe('grantCredits dispatcher — PHASE_2A_IMPLEMENTED gate', () => {
   });
 });
 
+test.describe('grantCredits PaymentIntent-only idempotency', () => {
+  test.beforeEach(() => {
+    _resetPhaseDetectionForTests();
+    _setPhase2AImplementedForTests(true);
+    delete process.env.PER_INSTRUCTOR_CREDITS_PHASE_2A;
+  });
+
+  test.afterAll(() => {
+    _resetPhaseDetectionForTests();
+    _setPhase2AImplementedForTests(false);
+    delete process.env.PER_INSTRUCTOR_CREDITS_PHASE_2A;
+  });
+
+  test('Phase 2A grant uses payment_intent arbiter when there is no Checkout session id', async () => {
+    const { sql, calls } = makeMockSql({ phase2aSchemaExists: true });
+
+    const result = await grantCredits({
+      sql,
+      ...baseArgs,
+      sessionId: null,
+      instructorId: 7,
+      effectiveRatePencePerMinute: 92,
+      paymentIntentId: 'pi_native_only',
+    });
+
+    expect(result.ok).toBe(true);
+    const phase2ACall = calls.find(c => isPhase2ALcbWrite(c.text));
+    expect(phase2ACall).toBeTruthy();
+    expect(phase2ACall.text).toContain('ON CONFLICT (stripe_payment_intent_id) WHERE stripe_payment_intent_id IS NOT NULL DO NOTHING');
+    expect(phase2ACall.values).toContain('pi_native_only');
+  });
+});
+
 // ──────────────────────────────────────────────────────────────────────────────
 // lockBalanceAndMutate — dispatcher-routing tests
 // ──────────────────────────────────────────────────────────────────────────────

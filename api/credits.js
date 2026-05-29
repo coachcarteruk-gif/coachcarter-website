@@ -12,6 +12,10 @@ function verifyAuth(req) {
   return requireAuth(req, { roles: ['learner', 'admin'] });
 }
 
+function verifyLearnerAuth(req) {
+  return requireAuth(req, { roles: ['learner'] });
+}
+
 function parsePositiveInteger(value) {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : null;
@@ -57,16 +61,43 @@ function getOptionalLearnerContext(req, schoolId) {
   return payload;
 }
 
+function buildCreditPurchaseMetadata({
+  user,
+  schoolId,
+  instructorId,
+  hours,
+  minutes,
+  totalPence,
+  discountPct,
+  emailValid,
+}) {
+  const lessonEquiv = Math.round(hours / 1.5); // backwards compat for older webhook reads
+  return {
+    payment_type:      'credit_purchase',
+    learner_id:        String(user.id),
+    learner_email:     emailValid ? user.email : '',
+    credits_purchased: String(lessonEquiv),
+    minutes_purchased: String(minutes),
+    hours_purchased:   String(hours),
+    discount_pct:      String(discountPct),
+    amount_pence:      String(totalPence),
+    school_id:         String(schoolId),
+    instructor_id:                    String(instructorId),
+    effective_rate_pence_per_minute:  String(Math.round(totalPence / minutes))
+  };
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   const action = req.query.action;
 
   if (action === 'balance') return handleBalance(req, res);
   if (action === 'checkout') return handleCheckout(req, res);
+  if (action === 'create-payment-intent') return handleCreatePaymentIntent(req, res);
   if (action === 'verify') return handleVerify(req, res);
   if (action === 'bulk-pricing') return handleBulkPricing(req, res);
 
-  return res.status(400).json({ error: 'Unknown action. Use ?action=balance, ?action=checkout, ?action=verify, or ?action=bulk-pricing' });
+  return res.status(400).json({ error: 'Unknown action. Use ?action=balance, ?action=checkout, ?action=create-payment-intent, ?action=verify, or ?action=bulk-pricing' });
 };
 
 // ── GET /api/credits?action=bulk-pricing ─────────────────────────────────────
@@ -294,7 +325,6 @@ async function handleCheckout(req, res) {
   // Round to nearest 0.5 hours
   hours = Math.round(hours * 2) / 2;
   const minutes = Math.round(hours * 60);
-  const lessonEquiv = Math.round(hours / 1.5); // for backwards compat metadata
 
   const instructorId = parsePositiveInteger(req.body.instructor_id);
 
@@ -321,6 +351,17 @@ async function handleCheckout(req, res) {
       ? `${hours} hours at £${(pricePerHourPence / 100).toFixed(2)}/hr. You save £${(discountAmt / 100).toFixed(2)} with the ${discountPct}% package discount.`
       : `${hours} hours of driving lessons. Book online at any time.`;
 
+    const metadata = buildCreditPurchaseMetadata({
+      user,
+      schoolId,
+      instructorId,
+      hours,
+      minutes,
+      totalPence,
+      discountPct,
+      emailValid,
+    });
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card', 'klarna'],
@@ -334,24 +375,7 @@ async function handleCheckout(req, res) {
           quantity: 1
         }
       ],
-      metadata: {
-        payment_type:      'credit_purchase',
-        learner_id:        String(user.id),
-        learner_email:     emailValid ? user.email : '',
-        credits_purchased: String(lessonEquiv),
-        minutes_purchased: String(minutes),
-        hours_purchased:   String(hours),
-        discount_pct:      String(discountPct),
-        amount_pence:      String(totalPence),
-        school_id:         String(schoolId),
-        // Step 4 / Phase 2A: scope LCB upsert in the webhook.
-        // effective_rate_pence_per_minute is derivable from the Stripe
-        // session itself (amount_pence / minutes) per the source-of-truth
-        // rule, but we also snapshot it into metadata for audit clarity
-        // and to surface the discount-applied rate (vs the school list rate).
-        instructor_id:                    String(instructorId),
-        effective_rate_pence_per_minute:  String(Math.round(totalPence / minutes))
-      },
+      metadata,
       ...(emailValid ? { customer_email: user.email } : {}),
       billing_address_collection: 'required',
       allow_promotion_codes: true,
@@ -364,6 +388,96 @@ async function handleCheckout(req, res) {
     console.error('credits checkout error:', err);
     reportError('/api/credits', err);
     return res.status(500).json({ error: 'Failed to create checkout session', details: 'Internal server error' });
+  }
+}
+
+// POST /api/credits?action=create-payment-intent
+// Native PaymentSheet prep: creates a Stripe PaymentIntent for buying hours.
+// Body mirrors web checkout: { hours, instructor_id }. Pricing remains fully
+// server-side and uses the same metadata contract as Checkout.
+async function handleCreatePaymentIntent(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = verifyLearnerAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  const emailValid = user.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(user.email).trim());
+
+  let hours;
+  if (req.body.hours) {
+    hours = parseFloat(req.body.hours);
+  } else if (req.body.quantity) {
+    hours = parseInt(req.body.quantity, 10) * 1.5;
+  }
+
+  if (!hours || hours < MIN_HOURS_PER_PURCHASE || hours > MAX_HOURS_PER_PURCHASE) {
+    return res.status(400).json({
+      error: `Hours must be between ${MIN_HOURS_PER_PURCHASE} and ${MAX_HOURS_PER_PURCHASE}`
+    });
+  }
+
+  hours = Math.round(hours * 2) / 2;
+  const minutes = Math.round(hours * 60);
+  const instructorId = parsePositiveInteger(req.body.instructor_id);
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const instructorResult = await resolveCheckoutInstructor(sql, { instructorId, schoolId });
+    if (!instructorResult.ok) {
+      return res.status(instructorResult.status).json({
+        error: instructorResult.message,
+        code: instructorResult.code
+      });
+    }
+
+    const pricing = await calcBulkTotal(sql, schoolId, hours, {
+      instructorId,
+      learnerId: user.id
+    });
+    const { fullPence, discountPct, discountAmt, totalPence, pricePerHourPence } = pricing;
+    const metadata = buildCreditPurchaseMetadata({
+      user,
+      schoolId,
+      instructorId,
+      hours,
+      minutes,
+      totalPence,
+      discountPct,
+      emailValid,
+    });
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: totalPence,
+      currency: 'gbp',
+      automatic_payment_methods: { enabled: true },
+      metadata,
+      ...(emailValid ? { receipt_email: user.email } : {}),
+      description: `${hours} hour${hours !== 1 ? 's' : ''} of driving lesson credit`,
+    });
+
+    return res.json({
+      ok: true,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      instructor_id: instructorId,
+      hours,
+      minutes,
+      amount_pence: totalPence,
+      total_pence: totalPence,
+      full_pence: fullPence,
+      discount_pct: discountPct,
+      discount_amount_pence: discountAmt,
+      price_per_hour_pence: pricePerHourPence,
+      effective_rate_pence_per_minute: Math.round(totalPence / minutes),
+      bulk_tiers_enabled: pricing.bulkTiersEnabled,
+      rate_source: pricing.rateSource,
+      _source: pricing._source,
+    });
+  } catch (err) {
+    console.error('credits create-payment-intent error:', err);
+    reportError('/api/credits?action=create-payment-intent', err);
+    return res.status(500).json({ error: 'Failed to create payment intent', details: 'Internal server error' });
   }
 }
 
@@ -484,4 +598,5 @@ async function handleVerify(req, res) {
 
 module.exports._handleBalance = handleBalance;
 module.exports._handleCheckout = handleCheckout;
+module.exports._handleCreatePaymentIntent = handleCreatePaymentIntent;
 module.exports._resolveCheckoutInstructor = resolveCheckoutInstructor;
