@@ -114,6 +114,15 @@ module.exports = async (req, res) => {
     // Klarna failure / cancellation — log only. No DB writes happened on
     // the earlier `completed` event because handlers gate on
     // payment_status='paid'. No retry needed (Stripe won't re-charge).
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object;
+      const paymentType = paymentIntent.metadata?.payment_type;
+
+      if (paymentType === 'credit_purchase') {
+        await handleCreditPurchase(paymentIntentToCreditSession(paymentIntent));
+      }
+    }
+
     if (event.type === 'checkout.session.async_payment_failed') {
       const session = event.data.object;
       console.error('Stripe async payment failed:', {
@@ -170,6 +179,18 @@ function isPaid(session) {
 }
 
 // ── Credit purchase handler ───────────────────────────────────────────────────
+function paymentIntentToCreditSession(paymentIntent) {
+  return {
+    id: paymentIntent.id,
+    object: 'payment_intent',
+    payment_status: paymentIntent.status === 'succeeded' ? 'paid' : paymentIntent.status,
+    payment_method_types: paymentIntent.payment_method_types || ['card'],
+    payment_intent: paymentIntent.id,
+    metadata: paymentIntent.metadata || {},
+    customer_email: paymentIntent.receipt_email || null,
+  };
+}
+
 async function handleCreditPurchase(session) {
   if (!isPaid(session)) return;
 
@@ -216,6 +237,7 @@ async function handleCreditPurchase(session) {
     const effectiveRatePencePerMinute = minutes > 0
       ? Math.round(amountPence / minutes)
       : null;
+    const isPaymentIntentOnly = session.object === 'payment_intent';
     const paymentIntentId = typeof session.payment_intent === 'string'
       ? session.payment_intent
       : session.payment_intent?.id || null;
@@ -239,7 +261,7 @@ async function handleCreditPurchase(session) {
       minutes,
       amountPence,
       paymentMethod,
-      sessionId: session.id,
+      sessionId: isPaymentIntentOnly ? null : session.id,
       stripeFeePence,
       instructorId: instructorIdMeta,
       effectiveRatePencePerMinute,
@@ -1380,3 +1402,4 @@ async function getRawBody(req) {
 }
 
 module.exports._handleCreditPurchase = handleCreditPurchase;
+module.exports._paymentIntentToCreditSession = paymentIntentToCreditSession;

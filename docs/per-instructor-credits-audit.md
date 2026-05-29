@@ -1,6 +1,6 @@
 # Per-Instructor Credits Audit
 
-Last updated: 2026-05-27
+Last updated: 2026-05-29
 
 This is the living implementation audit for the move from pooled learner credit
 (`learner_users.balance_minutes`) to per-instructor credit balances via
@@ -78,11 +78,11 @@ Classification:
 | Area | File/function | Current data source | Per-instructor safe? | Notes |
 |---|---|---|---|---|
 | Shared grants | `api/_credit-grant.js` `grantCredits`, `lockBalanceAndMutate`, `lockBalanceAdjustLCB` | LCB in Phase 2A | Mostly yes | Good core helper; LCB writes/guards now include `school_id`. Missing `instructorId` still grandfather-routes to instructor `1` by design during cutover. |
-| Credit checkout | `api/credits.js` `handleCheckout` | Required request `instructor_id`; instructor-aware `calcBulkTotal` | Yes | New learner-facing checkout rejects missing, cross-school, inactive, or hidden/demo instructors and writes `instructor_id` to Stripe metadata. Pricing uses custom learner rate → instructor hourly rate → school default, with bulk tiers only if `instructors.bulk_tiers_enabled = TRUE`. |
+| Credit checkout | `api/credits.js` `handleCheckout`, `handleCreatePaymentIntent` | Required request `instructor_id`; instructor-aware `calcBulkTotal` | Yes | Web Checkout and native PaymentIntent creation reject missing, cross-school, inactive, or hidden/demo instructors and write `instructor_id` to Stripe metadata. Pricing uses custom learner rate → instructor hourly rate → school default, with bulk tiers only if `instructors.bulk_tiers_enabled = TRUE`. |
 | Direct pay-and-book checkout | `api/slots.js` `checkout-slot`, `checkout-slot-guest`; `api/lesson-types.js`; `durations-for-slot` | Server-side `calcDirectLessonPrice` using custom learner rate → instructor hourly rate → school default | Yes | Stripe amount and metadata now come from the selected instructor's effective hourly rate × duration. Bulk-tier opt-in is ignored for direct single-slot payments; it only affects prepaid credit packages. Trial lesson types remain excluded/rejected on paid booking paths. |
 | Paid 1-hour lesson opt-in | `db/migration.sql`, `api/_lesson-type-helpers.js`, `api/lesson-types.js`, `api/slots.js`, `public/instructor/profile.js`, `public/learner/buy-credits.js` | Active `slug='1hr'` with explicit instructor opt-in | Yes | The paid 1-hour lesson type is active, but `offered_lesson_types = NULL` means the default active set and excludes opt-in-only `"1hr"`. Instructors can enable it in profile lesson-type toggles; booking and buy-credit single-lesson cards respect the selected instructor's offered list. |
 | Credit balance API | `api/credits.js` `handleBalance` | School-scoped LCB rows joined to same-school instructors | Yes | Preserves aggregate `balance_minutes`/`balance_hours`/`credit_balance`, adds per-instructor `balances`, and supports optional validated `instructor_id` with selected balance fields. |
-| Credit verify/webhook | `api/webhook.js` `handleCreditPurchase` | Stripe metadata + `grantCredits` | Mostly yes | Purchase completion consumes metadata `instructor_id` and grants to that instructor's LCB row. Legacy/missing metadata still goes to instructor `1` through the shared helper for old Stripe retries. |
+| Credit verify/webhook | `api/webhook.js` `handleCreditPurchase` | Stripe metadata + `grantCredits` | Mostly yes | Checkout completion and native `payment_intent.succeeded` consume metadata `instructor_id` and grant to that instructor's LCB row. PaymentIntent-only grants use `stripe_payment_intent_id` idempotency when no Checkout session id exists. Legacy/missing metadata still goes to instructor `1` through the shared helper for old Stripe retries. |
 | Learner credit booking | `api/slots.js` credit transaction path | LCB + FIFO `credit_transactions` by instructor | Yes | Locks/decrements chosen instructor row, writes BCS and list price. |
 | Instructor-created credit booking | `api/instructor.js` credit transaction path | LCB + FIFO CT by instructor | Yes | Same safe shape as learner booking. |
 | Cancellations | `api/slots.js`, `api/instructor.js` cancel paths | Booking `instructor_id` + `lockBalanceAdjustLCB` | Mostly yes | Returns credit to original instructor row and marks BCS refunded. Not fully transactional with booking update. |

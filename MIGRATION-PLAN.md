@@ -292,18 +292,17 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 
 Create `api/push.js` with actions: `subscribe`, `unsubscribe`. Supports both Web Push (PWA) and Expo Push (app).
 
-### 0.6 — Add PaymentIntent endpoint for in-app Stripe
+### 0.6 — PaymentIntent endpoint for in-app Stripe
 
-The web uses Stripe Checkout (redirect). The app needs a PaymentSheet flow:
+The web uses Stripe Checkout (redirect). The app will use a PaymentSheet flow:
 
 ```javascript
-// api/credits.js — add new action:
 // POST ?action=create-payment-intent
 // Body: { hours, instructor_id }    (learner_id resolved from JWT, same as ?action=checkout)
-// Returns: { clientSecret, ephemeralKey, customerId }
+// Returns: { clientSecret, paymentIntentId, ...pricingEcho }
 ```
 
-Keep the existing `/api/credits?action=checkout` action working for web (it returns a Stripe Checkout URL), but preserve the Slice 2/Thread B contract: learner-facing purchases must pass an explicit same-school active `instructor_id`; `calcBulkTotal` must price server-side using custom learner rate → instructor hourly rate → school default; school bulk tiers apply only when that instructor has `bulk_tiers_enabled = TRUE`; and the metadata must carry `instructor_id`, `amount_pence`, `discount_pct`, and `effective_rate_pence_per_minute` through the `credit_purchase` webhook. The new in-app action shares that same pricing helper and webhook metadata.
+Keep the existing `/api/credits?action=checkout` action working for web (it returns a Stripe Checkout URL), but preserve the Slice 2/Thread B contract: learner-facing purchases must pass an explicit same-school active `instructor_id`; `calcBulkTotal` must price server-side using custom learner rate → instructor hourly rate → school default; school bulk tiers apply only when that instructor has `bulk_tiers_enabled = TRUE`; and the metadata must carry `instructor_id`, `amount_pence`, `discount_pct`, and `effective_rate_pence_per_minute` through the `credit_purchase` webhook. The in-app action shares that same pricing helper and metadata contract, and `payment_intent.succeeded` grants via `grantCredits` with PaymentIntent idempotency.
 
 Native buy-credits screens should mirror the web Slice B contract before creating a payment intent: require a selected instructor, fetch `/api/credits?action=bulk-pricing&instructor_id=...` for display-only hourly/package state, reload the selected instructor balance with `/api/credits?action=balance&instructor_id=...`, and avoid showing bulk savings when `bulk_tiers_enabled` is false. Payment creation still relies on the server-priced `{ hours, instructor_id }` request.
 
