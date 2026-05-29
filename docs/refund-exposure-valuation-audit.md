@@ -2,9 +2,10 @@
 
 Last updated: 2026-05-29
 
-This design slice documents the next step after per-instructor credits: making
-the platform-balance refund exposure number exact enough for accounting without
-changing refund execution, Stripe behaviour, or payout formulas in this PR.
+This audit documents the refund exposure read model after per-instructor
+credits. The exact read model is intentionally read-only: it does not change
+refund execution, Stripe behaviour, payout formulas, or booking/credit mutation
+control flow.
 
 ## Current Advisory Widget
 
@@ -142,21 +143,32 @@ The exact model can classify these rows, but it cannot make them fully exact
 without a backfill policy. The safest behaviour is to surface legacy buckets and
 warnings rather than blend them into a precise-looking headline.
 
-## Future Implementation Plan
+## Implementation Status
 
-1. Add a disabled/pure read-model builder that loads source rows by school and
-   never reads `learner_users.balance_minutes`.
-2. Unit-test valuation buckets with paid Stripe credit, platform goodwill,
-   instructor goodwill, mixed sources, CSA cash refunds, and missing legacy
-   absorber/rate rows.
-3. Add integration tests against an isolated Neon branch for reconciliation
+The platform-balance API now returns exact source-attributed exposure separately
+from the legacy advisory aggregate:
+
+- `exact_refund_exposure_pence`: platform exposure from Stripe-backed unused
+  credit capped by Stripe-originated net cash-in, plus platform-absorbed
+  goodwill.
+- `exact_refund_exposure`: bucketed source details for Stripe-backed,
+  platform-goodwill, instructor-absorbed, legacy unknown absorber, and legacy
+  unpriced exposure.
+- `legacy_advisory_refund_exposure_pence`: the old aggregate
+  `learner_users.balance_minutes` signal.
+- `refund_exposure_pence`: preserved as the legacy advisory value for snapshot
+  compatibility.
+
+## Remaining Implementation Plan
+
+1. Add integration tests against an isolated Neon branch for reconciliation
    between source-level remaining minutes and `learner_credit_balances`.
-4. Add API metadata for both advisory and exact fields while keeping the
-   current dashboard number unchanged.
-5. Update admin UI copy to show advisory aggregate, exact source-level
-   liability, and cash-backed cap as separate values.
-6. Only after review, decide whether the old advisory field should be retired,
-   renamed, or left as a trend signal for snapshots.
+2. Decide whether the legacy advisory field should be retired, renamed, or left
+   permanently as a trend signal for snapshots.
+3. Decide how operator workflows should handle instructor-absorbed goodwill and
+   legacy unknown absorber buckets.
+4. If exact exposure becomes an alerting input, add threshold policy and tests
+   without coupling it to Stripe refund execution.
 
 ## Unresolved Policy Questions
 

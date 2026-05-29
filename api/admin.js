@@ -1770,10 +1770,11 @@ async function handlePayoutOverview(req, res) {
 async function handlePlatformBalance(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const result = await computePlatformBalance(sql, createStripeClient());
+    const result = await computePlatformBalance(sql, createStripeClient(), { schoolId });
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('platform-balance error:', err);

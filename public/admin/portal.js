@@ -2142,6 +2142,9 @@ async function loadPlatformBalance() {
         `).join('')}
       </div>
     `;
+    const exactExposure = data.exact_refund_exposure || {};
+    const legacyAdvisory = data.legacy_advisory_refund_exposure_pence ?? data.refund_exposure_pence;
+    const exactWarnings = Array.isArray(exactExposure.warnings) ? exactExposure.warnings.length : 0;
 
     body.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
@@ -2173,10 +2176,21 @@ async function loadPlatformBalance() {
 
       ${excludedHtml}
 
+      <div style="margin-top:14px;padding:10px 12px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:4px;font-size:0.82rem;color:#166534;">
+        <strong style="color:#14532d;">Exact unused-credit exposure:</strong>
+        <strong>${fmtPence(data.exact_refund_exposure_pence || 0)}</strong>
+        from source-attributed instructor balances.
+        Stripe-backed cap: <strong>${fmtPence(exactExposure.stripe_cash_backed_capped_pence || 0)}</strong>;
+        platform goodwill: <strong>${fmtPence(exactExposure.platform_goodwill_pence || 0)}</strong>;
+        instructor-absorbed: <strong>${fmtPence(exactExposure.instructor_absorbed_pence || 0)}</strong>;
+        legacy/unknown: <strong>${fmtPence((exactExposure.legacy_unknown_absorber_pence || 0) + (exactExposure.legacy_unpriced_pence || 0))}</strong>.
+        ${exactWarnings ? `<span style="color:#92400e;">${exactWarnings} source warning${exactWarnings === 1 ? '' : 's'}.</span>` : ''}
+      </div>
+
       <div style="margin-top:14px;padding:10px 12px;background:#f9fafb;border-left:3px solid #d1d5db;border-radius:4px;font-size:0.82rem;color:#4b5563;">
-        <strong style="color:#374151;">Advisory:</strong> legacy aggregate credit exposure signal
-        ≈ <strong>${fmtPence(data.refund_exposure_pence)}</strong>.
-        Uses the pooled learner balance shadow at the school rate; not an exact per-instructor refund liability and not part of payout viability above.
+        <strong style="color:#374151;">Legacy advisory:</strong> aggregate credit exposure signal
+        ≈ <strong>${fmtPence(legacyAdvisory)}</strong>.
+        Uses the pooled learner balance shadow at the school rate; kept only as a trend/advisory comparator and not part of payout viability above.
       </div>
 
       <p style="margin:12px 0 0;color:#6b7280;font-size:0.78rem;">
