@@ -733,6 +733,27 @@ async function planDirectBookingPreview({ sql, stripe, input }) {
     });
   }
 
+  if (Number(row.bcs_contribution_pence || 0) > 0) {
+    return blockedPreview({
+      refundType: input.refundType,
+      grossRefundPence: gross,
+      lines: [line({
+        learner_id: row.learner_id,
+        instructor_id: row.instructor_id,
+        lesson_booking_id: row.lesson_booking_id,
+        gross_pence_removed: gross,
+        source_fee_pence_used: Number(row.bcs_stripe_fee_pence || 0),
+        fee_withheld_pence: 0,
+      })],
+      reason: input.reason,
+      code: 'BCS_EXECUTE_NOT_ENABLED',
+      message: 'This booking is funded by booking credit sources. Automatic execution for booking-credit-source refunds is not enabled in this slice.',
+      stripe: identities,
+      metadata: operatorContext(row),
+      context: operatorContext(row),
+    });
+  }
+
   let fee = row.bcs_stripe_fee_pence > 0
     ? Number(row.bcs_stripe_fee_pence)
     : (row.booking_stripe_fee_pence == null ? null : Number(row.booking_stripe_fee_pence));

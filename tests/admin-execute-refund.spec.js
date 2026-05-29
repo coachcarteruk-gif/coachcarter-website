@@ -86,8 +86,31 @@ function bookingRow(overrides = {}) {
   };
 }
 
+function bookingCreditSourceRow(overrides = {}) {
+  return {
+    booking_credit_source_id: 55,
+    school_id: 1,
+    booking_id: 7001,
+    credit_transaction_id: 101,
+    minutes_drawn: 90,
+    contribution_pence: 8250,
+    bcs_stripe_fee_pence: 144,
+    learner_id: 61,
+    instructor_id: 4,
+    source_amount_pence: 8250,
+    source_stripe_fee_pence: 144,
+    payment_method: 'card',
+    stripe_session_id: 'cs_bcs',
+    stripe_payment_intent_id: 'pi_bcs',
+    stripe_charge_id: 'ch_bcs',
+    payment_source: 'booking_credit_source',
+    ...overrides,
+  };
+}
+
 function makeSql({
   sourceRow = creditSourceRow(),
+  bookingCreditSource = null,
   bookingSourceRow = null,
   existingEvent = null,
   existingLines = [],
@@ -116,6 +139,10 @@ function makeSql({
 
     if (/FROM credit_transactions ct/i.test(text)) {
       return sourceRow ? [sourceRow] : [];
+    }
+
+    if (/FROM booking_credit_sources bcs/i.test(text)) {
+      return bookingCreditSource ? [bookingCreditSource] : [];
     }
 
     if (/FROM lesson_bookings lb/i.test(text)) {
@@ -637,6 +664,70 @@ test.describe('admin execute-refund endpoint', () => {
     expect(stripeClient.calls).toHaveLength(0);
     expect(sql.calls.some((call) => /payout_line_items/i.test(call.text))).toBe(true);
     expect(sql.calls.some((call) => /INSERT INTO refund_events/i.test(call.text))).toBe(false);
+  });
+
+  test('BCS-backed direct bookings remain blocked before Stripe refund creation', async () => {
+    const sql = makeSql({
+      sourceRow: null,
+      bookingSourceRow: bookingRow({
+        bcs_contribution_pence: 8250,
+        bcs_stripe_fee_pence: 144,
+        stripe_payment_intent_id: 'pi_bcs_direct',
+        stripe_charge_id: 'ch_bcs_direct',
+      }),
+    });
+    const stripeClient = makeStripe();
+
+    const res = await callExecute({
+      body: executeBody({
+        refund_type: 'direct_slot',
+        credit_transaction_id: undefined,
+        lesson_booking_id: 7001,
+        idempotency_key: 'refund-test-key-direct-bcs-disabled',
+      }),
+      sql,
+      stripeClient,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({
+      error: true,
+      code: 'BCS_EXECUTE_NOT_ENABLED',
+      refund_executed: false,
+    });
+    expect(stripeClient.calls).toHaveLength(0);
+    expect(sql.calls.some((call) => /INSERT INTO refund_events/i.test(call.text))).toBe(false);
+    expect(sql.calls.some((call) => /INSERT INTO credit_source_adjustments/i.test(call.text))).toBe(false);
+  });
+
+  test('unsupported booking-credit-source execution is refused before Stripe refund creation', async () => {
+    const sql = makeSql({
+      sourceRow: null,
+      bookingCreditSource: bookingCreditSourceRow(),
+    });
+    const stripeClient = makeStripe();
+
+    const res = await callExecute({
+      body: executeBody({
+        refund_type: 'repeat_offer_partial',
+        credit_transaction_id: undefined,
+        booking_credit_source_id: 55,
+        idempotency_key: 'refund-test-key-bcs-disabled',
+      }),
+      sql,
+      stripeClient,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({
+      error: true,
+      code: 'BCS_EXECUTE_NOT_ENABLED',
+      refund_executed: false,
+    });
+    expect(stripeClient.calls).toHaveLength(0);
+    expect(sql.calls.some((call) => /INSERT INTO refund_events/i.test(call.text))).toBe(false);
+    expect(sql.calls.some((call) => /UPDATE\s+lesson_bookings/i.test(call.text))).toBe(false);
+    expect(sql.calls.some((call) => /payout_line_items/i.test(call.text) && /INSERT|UPDATE|DELETE/i.test(call.text))).toBe(false);
   });
 
   test('operator go is required before planning, Stripe, or SQL mutation', async () => {
