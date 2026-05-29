@@ -2342,8 +2342,13 @@ async function processPayoutsNow() {
 }
 
 // â”€â”€ Initial load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Refund preview is deliberately read-only: it asks the server-side planner for
-// trusted values and never exposes an execution action.
+// Refund preview is the operator evidence step. Execute remains gated by the
+// backend planner rerun, exact confirmation phrase, and idempotency key.
+const REFUND_EXECUTE_CONFIRMATION = 'EXECUTE_REFUND_CONFIRMED';
+let latestRefundPreview = null;
+let latestRefundPreviewPayload = null;
+let latestRefundExecuteIdempotencyKey = null;
+
 const REFUND_SOURCE_COPY = {
   direct_slot: {
     label: 'Lesson booking ID',
@@ -2403,6 +2408,22 @@ function resetRefundPreviewMessages() {
   }
 }
 
+function invalidateRefundPreviewExecution() {
+  latestRefundPreview = null;
+  latestRefundPreviewPayload = null;
+  latestRefundExecuteIdempotencyKey = null;
+}
+
+function resetRefundPreviewForInputChange() {
+  invalidateRefundPreviewExecution();
+  resetRefundPreviewMessages();
+  setRefundPreviewState('Not run');
+  const result = document.getElementById('refund-preview-result');
+  if (result) {
+    result.innerHTML = '<div class="empty-state" style="padding:28px 16px;">Run a fresh preview before executing any refund.</div>';
+  }
+}
+
 function updateRefundSourceFields() {
   const type = document.getElementById('refund-type')?.value || 'direct_slot';
   const copy = REFUND_SOURCE_COPY[type] || REFUND_SOURCE_COPY.direct_slot;
@@ -2417,7 +2438,7 @@ function updateRefundSourceFields() {
   if (help) help.textContent = copy.help;
   if (typeMeaning) typeMeaning.textContent = typeHelp.meaning;
   if (typeExample) typeExample.textContent = typeHelp.example;
-  resetRefundPreviewMessages();
+  resetRefundPreviewForInputChange();
 }
 
 function refundStateBadge(data) {
@@ -2462,9 +2483,169 @@ function refundActionLabel(action) {
   return labels[action] || action || '-';
 }
 
+function hasRefundTarget(data) {
+  const stripe = data?.stripe || {};
+  const evidence = data?.fee_evidence || {};
+  return Boolean(
+    stripe.stripePaymentIntentId
+    || stripe.paymentIntentId
+    || evidence.paymentIntentId
+    || stripe.stripeChargeId
+    || stripe.chargeId
+    || evidence.chargeId
+  );
+}
+
+function refundPreviewExecuteBlocker(data) {
+  if (!data || data.error) return 'Run a successful preview before executing.';
+  if (data.blocked) return 'Blocked previews cannot execute from the admin UI.';
+  if (data.manual_review_required) return 'Manual-review previews cannot execute from the admin UI.';
+  if (data.recommended_operator_action !== 'execute_eligible') return 'The backend planner did not mark this preview as execute eligible.';
+  if (Number(data.net_refund_pence || 0) <= 0) return 'Returned amount must be greater than zero before execution.';
+  if (!hasRefundTarget(data)) return 'Stripe payment evidence is missing or unclear.';
+  if ((data.lines || []).some((line) => line.booking_credit_source_id)) return 'Booking-credit-source-line execution is not enabled in this slice.';
+  return null;
+}
+
+function simpleRefundHash(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function refundSourceKey(payload = {}) {
+  if (payload.lesson_booking_id) return 'booking-' + payload.lesson_booking_id;
+  if (payload.credit_transaction_id) return 'credit-' + payload.credit_transaction_id;
+  if (payload.booking_credit_source_id) return 'bcs-' + payload.booking_credit_source_id;
+  return 'source-unknown';
+}
+
+function buildRefundExecuteIdempotencyKey(data, payload) {
+  const refundType = data.refund_type || payload.refund_type || 'refund';
+  const source = refundSourceKey(payload || {});
+  const fingerprint = JSON.stringify({
+    v: 1,
+    refund_type: refundType,
+    source,
+    gross_refund_pence: data.gross_refund_pence,
+    processing_fee_withheld_pence: data.processing_fee_withheld_pence,
+    net_refund_pence: data.net_refund_pence,
+    reason: data.reason || payload.reason || '',
+    stripe: data.stripe || {},
+    lines: (data.lines || []).map((line) => ({
+      lesson_booking_id: line.lesson_booking_id || null,
+      credit_transaction_id: line.credit_transaction_id || null,
+      booking_credit_source_id: line.booking_credit_source_id || null,
+      gross_pence_removed: line.gross_pence_removed || 0,
+      net_refund_pence: line.net_refund_pence || 0,
+      minutes_adjusted: line.minutes_adjusted || 0,
+    })),
+  });
+  const visibleSource = String(refundType + '-' + source)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 90);
+  return 'refund-execute-v1-' + visibleSource + '-' + simpleRefundHash(fingerprint);
+}
+
+function renderRefundExecuteResult(data) {
+  if (!data) return '';
+  if (data.error) {
+    return '<div style="border:1px solid rgba(239,68,68,0.28);background:var(--red-bg);color:#991b1b;border-radius:8px;padding:14px 16px;margin-top:14px;font-weight:700;">' +
+      esc(data.message || 'Refund execute failed.') +
+      (data.code ? '<div style="font-size:0.78rem;margin-top:6px;font-weight:600;">Code: ' + esc(data.code) + '</div>' : '') +
+      (data.stripe_refund_id ? '<div style="font-size:0.78rem;margin-top:6px;font-weight:600;">Stripe refund: ' + esc(data.stripe_refund_id) + '</div>' : '') +
+    '</div>';
+  }
+
+  const event = data.refund_event || {};
+  const lines = Array.isArray(event.lines) ? event.lines : [];
+  const csaIds = lines
+    .map((line) => line.credit_source_adjustment_id)
+    .filter(Boolean);
+  const title = data.idempotent_replay ? 'Idempotent replay returned existing refund' : 'Refund executed';
+
+  return '<div style="border:1px solid rgba(34,197,94,0.32);background:var(--green-bg);color:#166534;border-radius:8px;padding:14px 16px;margin-top:14px;">' +
+    '<div style="font-weight:800;font-size:1rem;">' + esc(title) + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0 16px;margin-top:10px;">' +
+      refundKv('Stripe refund', event.stripe_refund_id || data.stripe_refund_id) +
+      refundKv('Refund event', event.id) +
+      refundKv('Returned amount', fmtPence(Number(event.net_refund_pence || 0))) +
+      refundKv('Idempotency key', event.idempotency_key || data.idempotency_key || latestRefundExecuteIdempotencyKey) +
+      refundKv('CSA adjustment', csaIds.length ? csaIds.join(', ') : 'None returned') +
+      refundKv('Status', event.status || (data.refund_executed ? 'executed' : 'replayed')) +
+    '</div>' +
+    (lines.length
+      ? '<div style="margin-top:14px;"><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Executed ledger lines</h3>' + renderRefundLines(lines) + '</div>'
+      : '') +
+  '</div>';
+}
+
+function renderRefundExecutePanel(data, payload, executeResult) {
+  const blocker = refundPreviewExecuteBlocker(data);
+  if (blocker) {
+    return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;">' +
+      '<button class="btn" disabled style="opacity:0.55;cursor:not-allowed;">Execution blocked in UI</button>' +
+      '<span style="font-size:0.82rem;color:var(--muted);">' + esc(blocker) + '</span>' +
+    '</div>' + (executeResult ? renderRefundExecuteResult(executeResult) : '');
+  }
+
+  const idempotencyKey = buildRefundExecuteIdempotencyKey(data, payload || {});
+  latestRefundExecuteIdempotencyKey = idempotencyKey;
+  return '<div style="border:1px solid rgba(37,99,235,0.24);background:#eff6ff;border-radius:8px;padding:14px 16px;margin-bottom:18px;">' +
+    '<div style="font-weight:800;color:#1e3a8a;margin-bottom:8px;">Execute clean preview</div>' +
+    '<div style="font-size:0.86rem;color:#1e40af;line-height:1.45;margin-bottom:12px;">Review the preserved preview evidence above and below. Execution posts only to the gated backend path, which reruns the planner before Stripe.</div>' +
+    '<label for="refund-execute-idempotency-key" style="display:block;font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:#1e3a8a;margin-bottom:5px;">Idempotency key</label>' +
+    '<input id="refund-execute-idempotency-key" readonly value="' + esc(idempotencyKey) + '" style="width:100%;padding:10px 12px;border:1px solid rgba(37,99,235,0.28);border-radius:8px;background:#fff;font-size:0.85rem;font-family:monospace;margin-bottom:10px;">' +
+    '<label for="refund-execute-confirmation" style="display:block;font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:#1e3a8a;margin-bottom:5px;">Confirmation phrase</label>' +
+    '<input id="refund-execute-confirmation" autocomplete="off" placeholder="' + REFUND_EXECUTE_CONFIRMATION + '" style="width:100%;padding:10px 12px;border:1px solid rgba(37,99,235,0.28);border-radius:8px;background:#fff;font-size:0.9rem;margin-bottom:10px;">' +
+    '<div id="refund-execute-error" role="alert" style="display:none;margin-bottom:10px;padding:9px 10px;border-radius:8px;background:var(--red-bg);color:#991b1b;font-size:0.84rem;font-weight:700;"></div>' +
+    '<button type="button" class="btn btn-primary" id="btn-refund-execute" data-action="execute-refund" style="justify-content:center;">Execute refund</button>' +
+    '<span style="display:block;font-size:0.78rem;color:#1e40af;margin-top:8px;">This UI does not directly mutate bookings, payouts, credits, refund ledgers, or credit-source adjustments.</span>' +
+    renderRefundExecuteResult(executeResult) +
+  '</div>';
+}
+
+function refundPreviewExecutionCopy(executeResult) {
+  if (!executeResult) {
+    return {
+      text: 'Preview complete. No refund has been issued yet.',
+      bg: '#f0fdf4',
+      fg: '#166534',
+    };
+  }
+  if (!executeResult.error) {
+    return {
+      text: executeResult.idempotent_replay
+        ? 'Execute returned an existing idempotent refund. Review the result evidence below.'
+        : 'Execute response received. Review the Stripe and ledger evidence below.',
+      bg: '#f0fdf4',
+      fg: '#166534',
+    };
+  }
+  if (executeResult.stripe_refund_id) {
+    return {
+      text: 'Execute failed after a Stripe refund id was returned. Treat this as an incident and follow the runbook before retrying.',
+      bg: 'var(--red-bg)',
+      fg: '#991b1b',
+    };
+  }
+  return {
+    text: 'Execute failed. Review the backend response below before retrying.',
+    bg: 'var(--amber-bg)',
+    fg: '#92400e',
+  };
+}
+
 function renderRefundOperatorContext(data) {
   const rows = [
     ['Recommended action', refundActionLabel(data.recommended_operator_action)],
+    ['Reason', data.reason],
     ['Learner', data.learner_name],
     ['Learner email', data.learner_email],
     ['Instructor', data.instructor_name],
@@ -2506,6 +2687,7 @@ function renderRefundPreviewResult(data) {
   setRefundPreviewState(data);
 
   if (data && data.error) {
+    invalidateRefundPreviewExecution();
     result.innerHTML = '<div style="border:1px solid rgba(239,68,68,0.28);background:var(--red-bg);color:#991b1b;border-radius:8px;padding:14px 16px;font-weight:700;">' +
       esc(data.message || 'Refund preview failed.') +
       (data.code ? '<div style="font-size:0.78rem;margin-top:6px;font-weight:600;">Code: ' + esc(data.code) + '</div>' : '') +
@@ -2532,7 +2714,7 @@ function renderRefundPreviewResult(data) {
     border: 'rgba(34,197,94,0.32)',
     fg: '#166534',
     title: 'Preview ready',
-    body: 'Server-side planner returned an itemised preview. Execution is not available in this slice.'
+    body: 'Server-side planner returned an itemised preview. Clean supported previews can be executed after confirmation.'
   };
 
   const warnings = Array.isArray(data.warnings) && data.warnings.length
@@ -2541,7 +2723,10 @@ function renderRefundPreviewResult(data) {
       '</div>'
     : '';
   const previewOnlyCopy = (!blocked && !manual)
-    ? '<div style="margin:-6px 0 18px;padding:10px 12px;border-radius:8px;background:#f0fdf4;color:#166534;font-size:0.88rem;font-weight:700;">Preview only. No refund has been issued.</div>'
+    ? (function () {
+      const copy = refundPreviewExecutionCopy();
+      return '<div style="margin:-6px 0 18px;padding:10px 12px;border-radius:8px;background:' + copy.bg + ';color:' + copy.fg + ';font-size:0.88rem;font-weight:700;">' + esc(copy.text) + '</div>';
+    })()
     : '';
 
   result.innerHTML =
@@ -2560,10 +2745,73 @@ function renderRefundPreviewResult(data) {
       '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Operator context</h3>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px;">' + renderRefundOperatorContext(data) + '</div>' +
     '</div>' +
-    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;">' +
-      '<button class="btn" disabled style="opacity:0.55;cursor:not-allowed;">Execution is coming in a later reviewed slice</button>' +
-      '<span style="font-size:0.82rem;color:var(--muted);">This screen is preview-only and cannot mutate Stripe, bookings, credits, payouts, or refund ledger rows.</span>' +
+    renderRefundExecutePanel(data, latestRefundPreviewPayload) +
+    '<div style="margin-bottom:18px;">' +
+      '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger line evidence</h3>' +
+      renderRefundLines(data.lines) +
     '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">' +
+      '<div><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Fee evidence</h3>' + refundObjectRows(data.fee_evidence) + '</div>' +
+      '<div><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Stripe references</h3>' + refundObjectRows(data.stripe) + '</div>' +
+      '<div><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Metadata</h3>' + refundObjectRows(data.metadata) + '</div>' +
+    '</div>' +
+    warnings;
+}
+
+function rerenderRefundPreviewWithExecuteResult(executeResult) {
+  if (!latestRefundPreview) return;
+  const result = document.getElementById('refund-preview-result');
+  if (!result) return;
+  const data = latestRefundPreview;
+  setRefundPreviewState(data);
+
+  const blocked = Boolean(data.blocked);
+  const manual = Boolean(data.manual_review_required);
+  const tone = blocked ? {
+    bg: 'var(--red-bg)',
+    border: 'rgba(239,68,68,0.30)',
+    fg: '#991b1b',
+    title: 'Blocked',
+    body: data.message || 'The planner blocked automatic refund handling.'
+  } : manual ? {
+    bg: 'var(--amber-bg)',
+    border: 'rgba(245,158,11,0.35)',
+    fg: '#92400e',
+    title: 'Manual review required',
+    body: data.message || 'The planner requires manual review before execution.'
+  } : {
+    bg: 'var(--green-bg)',
+    border: 'rgba(34,197,94,0.32)',
+    fg: '#166534',
+    title: 'Preview ready',
+    body: 'Server-side planner returned an itemised preview. Clean supported previews can be executed after confirmation.'
+  };
+
+  const warnings = Array.isArray(data.warnings) && data.warnings.length
+    ? '<div style="margin-top:12px;"><div style="font-size:0.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Warnings</div>' +
+      data.warnings.map(w => '<div style="padding:8px 10px;border-radius:6px;background:#fff7ed;color:#9a3412;font-size:0.86rem;margin-bottom:6px;">' + esc(w) + '</div>').join('') +
+      '</div>'
+    : '';
+
+  const executionCopy = refundPreviewExecutionCopy(executeResult);
+
+  result.innerHTML =
+    '<div style="border:1px solid ' + tone.border + ';background:' + tone.bg + ';color:' + tone.fg + ';border-radius:8px;padding:14px 16px;margin-bottom:16px;">' +
+      '<div style="font-weight:800;font-size:1rem;">' + esc(tone.title) + '</div>' +
+      '<div style="font-size:0.88rem;line-height:1.45;margin-top:4px;">' + esc(tone.body) + '</div>' +
+      (data.code ? '<div style="font-size:0.78rem;font-weight:700;margin-top:8px;">Code: ' + esc(data.code) + '</div>' : '') +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;">' +
+      '<div class="stat-card"><div class="stat-value" style="font-size:1.6rem;">' + fmtPence(Number(data.gross_refund_pence || 0)) + '</div><div class="stat-label">Gross refund</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="font-size:1.6rem;">' + fmtPence(Number(data.processing_fee_withheld_pence || 0)) + '</div><div class="stat-label">Processing fee</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="font-size:1.6rem;">' + fmtPence(Number(data.net_refund_pence || 0)) + '</div><div class="stat-label">Returned amount</div></div>' +
+    '</div>' +
+    '<div style="margin:-6px 0 18px;padding:10px 12px;border-radius:8px;background:' + executionCopy.bg + ';color:' + executionCopy.fg + ';font-size:0.88rem;font-weight:700;">' + esc(executionCopy.text) + '</div>' +
+    '<div style="margin-bottom:18px;">' +
+      '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Operator context</h3>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px;">' + renderRefundOperatorContext(data) + '</div>' +
+    '</div>' +
+    renderRefundExecutePanel(data, latestRefundPreviewPayload, executeResult) +
     '<div style="margin-bottom:18px;">' +
       '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger line evidence</h3>' +
       renderRefundLines(data.lines) +
@@ -2628,10 +2876,11 @@ async function submitRefundPreview(e) {
   }
 
   try {
+    const payload = buildRefundPreviewPayload();
     const res = await fetchAdmin('/api/admin?action=refund-preview', {
       method: 'POST',
       headers: HEADERS,
-      body: JSON.stringify(buildRefundPreviewPayload())
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (!res.ok || data.error) {
@@ -2642,8 +2891,12 @@ async function submitRefundPreview(e) {
       });
       return;
     }
+    latestRefundPreview = data;
+    latestRefundPreviewPayload = payload;
+    latestRefundExecuteIdempotencyKey = null;
     renderRefundPreviewResult(data);
   } catch (error) {
+    invalidateRefundPreviewExecution();
     renderRefundPreviewResult({
       error: true,
       code: 'REFUND_PREVIEW_FAILED',
@@ -2653,6 +2906,88 @@ async function submitRefundPreview(e) {
     if (btn) {
       btn.disabled = false;
       btn.textContent = 'Preview refund';
+    }
+  }
+}
+
+function buildRefundExecutePayload() {
+  const confirmation = (document.getElementById('refund-execute-confirmation')?.value || '').trim();
+  const idempotencyKey = (document.getElementById('refund-execute-idempotency-key')?.value || '').trim();
+  return {
+    ...(latestRefundPreviewPayload || {}),
+    operator_go: confirmation,
+    idempotency_key: idempotencyKey,
+  };
+}
+
+async function submitRefundExecute() {
+  const errorBox = document.getElementById('refund-execute-error');
+  const button = document.getElementById('btn-refund-execute');
+  if (errorBox) {
+    errorBox.style.display = 'none';
+    errorBox.textContent = '';
+  }
+
+  const blocker = refundPreviewExecuteBlocker(latestRefundPreview);
+  if (blocker) {
+    if (errorBox) {
+      errorBox.textContent = blocker;
+      errorBox.style.display = 'block';
+    }
+    return;
+  }
+
+  const payload = buildRefundExecutePayload();
+  if (!payload.idempotency_key) {
+    if (errorBox) {
+      errorBox.textContent = 'A visible idempotency key is required before execution.';
+      errorBox.style.display = 'block';
+    }
+    return;
+  }
+  if (payload.operator_go !== REFUND_EXECUTE_CONFIRMATION) {
+    if (errorBox) {
+      errorBox.textContent = 'Enter the exact confirmation phrase before executing.';
+      errorBox.style.display = 'block';
+    }
+    return;
+  }
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Executing...';
+  }
+
+  try {
+    const res = await fetchAdmin('/api/admin?action=execute-refund', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      rerenderRefundPreviewWithExecuteResult({
+        error: true,
+        code: data.code || 'REFUND_EXECUTE_FAILED',
+        message: data.message || data.error || 'Refund execute failed.',
+        stripe_refund_id: data.stripe_refund_id || null,
+      });
+      return;
+    }
+    rerenderRefundPreviewWithExecuteResult({
+      ...data,
+      idempotency_key: payload.idempotency_key,
+    });
+  } catch (error) {
+    rerenderRefundPreviewWithExecuteResult({
+      error: true,
+      code: 'REFUND_EXECUTE_FAILED',
+      message: error.message || 'Refund execute failed.',
+    });
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Execute refund';
     }
   }
 }
@@ -2678,6 +3013,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'remove-blackout') removeBlackout(parseInt(t.dataset.idx, 10));
   else if (a === 'edit-booking') openAdminEditBooking(parseInt(t.dataset.id, 10));
   else if (a === 'open-refund-preview') openRefundPreviewFromBooking(parseInt(t.dataset.id, 10));
+  else if (a === 'execute-refund') submitRefundExecute();
   else if (a === 'mark-complete') markComplete(parseInt(t.dataset.id, 10));
   else if (a === 'show-learner-detail') showLearnerDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-adjust-credits') openAdjustCredits(t.dataset.learnerId, parseInt(t.dataset.balance, 10));
@@ -2853,6 +3189,10 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
     refundType.addEventListener('change', updateRefundSourceFields);
     updateRefundSourceFields();
   }
+  var refundSource = document.getElementById('refund-source-id');
+  if (refundSource) refundSource.addEventListener('input', resetRefundPreviewForInputChange);
+  var refundReason = document.getElementById('refund-reason');
+  if (refundReason) refundReason.addEventListener('input', resetRefundPreviewForInputChange);
   bind('btn-save-referral-config', saveReferralConfig);
   var refEnabled = document.getElementById('ref-enabled');
   if (refEnabled) refEnabled.addEventListener('change', function () { updateRefFieldsVisibility(this.checked); });
