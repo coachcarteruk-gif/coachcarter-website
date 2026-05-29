@@ -363,6 +363,36 @@ test.describe('refund preview planner', () => {
     expect(result.message).toContain('manual bank refund');
   });
 
+  test('blocks BCS-backed direct bookings from automatic execute eligibility', async () => {
+    const sql = makeSql(() => [bookingRow({
+      bcs_contribution_pence: 8250,
+      bcs_stripe_fee_pence: 144,
+      stripe_payment_intent_id: 'pi_bcs_direct',
+      stripe_charge_id: 'ch_bcs_direct',
+    })]);
+
+    const result = await plan({
+      schoolId: 1,
+      refundType: 'direct_slot',
+      lessonBookingId: 7001,
+      reason: 'bcs backed direct booking',
+    }, sql);
+
+    expect(result).toMatchObject({
+      ok: true,
+      blocked: true,
+      manual_review_required: true,
+      code: 'BCS_EXECUTE_NOT_ENABLED',
+      recommended_operator_action: 'blocked',
+      gross_refund_pence: 8250,
+      stripe: {
+        stripePaymentIntentId: 'pi_bcs_direct',
+        stripeChargeId: 'ch_bcs_direct',
+      },
+    });
+    expect(result.message).toContain('booking credit sources');
+  });
+
   test('blocks direct booking preview when caller requests more than computed refundable value', async () => {
     const sql = makeSql(() => [bookingRow({ list_price_pence: 8250 })]);
 

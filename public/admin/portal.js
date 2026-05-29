@@ -2342,8 +2342,12 @@ async function processPayoutsNow() {
 }
 
 // â”€â”€ Initial load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Refund preview is deliberately read-only: it asks the server-side planner for
-// trusted values and never exposes an execution action.
+// Refund execution is only exposed from a clean preview and still goes through
+// the server-side execute planner; the browser never submits trusted amounts.
+const REFUND_EXECUTE_CONFIRMATION = 'EXECUTE_REFUND_CONFIRMED';
+const REFUND_EXECUTE_KEY_PREFIX = 'cc_refund_execute_key:';
+let currentRefundPreview = null;
+
 const REFUND_SOURCE_COPY = {
   direct_slot: {
     label: 'Lesson booking ID',
@@ -2400,6 +2404,11 @@ function resetRefundPreviewMessages() {
   if (err) {
     err.style.display = 'none';
     err.textContent = '';
+  }
+  const status = document.getElementById('refund-execute-status');
+  if (status) {
+    status.style.display = 'none';
+    status.textContent = '';
   }
 }
 
@@ -2462,6 +2471,106 @@ function refundActionLabel(action) {
   return labels[action] || action || '-';
 }
 
+function refundPreviewHasStripeTarget(data) {
+  const stripe = data?.stripe || {};
+  const feeEvidence = data?.fee_evidence || {};
+  return Boolean(
+    stripe.stripePaymentIntentId ||
+    stripe.paymentIntentId ||
+    feeEvidence.paymentIntentId ||
+    stripe.stripeChargeId ||
+    stripe.chargeId ||
+    feeEvidence.chargeId
+  );
+}
+
+function refundExecuteBlockReason(data) {
+  if (!data || data.error) return 'Run a successful refund preview before executing.';
+  if (data.blocked) return data.message || 'This preview is blocked and must not be executed.';
+  if (data.manual_review_required) return data.message || 'This preview requires manual review and must not be executed automatically.';
+  if (data.recommended_operator_action === 'manual_bank_review_required') return 'Manual bank review cases cannot be executed from this UI.';
+  if (data.recommended_operator_action !== 'execute_eligible') {
+    return 'The planner did not mark this preview as execute eligible.';
+  }
+  if ((data.lines || []).some((line) => line.booking_credit_source_id)) {
+    return 'Booking-credit-source refund execution is not enabled in this slice.';
+  }
+  if (Number(data.net_refund_pence || 0) <= 0) return 'Net refund amount must be greater than zero.';
+  if (!refundPreviewHasStripeTarget(data)) return 'Stripe refund target is missing; use manual review.';
+  return null;
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) return '[' + value.map(stableStringify).join(',') + ']';
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value).sort().map(function (key) {
+      return JSON.stringify(key) + ':' + stableStringify(value[key]);
+    }).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+
+function refundHash(value) {
+  const text = stableStringify(value);
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function buildRefundExecuteFingerprint(payload, data) {
+  return {
+    payload,
+    preview: {
+      refund_type: data.refund_type,
+      reason: data.reason,
+      gross_refund_pence: data.gross_refund_pence,
+      processing_fee_withheld_pence: data.processing_fee_withheld_pence,
+      net_refund_pence: data.net_refund_pence,
+      stripe: data.stripe || null,
+      lines: (data.lines || []).map(function (line) {
+        return {
+          credit_transaction_id: line.credit_transaction_id || null,
+          booking_credit_source_id: line.booking_credit_source_id || null,
+          lesson_booking_id: line.lesson_booking_id || null,
+          learner_id: line.learner_id || null,
+          instructor_id: line.instructor_id || null,
+          gross_pence_removed: line.gross_pence_removed,
+          net_refund_pence: line.net_refund_pence,
+          minutes_adjusted: line.minutes_adjusted || 0
+        };
+      })
+    }
+  };
+}
+
+function newRefundIdempotencyKey(fingerprintHash) {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return 'refund-ui-' + fingerprintHash + '-' + window.crypto.randomUUID();
+  }
+  return 'refund-ui-' + fingerprintHash + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12);
+}
+
+function getRefundIdempotencyKey(payload, data) {
+  const fingerprintHash = refundHash(buildRefundExecuteFingerprint(payload, data));
+  const storageKey = REFUND_EXECUTE_KEY_PREFIX + fingerprintHash;
+  try {
+    const existing = window.sessionStorage.getItem(storageKey);
+    if (existing) return existing;
+    const generated = newRefundIdempotencyKey(fingerprintHash);
+    window.sessionStorage.setItem(storageKey, generated);
+    return generated;
+  } catch (err) {
+    return newRefundIdempotencyKey(fingerprintHash);
+  }
+}
+
+function refundPayloadMatchesCurrentForm(payload) {
+  return stableStringify(payload || {}) === stableStringify(buildRefundPreviewPayload());
+}
+
 function renderRefundOperatorContext(data) {
   const rows = [
     ['Recommended action', refundActionLabel(data.recommended_operator_action)],
@@ -2500,6 +2609,83 @@ function renderRefundLines(lines) {
     '</tbody></table></div>';
 }
 
+function renderRefundExecutePanel(data) {
+  const blockReason = refundExecuteBlockReason(data);
+  const idempotencyKey = currentRefundPreview?.idempotencyKey || '';
+  if (blockReason) {
+    return '<div style="border:1px solid rgba(245,158,11,0.35);background:var(--amber-bg);color:#92400e;border-radius:8px;padding:14px 16px;margin-bottom:18px;">' +
+      '<div style="font-weight:800;">Execution unavailable</div>' +
+      '<div style="font-size:0.88rem;line-height:1.45;margin-top:4px;">' + esc(blockReason) + '</div>' +
+    '</div>';
+  }
+
+  return '<div style="border:1px solid rgba(34,197,94,0.32);background:#f0fdf4;border-radius:8px;padding:14px 16px;margin-bottom:18px;">' +
+    '<div style="font-weight:800;color:#166534;">Clean preview can be executed</div>' +
+    '<div style="font-size:0.88rem;line-height:1.45;color:#166534;margin-top:4px;">Use the reviewed backend execute path only after approval. The server will rerun the planner and refuse blocked or manual-review cases.</div>' +
+    '<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(22,101,52,0.20);border-radius:8px;background:#fff;">' +
+      '<div style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">Idempotency key</div>' +
+      '<div style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:0.8rem;word-break:break-all;margin-top:3px;">' + esc(idempotencyKey) + '</div>' +
+    '</div>' +
+    '<label for="refund-execute-confirmation" style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#166534;margin-top:12px;margin-bottom:6px;">Confirmation phrase</label>' +
+    '<input id="refund-execute-confirmation" data-action="validate-refund-execute-confirmation" autocomplete="off" placeholder="' + esc(REFUND_EXECUTE_CONFIRMATION) + '" style="width:100%;padding:10px 12px;border:1px solid rgba(22,101,52,0.25);border-radius:8px;background:#fff;font-size:0.9rem;">' +
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;">' +
+      '<button type="button" class="btn btn-primary" id="btn-execute-refund" data-action="execute-refund" disabled>Execute refund</button>' +
+      '<span style="font-size:0.82rem;color:#166534;">Requires exact phrase. Amount and scope stay server-authoritative.</span>' +
+    '</div>' +
+    '<div id="refund-execute-status" role="alert" style="display:none;margin-top:12px;padding:10px 12px;border-radius:8px;font-size:0.86rem;font-weight:700;"></div>' +
+  '</div>';
+}
+
+function updateRefundExecuteButton() {
+  const btn = document.getElementById('btn-execute-refund');
+  const input = document.getElementById('refund-execute-confirmation');
+  if (!btn || !input) return;
+  const payloadStillMatches = currentRefundPreview && refundPayloadMatchesCurrentForm(currentRefundPreview.payload);
+  btn.disabled = input.value.trim() !== REFUND_EXECUTE_CONFIRMATION || !payloadStillMatches;
+}
+
+function setRefundExecuteStatus(message, type) {
+  const el = document.getElementById('refund-execute-status');
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.display = message ? 'block' : 'none';
+  const palette = type === 'error'
+    ? { bg: 'var(--red-bg)', fg: '#991b1b' }
+    : type === 'success'
+      ? { bg: 'var(--green-bg)', fg: '#166534' }
+      : { bg: 'var(--amber-bg)', fg: '#92400e' };
+  el.style.background = palette.bg;
+  el.style.color = palette.fg;
+}
+
+function renderExecutedRefundResult(data) {
+  const event = data?.refund_event || {};
+  const title = data.idempotent_replay
+    ? 'Existing refund returned for this idempotency key.'
+    : 'Refund executed through the approved backend path.';
+  return '<div style="border:1px solid rgba(34,197,94,0.32);background:var(--green-bg);color:#166534;border-radius:8px;padding:14px 16px;margin-bottom:18px;">' +
+      '<div style="font-weight:800;">' + esc(title) + '</div>' +
+      '<div style="font-size:0.88rem;line-height:1.45;margin-top:4px;">Verify the Stripe reference and ledger lines before learner communication.</div>' +
+    '</div>' +
+    '<div style="margin-bottom:18px;">' +
+      '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Refund event</h3>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px;">' +
+        refundKv('Refund event ID', event.id) +
+        refundKv('Status', event.status) +
+        refundKv('Refund type', event.refund_type) +
+        refundKv('Idempotency key', event.idempotency_key) +
+        refundKv('Gross refund', fmtPence(Number(event.gross_refund_pence || 0))) +
+        refundKv('Processing fee withheld', fmtPence(Number(event.processing_fee_withheld_pence || 0))) +
+        refundKv('Returned amount', fmtPence(Number(event.net_refund_pence || 0))) +
+        refundKv('Stripe refund reference', event.stripe_refund_id || 'Not applicable') +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-bottom:18px;">' +
+      '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger line summary</h3>' +
+      renderRefundLines(event.lines || []) +
+    '</div>';
+}
+
 function renderRefundPreviewResult(data) {
   const result = document.getElementById('refund-preview-result');
   if (!result) return;
@@ -2510,6 +2696,7 @@ function renderRefundPreviewResult(data) {
       esc(data.message || 'Refund preview failed.') +
       (data.code ? '<div style="font-size:0.78rem;margin-top:6px;font-weight:600;">Code: ' + esc(data.code) + '</div>' : '') +
     '</div>';
+    currentRefundPreview = null;
     return;
   }
 
@@ -2532,7 +2719,7 @@ function renderRefundPreviewResult(data) {
     border: 'rgba(34,197,94,0.32)',
     fg: '#166534',
     title: 'Preview ready',
-    body: 'Server-side planner returned an itemised preview. Execution is not available in this slice.'
+    body: 'Server-side planner returned an itemised preview. Clean automatic cases can be executed below.'
   };
 
   const warnings = Array.isArray(data.warnings) && data.warnings.length
@@ -2541,7 +2728,7 @@ function renderRefundPreviewResult(data) {
       '</div>'
     : '';
   const previewOnlyCopy = (!blocked && !manual)
-    ? '<div style="margin:-6px 0 18px;padding:10px 12px;border-radius:8px;background:#f0fdf4;color:#166534;font-size:0.88rem;font-weight:700;">Preview only. No refund has been issued.</div>'
+    ? '<div style="margin:-6px 0 18px;padding:10px 12px;border-radius:8px;background:#f0fdf4;color:#166534;font-size:0.88rem;font-weight:700;">Preview only. No refund has been issued yet.</div>'
     : '';
 
   result.innerHTML =
@@ -2561,9 +2748,9 @@ function renderRefundPreviewResult(data) {
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px;">' + renderRefundOperatorContext(data) + '</div>' +
     '</div>' +
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;">' +
-      '<button class="btn" disabled style="opacity:0.55;cursor:not-allowed;">Execution is coming in a later reviewed slice</button>' +
-      '<span style="font-size:0.82rem;color:var(--muted);">This screen is preview-only and cannot mutate Stripe, bookings, credits, payouts, or refund ledger rows.</span>' +
+      '<span style="font-size:0.82rem;color:var(--muted);">Execute uses admin?action=execute-refund. It must not mutate booking status or payout rows.</span>' +
     '</div>' +
+    renderRefundExecutePanel(data) +
     '<div style="margin-bottom:18px;">' +
       '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger line evidence</h3>' +
       renderRefundLines(data.lines) +
@@ -2618,6 +2805,7 @@ async function submitRefundPreview(e) {
   }
 
   const result = document.getElementById('refund-preview-result');
+  currentRefundPreview = null;
   if (result) {
     result.innerHTML = '<div class="empty-state" style="padding:28px 16px;">Preparing refund preview...</div>';
   }
@@ -2628,10 +2816,11 @@ async function submitRefundPreview(e) {
   }
 
   try {
+    const previewPayload = buildRefundPreviewPayload();
     const res = await fetchAdmin('/api/admin?action=refund-preview', {
       method: 'POST',
       headers: HEADERS,
-      body: JSON.stringify(buildRefundPreviewPayload())
+      body: JSON.stringify(previewPayload)
     });
     const data = await res.json();
     if (!res.ok || data.error) {
@@ -2642,8 +2831,14 @@ async function submitRefundPreview(e) {
       });
       return;
     }
+    currentRefundPreview = {
+      payload: previewPayload,
+      data,
+      idempotencyKey: getRefundIdempotencyKey(previewPayload, data)
+    };
     renderRefundPreviewResult(data);
   } catch (error) {
+    currentRefundPreview = null;
     renderRefundPreviewResult({
       error: true,
       code: 'REFUND_PREVIEW_FAILED',
@@ -2653,6 +2848,68 @@ async function submitRefundPreview(e) {
     if (btn) {
       btn.disabled = false;
       btn.textContent = 'Preview refund';
+    }
+  }
+}
+
+async function executeRefundFromPreview() {
+  if (!currentRefundPreview) {
+    setRefundExecuteStatus('Run a clean preview before executing.', 'error');
+    return;
+  }
+  if (!refundPayloadMatchesCurrentForm(currentRefundPreview.payload)) {
+    setRefundExecuteStatus('The form changed after preview. Run a fresh preview before executing.', 'error');
+    updateRefundExecuteButton();
+    return;
+  }
+  const blockReason = refundExecuteBlockReason(currentRefundPreview.data);
+  if (blockReason) {
+    setRefundExecuteStatus(blockReason, 'error');
+    return;
+  }
+  const phrase = (document.getElementById('refund-execute-confirmation')?.value || '').trim();
+  if (phrase !== REFUND_EXECUTE_CONFIRMATION) {
+    setRefundExecuteStatus('Type the exact confirmation phrase before executing.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-execute-refund');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Executing...';
+  }
+  setRefundExecuteStatus('Executing via admin?action=execute-refund. Keep this idempotency key with the operator evidence.', 'pending');
+
+  try {
+    const res = await fetchAdmin('/api/admin?action=execute-refund', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        ...currentRefundPreview.payload,
+        idempotency_key: currentRefundPreview.idempotencyKey,
+        operator_go: REFUND_EXECUTE_CONFIRMATION
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      setRefundExecuteStatus((data.message || data.error || 'Refund execution failed.') + (data.code ? ' Code: ' + data.code : ''), 'error');
+      return;
+    }
+    const result = document.getElementById('refund-preview-result');
+    if (result) {
+      result.innerHTML = renderExecutedRefundResult(data);
+      const badge = document.getElementById('refund-preview-state');
+      if (badge) {
+        badge.textContent = data.idempotent_replay ? 'Idempotent replay' : 'Executed';
+        badge.className = 'badge badge-green';
+      }
+    }
+  } catch (error) {
+    setRefundExecuteStatus(error.message || 'Refund execution failed.', 'error');
+  } finally {
+    if (btn) {
+      btn.textContent = 'Execute refund';
+      updateRefundExecuteButton();
     }
   }
 }
@@ -2678,6 +2935,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'remove-blackout') removeBlackout(parseInt(t.dataset.idx, 10));
   else if (a === 'edit-booking') openAdminEditBooking(parseInt(t.dataset.id, 10));
   else if (a === 'open-refund-preview') openRefundPreviewFromBooking(parseInt(t.dataset.id, 10));
+  else if (a === 'execute-refund') executeRefundFromPreview();
   else if (a === 'mark-complete') markComplete(parseInt(t.dataset.id, 10));
   else if (a === 'show-learner-detail') showLearnerDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-adjust-credits') openAdjustCredits(t.dataset.learnerId, parseInt(t.dataset.balance, 10));
@@ -2709,9 +2967,13 @@ document.addEventListener('change', function (e) {
   else if (t.dataset.action === 'toggle-bulk-select') toggleBulkSelect(parseInt(t.dataset.id, 10), t.checked);
 });
 document.addEventListener('input', function (e) {
+  if (e.target && (e.target.id === 'refund-source-id' || e.target.id === 'refund-reason')) {
+    updateRefundExecuteButton();
+  }
   var t = e.target.closest('[data-action]');
   if (!t) return;
   if (t.dataset.action === 'render-learners') renderLearners();
+  else if (t.dataset.action === 'validate-refund-execute-confirmation') updateRefundExecuteButton();
 });
 // â”€â”€ Referrals section â”€â”€
 async function loadReferrals() {
@@ -2850,7 +3112,10 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   if (refundForm) refundForm.addEventListener('submit', submitRefundPreview);
   var refundType = document.getElementById('refund-type');
   if (refundType) {
-    refundType.addEventListener('change', updateRefundSourceFields);
+    refundType.addEventListener('change', function () {
+      updateRefundSourceFields();
+      updateRefundExecuteButton();
+    });
     updateRefundSourceFields();
   }
   bind('btn-save-referral-config', saveReferralConfig);
