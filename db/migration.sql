@@ -872,6 +872,26 @@ SELECT setval('schools_id_seq', GREATEST(nextval('schools_id_seq'), 2));
 -- MULTI-TENANT: SCHOOL PAYOUTS
 -- ══════════════════════════════════════════════════════════════════════════════
 
+CREATE TABLE IF NOT EXISTS instructor_availability_overrides (
+  id              SERIAL PRIMARY KEY,
+  instructor_id   INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
+  school_id       INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  override_date   DATE NOT NULL,
+  start_time      TIME NOT NULL,
+  end_time        TIME NOT NULL,
+  active          BOOLEAN NOT NULL DEFAULT TRUE,
+  note            TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (start_time < end_time)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_instructor_availability_override_slot
+  ON instructor_availability_overrides(instructor_id, school_id, override_date, start_time, end_time);
+
+CREATE INDEX IF NOT EXISTS idx_instructor_availability_overrides_lookup
+  ON instructor_availability_overrides(school_id, instructor_id, override_date)
+  WHERE active = TRUE;
+
 CREATE TABLE IF NOT EXISTS school_payouts (
   id                 SERIAL PRIMARY KEY,
   school_id          INTEGER NOT NULL REFERENCES schools(id),

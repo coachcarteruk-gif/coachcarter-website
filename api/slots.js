@@ -150,6 +150,88 @@ function findAdjacentTravelSpacingConflict({ slotStart, slotEnd, pickupPostcode,
   return null;
 }
 
+async function slotFitsActiveAvailability(sql, {
+  instructorId,
+  schoolId,
+  date,
+  startTime,
+  endTime
+}) {
+  const slotStart = timeToMinutes(startTime);
+  const slotEnd = timeToMinutes(endTime);
+  const dayOfWeek = new Date(date + 'T00:00:00Z').getUTCDay();
+
+  const [instructor] = await sql`
+    SELECT COALESCE(min_booking_notice_hours, 24) AS min_booking_notice_hours
+    FROM instructors
+    WHERE id = ${instructorId}
+      AND school_id = ${schoolId}
+      AND active = true
+  `;
+  if (!instructor) return false;
+
+  const minNoticeHours = Math.max(0, parseInt(instructor.min_booking_notice_hours, 10) || 0);
+  if (minNoticeHours > 0) {
+    const slotDateTime = new Date(date + 'T00:00:00Z');
+    slotDateTime.setUTCHours(Math.floor(slotStart / 60), slotStart % 60, 0, 0);
+    if (((slotDateTime - new Date()) / 3600000) < minNoticeHours) return false;
+  }
+
+  let overrideWindows = [];
+  try {
+    overrideWindows = await sql`
+      SELECT start_time::text AS start_time, end_time::text AS end_time
+      FROM instructor_availability_overrides
+      WHERE instructor_id = ${instructorId}
+        AND school_id = ${schoolId}
+        AND override_date = ${date}::date
+        AND active = true
+    `;
+  } catch (_) {}
+
+  const blackoutRows = await sql`
+    SELECT 1
+    FROM instructor_blackout_dates
+    WHERE instructor_id = ${instructorId}
+      AND school_id = ${schoolId}
+      AND blackout_date <= ${date}::date
+      AND end_date >= ${date}::date
+    LIMIT 1
+  `;
+
+  let externalEvents = [];
+  try {
+    externalEvents = await sql`
+      SELECT start_time::text AS start_time, end_time::text AS end_time, is_all_day
+      FROM instructor_external_events
+      WHERE instructor_id = ${instructorId}
+        AND school_id = ${schoolId}
+        AND event_date = ${date}::date
+    `;
+  } catch (_) {}
+  if (externalEvents.some(e => e.is_all_day)) return false;
+  if (externalEvents.some(e => slotStart < timeToMinutes(e.end_time) && slotEnd > timeToMinutes(e.start_time))) {
+    return false;
+  }
+
+  const weeklyWindows = blackoutRows.length > 0
+    ? []
+    : await sql`
+        SELECT start_time::text AS start_time, end_time::text AS end_time
+        FROM instructor_availability
+        WHERE instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
+          AND day_of_week = ${dayOfWeek}
+          AND active = true
+      `;
+
+  return [...weeklyWindows, ...overrideWindows].some(w => {
+    const windowStart = timeToMinutes(w.start_time);
+    const windowEnd = timeToMinutes(w.end_time);
+    return slotStart >= windowStart && slotEnd <= windowEnd;
+  });
+}
+
 
 // verifyAuth delegates to centralised _auth.js.
 // All handlers in slots.js (handleBook, handleCheckoutSlot, handleCancel,
@@ -261,6 +343,7 @@ async function handleAvailable(req, res) {
             JOIN instructors i ON i.id = ia.instructor_id
             WHERE ia.instructor_id = ${instructor_id}
               AND ia.active = true
+              AND ia.school_id = ${schoolId}
               AND i.active  = true
               AND i.school_id = ${schoolId}
             ORDER BY ia.day_of_week, ia.start_time
@@ -278,6 +361,7 @@ async function handleAvailable(req, res) {
             JOIN instructors i ON i.id = ia.instructor_id
             WHERE ia.instructor_id = ${instructor_id}
               AND ia.active = true
+              AND ia.school_id = ${schoolId}
               AND i.active  = true
               AND i.school_id = ${schoolId}
               AND ((${implicitOfferAllowed} AND i.offered_lesson_types IS NULL) OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
@@ -296,6 +380,7 @@ async function handleAvailable(req, res) {
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
             WHERE ia.active = true
+              AND ia.school_id = ${schoolId}
               AND i.active  = true
               AND i.email  != 'demo@coachcarter.uk'
               AND i.school_id = ${schoolId}
@@ -313,12 +398,104 @@ async function handleAvailable(req, res) {
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
             WHERE ia.active = true
+              AND ia.school_id = ${schoolId}
               AND i.active  = true
               AND i.email  != 'demo@coachcarter.uk'
               AND i.school_id = ${schoolId}
               AND ((${implicitOfferAllowed} AND i.offered_lesson_types IS NULL) OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
             ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
           `);
+
+    let overrideWindows = [];
+    try {
+      overrideWindows = instructor_id
+        ? (minDurationOnly
+          ? await sql`
+              SELECT iao.instructor_id,
+                     iao.override_date::text AS override_date,
+                     iao.start_time::text AS start_time,
+                     iao.end_time::text AS end_time,
+                     i.name AS instructor_name,
+                     i.photo_url, i.bio,
+                     COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+                     COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     i.max_travel_minutes
+              FROM instructor_availability_overrides iao
+              JOIN instructors i ON i.id = iao.instructor_id
+              WHERE iao.instructor_id = ${instructor_id}
+                AND iao.active = true
+                AND iao.school_id = ${schoolId}
+                AND iao.override_date BETWEEN ${from} AND ${to}
+                AND i.active = true
+                AND i.school_id = ${schoolId}
+              ORDER BY iao.override_date, iao.start_time
+            `
+          : await sql`
+              SELECT iao.instructor_id,
+                     iao.override_date::text AS override_date,
+                     iao.start_time::text AS start_time,
+                     iao.end_time::text AS end_time,
+                     i.name AS instructor_name,
+                     i.photo_url, i.bio,
+                     COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+                     COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     i.max_travel_minutes
+              FROM instructor_availability_overrides iao
+              JOIN instructors i ON i.id = iao.instructor_id
+              WHERE iao.instructor_id = ${instructor_id}
+                AND iao.active = true
+                AND iao.school_id = ${schoolId}
+                AND iao.override_date BETWEEN ${from} AND ${to}
+                AND i.active = true
+                AND i.school_id = ${schoolId}
+                AND ((${implicitOfferAllowed} AND i.offered_lesson_types IS NULL) OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
+              ORDER BY iao.override_date, iao.start_time
+            `)
+        : (minDurationOnly
+          ? await sql`
+              SELECT iao.instructor_id,
+                     iao.override_date::text AS override_date,
+                     iao.start_time::text AS start_time,
+                     iao.end_time::text AS end_time,
+                     i.name AS instructor_name,
+                     i.photo_url, i.bio,
+                     COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+                     COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     i.max_travel_minutes
+              FROM instructor_availability_overrides iao
+              JOIN instructors i ON i.id = iao.instructor_id
+              WHERE iao.active = true
+                AND iao.school_id = ${schoolId}
+                AND iao.override_date BETWEEN ${from} AND ${to}
+                AND i.active = true
+                AND i.email != 'demo@coachcarter.uk'
+                AND i.school_id = ${schoolId}
+              ORDER BY iao.instructor_id, iao.override_date, iao.start_time
+            `
+          : await sql`
+              SELECT iao.instructor_id,
+                     iao.override_date::text AS override_date,
+                     iao.start_time::text AS start_time,
+                     iao.end_time::text AS end_time,
+                     i.name AS instructor_name,
+                     i.photo_url, i.bio,
+                     COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
+                     COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     i.max_travel_minutes
+              FROM instructor_availability_overrides iao
+              JOIN instructors i ON i.id = iao.instructor_id
+              WHERE iao.active = true
+                AND iao.school_id = ${schoolId}
+                AND iao.override_date BETWEEN ${from} AND ${to}
+                AND i.active = true
+                AND i.email != 'demo@coachcarter.uk'
+                AND i.school_id = ${schoolId}
+                AND ((${implicitOfferAllowed} AND i.offered_lesson_types IS NULL) OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
+              ORDER BY iao.instructor_id, iao.override_date, iao.start_time
+            `);
+    } catch (e) {
+      // Table may not exist before the availability override migration has run.
+    }
 
     // 2. Load all confirmed/completed bookings in the date range
     const bookings = instructor_id
@@ -419,6 +596,7 @@ async function handleAvailable(req, res) {
             JOIN instructors i ON i.id = ibd.instructor_id
             WHERE ibd.blackout_date <= ${to} AND ibd.end_date >= ${from}
               AND ibd.instructor_id = ${instructor_id}
+              AND ibd.school_id = ${schoolId}
               AND i.school_id = ${schoolId}
           `
         : await sql`
@@ -426,6 +604,7 @@ async function handleAvailable(req, res) {
             FROM instructor_blackout_dates ibd
             JOIN instructors i ON i.id = ibd.instructor_id
             WHERE ibd.blackout_date <= ${to} AND ibd.end_date >= ${from}
+              AND ibd.school_id = ${schoolId}
               AND i.school_id = ${schoolId}
           `;
     } catch (e) {
@@ -439,6 +618,7 @@ async function handleAvailable(req, res) {
               JOIN instructors i ON i.id = ibd.instructor_id
               WHERE ibd.blackout_date BETWEEN ${from} AND ${to}
                 AND ibd.instructor_id = ${instructor_id}
+                AND ibd.school_id = ${schoolId}
                 AND i.school_id = ${schoolId}
             `
           : await sql`
@@ -446,6 +626,7 @@ async function handleAvailable(req, res) {
               FROM instructor_blackout_dates ibd
               JOIN instructors i ON i.id = ibd.instructor_id
               WHERE ibd.blackout_date BETWEEN ${from} AND ${to}
+                AND ibd.school_id = ${schoolId}
                 AND i.school_id = ${schoolId}
             `;
       } catch (e2) {
@@ -464,6 +645,7 @@ async function handleAvailable(req, res) {
             JOIN instructors i ON i.id = iee.instructor_id
             WHERE iee.event_date BETWEEN ${from} AND ${to}
               AND iee.instructor_id = ${instructor_id}
+              AND iee.school_id = ${schoolId}
               AND i.school_id = ${schoolId}
           `
         : await sql`
@@ -472,6 +654,7 @@ async function handleAvailable(req, res) {
             FROM instructor_external_events iee
             JOIN instructors i ON i.id = iee.instructor_id
             WHERE iee.event_date BETWEEN ${from} AND ${to}
+              AND iee.school_id = ${schoolId}
               AND i.school_id = ${schoolId}
           `;
     } catch (e) {
@@ -491,6 +674,8 @@ async function handleAvailable(req, res) {
       }
     }
 
+    const externalAllDayIndex = new Set();
+
     // Index bookings + reservations by "instructorId|date" for fast lookup
     const bookedIndex = {};
     for (const b of [...bookings, ...reservations]) {
@@ -503,10 +688,11 @@ async function handleAvailable(req, res) {
       });
     }
 
-    // Index external calendar events — all-day as blackouts, timed as booked slots
+    // Index external calendar events: all-day events are hard blockers,
+    // timed events behave like existing bookings.
     for (const e of externalEvents) {
       if (e.is_all_day) {
-        blackoutIndex.add(`${e.instructor_id}|${e.event_date}`);
+        externalAllDayIndex.add(`${e.instructor_id}|${e.event_date}`);
       } else {
         const key = `${e.instructor_id}|${e.event_date}`;
         if (!bookedIndex[key]) bookedIndex[key] = [];
@@ -516,7 +702,7 @@ async function handleAvailable(req, res) {
 
     // 3. Group windows by instructor
     const byInstructor = {};
-    for (const w of windows) {
+    for (const w of [...windows, ...overrideWindows]) {
       if (!byInstructor[w.instructor_id]) {
         byInstructor[w.instructor_id] = {
           id:             w.instructor_id,
@@ -531,6 +717,7 @@ async function handleAvailable(req, res) {
       }
       byInstructor[w.instructor_id].windows.push({
         day_of_week: w.day_of_week,
+        override_date: w.override_date || null,
         start: timeToMinutes(w.start_time),
         end:   timeToMinutes(w.end_time)
       });
@@ -567,12 +754,18 @@ async function handleAvailable(req, res) {
       const dayOfWeek  = cursor.getDay(); // 0=Sun … 6=Sat
       const isToday    = dateStr === todayStr;
       const daySlots   = [];
+      const daySlotKeys = new Set();
 
       for (const instructor of Object.values(byInstructor)) {
-        // Skip this instructor on this date if it's a blackout day
-        if (blackoutIndex.has(`${instructor.id}|${dateStr}`)) continue;
+        if (externalAllDayIndex.has(`${instructor.id}|${dateStr}`)) continue;
+        const dateWindows = instructor.windows.filter(w => w.override_date === dateStr);
+        const isBlackout = blackoutIndex.has(`${instructor.id}|${dateStr}`);
+        if (isBlackout && dateWindows.length === 0) continue;
 
-        const matchingWindows = instructor.windows.filter(w => w.day_of_week === dayOfWeek);
+        const weeklyWindows = isBlackout
+          ? []
+          : instructor.windows.filter(w => !w.override_date && w.day_of_week === dayOfWeek);
+        const matchingWindows = weeklyWindows.concat(dateWindows);
         const bookedSlots     = bookedIndex[`${instructor.id}|${dateStr}`] || [];
         const buffer          = instructor.buffer_minutes || 0;
 
@@ -626,6 +819,13 @@ async function handleAvailable(req, res) {
                 continue;
               }
             }
+
+            const slotKey = `${instructor.id}|${slotStart}|${slotEnd}`;
+            if (daySlotKeys.has(slotKey)) {
+              slotStart += slotMinutes;
+              continue;
+            }
+            daySlotKeys.add(slotKey);
 
             daySlots.push({
               instructor_id:   instructor.id,
@@ -734,13 +934,43 @@ async function handleDurationsForSlot(req, res) {
     `;
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
 
-    const windows = await sql`
+    let windows = await sql`
       SELECT start_time::text AS start_time, end_time::text AS end_time
       FROM instructor_availability
       WHERE instructor_id = ${instructorId}
+        AND school_id = ${schoolId}
         AND day_of_week = ${dayOfWeek}
         AND active = true
     `;
+    let overrideWindows = [];
+    try {
+      overrideWindows = await sql`
+        SELECT start_time::text AS start_time, end_time::text AS end_time
+        FROM instructor_availability_overrides
+        WHERE instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
+          AND override_date = ${date}::date
+          AND active = true
+      `;
+      windows = windows.concat(overrideWindows);
+    } catch (_) {}
+
+    let blackoutBlocked = false;
+    try {
+      const blackouts = await sql`
+        SELECT 1
+        FROM instructor_blackout_dates
+        WHERE instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
+          AND blackout_date <= ${date}::date
+          AND end_date >= ${date}::date
+        LIMIT 1
+      `;
+      blackoutBlocked = blackouts.length > 0 && overrideWindows.length === 0;
+      if (blackouts.length > 0 && overrideWindows.length > 0) {
+        windows = overrideWindows;
+      }
+    } catch (_) {}
 
     const slotStart = timeToMinutes(start_time);
     const buffer = parseInt(instructor.buffer_minutes) || 0;
@@ -752,7 +982,9 @@ async function handleDurationsForSlot(req, res) {
     for (const w of windows) {
       const ws = timeToMinutes(w.start_time);
       const we = timeToMinutes(w.end_time);
-      if (slotStart >= ws && slotStart < we) { windowEnd = we; break; }
+      if (slotStart >= ws && slotStart < we) {
+        windowEnd = windowEnd == null ? we : Math.max(windowEnd, we);
+      }
     }
 
     // Notice cutoff: how soon-from-now the slot starts.
@@ -800,11 +1032,12 @@ async function handleDurationsForSlot(req, res) {
         FROM instructor_external_events
         WHERE event_date = ${date}
           AND instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
       `;
     } catch (_) {}
 
     // If an all-day external event blocks this date, every duration is a clash.
-    const allDayBlocked = externalEvents.some(e => e.is_all_day);
+    const allDayBlocked = blackoutBlocked || externalEvents.some(e => e.is_all_day);
 
     // Convert all blocks to {start, end, postcode} in minutes.
     const blocks = [];
@@ -1247,6 +1480,30 @@ async function handleBook(req, res) {
       return res.status(404).json({ error: 'Instructor not found or unavailable' });
     if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
       return rejectLessonTypeNotOffered(res);
+    }
+
+    const unavailableDates = [];
+    for (const bd of bookingDates) {
+      const fitsAvailability = await slotFitsActiveAvailability(sql, {
+        instructorId: instructor_id,
+        schoolId,
+        date: bd.date,
+        startTime: start_time,
+        endTime: end_time
+      });
+      if (!fitsAvailability) unavailableDates.push(bd.date);
+    }
+    if (unavailableDates.length > 0) {
+      const availableDates = bookingDates
+        .map(d => d.date)
+        .filter(d => !unavailableDates.includes(d));
+      return res.status(409).json({
+        error: true,
+        code: 'SLOTS_UNAVAILABLE',
+        message: `${unavailableDates.length} of ${weeks} slots are no longer available`,
+        conflicts: unavailableDates.map(d => ({ date: d, start_time, reason: 'outside availability' })),
+        available: availableDates.map(d => ({ date: d, start_time }))
+      });
     }
 
     // Demo instructor bookings are free (no deduction)
@@ -1741,6 +1998,16 @@ async function handleCheckoutSlot(req, res) {
     if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
       return rejectLessonTypeNotOffered(res);
     }
+    const stillAvailable = await slotFitsActiveAvailability(sql, {
+      instructorId: instructor_id,
+      schoolId,
+      date,
+      startTime: start_time,
+      endTime: end_time
+    });
+    if (!stillAvailable) {
+      return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });
+    }
 
     // Get learner email
     const [learner] = await sql`SELECT email FROM learner_users WHERE id = ${user.id}`;
@@ -1969,6 +2236,17 @@ async function handleCheckoutSlotGuest(req, res) {
     }
 
     // ── Find or create learner ──
+    const stillAvailable = await slotFitsActiveAvailability(sql, {
+      instructorId: instructor_id,
+      schoolId,
+      date,
+      startTime: start_time,
+      endTime: end_time
+    });
+    if (!stillAvailable) {
+      return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });
+    }
+
     let learnerId;
     const [existingLearner] = await sql`
       SELECT id, name, phone, pickup_address FROM learner_users
@@ -2254,6 +2532,17 @@ async function handleBookFreeTrial(req, res) {
       return res.status(404).json({ error: 'Instructor not found' });
     if (!isLessonTypeOffered(instructor.offered_lesson_types, trialType.slug)) {
       return res.status(400).json({ error: 'This instructor does not offer free trials.' });
+    }
+
+    const stillAvailable = await slotFitsActiveAvailability(sql, {
+      instructorId: instructor_id,
+      schoolId,
+      date,
+      startTime: start_time,
+      endTime: end_time
+    });
+    if (!stillAvailable) {
+      return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });
     }
 
     const bufferMinutes = parseInt(instructor.buffer_minutes, 10) || 0;

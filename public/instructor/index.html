@@ -181,6 +181,7 @@
       max-width: 100%;
     }
     .month-booking-pill.completed { background: var(--green); }
+    .month-availability-pill { background: #0f766e; color: white; }
     .month-more {
       font-size: 0.68rem; color: var(--muted); font-weight: 600;
       padding: 1px 4px;
@@ -455,6 +456,18 @@
     }
     .agenda-card-offer .agenda-learner { white-space: normal; color: var(--primary); }
     .agenda-card-offer .agenda-address { color: var(--muted); }
+    .agenda-card-availability,
+    .tp-availability {
+      cursor: default;
+      background: rgba(15, 118, 110, 0.08);
+      border-left-color: #0f766e !important;
+      border-style: dashed;
+    }
+    .availability-badge {
+      background: rgba(15, 118, 110, 0.12);
+      color: #0f766e;
+      border: 1px solid rgba(15, 118, 110, 0.28);
+    }
     .offer-pending-badge {
       display: inline-block; margin-left: 6px;
       font-size: 0.65rem; font-weight: 700;
@@ -646,6 +659,7 @@
       <button class="view-btn active" id="btnAgenda" data-view="agenda">Agenda</button>
     </div>
     <button class="btn-add-lesson" id="btn-open-add-lesson">+ Add Lesson</button>
+    <button class="btn-today" id="btn-open-avail">+ Slot</button>
     <span class="toolbar-secondary">
       <button class="btn-today" id="btn-open-offer" title="Send a lesson offer to one learner — or broadcast it to everyone free at this time">Offer</button>
     </span>
@@ -671,6 +685,10 @@
     <div class="modal-title" id="modalTitle">Add Availability</div>
     <div class="modal-sub" id="modalSubtitle">—</div>
     <div class="modal-field">
+      <label class="modal-label">Date</label>
+      <input type="date" class="modal-input" id="modalDate">
+    </div>
+    <div class="modal-field">
       <label class="modal-label">Start Time</label>
       <div class="modal-time-row">
         <input type="time" class="modal-input" id="modalStart" value="09:00">
@@ -680,7 +698,7 @@
     </div>
     <div class="modal-actions">
       <button class="btn-modal-cancel" id="btn-close-avail">Cancel</button>
-      <button class="btn-modal-save" id="modalSaveBtn">Save availability</button>
+      <button class="btn-modal-save" id="modalSaveBtn">Add slot</button>
     </div>
   </div>
 </div>

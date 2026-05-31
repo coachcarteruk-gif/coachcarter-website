@@ -81,6 +81,31 @@ function buildScopedDurationCreditRefusal(delta, availableMinutes) {
   return `Learner has insufficient balance. Needs ${delta} more minutes but has ${balance}.`;
 }
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_HHMM_RE = /^\d{2}:\d{2}$/;
+
+function isValidIsoDate(value) {
+  if (!ISO_DATE_RE.test(String(value || ''))) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function isValidTimeHHMM(value) {
+  if (!TIME_HHMM_RE.test(String(value || ''))) return false;
+  const [hh, mm] = value.split(':').map(Number);
+  return hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59;
+}
+
+function timeToMinutes(value) {
+  const [hh, mm] = String(value || '').split(':').map(Number);
+  return hh * 60 + mm;
+}
+
+function startOfTodayUtc() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
 function setCors(res) {
 }
 
@@ -101,6 +126,9 @@ module.exports = async (req, res) => {
   if (action === 'schedule-range')   return handleScheduleRange(req, res);
   if (action === 'availability')     return handleAvailability(req, res);
   if (action === 'set-availability') return handleSetAvailability(req, res);
+  if (action === 'availability-overrides') return handleAvailabilityOverrides(req, res);
+  if (action === 'create-availability-override') return handleCreateAvailabilityOverride(req, res);
+  if (action === 'delete-availability-override') return handleDeleteAvailabilityOverride(req, res);
   if (action === 'profile')          return handleProfile(req, res);
   if (action === 'update-profile')   return handleUpdateProfile(req, res);
   if (action === 'blackout-dates')     return handleBlackoutDates(req, res);
@@ -494,7 +522,28 @@ async function handleScheduleRange(req, res) {
       // lesson_offers table missing in some environments — fail silently
     }
 
-    return res.json({ bookings, pending_offers: pendingOffers });
+    let availabilityOverrides = [];
+    try {
+      availabilityOverrides = await sql`
+        SELECT id,
+               override_date::text AS override_date,
+               start_time::text AS start_time,
+               end_time::text AS end_time,
+               note
+        FROM instructor_availability_overrides
+        WHERE instructor_id = ${instructor.id}
+          AND school_id = ${schoolId}
+          AND active = true
+          AND override_date >= ${from}::date
+          AND override_date <= ${to}::date
+        ORDER BY override_date ASC, start_time ASC
+        LIMIT 200
+      `;
+    } catch (e) {
+      // Table may not exist before the availability override migration has run.
+    }
+
+    return res.json({ bookings, pending_offers: pendingOffers, availability_overrides: availabilityOverrides });
 
   } catch (err) {
     console.error('schedule-range err:', err.message);
@@ -510,6 +559,7 @@ async function handleAvailability(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -518,6 +568,7 @@ async function handleAvailability(req, res) {
       SELECT id, day_of_week, start_time::text, end_time::text, active
       FROM instructor_availability
       WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
       ORDER BY day_of_week, start_time
     `;
 
@@ -538,6 +589,7 @@ async function handleSetAvailability(req, res) {
 
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
 
   const { windows } = req.body;
   if (!Array.isArray(windows))
@@ -557,14 +609,14 @@ async function handleSetAvailability(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // Delete existing windows
-    await sql`DELETE FROM instructor_availability WHERE instructor_id = ${instructor.id}`;
+    await sql`DELETE FROM instructor_availability WHERE instructor_id = ${instructor.id} AND school_id = ${schoolId}`;
 
     // Insert new windows
     if (windows.length > 0) {
       for (const w of windows) {
         await sql`
-          INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time)
-          VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time})
+          INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, school_id)
+          VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${schoolId})
         `;
       }
     }
@@ -573,6 +625,7 @@ async function handleSetAvailability(req, res) {
       SELECT id, day_of_week, start_time::text, end_time::text, active
       FROM instructor_availability
       WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
       ORDER BY day_of_week, start_time
     `;
 
@@ -582,6 +635,175 @@ async function handleSetAvailability(req, res) {
     console.error('instructor set-availability error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to save availability' });
+  }
+}
+
+// Date-specific extra availability, used for one-off bookable slots that do
+// not change the instructor's recurring weekly pattern.
+async function handleAvailabilityOverrides(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: '"from" and "to" are required (YYYY-MM-DD)' });
+  if (!isValidIsoDate(from) || !isValidIsoDate(to)) {
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+  }
+  if (to < from) return res.status(400).json({ error: '"to" must be on or after "from"' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const overrides = await sql`
+      SELECT id, override_date::text AS override_date,
+             start_time::text AS start_time, end_time::text AS end_time,
+             note
+      FROM instructor_availability_overrides
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND active = true
+        AND override_date >= ${from}::date
+        AND override_date <= ${to}::date
+      ORDER BY override_date ASC, start_time ASC
+      LIMIT 500
+    `;
+
+    return res.json({ ok: true, overrides });
+  } catch (err) {
+    console.error('instructor availability-overrides error:', err);
+    reportError('/api/instructor?action=availability-overrides', err);
+    return res.status(500).json({ error: 'Failed to load availability overrides' });
+  }
+}
+
+async function handleCreateAvailabilityOverride(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const { override_date, start_time, end_time, note } = req.body || {};
+  if (!isValidIsoDate(override_date)) {
+    return res.status(400).json({ error: 'override_date must be YYYY-MM-DD' });
+  }
+  if (!isValidTimeHHMM(start_time) || !isValidTimeHHMM(end_time)) {
+    return res.status(400).json({ error: 'Times must be HH:MM format' });
+  }
+  if (start_time >= end_time) return res.status(400).json({ error: 'start_time must be before end_time' });
+
+  const overrideDate = new Date(`${override_date}T00:00:00Z`);
+  if (overrideDate < startOfTodayUtc()) {
+    return res.status(400).json({ error: 'Cannot add availability in the past' });
+  }
+
+  const cleanNote = typeof note === 'string' && note.trim() ? note.trim().slice(0, 250) : null;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [instructorRow] = await sql`
+      SELECT COALESCE(min_booking_notice_hours, 24) AS min_booking_notice_hours
+      FROM instructors
+      WHERE id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND active = true
+    `;
+    if (!instructorRow) return res.status(404).json({ error: 'Instructor not found or inactive' });
+
+    const slotStartMinutes = timeToMinutes(start_time);
+    if (overrideDate.getTime() === startOfTodayUtc().getTime()) {
+      const now = new Date();
+      const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+      if (slotStartMinutes <= nowMinutes) {
+        return res.status(400).json({ error: 'Cannot add availability for a time that has already started' });
+      }
+    }
+
+    const slotStartDateTime = new Date(`${override_date}T00:00:00Z`);
+    slotStartDateTime.setUTCHours(Math.floor(slotStartMinutes / 60), slotStartMinutes % 60, 0, 0);
+    const minNoticeHours = Math.max(0, parseInt(instructorRow.min_booking_notice_hours, 10) || 0);
+    if (minNoticeHours > 0 && ((slotStartDateTime - new Date()) / 3600000) < minNoticeHours) {
+      return res.status(400).json({ error: `Cannot add availability within your ${minNoticeHours}-hour minimum booking notice period` });
+    }
+
+    const allDayExternalBlocks = await sql`
+      SELECT 1
+      FROM instructor_external_events
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND event_date = ${override_date}::date
+        AND is_all_day = true
+      LIMIT 1
+    `;
+    if (allDayExternalBlocks.length > 0) {
+      return res.status(409).json({ error: 'Your synced calendar has an all-day event on this date' });
+    }
+
+    const overlapping = await sql`
+      SELECT id
+      FROM instructor_availability_overrides
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND active = true
+        AND override_date = ${override_date}::date
+        AND start_time < ${end_time}::time
+        AND end_time > ${start_time}::time
+        AND NOT (start_time = ${start_time}::time AND end_time = ${end_time}::time)
+      LIMIT 1
+    `;
+    if (overlapping.length > 0) {
+      return res.status(409).json({ error: 'Availability slot overlaps an existing one-off slot' });
+    }
+
+    const [row] = await sql`
+      INSERT INTO instructor_availability_overrides (
+        instructor_id, school_id, override_date, start_time, end_time, note, active
+      ) VALUES (
+        ${instructor.id}, ${schoolId}, ${override_date}, ${start_time}, ${end_time}, ${cleanNote}, true
+      )
+      ON CONFLICT (instructor_id, school_id, override_date, start_time, end_time)
+      DO UPDATE SET active = true, note = EXCLUDED.note
+      RETURNING id, override_date::text AS override_date,
+                start_time::text AS start_time, end_time::text AS end_time,
+                note
+    `;
+
+    return res.json({ ok: true, override: row });
+  } catch (err) {
+    console.error('instructor create-availability-override error:', err);
+    reportError('/api/instructor?action=create-availability-override', err);
+    return res.status(500).json({ error: 'Failed to add availability slot' });
+  }
+}
+
+async function handleDeleteAvailabilityOverride(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const id = parseInt(req.body?.id, 10);
+  if (!id) return res.status(400).json({ error: 'id is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const deleted = await sql`
+      DELETE FROM instructor_availability_overrides
+      WHERE id = ${id}
+        AND instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+      RETURNING id
+    `;
+    if (deleted.length === 0) return res.status(404).json({ error: 'Availability slot not found' });
+    return res.json({ ok: true, deleted_id: id });
+  } catch (err) {
+    console.error('instructor delete-availability-override error:', err);
+    reportError('/api/instructor?action=delete-availability-override', err);
+    return res.status(500).json({ error: 'Failed to remove availability slot' });
   }
 }
 
