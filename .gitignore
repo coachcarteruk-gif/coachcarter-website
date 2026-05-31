@@ -12,6 +12,13 @@ node_modules/
 .claude/plans/
 .claude/worktrees/
 
+# Local Codex / agent state (per-user, not for the team)
+.codex/
+tmp/
+.agents/skills/launch-readiness-audit/
+.agents/skills/stripe-best-practices/
+.agents/skills/ui-ux-pro-max/
+
 # Vercel CLI local state
 .vercel/
 
