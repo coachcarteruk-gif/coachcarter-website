@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.106 - Instructor One-Off Availability Slots (31 May 2026)
+
+Instructors can now add date-specific available windows from their calendar without changing their recurring weekly availability. The new `instructor_availability_overrides` table stores tenant-scoped one-off windows; `api/instructor.js` exposes list/create/delete actions and includes overrides in `schedule-range`; `api/slots.js` merges these windows into the learner slot feed and `durations-for-slot`, while keeping blackouts closed unless an instructor explicitly adds an override for that date.
+
+The instructor calendar has a `+ Slot` action, shows one-off availability as removable "Available" cards, and refreshes the schedule range after create/remove. Weekly availability remains managed separately on `/instructor/availability.html`.
+
+**Files:** `db/migration.sql`, `db/migrations/023_instructor_availability_overrides.sql`, `api/instructor.js`, `api/slots.js`, `public/instructor/index.html`, `public/instructor/index.js`, `tests/instructor-availability-overrides.spec.js`, `PROJECT.md`, `MIGRATION-PLAN.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.105 — Tightly Gated Admin Execute Refund Foundation (27 May 2026)
 
 Added the next refund slice after preview: `POST /api/admin?action=execute-refund`, backed by new `api/_refund-executor.js`. The executor requires an explicit operator confirmation token and idempotency key, re-runs the trusted server-side planner before Stripe, rejects blocked/manual-review plans, calls `stripe.refunds.create` only through an injectable Stripe client, writes executed refund ledger rows/lines, creates CSA rows plus locked balance decrements for supported unused credit-source refunds, and audit-logs `admin.execute_refund`.

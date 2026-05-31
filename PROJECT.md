@@ -660,9 +660,12 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `validate-token` | GET | No | (Legacy) Lightweight token check |
 | `verify-token` | POST | No | (Legacy) Consume token, return JWT. Body: `{ token }` |
 | `schedule` | GET | JWT | Instructor's upcoming scheduled bookings |
-| `schedule-range` | GET | JWT | Bookings in date range for calendar views. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
+| `schedule-range` | GET | JWT | Bookings, pending offers, and one-off availability overrides in date range for calendar views. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
 | `availability` | GET | JWT | Current weekly availability windows |
 | `set-availability` | POST | JWT | Update weekly availability windows |
+| `availability-overrides` | GET | JWT | Date-specific extra availability. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
+| `create-availability-override` | POST | JWT | Add a one-off available window without changing weekly availability. Body: `{ override_date, start_time, end_time, note? }` |
+| `delete-availability-override` | POST | JWT | Remove a one-off available window. Body: `{ id }` |
 | `profile` | GET | JWT | Profile details, including `bulk_tiers_enabled` and read-only `effective_hourly_rate_pence` |
 | `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages, ical_feed_url, and `bulk_tiers_enabled` |
 | `ical-test` | POST | JWT | Test-fetch an iCal feed URL, returns event count |
@@ -712,6 +715,8 @@ Two alarm triggers:
 **`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). Used by direct booking checkout, lesson-types/duration pricing APIs, credit checkout, earnings view, and payout calculations. Direct pay-and-book pricing uses custom learner rate → instructor hourly rate → school `bulk_hourly_pence`; bulk discounts remain credit-package only.
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
+
+**`instructor_availability_overrides`** — date-specific extra availability per instructor. Columns: instructor_id, school_id, override_date, start_time, end_time, active, note. These rows make a single slot/window bookable without altering recurring weekly availability. The learner slot feed and `durations-for-slot` merge them with weekly windows; on blackout dates, explicit overrides are the only windows that can open that date.
 
 **`instructor_blackout_dates`** — date ranges when an instructor is unavailable (holidays, sick days). Columns: blackout_date (start), end_date, reason. Single-day blackouts have end_date = blackout_date. Slot generation skips all dates within any active range. Indexed on (instructor_id, blackout_date, end_date).
 

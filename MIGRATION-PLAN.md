@@ -42,7 +42,7 @@
 |------|------|-------|
 | `learner.js` | learner | Sessions, progress, profile, mock-tests, quiz, competency, onboarding, weekly availability, GDPR export/deletion |
 | `learner-auth.js` | none → learner | Signup, login, forgot-password (code-based reset), email-code migration |
-| `instructor.js` | instructor | Schedule, availability, blackouts, learner history, notes, stats, cancel-booking, reschedule, create-booking, create-offer (with `max_repeat_weeks`), broadcast endpoints |
+| `instructor.js` | instructor | Schedule, weekly availability, one-off availability overrides, blackouts, learner history, notes, stats, cancel-booking, reschedule, create-booking, create-offer (with `max_repeat_weeks`), broadcast endpoints |
 | `instructor-auth.js` | none → instructor | Login, change-password (forced on first sign-in via `must_change_password`) |
 | `instructors.js` | public/instructor | Public instructor profile lookups (used by booking page) |
 | `admin.js` | admin | Dashboard, bookings, instructor CRUD, learner management, credit adjustment, set-instructor-password, forgot-password code flow |
@@ -116,7 +116,7 @@ Per-instructor credit portability note: [`docs/per-instructor-credits-audit.md`]
 **Multi-tenancy:** `schools`, `school_payouts`
 **Users:** `learner_users`, `instructors`, `admin_users`
 **Auth (legacy magic-link, kept for SMS / password-reset codes):** `magic_link_tokens`, `instructor_login_tokens`
-**Scheduling:** `instructor_availability`, `instructor_blackout_dates`, `instructor_external_events`, `lesson_bookings`, `slot_reservations`, `learner_availability`, ~~`lesson_confirmations`~~ *(dormant May 2026 — drop scheduled in follow-up migration once the rollback window has elapsed)*
+**Scheduling:** `instructor_availability`, `instructor_availability_overrides`, `instructor_blackout_dates`, `instructor_external_events`, `lesson_bookings`, `slot_reservations`, `learner_availability`, ~~`lesson_confirmations`~~ *(dormant May 2026 — drop scheduled in follow-up migration once the rollback window has elapsed)*
 **Lesson catalogue:** `lesson_types`, `lesson_offers` (manual + broadcast, with `max_repeat_weeks` for recurring series)
 **Notifications:** `sent_reminders`
 **Payments:** `credit_transactions`, `booking_credit_sources`, `credit_source_adjustments`, `refund_events`, `refund_event_lines`, `instructor_payouts`, `payout_line_items`, `guarantee_pricing`
@@ -173,6 +173,7 @@ Per-instructor credit portability note: [`docs/per-instructor-credits-audit.md`]
 - **GDPR compliance landed** — `cookie_consents`, `audit_log`, `deletion_requests`, `rate_limits` tables. PostHog now consent-gated via `posthog-loader.js`. `cron-retention.js` handles deletions + retention sweeps. `learner.js` exposes export-data and confirm-deletion. Credit/financial records are anonymised, never hard-deleted (7-year legal retention).
 - **InstructorBook split** — same backend, two front doors. `branding.js` injects per-school logo/colour from `schools.config`. `coachcarter.uk` (school) and `instructorbook.co.uk` (national SaaS for instructors) coexist. Pricing model D: free to use, 0.75% fee on weekly automated payouts. See `INSTRUCTORBOOK-PLAN.md`.
 - **`lesson_offers.max_repeat_weeks` (8 May 2026)** — INTEGER NULL, CHECK 1–18. Lets an instructor offer a recurring weekly slot. Learner picks count on the accept page. The webhook fans out a series with `series_id` via `bookOfferSeries()` in `api/offers.js`, skipping clashed weeks (existing booking, blackout, no DoW availability) and rolling to the next free week up to an 18-week lookahead. Stripe charges per-lesson × N; partial refund if we can't fill all weeks. **Only path that may exceed the 12-week self-serve booking cap.**
+- **`instructor_availability_overrides` (31 May 2026)** — date-specific available windows created from the instructor calendar. Native apps should expose this as an "add one-off available slot" action separate from recurring weekly availability. `api/slots.js` merges these rows into `available` and `durations-for-slot`; on blackout dates, explicit overrides are the only windows that can open that date.
 - **12-week advance booking cap** — `MAX_DAYS_AHEAD = 84` in `api/slots.js`, `FEED_MAX_DAYS = 84` in `public/learner/book.js`. Down from 90 days. Applies to all self-serve booking flows.
 - **Booking-page slot-first refactor (April 2026)** — `book.html` no longer has calendar views, view toggles, lesson-type pill bar, or a login wall. Slot feed renders at the smallest active duration; per-duration fits checked on slot click via `?action=durations-for-slot`. Guests can pay without an account via `?action=checkout-slot-guest`.
 - **Instructor calendar refactor (April 2026)** — daily view absorbed into agenda. Hour-slot time grid replaced with compact lesson list. Removed "Weekdays" and "Cancelled" filter buttons.

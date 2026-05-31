@@ -22,6 +22,7 @@ let cursor     = new Date(); // current date driving the view
 cursor.setHours(0,0,0,0);
 let bookingCache = {}; // dateStr -> [booking, ...]
 let pendingOfferCache = {}; // dateStr -> [pending offer, ...]
+let availabilityOverrideCache = {}; // dateStr -> [date-specific availability, ...]
 let availCache   = []; // availability windows [{day_of_week, start_time, end_time}]
 let calendarStartHour = 7; // from instructor profile
 let instructorSlug = null; // from profile, used for shareable booking links
@@ -182,6 +183,7 @@ async function fetchNeededData() {
     for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
       delete bookingCache[dateStr(d)];
       delete pendingOfferCache[dateStr(d)];
+      delete availabilityOverrideCache[dateStr(d)];
     }
     for (const b of (data.bookings || [])) {
       if (!bookingCache[b.scheduled_date]) bookingCache[b.scheduled_date] = [];
@@ -190,6 +192,11 @@ async function fetchNeededData() {
     for (const o of (data.pending_offers || [])) {
       if (!pendingOfferCache[o.scheduled_date]) pendingOfferCache[o.scheduled_date] = [];
       pendingOfferCache[o.scheduled_date].push(o);
+    }
+    for (const a of (data.availability_overrides || [])) {
+      const ds = a.override_date;
+      if (!availabilityOverrideCache[ds]) availabilityOverrideCache[ds] = [];
+      availabilityOverrideCache[ds].push(a);
     }
     loadedRanges.push({ from, to });
   } catch (err) {
@@ -285,9 +292,10 @@ function renderMonthly() {
     const ds        = dateStr(day);
     const allBookings = bookingCache[ds] || [];
     const bookings  = allBookings.filter(b => b.status !== 'refunded');
+    const overrides = availabilityOverrideCache[ds] || [];
     const inMonth   = day.getMonth() === cursor.getMonth();
     const isToday   = ds === dateStr(today);
-    const hasBook   = bookings.length > 0;
+    const hasBook   = bookings.length > 0 || overrides.length > 0;
 
     let cls = 'month-cell clickable';
     if (!inMonth) cls += ' other-month';
@@ -307,8 +315,13 @@ function renderMonthly() {
       const pillStyle = b.status === 'refunded' ? '' : `style="background:${pillColour}"`;
       html += `<div class="${pillCls}" ${pillStyle}>${b.start_time.slice(0,5)} ${esc(b.learner_name.split(' ')[0])}</div>`;
     }
-    if (bookings.length > 2) {
-      html += `<div class="month-more">+${bookings.length - 2} more</div>`;
+    const visibleOverrides = overrides.slice(0, Math.max(0, 2 - visible.length));
+    for (const a of visibleOverrides) {
+      html += `<div class="month-booking-pill month-availability-pill">${a.start_time.slice(0,5)} free</div>`;
+    }
+    const hiddenCount = bookings.length + overrides.length - visible.length - visibleOverrides.length;
+    if (hiddenCount > 0) {
+      html += `<div class="month-more">+${hiddenCount} more</div>`;
     }
     html += `</div>`;
   }
@@ -330,6 +343,7 @@ function renderWeekly() {
     const ds        = dateStr(day);
     const allBk     = bookingCache[ds] || [];
     const bookings  = allBk.filter(b => b.status !== 'refunded');
+    const overrides = availabilityOverrideCache[ds] || [];
     const isToday   = ds === dateStr(today);
 
     html += `<div class="tp-day${isToday ? ' is-today' : ''}">`;
@@ -342,7 +356,7 @@ function renderWeekly() {
 
     // Lessons column (right)
     html += '<div class="tp-day-lessons">';
-    if (bookings.length === 0) {
+    if (bookings.length === 0 && overrides.length === 0) {
       html += '<div class="tp-empty-day">No lessons</div>';
     } else {
       for (const b of bookings) {
@@ -362,6 +376,16 @@ function renderWeekly() {
               ${address ? `<div class="tp-lesson-address">📍 ${esc(address)}</div>` : ''}
             </div>
             <span class="tp-lesson-type" style="background:${ltColour}18;color:${ltColour}">${esc(ltName)}</span>
+          </div>`;
+      }
+      for (const a of overrides) {
+        html += `
+          <div class="tp-lesson tp-availability" data-availability-id="${a.id}">
+            <div class="tp-lesson-info">
+              <div class="tp-lesson-name">Available slot</div>
+              <div class="tp-lesson-time">${a.start_time.slice(0,5)} â†’ ${a.end_time.slice(0,5)}</div>
+            </div>
+            <button class="offer-cancel-btn" data-action="delete-availability-override" data-id="${a.id}">Remove</button>
           </div>`;
       }
     }
@@ -464,6 +488,9 @@ function renderAgenda() {
     for (const o of (pendingOfferCache[ds] || [])) {
       allBookings.push({ ...o, _kind: 'offer' });
     }
+    for (const a of (availabilityOverrideCache[ds] || [])) {
+      allBookings.push({ ...a, scheduled_date: a.override_date, _kind: 'availability' });
+    }
     d = addDays(d, 1);
   }
 
@@ -496,10 +523,12 @@ function renderAgenda() {
     const dayLabel = `${DAY_FULL[dayDate.getDay()]}, ${dayDate.getDate()} ${MON_FULL[dayDate.getMonth()]}`;
 
     const dayLessonCount = groups[ds].filter(x => x._kind === 'booking').length;
-    const dayOfferCount = groups[ds].length - dayLessonCount;
-    const countLabel = dayOfferCount > 0
-      ? `${dayLessonCount} lesson${dayLessonCount !== 1 ? 's' : ''}, ${dayOfferCount} pending`
-      : `${dayLessonCount} lesson${dayLessonCount !== 1 ? 's' : ''}`;
+    const dayOfferCount = groups[ds].filter(x => x._kind === 'offer').length;
+    const dayAvailabilityCount = groups[ds].filter(x => x._kind === 'availability').length;
+    const countParts = [`${dayLessonCount} lesson${dayLessonCount !== 1 ? 's' : ''}`];
+    if (dayOfferCount > 0) countParts.push(`${dayOfferCount} pending`);
+    if (dayAvailabilityCount > 0) countParts.push(`${dayAvailabilityCount} free`);
+    const countLabel = countParts.join(', ');
 
     html += `<div class="agenda-date-header${isToday ? ' today' : ''}">
       <span>${dayLabel}</span>
@@ -537,6 +566,24 @@ function renderAgenda() {
             </div>
             <div class="agenda-card-right">
               <button class="offer-cancel-btn" data-action="cancel-pending-offer" data-id="${b.id}" title="Cancel this pending offer and free up the slot">Cancel</button>
+            </div>
+          </div>`;
+        continue;
+      }
+
+      if (b._kind === 'availability') {
+        html += `
+          <div class="agenda-card agenda-card-availability" data-availability-id="${b.id}">
+            <div class="agenda-card-left">
+              <div class="agenda-time">${b.start_time.slice(0,5)} â€“ ${b.end_time.slice(0,5)}</div>
+              <span class="lesson-type-badge availability-badge">Available</span>
+            </div>
+            <div class="agenda-card-mid">
+              <div class="agenda-learner">Extra availability</div>
+              <div class="agenda-address" style="color:var(--muted)">Learners can book this slot without changing your weekly hours.</div>
+            </div>
+            <div class="agenda-card-right">
+              <button class="offer-cancel-btn" data-action="delete-availability-override" data-id="${b.id}">Remove</button>
             </div>
           </div>`;
         continue;
@@ -608,22 +655,26 @@ function handleBookingModalOverlayClick(e) {
 }
 
 // â”€â”€â”€ Add Availability Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-let modalTargetDate = null; // the date we're adding availability for
+let modalTargetDate = null; // the date we're adding date-specific availability for
 
-function openAvailModal() {
-  modalTargetDate = cursor;
-  const dow = cursor.getDay();
-  const dayName = DAY_FULL[dow];
-  const dateLabel = `${cursor.getDate()} ${MON_FULL[cursor.getMonth()]} ${cursor.getFullYear()}`;
+function openAvailModal(targetDateStr) {
+  modalTargetDate = targetDateStr ? new Date(targetDateStr + 'T00:00:00') : new Date(cursor);
+  modalTargetDate.setHours(0,0,0,0);
+  const dateLabel = `${modalTargetDate.getDate()} ${MON_FULL[modalTargetDate.getMonth()]} ${modalTargetDate.getFullYear()}`;
 
-  document.getElementById('modalTitle').textContent = `Add Availability`;
-  const existingCount = availCache.filter(w => w.day_of_week === dow).length;
-  const addNote = existingCount > 0 ? ` (${existingCount} existing window${existingCount > 1 ? 's' : ''})` : '';
-  document.getElementById('modalSubtitle').textContent = `For ${dayName}s (recurring weekly)${addNote}`;
+  document.getElementById('modalTitle').textContent = `Add available slot`;
+  document.getElementById('modalSubtitle').textContent = `For ${dateLabel} only`;
+
+  const dateInput = document.getElementById('modalDate');
+  if (dateInput) {
+    dateInput.min = dateStr(new Date());
+    dateInput.value = dateStr(modalTargetDate);
+  }
 
   // Default times for the new window
   document.getElementById('modalStart').value = '09:00';
-  document.getElementById('modalEnd').value   = '17:00';
+  document.getElementById('modalEnd').value   = '10:30';
+  document.getElementById('modalSaveBtn').textContent = 'Add slot';
 
   document.getElementById('availModal').classList.add('open');
 }
@@ -636,43 +687,56 @@ function handleModalOverlayClick(e) {
 }
 
 async function saveNewAvailability() {
+  const selectedDate = document.getElementById('modalDate')?.value || dateStr(modalTargetDate);
   const start = document.getElementById('modalStart').value;
   const end   = document.getElementById('modalEnd').value;
 
+  if (!selectedDate) { showToast('Please choose a date', 'error'); return; }
   if (!start || !end) { showToast('Please set both start and end times', 'error'); return; }
   if (start >= end)   { showToast('Start time must be before end time', 'error'); return; }
 
   const btn = document.getElementById('modalSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
 
-  const dow = modalTargetDate.getDay();
-
-  // Add the new window alongside any existing windows (including same day)
-  const updated = [...availCache];
-  updated.push({ day_of_week: dow, start_time: start, end_time: end });
-
   try {
-    const res  = await ccAuth.fetchAuthed('/api/instructor?action=set-availability', {
+    const res  = await ccAuth.fetchAuthed('/api/instructor?action=create-availability-override', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ windows: updated })
+      body: JSON.stringify({ override_date: selectedDate, start_time: start, end_time: end })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
-    availCache = (data.windows || []).map(w => ({
-      day_of_week: w.day_of_week,
-      start_time:  w.start_time.slice(0,5),
-      end_time:    w.end_time.slice(0,5)
-    }));
-
     closeAvailModal();
-    showToast('Availability saved ✓', 'success');
+    showToast('Available slot added', 'success');
+    loadedRanges = [];
     renderCurrentView();
   } catch (err) {
     showToast(err.message || 'Failed to save', 'error');
   } finally {
-    btn.disabled = false; btn.textContent = 'Save availability';
+    btn.disabled = false; btn.textContent = 'Add slot';
+  }
+}
+
+async function deleteAvailabilityOverride(id, btnEl) {
+  if (!id) return;
+  if (!confirm('Remove this available slot? Learners will no longer see it in the booking feed.')) return;
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Removing...'; }
+
+  try {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=delete-availability-override', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    loadedRanges = [];
+    showToast('Available slot removed', 'success');
+    renderCurrentView();
+  } catch (err) {
+    showToast(err.message || 'Failed to remove slot', 'error');
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Remove'; }
   }
 }
 
@@ -2228,7 +2292,7 @@ document.addEventListener('click', function (e) {
   if (a === 'drill-to-day') drillToDay(t.dataset.day);
   else if (a === 'cursor-to-agenda') { cursor = new Date(t.dataset.day + 'T00:00:00'); setView('agenda'); }
   else if (a === 'open-booking-detail') openBookingDetail(parseInt(t.dataset.id, 10));
-  else if (a === 'open-avail-modal') openAvailModal();
+  else if (a === 'open-avail-modal') openAvailModal(t.dataset.day);
   else if (a === 'toggle-feedback') {
     var target = document.getElementById(t.dataset.target);
     if (target) target.classList.toggle('open');
@@ -2249,6 +2313,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'select-learner') selectLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.phone, parseInt(t.dataset.balanceMinutes, 10));
   else if (a === 'offer-select-learner') selectOfferLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.detail);
   else if (a === 'cancel-pending-offer') cancelPendingOffer(parseInt(t.dataset.id, 10), t);
+  else if (a === 'delete-availability-override') deleteAvailabilityOverride(parseInt(t.dataset.id, 10), t);
 });
 document.addEventListener('change', function (e) {
   var t = e.target.closest('[data-action]');
@@ -2283,6 +2348,7 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
     btn.addEventListener('click', function () { setView(btn.dataset.view); });
   });
   bind('btn-open-add-lesson', openAddLessonModal);
+  bind('btn-open-avail', function () { openAvailModal(); });
   bind('btn-open-offer', function () { openOfferModal(); });
   bind('btn-toolbar-overflow', toggleToolbarOverflow);
   var availModal = document.getElementById('availModal');
