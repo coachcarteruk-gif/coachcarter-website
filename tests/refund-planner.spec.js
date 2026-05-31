@@ -271,6 +271,14 @@ test.describe('refund preview planner', () => {
       recommended_operator_action: 'blocked',
     });
     expect(result.processing_fee_withheld_pence).toBe(0);
+    expect(result.lines[0]).toMatchObject({
+      booking_credit_source_id: 55,
+      credit_transaction_id: 101,
+      source_fee_pence_used: 0,
+      fee_withheld_pence: 0,
+      net_refund_pence: 8250,
+      minutes_adjusted: 90,
+    });
     expect(result.warnings[0]).toContain('Processing fee evidence is missing');
   });
 
@@ -333,6 +341,13 @@ test.describe('refund preview planner', () => {
       net_refund_pence: 8250,
       recommended_operator_action: 'blocked',
     });
+    expect(result.lines[0]).toMatchObject({
+      credit_transaction_id: 101,
+      source_fee_pence_used: 0,
+      fee_withheld_pence: 0,
+      net_refund_pence: 8250,
+      minutes_adjusted: 90,
+    });
     expect(result.warnings[0]).toContain('Processing fee evidence is missing');
   });
 
@@ -351,6 +366,9 @@ test.describe('refund preview planner', () => {
       blocked: true,
       manual_review_required: true,
       code: 'BOOKING_ALREADY_PAID_OUT',
+      gross_refund_pence: 8250,
+      processing_fee_withheld_pence: 144,
+      net_refund_pence: 8106,
       recommended_operator_action: 'manual_bank_review_required',
       learner_name: 'Beatriz Example',
       learner_email: 'beatriz@example.test',
@@ -359,6 +377,16 @@ test.describe('refund preview planner', () => {
       booking_duration_minutes: 90,
       payment_source: 'lesson_booking',
       payment_channel: 'card',
+      fee_evidence: {
+        source: 'lesson_bookings.stripe_fee_pence',
+        pence: 144,
+      },
+    });
+    expect(result.lines[0]).toMatchObject({
+      lesson_booking_id: 7001,
+      source_fee_pence_used: 144,
+      fee_withheld_pence: 144,
+      net_refund_pence: 8106,
     });
     expect(result.message).toContain('manual bank refund');
   });

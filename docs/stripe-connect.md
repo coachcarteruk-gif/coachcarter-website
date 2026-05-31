@@ -25,11 +25,13 @@ Approved card refunds are net of the original non-refundable Stripe processing f
 
 For partial refunds, the withheld fee is the refunded portion's attributed/proportional share of the original Stripe fee. Prefer exact BCS attribution (`booking_credit_sources.stripe_fee_pence`) where it exists; otherwise use the source or booking fee snapshot (`credit_transactions.stripe_fee_pence`, `lesson_bookings.stripe_fee_pence`) or a Stripe balance transaction lookup. If fee evidence cannot be found, automatic refund preview/execution must block and return manual review rather than assuming zero.
 
-Already-paid-out direct bookings must not be automatically Stripe-refunded. Once a lesson appears in `payout_line_items`, Fraser should handle any approved refund manually from the bank account and record it in the refund ledger in a later execute/manual-record slice. Admin preview and execute both return this as blocked guidance.
+Already-paid-out direct bookings must not be automatically Stripe-refunded. Once a lesson appears in `payout_line_items`, Fraser should handle any approved refund manually from the bank account and record it through `POST /api/admin?action=record-manual-bank-refund`. Admin preview and automatic execute both return this as blocked guidance.
 
 The first implementation slice is `POST /api/admin?action=refund-preview`: read-only, admin-authenticated, school-scoped, and itemised as gross lesson credit value, withheld processing fee, and amount returned. It does not call `stripe.refunds.create`.
 
 The second implementation slice is `POST /api/admin?action=execute-refund`: admin-authenticated, school-scoped, and tightly gated by an explicit `operator_go` confirmation plus caller-supplied idempotency key. Execute re-runs the trusted server-side planner before any Stripe mutation, rejects blocked/manual-review plans, calls `stripe.refunds.create` only through an injected/created Stripe client, writes `refund_events(status='executed')` and `refund_event_lines`, audit-logs `admin.execute_refund`, and creates `credit_source_adjustments` plus locked balance decrements for supported unused credit-source refunds. It must not be run against production without a future explicit operator go.
+
+Manual bank recording is a separate ledger-only path: `POST /api/admin?action=record-manual-bank-refund` re-runs the preview, refuses clean `execute_eligible` cases, requires `operator_go="RECORD_MANUAL_BANK_REFUND_CONFIRMED"`, a stable idempotency key, and a bank reference, then writes `refund_events` / `refund_event_lines` with `metadata.refund_channel = "manual_bank"`. It does not call Stripe refund APIs, mutate booking status, edit payout rows, create `credit_source_adjustments`, or change learner credit balances.
 
 ## Fee models
 

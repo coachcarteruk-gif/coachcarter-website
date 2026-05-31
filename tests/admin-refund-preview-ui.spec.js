@@ -57,6 +57,7 @@ async function setupPortalPage(page, previews) {
     localStorage.setItem('cc_admin', JSON.stringify({ admin: { name: 'Test Admin', email: 'admin@example.test' } }));
     window.__previewQueue = queuedPreviews;
     window.__executeCalls = [];
+    window.__manualBankCalls = [];
     window.ccAdminAuth = {
       logout: () => {},
       fetchAuthed: async (url, options = {}) => {
@@ -81,6 +82,10 @@ async function setupPortalPage(page, previews) {
         if (url.includes('action=execute-refund')) {
           window.__executeCalls.push(JSON.parse(options.body || '{}'));
           return json({ error: true, code: 'SIMULATED_EXECUTE_HOLD', message: 'Simulated execute response.' }, 502);
+        }
+        if (url.includes('action=record-manual-bank-refund')) {
+          window.__manualBankCalls.push(JSON.parse(options.body || '{}'));
+          return json({ error: true, code: 'SIMULATED_MANUAL_BANK_HOLD', message: 'Simulated manual bank response.' }, 502);
         }
         return json({ ok: true });
       },
@@ -206,12 +211,39 @@ test.describe('admin refund preview UI', () => {
     expect(updateButton).toContain('refundPayloadMatchesCurrentForm');
   });
 
+  test('adds a separate manual bank record surface for manual-review previews', () => {
+    const renderPanel = sourceFor('renderManualBankRecordPanel');
+    const record = sourceFor('recordManualBankRefundFromPreview');
+    const block = sourceFor('manualBankRecordBlockReason');
+
+    expect(portalJs).toContain("const REFUND_MANUAL_BANK_CONFIRMATION = 'RECORD_MANUAL_BANK_REFUND_CONFIRMED'");
+    expect(renderPanel).toContain('Manual bank refund can be recorded');
+    expect(renderPanel).toContain('id="refund-manual-bank-reference"');
+    expect(renderPanel).toContain('id="btn-record-manual-bank-refund"');
+    expect(record).toContain("fetchAdmin('/api/admin?action=record-manual-bank-refund'");
+    expect(record).toContain('manual_bank_reference: reference');
+    expect(record).toContain('operator_go: REFUND_MANUAL_BANK_CONFIRMATION');
+    expect(record).not.toContain('gross_refund_pence');
+    expect(record).not.toContain('learner_id');
+    expect(block).toContain("data.recommended_operator_action === 'execute_eligible'");
+    expect(block).toContain('Preview ledger line evidence is required');
+  });
+
   test('renders execute result with refund event, Stripe reference, and ledger summary', () => {
     const render = sourceFor('renderExecutedRefundResult');
 
     expect(render).toContain('Refund event');
     expect(render).toContain('Stripe refund reference');
     expect(render).toContain('Ledger line summary');
+    expect(render).toContain('renderRefundLines(event.lines || [])');
+  });
+
+  test('renders manual bank result with no-Stripe/no-mutation copy and ledger summary', () => {
+    const render = sourceFor('renderManualBankRefundResult');
+
+    expect(render).toContain('Manual bank refund recorded in the ledger');
+    expect(render).toContain('No Stripe refund, booking update, payout mutation, or learner-credit mutation');
+    expect(render).toContain('Manual bank reference');
     expect(render).toContain('renderRefundLines(event.lines || [])');
   });
 
@@ -269,6 +301,60 @@ test.describe('admin refund preview UI', () => {
         await page.close();
       }
     }
+  });
+
+  test('behaviorally records manual bank cases through separate confirmation and idempotency', async ({ page }) => {
+    await setupPortalPage(page, [
+      cleanPreview({
+        blocked: true,
+        manual_review_required: true,
+        recommended_operator_action: 'manual_bank_review_required',
+        code: 'BOOKING_ALREADY_PAID_OUT',
+        message: 'This booking has already been paid out.',
+        refund_type: 'direct_slot',
+        lines: [{
+          lesson_booking_id: 7001,
+          learner_id: 61,
+          instructor_id: 4,
+          gross_pence_removed: 8250,
+          source_fee_pence_used: 144,
+          fee_withheld_pence: 144,
+          net_refund_pence: 8106,
+          minutes_adjusted: 0,
+        }],
+        processing_fee_withheld_pence: 144,
+        net_refund_pence: 8106,
+      }),
+    ]);
+    await requestPreview(page, { type: 'direct_slot', sourceId: '7001', reason: 'Approved manual bank refund' });
+
+    const recordButton = page.locator('#btn-record-manual-bank-refund');
+    await expect(recordButton).toBeDisabled();
+
+    await page.fill('#refund-manual-bank-reference', 'BANK-REF-7001');
+    await page.fill('#refund-manual-bank-confirmation', 'RECORD_MANUAL');
+    await expect(recordButton).toBeDisabled();
+
+    await page.fill('#refund-manual-bank-confirmation', 'RECORD_MANUAL_BANK_REFUND_CONFIRMED');
+    await expect(recordButton).toBeEnabled();
+
+    await recordButton.click();
+    await expect(page.locator('#refund-manual-bank-status')).toContainText('SIMULATED_MANUAL_BANK_HOLD');
+
+    const manualCalls = await page.evaluate(() => window.__manualBankCalls);
+    expect(manualCalls).toHaveLength(1);
+    expect(manualCalls[0]).toEqual({
+      refund_type: 'direct_slot',
+      lesson_booking_id: 7001,
+      reason: 'Approved manual bank refund',
+      idempotency_key: manualCalls[0].idempotency_key,
+      manual_bank_reference: 'BANK-REF-7001',
+      operator_go: 'RECORD_MANUAL_BANK_REFUND_CONFIRMED',
+    });
+    expect(manualCalls[0].idempotency_key).toBeTruthy();
+    expect(manualCalls[0]).not.toHaveProperty('gross_refund_pence');
+    expect(manualCalls[0]).not.toHaveProperty('learner_id');
+    expect(await page.evaluate(() => window.__executeCalls)).toEqual([]);
   });
 
   test('lets booking rows prefill the preview without executing anything', () => {

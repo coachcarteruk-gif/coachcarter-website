@@ -43,7 +43,8 @@ Untracked docs excluded from the main audit:
 | Area | Planned Work | Status | Completion % | Priority | Confidence | Why It Matters | Evidence | Recommended Next Slice |
 |---|---|---:|---:|---:|---|---|---|---|
 | Refunds | Refund preview, ledger, and tightly gated execution | shipped | 90% | P0 | high | Live-money safety: bad refunds create cash, payout, trust, and accounting damage. | `DEVELOPMENT-ROADMAP.md:3-19`, `docs/refund-operator-runbook.md:19-31`; PR #264 / merge `d3a3ae1` added admin execute UI from preview, backend execute eligibility guards, and BCS/manual-review refusal coverage. | Keep stable; optional stale-preview UI cleanup only. Remaining refund roadmap is tracked by the manual bank-refund ledger-only row. |
-| Refunds | Manual bank-refund ledger-only flow | planned / not started | 10% | P1 | high | Paid-out bookings and missing-fee evidence need a clean audit trail instead of spreadsheet memory. | `docs/refund-operator-runbook.md:93-105`, `166-173`. | Add "record manual refund" backend and admin form, with no Stripe call. |
+| Refunds | Manual bank-refund ledger-only flow | shipped | 90% | P1 | high | Paid-out bookings and missing-fee evidence need a clean audit trail instead of spreadsheet memory. | `docs/refund-operator-runbook.md:93-141`, `api/_refund-manual-bank.js`, `public/admin/portal.js`; branch `codex/manual-bank-refund-ledger` added ledger-only admin recording, bank reference capture, idempotency mismatch protection, and no-Stripe/no-booking/no-payout/no-credit-mutation tests. | Keep stable; next work is tracked by the manual refund evidence/admin-notes polish row. |
+| Refunds | Manual refund evidence, notes, and incident-repair polish | planned / not started | 10% | P2 | medium | The safe ledger path exists, but richer evidence capture would reduce reliance on external notes during awkward refunds or repair incidents. | `docs/refund-operator-runbook.md:188-191`; manual bank records currently store reason, bank reference, preview metadata, and audit log only. | Add optional admin refund notes/evidence fields and a dedicated repair workflow for Stripe-success/local-ledger-failure cases. |
 | Credits / Bookings | Booking credit source attribution, FIFO, and CSA-aware edge cases | partially shipped | 80% | P0 | high | This is the spine for refund correctness, instructor payout fairness, and per-instructor credit trust. | `docs/per-instructor-credits-audit.md:23-99`, `memory/current-state.md:42-55`, `memory/prod-facts.md:98-107`. | Finish partial repeat-offer CSA-aware writer and any remaining non-BCS booking paths. |
 | Credits | Remove hardcoded `instructor_id = 1` fallback and seed-instructor assumptions | partially shipped | 25% | P1 | medium | Fine for one school; dangerous for InstructorBook, multi-school, and native checkout attribution. | `memory/chips.md:9-21`, `docs/per-instructor-credits-audit.md:76-99`. | Add a migration gate: reject missing instructor metadata after a cutoff, with an explicit legacy-only handler. |
 | Credits | Grandfathering scenarios and operator policy | partially shipped | 70% | P1 | medium | The mechanics shipped, but the human rules for weird historic balances are still not clear enough. | `docs/credits-grandfather.md:449-462` still says Step 6 TODO. | Fill the scenario table and link it from admin credit tooling. |
@@ -73,9 +74,10 @@ Untracked docs excluded from the main audit:
 
 What to do:
 
-- Add a backend/admin path to record approved manual bank refunds.
-- Keep it ledger-only: no Stripe call, no booking-status mutation, no payout-row mutation, and no manual credit mutation.
-- Require preview evidence, operator reason, and duplicate/idempotency protection.
+- Backend/admin path exists: `record-manual-bank-refund`.
+- It is ledger-only: no Stripe refund call, no booking-status mutation, no payout-row mutation, and no credit mutation.
+- It requires preview evidence, operator reason, bank reference, confirmation phrase, and duplicate/idempotency protection.
+- Future polish is tracked separately: richer evidence capture, admin notes, and incident repair tooling.
 
 Why now:
 
@@ -84,8 +86,8 @@ Why now:
 
 Smallest safe PR:
 
-- Record one reviewed manual refund event shape from admin tooling.
-- Display the ledger result back to the operator.
+- Keep this shipped slice stable.
+- Staging/prod-smoke one reviewed already-paid-out or manual-review preview.
 - Leave automatic Stripe execution and BCS execution unchanged.
 
 Risks and edge cases:

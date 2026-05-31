@@ -27,7 +27,8 @@ This is an operational guide only. It does not authorise UI changes, API changes
 - For supported unused credit-source refunds, the current backend may also create a `credit_source_adjustments` row and apply its locked balance decrement as part of the execute transaction. Treat that as backend-controlled accounting, not an operator instruction to edit credits manually.
 - Automatic execution for booking-credit-source lines is not enabled in this slice; those cases may preview but must not be forced through by hand.
 - Already-paid-out direct bookings and missing fee evidence are blocked/manual-review cases, not automatic refunds.
-- Manual bank-refund ledger-only recording is not implemented yet.
+- `POST /api/admin?action=record-manual-bank-refund` is ledger-only. It requires a refund preview, admin auth, `operator_go: "RECORD_MANUAL_BANK_REFUND_CONFIRMED"`, a stable `idempotency_key`, and a `manual_bank_reference`.
+- Manual bank recording writes `refund_events(status='executed')` and `refund_event_lines` with `metadata.refund_channel = "manual_bank"`. It does not call `stripe.refunds.create`, change booking status, edit payout rows, create credit-source adjustments, or mutate learner credit.
 
 ## Refund Decision Flow
 
@@ -102,7 +103,15 @@ These cases require manual review and may only proceed via approved manual bank 
 - Stripe cannot be the original-method refund target.
 - The current backend says the source is unsupported for execution.
 
-Manual bank refund recording in the refund ledger is a future slice. Until it exists, do not invent ledger rows or edit `refund_events` manually.
+Manual bank refund recording in the refund ledger is available only through the approved admin path. Do not invent ledger rows or edit `refund_events` manually.
+
+Before recording:
+
+- Run the latest refund preview.
+- Confirm the case is not clean `execute_eligible`; clean original-method refunds should use the automatic execute path.
+- Confirm the bank refund has been approved and completed outside Stripe.
+- Enter the real bank reference in the admin form.
+- Use the generated manual-bank idempotency key once for that learner/source/amount/reason.
 
 ## Post-Refund Verification Checklist
 
@@ -117,6 +126,16 @@ After an automatic execute result:
 - Learner credits were not manually edited. If the supported execute path created a backend-controlled credit-source adjustment, verify it matches the refund ledger.
 - Admin/operator evidence is captured using current system capabilities.
 - Learner communication uses the ledger amount, not an estimate from memory.
+
+After a manual bank record result:
+
+- The bank transfer/reference exists outside Stripe and matches `metadata.manual_bank_reference`.
+- `refund_events` has one executed event for the idempotency key with `metadata.refund_channel = "manual_bank"` and no `stripe_refund_id`.
+- `refund_event_lines` exist and match the preview amount breakdown.
+- Booking status is unchanged.
+- Payout rows are unchanged.
+- Learner credits were not manually edited by the record path.
+- Learner communication uses the ledger amount and bank evidence, not an estimate from memory.
 
 Current tooling does not provide a dedicated operator-note trail for refunds beyond reason text, audit log entries for executed automatic refunds, and ledger metadata. Keep external evidence until an admin notes/audit trail slice exists.
 
@@ -169,6 +188,6 @@ These are non-operative notes for later slices:
 
 - Enrich preview responses with clearer operator labels for supported execute vs manual-review cases.
 - Build an execute UI that preserves preview evidence, requires the exact confirmation phrase, and generates/stores a stable idempotency key.
-- Add a manual bank-refund ledger-only flow if needed.
+- Extend manual bank recording only if future cases need richer evidence fields or a dedicated incident workflow.
 - Add admin refund notes and stronger audit trail affordances.
 - Add a dedicated incident/repair workflow for Stripe-success/local-ledger-failure cases.

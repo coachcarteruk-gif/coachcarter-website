@@ -64,6 +64,7 @@ const { grantGoodwillCredits } = require('./_admin-credit-goodwill');
 const { inspectCreditReconciliation, grantReconciliationCredits } = require('./_admin-credit-reconciliation');
 const { planAdminRefundPreview, validateRefundPreviewRequest } = require('./_refund-planner');
 const { executeAdminRefund, validateRefundExecuteRequest } = require('./_refund-executor');
+const { recordManualBankRefund, validateManualBankRefundRequest } = require('./_refund-manual-bank');
 const { logAudit } = require('./_audit');
 const { deleteLearnerCascade } = require('./_gdpr');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
@@ -168,6 +169,7 @@ module.exports = async (req, res) => {
   if (action === 'credit-reconciliation') return handleCreditReconciliationContract(req, res);
   if (action === 'refund-preview')      return handleRefundPreview(req, res);
   if (action === 'execute-refund')      return handleExecuteRefund(req, res);
+  if (action === 'record-manual-bank-refund') return handleRecordManualBankRefund(req, res);
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
   if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
   if (action === 'toggle-payout-pause')  return handleTogglePayoutPause(req, res);
@@ -1531,6 +1533,62 @@ async function handleExecuteRefund(req, res) {
       code: 'REFUND_EXECUTE_FAILED',
       message: 'Failed to execute refund.',
       refund_executed: false,
+    });
+  }
+}
+
+// Ledger-only manual bank refund recording. This records an approved manual
+// bank refund after a server-side preview, but never calls stripe.refunds,
+// changes booking status, edits payout rows, or mutates learner credit.
+async function handleRecordManualBankRefund(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const validated = validateManualBankRefundRequest(req.body || {}, { schoolId });
+  if (!validated.ok) {
+    return res.status(validated.status).json({
+      error: true,
+      code: validated.code,
+      message: validated.message,
+      manual_bank_recorded: false,
+    });
+  }
+
+  try {
+    const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
+    const stripeClient = req.stripeClient || req._stripe || createStripeClient();
+    const result = await recordManualBankRefund({
+      sql,
+      stripe: stripeClient,
+      admin,
+      input: validated.input,
+      req,
+      auditLogger: req.auditLogger || req._auditLogger,
+      connectionString: (req.sql || req._sql) ? req.connectionString : process.env.POSTGRES_URL,
+      transactionRunner: req.transactionRunner || req._transactionRunner,
+    });
+
+    if (!result.ok) {
+      return res.status(result.status || 400).json({
+        error: true,
+        code: result.code || 'MANUAL_BANK_REFUND_RECORD_FAILED',
+        message: result.message || 'Manual bank refund could not be recorded.',
+        manual_bank_recorded: false,
+      });
+    }
+
+    return res.status(result.status || 200).json(result);
+  } catch (err) {
+    console.error('admin record-manual-bank-refund error:', err.message);
+    reportError('/api/admin', err);
+    return res.status(500).json({
+      error: true,
+      code: 'MANUAL_BANK_REFUND_RECORD_FAILED',
+      message: 'Failed to record manual bank refund.',
+      manual_bank_recorded: false,
     });
   }
 }

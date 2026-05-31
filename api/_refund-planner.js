@@ -168,6 +168,7 @@ function netPreview({
 function blockedPreview({
   refundType,
   grossRefundPence = 0,
+  processingFeeWithheldPence = 0,
   lines = [],
   reason,
   code,
@@ -180,7 +181,7 @@ function blockedPreview({
   const preview = netPreview({
     refundType,
     grossRefundPence,
-    processingFeeWithheldPence: 0,
+    processingFeeWithheldPence,
     lines,
     feeEvidence,
     reason,
@@ -550,6 +551,17 @@ async function planBcsPreview({ sql, stripe, input }) {
     return blockedPreview({
       refundType: input.refundType,
       grossRefundPence: gross,
+      lines: [line({
+        learner_id: row.learner_id,
+        instructor_id: row.instructor_id,
+        booking_credit_source_id: row.booking_credit_source_id,
+        credit_transaction_id: row.credit_transaction_id,
+        booking_id: row.booking_id,
+        gross_pence_removed: gross,
+        source_fee_pence_used: 0,
+        fee_withheld_pence: 0,
+        minutes_adjusted: input.refundedMinutes || row.minutes_drawn || 0,
+      })],
       reason: input.reason,
       code: 'MISSING_PROCESSING_FEE',
       message: 'Processing fee evidence is missing; manual review is required.',
@@ -623,10 +635,20 @@ async function planCreditTransactionPreview({ sql, stripe, input }) {
       evidence = stripeEvidence;
     }
   }
+  const trustedMinutes = proportionalRefundMinutes(gross, availablePence, availableMinutes);
   if (sourceFee == null) {
     return blockedPreview({
       refundType: input.refundType,
       grossRefundPence: gross,
+      lines: trustedMinutes == null ? [] : [line({
+        learner_id: row.learner_id,
+        instructor_id: row.instructor_id,
+        credit_transaction_id: row.credit_transaction_id,
+        gross_pence_removed: gross,
+        source_fee_pence_used: 0,
+        fee_withheld_pence: 0,
+        minutes_adjusted: trustedMinutes,
+      })],
       reason: input.reason,
       code: 'MISSING_PROCESSING_FEE',
       message: 'Processing fee evidence is missing; manual review is required.',
@@ -639,7 +661,6 @@ async function planCreditTransactionPreview({ sql, stripe, input }) {
   const activeFee = Number(row.active_stripe_fee_pence || 0);
   const availableFee = Math.max(0, sourceFee - activeFee);
   const withheld = proportionalFee(gross, availablePence, availableFee);
-  const trustedMinutes = proportionalRefundMinutes(gross, availablePence, availableMinutes);
   if (trustedMinutes == null) {
     return blockedPreview({
       refundType: input.refundType,
@@ -712,21 +733,40 @@ async function planDirectBookingPreview({ sql, stripe, input }) {
     });
   }
 
+  let fee = row.bcs_stripe_fee_pence > 0
+    ? Number(row.bcs_stripe_fee_pence)
+    : (row.booking_stripe_fee_pence == null ? null : Number(row.booking_stripe_fee_pence));
+  let evidence = row.bcs_stripe_fee_pence > 0
+    ? { source: 'booking_credit_sources.stripe_fee_pence', pence: fee, preferred_bcs_attribution: true }
+    : (fee == null ? null : { source: 'lesson_bookings.stripe_fee_pence', pence: fee });
+
+  if (fee == null) {
+    const stripeEvidence = await lookupStripeFeeEvidence(stripe, identities);
+    if (stripeEvidence) {
+      fee = stripeEvidence.feePence;
+      evidence = stripeEvidence;
+    }
+  }
+
   if (row.already_paid_out === true) {
+    const feeBase = Number(row.bcs_contribution_pence || 0) || Number(row.list_price_pence || gross);
+    const withheld = fee == null ? 0 : proportionalFee(gross, feeBase, fee);
     return blockedPreview({
       refundType: input.refundType,
       grossRefundPence: gross,
+      processingFeeWithheldPence: withheld,
       lines: [line({
         learner_id: row.learner_id,
         instructor_id: row.instructor_id,
         lesson_booking_id: row.lesson_booking_id,
         gross_pence_removed: gross,
-        source_fee_pence_used: 0,
-        fee_withheld_pence: 0,
+        source_fee_pence_used: fee || 0,
+        fee_withheld_pence: withheld,
       })],
       reason: input.reason,
       code: 'BOOKING_ALREADY_PAID_OUT',
       message: 'This booking has already been paid out. Record a manual bank refund instead of attempting an automatic Stripe refund.',
+      feeEvidence: evidence,
       stripe: identities,
       metadata: operatorContext(row),
       context: operatorContext(row),
@@ -752,21 +792,6 @@ async function planDirectBookingPreview({ sql, stripe, input }) {
       metadata: operatorContext(row),
       context: operatorContext(row),
     });
-  }
-
-  let fee = row.bcs_stripe_fee_pence > 0
-    ? Number(row.bcs_stripe_fee_pence)
-    : (row.booking_stripe_fee_pence == null ? null : Number(row.booking_stripe_fee_pence));
-  let evidence = row.bcs_stripe_fee_pence > 0
-    ? { source: 'booking_credit_sources.stripe_fee_pence', pence: fee, preferred_bcs_attribution: true }
-    : (fee == null ? null : { source: 'lesson_bookings.stripe_fee_pence', pence: fee });
-
-  if (fee == null) {
-    const stripeEvidence = await lookupStripeFeeEvidence(stripe, identities);
-    if (stripeEvidence) {
-      fee = stripeEvidence.feePence;
-      evidence = stripeEvidence;
-    }
   }
 
   if (fee == null) {

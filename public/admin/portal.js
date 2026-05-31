@@ -2345,7 +2345,9 @@ async function processPayoutsNow() {
 // Refund execution is only exposed from a clean preview and still goes through
 // the server-side execute planner; the browser never submits trusted amounts.
 const REFUND_EXECUTE_CONFIRMATION = 'EXECUTE_REFUND_CONFIRMED';
+const REFUND_MANUAL_BANK_CONFIRMATION = 'RECORD_MANUAL_BANK_REFUND_CONFIRMED';
 const REFUND_EXECUTE_KEY_PREFIX = 'cc_refund_execute_key:';
+const REFUND_MANUAL_BANK_KEY_PREFIX = 'cc_manual_bank_refund_key:';
 let currentRefundPreview = null;
 
 const REFUND_SOURCE_COPY = {
@@ -2409,6 +2411,11 @@ function resetRefundPreviewMessages() {
   if (status) {
     status.style.display = 'none';
     status.textContent = '';
+  }
+  const manualStatus = document.getElementById('refund-manual-bank-status');
+  if (manualStatus) {
+    manualStatus.style.display = 'none';
+    manualStatus.textContent = '';
   }
 }
 
@@ -2500,6 +2507,16 @@ function refundExecuteBlockReason(data) {
   return null;
 }
 
+function manualBankRecordBlockReason(data) {
+  if (!data || data.error) return 'Run a refund preview before recording a manual bank refund.';
+  if (!data.blocked && !data.manual_review_required && data.recommended_operator_action === 'execute_eligible') {
+    return 'Clean original-method refunds should use Execute refund, not manual bank recording.';
+  }
+  if (Number(data.net_refund_pence || 0) <= 0) return 'Returned amount must be greater than zero.';
+  if (!Array.isArray(data.lines) || data.lines.length === 0) return 'Preview ledger line evidence is required before manual bank recording.';
+  return null;
+}
+
 function stableStringify(value) {
   if (Array.isArray(value)) return '[' + value.map(stableStringify).join(',') + ']';
   if (value && typeof value === 'object') {
@@ -2553,9 +2570,9 @@ function newRefundIdempotencyKey(fingerprintHash) {
   return 'refund-ui-' + fingerprintHash + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12);
 }
 
-function getRefundIdempotencyKey(payload, data) {
+function getRefundIdempotencyKey(payload, data, prefix) {
   const fingerprintHash = refundHash(buildRefundExecuteFingerprint(payload, data));
-  const storageKey = REFUND_EXECUTE_KEY_PREFIX + fingerprintHash;
+  const storageKey = (prefix || REFUND_EXECUTE_KEY_PREFIX) + fingerprintHash;
   try {
     const existing = window.sessionStorage.getItem(storageKey);
     if (existing) return existing;
@@ -2636,12 +2653,45 @@ function renderRefundExecutePanel(data) {
   '</div>';
 }
 
+function renderManualBankRecordPanel(data) {
+  const blockReason = manualBankRecordBlockReason(data);
+  const idempotencyKey = currentRefundPreview?.manualBankIdempotencyKey || '';
+  if (blockReason) return '';
+
+  return '<div style="border:1px solid rgba(245,158,11,0.35);background:var(--amber-bg);border-radius:8px;padding:14px 16px;margin-bottom:18px;">' +
+    '<div style="font-weight:800;color:#92400e;">Manual bank refund can be recorded</div>' +
+    '<div style="font-size:0.88rem;line-height:1.45;color:#92400e;margin-top:4px;">Use this only after the bank refund has been approved and completed outside Stripe. This records ledger evidence only; it does not call Stripe, change bookings, edit payouts, or mutate learner credit.</div>' +
+    '<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(146,64,14,0.20);border-radius:8px;background:#fff;">' +
+      '<div style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">Manual idempotency key</div>' +
+      '<div style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:0.8rem;word-break:break-all;margin-top:3px;">' + esc(idempotencyKey) + '</div>' +
+    '</div>' +
+    '<label for="refund-manual-bank-reference" style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#92400e;margin-top:12px;margin-bottom:6px;">Bank reference</label>' +
+    '<input id="refund-manual-bank-reference" data-action="validate-manual-bank-refund" autocomplete="off" placeholder="Bank transfer reference" style="width:100%;padding:10px 12px;border:1px solid rgba(146,64,14,0.25);border-radius:8px;background:#fff;font-size:0.9rem;">' +
+    '<label for="refund-manual-bank-confirmation" style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#92400e;margin-top:12px;margin-bottom:6px;">Confirmation phrase</label>' +
+    '<input id="refund-manual-bank-confirmation" data-action="validate-manual-bank-refund" autocomplete="off" placeholder="' + esc(REFUND_MANUAL_BANK_CONFIRMATION) + '" style="width:100%;padding:10px 12px;border:1px solid rgba(146,64,14,0.25);border-radius:8px;background:#fff;font-size:0.9rem;">' +
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;">' +
+      '<button type="button" class="btn btn-secondary" id="btn-record-manual-bank-refund" data-action="record-manual-bank-refund" disabled>Record manual bank refund</button>' +
+      '<span style="font-size:0.82rem;color:#92400e;">Requires exact phrase and bank reference.</span>' +
+    '</div>' +
+    '<div id="refund-manual-bank-status" role="alert" style="display:none;margin-top:12px;padding:10px 12px;border-radius:8px;font-size:0.86rem;font-weight:700;"></div>' +
+  '</div>';
+}
+
 function updateRefundExecuteButton() {
   const btn = document.getElementById('btn-execute-refund');
   const input = document.getElementById('refund-execute-confirmation');
   if (!btn || !input) return;
   const payloadStillMatches = currentRefundPreview && refundPayloadMatchesCurrentForm(currentRefundPreview.payload);
   btn.disabled = input.value.trim() !== REFUND_EXECUTE_CONFIRMATION || !payloadStillMatches;
+}
+
+function updateManualBankRefundButton() {
+  const btn = document.getElementById('btn-record-manual-bank-refund');
+  const phrase = document.getElementById('refund-manual-bank-confirmation');
+  const reference = document.getElementById('refund-manual-bank-reference');
+  if (!btn || !phrase || !reference) return;
+  const payloadStillMatches = currentRefundPreview && refundPayloadMatchesCurrentForm(currentRefundPreview.payload);
+  btn.disabled = phrase.value.trim() !== REFUND_MANUAL_BANK_CONFIRMATION || !reference.value.trim() || !payloadStillMatches;
 }
 
 function setRefundExecuteStatus(message, type) {
@@ -2654,6 +2704,20 @@ function setRefundExecuteStatus(message, type) {
     : type === 'success'
       ? { bg: 'var(--green-bg)', fg: '#166534' }
       : { bg: 'var(--amber-bg)', fg: '#92400e' };
+  el.style.background = palette.bg;
+  el.style.color = palette.fg;
+}
+
+function setManualBankRefundStatus(message, type) {
+  const el = document.getElementById('refund-manual-bank-status');
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.display = message ? 'block' : 'none';
+  const palette = type === 'error'
+    ? { bg: 'var(--red-bg)', fg: '#991b1b' }
+    : type === 'success'
+      ? { bg: 'var(--green-bg)', fg: '#166534' }
+      : { bg: '#fff7ed', fg: '#92400e' };
   el.style.background = palette.bg;
   el.style.color = palette.fg;
 }
@@ -2678,6 +2742,36 @@ function renderExecutedRefundResult(data) {
         refundKv('Processing fee withheld', fmtPence(Number(event.processing_fee_withheld_pence || 0))) +
         refundKv('Returned amount', fmtPence(Number(event.net_refund_pence || 0))) +
         refundKv('Stripe refund reference', event.stripe_refund_id || 'Not applicable') +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-bottom:18px;">' +
+      '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger line summary</h3>' +
+      renderRefundLines(event.lines || []) +
+    '</div>';
+}
+
+function renderManualBankRefundResult(data) {
+  const event = data?.refund_event || {};
+  const metadata = event.metadata || {};
+  const title = data.idempotent_replay
+    ? 'Existing manual bank refund returned for this idempotency key.'
+    : 'Manual bank refund recorded in the ledger.';
+  return '<div style="border:1px solid rgba(34,197,94,0.32);background:var(--green-bg);color:#166534;border-radius:8px;padding:14px 16px;margin-bottom:18px;">' +
+      '<div style="font-weight:800;">' + esc(title) + '</div>' +
+      '<div style="font-size:0.88rem;line-height:1.45;margin-top:4px;">No Stripe refund, booking update, payout mutation, or learner-credit mutation was performed by this record path.</div>' +
+    '</div>' +
+    '<div style="margin-bottom:18px;">' +
+      '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Refund event</h3>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px;">' +
+        refundKv('Refund event ID', event.id) +
+        refundKv('Status', event.status) +
+        refundKv('Refund channel', metadata.refund_channel || 'manual_bank') +
+        refundKv('Refund type', event.refund_type) +
+        refundKv('Manual bank reference', metadata.manual_bank_reference || '-') +
+        refundKv('Idempotency key', event.idempotency_key) +
+        refundKv('Gross refund', fmtPence(Number(event.gross_refund_pence || 0))) +
+        refundKv('Processing fee withheld', fmtPence(Number(event.processing_fee_withheld_pence || 0))) +
+        refundKv('Returned amount', fmtPence(Number(event.net_refund_pence || 0))) +
       '</div>' +
     '</div>' +
     '<div style="margin-bottom:18px;">' +
@@ -2751,6 +2845,7 @@ function renderRefundPreviewResult(data) {
       '<span style="font-size:0.82rem;color:var(--muted);">Execute uses admin?action=execute-refund. It must not mutate booking status or payout rows.</span>' +
     '</div>' +
     renderRefundExecutePanel(data) +
+    renderManualBankRecordPanel(data) +
     '<div style="margin-bottom:18px;">' +
       '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger line evidence</h3>' +
       renderRefundLines(data.lines) +
@@ -2834,7 +2929,8 @@ async function submitRefundPreview(e) {
     currentRefundPreview = {
       payload: previewPayload,
       data,
-      idempotencyKey: getRefundIdempotencyKey(previewPayload, data)
+      idempotencyKey: getRefundIdempotencyKey(previewPayload, data, REFUND_EXECUTE_KEY_PREFIX),
+      manualBankIdempotencyKey: getRefundIdempotencyKey(previewPayload, data, REFUND_MANUAL_BANK_KEY_PREFIX)
     };
     renderRefundPreviewResult(data);
   } catch (error) {
@@ -2914,6 +3010,74 @@ async function executeRefundFromPreview() {
   }
 }
 
+async function recordManualBankRefundFromPreview() {
+  if (!currentRefundPreview) {
+    setManualBankRefundStatus('Run a preview before recording a manual bank refund.', 'error');
+    return;
+  }
+  if (!refundPayloadMatchesCurrentForm(currentRefundPreview.payload)) {
+    setManualBankRefundStatus('The form changed after preview. Run a fresh preview before recording.', 'error');
+    updateManualBankRefundButton();
+    return;
+  }
+  const blockReason = manualBankRecordBlockReason(currentRefundPreview.data);
+  if (blockReason) {
+    setManualBankRefundStatus(blockReason, 'error');
+    return;
+  }
+  const reference = (document.getElementById('refund-manual-bank-reference')?.value || '').trim();
+  if (!reference) {
+    setManualBankRefundStatus('Enter the bank transfer reference before recording.', 'error');
+    return;
+  }
+  const phrase = (document.getElementById('refund-manual-bank-confirmation')?.value || '').trim();
+  if (phrase !== REFUND_MANUAL_BANK_CONFIRMATION) {
+    setManualBankRefundStatus('Type the exact manual-bank confirmation phrase before recording.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-record-manual-bank-refund');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Recording...';
+  }
+  setManualBankRefundStatus('Recording via admin?action=record-manual-bank-refund. Keep this idempotency key with the bank evidence.', 'pending');
+
+  try {
+    const res = await fetchAdmin('/api/admin?action=record-manual-bank-refund', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        ...currentRefundPreview.payload,
+        idempotency_key: currentRefundPreview.manualBankIdempotencyKey,
+        manual_bank_reference: reference,
+        operator_go: REFUND_MANUAL_BANK_CONFIRMATION
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      setManualBankRefundStatus((data.message || data.error || 'Manual bank refund record failed.') + (data.code ? ' Code: ' + data.code : ''), 'error');
+      return;
+    }
+    const result = document.getElementById('refund-preview-result');
+    if (result) {
+      result.innerHTML = renderManualBankRefundResult(data);
+      const badge = document.getElementById('refund-preview-state');
+      if (badge) {
+        badge.textContent = data.idempotent_replay ? 'Manual replay' : 'Manual recorded';
+        badge.className = 'badge badge-green';
+      }
+    }
+  } catch (error) {
+    setManualBankRefundStatus(error.message || 'Manual bank refund record failed.', 'error');
+  } finally {
+    if (btn) {
+      btn.textContent = 'Record manual bank refund';
+      updateManualBankRefundButton();
+    }
+  }
+}
+
 loadDashboard();
 
 // â”€â”€ Delegated error listener "” replaces inline onerror on dynamically
@@ -2936,6 +3100,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'edit-booking') openAdminEditBooking(parseInt(t.dataset.id, 10));
   else if (a === 'open-refund-preview') openRefundPreviewFromBooking(parseInt(t.dataset.id, 10));
   else if (a === 'execute-refund') executeRefundFromPreview();
+  else if (a === 'record-manual-bank-refund') recordManualBankRefundFromPreview();
   else if (a === 'mark-complete') markComplete(parseInt(t.dataset.id, 10));
   else if (a === 'show-learner-detail') showLearnerDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-adjust-credits') openAdjustCredits(t.dataset.learnerId, parseInt(t.dataset.balance, 10));
@@ -2969,11 +3134,13 @@ document.addEventListener('change', function (e) {
 document.addEventListener('input', function (e) {
   if (e.target && (e.target.id === 'refund-source-id' || e.target.id === 'refund-reason')) {
     updateRefundExecuteButton();
+    updateManualBankRefundButton();
   }
   var t = e.target.closest('[data-action]');
   if (!t) return;
   if (t.dataset.action === 'render-learners') renderLearners();
   else if (t.dataset.action === 'validate-refund-execute-confirmation') updateRefundExecuteButton();
+  else if (t.dataset.action === 'validate-manual-bank-refund') updateManualBankRefundButton();
 });
 // â”€â”€ Referrals section â”€â”€
 async function loadReferrals() {
