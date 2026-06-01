@@ -15,6 +15,37 @@ function formatBalanceMins(mins) {
   return rem ? `${h}h ${rem}m` : `${h}h`;
 }
 
+function normaliseTransmissionType(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return ['manual', 'automatic', 'both'].includes(text) ? text : null;
+}
+
+function transmissionLabel(value) {
+  switch (normaliseTransmissionType(value)) {
+    case 'automatic': return 'Automatic';
+    case 'both': return 'Manual/auto';
+    default: return 'Manual';
+  }
+}
+
+function configureAvailabilityTransmissionSelect() {
+  const select = document.getElementById('modalTransmission');
+  if (!select) return;
+  const allowed = instructorTransmissionType === 'both'
+    ? ['both', 'manual', 'automatic']
+    : [instructorTransmissionType];
+  for (const option of select.options) {
+    option.disabled = !allowed.includes(option.value);
+    option.hidden = !allowed.includes(option.value);
+  }
+  select.value = allowed[0] || 'manual';
+}
+
+function availabilityTransmissionBadge(slot) {
+  const type = normaliseTransmissionType(slot && slot.transmission_type) || 'both';
+  return `<span class="lesson-type-badge availability-badge transmission-badge">${transmissionLabel(type)}</span>`;
+}
+
 // â”€â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let instructor = null;
 let currentView = 'agenda'; // 'monthly' | 'weekly' | 'agenda'
@@ -26,6 +57,7 @@ let availabilityOverrideCache = {}; // dateStr -> [date-specific availability, .
 let availCache   = []; // availability windows [{day_of_week, start_time, end_time}]
 let calendarStartHour = 7; // from instructor profile
 let instructorSlug = null; // from profile, used for shareable booking links
+let instructorTransmissionType = 'manual'; // from profile, used for one-off slot defaults
 let loadedRanges = []; // [{from, to}] already fetched
 let selectedBooking = null;
 
@@ -52,6 +84,7 @@ async function loadCalendarPrefs() {
     if (res.ok && data.instructor) {
       calendarStartHour = data.instructor.calendar_start_hour || 7;
       instructorSlug = data.instructor.slug || null;
+      instructorTransmissionType = normaliseTransmissionType(data.instructor.transmission_type) || 'manual';
     }
   } catch {}
 }
@@ -385,6 +418,7 @@ function renderWeekly() {
               <div class="tp-lesson-name">Available slot</div>
               <div class="tp-lesson-time">${a.start_time.slice(0,5)} â†’ ${a.end_time.slice(0,5)}</div>
             </div>
+            ${availabilityTransmissionBadge(a)}
             <button class="offer-cancel-btn" data-action="delete-availability-override" data-id="${a.id}">Remove</button>
           </div>`;
       }
@@ -577,6 +611,7 @@ function renderAgenda() {
             <div class="agenda-card-left">
               <div class="agenda-time">${b.start_time.slice(0,5)} â€“ ${b.end_time.slice(0,5)}</div>
               <span class="lesson-type-badge availability-badge">Available</span>
+              ${availabilityTransmissionBadge(b)}
             </div>
             <div class="agenda-card-mid">
               <div class="agenda-learner">Extra availability</div>
@@ -674,6 +709,7 @@ function openAvailModal(targetDateStr) {
   // Default times for the new window
   document.getElementById('modalStart').value = '09:00';
   document.getElementById('modalEnd').value   = '10:30';
+  configureAvailabilityTransmissionSelect();
   document.getElementById('modalSaveBtn').textContent = 'Add slot';
 
   document.getElementById('availModal').classList.add('open');
@@ -690,6 +726,7 @@ async function saveNewAvailability() {
   const selectedDate = document.getElementById('modalDate')?.value || dateStr(modalTargetDate);
   const start = document.getElementById('modalStart').value;
   const end   = document.getElementById('modalEnd').value;
+  const transmission = normaliseTransmissionType(document.getElementById('modalTransmission')?.value) || instructorTransmissionType;
 
   if (!selectedDate) { showToast('Please choose a date', 'error'); return; }
   if (!start || !end) { showToast('Please set both start and end times', 'error'); return; }
@@ -702,7 +739,7 @@ async function saveNewAvailability() {
     const res  = await ccAuth.fetchAuthed('/api/instructor?action=create-availability-override', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ override_date: selectedDate, start_time: start, end_time: end })
+      body: JSON.stringify({ override_date: selectedDate, start_time: start, end_time: end, transmission_type: transmission })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);

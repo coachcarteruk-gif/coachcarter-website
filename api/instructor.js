@@ -83,6 +83,7 @@ function buildScopedDurationCreditRefusal(delta, availableMinutes) {
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_HHMM_RE = /^\d{2}:\d{2}$/;
+const AVAILABILITY_TRANSMISSION_TYPES = new Set(['manual', 'automatic', 'both']);
 
 function isValidIsoDate(value) {
   if (!ISO_DATE_RE.test(String(value || ''))) return false;
@@ -104,6 +105,16 @@ function timeToMinutes(value) {
 function startOfTodayUtc() {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+function normaliseAvailabilityTransmissionType(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return AVAILABILITY_TRANSMISSION_TYPES.has(text) ? text : null;
+}
+
+function instructorCanOfferAvailabilityTransmission(instructorTransmissionType, slotTransmissionType) {
+  const instructorType = normaliseAvailabilityTransmissionType(instructorTransmissionType) || 'manual';
+  return instructorType === 'both' || slotTransmissionType === instructorType;
 }
 
 function setCors(res) {
@@ -529,6 +540,7 @@ async function handleScheduleRange(req, res) {
                override_date::text AS override_date,
                start_time::text AS start_time,
                end_time::text AS end_time,
+               COALESCE(transmission_type, 'both') AS transmission_type,
                note
         FROM instructor_availability_overrides
         WHERE instructor_id = ${instructor.id}
@@ -659,6 +671,7 @@ async function handleAvailabilityOverrides(req, res) {
     const overrides = await sql`
       SELECT id, override_date::text AS override_date,
              start_time::text AS start_time, end_time::text AS end_time,
+             COALESCE(transmission_type, 'both') AS transmission_type,
              note
       FROM instructor_availability_overrides
       WHERE instructor_id = ${instructor.id}
@@ -685,7 +698,7 @@ async function handleCreateAvailabilityOverride(req, res) {
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { override_date, start_time, end_time, note } = req.body || {};
+  const { override_date, start_time, end_time, note, transmission_type } = req.body || {};
   if (!isValidIsoDate(override_date)) {
     return res.status(400).json({ error: 'override_date must be YYYY-MM-DD' });
   }
@@ -693,6 +706,14 @@ async function handleCreateAvailabilityOverride(req, res) {
     return res.status(400).json({ error: 'Times must be HH:MM format' });
   }
   if (start_time >= end_time) return res.status(400).json({ error: 'start_time must be before end_time' });
+
+  let requestedTransmissionType = null;
+  if (transmission_type !== undefined && transmission_type !== null && String(transmission_type).trim() !== '') {
+    requestedTransmissionType = normaliseAvailabilityTransmissionType(transmission_type);
+    if (!requestedTransmissionType) {
+      return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
+    }
+  }
 
   const overrideDate = new Date(`${override_date}T00:00:00Z`);
   if (overrideDate < startOfTodayUtc()) {
@@ -705,13 +726,20 @@ async function handleCreateAvailabilityOverride(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [instructorRow] = await sql`
-      SELECT COALESCE(min_booking_notice_hours, 24) AS min_booking_notice_hours
+      SELECT COALESCE(min_booking_notice_hours, 24) AS min_booking_notice_hours,
+             COALESCE(transmission_type, 'manual') AS transmission_type
       FROM instructors
       WHERE id = ${instructor.id}
         AND school_id = ${schoolId}
         AND active = true
     `;
     if (!instructorRow) return res.status(404).json({ error: 'Instructor not found or inactive' });
+
+    const instructorTransmissionType = normaliseAvailabilityTransmissionType(instructorRow.transmission_type) || 'manual';
+    const cleanTransmissionType = requestedTransmissionType || (instructorTransmissionType === 'both' ? 'both' : instructorTransmissionType);
+    if (!instructorCanOfferAvailabilityTransmission(instructorTransmissionType, cleanTransmissionType)) {
+      return res.status(400).json({ error: `This instructor profile is set to ${instructorTransmissionType} transmission only` });
+    }
 
     const slotStartMinutes = timeToMinutes(start_time);
     if (overrideDate.getTime() === startOfTodayUtc().getTime()) {
@@ -760,14 +788,17 @@ async function handleCreateAvailabilityOverride(req, res) {
 
     const [row] = await sql`
       INSERT INTO instructor_availability_overrides (
-        instructor_id, school_id, override_date, start_time, end_time, note, active
+        instructor_id, school_id, override_date, start_time, end_time, transmission_type, note, active
       ) VALUES (
-        ${instructor.id}, ${schoolId}, ${override_date}, ${start_time}, ${end_time}, ${cleanNote}, true
+        ${instructor.id}, ${schoolId}, ${override_date}, ${start_time}, ${end_time}, ${cleanTransmissionType}, ${cleanNote}, true
       )
       ON CONFLICT (instructor_id, school_id, override_date, start_time, end_time)
-      DO UPDATE SET active = true, note = EXCLUDED.note
+      DO UPDATE SET active = true,
+                    transmission_type = EXCLUDED.transmission_type,
+                    note = EXCLUDED.note
       RETURNING id, override_date::text AS override_date,
                 start_time::text AS start_time, end_time::text AS end_time,
+                COALESCE(transmission_type, 'both') AS transmission_type,
                 note
     `;
 

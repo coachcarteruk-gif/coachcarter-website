@@ -879,6 +879,8 @@ CREATE TABLE IF NOT EXISTS instructor_availability_overrides (
   override_date   DATE NOT NULL,
   start_time      TIME NOT NULL,
   end_time        TIME NOT NULL,
+  transmission_type TEXT NOT NULL DEFAULT 'both'
+                  CHECK (transmission_type IN ('manual','automatic','both')),
   active          BOOLEAN NOT NULL DEFAULT TRUE,
   note            TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),

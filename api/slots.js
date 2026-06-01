@@ -53,6 +53,7 @@ const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
 const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
 const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
+const SLOT_TRANSMISSION_TYPES = new Set(['manual', 'automatic', 'both']);
 
 class BookingTransactionAbort extends Error {
   constructor(result) {
@@ -96,6 +97,31 @@ function rejectLessonTypeNotOffered(res) {
   return res.status(400).json({
     error: 'This instructor does not currently offer that lesson length.'
   });
+}
+
+function normaliseSlotTransmissionType(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return SLOT_TRANSMISSION_TYPES.has(text) ? text : null;
+}
+
+function slotSupportsTransmission(slotTransmissionType, requestedTransmissionType) {
+  const requested = normaliseSlotTransmissionType(requestedTransmissionType);
+  if (!requested) return true;
+  const slotType = normaliseSlotTransmissionType(slotTransmissionType) || 'both';
+  return slotType === 'both' || slotType === requested;
+}
+
+function clampSlotTransmissionType(slotTransmissionType, instructorTransmissionType) {
+  const instructorType = normaliseSlotTransmissionType(instructorTransmissionType) || 'manual';
+  const slotType = normaliseSlotTransmissionType(slotTransmissionType) || 'both';
+  if (instructorType === 'both') return slotType;
+  if (slotType === 'both') return instructorType;
+  return slotType === instructorType ? slotType : null;
+}
+
+function parseRequestTransmissionType(value) {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  return normaliseSlotTransmissionType(value);
 }
 
 function hasBufferedSlotConflict(slotStart, slotEnd, blockStart, blockEnd, bufferMinutes = 0) {
@@ -155,20 +181,23 @@ async function slotFitsActiveAvailability(sql, {
   schoolId,
   date,
   startTime,
-  endTime
+  endTime,
+  transmissionType = null
 }) {
   const slotStart = timeToMinutes(startTime);
   const slotEnd = timeToMinutes(endTime);
   const dayOfWeek = new Date(date + 'T00:00:00Z').getUTCDay();
 
   const [instructor] = await sql`
-    SELECT COALESCE(min_booking_notice_hours, 24) AS min_booking_notice_hours
+    SELECT COALESCE(min_booking_notice_hours, 24) AS min_booking_notice_hours,
+           COALESCE(transmission_type, 'manual') AS transmission_type
     FROM instructors
     WHERE id = ${instructorId}
       AND school_id = ${schoolId}
       AND active = true
   `;
   if (!instructor) return false;
+  const instructorTransmissionType = normaliseSlotTransmissionType(instructor.transmission_type) || 'manual';
 
   const minNoticeHours = Math.max(0, parseInt(instructor.min_booking_notice_hours, 10) || 0);
   if (minNoticeHours > 0) {
@@ -180,7 +209,8 @@ async function slotFitsActiveAvailability(sql, {
   let overrideWindows = [];
   try {
     overrideWindows = await sql`
-      SELECT start_time::text AS start_time, end_time::text AS end_time
+      SELECT start_time::text AS start_time, end_time::text AS end_time,
+             COALESCE(transmission_type, 'both') AS transmission_type
       FROM instructor_availability_overrides
       WHERE instructor_id = ${instructorId}
         AND school_id = ${schoolId}
@@ -188,6 +218,12 @@ async function slotFitsActiveAvailability(sql, {
         AND active = true
     `;
   } catch (_) {}
+  overrideWindows = overrideWindows
+    .map(w => ({
+      ...w,
+      transmission_type: clampSlotTransmissionType(w.transmission_type, instructorTransmissionType)
+    }))
+    .filter(w => w.transmission_type);
 
   const blackoutRows = await sql`
     SELECT 1
@@ -224,11 +260,16 @@ async function slotFitsActiveAvailability(sql, {
           AND day_of_week = ${dayOfWeek}
           AND active = true
       `;
+  for (const w of weeklyWindows) {
+    w.transmission_type = instructorTransmissionType;
+  }
 
   return [...weeklyWindows, ...overrideWindows].some(w => {
     const windowStart = timeToMinutes(w.start_time);
     const windowEnd = timeToMinutes(w.end_time);
-    return slotStart >= windowStart && slotEnd <= windowEnd;
+    return slotStart >= windowStart &&
+           slotEnd <= windowEnd &&
+           slotSupportsTransmission(w.transmission_type, transmissionType);
   });
 }
 
@@ -279,8 +320,12 @@ module.exports = async (req, res) => {
 async function handleAvailable(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { from, to, instructor_id, lesson_type_id, pickup_postcode, school_id } = req.query;
+  const { from, to, instructor_id, lesson_type_id, pickup_postcode, school_id, transmission_type } = req.query;
   const schoolId = parseInt(school_id) || 1;
+  const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
+  if (transmission_type && !requestedTransmissionType) {
+    return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
+  }
   // Slot-first: when true, the caller is using lesson_type_id only to set the
   // grid spacing (smallest active duration). Skip the offered_lesson_types
   // filter so instructors offering OTHER durations are not excluded — the
@@ -338,6 +383,7 @@ async function handleAvailable(req, res) {
                    i.photo_url, i.bio,
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   COALESCE(i.transmission_type, 'manual') AS transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
@@ -356,6 +402,7 @@ async function handleAvailable(req, res) {
                    i.photo_url, i.bio,
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   COALESCE(i.transmission_type, 'manual') AS transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
@@ -376,6 +423,7 @@ async function handleAvailable(req, res) {
                    i.photo_url, i.bio,
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   COALESCE(i.transmission_type, 'manual') AS transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
@@ -394,6 +442,7 @@ async function handleAvailable(req, res) {
                    i.photo_url, i.bio,
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   COALESCE(i.transmission_type, 'manual') AS transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
@@ -419,6 +468,8 @@ async function handleAvailable(req, res) {
                      i.photo_url, i.bio,
                      COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                      COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     COALESCE(iao.transmission_type, 'both') AS transmission_type,
+                     COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                      i.max_travel_minutes
               FROM instructor_availability_overrides iao
               JOIN instructors i ON i.id = iao.instructor_id
@@ -439,6 +490,8 @@ async function handleAvailable(req, res) {
                      i.photo_url, i.bio,
                      COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                      COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     COALESCE(iao.transmission_type, 'both') AS transmission_type,
+                     COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                      i.max_travel_minutes
               FROM instructor_availability_overrides iao
               JOIN instructors i ON i.id = iao.instructor_id
@@ -461,6 +514,8 @@ async function handleAvailable(req, res) {
                      i.photo_url, i.bio,
                      COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                      COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     COALESCE(iao.transmission_type, 'both') AS transmission_type,
+                     COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                      i.max_travel_minutes
               FROM instructor_availability_overrides iao
               JOIN instructors i ON i.id = iao.instructor_id
@@ -481,6 +536,8 @@ async function handleAvailable(req, res) {
                      i.photo_url, i.bio,
                      COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                      COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     COALESCE(iao.transmission_type, 'both') AS transmission_type,
+                     COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                      i.max_travel_minutes
               FROM instructor_availability_overrides iao
               JOIN instructors i ON i.id = iao.instructor_id
@@ -703,6 +760,10 @@ async function handleAvailable(req, res) {
     // 3. Group windows by instructor
     const byInstructor = {};
     for (const w of [...windows, ...overrideWindows]) {
+      const windowTransmissionType = w.override_date
+        ? clampSlotTransmissionType(w.transmission_type, w.instructor_transmission_type)
+        : normaliseSlotTransmissionType(w.transmission_type);
+      if (!windowTransmissionType) continue;
       if (!byInstructor[w.instructor_id]) {
         byInstructor[w.instructor_id] = {
           id:             w.instructor_id,
@@ -718,6 +779,7 @@ async function handleAvailable(req, res) {
       byInstructor[w.instructor_id].windows.push({
         day_of_week: w.day_of_week,
         override_date: w.override_date || null,
+        transmission_type: windowTransmissionType,
         start: timeToMinutes(w.start_time),
         end:   timeToMinutes(w.end_time)
       });
@@ -765,11 +827,12 @@ async function handleAvailable(req, res) {
         const weeklyWindows = isBlackout
           ? []
           : instructor.windows.filter(w => !w.override_date && w.day_of_week === dayOfWeek);
-        const matchingWindows = weeklyWindows.concat(dateWindows);
+        const matchingWindows = dateWindows.concat(weeklyWindows);
         const bookedSlots     = bookedIndex[`${instructor.id}|${dateStr}`] || [];
         const buffer          = instructor.buffer_minutes || 0;
 
         for (const window of matchingWindows) {
+          if (!slotSupportsTransmission(window.transmission_type, requestedTransmissionType)) continue;
           let slotStart = window.start;
 
           while (slotStart + slotMinutes <= window.end) {
@@ -833,7 +896,8 @@ async function handleAvailable(req, res) {
               instructor_photo: instructor.photo_url,
               date:            dateStr,
               start_time:      minutesToTime(slotStart),
-              end_time:        minutesToTime(slotEnd)
+              end_time:        minutesToTime(slotEnd),
+              transmission_type: window.transmission_type
             });
 
             slotStart += slotMinutes;
@@ -889,9 +953,10 @@ async function handleAvailable(req, res) {
 async function handleDurationsForSlot(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { instructor_id, date, start_time, school_id, pickup_postcode } = req.query;
+  const { instructor_id, date, start_time, school_id, pickup_postcode, transmission_type } = req.query;
   const schoolId = parseInt(school_id) || 1;
   const instructorId = parseInt(instructor_id);
+  const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
 
   if (!instructorId || !date || !start_time) {
     return res.status(400).json({ error: 'instructor_id, date and start_time are required' });
@@ -901,6 +966,9 @@ async function handleDurationsForSlot(req, res) {
   }
   if (!/^\d{2}:\d{2}(:\d{2})?$/.test(start_time)) {
     return res.status(400).json({ error: 'Invalid start_time format. Use HH:MM' });
+  }
+  if (transmission_type && !requestedTransmissionType) {
+    return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
   }
 
   try {
@@ -926,6 +994,7 @@ async function handleDurationsForSlot(req, res) {
       SELECT i.id, i.offered_lesson_types,
              COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
              COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+             COALESCE(i.transmission_type, 'manual') AS transmission_type,
              i.max_travel_minutes
       FROM instructors i
       WHERE i.id = ${instructorId}
@@ -942,18 +1011,34 @@ async function handleDurationsForSlot(req, res) {
         AND day_of_week = ${dayOfWeek}
         AND active = true
     `;
+    const instructorTransmissionType = normaliseSlotTransmissionType(instructor.transmission_type) || 'manual';
+    windows = windows.map(w => ({ ...w, transmission_type: instructorTransmissionType }));
+    const slotStart = timeToMinutes(start_time);
     let overrideWindows = [];
     try {
       overrideWindows = await sql`
-        SELECT start_time::text AS start_time, end_time::text AS end_time
+        SELECT start_time::text AS start_time, end_time::text AS end_time,
+               COALESCE(transmission_type, 'both') AS transmission_type
         FROM instructor_availability_overrides
         WHERE instructor_id = ${instructorId}
           AND school_id = ${schoolId}
           AND override_date = ${date}::date
           AND active = true
       `;
-      windows = windows.concat(overrideWindows);
     } catch (_) {}
+    overrideWindows = overrideWindows
+      .map(w => ({
+        ...w,
+        transmission_type: clampSlotTransmissionType(w.transmission_type, instructorTransmissionType)
+      }))
+      .filter(w => w.transmission_type);
+
+    const matchingOverrideWindows = overrideWindows.filter(w => {
+      const ws = timeToMinutes(w.start_time);
+      const we = timeToMinutes(w.end_time);
+      return slotStart >= ws && slotStart < we && slotSupportsTransmission(w.transmission_type, requestedTransmissionType);
+    });
+    windows = matchingOverrideWindows.length > 0 ? matchingOverrideWindows : windows;
 
     let blackoutBlocked = false;
     try {
@@ -972,18 +1057,21 @@ async function handleDurationsForSlot(req, res) {
       }
     } catch (_) {}
 
-    const slotStart = timeToMinutes(start_time);
     const buffer = parseInt(instructor.buffer_minutes) || 0;
     const offered = instructor.offered_lesson_types; // null = default set, otherwise JSONB array of slugs
 
     // Find the availability window covering this start time (so we know how
     // long the door is open for).
     let windowEnd = null;
+    let slotTransmissionType = instructorTransmissionType;
     for (const w of windows) {
       const ws = timeToMinutes(w.start_time);
       const we = timeToMinutes(w.end_time);
-      if (slotStart >= ws && slotStart < we) {
-        windowEnd = windowEnd == null ? we : Math.max(windowEnd, we);
+      if (slotStart >= ws && slotStart < we && slotSupportsTransmission(w.transmission_type, requestedTransmissionType)) {
+        if (windowEnd == null || we > windowEnd) {
+          windowEnd = we;
+          slotTransmissionType = normaliseSlotTransmissionType(w.transmission_type) || instructorTransmissionType;
+        }
       }
     }
 
@@ -1133,6 +1221,7 @@ async function handleDurationsForSlot(req, res) {
       instructor_id: instructorId,
       date,
       start_time,
+      transmission_type: slotTransmissionType,
       durations
     });
   } catch (err) {
@@ -1408,9 +1497,13 @@ async function handleBook(req, res) {
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = user.school_id || 1;
 
-  const { instructor_id, date, start_time, end_time, lesson_type_id, pickup_address, dropoff_address, repeat_weeks } = req.body;
+  const { instructor_id, date, start_time, end_time, lesson_type_id, pickup_address, dropoff_address, repeat_weeks, transmission_type } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'instructor_id, date, start_time and end_time are required' });
+  const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
+  if (transmission_type && !requestedTransmissionType) {
+    return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
+  }
 
   // Validate repeat_weeks if provided
   const weeks = repeat_weeks ? parseInt(repeat_weeks, 10) : 1;
@@ -1489,7 +1582,8 @@ async function handleBook(req, res) {
         schoolId,
         date: bd.date,
         startTime: start_time,
-        endTime: end_time
+        endTime: end_time,
+        transmissionType: requestedTransmissionType
       });
       if (!fitsAvailability) unavailableDates.push(bd.date);
     }
@@ -1906,9 +2000,13 @@ async function handleCheckoutSlot(req, res) {
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = user.school_id || 1;
 
-  const { instructor_id, date, start_time, end_time, lesson_type_id } = req.body;
+  const { instructor_id, date, start_time, end_time, lesson_type_id, transmission_type } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'instructor_id, date, start_time, end_time required' });
+  const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
+  if (transmission_type && !requestedTransmissionType) {
+    return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
+  }
 
   // Reject same-day bookings where the slot has already started
   const startMins    = timeToMinutes(start_time);
@@ -2003,7 +2101,8 @@ async function handleCheckoutSlot(req, res) {
       schoolId,
       date,
       startTime: start_time,
-      endTime: end_time
+      endTime: end_time,
+      transmissionType: requestedTransmissionType
     });
     if (!stillAvailable) {
       return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });
@@ -2046,6 +2145,7 @@ async function handleCheckoutSlot(req, res) {
         scheduled_date:  date,
         start_time,
         end_time,
+        transmission_type: requestedTransmissionType || '',
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
         amount_pence:    String(pricePence),
@@ -2117,7 +2217,7 @@ async function handleCheckoutSlotGuest(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { instructor_id, date, start_time, end_time, lesson_type_id,
-          guest_name, guest_email, guest_phone, guest_pickup_address } = req.body;
+          guest_name, guest_email, guest_phone, guest_pickup_address, transmission_type } = req.body;
 
   // Validate required guest fields
   if (!guest_name || !guest_name.trim())
@@ -2136,6 +2236,10 @@ async function handleCheckoutSlotGuest(req, res) {
   const cleanName  = guest_name.trim();
   const cleanAddr  = guest_pickup_address.trim();
   const schoolId   = parseInt(req.body.school_id, 10) || 1;
+  const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
+  if (transmission_type && !requestedTransmissionType) {
+    return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -2240,7 +2344,8 @@ async function handleCheckoutSlotGuest(req, res) {
       schoolId,
       date,
       startTime: start_time,
-      endTime: end_time
+      endTime: end_time,
+      transmissionType: requestedTransmissionType
     });
     if (!stillAvailable) {
       return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });
@@ -2327,6 +2432,7 @@ async function handleCheckoutSlotGuest(req, res) {
         scheduled_date:  date,
         start_time,
         end_time,
+        transmission_type: requestedTransmissionType || '',
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
         amount_pence:    String(pricePence),
@@ -2403,8 +2509,8 @@ async function handleBookFreeTrial(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { instructor_id, date, start_time, end_time,
-          guest_name, guest_email, guest_phone, guest_pickup_address,
-          referral_code } = req.body;
+           guest_name, guest_email, guest_phone, guest_pickup_address,
+          referral_code, transmission_type } = req.body;
 
   if (!guest_name || !guest_name.trim())
     return res.status(400).json({ error: 'Name is required' });
@@ -2422,6 +2528,10 @@ async function handleBookFreeTrial(req, res) {
   const cleanName  = guest_name.trim();
   const cleanAddr  = guest_pickup_address.trim();
   const schoolId   = parseInt(req.body.school_id, 10) || 1;
+  const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
+  if (transmission_type && !requestedTransmissionType) {
+    return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -2537,7 +2647,8 @@ async function handleBookFreeTrial(req, res) {
       schoolId,
       date,
       startTime: start_time,
-      endTime: end_time
+      endTime: end_time,
+      transmissionType: requestedTransmissionType
     });
     if (!stillAvailable) {
       return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });

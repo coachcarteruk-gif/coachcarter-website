@@ -468,6 +468,12 @@
       color: #0f766e;
       border: 1px solid rgba(15, 118, 110, 0.28);
     }
+    .transmission-badge {
+      margin-left: 4px;
+      background: rgba(30, 58, 95, 0.08);
+      color: var(--primary);
+      border-color: rgba(30, 58, 95, 0.18);
+    }
     .offer-pending-badge {
       display: inline-block; margin-left: 6px;
       font-size: 0.65rem; font-weight: 700;
@@ -695,6 +701,14 @@
         <span class="modal-time-sep">to</span>
         <input type="time" class="modal-input" id="modalEnd" value="17:00">
       </div>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label" for="modalTransmission">Transmission</label>
+      <select class="modal-input" id="modalTransmission">
+        <option value="both">Manual or automatic</option>
+        <option value="manual">Manual</option>
+        <option value="automatic">Automatic</option>
+      </select>
     </div>
     <div class="modal-actions">
       <button class="btn-modal-cancel" id="btn-close-avail">Cancel</button>

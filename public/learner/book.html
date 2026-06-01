@@ -326,6 +326,15 @@
       color: var(--muted); letter-spacing: 0.04em;
       display: flex; align-items: center; gap: 8px;
     }
+    .feed-card-meta {
+      margin-top: 5px;
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
     .feed-card-chevron {
       flex-shrink: 0; width: 18px; height: 18px; color: var(--border);
       transition: color 0.2s, transform 0.2s;
@@ -643,6 +652,7 @@
         <div class="modal-detail-row"><span>Date</span><span id="mdDate">—</span></div>
         <div class="modal-detail-row"><span>Time</span><span id="mdTime">—</span></div>
         <div class="modal-detail-row"><span>Instructor</span><span id="mdInstructor">—</span></div>
+        <div class="modal-detail-row"><span>Transmission</span><span id="mdTransmission">-</span></div>
         <div class="modal-detail-row" id="mdDurationPicker" style="display:none">
           <span>Lesson</span>
           <select id="mdLessonTypeSelect" style="border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:0.9rem;background:var(--white);color:var(--primary);font-weight:600;max-width:60%"></select>

@@ -98,6 +98,7 @@
           + 'data-date="' + escapeAttr(date) + '" '
           + 'data-start="' + escapeAttr(s.start_time) + '" '
           + 'data-end="' + escapeAttr(s.end_time) + '" '
+          + 'data-transmission-type="' + escapeAttr(s.transmission_type || 'both') + '" '
           + 'data-instructor-id="' + escapeAttr(String(s.instructor_id)) + '" '
           + 'data-instructor-name="' + escapeAttr(instructorName) + '">'
           + escapeHtml(startShort)
@@ -135,6 +136,7 @@
       date: btn.dataset.date,
       start_time: btn.dataset.start,
       end_time: btn.dataset.end,
+      transmission_type: btn.dataset.transmissionType,
       instructor_id: parseInt(btn.dataset.instructorId, 10),
       instructor_name: btn.dataset.instructorName
     };
@@ -186,6 +188,7 @@
       date: selectedSlot.date,
       start_time: selectedSlot.start_time,
       end_time: selectedSlot.end_time,
+      transmission_type: selectedSlot.transmission_type,
       guest_name: val('guest_name'),
       guest_email: val('guest_email'),
       guest_phone: val('guest_phone'),

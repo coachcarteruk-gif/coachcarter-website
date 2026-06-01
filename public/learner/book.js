@@ -590,6 +590,7 @@ function buildSlotFeedHtml(allSlots) {
     }
     const timeStr = s.start_time.slice(0, 5);
     const colour = s.colour || (selectedLessonType ? selectedLessonType.colour : 'var(--accent)');
+    const transmission = normaliseTransmissionType(s.transmission_type) || 'both';
     const avatar = s.instructor_avatar
       ? `<span class="slot-avatar"><img src="${esc(s.instructor_avatar)}" alt=""></span>`
       : `<span class="slot-avatar">${esc((s.instructor_name || '?')[0])}</span>`;
@@ -598,11 +599,13 @@ function buildSlotFeedHtml(allSlots) {
       data-date="${s.date}"
       data-start="${s.start_time}"
       data-end="${s.end_time}"
+      data-transmission-type="${transmission}"
       data-instructor-name="${esc(s.instructor_name || '')}">
       <div class="feed-card-accent" style="background:${colour}"></div>
       <div class="feed-card-body">
         <div class="feed-card-time">${timeStr}</div>
         <div class="feed-card-instructor">${avatar} ${esc(s.instructor_name || 'Instructor')}</div>
+        <div class="feed-card-meta">${transmissionLabel(transmission)}</div>
       </div>
       <svg class="feed-card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
     </div>`;
@@ -808,6 +811,7 @@ function openBookModal(el) {
     date:            el.dataset.date,
     start_time:      el.dataset.start,
     end_time:        el.dataset.end, // grid end-time; will be overwritten when duration is picked
+    transmission_type: el.dataset.transmissionType,
     instructor_name: el.dataset.instructorName
   };
   selectedInstructorBalanceMinutes = 0;
@@ -817,6 +821,7 @@ function openBookModal(el) {
   document.getElementById('mdDate').textContent = dateDisplay;
   document.getElementById('mdTime').textContent = pendingSlot.start_time;
   document.getElementById('mdInstructor').textContent = pendingSlot.instructor_name;
+  document.getElementById('mdTransmission').textContent = transmissionLabel(pendingSlot.transmission_type);
   document.getElementById('mdDropoff').value = '';
 
   // Reset duration-picker UI to loading state.
@@ -885,6 +890,7 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
   try {
     const selectedBalancePromise = isGuest ? Promise.resolve() : loadSelectedInstructorBalance(slot);
     let url = `/api/slots?action=durations-for-slot&instructor_id=${encodeURIComponent(slot.instructor_id)}&date=${encodeURIComponent(slot.date)}&start_time=${encodeURIComponent(slot.start_time)}`;
+    if (slot.transmission_type) url += `&transmission_type=${encodeURIComponent(slot.transmission_type)}`;
     if (!isGuest && auth && auth.user && auth.user.id) url += `&learner_id=${encodeURIComponent(auth.user.id)}`;
     const pc = getLearnerPostcode();
     if (pc) url += `&pickup_postcode=${encodeURIComponent(pc)}`;
@@ -1033,6 +1039,19 @@ function formatHours(mins) {
   return h % 1 === 0 ? `${h} hour${h !== 1 ? 's' : ''}` : `${h.toFixed(1)} hours`;
 }
 
+function normaliseTransmissionType(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return ['manual', 'automatic', 'both'].includes(text) ? text : null;
+}
+
+function transmissionLabel(value) {
+  switch (normaliseTransmissionType(value)) {
+    case 'automatic': return 'Automatic transmission';
+    case 'both': return 'Manual or automatic';
+    default: return 'Manual transmission';
+  }
+}
+
 // Persist the last-picked lesson type so a returning learner sees their usual
 // duration preselected on the next booking. No expiry "” driving lessons are
 // infrequent and we want stickiness across weeks/months.
@@ -1097,13 +1116,14 @@ async function updateRepeatDates() {
       const chunk = dates.slice(i, i + CHUNK_WEEKS);
       const from = chunk[0];
       const to = chunk[chunk.length - 1];
-      const res = await ccAuth.fetchAuthed(`/api/slots?action=available&from=${from}&to=${to}&instructor_id=${instId}${ltId ? '&lesson_type_id=' + ltId : ''}${pc ? '&pickup_postcode=' + pc : ''}`);
+      const tx = pendingSlot.transmission_type ? '&transmission_type=' + encodeURIComponent(pendingSlot.transmission_type) : '';
+      const res = await ccAuth.fetchAuthed(`/api/slots?action=available&from=${from}&to=${to}&instructor_id=${instId}${ltId ? '&lesson_type_id=' + ltId : ''}${pc ? '&pickup_postcode=' + pc : ''}${tx}`);
       const data = await res.json();
       Object.assign(allSlots, data.slots || {});
     }
     for (let i = 1; i < dates.length; i++) {
       const dateSlots = allSlots[dates[i]] || [];
-      const hasSlot = dateSlots.some(s => s.start_time === pendingSlot.start_time);
+      const hasSlot = dateSlots.some(s => s.start_time === pendingSlot.start_time && (!pendingSlot.transmission_type || s.transmission_type === pendingSlot.transmission_type));
       if (!hasSlot) repeatConflicts.push(dates[i]);
     }
   } catch {}
