@@ -105,6 +105,19 @@ test.describe('instructor add lesson payment links', () => {
     expect(dashboardBody).toContain("dropoff_address: document.getElementById('bookDropoff').value.trim() || null");
   });
 
+  test('create-booking sends the instructor a text confirmation after booking', () => {
+    const body = functionBody(read('api/instructor.js'), 'handleCreateBooking').replace(/\r\n/g, '\n');
+
+    expect(body).toContain('SELECT id, name, email, phone FROM instructors');
+    expect(body).toContain('await sendWhatsApp(\n      instrDetails.phone');
+    expect(body).toContain('Learner: ${learner.name}');
+    expect(body).toContain('View schedule: https://coachcarter.uk/instructor/');
+    expect(body).toContain("purpose: 'instructor.booking_created'");
+    expect(body).toContain('learnerId: learner.id');
+    expect(body).toContain('instructorId: instructor.id');
+    expect(body).toContain('schoolId');
+  });
+
   test('payment-link success keeps copy fallback and delivery state visible', () => {
     const indexJs = read('public/instructor/index.js');
     const dashboardJs = read('public/instructor/dashboard.js');
@@ -135,7 +148,7 @@ test.describe('instructor add lesson payment links', () => {
   });
 
   test('calendar stale payment-link success is cleared when slot-defining fields change', () => {
-    const js = read('public/instructor/index.js');
+    const js = read('public/instructor/index.js').replace(/\r\n/g, '\n');
 
     expect(js).toContain("['addLessonDate', 'addLessonTime', 'addLessonType'].forEach(function (id) {");
     expect(js).toContain("if (field) field.addEventListener('change', clearPaymentLinkSuccess);");
@@ -160,7 +173,7 @@ test.describe('instructor add lesson payment links', () => {
   });
 
   test('dashboard payment method change clears stale success before refreshing payment UI', () => {
-    const js = read('public/instructor/dashboard.js');
+    const js = read('public/instructor/dashboard.js').replace(/\r\n/g, '\n');
 
     expect(js).toContain("radio.addEventListener('change', function () {\n      clearPaymentLinkSuccess();\n      updateBookPaymentUi();");
     expect(namedFunctionBody(js, 'openBookModal')).toContain('clearPaymentLinkSuccess();');

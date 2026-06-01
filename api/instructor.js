@@ -2137,6 +2137,17 @@ async function handleCreateBooking(req, res) {
       `✅ Lesson booked!\n\n📅 ${dateStr}\n⏰ ${start_time} – ${end_time}\n🚗 Instructor: ${instrDetails.name}\n\n${payMethod === 'credit' ? `${durationStr} deducted. ${balanceStr} remaining.\n\n` : ''}Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
     );
 
+    await sendWhatsApp(
+      instrDetails.phone,
+      `Lesson booked\n\nLearner: ${learner.name}\nDate: ${dateStr}\nTime: ${start_time} - ${end_time}\nType: ${lessonType.name}\nDuration: ${durationStr}\n\nView schedule: https://coachcarter.uk/instructor/`,
+      {
+        purpose: 'instructor.booking_created',
+        learnerId: learner.id,
+        instructorId: instructor.id,
+        schoolId,
+      }
+    );
+
     return res.json({
       ok: true,
       booking_id: booking.id,
