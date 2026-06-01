@@ -617,7 +617,6 @@ async function handleAcceptOffer(req, res) {
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      payment_method_types: ['card', 'klarna'],
       line_items: [{
         price_data: {
           currency: 'gbp',
