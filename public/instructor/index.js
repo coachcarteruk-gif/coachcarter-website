@@ -1848,6 +1848,11 @@ async function openOfferModal(prefillEmail, prefillName) {
     const typesData = await typesRes.json();
     const learnersData = await learnersRes.json();
     offerLearners = learnersData.learners || [];
+    if (!prefillEmail && !prefillName && offerLearners.length > 0) {
+      modeExisting.checked = true;
+      modeNew.checked = false;
+      switchLearnerMode();
+    }
     const types = typesData.lesson_types || [];
     window._offerLessonTypes = types; // used by loadBroadcastAudience() to compute end_time
     const sel = document.getElementById('offerLessonType');

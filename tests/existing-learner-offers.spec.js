@@ -160,16 +160,32 @@ test.describe('existing learner lesson offers', () => {
     const html = read('public/instructor/index.html');
     const js = read('public/instructor/index.js');
     const sendOffer = functionBody(js, 'sendOffer');
+    const openOfferModal = functionBody(js, 'openOfferModal');
 
     expect(html).toContain('id="offerModeExisting"');
+    expect(html).toContain('Existing school learner');
     expect(html).toContain('id="offerModeNew"');
+    expect(html).toContain('New learner or link');
     expect(html).toContain('id="offerLearnerSearch"');
     expect(js).toContain("ccAuth.fetchAuthed('/api/instructor?action=school-learners')");
     expect(js).toContain('function filterOfferLearners()');
     expect(js).toContain('function selectOfferLearner(id, name, detail)');
+    expect(openOfferModal).toContain('if (!prefillEmail && !prefillName && offerLearners.length > 0)');
     expect(sendOffer).toContain('const existingMode = document.getElementById(\'offerModeExisting\').checked');
     expect(sendOffer).toContain('payload.learner_id = selectedOfferLearnerId');
     expect(sendOffer).toContain('payload.learner_name = offerName');
+  });
+
+  test('school-learners endpoint returns all same-school learners with per-instructor labelling', () => {
+    const body = functionBody(read('api/instructor.js'), 'handleSchoolLearners');
+
+    expect(body).toContain('FROM learner_users lu');
+    expect(body).toContain('WHERE lu.school_id = ${schoolId}');
+    expect(body).toContain('AND lu.archived_at IS NULL');
+    expect(body).toContain('EXISTS (');
+    expect(body).toContain('AND lb.instructor_id = ${instructor.id}');
+    expect(body).toContain(') AS is_your_learner');
+    expect(body).toContain('ORDER BY lu.name ASC');
   });
 
   test('instructor UI reports offer delivery state and keeps manual copy fallback visible', () => {
