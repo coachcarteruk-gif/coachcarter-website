@@ -67,10 +67,16 @@ function abortBookingTransaction(result) {
   throw new BookingTransactionAbort(result);
 }
 
-// Look up a lesson type by ID (or return the default 'standard' type)
-async function getLessonType(sql, lessonTypeId, schoolId) {
+// Look up a lesson type by ID/slug (or return the default 'standard' type)
+async function getLessonType(sql, lessonTypeId, schoolId, lessonTypeSlug = null) {
   if (lessonTypeId) {
     const [lt] = await sql`SELECT * FROM lesson_types WHERE id = ${lessonTypeId} AND active = true AND school_id = ${schoolId}`;
+    return lt || null;
+  }
+  if (lessonTypeSlug) {
+    const slug = String(lessonTypeSlug).trim().toLowerCase();
+    if (!/^[a-z0-9_-]{1,40}$/.test(slug)) return null;
+    const [lt] = await sql`SELECT * FROM lesson_types WHERE slug = ${slug} AND active = true AND school_id = ${schoolId}`;
     return lt || null;
   }
   // Default to standard lesson
@@ -320,7 +326,7 @@ module.exports = async (req, res) => {
 async function handleAvailable(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { from, to, instructor_id, lesson_type_id, pickup_postcode, school_id, transmission_type } = req.query;
+  const { from, to, instructor_id, lesson_type_id, lesson_type_slug, pickup_postcode, school_id, transmission_type } = req.query;
   const schoolId = parseInt(school_id) || 1;
   const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
   if (transmission_type && !requestedTransmissionType) {
@@ -363,7 +369,7 @@ async function handleAvailable(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // 0. Look up lesson type to get duration
-    const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
+    const lessonType = await getLessonType(sql, lesson_type_id, schoolId, lesson_type_slug);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const slotMinutes = lessonType.duration_minutes;
 

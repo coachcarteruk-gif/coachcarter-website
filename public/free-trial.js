@@ -1,9 +1,6 @@
 (function () {
   'use strict';
 
-  // Free Trial lesson type id (school 1, slug='trial'). Hardcoded because
-  // the page is single-purpose; if/when other schools join we'll fetch this.
-  var FREE_TRIAL_LESSON_TYPE_ID = 37;
   var DAYS_AHEAD = 14;
 
   // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -52,7 +49,7 @@
     to.setDate(to.getDate() + DAYS_AHEAD);
     var toStr = ymd(to);
 
-    var url = '/api/slots?action=available&from=' + fromStr + '&to=' + toStr + '&lesson_type_id=' + FREE_TRIAL_LESSON_TYPE_ID;
+    var url = '/api/slots?action=available&from=' + fromStr + '&to=' + toStr + '&lesson_type_slug=trial';
     if (prefInstructorId) url += '&instructor_id=' + encodeURIComponent(prefInstructorId);
     fetch(url)
       .then(function (r) { return r.json(); })
