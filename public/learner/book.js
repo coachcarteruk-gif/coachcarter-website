@@ -43,7 +43,7 @@ let lastBookingId = null;
 let learnerProfile = { phone: '', pickup_address: '' };
 let hasFreeTrialSlot = false; // true if current school has a lesson_type with slug='trial'
 // Slot-first state: full list of selectable lesson types (excludes 'trial')
-// and the smallest active duration in minutes "” used for slot-feed grid spacing.
+// and the smallest active duration in minutes "” used as the provisional feed duration.
 let availableLessonTypes = [];
 let slotFeedDuration = 60; // sensible default; updated from availableLessonTypes
 let slotFeedLessonTypeId = null; // id of the lesson type whose duration we use for grid spacing
@@ -257,7 +257,7 @@ async function loadLessonTypes() {
     lessonTypes = data.lesson_types || [];
     hasFreeTrialSlot = lessonTypes.some(lt => lt && lt.slug === 'trial');
     // Slot-first: cache the full bookable list (sans trial) and pick the
-    // smallest active duration to drive feed grid spacing. The duration
+    // smallest active duration as the provisional feed duration. The duration
     // dropdown inside the booking modal is built from this list.
     availableLessonTypes = lessonTypes.filter(lt => lt && lt.slug !== 'trial');
     if (availableLessonTypes.length > 0) {
@@ -440,7 +440,8 @@ function onFilterChange() {
 
 async function initFeed() {
   // Slot-first: feed loads at the smallest active duration regardless of any
-  // single "selected" lesson type. The duration is picked inside the modal.
+  // single "selected" lesson type. The API emits starts on the booking
+  // increment; the final duration is picked inside the modal.
   feedFrom = new Date(); feedFrom.setHours(0,0,0,0);
   feedTo = addDaysLocal(feedFrom, FEED_CHUNK_DAYS - 1);
   const maxDate = addDaysLocal(feedFrom, FEED_MAX_DAYS);
@@ -510,9 +511,9 @@ async function fetchFeedSlots(fromDate, toDate, opts) {
   if (to > maxDate) to = maxDate;
 
   const instructorId = opts.omitInstructor ? '' : document.getElementById('instructorFilter').value;
-  // Slot-first: feed renders at the smallest active duration, agnostic of which
-  // lesson type the learner will eventually pick. The grid lesson_type_id sets
-  // the slot length; min_duration_only=1 tells the API to skip the
+  // Slot-first: feed renders from a provisional duration, agnostic of which
+  // lesson type the learner will eventually pick. The lesson_type_id sets
+  // that provisional slot length; min_duration_only=1 tells the API to skip the
   // offered_lesson_types filter (per-duration check happens on slot click).
   const ltId = slotFeedLessonTypeId || (selectedLessonType && selectedLessonType.id) || '';
   const cacheKey = `${from}|${to}|${instructorId}|${ltId}|mdo`;

@@ -77,7 +77,7 @@
               <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">New date</div>
               <input type="date" id="ba-resch-date" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:16px;margin-bottom:8px;background:var(--white);color:var(--primary)">
               <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">New start time</div>
-              <input type="time" id="ba-resch-time" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:16px;background:var(--white);color:var(--primary)" step="1800">
+              <input type="time" id="ba-resch-time" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:16px;background:var(--white);color:var(--primary)" step="900">
               <div id="ba-resch-end" style="font-size:0.82rem;color:var(--muted);margin-top:6px"></div>
               <div id="ba-resch-conflict" style="font-size:0.82rem;color:var(--red);margin-top:6px;display:none"></div>
             </div>
@@ -112,7 +112,7 @@
             </div>
             <div>
               <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Start time</div>
-              <input type="time" id="ba-add-time" step="1800" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:16px;background:var(--white);color:var(--primary)">
+              <input type="time" id="ba-add-time" step="900" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:16px;background:var(--white);color:var(--primary)">
             </div>
             <div>
               <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Lesson type</div>

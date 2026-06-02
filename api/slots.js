@@ -48,6 +48,7 @@ const {
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
+const SLOT_START_INCREMENT_MINUTES = 15;
 const MAX_DAYS_AHEAD      = 84;   // 12-week booking window (offer-driven series may exceed this — see api/webhook.js handleOfferBooking)
 const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
@@ -333,7 +334,7 @@ async function handleAvailable(req, res) {
     return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
   }
   // Slot-first: when true, the caller is using lesson_type_id only to set the
-  // grid spacing (smallest active duration). Skip the offered_lesson_types
+  // provisional slot duration. Skip the offered_lesson_types
   // filter so instructors offering OTHER durations are not excluded — the
   // per-duration check happens later in handleDurationsForSlot when the user
   // clicks a slot.
@@ -372,6 +373,7 @@ async function handleAvailable(req, res) {
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId, lesson_type_slug);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const slotMinutes = lessonType.duration_minutes;
+    const slotStartIncrementMinutes = SLOT_START_INCREMENT_MINUTES;
 
     // 1. Load availability windows (optionally filtered to one instructor).
     // When minDurationOnly is set, we don't filter by offered_lesson_types —
@@ -846,7 +848,7 @@ async function handleAvailable(req, res) {
 
             // Skip slots that have already started today
             if (isToday && slotStart <= nowMinutes) {
-              slotStart += slotMinutes;
+              slotStart += slotStartIncrementMinutes;
               continue;
             }
 
@@ -856,7 +858,7 @@ async function handleAvailable(req, res) {
               slotDateTime.setUTCHours(Math.floor(slotStart / 60), slotStart % 60, 0, 0);
               const hoursUntilSlot = (slotDateTime - now) / 3600000;
               if (hoursUntilSlot < instructor.min_booking_notice_hours) {
-                slotStart += slotMinutes;
+                slotStart += slotStartIncrementMinutes;
                 continue;
               }
             }
@@ -868,7 +870,7 @@ async function handleAvailable(req, res) {
             );
 
             if (isBooked) {
-              slotStart += slotMinutes;
+              slotStart += slotStartIncrementMinutes;
               continue;
             }
 
@@ -884,14 +886,14 @@ async function handleAvailable(req, res) {
 
               if (travelBlocked) {
                 travelHiddenCount++;
-                slotStart += slotMinutes;
+                slotStart += slotStartIncrementMinutes;
                 continue;
               }
             }
 
             const slotKey = `${instructor.id}|${slotStart}|${slotEnd}`;
             if (daySlotKeys.has(slotKey)) {
-              slotStart += slotMinutes;
+              slotStart += slotStartIncrementMinutes;
               continue;
             }
             daySlotKeys.add(slotKey);
@@ -906,7 +908,7 @@ async function handleAvailable(req, res) {
               transmission_type: window.transmission_type
             });
 
-            slotStart += slotMinutes;
+            slotStart += slotStartIncrementMinutes;
           }
         }
       }
