@@ -16,8 +16,12 @@ node_modules/
 .codex/
 tmp/
 .agents/skills/launch-readiness-audit/
+.agents/skills/marketing-map/
+.agents/skills/pdf-to-markdown/
 .agents/skills/stripe-best-practices/
 .agents/skills/ui-ux-pro-max/
+.claude/skills/pdf-to-markdown/
+.tmp/
 
 # Vercel CLI local state
 .vercel/

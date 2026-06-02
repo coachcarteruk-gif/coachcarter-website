@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marketing Map</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Marketing Map</h1>
+      <p>CoachCarter lead engine thinking space</p>
+    </div>
+    <div class="toolbar" aria-label="Map controls">
+      <label>
+        Search
+        <input id="searchInput" type="search" placeholder="Area, concept, idea">
+      </label>
+      <label>
+        Status
+        <select id="statusFilter">
+          <option value="all">All</option>
+          <option value="not-started">Not started</option>
+          <option value="in-progress">In progress</option>
+          <option value="implemented">Implemented</option>
+          <option value="needs-measurement">Needs measurement</option>
+        </select>
+      </label>
+      <label>
+        Detail
+        <select id="detailMode">
+          <option value="areas" selected>Areas</option>
+          <option value="concepts">Concepts</option>
+          <option value="selected">Selected ideas</option>
+        </select>
+      </label>
+      <button id="resetViewBtn" type="button">Reset view</button>
+      <button id="addThoughtBtn" type="button">Add thought</button>
+      <button id="exportBtn" type="button">Export state</button>
+      <label class="import-label">
+        Import
+        <input id="importInput" type="file" accept="application/json">
+      </label>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="map-panel" aria-label="Marketing map canvas">
+      <div class="map-help">Drag to pan. Wheel to zoom. Click a node to inspect it.</div>
+      <svg id="mapSvg" role="img" aria-label="CoachCarter marketing map"></svg>
+    </section>
+
+    <aside class="inspector" aria-label="Selected item details">
+      <div id="inspectorContent"></div>
+    </aside>
+
+    <aside class="work-next" aria-label="Work next queue">
+      <div class="panel-heading">
+        <h2>Work Next</h2>
+        <p>Manual focus order</p>
+      </div>
+      <div id="workNextList"></div>
+    </aside>
+  </main>
+
+  <script src="data/framework.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
