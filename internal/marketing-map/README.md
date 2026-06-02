@@ -1,8 +1,8 @@
-# Marketing Map Guide
+# Growth Map Guide
 
-Marketing Map is a private founder workspace for turning the `$100M Leads` framework into CoachCarter marketing implementation ideas.
+Growth Map is a private founder workspace for turning the `$100M Leads`, `$100M Offers`, and `$100M Money Models` ideas into CoachCarter growth implementation work.
 
-It is not part of the production website. It is a standalone local tool for thinking, mapping, prioritising, and tracking what parts of the lead-generation system have been translated into CoachCarter.
+It is not part of the production website. It is a standalone local tool for thinking, mapping, prioritising, and tracking what parts of the lead-generation, offer, and money-model system have been translated into CoachCarter.
 
 ## Quick Start
 
@@ -32,22 +32,22 @@ http://127.0.0.1:4174
 
 ## What It Is For
 
-Use Marketing Map to answer:
+Use Growth Map to answer:
 
 - Which parts of the book have I not implemented yet?
-- Which marketing ideas map naturally onto CoachCarter?
+- Which lead, offer, and money-model ideas map naturally onto CoachCarter?
 - What should I work on next?
-- What website, product, content, referral, outreach, or measurement ideas are connected?
+- What website, product, content, referral, outreach, offer, pricing, or measurement ideas are connected?
 - Where am I still just thinking, and where have I started executing?
 
 The tool is intentionally manual. It does not generate ideas for you or make decisions for you. It gives you a structured place to think, record, connect, and choose.
 
 ## The Core Mental Model
 
-Marketing Map has three layers:
+Growth Map has three layers:
 
 1. **Areas**
-   Big implementation areas such as Lead Magnets, Referrals, Paid Ads, Free Content, Measurement, and More Better New.
+   Big implementation areas such as Lead Magnets, Referrals, Paid Ads, Free Content, Money Model, Attraction Offers, Upsells, Downsells, Continuity, Measurement, and More Better New.
 
 2. **Concepts**
    Book-derived concepts underneath each area. These explain the marketing principle in practical terms.
@@ -55,7 +55,7 @@ Marketing Map has three layers:
 3. **Ideas**
    Concrete CoachCarter implementation possibilities. These are the things you might actually build, write, test, automate, or track.
 
-The aim is not to perfectly recreate the book. The aim is to turn the book into a working CoachCarter lead engine map.
+The aim is not to perfectly recreate the books. The aim is to turn the combined system into a working CoachCarter growth map: attract leads, convert them with useful offers, improve the economics, and measure what happens.
 
 ## Main Screen
 
@@ -129,7 +129,7 @@ Shows only the main implementation areas.
 Best for:
 
 - orienting yourself
-- deciding which broad part of the lead engine to think about
+- deciding which broad part of the growth engine to think about
 - avoiding clutter
 
 This is the default view.
@@ -353,7 +353,7 @@ Useful examples:
 
 ## Import And Export
 
-Marketing Map stores your edits in browser `localStorage`.
+Growth Map stores your edits in browser `localStorage`.
 
 That means your state is private and local to your browser profile.
 
@@ -398,7 +398,7 @@ Open the map in **Areas** mode.
 Ask:
 
 ```text
-Which part of the lead engine feels weakest or most interesting right now?
+Which part of the growth engine feels weakest or most interesting right now?
 ```
 
 ### 2. Drill Into One Area
@@ -429,7 +429,7 @@ Move the most important one to the top.
 
 If an idea becomes real implementation work, build it in the appropriate part of the repo or create a separate plan.
 
-Marketing Map is the thinking and prioritisation layer, not the entire delivery system.
+Growth Map is the thinking and prioritisation layer, not the entire delivery system.
 
 ### 7. Come Back To Measure
 
@@ -465,7 +465,7 @@ Book concept -> CoachCarter idea -> next action -> measurement
 
 ## Current Preloaded Areas
 
-The first version includes:
+The current framework includes:
 
 - Audience & Problem
 - Lead Magnets
@@ -478,8 +478,16 @@ The first version includes:
 - Partners & Lead Getters
 - Measurement
 - More Better New
+- Money Model
+- Attraction Offers
+- Upsell Offers
+- Downsell Offers
+- Continuity Offers
+- Money Model Rules
 
 Each area includes book-derived concepts, prompts, and CoachCarter implementation ideas where there is an obvious fit.
+
+The leads side is mostly inspired by `$100M Leads`. The offer and economics side is inspired by the `$100M Money Models` outline and its bridge between offers, leads, and cashflow.
 
 ## Editing The Framework
 

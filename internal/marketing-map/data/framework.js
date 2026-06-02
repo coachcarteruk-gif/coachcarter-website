@@ -1,6 +1,6 @@
 window.MARKETING_FRAMEWORK = {
-  title: "Marketing Map",
-  version: 1,
+  title: "Growth Map",
+  version: 2,
   statuses: [
     { id: "not-started", label: "Not started" },
     { id: "in-progress", label: "In progress" },
@@ -546,6 +546,371 @@ window.MARKETING_FRAMEWORK = {
           ]
         }
       ]
+    },
+    {
+      id: "money-model",
+      title: "Money Model",
+      summary: "Design the sequence of offers that turns leads into customers, customers into more cash, and useful relationships into recurring value.",
+      bookRefs: ["$100M Money Model", "What you offer", "When you offer", "How you offer it", "Increase customers and speed of payment"],
+      prompts: [
+        "What is CoachCarter's current sequence of offers from stranger to paying customer?",
+        "Where does the current journey create cash quickly, and where does it delay cash?",
+        "Which offer exists only in your head but not yet in the product or site?",
+        "What would make the model simple enough to scale without constant founder intervention?"
+      ],
+      concepts: [
+        {
+          id: "offer-sequence",
+          title: "Sequence of offers",
+          summary: "The money model is the ordered path of what is offered, when it is offered, and how it is presented.",
+          prompts: [
+            "What does a learner see first, second, third, and after booking?",
+            "What does an instructor see first, second, third, and after joining?",
+            "Where is the next offer missing or unclear?"
+          ],
+          ideas: [
+            { id: "learner-offer-path-map", title: "Map learner offer path", type: "Manual process", tags: ["offers", "journey"], checklist: ["List current learner entry points", "Write first offer", "Write next offer", "Identify missing follow-up"] },
+            { id: "instructor-offer-path-map", title: "Map instructor offer path", type: "Manual process", tags: ["offers", "supply"], checklist: ["List current instructor entry points", "Write first offer", "Write next offer", "Identify retention offer"] }
+          ]
+        },
+        {
+          id: "cash-speed",
+          title: "Customers and speed of payment",
+          summary: "A stronger model gets more customers and pulls useful cash forward rather than waiting for slow drip economics.",
+          prompts: [
+            "Where can CoachCarter ethically reduce time from interest to payment?",
+            "Which offers could cover acquisition and service cost faster?",
+            "Which current paths create value but delay cash too long?"
+          ],
+          ideas: [
+            { id: "speed-to-payment-audit", title: "Speed-to-payment audit", type: "Measurement", tags: ["cash", "conversion"], checklist: ["Map interest-to-payment steps", "Find delays", "Pick one payment-speed improvement"] },
+            { id: "first-30-day-cash-model", title: "First 30-day cash model", type: "Measurement", tags: ["finance"], checklist: ["Estimate acquisition cost", "Estimate service cost", "Estimate 30-day profit", "Set minimum viable margin"] }
+          ]
+        },
+        {
+          id: "bad-money-model-warning",
+          title: "Bad money model warning",
+          summary: "A model that loses money to acquire customers or recovers profit too slowly can starve growth even when demand exists.",
+          prompts: [
+            "Where could CoachCarter accidentally buy growth too expensively?",
+            "Which offers look attractive but might create delayed or weak cashflow?",
+            "What must be true before paid acquisition can scale?"
+          ],
+          ideas: [
+            { id: "cash-risk-checklist", title: "Cash risk checklist", type: "Measurement", tags: ["risk", "ads"], checklist: ["Define max cost per booking", "Define refund/cancellation exposure", "Define payback period", "Review before ads"] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "attraction-offers",
+      title: "Attraction Offers",
+      summary: "Offers designed to turn strangers into first-time customers and solve the first cash constraint.",
+      bookRefs: ["Stage I: Get Cash", "Attraction offers", "Win your money back", "Giveaways", "Decoy offer", "Buy X Get Y Free", "Pay less now or pay more later"],
+      prompts: [
+        "What first offer would make a learner say yes faster?",
+        "What first offer would be simple enough to explain in one line?",
+        "What would make a first booking feel lower risk without creating messy refund exposure?",
+        "Which attraction offer could CoachCarter test without changing the whole business?"
+      ],
+      concepts: [
+        {
+          id: "stage-one-get-cash",
+          title: "Stage I: Get Cash",
+          summary: "Perfect one attraction offer first so customer acquisition and basic cost coverage become reliable.",
+          prompts: [
+            "What is the one first offer CoachCarter should perfect before adding layers?",
+            "What does perfect mean: more bookings, faster payment, better instructor supply, or lower support?"
+          ],
+          ideas: [
+            { id: "first-booking-attraction-offer", title: "First-booking attraction offer", type: "Website/product", tags: ["offer", "booking"], checklist: ["Choose learner segment", "Write offer promise", "Define first booking CTA", "Measure conversion"] },
+            { id: "instructor-first-supply-offer", title: "Instructor first-supply offer", type: "Website/product", tags: ["instructors", "offer"], checklist: ["Define instructor pain", "Write joining offer", "Choose proof point", "Measure enquiries"] }
+          ]
+        },
+        {
+          id: "win-your-money-back",
+          title: "Win your money back",
+          summary: "A goal-based refund or credit can reduce perceived risk, but criteria must be trackable and financially safe.",
+          prompts: [
+            "What learner result or action could be tracked cleanly?",
+            "Would the reward be cash, lesson credit, or something else?",
+            "What refund or credit rules would avoid confusion and abuse?"
+          ],
+          ideas: [
+            { id: "goal-based-credit-offer", title: "Goal-based lesson credit offer", type: "Website/product", tags: ["credits", "risk"], checklist: ["Pick trackable action/result", "Model credit exposure", "Write clear terms", "Check refund/accounting implications"] }
+          ]
+        },
+        {
+          id: "giveaway-offer",
+          title: "Giveaway with promotional offer",
+          summary: "Advertise a prize, collect eligible leads, and give non-winners a promotional path into the core offer.",
+          prompts: [
+            "What giveaway would attract the right learner rather than random entrants?",
+            "What promotional offer should non-winners receive?",
+            "What data should be captured without overcomplicating entry?"
+          ],
+          ideas: [
+            { id: "free-lesson-giveaway", title: "Free lesson giveaway funnel", type: "Website/product", tags: ["lead capture", "promotion"], checklist: ["Define prize", "Define eligibility", "Create non-winner offer", "Add source tracking"] }
+          ]
+        },
+        {
+          id: "decoy-and-contrast",
+          title: "Decoy and contrast",
+          summary: "A lesser option can make the premium or core option look obviously more valuable when the contrast is large.",
+          prompts: [
+            "What cheap or free lesser version could clarify the value of booking properly?",
+            "What premium option should sit beside it?",
+            "Would this help or confuse learners?"
+          ],
+          ideas: [
+            { id: "lesson-readiness-decoy", title: "Free readiness check vs paid lesson contrast", type: "Website/product", tags: ["offer", "contrast"], checklist: ["Define free check", "Define premium next step", "Write comparison copy", "Measure booking clicks"] }
+          ]
+        },
+        {
+          id: "pay-now-pay-later",
+          title: "Pay less now or pay more later",
+          summary: "A time-sensitive choice can pull payment forward by making the earlier commitment clearly better.",
+          prompts: [
+            "Where could early commitment be rewarded without harming instructor economics?",
+            "What bonus could make paying now feel better than waiting?",
+            "What terms must be clear for cancellation and credits?"
+          ],
+          ideas: [
+            { id: "early-block-booking-bonus", title: "Early block-booking bonus", type: "Website/product", tags: ["credits", "offer"], checklist: ["Define block size", "Define bonus", "Model instructor/school economics", "Write terms"] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "upsell-offers",
+      title: "Upsell Offers",
+      summary: "Offers that solve the next immediate problem and raise 30-day profit after the customer says yes.",
+      bookRefs: ["Stage II: Get More Cash", "Upsell offers", "Menu upsell", "Anchor upsell", "Rollover upsell", "Card on file"],
+      prompts: [
+        "After a learner books or buys credit, what next problem appears immediately?",
+        "What add-on would genuinely improve the outcome rather than feel tacked on?",
+        "What premium anchor would make the main offer clearer?",
+        "Could previous spend or credit roll into a better package?"
+      ],
+      concepts: [
+        {
+          id: "classic-upsell",
+          title: "Classic next-problem upsell",
+          summary: "Offer the solution to the next immediate problem created by the first purchase.",
+          prompts: [
+            "What does a learner need right after a first lesson booking?",
+            "What does an instructor need right after joining?"
+          ],
+          ideas: [
+            { id: "first-lesson-to-block-upsell", title: "First lesson to block-booking upsell", type: "Website/product", tags: ["credits", "conversion"], checklist: ["Define trigger moment", "Write upgrade copy", "Show value difference", "Measure upgrade rate"] },
+            { id: "test-prep-upsell", title: "Test prep add-on upsell", type: "Website/product", tags: ["learner outcome"], checklist: ["Define add-on", "Find trigger point", "Write benefits", "Measure take-up"] }
+          ]
+        },
+        {
+          id: "menu-upsell",
+          title: "Menu upsell",
+          summary: "Show a small menu of relevant upgrades, including what the learner does not need, so the recommendation feels trustworthy.",
+          prompts: [
+            "What upgrade menu could be helpful rather than pushy?",
+            "Where can CoachCarter say 'you probably do not need this yet'?"
+          ],
+          ideas: [
+            { id: "recommended-lesson-package-menu", title: "Recommended lesson package menu", type: "Website/product", tags: ["packages"], checklist: ["Define package options", "Add guidance copy", "Highlight recommended option", "Avoid overwhelming choices"] }
+          ]
+        },
+        {
+          id: "anchor-upsell",
+          title: "Anchor upsell",
+          summary: "Present a premium high-value option first so the main offer is easier to understand and compare.",
+          prompts: [
+            "What would a premium CoachCarter learner package include?",
+            "Would an anchor package clarify value or feel unrealistic?"
+          ],
+          ideas: [
+            { id: "premium-learner-package-anchor", title: "Premium learner package anchor", type: "Website/product", tags: ["pricing", "packages"], checklist: ["Define premium package", "Define main package", "Write comparison copy", "Measure package selection"] }
+          ]
+        },
+        {
+          id: "rollover-upsell",
+          title: "Rollover upsell",
+          summary: "Credit a previous purchase toward a larger offer to re-engage or upgrade the customer without wasting prior spend.",
+          prompts: [
+            "Where could unused lesson credit become an upgrade path?",
+            "Could a refund or cancelled booking credit roll into a package?"
+          ],
+          ideas: [
+            { id: "credit-to-package-rollover", title: "Credit to package rollover", type: "Website/product", tags: ["credits", "retention"], checklist: ["Define eligible credit", "Model accounting impact", "Write upgrade rule", "Track conversions"] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "downsell-offers",
+      title: "Downsell Offers",
+      summary: "Alternative ways to say yes when the main offer is rejected, without discounting the same product for less.",
+      bookRefs: ["Stage II: Get More Cash", "Downsell offers", "Payment plan downsells", "Trial with penalty", "Feature downsells"],
+      prompts: [
+        "When a learner or instructor says no, what are they really objecting to?",
+        "Could the offer change by payment terms, features, or delivery rather than just lower price?",
+        "What lower-barrier version would still preserve the value of the original offer?",
+        "What downsell would be safe, clear, and easy to administer?"
+      ],
+      concepts: [
+        {
+          id: "payment-plan-downsell",
+          title: "Payment plan downsell",
+          summary: "Spread cost over time to lower the barrier while preserving incentives for paying in full.",
+          prompts: [
+            "Which CoachCarter offers are blocked by upfront cost?",
+            "How would paying in full still remain attractive?"
+          ],
+          ideas: [
+            { id: "credit-package-payment-plan", title: "Credit package payment plan", type: "Website/product", tags: ["payments", "credits"], checklist: ["Choose package", "Model payment timing", "Define paid-in-full incentive", "Check Stripe/accounting flow"] }
+          ]
+        },
+        {
+          id: "trial-with-penalty",
+          title: "Trial with penalty",
+          summary: "A customer can get a trial free if they meet clear action or result terms, with a fee if they do not.",
+          prompts: [
+            "Is there any CoachCarter context where this is ethical and simple?",
+            "What action could be tracked without ambiguity?",
+            "Would card-on-file make sense here or create friction?"
+          ],
+          ideas: [
+            { id: "instructor-trial-terms", title: "Instructor trial with clear action terms", type: "Website/product", tags: ["instructors", "trial"], checklist: ["Define trial action", "Define penalty/fee", "Check fairness", "Decide if worth testing"] }
+          ]
+        },
+        {
+          id: "feature-downsell",
+          title: "Feature downsell",
+          summary: "Create a lower version by removing quantity, quality, support, or guarantees, rather than negotiating the same thing cheaper.",
+          prompts: [
+            "What lesser version of an offer is still useful?",
+            "What can be removed without damaging the core experience?",
+            "What should never be discounted because it teaches the wrong lesson?"
+          ],
+          ideas: [
+            { id: "lite-package-downsell", title: "Lite package downsell", type: "Website/product", tags: ["packages"], checklist: ["Define full package", "Remove features for lite", "Keep value distinction clear", "Measure conversion"] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "continuity-offers",
+      title: "Continuity Offers",
+      summary: "Ongoing value for ongoing payment, designed to keep useful relationships buying and increase total customer value.",
+      bookRefs: ["Stage III: Get The Most Cash", "Continuity offers", "Continuity bonus", "Continuity discount", "Waived fee offer"],
+      prompts: [
+        "What ongoing value could CoachCarter provide after the first transaction?",
+        "What recurring offer would be genuinely useful rather than forced?",
+        "Could continuity apply to learners, instructors, schools, or partners?",
+        "What would make a long-term commitment fair and clear?"
+      ],
+      concepts: [
+        {
+          id: "ongoing-value",
+          title: "Ongoing value",
+          summary: "Continuity should solve a recurring problem, not merely charge repeatedly.",
+          prompts: [
+            "Which CoachCarter user has a recurring problem?",
+            "What repeated value could be delivered with low marginal effort?"
+          ],
+          ideas: [
+            { id: "instructor-growth-membership", title: "Instructor growth membership concept", type: "Website/product", tags: ["instructors", "continuity"], checklist: ["Define ongoing value", "Define monthly price hypothesis", "List included tools", "Validate demand manually"] },
+            { id: "learner-progress-membership", title: "Learner progress support concept", type: "Website/product", tags: ["learners", "continuity"], checklist: ["Define recurring learner value", "Check if lessons already cover it", "Avoid forced subscription", "Assess usefulness"] }
+          ]
+        },
+        {
+          id: "continuity-bonus",
+          title: "Continuity bonus",
+          summary: "A valuable bonus can make signing up today feel better than buying the bonus alone.",
+          prompts: [
+            "What bonus would be worth more than the first payment?",
+            "Would this bonus help retention or just attract poor-fit customers?"
+          ],
+          ideas: [
+            { id: "continuity-bonus-bank", title: "Continuity bonus bank", type: "Manual process", tags: ["offers"], checklist: ["List possible bonuses", "Estimate standalone value", "Choose one to test"] }
+          ]
+        },
+        {
+          id: "continuity-discount",
+          title: "Continuity discount",
+          summary: "A long-term commitment can earn free time or a spread discount if the economics and cancellation rules are clear.",
+          prompts: [
+            "Would a long-term commitment make sense for instructors or schools?",
+            "Where would free time or setup support be valuable?",
+            "What early-exit terms would be fair?"
+          ],
+          ideas: [
+            { id: "annual-instructor-plan", title: "Annual instructor plan sketch", type: "Website/product", tags: ["pricing", "instructors"], checklist: ["Define monthly value", "Define annual incentive", "Define cancellation rules", "Model cash impact"] }
+          ]
+        },
+        {
+          id: "waived-fee-offer",
+          title: "Waived fee offer",
+          summary: "A setup or onboarding fee can be waived in exchange for a longer commitment, but the early exit rule must be explicit.",
+          prompts: [
+            "Is there a legitimate setup cost CoachCarter could charge or waive?",
+            "Would waived setup simplify or complicate the proposition?"
+          ],
+          ideas: [
+            { id: "waived-onboarding-fee-test", title: "Waived onboarding fee test", type: "Website/product", tags: ["pricing", "commitment"], checklist: ["Define setup value", "Define commitment", "Define early-exit rule", "Decide if appropriate"] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "money-model-rules",
+      title: "Money Model Rules",
+      summary: "Guardrails for building the growth system: perfect one offer at a time, keep it simple, and use partner products to fill gaps where sensible.",
+      bookRefs: ["Perfect one offer at a time", "Simple scales, fancy fails", "Affiliate products fill gaps"],
+      prompts: [
+        "Which offer deserves focus before adding anything else?",
+        "Where is the model becoming clever instead of simple?",
+        "What gap could be filled by a partner rather than building from scratch?",
+        "What should be deliberately ignored for now?"
+      ],
+      concepts: [
+        {
+          id: "one-offer-at-a-time",
+          title: "Perfect one offer at a time",
+          summary: "Do not stack complexity before one offer is clear, working, and measurable.",
+          prompts: [
+            "What is the current one offer to perfect?",
+            "What evidence would show it is working enough to add the next layer?"
+          ],
+          ideas: [
+            { id: "one-offer-focus-board", title: "One-offer focus board", type: "Manual process", tags: ["focus"], checklist: ["Choose current offer", "Define success signal", "Pause competing offer ideas", "Review weekly"] }
+          ]
+        },
+        {
+          id: "simple-scales",
+          title: "Simple scales, fancy fails",
+          summary: "Simple offers, rules, and flows are easier to sell, operate, measure, and automate.",
+          prompts: [
+            "Which offer has too many conditions?",
+            "What would the simpler version be?",
+            "Can a learner explain it back in one sentence?"
+          ],
+          ideas: [
+            { id: "offer-simplicity-review", title: "Offer simplicity review", type: "Manual process", tags: ["copy", "ops"], checklist: ["Pick offer", "Write one-sentence version", "Remove one condition", "Check operational burden"] }
+          ]
+        },
+        {
+          id: "affiliate-products-fill-gaps",
+          title: "Partner products fill gaps",
+          summary: "Where CoachCarter cannot or should not build the whole solution, partner or affiliate products may fill the gap.",
+          prompts: [
+            "What learner or instructor need is outside CoachCarter's core?",
+            "Who already solves that need well?",
+            "Would a partner offer improve the journey or distract from it?"
+          ],
+          ideas: [
+            { id: "partner-product-gap-list", title: "Partner product gap list", type: "Partnership", tags: ["affiliate", "partners"], checklist: ["List adjacent needs", "Find possible partners", "Define referral value", "Decide first test"] }
+          ]
+        }
+      ]
     }
   ],
   links: [
@@ -562,6 +927,20 @@ window.MARKETING_FRAMEWORK = {
     ["measurement", "more-better-new", "Results decide what to improve"],
     ["more-better-new", "free-content", "Improve or expand content"],
     ["more-better-new", "paid-ads", "Scale only with feedback"],
-    ["more-better-new", "referrals", "Improve referral loops"]
+    ["more-better-new", "referrals", "Improve referral loops"],
+    ["lead-magnets", "attraction-offers", "Lead magnets can become entry offers"],
+    ["cta-capture", "attraction-offers", "Capture turns attention into offer acceptance"],
+    ["paid-ads", "money-model", "Paid growth needs offer economics"],
+    ["measurement", "money-model", "Money model needs numbers"],
+    ["money-model", "attraction-offers", "First offer gets cash"],
+    ["attraction-offers", "upsell-offers", "First yes creates next problem"],
+    ["upsell-offers", "downsell-offers", "Rejected upgrade needs alternate yes"],
+    ["upsell-offers", "continuity-offers", "More value can become recurring"],
+    ["downsell-offers", "attraction-offers", "Downsells preserve first customer acquisition"],
+    ["continuity-offers", "money-model", "Recurring value increases total value"],
+    ["money-model-rules", "money-model", "Rules keep the model simple"],
+    ["money-model-rules", "more-better-new", "Iteration needs guardrails"],
+    ["lead-getters", "money-model", "Partners may need their own offer path"],
+    ["referrals", "attraction-offers", "Referral asks need clear offers"]
   ]
 };

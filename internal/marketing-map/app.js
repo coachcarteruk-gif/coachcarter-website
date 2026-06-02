@@ -141,7 +141,7 @@
         kind: "center",
         id: "center",
         title: framework.title,
-        summary: "A private, map-first workspace for translating the book framework into CoachCarter marketing implementation."
+        summary: "A private, map-first workspace for translating lead generation, offer design, and money model thinking into CoachCarter implementation."
       };
     }
     const area = framework.areas.find((item) => item.id === id);
@@ -200,7 +200,7 @@
     const nodes = [makeNode("center", "center", 0, 0, "Founder workspace")];
     const links = [];
     const areas = allAreas();
-    const areaRadius = 430;
+    const areaRadius = 500;
     const selected = findItem(selectedId);
     const selectedAreaId = selected && selected.kind === "area"
       ? selected.id
@@ -767,7 +767,7 @@
 
   function resetView() {
     pan = { x: svg.clientWidth / 2, y: svg.clientHeight / 2 };
-    scale = detailMode.value === "areas" ? 0.68 : 0.64;
+    scale = detailMode.value === "areas" ? 0.6 : 0.58;
     saveState();
     renderMap();
   }
@@ -848,7 +848,7 @@
   bindGlobalControls();
   if (!state.ui || !state.ui.pan || (state.ui.pan.x === 0 && state.ui.pan.y === 0)) {
     pan = { x: Math.max(420, svg.clientWidth / 2), y: Math.max(360, svg.clientHeight / 2) };
-    scale = 0.68;
+    scale = 0.6;
   }
   render();
 })();
