@@ -2434,3 +2434,37 @@ CREATE INDEX IF NOT EXISTS idx_refund_event_lines_credit_tx ON refund_event_line
 CREATE INDEX IF NOT EXISTS idx_refund_event_lines_bcs ON refund_event_lines(booking_credit_source_id);
 CREATE INDEX IF NOT EXISTS idx_refund_event_lines_booking ON refund_event_lines(lesson_booking_id);
 CREATE INDEX IF NOT EXISTS idx_refund_event_lines_csa ON refund_event_lines(credit_source_adjustment_id);
+
+-- PUBLIC TENANT RESOLUTION
+-- Public endpoints should resolve their school from the request host or
+-- ?school=slug instead of silently defaulting to school_id=1. The insert gate
+-- prevents onboarding a second school until legacy public defaults have been
+-- audited and explicitly marked complete.
+ALTER TABLE schools ADD COLUMN IF NOT EXISTS primary_host TEXT;
+
+UPDATE schools
+   SET primary_host = 'www.coachcarter.uk'
+ WHERE id = 1
+   AND (primary_host IS NULL OR TRIM(primary_host) = '');
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_schools_primary_host_lower
+  ON schools (LOWER(primary_host))
+  WHERE primary_host IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION assert_public_endpoints_tenant_resolved()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.id <> 1 AND NOT EXISTS (
+    SELECT 1 FROM migration_markers
+     WHERE key = 'public_endpoints_tenant_resolved'
+  ) THEN
+    RAISE EXCEPTION 'Cannot create school id=% - public endpoints still have legacy school_id=1 defaults. Sweep public tenant resolution and insert migration marker public_endpoints_tenant_resolved first.', NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_schools_require_tenant_resolution ON schools;
+CREATE TRIGGER trg_schools_require_tenant_resolution
+  BEFORE INSERT ON schools
+  FOR EACH ROW EXECUTE FUNCTION assert_public_endpoints_tenant_resolved();

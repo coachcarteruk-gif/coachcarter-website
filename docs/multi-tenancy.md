@@ -28,6 +28,14 @@ The platform is multi-tenant. Each driving school is an isolated tenant with the
 - `GET /api/schools?action=branding&school_id=X` — public endpoint returning school name, colours, logo.
 - HTML elements with `data-brand-name` and `data-brand-logo` attributes are auto-updated.
 
+## Public tenant resolution
+
+- Public endpoints should use `api/_tenant.js` instead of silently defaulting to `school_id = 1`.
+- Resolution order is host / `x-forwarded-host` via `schools.primary_host`, then `?school=<slug>`, then local development / Vercel preview fallback to CoachCarter.
+- Existing public endpoints may temporarily allow legacy `?school_id=` while they are being converted. New public endpoints should not accept client-submitted `school_id`.
+- Authenticated endpoints remain JWT-scoped. They derive `school_id` from the session token, not from host/query public tenant resolution.
+- The migration guard on `schools` blocks creating non-default schools until the `public_endpoints_tenant_resolved` marker is inserted after the legacy public endpoint sweep.
+
 ## Stripe payment flow
 
 - Learner pays → platform Stripe account → weekly cron transfers to school's Stripe Connect (minus platform fee) → school handles instructor payments externally.

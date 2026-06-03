@@ -40,6 +40,7 @@ const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { calcDirectLessonPrice } = require('./_pricing-helpers');
 const { isOptInOnlyLessonTypeSlug, isLessonTypeOffered } = require('./_lesson-type-helpers');
+const { resolveSchoolFromRequest } = require('./_tenant');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -327,8 +328,7 @@ module.exports = async (req, res) => {
 async function handleAvailable(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { from, to, instructor_id, lesson_type_id, lesson_type_slug, pickup_postcode, school_id, transmission_type } = req.query;
-  const schoolId = parseInt(school_id) || 1;
+  const { from, to, instructor_id, lesson_type_id, lesson_type_slug, pickup_postcode, transmission_type } = req.query;
   const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
   if (transmission_type && !requestedTransmissionType) {
     return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
@@ -368,6 +368,9 @@ async function handleAvailable(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const tenant = await resolveSchoolFromRequest(req, { sql, allowLegacySchoolIdQuery: true });
+    if (!tenant) return res.status(404).json({ error: 'School not found' });
+    const schoolId = tenant.schoolId;
 
     // 0. Look up lesson type to get duration
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId, lesson_type_slug);
@@ -953,7 +956,7 @@ async function handleAvailable(req, res) {
 //   instructor_id     (required, integer)
 //   date              (required, YYYY-MM-DD)
 //   start_time        (required, HH:MM or HH:MM:SS)
-//   school_id         (optional, default 1)
+//   school / school_id (optional legacy tenant hints; host mapping preferred)
 //   pickup_postcode   (optional) — when present, runs travel-time check
 //
 // Returns: { instructor_id, date, start_time, durations: [{lesson_type_id,
@@ -961,8 +964,7 @@ async function handleAvailable(req, res) {
 async function handleDurationsForSlot(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { instructor_id, date, start_time, school_id, pickup_postcode, transmission_type } = req.query;
-  const schoolId = parseInt(school_id) || 1;
+  const { instructor_id, date, start_time, pickup_postcode, transmission_type } = req.query;
   const instructorId = parseInt(instructor_id);
   const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
 
@@ -981,6 +983,9 @@ async function handleDurationsForSlot(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const tenant = await resolveSchoolFromRequest(req, { sql, allowLegacySchoolIdQuery: true });
+    if (!tenant) return res.status(404).json({ error: 'School not found' });
+    const schoolId = tenant.schoolId;
 
     // Load all active lesson types for this school, excluding the free-trial
     // type (free trials have their own dedicated flow at /free-trial.html).
