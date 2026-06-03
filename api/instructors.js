@@ -20,6 +20,7 @@ const { reportError } = require('./_error-alert');
 const { requireAuth, getSchoolId } = require('./_auth');
 const { validatePassword, hashPassword } = require('./_password');
 const { logAudit } = require('./_audit');
+const { resolveSchoolFromRequest } = require('./_tenant');
 
 module.exports = async (req, res) => {
   const action = req.query.action;
@@ -46,7 +47,11 @@ async function handleList(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const schoolId = parseInt(req.query.school_id) || 1;
+    const tenant = await resolveSchoolFromRequest(req, { sql, allowLegacySchoolIdQuery: true });
+    if (!tenant) {
+      return res.status(404).json({ error: 'School not found' });
+    }
+    const schoolId = tenant.schoolId;
     const instructors = await sql`
       SELECT id, name, slug, bio, photo_url, active,
              pass_rate, years_experience, specialisms
@@ -71,10 +76,14 @@ async function handleAvailability(req, res) {
 
   const { instructor_id } = req.query;
   if (!instructor_id) return res.status(400).json({ error: 'instructor_id required' });
-  const schoolId = parseInt(req.query.school_id) || 1;
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const tenant = await resolveSchoolFromRequest(req, { sql, allowLegacySchoolIdQuery: true });
+    if (!tenant) {
+      return res.status(404).json({ error: 'School not found' });
+    }
+    const schoolId = tenant.schoolId;
     const windows = await sql`
       SELECT ia.id, ia.day_of_week, ia.start_time, ia.end_time, ia.active
       FROM instructor_availability ia
