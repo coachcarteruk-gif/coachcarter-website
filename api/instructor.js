@@ -3142,6 +3142,10 @@ async function handleCreateOffer(req, res) {
       lessonType = lt || { id: null, slug: 'standard', duration_minutes: 90, name: 'Standard Lesson', price_pence: 8250 };
     }
     const durationMins = lessonType.duration_minutes;
+    const isTrialOffer = lessonType.slug === 'trial';
+    if (isTrialOffer && isFlexible) {
+      return res.status(400).json({ error: 'Free trial offers must be for a fixed slot. Pick a date and time, or use a standard/free lesson offer.' });
+    }
 
     // Calculate end time (only for slot-pinned offers)
     let end_time = null;
@@ -3235,7 +3239,7 @@ async function handleCreateOffer(req, res) {
       instructorId: instructor.id,
       learnerId: existingLearner?.id || null,
       durationMinutes: durationMins,
-      explicitPricePence: offer_price_pence,
+      explicitPricePence: isTrialOffer ? 0 : offer_price_pence,
       discountPct: discountPctClean,
     });
 

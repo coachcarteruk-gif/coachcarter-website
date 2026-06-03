@@ -313,7 +313,7 @@ async function handleGetOffer(req, res) {
              o.start_time::text, o.end_time::text, o.status, o.expires_at,
              o.discount_pct, o.offer_price_pence, o.max_repeat_weeks,
              o.kind, o.trigger,
-             lt.name AS lesson_type_name, lt.duration_minutes, lt.price_pence,
+             lt.name AS lesson_type_name, lt.slug AS lesson_type_slug, lt.duration_minutes, lt.price_pence,
              i.name AS instructor_name, i.school_id AS instructor_school_id,
              lu.name AS learner_name, lu.phone AS learner_phone,
              lu.pickup_address AS learner_pickup_address
@@ -366,6 +366,7 @@ async function handleGetOffer(req, res) {
     const resolvedName = offer.offer_learner_name || offer.learner_name || '';
     const needsDetails = !resolvedName || !offer.learner_phone || !offer.learner_pickup_address;
     const isFlexible = !offer.scheduled_date && !offer.start_time;
+    const isTrialOffer = offer.lesson_type_slug === 'trial';
     const originalPricePence = offer.price_pence ?? 8250;
 
     // offer_price_pence is the frozen final price for new offers. Since this
@@ -373,7 +374,10 @@ async function handleGetOffer(req, res) {
     // null-price offers expose a lesson-type "original" price for was/now UI.
     let finalPricePence;
     let displayOriginalPricePence = originalPricePence;
-    if (offer.offer_price_pence != null) {
+    if (isTrialOffer) {
+      finalPricePence = 0;
+      displayOriginalPricePence = 0;
+    } else if (offer.offer_price_pence != null) {
       finalPricePence = offer.offer_price_pence;
       displayOriginalPricePence = finalPricePence;
     } else {
@@ -433,7 +437,7 @@ async function handleAcceptOffer(req, res) {
 
     // Fetch the offer with full details
     const [offer] = await sql`
-      SELECT o.*, lt.name AS lesson_type_name, lt.duration_minutes, lt.price_pence,
+      SELECT o.*, lt.name AS lesson_type_name, lt.slug AS lesson_type_slug, lt.duration_minutes, lt.price_pence,
              i.name AS instructor_name
       FROM lesson_offers o
       JOIN instructors i ON i.id = o.instructor_id
@@ -490,7 +494,10 @@ async function handleAcceptOffer(req, res) {
     };
 
     const isFlexible = !offer.scheduled_date && !offer.start_time;
+    const isTrialOffer = offer.lesson_type_slug === 'trial';
     const originalPricePence = offer.price_pence ?? 8250;
+    if (isTrialOffer && isFlexible)
+      return res.status(400).json({ error: 'Free trial offers must be for a fixed slot. Ask your instructor to send a dated trial offer.' });
 
     // Resolve weekly-repeat count. The offer's max_repeat_weeks is the ceiling
     // the instructor set (null/1 = single lesson only). Learner-supplied count
@@ -507,7 +514,9 @@ async function handleAcceptOffer(req, res) {
 
     // offer_price_pence (custom price) takes precedence over discount_pct
     let pricePence;
-    if (offer.offer_price_pence != null) {
+    if (isTrialOffer) {
+      pricePence = 0;
+    } else if (offer.offer_price_pence != null) {
       pricePence = offer.offer_price_pence;
     } else {
       const discountPct = offer.discount_pct || 0;
