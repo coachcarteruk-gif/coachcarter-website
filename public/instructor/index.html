@@ -801,6 +801,13 @@
           <div class="notes-label">Lesson type</div>
           <select id="editBookingType" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--primary)"></select>
         </div>
+        <div id="editBookingTransmissionWrap">
+          <div class="notes-label">Transmission</div>
+          <select id="editBookingTransmission" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--primary)">
+            <option value="manual">Manual</option>
+            <option value="automatic">Automatic</option>
+          </select>
+        </div>
         <div class="booking-detail-row"><span class="booking-detail-label">End time</span><span class="booking-detail-val" id="editBookingEndTime">—</span></div>
         <div id="editBookingBalanceInfo" style="font-size:0.82rem;color:var(--muted);display:none"></div>
         <label style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:0.85rem;cursor:pointer">
@@ -845,6 +852,13 @@
       <div>
         <div class="notes-label">Lesson type</div>
         <select id="addLessonType" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;"></select>
+      </div>
+      <div id="addLessonTransmissionWrap">
+        <div class="notes-label">Transmission</div>
+        <select id="addLessonTransmission" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
+          <option value="manual">Manual</option>
+          <option value="automatic">Automatic</option>
+        </select>
       </div>
       <div>
         <div class="notes-label">Payment</div>

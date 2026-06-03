@@ -108,7 +108,7 @@ test.describe('instructor add lesson payment links', () => {
   test('create-booking sends the instructor a text confirmation after booking', () => {
     const body = functionBody(read('api/instructor.js'), 'handleCreateBooking').replace(/\r\n/g, '\n');
 
-    expect(body).toContain('SELECT id, name, email, phone FROM instructors');
+    expect(body).toContain("SELECT id, name, email, phone, COALESCE(transmission_type, 'manual') AS transmission_type");
     expect(body).toContain('await sendWhatsApp(\n      instrDetails.phone');
     expect(body).toContain('Learner: ${learner.name}');
     expect(body).toContain('View schedule: https://coachcarter.uk/instructor/');

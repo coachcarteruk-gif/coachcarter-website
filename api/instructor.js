@@ -84,6 +84,7 @@ function buildScopedDurationCreditRefusal(delta, availableMinutes) {
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_HHMM_RE = /^\d{2}:\d{2}$/;
 const AVAILABILITY_TRANSMISSION_TYPES = new Set(['manual', 'automatic', 'both']);
+const LESSON_TRANSMISSION_TYPES = new Set(['manual', 'automatic']);
 
 function isValidIsoDate(value) {
   if (!ISO_DATE_RE.test(String(value || ''))) return false;
@@ -112,9 +113,24 @@ function normaliseAvailabilityTransmissionType(value) {
   return AVAILABILITY_TRANSMISSION_TYPES.has(text) ? text : null;
 }
 
+function normaliseLessonTransmissionType(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return LESSON_TRANSMISSION_TYPES.has(text) ? text : null;
+}
+
 function instructorCanOfferAvailabilityTransmission(instructorTransmissionType, slotTransmissionType) {
   const instructorType = normaliseAvailabilityTransmissionType(instructorTransmissionType) || 'manual';
   return instructorType === 'both' || slotTransmissionType === instructorType;
+}
+
+function instructorCanTeachLessonTransmission(instructorTransmissionType, lessonTransmissionType) {
+  const instructorType = normaliseAvailabilityTransmissionType(instructorTransmissionType) || 'manual';
+  return instructorType === 'both' || lessonTransmissionType === instructorType;
+}
+
+function defaultLessonTransmissionForInstructor(instructorTransmissionType) {
+  const instructorType = normaliseAvailabilityTransmissionType(instructorTransmissionType) || 'manual';
+  return instructorType === 'automatic' ? 'automatic' : 'manual';
 }
 
 function setCors(res) {
@@ -374,11 +390,15 @@ async function handleSchedule(req, res) {
         ds.id AS session_log_id,
         ds.notes AS session_notes,
         lb.instructor_notes,
+        COALESCE(lb.transmission_type,
+          CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END
+        ) AS transmission_type,
         lt.name AS lesson_type_name,
         lt.colour AS lesson_type_colour,
         COALESCE(lt.duration_minutes, 90) AS duration_minutes
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
@@ -464,6 +484,9 @@ async function handleScheduleRange(req, res) {
         lb.status,
         lb.notes,
         lb.instructor_notes,
+        COALESCE(lb.transmission_type,
+          CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END
+        ) AS transmission_type,
         lb.lesson_type_id,
         lu.id    AS learner_id,
         lu.name  AS learner_name,
@@ -478,6 +501,7 @@ async function handleScheduleRange(req, res) {
         COALESCE(lt.duration_minutes, 90) AS duration_minutes
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.school_id = ${schoolId}
@@ -1513,16 +1537,16 @@ async function handleRescheduleBooking(req, res) {
 }
 
 // ── POST /api/instructor?action=edit-booking ────────────────────────────────
-// Body: { booking_id, scheduled_date?, start_time?, lesson_type_id? }
-// In-place edit of a booking's date, time, or lesson type.
+// Body: { booking_id, scheduled_date?, start_time?, lesson_type_id?, transmission_type? }
+// In-place edit of a booking's date, time, lesson type, or transmission.
 async function handleEditBooking(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { booking_id, scheduled_date, start_time, lesson_type_id, force, notify } = req.body;
+  const { booking_id, scheduled_date, start_time, lesson_type_id, transmission_type, force, notify } = req.body;
   if (!booking_id) return res.status(400).json({ error: 'booking_id is required' });
-  if (!scheduled_date && !start_time && !lesson_type_id)
+  if (!scheduled_date && !start_time && !lesson_type_id && transmission_type === undefined)
     return res.status(400).json({ error: 'At least one field to edit is required' });
 
   try {
@@ -1534,8 +1558,12 @@ async function handleEditBooking(req, res) {
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
              lb.scheduled_date::text AS scheduled_date, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
              lb.lesson_type_id, lb.minutes_deducted, lb.setmore_key,
+             COALESCE(lb.transmission_type,
+               CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END
+             ) AS transmission_type,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name,
+             COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
              COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
              COALESCE(lt.duration_minutes, 90) AS type_duration_minutes,
              lt.name AS lesson_type_name
@@ -1561,6 +1589,18 @@ async function handleEditBooking(req, res) {
     let newStartTime = start_time || String(booking.start_time).slice(0, 5);
     let newLessonTypeId = lesson_type_id || booking.lesson_type_id;
     let newDuration = parseInt(booking.type_duration_minutes) || 90;
+    let newTransmissionType = normaliseLessonTransmissionType(booking.transmission_type)
+      || defaultLessonTransmissionForInstructor(booking.instructor_transmission_type);
+
+    if (transmission_type !== undefined && transmission_type !== null && String(transmission_type).trim() !== '') {
+      newTransmissionType = normaliseLessonTransmissionType(transmission_type);
+      if (!newTransmissionType) {
+        return res.status(400).json({ error: 'transmission_type must be manual or automatic' });
+      }
+    }
+    if (!instructorCanTeachLessonTransmission(booking.instructor_transmission_type, newTransmissionType)) {
+      return res.status(400).json({ error: `This instructor profile is set to ${booking.instructor_transmission_type} transmission only` });
+    }
 
     // If lesson type changed, look up new duration
     if (lesson_type_id && lesson_type_id !== booking.lesson_type_id) {
@@ -1677,6 +1717,7 @@ async function handleEditBooking(req, res) {
           start_time = ${newStartTime}::time,
           end_time = ${newEndTime}::time,
           lesson_type_id = ${newLessonTypeId},
+          transmission_type = ${newTransmissionType},
           minutes_deducted = ${oldMinutes > 0 ? newMinutes : 0},
           edited_at = NOW()
       WHERE id = ${booking_id}
@@ -1728,7 +1769,7 @@ async function handleEditBooking(req, res) {
       }
     }
 
-    return res.json({ ok: true, booking_id, newDate, newStartTime, newEndTime, newLessonTypeId, balanceAdjusted, delta });
+    return res.json({ ok: true, booking_id, newDate, newStartTime, newEndTime, newLessonTypeId, transmission_type: newTransmissionType, balanceAdjusted, delta });
   } catch (err) {
     console.error('instructor edit-booking error:', err);
     reportError('/api/instructor', err);
@@ -1737,7 +1778,7 @@ async function handleEditBooking(req, res) {
 }
 
 // ── POST /api/instructor?action=create-booking ────────────────────────────
-// Body: { learner_id, scheduled_date, start_time, payment_method, notes, pickup_address?, dropoff_address? }
+// Body: { learner_id, scheduled_date, start_time, payment_method, notes, pickup_address?, dropoff_address?, transmission_type? }
 // Instructor creates a booking on behalf of a learner.
 async function createInstructorCreditBookingTransaction({
   connectionString,
@@ -1748,6 +1789,7 @@ async function createInstructorCreditBookingTransaction({
   startTime,
   endTime,
   lessonTypeId,
+  transmissionType = 'manual',
   durationMins,
   notes,
   pickupAddress,
@@ -1873,18 +1915,18 @@ async function createInstructorCreditBookingTransaction({
           `INSERT INTO lesson_bookings
              (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
               created_by, payment_method, instructor_notes, pickup_address, dropoff_address,
-              lesson_type_id, minutes_deducted, school_id,
+              lesson_type_id, transmission_type, minutes_deducted, school_id,
               list_price_pence, list_price_source)
            VALUES
              ($1, $2, $3, $4, $5, $6,
               'instructor', 'credit', $7, $8, $9,
-              $10, $11, $12,
+              $10, $11, $12, $13,
               0, 'live_compute_insert')
            RETURNING id, scheduled_date::text, start_time::text, end_time::text, status`,
           [
             learnerId, instructorId, scheduledDate, startTime, endTime, SCHEDULED,
             notes || null, pickupAddress || null, dropoffAddress || null,
-            lessonTypeId || null, durationMins, schoolId,
+            lessonTypeId || null, transmissionType, durationMins, schoolId,
           ]
         );
         booking = inserted.rows[0];
@@ -1978,7 +2020,7 @@ async function handleCreateBooking(req, res) {
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { learner_id, scheduled_date, start_time, lesson_type_id, payment_method, notes, pickup_address, dropoff_address } = req.body;
+  const { learner_id, scheduled_date, start_time, lesson_type_id, payment_method, notes, pickup_address, dropoff_address, transmission_type } = req.body;
   if (!learner_id || !scheduled_date || !start_time)
     return res.status(400).json({ error: 'learner_id, scheduled_date and start_time are required' });
 
@@ -2028,8 +2070,23 @@ async function handleCreateBooking(req, res) {
 
     // Get instructor details for notifications
     const [instrDetails] = await sql`
-      SELECT id, name, email, phone FROM instructors WHERE id = ${instructor.id} AND school_id = ${schoolId}
+      SELECT id, name, email, phone, COALESCE(transmission_type, 'manual') AS transmission_type
+      FROM instructors
+      WHERE id = ${instructor.id} AND school_id = ${schoolId}
     `;
+    if (!instrDetails) return res.status(404).json({ error: 'Instructor not found' });
+
+    const requestedTransmissionType = transmission_type !== undefined && transmission_type !== null && String(transmission_type).trim() !== ''
+      ? normaliseLessonTransmissionType(transmission_type)
+      : null;
+    if (transmission_type && !requestedTransmissionType) {
+      return res.status(400).json({ error: 'transmission_type must be manual or automatic' });
+    }
+    const bookingTransmissionType = requestedTransmissionType
+      || defaultLessonTransmissionForInstructor(instrDetails.transmission_type);
+    if (!instructorCanTeachLessonTransmission(instrDetails.transmission_type, bookingTransmissionType)) {
+      return res.status(400).json({ error: `This instructor profile is set to ${instrDetails.transmission_type} transmission only` });
+    }
 
     // Credit bookings must create booking_credit_sources in the same
     // transaction as the booking and LCB decrement, matching slots.js.
@@ -2047,6 +2104,7 @@ async function handleCreateBooking(req, res) {
         startTime: start_time,
         endTime: end_time,
         lessonTypeId: lessonType.id,
+        transmissionType: bookingTransmissionType,
         durationMins,
         notes,
         pickupAddress: bookingPickup,
@@ -2071,12 +2129,12 @@ async function handleCreateBooking(req, res) {
           INSERT INTO lesson_bookings
             (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
              created_by, payment_method, instructor_notes, pickup_address, dropoff_address,
-             lesson_type_id, minutes_deducted, school_id)
+             lesson_type_id, transmission_type, minutes_deducted, school_id)
           VALUES
             (${learner_id}, ${instructor.id}, ${scheduled_date}, ${start_time}, ${end_time},
              ${SCHEDULED}, 'instructor', ${payMethod}, ${notes || null},
              ${bookingPickup}, ${bookingDropoff},
-             ${lessonType.id}, 0, ${schoolId})
+             ${lessonType.id}, ${bookingTransmissionType}, 0, ${schoolId})
           RETURNING id, scheduled_date, start_time::text, end_time::text, status
         `;
         booking = b;
@@ -2113,6 +2171,7 @@ async function handleCreateBooking(req, res) {
             <tr><td><strong>Time:</strong></td><td>${start_time} – ${end_time}</td></tr>
             <tr><td><strong>Instructor:</strong></td><td>${instrDetails.name}</td></tr>
             <tr><td><strong>Type:</strong></td><td>${lessonType.name}</td></tr>
+            <tr><td><strong>Transmission:</strong></td><td>${bookingTransmissionType === 'automatic' ? 'Automatic' : 'Manual'}</td></tr>
             <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
           </table>
           ${payMethod === 'credit' ? `<p>${durationStr} deducted from your balance. You have ${balanceStr} remaining.</p>` : ''}
@@ -2155,6 +2214,7 @@ async function handleCreateBooking(req, res) {
       scheduled_date,
       start_time,
       end_time,
+      transmission_type: bookingTransmissionType,
       payment_method: payMethod,
       credit_balance: updated.credit_balance,
       balance_minutes: updated.balance_minutes || 0,

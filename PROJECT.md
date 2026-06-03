@@ -581,6 +581,7 @@ reschedule_count INTEGER DEFAULT 0  -- how many times this booking chain has bee
 created_by TEXT DEFAULT 'learner'    -- 'learner', 'instructor', 'admin'
 payment_method TEXT DEFAULT 'credit' -- 'credit', 'stripe', 'cash', 'free'
 lesson_type_id INTEGER              -- FK to lesson_types
+transmission_type TEXT DEFAULT 'manual' -- 'manual' or 'automatic'; concrete per-lesson vehicle type
 minutes_deducted INTEGER            -- hours deducted (in minutes) for audit trail
 pickup_address TEXT                  -- per-booking pickup (overrides learner profile)
 dropoff_address TEXT                 -- per-booking dropoff (school, work, test centre)
