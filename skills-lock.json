@@ -5,6 +5,11 @@
       "source": "ceorkm/mobile-app-ui-design",
       "sourceType": "github",
       "computedHash": "0f039cf367e8f72ca25d27e503e8a68f26210c6bbe31ed51c86d7263ecfe5f74"
+    },
+    "stripe-best-practices": {
+      "source": "docs.stripe.com",
+      "sourceType": "well-known",
+      "computedHash": "4c918c1d768906f7d7815b4b791a520121147479aaae9a451b29854267f60bbf"
     }
   }
 }

@@ -3,6 +3,7 @@ const path = require('path');
 const { test, expect } = require('@playwright/test');
 
 const migrationSql = fs.readFileSync(path.join(__dirname, '..', 'db', 'migration.sql'), 'utf8');
+const refundNotesMigrationSql = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '027_refund_event_notes.sql'), 'utf8');
 const gdprJs = fs.readFileSync(path.join(__dirname, '..', 'api', '_gdpr.js'), 'utf8');
 const learnerJs = fs.readFileSync(path.join(__dirname, '..', 'api', 'learner.js'), 'utf8');
 
@@ -22,6 +23,7 @@ test.describe('refund ledger schema', () => {
     expect(migrationSql).toContain('CREATE INDEX IF NOT EXISTS idx_refund_events_learner ON refund_events(learner_id)');
     expect(migrationSql).toContain('CREATE INDEX IF NOT EXISTS idx_refund_events_created_by ON refund_events(created_by)');
     expect(migrationSql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_events_idempotency_key');
+    expect(migrationSql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_events_id_school');
     expect(migrationSql).toContain("IF to_regclass('public.refund_events') IS NOT NULL THEN");
     expect(migrationSql).toContain("ALTER TABLE refund_events DROP CONSTRAINT");
     expect(migrationSql).toContain('ADD CONSTRAINT refund_events_status_check');
@@ -46,6 +48,20 @@ test.describe('refund ledger schema', () => {
     expect(migrationSql).toContain('CREATE INDEX IF NOT EXISTS idx_refund_event_lines_bcs ON refund_event_lines(booking_credit_source_id)');
     expect(migrationSql).toContain('CREATE INDEX IF NOT EXISTS idx_refund_event_lines_booking ON refund_event_lines(lesson_booking_id)');
     expect(migrationSql).toContain('CREATE INDEX IF NOT EXISTS idx_refund_event_lines_csa ON refund_event_lines(credit_source_adjustment_id)');
+
+    expect(migrationSql).toContain('CREATE TABLE IF NOT EXISTS refund_event_notes');
+    expect(migrationSql).toContain('refund_event_id                     INTEGER NOT NULL');
+    expect(migrationSql).toContain('CONSTRAINT refund_event_notes_event_school_fk');
+    expect(migrationSql).toContain('FOREIGN KEY (refund_event_id, school_id) REFERENCES refund_events(id, school_id)');
+    expect(migrationSql).toContain("note_type IN ('operator_note', 'evidence', 'incident', 'repair_decision')");
+    expect(migrationSql).toContain("incident_status IN ('open', 'watching', 'resolved', 'not_applicable')");
+    expect(migrationSql).toContain("CHECK (note_type = 'incident' OR incident_status = 'not_applicable')");
+    expect(migrationSql).toContain('CREATE INDEX IF NOT EXISTS idx_refund_event_notes_school');
+    expect(migrationSql).toContain('CREATE INDEX IF NOT EXISTS idx_refund_event_notes_event');
+    expect(migrationSql).toContain('CREATE INDEX IF NOT EXISTS idx_refund_event_notes_incident');
+    expect(refundNotesMigrationSql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_events_id_school');
+    expect(refundNotesMigrationSql).toContain('CONSTRAINT refund_event_notes_event_school_fk');
+    expect(refundNotesMigrationSql).toContain('FOREIGN KEY (refund_event_id, school_id) REFERENCES refund_events(id, school_id)');
   });
 
   test('wires refund_events into GDPR export and learner deletion anonymisation', () => {

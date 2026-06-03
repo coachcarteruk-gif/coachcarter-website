@@ -2667,6 +2667,10 @@ function renderManualBankRecordPanel(data) {
     '</div>' +
     '<label for="refund-manual-bank-reference" style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#92400e;margin-top:12px;margin-bottom:6px;">Bank reference</label>' +
     '<input id="refund-manual-bank-reference" data-action="validate-manual-bank-refund" autocomplete="off" placeholder="Bank transfer reference" style="width:100%;padding:10px 12px;border:1px solid rgba(146,64,14,0.25);border-radius:8px;background:#fff;font-size:0.9rem;">' +
+    '<label for="refund-manual-bank-evidence" style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#92400e;margin-top:12px;margin-bottom:6px;">Evidence reference</label>' +
+    '<input id="refund-manual-bank-evidence" autocomplete="off" placeholder="Bank screenshot, statement line, or approval reference" maxlength="500" style="width:100%;padding:10px 12px;border:1px solid rgba(146,64,14,0.25);border-radius:8px;background:#fff;font-size:0.9rem;">' +
+    '<label for="refund-manual-bank-note" style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#92400e;margin-top:12px;margin-bottom:6px;">Operator note</label>' +
+    '<textarea id="refund-manual-bank-note" placeholder="Optional operational note for this manual refund record" maxlength="1000" rows="3" style="width:100%;padding:10px 12px;border:1px solid rgba(146,64,14,0.25);border-radius:8px;background:#fff;font-size:0.9rem;resize:vertical;"></textarea>' +
     '<label for="refund-manual-bank-confirmation" style="display:block;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#92400e;margin-top:12px;margin-bottom:6px;">Confirmation phrase</label>' +
     '<input id="refund-manual-bank-confirmation" data-action="validate-manual-bank-refund" autocomplete="off" placeholder="' + esc(REFUND_MANUAL_BANK_CONFIRMATION) + '" style="width:100%;padding:10px 12px;border:1px solid rgba(146,64,14,0.25);border-radius:8px;background:#fff;font-size:0.9rem;">' +
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;">' +
@@ -2747,7 +2751,8 @@ function renderExecutedRefundResult(data) {
     '<div style="margin-bottom:18px;">' +
       '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger line summary</h3>' +
       renderRefundLines(event.lines || []) +
-    '</div>';
+    '</div>' +
+    renderRefundNotesPanel(event);
 }
 
 function renderManualBankRefundResult(data) {
@@ -2768,6 +2773,8 @@ function renderManualBankRefundResult(data) {
         refundKv('Refund channel', metadata.refund_channel || 'manual_bank') +
         refundKv('Refund type', event.refund_type) +
         refundKv('Manual bank reference', metadata.manual_bank_reference || '-') +
+        refundKv('Evidence reference', metadata.evidence_reference || '-') +
+        refundKv('Operator note', metadata.operator_note || '-') +
         refundKv('Idempotency key', event.idempotency_key) +
         refundKv('Gross refund', fmtPence(Number(event.gross_refund_pence || 0))) +
         refundKv('Processing fee withheld', fmtPence(Number(event.processing_fee_withheld_pence || 0))) +
@@ -2777,7 +2784,148 @@ function renderManualBankRefundResult(data) {
     '<div style="margin-bottom:18px;">' +
       '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger line summary</h3>' +
       renderRefundLines(event.lines || []) +
+    '</div>' +
+    renderRefundNotesPanel(event);
+}
+
+function refundNoteTypeLabel(type) {
+  const labels = {
+    operator_note: 'Operator note',
+    evidence: 'Evidence',
+    incident: 'Incident',
+    repair_decision: 'Repair decision'
+  };
+  return labels[type] || type || 'Note';
+}
+
+function renderRefundNotesPanel(event) {
+  if (!event || !event.id) return '';
+  return '<div id="refund-notes-panel" data-refund-event-id="' + esc(event.id) + '" style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-top:18px;">' +
+    '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px;">' +
+      '<div>' +
+        '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0;">Refund notes timeline</h3>' +
+        '<div style="font-size:0.84rem;color:var(--muted);margin-top:3px;">For operator context, evidence references, and incident repair decisions. Notes do not mutate refund accounting.</div>' +
+      '</div>' +
+      '<span class="badge badge-gray">Event #' + esc(event.id) + '</span>' +
+    '</div>' +
+    '<div id="refund-notes-list" style="margin-bottom:14px;color:var(--muted);font-size:0.86rem;">Loading notes...</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:10px;">' +
+      '<div><label for="refund-note-type" style="display:block;font-size:0.74rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Type</label>' +
+        '<select id="refund-note-type" style="width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;">' +
+          '<option value="operator_note">Operator note</option>' +
+          '<option value="evidence">Evidence</option>' +
+          '<option value="incident">Incident</option>' +
+          '<option value="repair_decision">Repair decision</option>' +
+        '</select></div>' +
+      '<div><label for="refund-note-incident-status" style="display:block;font-size:0.74rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Incident status</label>' +
+        '<select id="refund-note-incident-status" style="width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;">' +
+          '<option value="not_applicable">Not applicable</option>' +
+          '<option value="open">Open</option>' +
+          '<option value="watching">Watching</option>' +
+          '<option value="resolved">Resolved</option>' +
+        '</select></div>' +
+      '<div><label for="refund-note-evidence" style="display:block;font-size:0.74rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Evidence reference</label>' +
+        '<input id="refund-note-evidence" maxlength="500" placeholder="Optional reference" style="width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;"></div>' +
+    '</div>' +
+    '<textarea id="refund-note-body" maxlength="2000" rows="3" placeholder="Add a concise refund note..." style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:0.9rem;resize:vertical;"></textarea>' +
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
+      '<button type="button" class="btn btn-secondary" data-action="add-refund-note">Add note</button>' +
+      '<div id="refund-note-status" role="alert" style="font-size:0.84rem;font-weight:700;color:var(--muted);"></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderRefundNotesTimeline(notes) {
+  if (!Array.isArray(notes) || notes.length === 0) {
+    return '<div style="padding:10px 0;color:var(--muted);font-size:0.86rem;">No refund notes yet.</div>';
+  }
+  return notes.map(function (note) {
+    return '<div style="border-top:1px solid var(--border);padding:10px 0;">' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+        '<span class="badge badge-gray">' + esc(refundNoteTypeLabel(note.note_type)) + '</span>' +
+        (note.incident_status && note.incident_status !== 'not_applicable' ? '<span class="badge badge-amber">' + esc(note.incident_status) + '</span>' : '') +
+        '<span style="font-size:0.78rem;color:var(--muted);">' + esc(note.created_at || '') + '</span>' +
+      '</div>' +
+      '<div style="font-size:0.92rem;line-height:1.45;margin-top:6px;white-space:pre-wrap;">' + esc(note.body || '') + '</div>' +
+      (note.evidence_reference ? '<div style="font-size:0.82rem;color:var(--muted);margin-top:5px;">Evidence: ' + esc(note.evidence_reference) + '</div>' : '') +
+      '<div style="font-size:0.78rem;color:var(--muted);margin-top:5px;">By ' + esc(note.admin_name || note.admin_email || ('admin #' + (note.created_by || '-'))) + '</div>' +
     '</div>';
+  }).join('');
+}
+
+async function loadRefundNotes(refundEventId) {
+  const list = document.getElementById('refund-notes-list');
+  if (!list || !refundEventId) return;
+  const expectedEventId = String(refundEventId);
+  list.innerHTML = 'Loading notes...';
+  try {
+    const res = await fetchAdmin('/api/admin?action=refund-notes&refund_event_id=' + encodeURIComponent(refundEventId), {
+      headers: HEADERS
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.message || data.error || 'Refund notes failed.');
+    const panel = document.getElementById('refund-notes-panel');
+    if (!panel || panel.dataset.refundEventId !== expectedEventId) return;
+    list.innerHTML = renderRefundNotesTimeline(data.notes || []);
+  } catch (err) {
+    const panel = document.getElementById('refund-notes-panel');
+    if (!panel || panel.dataset.refundEventId !== expectedEventId) return;
+    list.innerHTML = '<div style="color:#991b1b;background:var(--red-bg);border-radius:8px;padding:10px 12px;">' + esc(err.message || 'Failed to load refund notes.') + '</div>';
+  }
+}
+
+async function addRefundNoteFromPanel() {
+  const panel = document.getElementById('refund-notes-panel');
+  if (!panel) return;
+  const refundEventId = parseInt(panel.dataset.refundEventId, 10);
+  const status = document.getElementById('refund-note-status');
+  const btn = panel.querySelector('[data-action="add-refund-note"]');
+  const bodyEl = document.getElementById('refund-note-body');
+  const body = (bodyEl?.value || '').trim();
+  if (!body) {
+    if (status) { status.textContent = 'Add a note before saving.'; status.style.color = '#991b1b'; }
+    return;
+  }
+
+  const noteType = document.getElementById('refund-note-type')?.value || 'operator_note';
+  let incidentStatus = document.getElementById('refund-note-incident-status')?.value || 'not_applicable';
+  if (noteType === 'incident' && incidentStatus === 'not_applicable') incidentStatus = 'open';
+  if (noteType !== 'incident') incidentStatus = 'not_applicable';
+  const evidenceReference = (document.getElementById('refund-note-evidence')?.value || '').trim();
+  const requestBody = {
+    refund_event_id: refundEventId,
+    note_type: noteType,
+    incident_status: incidentStatus,
+    body
+  };
+  if (evidenceReference) requestBody.evidence_reference = evidenceReference;
+
+  if (status) { status.textContent = 'Saving note...'; status.style.color = 'var(--muted)'; }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
+  }
+  try {
+    const res = await fetchAdmin('/api/admin?action=add-refund-note', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify(requestBody)
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.message || data.error || 'Refund note failed.');
+    if (bodyEl) bodyEl.value = '';
+    const evidence = document.getElementById('refund-note-evidence');
+    if (evidence) evidence.value = '';
+    if (status) { status.textContent = 'Note added.'; status.style.color = '#166534'; }
+    await loadRefundNotes(refundEventId);
+  } catch (err) {
+    if (status) { status.textContent = err.message || 'Failed to add note.'; status.style.color = '#991b1b'; }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Add note';
+    }
+  }
 }
 
 function renderRefundPreviewResult(data) {
@@ -2999,6 +3147,7 @@ async function executeRefundFromPreview() {
         badge.textContent = data.idempotent_replay ? 'Idempotent replay' : 'Executed';
         badge.className = 'badge badge-green';
       }
+      if (data.refund_event?.id) loadRefundNotes(data.refund_event.id);
     }
   } catch (error) {
     setRefundExecuteStatus(error.message || 'Refund execution failed.', 'error');
@@ -3030,6 +3179,8 @@ async function recordManualBankRefundFromPreview() {
     setManualBankRefundStatus('Enter the bank transfer reference before recording.', 'error');
     return;
   }
+  const evidenceReference = (document.getElementById('refund-manual-bank-evidence')?.value || '').trim();
+  const operatorNote = (document.getElementById('refund-manual-bank-note')?.value || '').trim();
   const phrase = (document.getElementById('refund-manual-bank-confirmation')?.value || '').trim();
   if (phrase !== REFUND_MANUAL_BANK_CONFIRMATION) {
     setManualBankRefundStatus('Type the exact manual-bank confirmation phrase before recording.', 'error');
@@ -3044,15 +3195,19 @@ async function recordManualBankRefundFromPreview() {
   setManualBankRefundStatus('Recording via admin?action=record-manual-bank-refund. Keep this idempotency key with the bank evidence.', 'pending');
 
   try {
+    const requestBody = {
+      ...currentRefundPreview.payload,
+      idempotency_key: currentRefundPreview.manualBankIdempotencyKey,
+      manual_bank_reference: reference,
+      operator_go: REFUND_MANUAL_BANK_CONFIRMATION
+    };
+    if (evidenceReference) requestBody.evidence_reference = evidenceReference;
+    if (operatorNote) requestBody.operator_note = operatorNote;
+
     const res = await fetchAdmin('/api/admin?action=record-manual-bank-refund', {
       method: 'POST',
       headers: HEADERS,
-      body: JSON.stringify({
-        ...currentRefundPreview.payload,
-        idempotency_key: currentRefundPreview.manualBankIdempotencyKey,
-        manual_bank_reference: reference,
-        operator_go: REFUND_MANUAL_BANK_CONFIRMATION
-      })
+      body: JSON.stringify(requestBody)
     });
     const data = await res.json();
     if (!res.ok || data.error) {
@@ -3067,6 +3222,7 @@ async function recordManualBankRefundFromPreview() {
         badge.textContent = data.idempotent_replay ? 'Manual replay' : 'Manual recorded';
         badge.className = 'badge badge-green';
       }
+      if (data.refund_event?.id) loadRefundNotes(data.refund_event.id);
     }
   } catch (error) {
     setManualBankRefundStatus(error.message || 'Manual bank refund record failed.', 'error');
@@ -3101,6 +3257,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'open-refund-preview') openRefundPreviewFromBooking(parseInt(t.dataset.id, 10));
   else if (a === 'execute-refund') executeRefundFromPreview();
   else if (a === 'record-manual-bank-refund') recordManualBankRefundFromPreview();
+  else if (a === 'add-refund-note') addRefundNoteFromPanel();
   else if (a === 'mark-complete') markComplete(parseInt(t.dataset.id, 10));
   else if (a === 'show-learner-detail') showLearnerDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-adjust-credits') openAdjustCredits(t.dataset.learnerId, parseInt(t.dataset.balance, 10));

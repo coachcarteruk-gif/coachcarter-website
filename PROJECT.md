@@ -564,6 +564,8 @@ Per-instructor credit safety tracker: [`docs/per-instructor-credits-audit.md`](d
 
 **`refund_event_lines`** — itemised refund ledger lines keyed to source rows. Columns: `school_id`, `refund_event_id`, optional `credit_transaction_id`, `booking_credit_source_id`, `lesson_booking_id`, `credit_source_adjustment_id`, gross/source-fee/withheld/net pence, `minutes_adjusted`, created_at.
 
+**`refund_event_notes`** — admin-only refund notes timeline linked to `refund_events`. Columns: `school_id`, `refund_event_id`, `created_by`, `note_type` (`operator_note`, `evidence`, `incident`, `repair_decision`), `incident_status` (`open`, `watching`, `resolved`, `not_applicable`), body, optional evidence reference, metadata, created_at. Notes do not mutate refund ledger, booking, payout, Stripe, CSA, or learner credit state.
+
 **`lesson_bookings`**
 ```sql
 id SERIAL PRIMARY KEY
@@ -760,6 +762,9 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 | `credit-goodwill` | POST | JWT | Grant goodwill credits to a learner/instructor pair through the shared serialized LCB credit mutation path. Requires learner/instructor scope, minutes, reason, and `absorbed_by` (`platform` or `instructor`). Audit-logged as `admin.credit_goodwill_grant` |
 | `refund-preview` | POST | JWT | Read-only admin refund planner for net-of-processing-fee refunds. Supports credit purchase/source previews, partial repeat-offer unused value previews, and direct slot/offer booking previews. It itemises gross lesson credit value, withheld original processing fee, and net amount returned; blocks missing-fee cases and already-paid-out direct bookings for manual review. It does not write `refund_events`, mutate credit balances/CSA, or call `stripe.refunds.create`. |
 | `execute-refund` | POST | JWT | Tightly gated admin refund executor. Requires `idempotency_key` and `operator_go: "EXECUTE_REFUND_CONFIRMED"`, re-runs `_refund-planner.js`, blocks manual-review plans, calls `stripe.refunds.create` through an injectable Stripe client, writes `refund_events(status='executed')` / `refund_event_lines`, creates CSA + locked balance decrements for supported unused credit-source refunds, and audit-logs `admin.execute_refund`. Already-paid-out direct bookings remain blocked. |
+| `record-manual-bank-refund` | POST | JWT | Ledger-only manual bank refund record. Requires `idempotency_key`, `operator_go: "RECORD_MANUAL_BANK_REFUND_CONFIRMED"`, `manual_bank_reference`, and a reason. Optional `evidence_reference` and `operator_note` are retained in `refund_events.metadata`. It re-runs `_refund-planner.js`, refuses clean execute-eligible original-method refunds, writes executed refund ledger rows/lines, and audit-logs `admin.record_manual_bank_refund`. It does not call Stripe, change bookings, edit payout rows, create CSA rows, or mutate learner credit. |
+| `refund-notes` | GET | JWT | Lists admin refund notes for a school-scoped `refund_event_id`. Returns the refund event summary plus ordered `refund_event_notes` rows. |
+| `add-refund-note` | POST | JWT | Adds an admin note to a school-scoped refund event. Body: `{ refund_event_id, note_type, body, incident_status?, evidence_reference? }`. Supports operator/evidence/incident/repair-decision notes and audit-logs `admin.add_refund_note`. It records context only; it does not repair or mutate refund accounting. |
 | `invite-learner` | POST | JWT | Create learner account and send 7-day magic link invite email |
 | `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type (same as instructor version but admin-scoped). Audit-logged |
 | `instructor-blackouts` | GET | JWT | Get future blackout dates for an instructor (`?instructor_id=X`) |
@@ -1010,7 +1015,7 @@ When a learner is deleted, data is handled as follows:
 
 ## What's still to build
 
-- **Refund flow UI/manual record** — backend preview and tightly gated execute foundation exists, but learner request UI, admin approval UI, and manual bank-refund record flows are still to build.
+- **Refund flow polish** — backend preview, tightly gated execute, admin execute UI, manual bank-refund ledger recording, and admin refund notes timeline exist. Learner request UI, richer approval workflow, and actual incident repair tooling are still to build.
 - **Automated reminders** — 24-hour email/SMS before lessons (Vercel cron)
 - **Waiting list** — capture leads when fully booked
 - **Referral system** — unique links, credit bonuses for both parties
