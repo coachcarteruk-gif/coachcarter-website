@@ -223,7 +223,10 @@ test.describe('admin manual bank refund record endpoint', () => {
     const stripeClient = makeStripe();
 
     const res = await callManualBank({
-      body: manualBankBody(),
+      body: manualBankBody({
+        evidence_reference: 'BANK-SCREENSHOT-7001',
+        operator_note: 'Fraser approved after confirming payout already landed.',
+      }),
       sql,
       stripeClient,
     });
@@ -245,6 +248,8 @@ test.describe('admin manual bank refund record endpoint', () => {
     expect(res.body.refund_event.metadata).toMatchObject({
       refund_channel: 'manual_bank',
       manual_bank_reference: 'BANK-REF-7001',
+      evidence_reference: 'BANK-SCREENSHOT-7001',
+      operator_note: 'Fraser approved after confirming payout already landed.',
       preview_code: 'BOOKING_ALREADY_PAID_OUT',
       recommended_operator_action: 'manual_bank_review_required',
     });
@@ -479,6 +484,26 @@ test.describe('admin manual bank refund record endpoint', () => {
     expect(res.body).toMatchObject({
       error: true,
       code: 'OPERATOR_GO_REQUIRED',
+      manual_bank_recorded: false,
+    });
+    expect(stripeClient.calls).toHaveLength(0);
+    expect(sql.calls).toHaveLength(0);
+  });
+
+  test('validates optional manual evidence fields before planning or SQL mutation', async () => {
+    const sql = makeSql();
+    const stripeClient = makeStripe();
+
+    const res = await callManualBank({
+      body: manualBankBody({ evidence_reference: 'x'.repeat(501) }),
+      sql,
+      stripeClient,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({
+      error: true,
+      code: 'MANUAL_EVIDENCE_REFERENCE_TOO_LONG',
       manual_bank_recorded: false,
     });
     expect(stripeClient.calls).toHaveLength(0);

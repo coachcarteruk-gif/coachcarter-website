@@ -58,6 +58,7 @@ async function setupPortalPage(page, previews) {
     window.__previewQueue = queuedPreviews;
     window.__executeCalls = [];
     window.__manualBankCalls = [];
+    window.__refundNoteCalls = [];
     window.ccAdminAuth = {
       logout: () => {},
       fetchAuthed: async (url, options = {}) => {
@@ -86,6 +87,11 @@ async function setupPortalPage(page, previews) {
         if (url.includes('action=record-manual-bank-refund')) {
           window.__manualBankCalls.push(JSON.parse(options.body || '{}'));
           return json({ error: true, code: 'SIMULATED_MANUAL_BANK_HOLD', message: 'Simulated manual bank response.' }, 502);
+        }
+        if (url.includes('action=refund-notes')) return json({ ok: true, notes: [] });
+        if (url.includes('action=add-refund-note')) {
+          window.__refundNoteCalls.push(JSON.parse(options.body || '{}'));
+          return json({ ok: true, note_added: true, note: { id: 88 } });
         }
         return json({ ok: true });
       },
@@ -219,9 +225,13 @@ test.describe('admin refund preview UI', () => {
     expect(portalJs).toContain("const REFUND_MANUAL_BANK_CONFIRMATION = 'RECORD_MANUAL_BANK_REFUND_CONFIRMED'");
     expect(renderPanel).toContain('Manual bank refund can be recorded');
     expect(renderPanel).toContain('id="refund-manual-bank-reference"');
+    expect(renderPanel).toContain('id="refund-manual-bank-evidence"');
+    expect(renderPanel).toContain('id="refund-manual-bank-note"');
     expect(renderPanel).toContain('id="btn-record-manual-bank-refund"');
     expect(record).toContain("fetchAdmin('/api/admin?action=record-manual-bank-refund'");
     expect(record).toContain('manual_bank_reference: reference');
+    expect(record).toContain('evidence_reference = evidenceReference');
+    expect(record).toContain('operator_note = operatorNote');
     expect(record).toContain('operator_go: REFUND_MANUAL_BANK_CONFIRMATION');
     expect(record).not.toContain('gross_refund_pence');
     expect(record).not.toContain('learner_id');
@@ -244,7 +254,34 @@ test.describe('admin refund preview UI', () => {
     expect(render).toContain('Manual bank refund recorded in the ledger');
     expect(render).toContain('No Stripe refund, booking update, payout mutation, or learner-credit mutation');
     expect(render).toContain('Manual bank reference');
+    expect(render).toContain('Evidence reference');
+    expect(render).toContain('Operator note');
     expect(render).toContain('renderRefundLines(event.lines || [])');
+  });
+
+  test('adds a refund notes timeline for executed or manual refund events', () => {
+    const executedRender = sourceFor('renderExecutedRefundResult');
+    const manualRender = sourceFor('renderManualBankRefundResult');
+    const panel = sourceFor('renderRefundNotesPanel');
+    const loader = sourceFor('loadRefundNotes');
+    const addNote = sourceFor('addRefundNoteFromPanel');
+
+    expect(executedRender).toContain('renderRefundNotesPanel(event)');
+    expect(manualRender).toContain('renderRefundNotesPanel(event)');
+    expect(panel).toContain('Refund notes timeline');
+    expect(panel).toContain('id="refund-note-type"');
+    expect(panel).toContain('id="refund-note-incident-status"');
+    expect(panel).toContain('id="refund-note-body"');
+    expect(loader).toContain("fetchAdmin('/api/admin?action=refund-notes&refund_event_id='");
+    expect(loader).toContain('const expectedEventId = String(refundEventId)');
+    expect(loader).toContain("panel.dataset.refundEventId !== expectedEventId");
+    expect(addNote).toContain("fetchAdmin('/api/admin?action=add-refund-note'");
+    expect(addNote).toContain('refund_event_id: refundEventId');
+    expect(addNote).toContain("btn.disabled = true");
+    expect(addNote).toContain("btn.textContent = 'Adding...'");
+    expect(addNote).toContain("btn.disabled = false");
+    expect(addNote).not.toContain('gross_refund_pence');
+    expect(addNote).not.toContain('stripe_refund_id');
   });
 
   test('behaviorally gates execute, reuses idempotency, and sends only expected execute body', async ({ page }) => {
@@ -332,6 +369,8 @@ test.describe('admin refund preview UI', () => {
     await expect(recordButton).toBeDisabled();
 
     await page.fill('#refund-manual-bank-reference', 'BANK-REF-7001');
+    await page.fill('#refund-manual-bank-evidence', 'BANK-SCREENSHOT-7001');
+    await page.fill('#refund-manual-bank-note', 'Approved after bank transfer was completed.');
     await page.fill('#refund-manual-bank-confirmation', 'RECORD_MANUAL');
     await expect(recordButton).toBeDisabled();
 
@@ -349,6 +388,8 @@ test.describe('admin refund preview UI', () => {
       reason: 'Approved manual bank refund',
       idempotency_key: manualCalls[0].idempotency_key,
       manual_bank_reference: 'BANK-REF-7001',
+      evidence_reference: 'BANK-SCREENSHOT-7001',
+      operator_note: 'Approved after bank transfer was completed.',
       operator_go: 'RECORD_MANUAL_BANK_REFUND_CONFIRMED',
     });
     expect(manualCalls[0].idempotency_key).toBeTruthy();

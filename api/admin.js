@@ -65,6 +65,12 @@ const { inspectCreditReconciliation, grantReconciliationCredits } = require('./_
 const { planAdminRefundPreview, validateRefundPreviewRequest } = require('./_refund-planner');
 const { executeAdminRefund, validateRefundExecuteRequest } = require('./_refund-executor');
 const { recordManualBankRefund, validateManualBankRefundRequest } = require('./_refund-manual-bank');
+const {
+  addRefundNote,
+  listRefundNotes,
+  validateRefundNoteCreateRequest,
+  validateRefundNoteListRequest,
+} = require('./_refund-notes');
 const { logAudit } = require('./_audit');
 const { deleteLearnerCascade } = require('./_gdpr');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
@@ -170,6 +176,8 @@ module.exports = async (req, res) => {
   if (action === 'refund-preview')      return handleRefundPreview(req, res);
   if (action === 'execute-refund')      return handleExecuteRefund(req, res);
   if (action === 'record-manual-bank-refund') return handleRecordManualBankRefund(req, res);
+  if (action === 'refund-notes')        return handleRefundNotes(req, res);
+  if (action === 'add-refund-note')     return handleAddRefundNote(req, res);
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
   if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
   if (action === 'toggle-payout-pause')  return handleTogglePayoutPause(req, res);
@@ -1589,6 +1597,93 @@ async function handleRecordManualBankRefund(req, res) {
       code: 'MANUAL_BANK_REFUND_RECORD_FAILED',
       message: 'Failed to record manual bank refund.',
       manual_bank_recorded: false,
+    });
+  }
+}
+
+// Admin refund notes timeline. These notes do not repair or mutate refund
+// accounting; they preserve operator/incident context alongside the ledger.
+async function handleRefundNotes(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const validated = validateRefundNoteListRequest(req.query || {}, { schoolId });
+  if (!validated.ok) {
+    return res.status(validated.status).json({
+      error: true,
+      code: validated.code,
+      message: validated.message,
+    });
+  }
+
+  try {
+    const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
+    const result = await listRefundNotes({ sql, input: validated.input });
+    if (!result.ok) {
+      return res.status(result.status || 400).json({
+        error: true,
+        code: result.code || 'REFUND_NOTES_FAILED',
+        message: result.message || 'Refund notes could not be loaded.',
+      });
+    }
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('admin refund-notes error:', err.message);
+    reportError('/api/admin', err);
+    return res.status(500).json({
+      error: true,
+      code: 'REFUND_NOTES_FAILED',
+      message: 'Failed to load refund notes.',
+    });
+  }
+}
+
+async function handleAddRefundNote(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const validated = validateRefundNoteCreateRequest(req.body || {}, { schoolId });
+  if (!validated.ok) {
+    return res.status(validated.status).json({
+      error: true,
+      code: validated.code,
+      message: validated.message,
+      note_added: false,
+    });
+  }
+
+  try {
+    const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
+    const result = await addRefundNote({
+      sql,
+      admin,
+      input: validated.input,
+      req,
+      auditLogger: req.auditLogger || req._auditLogger,
+    });
+    if (!result.ok) {
+      return res.status(result.status || 400).json({
+        error: true,
+        code: result.code || 'REFUND_NOTE_ADD_FAILED',
+        message: result.message || 'Refund note could not be added.',
+        note_added: false,
+      });
+    }
+    return res.status(200).json({ ...result, note_added: true });
+  } catch (err) {
+    console.error('admin add-refund-note error:', err.message);
+    reportError('/api/admin', err);
+    return res.status(500).json({
+      error: true,
+      code: 'REFUND_NOTE_ADD_FAILED',
+      message: 'Failed to add refund note.',
+      note_added: false,
     });
   }
 }

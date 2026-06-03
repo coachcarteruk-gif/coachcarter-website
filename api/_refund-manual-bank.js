@@ -31,6 +31,16 @@ function validateManualBankRefundRequest(body = {}, { schoolId } = {}) {
     return validationError('MANUAL_BANK_REFERENCE_REQUIRED', 'manual_bank_reference is required and must be 180 characters or fewer.');
   }
 
+  const operatorNote = cleanText(body.operator_note);
+  if (operatorNote && operatorNote.length > 1000) {
+    return validationError('MANUAL_OPERATOR_NOTE_TOO_LONG', 'operator_note must be 1000 characters or fewer.');
+  }
+
+  const evidenceReference = cleanText(body.evidence_reference);
+  if (evidenceReference && evidenceReference.length > 500) {
+    return validationError('MANUAL_EVIDENCE_REFERENCE_TOO_LONG', 'evidence_reference must be 500 characters or fewer.');
+  }
+
   if (body.operator_go !== MANUAL_BANK_OPERATOR_GO) {
     return validationError(
       'OPERATOR_GO_REQUIRED',
@@ -47,6 +57,8 @@ function validateManualBankRefundRequest(body = {}, { schoolId } = {}) {
       idempotencyKey,
       operatorGo: body.operator_go,
       manualBankReference,
+      operatorNote,
+      evidenceReference,
     },
   };
 }
@@ -100,7 +112,7 @@ function isCompleteManualBankEvent(event) {
 }
 
 function manualBankRequestFingerprint(input = {}) {
-  return {
+  return normalizeManualBankRequestFingerprint({
     school_id: input.schoolId || null,
     refund_type: input.refundType || null,
     credit_transaction_id: input.creditTransactionId || null,
@@ -110,6 +122,24 @@ function manualBankRequestFingerprint(input = {}) {
     refunded_minutes: input.refundedMinutes == null ? null : input.refundedMinutes,
     reason: input.reason || null,
     manual_bank_reference: input.manualBankReference || null,
+    operator_note: input.operatorNote || null,
+    evidence_reference: input.evidenceReference || null,
+  });
+}
+
+function normalizeManualBankRequestFingerprint(value = {}) {
+  return {
+    school_id: value.school_id || null,
+    refund_type: value.refund_type || null,
+    credit_transaction_id: value.credit_transaction_id || null,
+    booking_credit_source_id: value.booking_credit_source_id || null,
+    lesson_booking_id: value.lesson_booking_id || null,
+    gross_refund_pence: value.gross_refund_pence == null ? null : value.gross_refund_pence,
+    refunded_minutes: value.refunded_minutes == null ? null : value.refunded_minutes,
+    reason: value.reason || null,
+    manual_bank_reference: value.manual_bank_reference || null,
+    operator_note: value.operator_note || null,
+    evidence_reference: value.evidence_reference || null,
   };
 }
 
@@ -127,7 +157,7 @@ function manualBankRequestMatches(event, input) {
   if (!isCompleteManualBankEvent(event)) return false;
   const metadata = event.metadata || {};
   if (!metadata.manual_bank_request) return false;
-  return stableStringify(metadata.manual_bank_request) === stableStringify(manualBankRequestFingerprint(input));
+  return stableStringify(normalizeManualBankRequestFingerprint(metadata.manual_bank_request)) === stableStringify(manualBankRequestFingerprint(input));
 }
 
 function clientSqlTag(client) {
@@ -183,6 +213,8 @@ async function writeManualBankLedger(sql, { plan, input, admin, connectionString
          ${JSON.stringify({
            refund_channel: 'manual_bank',
            manual_bank_reference: input.manualBankReference,
+           operator_note: input.operatorNote || null,
+           evidence_reference: input.evidenceReference || null,
            fee_evidence: plan.fee_evidence || null,
            manual_bank_request: manualBankRequestFingerprint(input),
            warnings: plan.warnings || [],
@@ -310,6 +342,8 @@ async function recordManualBankRefund({
         refund_type: plan.refund_type,
         idempotency_key: input.idempotencyKey,
         manual_bank_reference: input.manualBankReference,
+        operator_note: input.operatorNote || null,
+        evidence_reference: input.evidenceReference || null,
         gross_refund_pence: plan.gross_refund_pence,
         processing_fee_withheld_pence: plan.processing_fee_withheld_pence,
         net_refund_pence: plan.net_refund_pence,
