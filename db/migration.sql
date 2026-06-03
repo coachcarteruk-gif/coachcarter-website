@@ -2435,6 +2435,40 @@ CREATE INDEX IF NOT EXISTS idx_refund_event_lines_bcs ON refund_event_lines(book
 CREATE INDEX IF NOT EXISTS idx_refund_event_lines_booking ON refund_event_lines(lesson_booking_id);
 CREATE INDEX IF NOT EXISTS idx_refund_event_lines_csa ON refund_event_lines(credit_source_adjustment_id);
 
+-- LESSON BOOKING TRANSMISSION TYPE
+-- Individual lessons are concrete manual/automatic bookings, even when an
+-- instructor profile supports both.
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS transmission_type TEXT;
+
+UPDATE lesson_bookings lb
+   SET transmission_type = CASE
+     WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic'
+     ELSE 'manual'
+   END
+  FROM instructors i
+ WHERE i.id = lb.instructor_id
+   AND (lb.transmission_type IS NULL OR lb.transmission_type NOT IN ('manual','automatic'));
+
+UPDATE lesson_bookings
+   SET transmission_type = 'manual'
+ WHERE transmission_type IS NULL
+    OR transmission_type NOT IN ('manual','automatic');
+
+ALTER TABLE lesson_bookings ALTER COLUMN transmission_type SET DEFAULT 'manual';
+ALTER TABLE lesson_bookings ALTER COLUMN transmission_type SET NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'chk_lesson_bookings_transmission_type'
+  ) THEN
+    ALTER TABLE lesson_bookings
+      ADD CONSTRAINT chk_lesson_bookings_transmission_type
+      CHECK (transmission_type IN ('manual','automatic'));
+  END IF;
+END $$;
+
 -- PUBLIC TENANT RESOLUTION
 -- Public endpoints should resolve their school from the request host or
 -- ?school=slug instead of silently defaulting to school_id=1. The insert gate
