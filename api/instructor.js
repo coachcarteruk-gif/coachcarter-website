@@ -142,6 +142,12 @@ function verifyInstructorAuth(req) {
   return requireAuth(req, { roles: ['instructor'] });
 }
 
+function lessonBookingTransmissionColumnMissing(err) {
+  if (!err) return false;
+  const msg = String(err.message || '');
+  return /lesson_bookings\.transmission_type|lb\.transmission_type|column .*transmission_type.* does not exist/i.test(msg);
+}
+
 module.exports = async (req, res) => {
   setCors(res);
   const action = req.query.action;
@@ -370,44 +376,85 @@ async function handleSchedule(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    const bookings = await sql`
-      SELECT
-        lb.id,
-        lb.scheduled_date::text,
-        lb.start_time::text,
-        lb.end_time::text,
-        lb.status,
-        lb.notes,
-        lb.lesson_type_id,
-        lu.id   AS learner_id,
-        lu.name AS learner_name,
-        lu.email AS learner_email,
-        lu.phone AS learner_phone,
-        COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
-        lu.pickup_address AS learner_pickup_address,
-        lb.pickup_address AS booking_pickup_address,
-        lb.dropoff_address AS booking_dropoff_address,
-        ds.id AS session_log_id,
-        ds.notes AS session_notes,
-        lb.instructor_notes,
-        COALESCE(lb.transmission_type,
-          CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END
-        ) AS transmission_type,
-        lt.name AS lesson_type_name,
-        lt.colour AS lesson_type_colour,
-        COALESCE(lt.duration_minutes, 90) AS duration_minutes
-      FROM lesson_bookings lb
-      JOIN learner_users lu ON lu.id = lb.learner_id
-      JOIN instructors i ON i.id = lb.instructor_id
-      LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
-      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
-      WHERE lb.instructor_id = ${instructor.id}
-        AND lb.school_id = ${schoolId}
-        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
-        AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '14 days')
-      ORDER BY lb.scheduled_date ASC, lb.start_time ASC
-      LIMIT 60
-    `;
+    let bookings;
+    try {
+      bookings = await sql`
+        SELECT
+          lb.id,
+          lb.scheduled_date::text,
+          lb.start_time::text,
+          lb.end_time::text,
+          lb.status,
+          lb.notes,
+          lb.lesson_type_id,
+          lu.id   AS learner_id,
+          lu.name AS learner_name,
+          lu.email AS learner_email,
+          lu.phone AS learner_phone,
+          COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
+          lu.pickup_address AS learner_pickup_address,
+          lb.pickup_address AS booking_pickup_address,
+          lb.dropoff_address AS booking_dropoff_address,
+          ds.id AS session_log_id,
+          ds.notes AS session_notes,
+          lb.instructor_notes,
+          COALESCE(lb.transmission_type,
+            CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END
+          ) AS transmission_type,
+          lt.name AS lesson_type_name,
+          lt.colour AS lesson_type_colour,
+          COALESCE(lt.duration_minutes, 90) AS duration_minutes
+        FROM lesson_bookings lb
+        JOIN learner_users lu ON lu.id = lb.learner_id AND COALESCE(lu.school_id, 1) = ${schoolId}
+        JOIN instructors i ON i.id = lb.instructor_id AND COALESCE(i.school_id, 1) = ${schoolId}
+        LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id AND COALESCE(ds.school_id, 1) = ${schoolId}
+        LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id AND COALESCE(lt.school_id, 1) = ${schoolId}
+        WHERE lb.instructor_id = ${instructor.id}
+          AND COALESCE(lb.school_id, 1) = ${schoolId}
+          AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
+          AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '14 days')
+        ORDER BY lb.scheduled_date ASC, lb.start_time ASC
+        LIMIT 60
+      `;
+    } catch (err) {
+      if (!lessonBookingTransmissionColumnMissing(err)) throw err;
+      bookings = await sql`
+        SELECT
+          lb.id,
+          lb.scheduled_date::text,
+          lb.start_time::text,
+          lb.end_time::text,
+          lb.status,
+          lb.notes,
+          lb.lesson_type_id,
+          lu.id   AS learner_id,
+          lu.name AS learner_name,
+          lu.email AS learner_email,
+          lu.phone AS learner_phone,
+          COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
+          lu.pickup_address AS learner_pickup_address,
+          lb.pickup_address AS booking_pickup_address,
+          lb.dropoff_address AS booking_dropoff_address,
+          ds.id AS session_log_id,
+          ds.notes AS session_notes,
+          lb.instructor_notes,
+          CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END AS transmission_type,
+          lt.name AS lesson_type_name,
+          lt.colour AS lesson_type_colour,
+          COALESCE(lt.duration_minutes, 90) AS duration_minutes
+        FROM lesson_bookings lb
+        JOIN learner_users lu ON lu.id = lb.learner_id AND COALESCE(lu.school_id, 1) = ${schoolId}
+        JOIN instructors i ON i.id = lb.instructor_id AND COALESCE(i.school_id, 1) = ${schoolId}
+        LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id AND COALESCE(ds.school_id, 1) = ${schoolId}
+        LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id AND COALESCE(lt.school_id, 1) = ${schoolId}
+        WHERE lb.instructor_id = ${instructor.id}
+          AND COALESCE(lb.school_id, 1) = ${schoolId}
+          AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
+          AND lb.scheduled_date >= (CURRENT_DATE - INTERVAL '14 days')
+        ORDER BY lb.scheduled_date ASC, lb.start_time ASC
+        LIMIT 60
+      `;
+    }
 
     // Fetch skill ratings for any logged sessions
     const loggedIds = bookings.filter(b => b.session_log_id).map(b => b.session_log_id);
@@ -475,42 +522,81 @@ async function handleScheduleRange(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // Core query with lesson type join
-    const bookings = await sql`
-      SELECT
-        lb.id,
-        lb.scheduled_date::text,
-        lb.start_time::text,
-        lb.end_time::text,
-        lb.status,
-        lb.notes,
-        lb.instructor_notes,
-        COALESCE(lb.transmission_type,
-          CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END
-        ) AS transmission_type,
-        lb.lesson_type_id,
-        lu.id    AS learner_id,
-        lu.name  AS learner_name,
-        lu.email AS learner_email,
-        lu.phone AS learner_phone,
-        lu.pickup_address AS learner_pickup_address,
-        lb.pickup_address AS booking_pickup_address,
-        lb.dropoff_address AS booking_dropoff_address,
-        COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
-        lt.name AS lesson_type_name,
-        lt.colour AS lesson_type_colour,
-        COALESCE(lt.duration_minutes, 90) AS duration_minutes
-      FROM lesson_bookings lb
-      JOIN learner_users lu ON lu.id = lb.learner_id
-      JOIN instructors i ON i.id = lb.instructor_id
-      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
-      WHERE lb.instructor_id = ${instructor.id}
-        AND lb.school_id = ${schoolId}
-        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
-        AND lb.scheduled_date >= ${from}::date
-        AND lb.scheduled_date <= ${to}::date
-      ORDER BY lb.scheduled_date ASC, lb.start_time ASC
-      LIMIT 500
-    `;
+    let bookings;
+    try {
+      bookings = await sql`
+        SELECT
+          lb.id,
+          lb.scheduled_date::text,
+          lb.start_time::text,
+          lb.end_time::text,
+          lb.status,
+          lb.notes,
+          lb.instructor_notes,
+          COALESCE(lb.transmission_type,
+            CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END
+          ) AS transmission_type,
+          lb.lesson_type_id,
+          lu.id    AS learner_id,
+          lu.name  AS learner_name,
+          lu.email AS learner_email,
+          lu.phone AS learner_phone,
+          lu.pickup_address AS learner_pickup_address,
+          lb.pickup_address AS booking_pickup_address,
+          lb.dropoff_address AS booking_dropoff_address,
+          COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
+          lt.name AS lesson_type_name,
+          lt.colour AS lesson_type_colour,
+          COALESCE(lt.duration_minutes, 90) AS duration_minutes
+        FROM lesson_bookings lb
+        JOIN learner_users lu ON lu.id = lb.learner_id AND COALESCE(lu.school_id, 1) = ${schoolId}
+        JOIN instructors i ON i.id = lb.instructor_id AND COALESCE(i.school_id, 1) = ${schoolId}
+        LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id AND COALESCE(lt.school_id, 1) = ${schoolId}
+        WHERE lb.instructor_id = ${instructor.id}
+          AND COALESCE(lb.school_id, 1) = ${schoolId}
+          AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
+          AND lb.scheduled_date >= ${from}::date
+          AND lb.scheduled_date <= ${to}::date
+        ORDER BY lb.scheduled_date ASC, lb.start_time ASC
+        LIMIT 500
+      `;
+    } catch (err) {
+      if (!lessonBookingTransmissionColumnMissing(err)) throw err;
+      bookings = await sql`
+        SELECT
+          lb.id,
+          lb.scheduled_date::text,
+          lb.start_time::text,
+          lb.end_time::text,
+          lb.status,
+          lb.notes,
+          lb.instructor_notes,
+          CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END AS transmission_type,
+          lb.lesson_type_id,
+          lu.id    AS learner_id,
+          lu.name  AS learner_name,
+          lu.email AS learner_email,
+          lu.phone AS learner_phone,
+          lu.pickup_address AS learner_pickup_address,
+          lb.pickup_address AS booking_pickup_address,
+          lb.dropoff_address AS booking_dropoff_address,
+          COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
+          lt.name AS lesson_type_name,
+          lt.colour AS lesson_type_colour,
+          COALESCE(lt.duration_minutes, 90) AS duration_minutes
+        FROM lesson_bookings lb
+        JOIN learner_users lu ON lu.id = lb.learner_id AND COALESCE(lu.school_id, 1) = ${schoolId}
+        JOIN instructors i ON i.id = lb.instructor_id AND COALESCE(i.school_id, 1) = ${schoolId}
+        LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id AND COALESCE(lt.school_id, 1) = ${schoolId}
+        WHERE lb.instructor_id = ${instructor.id}
+          AND COALESCE(lb.school_id, 1) = ${schoolId}
+          AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
+          AND lb.scheduled_date >= ${from}::date
+          AND lb.scheduled_date <= ${to}::date
+        ORDER BY lb.scheduled_date ASC, lb.start_time ASC
+        LIMIT 500
+      `;
+    }
 
     // Pending offers in the same window — slot-pinned only (flexible offers
     // don't block any specific time). Surfaced on the calendar so the
