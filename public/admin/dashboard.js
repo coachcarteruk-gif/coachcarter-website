@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-// HTML-escape helper "” user data from the API is never trusted.
+// HTML-escape helper — user data from the API is never trusted.
 // Every ${field} interpolation into innerHTML MUST be wrapped in esc().
 function esc(str) {
   return String(str == null ? '' : str)
@@ -82,7 +82,7 @@ function renderBookings(filter = 'all') {
       </div>
       <div class="package ${booking.package === 'pass_guarantee' ? 'pass' : ''}">${esc(booking.packageDisplay)}</div>
       <div><span class="status ${booking.status === 'PAID_PENDING_VERIFICATION' ? 'verification' : 'pending'}">${esc(booking.statusDisplay)}</span></div>
-      <div class="amount">Â£${esc(booking.amount)}</div>
+      <div class="amount">£${esc(booking.amount)}</div>
       <div class="actions">
         <button class="action-btn" data-action="view-booking" data-ref="${esc(booking.ref)}">View</button>
         ${booking.testStatus === 'has_test' ? `<button class="action-btn" data-action="verify-dvsa" data-ref="${esc(booking.ref)}">Verify DVSA</button>` : ''}
@@ -144,7 +144,7 @@ function showSection(section) {
   }
 }
 
-// â”€â”€ INSTRUCTOR MANAGEMENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── INSTRUCTOR MANAGEMENT ─────────────────────────────────
 async function loadInstructors() {
   const listEl = document.getElementById('instructors-list');
   listEl.innerHTML = '<div class="empty-state">Loading...</div>';
@@ -343,7 +343,7 @@ async function toggleInstructor(id, active) {
 document.getElementById('instructorModal').addEventListener('click', function(e) {
   if (e.target === this) closeInstructorModal();
 });
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────
 
 document.querySelectorAll('.filters .filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -353,7 +353,7 @@ document.querySelectorAll('.filters .filter-btn').forEach(btn => {
   });
 });
 
-// Admin auth now lives in the httpOnly cc_admin cookie "” browser
+// Admin auth now lives in the httpOnly cc_admin cookie — browser
 // attaches it automatically. fetchAdmin (from shared/admin-auth.js)
 // handles credentials + CSRF header. ADMIN_HEADERS kept as a
 // Content-Type-only object so existing fetchAdmin({ headers: ... })

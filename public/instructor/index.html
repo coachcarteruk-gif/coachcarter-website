@@ -22,13 +22,13 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* â”€â”€ Page Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Page Shell ───────────────────────────────────────────────────────── */
     .page {
       max-width: 960px; margin: 0 auto;
       padding: 24px 16px 24px;
     }
 
-    /* â”€â”€ Calendar Toolbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Calendar Toolbar ─────────────────────────────────────────────────── */
     .cal-toolbar {
       position: sticky; top: 0; z-index: 50;
       background: var(--white); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
@@ -123,7 +123,7 @@
     .payment-radios input:checked + span { color: var(--accent); font-weight: 600; }
     .payment-radios label:has(input:checked) { border-color: var(--accent); background: var(--accent-lt); }
 
-    /* â”€â”€ Loading / Empty â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Loading / Empty ──────────────────────────────────────────────────── */
     .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
     .spinner {
       width: 32px; height: 32px; border: 3px solid var(--border);
@@ -134,7 +134,7 @@
     .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 0.875rem; }
     .empty-icon  { font-size: 2rem; margin-bottom: 10px; }
 
-    /* â”€â”€ MONTHLY VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── MONTHLY VIEW ─────────────────────────────────────────────────────── */
     .month-grid {
       background: var(--white); border: 1px solid var(--border);
       border-radius: var(--radius); overflow: hidden;
@@ -187,7 +187,7 @@
       padding: 1px 4px;
     }
 
-    /* â”€â”€ WEEKLY VIEW (Timepage-style agenda) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── WEEKLY VIEW (Timepage-style agenda) ────────────────────────────── */
     .tp-week { max-width: 720px; }
     .tp-day {
       display: flex; gap: 0; border-bottom: 1px solid var(--border);
@@ -260,7 +260,7 @@
       padding: 8px 0; opacity: 0.6;
     }
 
-    /* â”€â”€ DAILY VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── DAILY VIEW ───────────────────────────────────────────────────────── */
     .daily-header {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 16px; gap: 12px; flex-wrap: wrap;
@@ -408,7 +408,7 @@
     }
     .daily-empty-hour { font-size: 0.78rem; color: #ccc; padding: 2px 0; }
 
-    /* â”€â”€ AGENDA VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── AGENDA VIEW ──────────────────────────────────────────────────────── */
     .agenda-view { max-width: 720px; }
     .agenda-date-header {
       display: flex; justify-content: space-between; align-items: center;
@@ -492,7 +492,7 @@
     .offer-cancel-btn:hover { background: var(--red-lt, #fee); border-color: var(--red, #f5a3a3); color: var(--red, #b00); }
     .offer-cancel-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    /* â”€â”€ Add Availability Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Add Availability Modal ───────────────────────────────────────────── */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.45);
       z-index: 1000; display: flex; align-items: center; justify-content: center;
@@ -538,7 +538,7 @@
     .btn-modal-save:hover { background: var(--accent-dk); }
     .btn-modal-save:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    /* â”€â”€ Booking detail modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Booking detail modal ─────────────────────────────────────────────── */
     .booking-detail-card {
       background: var(--bg); border-radius: 10px; padding: 14px 16px;
       margin-bottom: 16px;
@@ -547,7 +547,7 @@
     .booking-detail-label { font-size: 0.75rem; font-weight: 700; color: var(--muted); width: 60px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.03em; }
     .booking-detail-val { font-size: 0.875rem; font-weight: 600; }
 
-    /* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Toast ────────────────────────────────────────────────────────────── */
     .toast {
       position: fixed; bottom: 72px; left: 50%;
       transform: translateX(-50%) translateY(120px);
@@ -561,7 +561,7 @@
     .toast.success { background: #16a34a; }
     .toast.error   { background: var(--red); }
 
-    /* â”€â”€ Toolbar overflow menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Toolbar overflow menu ──────────────────────────────────────────── */
     .toolbar-overflow-wrap { position: relative; display: none; }
     .toolbar-overflow-btn { font-size: 1.2rem; letter-spacing: 2px; padding: 6px 10px; }
     .toolbar-overflow-menu {
@@ -580,7 +580,7 @@
     .toolbar-overflow-item:hover { background: var(--surface); }
     .toolbar-overflow-item + .toolbar-overflow-item { border-top: 1px solid var(--border); }
 
-    /* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Responsive ───────────────────────────────────────────────────────── */
     @media (max-width: 700px) {
       .cal-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
       .toolbar-secondary { display: none; }
@@ -589,7 +589,7 @@
       .month-cell { min-height: 60px; }
       .month-booking-pill { display: none; }
       .month-cell.has-bookings::after {
-        content: 'â—'; font-size: 0.6rem; color: var(--accent);
+        content: '●'; font-size: 0.6rem; color: var(--accent);
         position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
       }
       .week-grid { overflow-x: auto; }
@@ -602,12 +602,12 @@
 
 
 
-    /* â”€â”€ Instructor Notes Textarea â”€â”€ */
+    /* ── Instructor Notes Textarea ── */
     .notes-field { width: 100%; min-height: 60px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-body); font-size: 0.85rem; color: var(--primary); resize: vertical; background: var(--bg); margin-top: 8px; }
     .notes-field::placeholder { color: var(--muted); }
     .notes-label { font-size: 0.78rem; font-weight: 700; color: var(--muted); margin-top: 12px; }
 
-    /* â”€â”€ Learner History Modal â”€â”€ */
+    /* ── Learner History Modal ── */
     .history-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
     .history-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--accent-lt); display: flex; align-items: center; justify-content: center; font-family: var(--font-head); font-weight: 700; color: var(--accent); font-size: 1.1rem; flex-shrink: 0; }
     .history-name { font-family: var(--font-head); font-weight: 700; font-size: 1rem; }
@@ -619,17 +619,17 @@
     .history-item-notes { color: var(--muted); font-size: 0.8rem; margin-top: 4px; font-style: italic; }
     .history-item .feedback-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 
-    /* â”€â”€ Cancel Modal â”€â”€ */
+    /* ── Cancel Modal ── */
     .cancel-reason { width: 100%; min-height: 50px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-body); font-size: 0.85rem; resize: vertical; margin-top: 8px; }
     .btn-cancel-danger { background: var(--red); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-family: var(--font-head); font-weight: 700; font-size: 0.88rem; cursor: pointer; transition: background 0.15s; }
     .btn-cancel-danger:hover { background: #dc2626; }
 
-    /* â”€â”€ Contact links (phone/WhatsApp) â”€â”€ */
+    /* ── Contact links (phone/WhatsApp) ── */
     .daily-booking-contact { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 0.78rem; }
     .daily-booking-contact a { color: var(--accent); text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
     .daily-booking-contact a:hover { text-decoration: underline; }
 
-    /* â”€â”€ Inline notes editing â”€â”€ */
+    /* ── Inline notes editing ── */
     .inline-notes { width: 100%; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
     .inline-notes-display { font-size: 0.8rem; color: var(--muted); font-style: italic; line-height: 1.4; }
     .inline-notes-link { font-size: 0.75rem; font-weight: 600; color: var(--accent); cursor: pointer; background: none; border: none; padding: 0; margin-top: 4px; font-family: var(--font-body); }
@@ -759,7 +759,7 @@
   </div>
 </div>
 
-<!-- â”€â”€ Reschedule modal â”€â”€ -->
+<!-- ── Reschedule modal ── -->
 <div class="modal-overlay" id="instrRescheduleModal">
   <div class="modal">
     <div class="modal-title">Reschedule Lesson</div>
@@ -781,7 +781,7 @@
   </div>
 </div>
 
-<!-- â”€â”€ Edit Booking Modal â”€â”€ -->
+<!-- ── Edit Booking Modal ── -->
 <div class="modal-overlay" id="editBookingModal">
   <div class="modal">
     <div class="modal-title">Edit Lesson</div>
@@ -823,7 +823,7 @@
   </div>
 </div>
 
-<!-- â”€â”€ Add Lesson Modal â”€â”€ -->
+<!-- ── Add Lesson Modal ── -->
 <div class="modal-overlay" id="addLessonModal">
   <div class="modal" style="max-width:420px">
     <div class="modal-title">Add Lesson</div>
@@ -838,7 +838,7 @@
         <div id="addLessonSelected" style="display:none; margin-top:8px; padding:8px 12px; background:var(--accent-lt); border-radius:8px; font-size:0.85rem; display:none;">
           <span id="addLessonSelectedName" style="font-weight:600"></span>
           <span id="addLessonSelectedDetail" style="color:var(--muted); margin-left:8px"></span>
-          <button id="btn-clear-selected-learner" style="float:right; background:none; border:none; cursor:pointer; color:var(--muted); font-size:0.9rem;">âœ•</button>
+          <button id="btn-clear-selected-learner" style="float:right; background:none; border:none; cursor:pointer; color:var(--muted); font-size:0.9rem;">✕</button>
         </div>
       </div>
       <div>
@@ -888,7 +888,7 @@
   </div>
 </div>
 
-<!-- â”€â”€ Offer Lesson Modal â”€â”€ -->
+<!-- ── Offer Lesson Modal ── -->
 <div class="modal-overlay" id="offerLessonModal">
   <div class="modal" style="max-width:480px">
     <div class="modal-title">Offer Lesson</div>

@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Constants ───────────────────────────────────────────────────────────────
 const DAY_SHORT  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const DAY_FULL   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_SHORT  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -67,7 +67,7 @@ function bookingTransmissionBadge(booking) {
   return `<span class="lesson-type-badge transmission-badge">${transmissionLabel(type)}</span>`;
 }
 
-// â”€â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── State ───────────────────────────────────────────────────────────────────
 let instructor = null;
 let currentView = 'agenda'; // 'monthly' | 'weekly' | 'agenda'
 let cursor     = new Date(); // current date driving the view
@@ -82,7 +82,7 @@ let instructorTransmissionType = 'manual'; // from profile, used for one-off slo
 let loadedRanges = []; // [{from, to}] already fetched
 let selectedBooking = null;
 
-// â”€â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Init ────────────────────────────────────────────────────────────────────
 async function init() {
   const session = ccAuth.getAuth();
   if (!session) { window.location.href = '/instructor/login.html'; return; }
@@ -143,7 +143,7 @@ function navNext() {
   else { cursor.setDate(cursor.getDate() + 14); } // agenda
   renderCurrentView();
 }
-// â”€â”€â”€ Swipe navigation for daily/weekly views â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Swipe navigation for daily/weekly views ─────────────────────────────────
 (function() {
   let touchStartX = 0, touchStartY = 0;
   const calEl = document.getElementById('calContent');
@@ -169,7 +169,7 @@ function goToday() {
   renderCurrentView();
 }
 
-// â”€â”€â”€ Render dispatcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Render dispatcher ───────────────────────────────────────────────────────
 async function renderCurrentView() {
   updateToolbarLabel();
   await fetchNeededData();
@@ -198,7 +198,7 @@ function updateToolbarLabel() {
   }
 }
 
-// â”€â”€â”€ Data fetching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Data fetching ───────────────────────────────────────────────────────────
 async function fetchNeededData() {
   let from, to;
   if (currentView === 'monthly') {
@@ -304,7 +304,7 @@ function _lessonTypeMinutes(lessonTypeId) {
   return lt ? lt.duration_minutes : null;
 }
 
-// â”€â”€â”€ Availability fetching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Availability fetching ───────────────────────────────────────────────────
 async function loadAvailability() {
   try {
     const res  = await ccAuth.fetchAuthed('/api/instructor?action=availability');
@@ -320,7 +320,7 @@ async function loadAvailability() {
   } catch {}
 }
 
-// â”€â”€â”€ MONTHLY RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── MONTHLY RENDER ──────────────────────────────────────────────────────────
 function renderMonthly() {
   const today      = new Date(); today.setHours(0,0,0,0);
   const firstOfMon = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -384,7 +384,7 @@ function renderMonthly() {
   document.getElementById('calContent').innerHTML = html;
 }
 
-// â”€â”€â”€ WEEKLY RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── WEEKLY RENDER ───────────────────────────────────────────────────────────
 function renderWeekly() {
   const today     = new Date(); today.setHours(0,0,0,0);
   const weekStart = getWeekStart(cursor);
@@ -438,7 +438,7 @@ function renderWeekly() {
           <div class="tp-lesson tp-availability" data-availability-id="${a.id}">
             <div class="tp-lesson-info">
               <div class="tp-lesson-name">Available slot</div>
-              <div class="tp-lesson-time">${a.start_time.slice(0,5)} â†’ ${a.end_time.slice(0,5)}</div>
+              <div class="tp-lesson-time">${a.start_time.slice(0,5)} → ${a.end_time.slice(0,5)}</div>
             </div>
             ${availabilityTransmissionBadge(a)}
             <button class="offer-cancel-btn" data-action="delete-availability-override" data-id="${a.id}">Remove</button>
@@ -452,7 +452,7 @@ function renderWeekly() {
   document.getElementById('calContent').innerHTML = html;
 }
 
-// â”€â”€â”€ DAILY RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── DAILY RENDER ────────────────────────────────────────────────────────────
 function renderDaily() {
   const today    = new Date(); today.setHours(0,0,0,0);
   const ds       = dateStr(cursor);
@@ -524,7 +524,7 @@ function renderDaily() {
   document.getElementById('calContent').innerHTML = html;
 }
 
-// â”€â”€â”€ AGENDA RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── AGENDA RENDER ──────────────────────────────────────────────────────────
 function renderAgenda() {
   const today = new Date(); today.setHours(0,0,0,0);
   const rangeStart = new Date(cursor);
@@ -631,7 +631,7 @@ function renderAgenda() {
         html += `
           <div class="agenda-card agenda-card-availability" data-availability-id="${b.id}">
             <div class="agenda-card-left">
-              <div class="agenda-time">${b.start_time.slice(0,5)} â€“ ${b.end_time.slice(0,5)}</div>
+              <div class="agenda-time">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
               <span class="lesson-type-badge availability-badge">Available</span>
               ${availabilityTransmissionBadge(b)}
             </div>
@@ -689,13 +689,13 @@ function renderAgenda() {
   if (todayHeader) todayHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// â”€â”€â”€ Drill-down from monthly â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Drill-down from monthly ─────────────────────────────────────────────────
 function drillToDay(ds) {
   cursor = new Date(ds + 'T00:00:00');
   setView('agenda');
 }
 
-// â”€â”€â”€ Status helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Status helpers ──────────────────────────────────────────────────────────
 function statusLabel(status) {
   switch (status) {
     case 'chargeable': return '✓ Completed';
@@ -712,7 +712,7 @@ function handleBookingModalOverlayClick(e) {
   if (e.target === document.getElementById('bookingModal')) closeBookingModal();
 }
 
-// â”€â”€â”€ Add Availability Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Add Availability Modal ──────────────────────────────────────────────────
 let modalTargetDate = null; // the date we're adding date-specific availability for
 
 function openAvailModal(targetDateStr) {
@@ -800,7 +800,7 @@ async function deleteAvailabilityOverride(id, btnEl) {
   }
 }
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function dateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2,'0');
@@ -850,7 +850,7 @@ function renderFeedbackHTML(b) {
   </div>`;
 }
 
-// â”€â”€â”€ WhatsApp URL helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── WhatsApp URL helper ──────────────────────────────────────────────────────
 function whatsappUrl(phone) {
   if (!phone) return null;
   let num = phone.replace(/\s+/g, '');
@@ -859,7 +859,7 @@ function whatsappUrl(phone) {
   return 'https://wa.me/' + num;
 }
 
-// â”€â”€â”€ Inline notes on completed lessons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Inline notes on completed lessons ────────────────────────────────────────
 function renderInlineNotes(b) {
   const hasNotes = b.instructor_notes && b.instructor_notes.trim();
   return `
@@ -913,7 +913,7 @@ async function saveInlineNotes(bookingId) {
   }
 }
 
-// â”€â”€â”€ Travel time between consecutive bookings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Travel time between consecutive bookings ──────────────────────────────
 const UK_PC_RE = /([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})/i;
 function clientExtractPostcode(addr) {
   if (!addr) return null;
@@ -1007,7 +1007,7 @@ async function cancelPendingOffer(offerId, btnEl) {
 // ─── Refresh schedule ────────────────────────────────────────────────────────
 async function refreshSchedule(silent) {
   const btn = document.getElementById('refreshBtn');
-  if (btn && !silent) btn.textContent = 'âŸ³';
+  if (btn && !silent) btn.textContent = '⟳';
   // Full refresh: clear everything and re-fetch + re-render in one step.
   // renderCurrentView calls fetchNeededData (which awaits) before rendering,
   // so the calendar shows fresh data directly without flashing empty.
@@ -1046,7 +1046,7 @@ function showToast(msg, type = '') {
   setTimeout(() => t.classList.remove('show'), 3500);
 }
 
-// â”€â”€â”€ Calendar Sync Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Calendar Sync Banner ──────────────────────────────────────────────────
 function shouldShowInstructorCalSync() {
   const val = localStorage.getItem('cc_instructor_cal_synced');
   if (!val) return true;
@@ -1060,7 +1060,7 @@ function shouldShowInstructorCalSync() {
 
 // Stats + next lesson moved to /instructor/dashboard.html
 
-// â”€â”€â”€ Instructor Notes in Complete Flow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Instructor Notes in Complete Flow ───────────────────────────────────────
 function openBookingDetail(bookingId) {
   let b = null;
   for (const ds in bookingCache) {
@@ -1116,7 +1116,7 @@ function openBookingDetail(bookingId) {
   document.getElementById('bookingModal').classList.add('open');
 }
 
-// â”€â”€â”€ Learner History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Learner History ──────────────────────────────────────────────────────────
 async function openLearnerHistory(learnerId) {
   document.getElementById('historyModal').classList.add('open');
   document.getElementById('historyContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading…</p></div>';
@@ -1188,7 +1188,7 @@ function closeHistoryModal() {
   document.getElementById('historyModal').classList.remove('open');
 }
 
-// â”€â”€â”€ Cancel Booking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Cancel Booking ───────────────────────────────────────────────────────────
 let cancelBookingId = null;
 
 function openCancelModal(bookingId) {
@@ -1228,7 +1228,7 @@ async function confirmCancel() {
   }
 }
 
-// â”€â”€â”€ Reschedule Booking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Reschedule Booking ──────────────────────────────────────────────────────
 let rescheduleBookingId = null;
 
 function openRescheduleModal(bookingId, date, start, end, learnerName) {
@@ -1286,7 +1286,7 @@ async function confirmInstrReschedule() {
   }
 }
 
-// â”€â”€â”€ Edit Booking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Edit Booking ─────────────────────────────────────────────────────────
 let editBookingId = null;
 let editBookingLessonTypes = [];
 let editBookingOrigMinutes = 0;
@@ -1430,7 +1430,7 @@ async function confirmEditBooking(forceOverride) {
 // Wire up time input change to recalculate end time
 document.getElementById('editBookingTime')?.addEventListener('input', updateEditEndTime);
 
-// â”€â”€â”€ Add Lesson (Instructor-Initiated Booking) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Add Lesson (Instructor-Initiated Booking) ──────────────────────────────
 let addLessonLearners = [];
 let selectedLearnerId = null;
 
@@ -1752,7 +1752,7 @@ async function confirmCreateBooking() {
   }
 }
 
-// â”€â”€ Offer Lesson Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Offer Lesson Modal ────────────────────────────────────────────────────────
 let offerLearners = [];
 let selectedOfferLearnerId = null;
 
@@ -1969,7 +1969,7 @@ function filterOfferLearners() {
       return `
       <div class="learner-option" data-action="offer-select-learner" data-id="${l.id}" data-name="${esc(l.name)}" data-detail="${esc(l.phone || l.email || '')}">
         <div class="learner-opt-name">${esc(l.name)}${tag}</div>
-        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? 'Â·' : ''} ${esc(l.email || '')}</div>
+        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? '·' : ''} ${esc(l.email || '')}</div>
       </div>
     `;
     }).join('');
@@ -2347,7 +2347,7 @@ async function sendOffer() {
   }
 }
 
-// â”€â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Boot ─────────────────────────────────────────────────────────────────────
 init();
 
 // Auto-open offer modal if ?offer=email param is present (from learners page)
@@ -2401,19 +2401,19 @@ document.addEventListener('change', function (e) {
     if (row) row.style.display = t.value ? 'block' : 'none';
   }
 });
-// â”€â”€ Toolbar overflow buttons (combo actions) â”€â”€
+// ── Toolbar overflow buttons (combo actions) ──
 document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
   btn.addEventListener('click', function () {
     var op = btn.dataset.toolbarOf;
     if (op === 'offer') { openOfferModal(); toggleToolbarOverflow(); }
   });
 });
-// â”€â”€ Offer modal price/type changes â”€â”€
+// ── Offer modal price/type changes ──
 (function () {
   var cp = document.getElementById('offerCustomPrice');
   if (cp) cp.addEventListener('input', updateOfferPrice);
 })();
-// â”€â”€ Static wires â”€â”€
+// ── Static wires ──
 (function wire() {
   var bind = function (id, fn, ev) {
     var el = document.getElementById(id);

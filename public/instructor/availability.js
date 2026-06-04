@@ -83,7 +83,7 @@
           <span class="time-sep">to</span>
           <input type="time" value="${w.end_time}" data-action="update-window" data-idx="${idx}" data-field="end_time">
         </div>
-        <button class="btn-remove-window" data-action="remove-window" data-idx="${idx}" title="Remove">âœ•</button>
+        <button class="btn-remove-window" data-action="remove-window" data-idx="${idx}" title="Remove">✕</button>
       </div>`;
   }
 
@@ -110,7 +110,7 @@
   }
 
   async function saveAvailability() {
-    // Validate "” start < end for each window
+    // Validate — start < end for each window
     for (const w of windows) {
       if (w.start_time >= w.end_time) {
         showToast('Start time must be before end time for all windows', 'error');
@@ -169,7 +169,7 @@
     setTimeout(() => t.classList.remove('show'), 3500);
   }
 
-  // â”€â”€â”€ Blackout date ranges â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Blackout date ranges ──────────────────────────────────────────────────
   async function loadBlackoutDates() {
     try {
       const res = await ccAuth.fetchAuthed('/api/instructor?action=blackout-dates');
@@ -211,14 +211,14 @@
       const isSingle = r.start_date === r.end_date;
       const label = isSingle
         ? formatDateUK(r.start_date)
-        : `${formatDateUK(r.start_date)} "“ ${formatDateUK(r.end_date)}`;
+        : `${formatDateUK(r.start_date)} – ${formatDateUK(r.end_date)}`;
       const badge = isSingle ? '' : `<span class="blackout-days-badge">${dayCount(r.start_date, r.end_date)} days</span>`;
       return `
         <div class="blackout-row">
           <span class="blackout-date-label">${label}</span>
           ${badge}
           <span class="blackout-reason">${r.reason ? esc(r.reason) : ''}</span>
-          <button class="btn-remove-blackout" data-action="remove-blackout" data-idx="${i}" title="Remove">âœ•</button>
+          <button class="btn-remove-blackout" data-action="remove-blackout" data-idx="${i}" title="Remove">✕</button>
         </div>`;
     }).join('');
   }

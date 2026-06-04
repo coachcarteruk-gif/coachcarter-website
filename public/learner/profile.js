@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-// â”€â”€ Auth â”€â”€
+// ── Auth ──
 let AUTH, PROGRESS, BALANCE_DATA;
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -114,7 +114,7 @@ function renderCreditBalances() {
   }).join('');
 }
 
-// â”€â”€ Postcode address lookup â”€â”€
+// ── Postcode address lookup ──
 let confirmedPostcodeData = null;
 
 async function lookupPostcode() {
@@ -166,7 +166,7 @@ function buildFullAddress() {
   updateProfileBadge();
 }
 
-// â”€â”€ Profile (phone + pickup address) â”€â”€
+// ── Profile (phone + pickup address) ──
 function renderProfile() {
   if (!PROGRESS) return;
   const phone = PROGRESS.phone || '';
@@ -265,7 +265,7 @@ async function saveProfile() {
   }
 }
 
-// â”€â”€ Driving Test Date â”€â”€
+// ── Driving Test Date ──
 function renderTestDate() {
   const dateInput = document.getElementById('testDate');
   const timeInput = document.getElementById('testTime');
@@ -333,7 +333,7 @@ async function saveTest() {
   }
 }
 
-// â”€â”€ Contact preference toggle â”€â”€
+// ── Contact preference toggle ──
 function updatePrefSub(isOn) {
   const sub = document.getElementById('pref-sub');
   sub.textContent = isOn
@@ -361,7 +361,7 @@ async function toggleContactPref() {
   }
 }
 
-// â”€â”€ Availability â”€â”€
+// ── Availability ──
 let AVAIL_WINDOWS = [];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // Display order: Mon-Sun
@@ -395,7 +395,7 @@ function drawAvailDays() {
     } else {
       for (let i = 0; i < windows.length; i++) {
         const w = windows[i];
-        html += `<span class="avail-chip">${fmtTime(w.start_time)} "“ ${fmtTime(w.end_time)}<span class="avail-chip-x" data-action="remove-avail-window" data-day="${day}" data-idx="${i}">&times;</span></span>`;
+        html += `<span class="avail-chip">${fmtTime(w.start_time)} – ${fmtTime(w.end_time)}<span class="avail-chip-x" data-action="remove-avail-window" data-day="${day}" data-idx="${i}">&times;</span></span>`;
       }
     }
     html += `<button type="button" class="avail-add-btn" data-action="show-add-row" data-day="${day}">+</button>`;
@@ -513,7 +513,7 @@ async function saveAvailability() {
   }
 }
 
-// â”€â”€ GDPR: Request Account Deletion â”€â”€
+// ── GDPR: Request Account Deletion ──
 async function requestDeletion(btn) {
   if (!confirm('Are you sure you want to delete your account? This action CANNOT be undone. All your bookings, progress, and personal data will be permanently removed.')) return;
   if (!confirm('This is your final confirmation. Proceed with account deletion?')) return;

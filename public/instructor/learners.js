@@ -6,7 +6,7 @@ let allLearners = [];
 let currentSort = 'recent';
 let currentDetailLearnerId = null;
 
-// â”€â”€ Init â”€â”€
+// ── Init ──
 function init() {
   const session = ccAuth.getAuth();
   if (!session) { window.location.href = '/instructor/login.html'; return; }
@@ -23,7 +23,7 @@ function signOut() {
   ccAuth.logout();
 }
 
-// â”€â”€ Sort â”€â”€
+// ── Sort ──
 function setSort(mode) {
   currentSort = mode;
   document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
@@ -43,7 +43,7 @@ function sortLearners(list) {
   return sorted;
 }
 
-// â”€â”€ Load learners â”€â”€
+// ── Load learners ──
 async function loadLearners() {
   try {
     const res = await ccAuth.fetchAuthed('/api/instructor?action=my-learners');
@@ -146,7 +146,7 @@ function renderLearners() {
   }).join('');
 }
 
-// â”€â”€ Detail view â”€â”€
+// ── Detail view ──
 async function openLearner(id) {
   currentDetailLearnerId = id;
   document.getElementById('list-view').style.display = 'none';
@@ -267,7 +267,7 @@ function renderDetail(data, notesData, mockData) {
 
   html += '</div>';
 
-  // â”€â”€ Mock Test History â”€â”€
+  // ── Mock Test History ──
   var mocks = (mockData && mockData.mock_tests) || [];
   if (mocks.length > 0) {
     html += '<div class="section-title" style="margin-top:24px">Mock Test History</div>';
@@ -362,7 +362,7 @@ function showList() {
   renderLearners(); // re-render to pick up any notes/test date changes
 }
 
-// â”€â”€ Helpers â”€â”€
+// ── Helpers ──
 function esc(s) {
   if (!s) return '';
   const d = document.createElement('div');
@@ -410,7 +410,7 @@ function showToast(msg, type = '') {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-// â”€â”€ Offer Lesson (redirect to schedule page with offer modal open) â”€â”€
+// ── Offer Lesson (redirect to schedule page with offer modal open) ──
 function offerLessonToLearner(email, name) {
   // Navigate to the schedule page with query params to open the offer modal
   let url = '/instructor/?offer=' + encodeURIComponent(email || '');

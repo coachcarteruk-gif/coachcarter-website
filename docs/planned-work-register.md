@@ -1,6 +1,6 @@
 # Planned Work Register
 
-Last audited: 2026-05-29
+Last audited: 2026-06-04
 
 This is a living product and engineering roadmap distilled from the tracked
 Markdown documentation in this repository. It is meant to answer:
@@ -44,7 +44,7 @@ Untracked docs excluded from the main audit:
 |---|---|---:|---:|---:|---|---|---|---|
 | Refunds | Refund preview, ledger, and tightly gated execution | shipped | 90% | P0 | high | Live-money safety: bad refunds create cash, payout, trust, and accounting damage. | `DEVELOPMENT-ROADMAP.md:3-19`, `docs/refund-operator-runbook.md:19-31`; PR #264 / merge `d3a3ae1` added admin execute UI from preview, backend execute eligibility guards, and BCS/manual-review refusal coverage. | Keep stable; optional stale-preview UI cleanup only. Remaining refund roadmap is tracked by the manual bank-refund ledger-only row. |
 | Refunds | Manual bank-refund ledger-only flow | shipped | 90% | P1 | high | Paid-out bookings and missing-fee evidence need a clean audit trail instead of spreadsheet memory. | `docs/refund-operator-runbook.md:93-141`, `api/_refund-manual-bank.js`, `public/admin/portal.js`; branch `codex/manual-bank-refund-ledger` added ledger-only admin recording, bank reference capture, idempotency mismatch protection, and no-Stripe/no-booking/no-payout/no-credit-mutation tests. | Keep stable; next work is tracked by the manual refund evidence/admin-notes polish row. |
-| Refunds | Manual refund evidence, notes, discovery, and incident-repair polish | partially shipped | 86% | P2 | medium | The safe ledger path exists, manual-bank records capture evidence metadata, refund events have searchable admin discovery/detail, notes preserve incident context, and incident readiness is visible in event detail before any repair mutation exists. | `docs/refund-operator-runbook.md:30-34`, `api/_refund-manual-bank.js`, `api/_refund-events.js`, `api/_refund-notes.js`, `api/_refund-incident-readiness.js`, `public/admin/portal.js`; records store bank references/evidence, event discovery is school-scoped/read-only, notes support operator/evidence/incident/repair-decision entries, add-note actions are audit-logged, and readiness returns and renders `complete` / `incomplete` / `needs_manual_decision` without Stripe calls or refund/booking/payout/credit mutation. | Build the separately reviewed repair mutation for Stripe-success/local-ledger-failure cases, using the readiness design and stop conditions in the runbook. UI visibility has shipped; repair remains future work. |
+| Refunds | Manual refund evidence, notes, discovery, and incident-repair polish | partially shipped | 88% | P2 | medium | The safe ledger path exists, manual-bank records capture evidence metadata, refund events have searchable admin discovery/detail, notes preserve incident context, and incident readiness is visible in event detail before any repair mutation exists. | `docs/refund-operator-runbook.md:30-34`, `api/_refund-manual-bank.js`, `api/_refund-events.js`, `api/_refund-notes.js`, `api/_refund-incident-readiness.js`, `public/admin/portal.js`; records store bank references/evidence, event discovery is school-scoped/read-only, notes support operator/evidence/incident/repair-decision entries, add-note actions are audit-logged, and readiness returns and renders `complete` / `incomplete` / `needs_manual_decision` without Stripe calls or refund/booking/payout/credit mutation. PR #272 shipped the read-only Incident Readiness panel; commit `a5bbfb7` added UI coverage for endpoint error/404 rendering and proved readiness note-prefill alone makes zero network calls. | Next safe slice is a separately reviewed incident-repair contract/refusal harness for Stripe-success/local-ledger-failure cases before any write path: define the exact plan fingerprint, idempotency binding, audit requirements, and stop-condition tests from the runbook. Actual repair mutation remains future work. |
 | Credits / Bookings | Booking credit source attribution, FIFO, and CSA-aware edge cases | partially shipped | 80% | P0 | high | This is the spine for refund correctness, instructor payout fairness, and per-instructor credit trust. | `docs/per-instructor-credits-audit.md:23-99`, `memory/current-state.md:42-55`, `memory/prod-facts.md:98-107`. | Finish partial repeat-offer CSA-aware writer and any remaining non-BCS booking paths. |
 | Credits | Remove hardcoded `instructor_id = 1` fallback and seed-instructor assumptions | partially shipped | 25% | P1 | medium | Fine for one school; dangerous for InstructorBook, multi-school, and native checkout attribution. | `memory/chips.md:9-21`, `docs/per-instructor-credits-audit.md:76-99`. | Add a migration gate: reject missing instructor metadata after a cutoff, with an explicit legacy-only handler. |
 | Credits | Grandfathering scenarios and operator policy | partially shipped | 70% | P1 | medium | The mechanics shipped, but the human rules for weird historic balances are still not clear enough. | `docs/credits-grandfather.md:449-462` still says Step 6 TODO. | Fill the scenario table and link it from admin credit tooling. |
@@ -70,40 +70,41 @@ Untracked docs excluded from the main audit:
 
 ## Top 5 Recommended Next Slices
 
-### 1. Manual Bank Refund Ledger-Only Flow
+### 1. Incident Repair Contract And Refusal Harness
 
 What to do:
 
-- Backend/admin path exists: `record-manual-bank-refund`.
-- It is ledger-only: no Stripe refund call, no booking-status mutation, no payout-row mutation, and no credit mutation.
-- It requires preview evidence, operator reason, bank reference, confirmation phrase, and duplicate/idempotency protection.
-- Follow-on polish has partly shipped: refund-event discovery, admin notes, and read-only incident readiness classification. Actual repair mutation remains separate.
+- Keep the shipped Incident Readiness panel read-only.
+- Add a backend repair-plan contract for Stripe-success/local-ledger-failure cases, but start with refusal/no-op tests before write support.
+- Bind any future repair plan to one school-scoped refund event, one original refund idempotency key, one Stripe refund ID, and one exact repair fingerprint.
+- Add tests for every stop condition in the runbook: cross-school event, missing Stripe evidence, ambiguous idempotency, mismatched amounts/source/learner/instructor/school, open manual-decision notes, and any proposed booking/payout/BCS/refund-event edit.
+- Do not expose an admin repair button until the refusal harness and audit contract are reviewed.
 
 Why now:
 
-- Highest remaining refund operator gap after PR #264 shipped clean automatic execute from preview.
-- Paid-out bookings, missing-fee evidence, and unsupported refund targets still need a clean audit trail instead of spreadsheet memory.
+- Refund preview, automatic execute, manual-bank ledger recording, refund-event search/detail, notes, and read-only readiness are now in place.
+- The remaining refund operator gap is the rare but dangerous incident where Stripe succeeded and local ledger/accounting failed.
 
 Smallest safe PR:
 
-- Keep this shipped slice stable.
-- Staging/prod-smoke one reviewed already-paid-out or manual-review preview.
-- Leave automatic Stripe execution and BCS execution unchanged.
+- Add a repair-planning helper or endpoint stub that refuses by default and returns structured reasons.
+- Cover the contract/refusal matrix with mocked tests only.
+- No `refund_events`, `refund_event_lines`, Stripe, booking, payout, learner-credit, CSA, BCS, or credit-transaction mutation in this first slice.
 
 Risks and edge cases:
 
-- Duplicate refunds.
-- Recording a ledger event before the real bank transfer is approved/completed.
-- Confusing manual ledger recording with automatic Stripe execution.
-- Paid-out direct bookings and missing Stripe fee evidence.
+- Duplicate refund or duplicate repair.
+- Cross-school exposure.
+- Repairing the wrong learner/source/instructor tuple.
+- Treating a commercial decision as accounting repair.
+- Accidentally editing historical ledger values instead of adding missing paired records.
 
 Likely files:
 
 - `api/admin.js`
-- `api/_refund-planner.js`
-- new or existing refund ledger helper
-- `public/admin/portal.html`
-- `public/admin/portal.js`
+- `api/_refund-incident-readiness.js`
+- future `api/_refund-incident-repair.js` or repair-plan helper
+- `docs/refund-operator-runbook.md`
 - refund-related tests
 
 ### 2. Close BCS/FIFO Attribution Edges

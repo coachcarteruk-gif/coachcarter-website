@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <link rel="manifest" href="/manifest.json">
@@ -29,10 +29,10 @@
   <style>
     main { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; }
 
-    /* â”€â”€ SCREEN TRANSITIONS â”€â”€ */
+    /* ── SCREEN TRANSITIONS ── */
     .screen { animation: fadeIn 0.3s ease; }
 
-    /* â”€â”€ PROGRESS BAR â”€â”€ */
+    /* ── PROGRESS BAR ── */
     .progress-bar-wrap {
       background: var(--surface); border-radius: 100px; height: 8px;
       margin-bottom: 32px; overflow: hidden; border: 1px solid var(--border);
@@ -49,7 +49,7 @@
     .step-labels span.active { color: var(--accent); }
     .step-labels span.done { color: var(--green); }
 
-    /* â”€â”€ HEADINGS â”€â”€ */
+    /* ── HEADINGS ── */
     .screen-title {
       font-family: var(--font-head); font-size: 1.6rem; font-weight: 800;
       letter-spacing: -0.03em; margin-bottom: 8px; line-height: 1.2;
@@ -59,7 +59,7 @@
       margin-bottom: 28px;
     }
 
-    /* â”€â”€ BUTTONS â”€â”€ */
+    /* ── BUTTONS ── */
     .btn-primary {
       display: inline-flex; align-items: center; justify-content: center;
       padding: 16px 32px; border-radius: 12px; border: none;
@@ -83,7 +83,7 @@
     .btn-group .btn-primary { flex: 1; }
     .btn-group .btn-secondary { flex: 0 0 auto; }
 
-    /* â”€â”€ FORM FIELDS â”€â”€ */
+    /* ── FORM FIELDS ── */
     .form-group { margin-bottom: 24px; }
     .form-label {
       display: block; font-size: 0.88rem; font-weight: 700;
@@ -93,7 +93,7 @@
       font-size: 0.8rem; color: var(--muted); font-weight: 400; margin-left: 4px;
     }
 
-    /* â”€â”€ STEPPER INPUT â”€â”€ */
+    /* ── STEPPER INPUT ── */
     .stepper {
       display: inline-flex; align-items: center; gap: 0;
       border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
@@ -117,7 +117,7 @@
     .stepper input::-webkit-outer-spin-button,
     .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
-    /* â”€â”€ RADIO GROUP â”€â”€ */
+    /* ── RADIO GROUP ── */
     .radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
     .radio-btn {
       padding: 10px 20px; border-radius: 100px; border: 1px solid var(--border);
@@ -128,7 +128,7 @@
     .radio-btn:hover { border-color: var(--accent); color: var(--accent); }
     .radio-btn.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-    /* â”€â”€ TOGGLE GROUP â”€â”€ */
+    /* ── TOGGLE GROUP ── */
     .toggle-group { display: flex; gap: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); display: inline-flex; }
     .toggle-btn {
       padding: 12px 28px; border: none; background: var(--white);
@@ -140,7 +140,7 @@
     .toggle-btn:hover { background: var(--accent-lt); }
     .toggle-btn.selected { background: var(--accent); color: #fff; }
 
-    /* â”€â”€ DATE INPUT â”€â”€ */
+    /* ── DATE INPUT ── */
     .date-input {
       padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border);
       font-size: 0.95rem; font-family: var(--font-body); color: var(--primary);
@@ -148,7 +148,7 @@
       margin-top: 8px;
     }
 
-    /* â”€â”€ TEXTAREA â”€â”€ */
+    /* ── TEXTAREA ── */
     .form-textarea {
       width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border);
       font-size: 0.92rem; font-family: var(--font-body); color: var(--primary);
@@ -156,7 +156,7 @@
     }
     .form-textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-mid); }
 
-    /* â”€â”€ STEP 2: AREA CARDS â”€â”€ */
+    /* ── STEP 2: AREA CARDS ── */
     .area-card {
       border: 1px solid var(--border); border-radius: var(--radius);
       margin-bottom: 12px; overflow: hidden; transition: box-shadow 0.2s;
@@ -203,7 +203,7 @@
     .rating-btn[data-rating="ok"].selected { border-color: var(--amber); background: var(--accent-lt); }
     .rating-btn[data-rating="nailed"].selected { border-color: var(--green); background: var(--green-lt); }
 
-    /* â”€â”€ EXPANDED SKILL ROWS â”€â”€ */
+    /* ── EXPANDED SKILL ROWS ── */
     .area-expansion {
       max-height: 0; overflow: hidden;
       transition: max-height 0.35s ease, padding 0.35s ease;
@@ -237,7 +237,7 @@
     .skill-rating-btn[data-rating="nailed"].selected { border-color: var(--green); background: var(--green-lt); }
     .skill-rating-btn:hover { transform: translateY(-1px); }
 
-    /* â”€â”€ STEP 3: SUMMARY â”€â”€ */
+    /* ── STEP 3: SUMMARY ── */
     .summary-card {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
@@ -276,7 +276,7 @@
     }
     .summary-skill-item .summary-dot { width: 8px; height: 8px; }
 
-    /* â”€â”€ SUCCESS SCREEN â”€â”€ */
+    /* ── SUCCESS SCREEN ── */
     .success-screen { text-align: center; padding: 60px 0 20px; }
     .success-check {
       width: 80px; height: 80px; border-radius: 50%; background: var(--green);
@@ -296,7 +296,7 @@
     .success-btns { display: flex; flex-direction: column; gap: 10px; max-width: 320px; margin: 0 auto; }
     .success-btns .btn-primary, .success-btns .btn-secondary { width: 100%; justify-content: center; }
 
-    /* â”€â”€ LOADING â”€â”€ */
+    /* ── LOADING ── */
     .loading-overlay {
       position: fixed; inset: 0; background: rgba(255,255,255,0.85);
       display: flex; align-items: center; justify-content: center;
@@ -309,7 +309,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* â”€â”€ RESPONSIVE â”€â”€ */
+    /* ── RESPONSIVE ── */
     @media (max-width: 520px) {
       .area-card-header { flex-wrap: wrap; gap: 10px; }
       .area-rating-btns { width: 100%; justify-content: stretch; }
@@ -344,7 +344,7 @@
     <div class="form-group">
       <label class="form-label">Hours of professional lessons</label>
       <div class="stepper">
-        <button type="button" data-stepper="hoursPro" data-delta="-1" aria-label="Decrease">âˆ’</button>
+        <button type="button" data-stepper="hoursPro" data-delta="-1" aria-label="Decrease">−</button>
         <input type="number" id="hoursPro" value="0" min="0" max="200" aria-label="Hours of professional lessons">
         <button type="button" data-stepper="hoursPro" data-delta="1" aria-label="Increase">+</button>
       </div>
@@ -353,7 +353,7 @@
     <div class="form-group">
       <label class="form-label">Hours of private practice</label>
       <div class="stepper">
-        <button type="button" data-stepper="hoursPrivate" data-delta="-1" aria-label="Decrease">âˆ’</button>
+        <button type="button" data-stepper="hoursPrivate" data-delta="-1" aria-label="Decrease">−</button>
         <input type="number" id="hoursPrivate" value="0" min="0" max="200" aria-label="Hours of private practice">
         <button type="button" data-stepper="hoursPrivate" data-delta="1" aria-label="Increase">+</button>
       </div>

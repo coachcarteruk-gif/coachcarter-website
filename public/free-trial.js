@@ -3,7 +3,7 @@
 
   var DAYS_AHEAD = 14;
 
-  // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── State ────────────────────────────────────────────────────────────────
   // Slot objects from the API include instructor_name, so no separate fetch needed.
   var slotsByDate = {}; // { 'YYYY-MM-DD': [ {start_time, end_time, instructor_id, instructor_name}, ... ] }
   var selectedSlot = null;  // { date, start_time, end_time, instructor_id, instructor_name }
@@ -11,7 +11,7 @@
   var prefInstructorId = null; // ?instructor_id= hint (filters slot feed)
   var prefDate = null;         // ?date= hint (scrolls into view)
 
-  // â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Init ────────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', function () {
     // Capture ?ref=XXX for forward-compat referrer flow
     var qs = new URLSearchParams(window.location.search);
@@ -32,7 +32,7 @@
     loadSlots();
   });
 
-  // â”€â”€ PostHog helper (no-op if posthog not loaded yet) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── PostHog helper (no-op if posthog not loaded yet) ────────────────────
   function posthogCapture(event, props) {
     try {
       if (window.posthog && typeof posthog.capture === 'function') {
@@ -41,7 +41,7 @@
     } catch (e) { /* swallow */ }
   }
 
-  // â”€â”€ Slot loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Slot loading ─────────────────────────────────────────────────────────
   function loadSlots() {
     var today = new Date();
     var fromStr = ymd(today);
@@ -151,7 +151,7 @@
 
     // QoL: auto-scroll to the details form so the learner can immediately
     // see what to do next. Without this, the slot just changes colour and
-    // the form stays out of view "” common cause of drop-off.
+    // the form stays out of view — common cause of drop-off.
     var formAnchor = document.getElementById('step-2-heading');
     if (formAnchor && typeof formAnchor.scrollIntoView === 'function') {
       formAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -168,7 +168,7 @@
     bar.style.display = 'block';
   }
 
-  // â”€â”€ Form submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Form submit ──────────────────────────────────────────────────────────
   function handleSubmit(e) {
     e.preventDefault();
     var errEl = document.getElementById('formError');
@@ -235,7 +235,7 @@
       } else if (r.status === 429) {
         showError(r.body.error || 'Too many attempts. Please try again in an hour.');
       } else {
-        showError(r.body.error || r.body.message || 'Could not book "” please try again.');
+        showError(r.body.error || r.body.message || 'Could not book — please try again.');
       }
 
       submitBtn.disabled = false;
@@ -255,7 +255,7 @@
     errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Helpers ──────────────────────────────────────────────────────────────
   function val(id) {
     var el = document.getElementById(id);
     return el ? el.value.trim() : '';

@@ -2,7 +2,7 @@
   'use strict';
 
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Constants ───────────────────────────────────────────────────────────────
 const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const DAY_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -10,7 +10,7 @@ const MON_FULL  = ['January','February','March','April','May','June','July','Aug
 
 const DEFAULT_PRICE_PENCE = 8250; // fallback if lesson-types API fails
 
-// â”€â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── State ───────────────────────────────────────────────────────────────────
 let auth          = null; // null when browsing as guest; { user, ... } when logged in
 let creditBalance = 0;
 let balanceMinutes = 0;
@@ -43,12 +43,12 @@ let lastBookingId = null;
 let learnerProfile = { phone: '', pickup_address: '' };
 let hasFreeTrialSlot = false; // true if current school has a lesson_type with slug='trial'
 // Slot-first state: full list of selectable lesson types (excludes 'trial')
-// and the smallest active duration in minutes "” used as the provisional feed duration.
+// and the smallest active duration in minutes — used as the provisional feed duration.
 let availableLessonTypes = [];
 let slotFeedDuration = 60; // sensible default; updated from availableLessonTypes
 let slotFeedLessonTypeId = null; // id of the lesson type whose duration we use for grid spacing
 
-// â”€â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
   auth = ccAuth.getAuth();
 
@@ -64,13 +64,13 @@ function init() {
   const rescheduleBookingId = params.get('reschedule'); // ?reschedule=BOOKING_ID
   if (params.get('paid') === '1') {
     const paidMsg = auth
-      ? 'Payment successful "” your lesson is booked! Check your email for details.'
+      ? 'Payment successful — your lesson is booked! Check your email for details.'
       : 'Booking confirmed! Check your email for details and a link to manage your bookings.';
     showToast(paidMsg, 'success');
     window.history.replaceState({}, '', '/learner/book.html');
   }
   if (params.get('cancelled') === '1') {
-    showToast('Payment cancelled "” the slot has been released.', '');
+    showToast('Payment cancelled — the slot has been released.', '');
     window.history.replaceState({}, '', '/learner/book.html');
   }
 
@@ -190,7 +190,7 @@ function dismissWelcome() {
 }
 window.dismissWelcome = dismissWelcome;
 
-// â”€â”€â”€ Balance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Balance ─────────────────────────────────────────────────────────────────
 async function loadBalance() {
   try {
     const res = await ccAuth.fetchAuthed('/api/credits?action=balance');
@@ -235,12 +235,12 @@ function updateModalBuyCreditLinks() {
 }
 
 function updateCreditBadge() {
-  // Hide credits banner for guests (they have no account "” guestBanner covers this case)
+  // Hide credits banner for guests (they have no account — guestBanner covers this case)
   // and when payments are disabled.
   document.getElementById('noCreditsBanner').style.display = (auth && paymentsEnabled && balanceMinutes === 0) ? 'flex' : 'none';
 }
 
-// â”€â”€â”€ Lesson Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Lesson Types ───────────────────────────────────────────────────────────
 async function loadLessonTypes() {
   try {
     let url = '/api/lesson-types?action=list';
@@ -275,7 +275,7 @@ async function loadLessonTypes() {
   }
 }
 
-// â”€â”€â”€ Instructors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Instructors ─────────────────────────────────────────────────────────────
 async function loadInstructors() {
   try {
     const res = await ccAuth.fetchAuthed('/api/instructors?action=list');
@@ -290,7 +290,7 @@ async function loadInstructors() {
   } catch {}
 }
 
-// â”€â”€â”€ Upcoming bookings (compact next-lesson card) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Upcoming bookings (compact next-lesson card) ───────────────────────────
 async function loadUpcoming() {
   try {
     const res = await ccAuth.fetchAuthed('/api/slots?action=my-bookings');
@@ -308,7 +308,7 @@ async function loadUpcoming() {
   } catch {}
 }
 
-// â”€â”€â”€ Learner profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Learner profile ─────────────────────────────────────────────────────────
 async function loadLearnerProfile() {
   try {
     const res = await ccAuth.fetchAuthed('/api/learner?action=profile');
@@ -357,7 +357,7 @@ async function savePickupPostcode() {
     // Update local profile and hide prompt
     learnerProfile.pickup_address = postcode;
     document.getElementById('postcodePrompt').style.display = 'none';
-    showToast('Pickup postcode saved "” filtering slots by travel time', 'success');
+    showToast('Pickup postcode saved — filtering slots by travel time', 'success');
 
     // Re-fetch slots with travel filter now active
     loadedRanges = [];
@@ -426,7 +426,7 @@ function getLearnerPostcode() {
   return match ? match[1].toUpperCase().replace(/\s+/g, '+') : null;
 }
 
-// â”€â”€â”€ Feed controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Feed controls ──────────────────────────────────────────────────────────
 function onFilterChange() {
   loadedRanges = []; slotCache = {};
   // Lesson-type / postcode filters affect alternatives too — overflow cache is per (ltId|postcode).
@@ -729,17 +729,17 @@ window.loadMoreSlots = loadMoreSlots;
 function showLoading() { document.getElementById('calContent').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading available slots…</p></div>'; document.getElementById('feedFooter').style.display = 'none'; }
 function showError(msg) { document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`; document.getElementById('feedFooter').style.display = 'none'; }
 
-// â”€â”€â”€ Book modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Book modal ──────────────────────────────────────────────────────────────
 // Apply a chosen lesson type to all the price/duration/credit/pay UI inside
 // the modal. Called from openBookModal after dropdown selection (or auto-pick
-// when only one option fits). Pure UI write "” no side effects beyond the DOM
+// when only one option fits). Pure UI write — no side effects beyond the DOM
 // and selectedLessonType.
 function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
   selectedLessonType = { ...lt, id: lt.id || lt.lesson_type_id };
   const ltDuration = lt.duration_minutes;
   // Recompute pendingSlot.end_time to match the picked duration. Backend
   // handlers (handleBook, handleCheckoutSlot, handleCheckoutSlotGuest) read
-  // start_time + end_time from the body "” they must reflect the user's choice,
+  // start_time + end_time from the body — they must reflect the user's choice,
   // not the grid's smallest-duration end-time.
   if (pendingSlot && pendingSlot.start_time) {
     const [h, m] = pendingSlot.start_time.split(':').map(Number);
@@ -748,14 +748,14 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
     const eh = Math.floor(endMins / 60);
     const em = endMins % 60;
     pendingSlot.end_time = `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
-    document.getElementById('mdTime').textContent = `${pendingSlot.start_time} "“ ${pendingSlot.end_time}`;
+    document.getElementById('mdTime').textContent = `${pendingSlot.start_time} – ${pendingSlot.end_time}`;
   }
   const ltHrs = ltDuration / 60;
   const ltHrsStr = ltHrs % 1 === 0 ? `${ltHrs} hour${ltHrs !== 1 ? 's' : ''}` : `${ltHrs.toFixed(1)} hours`;
   document.getElementById('mdDuration').textContent = ltHrsStr;
   document.getElementById('mdDeductHours').textContent = ltHrsStr;
   const ltPrice = lt.price_pence != null ? lt.price_pence : DEFAULT_PRICE_PENCE;
-  const ltPriceStr = 'Â£' + (ltPrice / 100).toFixed(2);
+  const ltPriceStr = '£' + (ltPrice / 100).toFixed(2);
   document.getElementById('mdPayAmount').textContent = ltPriceStr;
   document.getElementById('payBtnLabel').textContent = `Pay ${ltPriceStr} & book`;
   document.getElementById('paySpinner').style.display = 'none';
@@ -768,7 +768,7 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
   } else if (!paymentsEnabled) {
     document.getElementById('modalCreditPath').style.display = 'block';
     document.getElementById('modalPayPath').style.display = 'none';
-    document.getElementById('mdDeductHours').textContent = 'free "” no credits required';
+    document.getElementById('mdDeductHours').textContent = 'free — no credits required';
     document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
     document.getElementById('bookSpinner').style.display = 'none';
     document.getElementById('btnConfirmBook').disabled = false;
@@ -789,7 +789,7 @@ function openBookModal(el) {
   const isGuest = !auth;
   const needsProfileFields = !isGuest && !isProfileComplete();
 
-  // Reschedule mode bypasses the duration picker "” rescheduled bookings keep their original duration.
+  // Reschedule mode bypasses the duration picker — rescheduled bookings keep their original duration.
   if (pendingReschedule) {
     if (isGuest) { if (window.ccAuth) window.ccAuth.requireAuth(); return; }
     openRescheduleConfirm({
@@ -830,7 +830,7 @@ function openBookModal(el) {
   document.getElementById('mdSingleTypeRow').style.display = 'none';
   document.getElementById('mdNoFitRow').style.display = 'none';
   document.getElementById('mdLoadingRow').style.display = 'flex';
-  document.getElementById('mdDuration').textContent = '"”';
+  document.getElementById('mdDuration').textContent = '—';
   document.getElementById('btnPayAndBook').disabled = true;
   document.getElementById('btnConfirmBook') && (document.getElementById('btnConfirmBook').disabled = true);
   selectedLessonType = null;
@@ -933,7 +933,7 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
                        : 'no lesson lengths fit this slot';
       document.getElementById('mdNoFitText').textContent = reasonText;
       document.getElementById('mdNoFitRow').style.display = 'flex';
-      document.getElementById('mdDuration').textContent = '"”';
+      document.getElementById('mdDuration').textContent = '—';
       // Disable both confirm paths; user has to close + pick another slot.
       document.getElementById('btnPayAndBook').disabled = true;
       const credBtn = document.getElementById('btnConfirmBook');
@@ -943,7 +943,7 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
 
     // Auto-collapse when there's only one option for the school AND only one fits.
     if (durations.length === 1 && fitting.length === 1) {
-      document.getElementById('mdSingleType').textContent = `${fitting[0].name} "” ${formatHours(fitting[0].duration_minutes)} "” Â£${(fitting[0].price_pence / 100).toFixed(2)}`;
+      document.getElementById('mdSingleType').textContent = `${fitting[0].name} — ${formatHours(fitting[0].duration_minutes)} — £${(fitting[0].price_pence / 100).toFixed(2)}`;
       document.getElementById('mdSingleTypeRow').style.display = 'flex';
       applyLessonTypeToModal(fitting[0], isGuest, needsProfileFields);
       window.posthog && posthog.capture('duration_selected', {
@@ -958,12 +958,12 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
       return;
     }
 
-    // Render dropdown "” fitting options first, non-fitting disabled with a reason suffix.
+    // Render dropdown — fitting options first, non-fitting disabled with a reason suffix.
     select.innerHTML = '';
     for (const d of fitting) {
       const opt = document.createElement('option');
       opt.value = String(d.lesson_type_id);
-      opt.textContent = `${d.name} "” ${formatHours(d.duration_minutes)} "” Â£${(d.price_pence / 100).toFixed(2)}`;
+      opt.textContent = `${d.name} — ${formatHours(d.duration_minutes)} — £${(d.price_pence / 100).toFixed(2)}`;
       select.appendChild(opt);
     }
     for (const d of durations.filter(d => !d.fits)) {
@@ -971,12 +971,12 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
       opt.value = String(d.lesson_type_id);
       opt.disabled = true;
       const why = d.reason === 'travel' ? 'travel' : d.reason === 'clash' ? 'clash' : d.reason === 'window' ? 'too long' : d.reason === 'notice' ? 'short notice' : d.reason === 'advance' ? 'too far ahead' : d.reason === 'not_offered' ? 'not offered' : 'unavailable';
-      opt.textContent = `${d.name} "” ${formatHours(d.duration_minutes)} "” unavailable (${why})`;
+      opt.textContent = `${d.name} — ${formatHours(d.duration_minutes)} — unavailable (${why})`;
       select.appendChild(opt);
     }
-    // Preselect order: ?type= URL slug â†’ cc_last_lesson_type_id (returning
-    // learner default) â†’ first fitting (smallest). No expiry on the
-    // localStorage value "” driving lessons are infrequent, want stickiness.
+    // Preselect order: ?type= URL slug → cc_last_lesson_type_id (returning
+    // learner default) → first fitting (smallest). No expiry on the
+    // localStorage value — driving lessons are infrequent, want stickiness.
     let preselected = null;
     let preselectSource = 'default';
     if (preselectedTypeSlug) {
@@ -1055,7 +1055,7 @@ function transmissionLabel(value) {
 }
 
 // Persist the last-picked lesson type so a returning learner sees their usual
-// duration preselected on the next booking. No expiry "” driving lessons are
+// duration preselected on the next booking. No expiry — driving lessons are
 // infrequent and we want stickiness across weeks/months.
 function setLastLessonType(lt) {
   if (!lt || !lt.id) return;
@@ -1079,7 +1079,7 @@ function closeBookModal() {
   }, 300);
 }
 
-// â”€â”€â”€ Repeat weekly logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Repeat weekly logic ──────────────────────────────────────────────────
 let repeatConflicts = [];
 
 function toggleRepeatOptions() {
@@ -1106,7 +1106,7 @@ async function updateRepeatDates() {
   }
 
   // Check conflicts. The /available endpoint caps each request at 31 days,
-  // so chunk by date span: max 4 weekly dates per request (â‰¤21 days span).
+  // so chunk by date span: max 4 weekly dates per request (≤21 days span).
   repeatConflicts = [];
   try {
     const ltId = selectedLessonType ? selectedLessonType.id : '';
@@ -1167,7 +1167,7 @@ function updateDeductDisplay() {
   if (weeks > 1) {
     const perLesson = ltDuration / 60;
     const perStr = perLesson % 1 === 0 ? `${perLesson} hour${perLesson !== 1 ? 's' : ''}` : `${perLesson.toFixed(1)} hours`;
-    document.getElementById('repeatTotal').textContent = `Total: ${totalStr} (${weeks} Ã— ${perStr})`;
+    document.getElementById('repeatTotal').textContent = `Total: ${totalStr} (${weeks} × ${perStr})`;
     document.getElementById('repeatTotal').style.display = 'block';
   } else {
     document.getElementById('repeatTotal').style.display = 'none';
@@ -1175,11 +1175,11 @@ function updateDeductDisplay() {
 
   // Update balance check for credit path visibility
   if (!paymentsEnabled) {
-    // Free booking mode "” always show credit path, hide pay path
+    // Free booking mode — always show credit path, hide pay path
     document.getElementById('modalCreditPath').style.display = 'block';
     document.getElementById('modalPayPath').style.display = 'none';
     // Update deduction text to indicate free booking
-    document.getElementById('mdDeductHours').textContent = 'free "” no credits required';
+    document.getElementById('mdDeductHours').textContent = 'free — no credits required';
   } else {
     const hasCreds = selectedInstructorBalanceMinutes >= totalMins;
     document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
@@ -1213,7 +1213,7 @@ function updateBookButtonState() {
 window.toggleRepeatOptions = toggleRepeatOptions;
 window.updateRepeatDates = updateRepeatDates;
 
-// â”€â”€â”€ Confirm with credit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Confirm with credit ─────────────────────────────────────────────────────
 async function confirmBookWithCredit() {
   if (!pendingSlot) return;
   // Save profile fields first if shown (phone/pickup for incomplete profiles)
@@ -1264,10 +1264,10 @@ async function confirmBookWithCredit() {
   }
 }
 
-// â”€â”€â”€ Claim-as-free-trial (guest CTA) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Claim-as-free-trial (guest CTA) ─────────────────────────────────────────
 // Routes the guest to /free-trial.html carrying the chosen instructor + date as
 // hints. The trial handler enforces strict duration matching, so the slot itself
-// cannot be force-converted "” the guest re-picks a real trial slot on the
+// cannot be force-converted — the guest re-picks a real trial slot on the
 // dedicated page. Eligibility (one-trial-per-email/phone) is checked at submit
 // time by the existing free-trial handler, not pre-flighted here.
 function handleClaimTrialClick(e) {
@@ -1284,7 +1284,7 @@ function handleClaimTrialClick(e) {
   window.location.href = '/free-trial.html' + (params.toString() ? '?' + params.toString() : '');
 }
 
-// â”€â”€â”€ Pay & book (Stripe) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Pay & book (Stripe) ─────────────────────────────────────────────────────
 async function confirmPayAndBook() {
   if (!pendingSlot) return;
   // Save profile fields first if shown (phone/pickup for incomplete profiles)
@@ -1296,7 +1296,7 @@ async function confirmPayAndBook() {
   const ltPrice = selectedLessonType ? selectedLessonType.price_pence : DEFAULT_PRICE_PENCE;
   const isGuest = !auth;
 
-  // Guest validation "” inline per-field errors
+  // Guest validation — inline per-field errors
   if (isGuest) {
     clearAllGuestErrors();
     let hasError = false;
@@ -1322,7 +1322,7 @@ async function confirmPayAndBook() {
 
   try {
     if (isGuest) {
-      // Guest checkout "” no auth required
+      // Guest checkout — no auth required
       const payBody = {
         ...pendingSlot,
         lesson_type_id: selectedLessonType?.id,
@@ -1355,7 +1355,7 @@ async function confirmPayAndBook() {
     }
   } catch (err) {
     showToast(err.message || 'Could not start payment. Please try again.', 'error');
-    const priceStr = 'Â£' + (ltPrice / 100).toFixed(2);
+    const priceStr = '£' + (ltPrice / 100).toFixed(2);
     btn.disabled = false; label.textContent = `Pay ${priceStr} & book`; spinner.style.display = 'none';
   }
 }
@@ -1403,7 +1403,7 @@ function refreshAfterBooking() {
   Promise.all([loadUpcoming(), initFeed()]);
 }
 
-// â”€â”€â”€ Calendar download & subscribe â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Calendar download & subscribe ───────────────────────────────────────────
 async function handleCalendarDownload(e) {
   e.preventDefault();
   if (!lastBookingId) return;
@@ -1415,7 +1415,7 @@ async function handleCalendarDownload(e) {
     const a = document.createElement('a'); a.href = url; a.download = 'coachcarter-lesson.ics';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('Calendar file downloaded "” open it to add to your calendar', 'success');
+    showToast('Calendar file downloaded — open it to add to your calendar', 'success');
   } catch { showToast('Could not download calendar file', 'error'); }
 }
 
@@ -1459,21 +1459,21 @@ async function downloadCalendar(bookingId) {
 }
 window.downloadCalendar = downloadCalendar;
 
-// â”€â”€â”€ Cancel modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Cancel modal ────────────────────────────────────────────────────────────
 function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil, seriesId) {
   pendingCancel = { bookingId, date, start, end, instructorName, hoursUntil, seriesId: seriesId || null };
   const dateDisplay = new Date(date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
   document.getElementById('cmDate').textContent = dateDisplay;
-  document.getElementById('cmTime').textContent = `${start} "“ ${end}`;
+  document.getElementById('cmTime').textContent = `${start} – ${end}`;
   document.getElementById('cmInstructor').textContent = instructorName;
 
   const willGet = hoursUntil >= 48;
   const policyEl = document.getElementById('cancelPolicyNote');
   policyEl.className = 'cancel-policy' + (willGet ? ' safe' : '');
   policyEl.innerHTML = willGet
-    ? 'âœ“ You are cancelling more than 48 hours before the lesson. <strong>Your lesson credit will be returned to your balance automatically.</strong>'
-    : 'âš  This lesson is within 48 hours. <strong>Your lesson will be forfeited</strong> in line with the cancellation policy.';
+    ? '✓ You are cancelling more than 48 hours before the lesson. <strong>Your lesson credit will be returned to your balance automatically.</strong>'
+    : '⚠ This lesson is within 48 hours. <strong>Your lesson will be forfeited</strong> in line with the cancellation policy.';
 
   // Show acknowledgment checkbox for sub-48hr cancellations
   const ackLabel = document.getElementById('cancelAckLabel');
@@ -1494,7 +1494,7 @@ function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil
       toggleCancelSeriesInfo();
       // Override policy display for series
       policyEl.className = 'cancel-policy safe';
-      policyEl.innerHTML = 'âœ“ Each lesson in the series will be assessed individually. Lesson credit for lessons 48+ hours away will be returned to your balance.';
+      policyEl.innerHTML = '✓ Each lesson in the series will be assessed individually. Lesson credit for lessons 48+ hours away will be returned to your balance.';
     }
   } else {
     seriesOption.style.display = 'none';
@@ -1555,7 +1555,7 @@ async function confirmCancel() {
   }
 }
 
-// â”€â”€â”€ Reschedule flow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Reschedule flow ────────────────────────────────────────────────────────
 function startRescheduleMode(bookingId, date, start, end, instructorName, instructorId) {
   pendingReschedule = { bookingId, date, start, end, instructorName, instructorId };
   const dateStr = new Date(date + 'T00:00:00Z')
@@ -1573,7 +1573,7 @@ function cancelRescheduleMode() {
 window.cancelRescheduleMode = cancelRescheduleMode;
 
 function openRescheduleConfirm(newSlot) {
-  // Show confirmation modal with old â†’ new times
+  // Show confirmation modal with old → new times
   const oldDateStr = new Date(pendingReschedule.date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
   const newDateStr = new Date(newSlot.date + 'T00:00:00Z')
@@ -1626,7 +1626,7 @@ async function confirmReschedule(newSlot) {
   }
 }
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
@@ -1652,7 +1652,7 @@ function showToast(msg, type = '') {
   setTimeout(() => t.classList.remove('show'), 4000);
 }
 
-// â”€â”€â”€ Slot reservation countdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Slot reservation countdown ──────────────────────────────────────────────
 let slotTimerInterval = null;
 function startSlotTimer() {
   clearSlotTimer();
@@ -1684,7 +1684,7 @@ function clearSlotTimer() {
   if (el) el.style.display = 'none';
 }
 
-// â”€â”€â”€ Inline field validation helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Inline field validation helpers ─────────────────────────────────────────
 function showFieldError(inputEl, errId) {
   inputEl.classList.add('input-error');
   const msg = document.getElementById(errId);
@@ -1701,11 +1701,11 @@ function clearAllGuestErrors() {
   document.querySelectorAll('#guestFields .field-error-msg.show').forEach(el => el.classList.remove('show'));
 }
 
-// â”€â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Boot ────────────────────────────────────────────────────────────────────
 init();
 
 
-// â”€â”€ CSP-friendly event delegation for dynamically rendered handlers â”€â”€
+// ── CSP-friendly event delegation for dynamically rendered handlers ──
 document.addEventListener('click', function (e) {
   var target = e.target.closest('[data-action]');
   if (!target) return;
@@ -1715,7 +1715,7 @@ document.addEventListener('click', function (e) {
   }
 });
 
-// â”€â”€ Static handlers previously inline in the HTML â”€â”€
+// ── Static handlers previously inline in the HTML ──
 (function wireStaticHandlers() {
   var bannerDismiss = document.querySelector('.banner-dismiss');
   if (bannerDismiss) bannerDismiss.addEventListener('click', dismissWelcome);
