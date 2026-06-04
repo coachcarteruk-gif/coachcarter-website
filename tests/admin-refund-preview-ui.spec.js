@@ -46,14 +46,38 @@ function cleanPreview(overrides = {}) {
   };
 }
 
-async function setupPortalPage(page, previews) {
+function readinessResponse(overrides = {}) {
+  return {
+    ok: true,
+    read_only: true,
+    readiness: {
+      classification: 'complete',
+      complete: true,
+      repairable_candidate: false,
+      required_evidence: ['refund_event:900', 'idempotency_key:refund-ui-900', 'stripe_refund_id:re_slot_900'],
+      reasons: {
+        incomplete: [],
+        manual_decision: [],
+      },
+      stop_conditions: [],
+      allowed_next_step: 'post_refund_verification',
+      ...(overrides.readiness || {}),
+    },
+    event: { id: 900 },
+    lines: [],
+    notes: [],
+    ...overrides,
+  };
+}
+
+async function setupPortalPage(page, previews, readinessResponses = [readinessResponse()]) {
   await page.route('https://admin.test/portal.html', route => route.fulfill({
     status: 200,
     contentType: 'text/html',
     body: strippedPortalHtml,
   }));
   await page.goto('https://admin.test/portal.html');
-  await page.evaluate((queuedPreviews) => {
+  await page.evaluate(({ queuedPreviews, queuedReadinessResponses }) => {
     localStorage.setItem('cc_admin', JSON.stringify({ admin: { name: 'Test Admin', email: 'admin@example.test' } }));
     window.__previewQueue = queuedPreviews;
     window.__executeCalls = [];
@@ -61,6 +85,8 @@ async function setupPortalPage(page, previews) {
     window.__refundNoteCalls = [];
     window.__refundEventSearchCalls = [];
     window.__refundEventDetailCalls = [];
+    window.__refundReadinessCalls = [];
+    window.__refundReadinessQueue = queuedReadinessResponses;
     window.ccAdminAuth = {
       logout: () => {},
       fetchAuthed: async (url, options = {}) => {
@@ -89,6 +115,22 @@ async function setupPortalPage(page, previews) {
         if (url.includes('action=record-manual-bank-refund')) {
           window.__manualBankCalls.push(JSON.parse(options.body || '{}'));
           return json({ error: true, code: 'SIMULATED_MANUAL_BANK_HOLD', message: 'Simulated manual bank response.' }, 502);
+        }
+        if (url.includes('action=refund-incident-readiness')) {
+          window.__refundReadinessCalls.push(url);
+          return json(window.__refundReadinessQueue.shift() || {
+            ok: true,
+            read_only: true,
+            readiness: {
+              classification: 'complete',
+              complete: true,
+              repairable_candidate: false,
+              required_evidence: ['refund_event:900'],
+              reasons: { incomplete: [], manual_decision: [] },
+              stop_conditions: [],
+              allowed_next_step: 'post_refund_verification',
+            },
+          });
         }
         if (url.includes('action=refund-events')) {
           if (url.includes('refund_event_id=')) {
@@ -139,7 +181,7 @@ async function setupPortalPage(page, previews) {
         return json({ ok: true });
       },
     };
-  }, previews);
+  }, { queuedPreviews: previews, queuedReadinessResponses: readinessResponses });
   await page.addScriptTag({ content: portalJs });
   await page.evaluate(() => {
     document.getElementById('section-refund-preview').classList.add('active');
@@ -332,6 +374,8 @@ test.describe('admin refund preview UI', () => {
     const loadSearch = sourceFor('loadRefundEvents');
     const openDetail = sourceFor('openRefundEvent');
     const renderDetail = sourceFor('renderRefundEventDetail');
+    const loadReadiness = sourceFor('loadRefundIncidentReadiness');
+    const renderReadiness = sourceFor('renderRefundIncidentReadiness');
 
     expect(portalHtml).toContain('id="refund-events-search-form"');
     expect(portalHtml).toContain('id="refund-events-results"');
@@ -347,6 +391,23 @@ test.describe('admin refund preview UI', () => {
     expect(renderDetail).toContain('Metadata');
     expect(renderDetail).toContain('Notes timeline');
     expect(renderDetail).toContain('renderRefundNotesTimeline(data.notes || [])');
+    expect(renderDetail).toContain('id="refund-incident-readiness-panel"');
+    expect(openDetail).toContain('await loadRefundIncidentReadiness(refundEventId)');
+    expect(loadReadiness).toContain("fetchAdmin('/api/admin?action=refund-incident-readiness&refund_event_id='");
+    expect(loadReadiness).toContain('encodeURIComponent(refundEventId)');
+    expect(loadReadiness).not.toContain("method: 'POST'");
+    expect(loadReadiness).not.toContain('school_id');
+    expect(renderReadiness).toContain('Incident Readiness');
+    expect(renderReadiness).toContain('No incident repair action exists yet.');
+    expect(renderReadiness).toContain('This panel does not expose repair, execute, Stripe, booking, payout, credit, CSA, BCS, or ledger mutation controls.');
+    expect(renderReadiness).toContain('Required evidence');
+    expect(renderReadiness).toContain('Incomplete reasons');
+    expect(renderReadiness).toContain('Manual-decision reasons');
+    expect(renderReadiness).toContain('Stop conditions');
+    expect(renderReadiness).not.toContain('data-action="execute-refund"');
+    expect(renderReadiness).not.toContain('data-action="record-manual-bank-refund"');
+    expect(renderReadiness).not.toContain("fetchAdmin('/api/admin?action=execute-refund'");
+    expect(renderReadiness).not.toContain("fetchAdmin('/api/admin?action=record-manual-bank-refund'");
     expect(loadSearch).not.toContain("method: 'POST'");
     expect(openDetail).not.toContain("method: 'POST'");
   });
@@ -371,10 +432,115 @@ test.describe('admin refund preview UI', () => {
     await page.click('[data-action="open-refund-event"][data-id="900"]');
     await expect(page.locator('#refund-event-detail')).toContainText('Refund event #900');
     await expect(page.locator('#refund-event-detail')).toContainText('Ledger lines');
+    await expect(page.locator('#refund-incident-readiness-panel')).toContainText('Incident Readiness');
+    await expect(page.locator('#refund-incident-readiness-panel')).toContainText('Complete');
+    await expect(page.locator('#refund-incident-readiness-panel')).toContainText('Post-refund verification');
+    await expect(page.locator('#refund-incident-readiness-panel')).toContainText('No incident repair action exists yet.');
     await expect(page.locator('#refund-event-detail')).toContainText('Incident context only.');
     const detailCalls = await page.evaluate(() => window.__refundEventDetailCalls);
     expect(detailCalls).toHaveLength(1);
     expect(detailCalls[0]).toContain('refund_event_id=900');
+    const readinessCalls = await page.evaluate(() => window.__refundReadinessCalls);
+    expect(readinessCalls).toHaveLength(1);
+    expect(readinessCalls[0]).toContain('action=refund-incident-readiness');
+    expect(readinessCalls[0]).toContain('refund_event_id=900');
+    expect(readinessCalls[0]).not.toContain('school_id');
+    expect(await page.evaluate(() => window.__executeCalls)).toEqual([]);
+    expect(await page.evaluate(() => window.__manualBankCalls)).toEqual([]);
+  });
+
+  test('behaviorally renders incomplete and manual-decision readiness states without mutation controls', async ({ browser }) => {
+    const cases = [
+      {
+        response: readinessResponse({
+          readiness: {
+            classification: 'incomplete',
+            complete: false,
+            repairable_candidate: true,
+            required_evidence: ['refund_event:900', 'stripe_refund_id:re_slot_900'],
+            reasons: { incomplete: ['REFUND_EVENT_LINES_MISSING'], manual_decision: [] },
+            stop_conditions: ['REFUND_EVENT_LINES_MISSING'],
+            allowed_next_step: 'record_evidence_and_stop_for_review',
+          },
+        }),
+        expected: ['Incomplete', 'REFUND_EVENT_LINES_MISSING', 'Record evidence and stop for review'],
+      },
+      {
+        response: readinessResponse({
+          readiness: {
+            classification: 'needs_manual_decision',
+            complete: false,
+            repairable_candidate: false,
+            required_evidence: ['refund_event:900', 'manual_bank_reference:BANK-900'],
+            reasons: { incomplete: [], manual_decision: ['OPEN_INCIDENT_NOTE'] },
+            stop_conditions: ['OPEN_INCIDENT_NOTE'],
+            allowed_next_step: 'record_evidence_and_stop_for_review',
+          },
+        }),
+        expected: ['Needs manual decision', 'OPEN_INCIDENT_NOTE', 'manual_bank_reference:BANK-900'],
+      },
+    ];
+
+    for (const item of cases) {
+      const page = await browser.newPage();
+      try {
+        await setupPortalPage(page, [], [item.response]);
+        await page.click('#btn-refund-events-search');
+        await page.click('[data-action="open-refund-event"][data-id="900"]');
+        for (const text of item.expected) {
+          await expect(page.locator('#refund-incident-readiness-panel')).toContainText(text);
+        }
+        await expect(page.locator('#refund-incident-readiness-panel [data-action="execute-refund"]')).toHaveCount(0);
+        await expect(page.locator('#refund-incident-readiness-panel [data-action="record-manual-bank-refund"]')).toHaveCount(0);
+        expect(await page.evaluate(() => window.__executeCalls)).toEqual([]);
+        expect(await page.evaluate(() => window.__manualBankCalls)).toEqual([]);
+      } finally {
+        await page.close();
+      }
+    }
+  });
+
+  test('prefills incident or repair-decision notes from readiness using only the notes endpoint', async ({ page }) => {
+    await setupPortalPage(page, [], [readinessResponse({
+      readiness: {
+        classification: 'needs_manual_decision',
+        complete: false,
+        repairable_candidate: false,
+        required_evidence: ['refund_event:900'],
+        reasons: { incomplete: [], manual_decision: ['OPEN_INCIDENT_NOTE'] },
+        stop_conditions: ['OPEN_INCIDENT_NOTE'],
+        allowed_next_step: 'record_evidence_and_stop_for_review',
+      },
+    })]);
+
+    await page.click('#btn-refund-events-search');
+    await page.click('[data-action="open-refund-event"][data-id="900"]');
+    await page.click('[data-action="prefill-refund-note"][data-note-type="incident"]');
+    await expect(page.locator('#refund-note-type')).toHaveValue('incident');
+    await expect(page.locator('#refund-note-incident-status')).toHaveValue('open');
+    await expect(page.locator('#refund-note-body')).toHaveValue(/Incident readiness reviewed\./);
+
+    await page.click('[data-action="add-refund-note"]');
+    const incidentCalls = await page.evaluate(() => window.__refundNoteCalls);
+    expect(incidentCalls).toHaveLength(1);
+    expect(incidentCalls[0]).toMatchObject({
+      refund_event_id: 900,
+      note_type: 'incident',
+      incident_status: 'open',
+    });
+    expect(incidentCalls[0]).not.toHaveProperty('gross_refund_pence');
+    expect(incidentCalls[0]).not.toHaveProperty('stripe_refund_id');
+
+    await page.click('[data-action="prefill-refund-note"][data-note-type="repair_decision"]');
+    await page.fill('#refund-note-body', 'Readiness reviewed. Repair mutation remains future work; operator decision: stop.');
+    await page.click('[data-action="add-refund-note"]');
+    const calls = await page.evaluate(() => window.__refundNoteCalls);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({
+      refund_event_id: 900,
+      note_type: 'repair_decision',
+      incident_status: 'not_applicable',
+    });
     expect(await page.evaluate(() => window.__executeCalls)).toEqual([]);
     expect(await page.evaluate(() => window.__manualBankCalls)).toEqual([]);
   });

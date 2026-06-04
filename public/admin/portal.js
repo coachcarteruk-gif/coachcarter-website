@@ -2866,6 +2866,109 @@ function refundEventStatusBadge(status) {
   return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + esc(status || '-') + '</span>';
 }
 
+function refundReadinessLabel(value) {
+  const labels = {
+    complete: 'Complete',
+    incomplete: 'Incomplete',
+    needs_manual_decision: 'Needs manual decision',
+    post_refund_verification: 'Post-refund verification',
+    record_evidence_and_stop_for_review: 'Record evidence and stop for review'
+  };
+  return labels[value] || value || '-';
+}
+
+function refundReadinessBadge(classification) {
+  const map = {
+    complete: 'badge-green',
+    incomplete: 'badge-red',
+    needs_manual_decision: 'badge-amber'
+  };
+  return '<span class="badge ' + (map[classification] || 'badge-gray') + '">' + esc(refundReadinessLabel(classification)) + '</span>';
+}
+
+function renderRefundReadinessList(items, emptyText) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return '<div style="color:var(--muted);font-size:0.86rem;">' + esc(emptyText || 'None returned') + '</div>';
+  }
+  return '<ul style="margin:0;padding-left:18px;color:#333;font-size:0.88rem;line-height:1.5;">' +
+    items.map(function (item) { return '<li><code>' + esc(item) + '</code></li>'; }).join('') +
+  '</ul>';
+}
+
+function renderRefundIncidentReadiness(data) {
+  const readiness = data?.readiness || {};
+  const reasons = readiness.reasons || {};
+  const classification = readiness.classification || 'unknown';
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;background:#fff;margin-bottom:18px;">' +
+    '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px;">' +
+      '<div>' +
+        '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0;">Incident Readiness</h3>' +
+        '<div style="font-size:0.84rem;color:var(--muted);margin-top:3px;">Read-only classifier. No incident repair action exists yet.</div>' +
+      '</div>' +
+      refundReadinessBadge(classification) +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px;margin-bottom:14px;">' +
+      refundKv('Classification', refundReadinessLabel(classification)) +
+      refundKv('Allowed next step', refundReadinessLabel(readiness.allowed_next_step)) +
+      refundKv('Repairable candidate', readiness.repairable_candidate ? 'Yes, for future reviewed repair design only' : 'No') +
+      refundKv('Read-only', data?.read_only ? 'Yes' : 'Expected yes') +
+    '</div>' +
+    '<div style="padding:10px 12px;border-radius:8px;background:#fff7ed;color:#92400e;font-size:0.88rem;font-weight:700;line-height:1.45;margin-bottom:14px;">' +
+      'This panel does not expose repair, execute, Stripe, booking, payout, credit, CSA, BCS, or ledger mutation controls.' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">' +
+      '<div><h4 style="font-size:0.86rem;margin:0 0 8px;">Required evidence</h4>' + renderRefundReadinessList(readiness.required_evidence, 'No required local evidence returned.') + '</div>' +
+      '<div><h4 style="font-size:0.86rem;margin:0 0 8px;">Incomplete reasons</h4>' + renderRefundReadinessList(reasons.incomplete, 'No incomplete reasons.') + '</div>' +
+      '<div><h4 style="font-size:0.86rem;margin:0 0 8px;">Manual-decision reasons</h4>' + renderRefundReadinessList(reasons.manual_decision, 'No manual-decision reasons.') + '</div>' +
+      '<div><h4 style="font-size:0.86rem;margin:0 0 8px;">Stop conditions</h4>' + renderRefundReadinessList(readiness.stop_conditions, 'No stop conditions returned.') + '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;">' +
+      '<button type="button" class="btn btn-sm" data-action="prefill-refund-note" data-note-type="incident">Add incident note</button>' +
+      '<button type="button" class="btn btn-sm" data-action="prefill-refund-note" data-note-type="repair_decision">Add repair decision note</button>' +
+      '<span style="font-size:0.82rem;color:var(--muted);">These only prefill the existing notes form.</span>' +
+    '</div>' +
+  '</div>';
+}
+
+async function loadRefundIncidentReadiness(refundEventId) {
+  const panel = document.getElementById('refund-incident-readiness-panel');
+  if (!panel || !refundEventId) return;
+  const expectedEventId = String(refundEventId);
+  panel.dataset.refundEventId = expectedEventId;
+  panel.innerHTML = '<div class="empty-state" style="padding:20px 12px;">Loading incident readiness...</div>';
+  try {
+    const res = await fetchAdmin('/api/admin?action=refund-incident-readiness&refund_event_id=' + encodeURIComponent(refundEventId), {
+      headers: HEADERS
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.message || data.error || 'Incident readiness failed.');
+    if (panel.dataset.refundEventId !== expectedEventId) return;
+    panel.innerHTML = renderRefundIncidentReadiness(data);
+  } catch (err) {
+    if (panel.dataset.refundEventId !== expectedEventId) return;
+    panel.innerHTML = '<div style="color:#991b1b;background:var(--red-bg);border-radius:8px;padding:10px 12px;">' + esc(err.message || 'Failed to load incident readiness.') + '</div>';
+  }
+}
+
+function prefillRefundNoteFromReadiness(noteType) {
+  const type = document.getElementById('refund-note-type');
+  const incidentStatus = document.getElementById('refund-note-incident-status');
+  const body = document.getElementById('refund-note-body');
+  if (type) type.value = noteType === 'repair_decision' ? 'repair_decision' : 'incident';
+  if (incidentStatus) incidentStatus.value = noteType === 'repair_decision' ? 'not_applicable' : 'open';
+  if (body && !body.value.trim()) {
+    body.value = noteType === 'repair_decision'
+      ? 'Readiness reviewed. Repair mutation remains future work; operator decision: '
+      : 'Incident readiness reviewed. Evidence/status: ';
+  }
+  const status = document.getElementById('refund-note-status');
+  if (status) {
+    status.textContent = 'Review the prefilled note, then use Add note to save context only.';
+    status.style.color = 'var(--muted)';
+  }
+  if (body) body.focus();
+}
+
 function buildRefundEventsSearchParams() {
   const params = new URLSearchParams({ action: 'refund-events' });
   const q = (document.getElementById('refund-events-q')?.value || '').trim();
@@ -2967,10 +3070,14 @@ function renderRefundEventDetail(data) {
       '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger lines</h3>' +
       renderRefundLines(data.lines || []) +
     '</div>' +
+    '<div id="refund-incident-readiness-panel" data-refund-event-id="' + esc(event.id || '') + '">' +
+      '<div class="empty-state" style="padding:20px 12px;">Incident readiness will load from the school-scoped backend classifier.</div>' +
+    '</div>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:18px;">' +
       '<div><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Metadata</h3>' + refundObjectRows(event.metadata) + '</div>' +
       '<div><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Notes timeline</h3>' + renderRefundNotesTimeline(data.notes || []) + '</div>' +
     '</div>' +
+    renderRefundNotesPanel(event) +
   '</div>';
 }
 
@@ -2985,6 +3092,8 @@ async function openRefundEvent(refundEventId) {
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.message || data.error || 'Refund event detail failed.');
     detail.innerHTML = renderRefundEventDetail(data);
+    await loadRefundIncidentReadiness(refundEventId);
+    await loadRefundNotes(refundEventId);
   } catch (error) {
     detail.innerHTML = '<div style="color:#991b1b;background:var(--red-bg);border-radius:8px;padding:10px 12px;">' + esc(error.message || 'Failed to load refund event.') + '</div>';
   }
@@ -3396,6 +3505,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'record-manual-bank-refund') recordManualBankRefundFromPreview();
   else if (a === 'add-refund-note') addRefundNoteFromPanel();
   else if (a === 'open-refund-event') openRefundEvent(parseInt(t.dataset.id, 10));
+  else if (a === 'prefill-refund-note') prefillRefundNoteFromReadiness(t.dataset.noteType);
   else if (a === 'mark-complete') markComplete(parseInt(t.dataset.id, 10));
   else if (a === 'show-learner-detail') showLearnerDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-adjust-credits') openAdjustCredits(t.dataset.learnerId, parseInt(t.dataset.balance, 10));
