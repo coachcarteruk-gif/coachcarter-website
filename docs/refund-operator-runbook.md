@@ -30,6 +30,7 @@ This is an operational guide only. It does not authorise UI changes, API changes
 - `POST /api/admin?action=record-manual-bank-refund` is ledger-only. It requires a refund preview, admin auth, `operator_go: "RECORD_MANUAL_BANK_REFUND_CONFIRMED"`, a stable `idempotency_key`, and a `manual_bank_reference`. Optional `evidence_reference` and `operator_note` are stored in refund ledger metadata.
 - Manual bank recording writes `refund_events(status='executed')` and `refund_event_lines` with `metadata.refund_channel = "manual_bank"`. It does not call `stripe.refunds.create`, change booking status, edit payout rows, create credit-source adjustments, or mutate learner credit.
 - `GET /api/admin?action=refund-events` is read-only refund-event discovery/detail. It is admin-authenticated and school-scoped. Operators can search recent refund events by event ID, idempotency key, Stripe refund/payment references, learner ID/name/email, refund type/status, and date window. Detail loads the event metadata, ledger lines, and notes timeline.
+- `GET /api/admin?action=refund-incident-readiness&refund_event_id=...` is a read-only incident readiness classifier. It is admin-authenticated and school-scoped. It reads only local `refund_events`, `refund_event_lines`, stored Stripe reference columns, event metadata, and `refund_event_notes`; it does not call Stripe and does not mutate refund, booking, payout, CSA, BCS, credit-transaction, or learner-credit tables. It classifies the local record as `complete`, `incomplete`, or `needs_manual_decision`.
 - `GET /api/admin?action=refund-notes&refund_event_id=...` and `POST /api/admin?action=add-refund-note` provide an admin-only notes timeline for operator context, evidence references, incidents, and repair decisions. Notes are context-only; they do not repair, mutate, or rebalance refund accounting.
 
 ## Refund Decision Flow
@@ -146,6 +147,87 @@ After a manual bank record result:
 - Learner communication uses the ledger amount and bank evidence, not an estimate from memory.
 
 Current tooling stores manual-bank evidence reference and operator note in ledger metadata, and refund events now have a dedicated notes timeline for follow-up context. It still does not provide an automated incident-repair workflow. Keep external source evidence until any required repair path is complete.
+
+## Incident Repair Readiness
+
+This section designs the next repair workflow but does not authorise repair mutation.
+
+Use readiness when there is already a local refund event and an operator needs to decide whether the event is complete, incomplete, or blocked on a human decision. The readiness endpoint is a local classifier only. It does not prove that Stripe money moved; it only reports what the CoachCarter ledger currently knows.
+
+Readiness classifications:
+
+- `complete`: the event is `executed`, has at least one ledger line, line totals match event gross/fee/net totals, automatic Stripe credit-source lines have their CSA link where required, and there is no open incident note or missing required local reference.
+- `incomplete`: the event is structurally incomplete, such as missing `refund_event_lines`, line totals not matching the event totals, or a Stripe automatic credit-source refund line missing its `credit_source_adjustment_id`.
+- `needs_manual_decision`: the local ledger is not structurally incomplete, but the operator must decide before any future repair path is considered. Examples include non-`executed` event status, missing local Stripe refund reference for a non-manual-bank returned amount, missing manual-bank reference on a manual-bank event, or an open/watching incident note.
+
+Repairable later, subject to a separate reviewed mutation slice:
+
+- Stripe-success/local-ledger-failure cases where Stripe refund evidence exists, the event belongs to the same school, the event is `executed`, the idempotency key matches the original approved attempt, and the only defect is missing or incomplete local refund ledger/accounting rows.
+- Incomplete local ledger cases where the original trusted preview, admin identity, school, learner/source IDs, Stripe refund ID, Stripe payment references, idempotency key, amount breakdown, and failure timestamp can be tied together without ambiguity.
+- Automatic credit-source refund incidents where the intended future repair can write the missing CSA and LCB adjustment only if the source, learner, instructor, school, minutes, amount, and Stripe refund ID match the original approved plan exactly.
+
+Explicitly not repairable by an automated repair path:
+
+- Cross-school events or any case where school scope is uncertain.
+- Cases without Stripe refund evidence for an original-method refund.
+- Events with a reused or ambiguous idempotency key.
+- Amount, learner, instructor, source, booking, or payment-reference mismatches.
+- Disputes, chargebacks, cash repayments, partial external repayments, or money movement outside the model.
+- Clean manual-bank ledger records that only need evidence review, not accounting repair.
+- Booking status changes, payout reversals, learner-credit goodwill, or commercial decisions disguised as repair.
+
+Required evidence before any future repair mutation is designed:
+
+- Refund event ID, school ID, learner ID, refund type, status, and created admin.
+- Original idempotency key and the exact request body, excluding secrets.
+- Trusted preview output used for approval.
+- Stripe refund ID, payment intent or charge ID, and balance transaction ID where applicable.
+- Event metadata, existing ledger lines, and notes timeline.
+- Failure response, timestamp, admin identity, and any platform logs.
+- Clear operator note or repair-decision note explaining why the case is considered repairable.
+
+Stop conditions:
+
+- Readiness returns `needs_manual_decision`.
+- Readiness returns `incomplete` but there is no Stripe refund ID or the idempotency key is ambiguous.
+- The event is not in the authenticated school.
+- Any evidence item above is missing or contradictory.
+- Any proposed fix requires changing booking status, payout rows, learner balances, historical BCS rows, or historical refund event values.
+
+School scope:
+
+- Every readiness and future repair query must filter by authenticated `school_id`.
+- A repair design must never accept caller-supplied school, learner, instructor, booking, source, amount, or Stripe values as trusted. They must be derived from the school-scoped refund event, trusted preview evidence, and existing ledger/source rows.
+
+Idempotency rules:
+
+- The original refund idempotency key remains the anchor for Stripe-success/local-ledger-failure repair.
+- A future repair mutation may have its own repair idempotency key, but it must be bound to one refund event, one school, one Stripe refund ID, and one exact repair plan fingerprint.
+- Never use a new refund execution idempotency key to bypass an incomplete ledger blocker.
+
+Audit requirements for a future mutation slice:
+
+- Audit-log every repair attempt, success, no-op replay, and refusal.
+- Include admin identity, school ID, refund event ID, original refund idempotency key, repair idempotency key, Stripe refund ID, evidence reference, before/after affected row IDs, and refusal reason where applicable.
+- Add a `repair_decision` refund note before or during the reviewed repair path so the operator timeline explains why the mutation occurred.
+
+Allowed future repair writes, only after a separate reviewed implementation:
+
+- Missing `refund_event_lines` for the existing school-scoped refund event.
+- Missing `credit_source_adjustments` for a supported automatic credit-source refund.
+- The paired `learner_credit_balances` decrement required by that CSA, using the existing locked LCB mutation helper and the trusted learner/instructor/school tuple.
+- `refund_event_notes` and `audit_log` context for repair decisions and outcomes.
+
+Forbidden mutations unless separately reviewed:
+
+- Manual editing of existing `refund_events` values.
+- Manual editing of existing `refund_event_lines` values.
+- Any `booking_credit_sources` historical mutation.
+- Any `credit_transactions` historical mutation.
+- Any booking status mutation.
+- Any payout row mutation.
+- Any Stripe refund broadening or dashboard-only Stripe action.
+- Any learner credit mutation not paired to a reviewed CSA repair plan.
 
 ## Stop Conditions
 
