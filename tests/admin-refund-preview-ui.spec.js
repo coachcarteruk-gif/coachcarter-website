@@ -86,10 +86,12 @@ async function setupPortalPage(page, previews, readinessResponses = [readinessRe
     window.__refundEventSearchCalls = [];
     window.__refundEventDetailCalls = [];
     window.__refundReadinessCalls = [];
+    window.__adminFetchCalls = [];
     window.__refundReadinessQueue = queuedReadinessResponses;
     window.ccAdminAuth = {
       logout: () => {},
       fetchAuthed: async (url, options = {}) => {
+        window.__adminFetchCalls.push({ url, method: options.method || 'GET' });
         const json = (body, status = 200) => new Response(JSON.stringify(body), {
           status,
           headers: { 'Content-Type': 'application/json' },
@@ -118,7 +120,11 @@ async function setupPortalPage(page, previews, readinessResponses = [readinessRe
         }
         if (url.includes('action=refund-incident-readiness')) {
           window.__refundReadinessCalls.push(url);
-          return json(window.__refundReadinessQueue.shift() || {
+          const queued = window.__refundReadinessQueue.shift();
+          if (queued && Object.prototype.hasOwnProperty.call(queued, 'status')) {
+            return json(queued.body || queued.response || {}, queued.status);
+          }
+          return json(queued || {
             ok: true,
             read_only: true,
             readiness: {
@@ -498,6 +504,77 @@ test.describe('admin refund preview UI', () => {
         await page.close();
       }
     }
+  });
+
+  test('behaviorally renders readiness endpoint error and not-found states without mutation controls', async ({ browser }) => {
+    const cases = [
+      {
+        response: {
+          status: 500,
+          body: { error: true, code: 'READINESS_FAILED', message: 'Readiness classifier unavailable.' },
+        },
+        expected: 'Readiness classifier unavailable.',
+      },
+      {
+        response: {
+          status: 404,
+          body: { error: true, code: 'REFUND_EVENT_NOT_FOUND', message: 'Refund event not found.' },
+        },
+        expected: 'Refund event not found.',
+      },
+    ];
+
+    for (const item of cases) {
+      const page = await browser.newPage();
+      try {
+        await setupPortalPage(page, [], [item.response]);
+        await page.click('#btn-refund-events-search');
+        await page.click('[data-action="open-refund-event"][data-id="900"]');
+        await expect(page.locator('#refund-incident-readiness-panel')).toContainText(item.expected);
+        await expect(page.locator('#refund-incident-readiness-panel [data-action="prefill-refund-note"]')).toHaveCount(0);
+        await expect(page.locator('#refund-incident-readiness-panel [data-action="execute-refund"]')).toHaveCount(0);
+        await expect(page.locator('#refund-incident-readiness-panel [data-action="record-manual-bank-refund"]')).toHaveCount(0);
+        expect(await page.evaluate(() => window.__executeCalls)).toEqual([]);
+        expect(await page.evaluate(() => window.__manualBankCalls)).toEqual([]);
+        expect(await page.evaluate(() => window.__refundNoteCalls)).toEqual([]);
+      } finally {
+        await page.close();
+      }
+    }
+  });
+
+  test('clicking readiness note-prefill alone makes zero network calls', async ({ page }) => {
+    await setupPortalPage(page, [], [readinessResponse({
+      readiness: {
+        classification: 'needs_manual_decision',
+        complete: false,
+        repairable_candidate: false,
+        required_evidence: ['refund_event:900'],
+        reasons: { incomplete: [], manual_decision: ['OPEN_INCIDENT_NOTE'] },
+        stop_conditions: ['OPEN_INCIDENT_NOTE'],
+        allowed_next_step: 'record_evidence_and_stop_for_review',
+      },
+    })]);
+
+    await page.click('#btn-refund-events-search');
+    await page.click('[data-action="open-refund-event"][data-id="900"]');
+    await expect(page.locator('[data-action="prefill-refund-note"][data-note-type="incident"]')).toBeVisible();
+
+    await page.evaluate(() => {
+      window.__adminFetchCalls = [];
+      window.__refundNoteCalls = [];
+      window.__executeCalls = [];
+      window.__manualBankCalls = [];
+    });
+    await page.click('[data-action="prefill-refund-note"][data-note-type="incident"]');
+
+    await expect(page.locator('#refund-note-type')).toHaveValue('incident');
+    await expect(page.locator('#refund-note-incident-status')).toHaveValue('open');
+    await expect(page.locator('#refund-note-body')).toHaveValue(/Incident readiness reviewed\./);
+    expect(await page.evaluate(() => window.__adminFetchCalls)).toEqual([]);
+    expect(await page.evaluate(() => window.__refundNoteCalls)).toEqual([]);
+    expect(await page.evaluate(() => window.__executeCalls)).toEqual([]);
+    expect(await page.evaluate(() => window.__manualBankCalls)).toEqual([]);
   });
 
   test('prefills incident or repair-decision notes from readiness using only the notes endpoint', async ({ page }) => {
