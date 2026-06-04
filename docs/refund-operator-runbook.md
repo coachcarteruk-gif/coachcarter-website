@@ -31,6 +31,7 @@ This is an operational guide only. It does not authorise UI changes, API changes
 - Manual bank recording writes `refund_events(status='executed')` and `refund_event_lines` with `metadata.refund_channel = "manual_bank"`. It does not call `stripe.refunds.create`, change booking status, edit payout rows, create credit-source adjustments, or mutate learner credit.
 - `GET /api/admin?action=refund-events` is read-only refund-event discovery/detail. It is admin-authenticated and school-scoped. Operators can search recent refund events by event ID, idempotency key, Stripe refund/payment references, learner ID/name/email, refund type/status, and date window. Detail loads the event metadata, ledger lines, and notes timeline.
 - `GET /api/admin?action=refund-incident-readiness&refund_event_id=...` is a read-only incident readiness classifier. It is admin-authenticated and school-scoped. It reads only local `refund_events`, `refund_event_lines`, stored Stripe reference columns, event metadata, and `refund_event_notes`; it does not call Stripe and does not mutate refund, booking, payout, CSA, BCS, credit-transaction, or learner-credit tables. It classifies the local record as `complete`, `incomplete`, or `needs_manual_decision`.
+- The admin portal Refund Operations event detail now displays incident readiness from that endpoint. The panel is visibility-only: it shows classification, evidence, incomplete/manual-decision reasons, stop conditions, and the allowed next step. It has no repair, execute, Stripe, booking, payout, credit, CSA, BCS, or ledger mutation controls.
 - `GET /api/admin?action=refund-notes&refund_event_id=...` and `POST /api/admin?action=add-refund-note` provide an admin-only notes timeline for operator context, evidence references, incidents, and repair decisions. Notes are context-only; they do not repair, mutate, or rebalance refund accounting.
 
 ## Refund Decision Flow
@@ -153,6 +154,13 @@ Current tooling stores manual-bank evidence reference and operator note in ledge
 This section designs the next repair workflow but does not authorise repair mutation.
 
 Use readiness when there is already a local refund event and an operator needs to decide whether the event is complete, incomplete, or blocked on a human decision. The readiness endpoint is a local classifier only. It does not prove that Stripe money moved; it only reports what the CoachCarter ledger currently knows.
+
+Current UI visibility:
+
+- Open Refund Preview -> Refund Operations, search for the refund event, and open the event detail.
+- The Incident Readiness panel loads from `GET /api/admin?action=refund-incident-readiness&refund_event_id=...`.
+- The panel may prefill an `incident` or `repair_decision` note, but saving still goes through the existing `add-refund-note` endpoint and records context only.
+- There is still no repair mutation. If readiness is `incomplete` or `needs_manual_decision`, record evidence and stop for review.
 
 Readiness classifications:
 
