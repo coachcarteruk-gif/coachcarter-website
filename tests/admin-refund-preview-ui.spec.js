@@ -412,8 +412,10 @@ test.describe('admin refund preview UI', () => {
     expect(renderReadiness).toContain('Stop conditions');
     expect(renderReadiness).not.toContain('data-action="execute-refund"');
     expect(renderReadiness).not.toContain('data-action="record-manual-bank-refund"');
+    expect(renderReadiness).not.toContain('data-action="refund-incident-repair-plan"');
     expect(renderReadiness).not.toContain("fetchAdmin('/api/admin?action=execute-refund'");
     expect(renderReadiness).not.toContain("fetchAdmin('/api/admin?action=record-manual-bank-refund'");
+    expect(portalJs).not.toContain("fetchAdmin('/api/admin?action=refund-incident-repair-plan'");
     expect(loadSearch).not.toContain("method: 'POST'");
     expect(openDetail).not.toContain("method: 'POST'");
   });

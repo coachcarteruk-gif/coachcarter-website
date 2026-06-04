@@ -71,6 +71,10 @@ const {
   validateRefundIncidentReadinessRequest,
 } = require('./_refund-incident-readiness');
 const {
+  fetchRefundIncidentRepairPlan,
+  validateRefundIncidentRepairPlanRequest,
+} = require('./_refund-incident-repair');
+const {
   addRefundNote,
   listRefundNotes,
   validateRefundNoteCreateRequest,
@@ -183,6 +187,7 @@ module.exports = async (req, res) => {
   if (action === 'record-manual-bank-refund') return handleRecordManualBankRefund(req, res);
   if (action === 'refund-events')       return handleRefundEvents(req, res);
   if (action === 'refund-incident-readiness') return handleRefundIncidentReadiness(req, res);
+  if (action === 'refund-incident-repair-plan') return handleRefundIncidentRepairPlan(req, res);
   if (action === 'refund-notes')        return handleRefundNotes(req, res);
   if (action === 'add-refund-note')     return handleAddRefundNote(req, res);
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
@@ -1684,6 +1689,51 @@ async function handleRefundIncidentReadiness(req, res) {
       error: true,
       code: 'REFUND_INCIDENT_READINESS_FAILED',
       message: 'Failed to load refund incident readiness.',
+    });
+  }
+}
+
+// Refusal-only incident repair contract. This is not a repair mutation: it
+// reads local refund evidence, returns structured stop reasons, and never
+// calls Stripe or writes booking, payout, credit, CSA, BCS, or ledger rows.
+async function handleRefundIncidentRepairPlan(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const validated = validateRefundIncidentRepairPlanRequest(req.body || {}, { schoolId });
+  if (!validated.ok) {
+    return res.status(validated.status).json({
+      error: true,
+      code: validated.code,
+      message: validated.message,
+      repair_mutation_allowed: false,
+      mutation_performed: false,
+      refusal_reasons: validated.refusal_reasons,
+    });
+  }
+
+  try {
+    const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
+    const result = await fetchRefundIncidentRepairPlan({ sql, input: validated.input });
+    if (!result.ok) {
+      return res.status(result.status || 409).json({
+        error: true,
+        ...result,
+      });
+    }
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('admin refund-incident-repair-plan error:', err.message);
+    reportError('/api/admin', err);
+    return res.status(500).json({
+      error: true,
+      code: 'REFUND_INCIDENT_REPAIR_PLAN_FAILED',
+      message: 'Failed to prepare refund incident repair plan.',
+      repair_mutation_allowed: false,
+      mutation_performed: false,
     });
   }
 }
