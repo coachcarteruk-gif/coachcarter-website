@@ -203,6 +203,20 @@
           </select>
           <p class="field-hint">Rest or travel time blocked after each booked lesson. Learners won't be able to book within this window.</p>
         </div>
+
+        <div class="form-group">
+          <label for="inputMaxBookingDays">How far ahead learners can book</label>
+          <select id="inputMaxBookingDays" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--primary);font-family:var(--font-body);font-size:0.9rem;padding:10px 13px;outline:none;">
+            <option value="7" ${p.max_booking_days_ahead === 7 ? 'selected' : ''}>1 week ahead</option>
+            <option value="14" ${p.max_booking_days_ahead === 14 ? 'selected' : ''}>2 weeks ahead</option>
+            <option value="21" ${p.max_booking_days_ahead === 21 ? 'selected' : ''}>3 weeks ahead</option>
+            <option value="28" ${p.max_booking_days_ahead === 28 ? 'selected' : ''}>4 weeks ahead</option>
+            <option value="42" ${p.max_booking_days_ahead === 42 ? 'selected' : ''}>6 weeks ahead</option>
+            <option value="56" ${p.max_booking_days_ahead === 56 ? 'selected' : ''}>8 weeks ahead</option>
+            <option value="84" ${p.max_booking_days_ahead === 84 || !p.max_booking_days_ahead ? 'selected' : ''}>12 weeks ahead (default)</option>
+          </select>
+          <p class="field-hint">Learners will only see and book your slots inside this window. Offers with repeats still use their separate offer rules.</p>
+        </div>
       </div>
 
       <div class="form-card">
@@ -516,6 +530,7 @@
     const bio            = document.getElementById('inputBio').value.trim();
     const photo_url      = document.getElementById('inputPhoto').value.trim();
     const buffer_minutes = parseInt(document.getElementById('inputBuffer').value);
+    const max_booking_days_ahead = parseInt(document.getElementById('inputMaxBookingDays').value);
     const reminder_hours = parseInt(document.getElementById('inputReminderHours').value);
     const daily_schedule_email = document.getElementById('inputDailySchedule').checked;
     const broadcast_offers_enabled = document.getElementById('inputBroadcastEnabled').checked;
@@ -551,7 +566,7 @@
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           name, phone: phone || null, bio: bio || null, photo_url: photo_url || null,
-          buffer_minutes, reminder_hours, daily_schedule_email,
+          buffer_minutes, max_booking_days_ahead, reminder_hours, daily_schedule_email,
           broadcast_offers_enabled, bulk_tiers_enabled,
           adi_grade, pass_rate, years_experience, specialisms,
           vehicle_make, vehicle_model, transmission_type, dual_controls,

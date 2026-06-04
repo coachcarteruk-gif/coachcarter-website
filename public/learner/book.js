@@ -929,6 +929,7 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
                        : reasons.includes('clash')  ? 'this time clashes with an existing booking'
                        : reasons.includes('window') ? 'this is outside the instructor\'s working hours for that length'
                        : reasons.includes('notice') ? 'too short notice for any duration'
+                       : reasons.includes('advance') ? 'this date is outside the instructor\'s booking window'
                        : 'no lesson lengths fit this slot';
       document.getElementById('mdNoFitText').textContent = reasonText;
       document.getElementById('mdNoFitRow').style.display = 'flex';
@@ -969,7 +970,7 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
       const opt = document.createElement('option');
       opt.value = String(d.lesson_type_id);
       opt.disabled = true;
-      const why = d.reason === 'travel' ? 'travel' : d.reason === 'clash' ? 'clash' : d.reason === 'window' ? 'too long' : d.reason === 'notice' ? 'short notice' : d.reason === 'not_offered' ? 'not offered' : 'unavailable';
+      const why = d.reason === 'travel' ? 'travel' : d.reason === 'clash' ? 'clash' : d.reason === 'window' ? 'too long' : d.reason === 'notice' ? 'short notice' : d.reason === 'advance' ? 'too far ahead' : d.reason === 'not_offered' ? 'not offered' : 'unavailable';
       opt.textContent = `${d.name} "” ${formatHours(d.duration_minutes)} "” unavailable (${why})`;
       select.appendChild(opt);
     }

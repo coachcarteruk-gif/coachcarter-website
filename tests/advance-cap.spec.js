@@ -2,13 +2,14 @@
 const { test, expect } = require('@playwright/test');
 const { test: authedTest, expect: authedExpect } = require('./fixtures/auth');
 
-// 12-week advance booking cap (CLAUDE.md hard rule).
+// 12-week platform advance booking cap (CLAUDE.md hard rule).
 //
 // MAX_DAYS_AHEAD = 84 in api/slots.js. The cap covers ?action=available,
 // ?action=book, ?action=checkout-slot, ?action=reschedule, ?action=book-free-trial,
 // and api/instructor.js?action=create-offer. The ONLY legitimate path past
 // the cap is bookOfferSeries() in api/offers.js, fanned out from the Stripe
-// webhook.
+// webhook. Instructors may reduce their own learner-facing booking window via
+// max_booking_days_ahead, but may not extend self-serve booking beyond 84 days.
 //
 // What this exercises (live API):
 //   1. ?action=available rejects `to` > today + 84 days with the documented

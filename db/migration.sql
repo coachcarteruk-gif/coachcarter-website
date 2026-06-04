@@ -393,6 +393,10 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS reschedule_count INTEGER DE
 -- FEATURE 10: SCHEDULING LEAD TIME
 -- ══════════════════════════════════════════════════════════════════════════════
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS min_booking_notice_hours INTEGER DEFAULT 24;
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS max_booking_days_ahead INTEGER DEFAULT 84;
+ALTER TABLE instructors DROP CONSTRAINT IF EXISTS chk_instructors_max_booking_days_ahead;
+ALTER TABLE instructors ADD CONSTRAINT chk_instructors_max_booking_days_ahead
+  CHECK (max_booking_days_ahead BETWEEN 1 AND 84);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- FEATURE 5: INSTRUCTOR-INITIATED BOOKING

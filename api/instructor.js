@@ -962,6 +962,7 @@ async function handleProfile(req, res) {
     const [profile] = await sql`
       SELECT id, name, email, phone, bio, photo_url, active, slug, created_at,
              COALESCE(buffer_minutes, 30) AS buffer_minutes,
+             COALESCE(max_booking_days_ahead, 84) AS max_booking_days_ahead,
              COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
              adi_grade, pass_rate, years_experience,
              COALESCE(specialisms, '[]'::jsonb) AS specialisms,
@@ -1005,7 +1006,7 @@ async function handleUpdateProfile(req, res) {
   const schoolId = instructor.school_id || 1;
 
   const {
-    name, phone, bio, photo_url, buffer_minutes, calendar_start_hour, reminder_hours, daily_schedule_email,
+    name, phone, bio, photo_url, buffer_minutes, max_booking_days_ahead, calendar_start_hour, reminder_hours, daily_schedule_email,
     adi_grade, pass_rate, years_experience, specialisms,
     vehicle_make, vehicle_model, transmission_type, dual_controls,
     service_areas, languages, ical_feed_url, offered_lesson_types,
@@ -1025,6 +1026,14 @@ async function handleUpdateProfile(req, res) {
     const buf = parseInt(buffer_minutes);
     if (isNaN(buf) || buf < 0 || buf > 120)
       return res.status(400).json({ error: 'Buffer time must be between 0 and 120 minutes' });
+  }
+
+  // Validate max_booking_days_ahead if provided. This can only reduce the
+  // learner-facing window below the platform cap, never extend it.
+  if (max_booking_days_ahead !== undefined && max_booking_days_ahead !== null) {
+    const maxDays = parseInt(max_booking_days_ahead, 10);
+    if (isNaN(maxDays) || maxDays < 1 || maxDays > 84)
+      return res.status(400).json({ error: 'Advance booking window must be between 1 and 84 days' });
   }
 
   // Validate calendar_start_hour if provided
@@ -1113,6 +1122,8 @@ async function handleUpdateProfile(req, res) {
 
     const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null)
       ? parseInt(buffer_minutes) : null;
+    const maxBookingDaysVal = (max_booking_days_ahead !== undefined && max_booking_days_ahead !== null)
+      ? parseInt(max_booking_days_ahead, 10) : null;
     const cshVal = (calendar_start_hour !== undefined && calendar_start_hour !== null)
       ? parseInt(calendar_start_hour) : null;
     const rhVal = (reminder_hours !== undefined && reminder_hours !== null)
@@ -1152,6 +1163,7 @@ async function handleUpdateProfile(req, res) {
         bio                  = COALESCE(${bio       ?? null}, bio),
         photo_url            = COALESCE(${photo_url ?? null}, photo_url),
         buffer_minutes       = COALESCE(${bufVal}, buffer_minutes),
+        max_booking_days_ahead = COALESCE(${maxBookingDaysVal}, max_booking_days_ahead),
         calendar_start_hour  = COALESCE(${cshVal}, calendar_start_hour),
         reminder_hours       = COALESCE(${rhVal}, reminder_hours),
         daily_schedule_email = COALESCE(${dseVal}, daily_schedule_email),
@@ -1175,6 +1187,7 @@ async function handleUpdateProfile(req, res) {
         AND school_id = ${schoolId}
       RETURNING id, name, email, phone, bio, photo_url,
                 COALESCE(buffer_minutes, 30) AS buffer_minutes,
+                COALESCE(max_booking_days_ahead, 84) AS max_booking_days_ahead,
                 COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
                 COALESCE(reminder_hours, 24) AS reminder_hours,
                 COALESCE(daily_schedule_email, true) AS daily_schedule_email,

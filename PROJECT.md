@@ -669,8 +669,8 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `availability-overrides` | GET | JWT | Date-specific extra availability. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
 | `create-availability-override` | POST | JWT | Add a one-off available window without changing weekly availability. Body: `{ override_date, start_time, end_time, note? }` |
 | `delete-availability-override` | POST | JWT | Remove a one-off available window. Body: `{ id }` |
-| `profile` | GET | JWT | Profile details, including `bulk_tiers_enabled` and read-only `effective_hourly_rate_pence` |
-| `update-profile` | POST | JWT | Update bio, contact, buffer, qualifications, vehicle, service area, languages, ical_feed_url, and `bulk_tiers_enabled` |
+| `profile` | GET | JWT | Profile details, including `max_booking_days_ahead`, `bulk_tiers_enabled`, and read-only `effective_hourly_rate_pence` |
+| `update-profile` | POST | JWT | Update bio, contact, buffer, learner advance booking window, qualifications, vehicle, service area, languages, ical_feed_url, and `bulk_tiers_enabled` |
 | `ical-test` | POST | JWT | Test-fetch an iCal feed URL, returns event count |
 | `ical-status` | GET | JWT | Returns iCal sync status (url, last_synced, error, event_count) |
 | `cancel-booking` | POST | JWT | Cancel a scheduled booking (always refunds learner credit — instructor-initiated cancellations bypass the 48h rule). Body: `{ booking_id, reason?, notify? }` — `notify: false` skips learner email |
@@ -711,7 +711,7 @@ Two alarm triggers:
 
 ### Database tables
 
-**`instructors`** — name, email, phone, bio, photo_url, active flag, slug (unique, auto-generated from first name — used for clean booking URLs like `/book/fraser`), buffer_minutes (default 30), min_booking_notice_hours (default 24), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error, stripe_account_id, stripe_onboarding_complete, payouts_paused, weekly_franchise_fee_pence (NULL = commission model, non-NULL = fixed weekly fee), hourly_rate_pence (NULL = inherit school default, non-NULL = admin-set instructor hourly override)
+**`instructors`** — name, email, phone, bio, photo_url, active flag, slug (unique, auto-generated from first name — used for clean booking URLs like `/book/fraser`), buffer_minutes (default 30), min_booking_notice_hours (default 24), max_booking_days_ahead (default 84, instructor-selected learner booking window capped at 12 weeks), calendar_start_hour (default 7), adi_grade, pass_rate, years_experience, specialisms (JSONB array), vehicle_make, vehicle_model, transmission_type (manual/automatic/both), dual_controls (default true), service_areas (JSONB array), languages (JSONB array, default ["English"]), ical_feed_url, ical_last_synced_at, ical_sync_error, stripe_account_id, stripe_onboarding_complete, payouts_paused, weekly_franchise_fee_pence (NULL = commission model, non-NULL = fixed weekly fee), hourly_rate_pence (NULL = inherit school default, non-NULL = admin-set instructor hourly override)
 
 `instructors.hourly_rate_pence` is the admin-editable per-instructor lesson rate override used after any learner/instructor custom rate and before the school default. `instructors.bulk_tiers_enabled` controls whether school-defined bulk discounts apply to future credit purchases for that instructor; when true, the instructor absorbs the discount. It does not discount direct pay-and-book single-slot payments.
 

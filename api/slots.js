@@ -49,7 +49,7 @@ const {
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
-const SLOT_START_INCREMENT_MINUTES = 15;
+const SLOT_START_INCREMENT_MINUTES = 30;
 const MAX_DAYS_AHEAD      = 84;   // 12-week booking window (offer-driven series may exceed this — see api/webhook.js handleOfferBooking)
 const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
@@ -184,6 +184,26 @@ function findAdjacentTravelSpacingConflict({ slotStart, slotEnd, pickupPostcode,
   return null;
 }
 
+function normaliseMaxBookingDaysAhead(value) {
+  const days = parseInt(value, 10);
+  if (!Number.isFinite(days) || days <= 0) return MAX_DAYS_AHEAD;
+  return Math.min(days, MAX_DAYS_AHEAD);
+}
+
+function bookingWindowLimitDate(maxBookingDaysAhead) {
+  return addDays(startOfDay(new Date()), normaliseMaxBookingDaysAhead(maxBookingDaysAhead));
+}
+
+function isDateWithinBookingWindow(dateValue, maxBookingDaysAhead) {
+  const dateObj = dateValue instanceof Date ? dateValue : parseDate(String(dateValue).slice(0, 10));
+  return !!dateObj && dateObj <= bookingWindowLimitDate(maxBookingDaysAhead);
+}
+
+function advanceWindowError(maxBookingDaysAhead, verb = 'book') {
+  const days = normaliseMaxBookingDaysAhead(maxBookingDaysAhead);
+  return `This instructor only accepts learner bookings up to ${days} day${days !== 1 ? 's' : ''} in advance. Please choose an earlier date to ${verb}.`;
+}
+
 async function slotFitsActiveAvailability(sql, {
   instructorId,
   schoolId,
@@ -198,6 +218,7 @@ async function slotFitsActiveAvailability(sql, {
 
   const [instructor] = await sql`
     SELECT COALESCE(min_booking_notice_hours, 24) AS min_booking_notice_hours,
+           COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
            COALESCE(transmission_type, 'manual') AS transmission_type
     FROM instructors
     WHERE id = ${instructorId}
@@ -206,6 +227,7 @@ async function slotFitsActiveAvailability(sql, {
   `;
   if (!instructor) return false;
   const instructorTransmissionType = normaliseSlotTransmissionType(instructor.transmission_type) || 'manual';
+  if (!isDateWithinBookingWindow(date, instructor.max_booking_days_ahead)) return false;
 
   const minNoticeHours = Math.max(0, parseInt(instructor.min_booking_notice_hours, 10) || 0);
   if (minNoticeHours > 0) {
@@ -394,6 +416,7 @@ async function handleAvailable(req, res) {
                    i.photo_url, i.bio,
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                    COALESCE(i.transmission_type, 'manual') AS transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
@@ -413,6 +436,7 @@ async function handleAvailable(req, res) {
                    i.photo_url, i.bio,
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                    COALESCE(i.transmission_type, 'manual') AS transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
@@ -434,6 +458,7 @@ async function handleAvailable(req, res) {
                    i.photo_url, i.bio,
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                    COALESCE(i.transmission_type, 'manual') AS transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
@@ -453,6 +478,7 @@ async function handleAvailable(req, res) {
                    i.photo_url, i.bio,
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                   COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                    COALESCE(i.transmission_type, 'manual') AS transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
@@ -479,6 +505,7 @@ async function handleAvailable(req, res) {
                      i.photo_url, i.bio,
                      COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                      COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                      COALESCE(iao.transmission_type, 'both') AS transmission_type,
                      COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                      i.max_travel_minutes
@@ -501,6 +528,7 @@ async function handleAvailable(req, res) {
                      i.photo_url, i.bio,
                      COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                      COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                      COALESCE(iao.transmission_type, 'both') AS transmission_type,
                      COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                      i.max_travel_minutes
@@ -525,6 +553,7 @@ async function handleAvailable(req, res) {
                      i.photo_url, i.bio,
                      COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                      COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                      COALESCE(iao.transmission_type, 'both') AS transmission_type,
                      COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                      i.max_travel_minutes
@@ -547,6 +576,7 @@ async function handleAvailable(req, res) {
                      i.photo_url, i.bio,
                      COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                      COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+                     COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                      COALESCE(iao.transmission_type, 'both') AS transmission_type,
                      COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                      i.max_travel_minutes
@@ -783,6 +813,7 @@ async function handleAvailable(req, res) {
           bio:            w.bio,
           buffer_minutes: w.buffer_minutes != null ? Math.max(0, parseInt(w.buffer_minutes, 10) || 0) : 30,
           min_booking_notice_hours: parseInt(w.min_booking_notice_hours) || 24,
+          max_booking_days_ahead: normaliseMaxBookingDaysAhead(w.max_booking_days_ahead),
           max_travel_minutes: w.max_travel_minutes != null ? parseInt(w.max_travel_minutes) : DEFAULT_MAX_TRAVEL_MINUTES,
           windows:        []
         };
@@ -830,6 +861,7 @@ async function handleAvailable(req, res) {
       const daySlotKeys = new Set();
 
       for (const instructor of Object.values(byInstructor)) {
+        if (!isDateWithinBookingWindow(cursor, instructor.max_booking_days_ahead)) continue;
         if (externalAllDayIndex.has(`${instructor.id}|${dateStr}`)) continue;
         const dateWindows = instructor.windows.filter(w => w.override_date === dateStr);
         const isBlackout = blackoutIndex.has(`${instructor.id}|${dateStr}`);
@@ -1007,6 +1039,7 @@ async function handleDurationsForSlot(req, res) {
       SELECT i.id, i.offered_lesson_types,
              COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
              COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
+             COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
              COALESCE(i.transmission_type, 'manual') AS transmission_type,
              i.max_travel_minutes
       FROM instructors i
@@ -1093,6 +1126,7 @@ async function handleDurationsForSlot(req, res) {
     slotDateTime.setUTCHours(Math.floor(slotStart / 60), slotStart % 60, 0, 0);
     const hoursUntilSlot = (slotDateTime - new Date()) / 3600000;
     const violatesNotice = hoursUntilSlot < (parseInt(instructor.min_booking_notice_hours) || 0);
+    const violatesAdvanceWindow = !isDateWithinBookingWindow(date, instructor.max_booking_days_ahead);
 
     // Same-day blocks (bookings + reservations + pending offers + external).
     const sameDayBookings = await sql`
@@ -1187,6 +1221,8 @@ async function handleDurationsForSlot(req, res) {
 
       if (allDayBlocked) {
         fits = false; reason = 'clash';
+      } else if (violatesAdvanceWindow) {
+        fits = false; reason = 'advance';
       } else if (windowEnd === null || slotEnd > windowEnd) {
         fits = false; reason = 'window';
       } else if (violatesNotice) {
@@ -1579,13 +1615,19 @@ async function handleBook(req, res) {
 
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
-      SELECT id, name, email, phone, max_travel_minutes, offered_lesson_types FROM instructors
+      SELECT id, name, email, phone, max_travel_minutes, offered_lesson_types,
+             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead
+      FROM instructors
       WHERE id = ${instructor_id} AND active = true AND school_id = ${schoolId}
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found or unavailable' });
     if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
       return rejectLessonTypeNotOffered(res);
+    }
+    const outOfWindowDates = bookingDates.filter(bd => !isDateWithinBookingWindow(bd.dateObj, instructor.max_booking_days_ahead));
+    if (outOfWindowDates.length > 0) {
+      return res.status(400).json({ error: advanceWindowError(instructor.max_booking_days_ahead) });
     }
 
     const unavailableDates = [];
@@ -2026,6 +2068,8 @@ async function handleCheckoutSlot(req, res) {
   const endMins      = timeToMinutes(end_time);
   const checkoutDate = parseDate(date);
   const todayStart   = startOfDay(new Date());
+  if (!checkoutDate)
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
   if (checkoutDate && checkoutDate.getTime() === todayStart.getTime()) {
     const now = new Date();
     const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
@@ -2099,7 +2143,9 @@ async function handleCheckoutSlot(req, res) {
 
     // Check instructor is valid (and belongs to this school)
     const [instructor] = await sql`
-      SELECT id, name, offered_lesson_types FROM instructors
+      SELECT id, name, offered_lesson_types,
+             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead
+      FROM instructors
       WHERE id = ${instructor_id}
         AND active = true
         AND COALESCE(school_id, 1) = ${schoolId}
@@ -2108,6 +2154,9 @@ async function handleCheckoutSlot(req, res) {
       return res.status(404).json({ error: 'Instructor not found' });
     if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
       return rejectLessonTypeNotOffered(res);
+    }
+    if (!isDateWithinBookingWindow(checkoutDate, instructor.max_booking_days_ahead)) {
+      return res.status(400).json({ error: advanceWindowError(instructor.max_booking_days_ahead) });
     }
     const stillAvailable = await slotFitsActiveAvailability(sql, {
       instructorId: instructor_id,
@@ -2285,6 +2334,8 @@ async function handleCheckoutSlotGuest(req, res) {
     const endMins   = timeToMinutes(end_time);
     const checkoutDate = parseDate(date);
     const todayStart   = startOfDay(new Date());
+    if (!checkoutDate)
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
     if (checkoutDate && checkoutDate.getTime() === todayStart.getTime()) {
       const now = new Date();
       const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
@@ -2340,7 +2391,9 @@ async function handleCheckoutSlotGuest(req, res) {
     } catch (e) { /* table may not exist yet */ }
 
     const [instructor] = await sql`
-      SELECT id, name, offered_lesson_types FROM instructors
+      SELECT id, name, offered_lesson_types,
+             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead
+      FROM instructors
       WHERE id = ${instructor_id}
         AND active = true
         AND COALESCE(school_id, 1) = ${schoolId}
@@ -2349,6 +2402,9 @@ async function handleCheckoutSlotGuest(req, res) {
       return res.status(404).json({ error: 'Instructor not found' });
     if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
       return rejectLessonTypeNotOffered(res);
+    }
+    if (!isDateWithinBookingWindow(checkoutDate, instructor.max_booking_days_ahead)) {
+      return res.status(400).json({ error: advanceWindowError(instructor.max_booking_days_ahead) });
     }
 
     // ── Find or create learner ──
@@ -2588,6 +2644,8 @@ async function handleBookFreeTrial(req, res) {
     const endMins   = timeToMinutes(end_time);
     const checkoutDate = parseDate(date);
     const todayStart   = startOfDay(new Date());
+    if (!checkoutDate)
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
     if (checkoutDate && checkoutDate.getTime() === todayStart.getTime()) {
       const now = new Date();
       const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
@@ -2645,7 +2703,8 @@ async function handleBookFreeTrial(req, res) {
 
     const [instructor] = await sql`
       SELECT id, name, email, phone, COALESCE(buffer_minutes, 30) AS buffer_minutes,
-             max_travel_minutes, offered_lesson_types
+             max_travel_minutes, offered_lesson_types,
+             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead
       FROM instructors
       WHERE id = ${instructor_id} AND active = true AND school_id = ${schoolId}
     `;
@@ -2653,6 +2712,9 @@ async function handleBookFreeTrial(req, res) {
       return res.status(404).json({ error: 'Instructor not found' });
     if (!isLessonTypeOffered(instructor.offered_lesson_types, trialType.slug)) {
       return res.status(400).json({ error: 'This instructor does not offer free trials.' });
+    }
+    if (!isDateWithinBookingWindow(checkoutDate, instructor.max_booking_days_ahead)) {
+      return res.status(400).json({ error: advanceWindowError(instructor.max_booking_days_ahead) });
     }
 
     const stillAvailable = await slotFitsActiveAvailability(sql, {
@@ -3343,6 +3405,7 @@ async function handleReschedule(req, res) {
              lb.end_time::text       AS end_time,
              i.name AS instructor_name, i.email AS instructor_email,
              i.phone AS instructor_phone,
+             COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
              lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
              COALESCE(lb.reschedule_count, 0) AS reschedule_count,
              COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS type_duration_minutes,
@@ -3357,6 +3420,9 @@ async function handleReschedule(req, res) {
 
     if (!booking)
       return res.status(404).json({ error: 'Booking not found' });
+    if (!isDateWithinBookingWindow(newBookingDate, booking.max_booking_days_ahead)) {
+      return res.status(400).json({ error: advanceWindowError(booking.max_booking_days_ahead, 'reschedule') });
+    }
 
     // Calculate new end time using booking's lesson type duration
     const bookingDuration = parseInt(booking.type_duration_minutes) || DEFAULT_SLOT_MINUTES;

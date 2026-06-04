@@ -430,11 +430,11 @@ function showAddRow(btn, day) {
   const row = document.createElement('div');
   row.className = 'avail-add-row';
 
-  // Build time options (07:00 to 21:00 in 15-min steps)
+  // Build time options (07:00 to 21:00 in 30-min steps)
   let opts = '';
   for (let h = 7; h <= 21; h++) {
-    for (const m of ['00', '15', '30', '45']) {
-      if (h === 21 && m !== '00') continue;
+    for (const m of ['00', '30']) {
+      if (h === 21 && m === '30') continue;
       const val = String(h).padStart(2, '0') + ':' + m;
       opts += `<option value="${val}">${fmtTime(val)}</option>`;
     }
