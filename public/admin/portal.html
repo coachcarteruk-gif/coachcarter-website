@@ -748,6 +748,52 @@ body {
         </div>
       </div>
     </div>
+
+    <div class="panel-card" style="margin-top:20px;">
+      <div class="panel-card-header">
+        <span class="panel-card-title">Refund Operations</span>
+        <span class="badge badge-gray" id="refund-events-state">Recent 30 days</span>
+      </div>
+      <form id="refund-events-search-form" style="padding:20px;border-bottom:1px solid var(--border);">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end;">
+          <div>
+            <label for="refund-events-q" style="display:block;font-size:0.74rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Search</label>
+            <input id="refund-events-q" autocomplete="off" placeholder="Event, key, Stripe, learner" style="width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+          </div>
+          <div>
+            <label for="refund-events-type" style="display:block;font-size:0.74rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Type</label>
+            <select id="refund-events-type" style="width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+              <option value="">All types</option>
+              <option value="credit_purchase">Credit purchase</option>
+              <option value="repeat_offer_partial">Repeat offer partial</option>
+              <option value="direct_slot">Lesson booking</option>
+              <option value="direct_offer">Offer booking</option>
+              <option value="manual_record">Manual record</option>
+            </select>
+          </div>
+          <div>
+            <label for="refund-events-status" style="display:block;font-size:0.74rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Status</label>
+            <select id="refund-events-status" style="width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+              <option value="">All statuses</option>
+              <option value="previewed">Previewed</option>
+              <option value="manual_review">Manual review</option>
+              <option value="blocked">Blocked</option>
+              <option value="executed">Executed</option>
+            </select>
+          </div>
+          <div>
+            <label for="refund-events-recent" style="display:block;font-size:0.74rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Recent days</label>
+            <input id="refund-events-recent" type="number" min="1" max="365" value="30" style="width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+          </div>
+          <button type="submit" class="btn btn-secondary" id="btn-refund-events-search" style="justify-content:center;">Search events</button>
+        </div>
+        <div id="refund-events-error" role="alert" style="display:none;margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--red-bg);color:#991b1b;font-size:0.85rem;"></div>
+      </form>
+      <div id="refund-events-results" style="padding:20px;">
+        <div class="empty-state" style="padding:20px 12px;">Search recent refund events to inspect ledger lines, metadata, and notes.</div>
+      </div>
+      <div id="refund-event-detail" style="display:none;padding:0 20px 20px;"></div>
+    </div>
   </div>
 
   <div class="section" id="section-referrals">

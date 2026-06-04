@@ -65,6 +65,7 @@ const { inspectCreditReconciliation, grantReconciliationCredits } = require('./_
 const { planAdminRefundPreview, validateRefundPreviewRequest } = require('./_refund-planner');
 const { executeAdminRefund, validateRefundExecuteRequest } = require('./_refund-executor');
 const { recordManualBankRefund, validateManualBankRefundRequest } = require('./_refund-manual-bank');
+const { searchRefundEvents, validateRefundEventSearchRequest } = require('./_refund-events');
 const {
   addRefundNote,
   listRefundNotes,
@@ -176,6 +177,7 @@ module.exports = async (req, res) => {
   if (action === 'refund-preview')      return handleRefundPreview(req, res);
   if (action === 'execute-refund')      return handleExecuteRefund(req, res);
   if (action === 'record-manual-bank-refund') return handleRecordManualBankRefund(req, res);
+  if (action === 'refund-events')       return handleRefundEvents(req, res);
   if (action === 'refund-notes')        return handleRefundNotes(req, res);
   if (action === 'add-refund-note')     return handleAddRefundNote(req, res);
   if (action === 'delete-learner')    return handleDeleteLearner(req, res);
@@ -1597,6 +1599,46 @@ async function handleRecordManualBankRefund(req, res) {
       code: 'MANUAL_BANK_REFUND_RECORD_FAILED',
       message: 'Failed to record manual bank refund.',
       manual_bank_recorded: false,
+    });
+  }
+}
+
+// Read-only refund event discovery/detail endpoint. It is school-scoped and
+// never repairs, mutates ledgers, changes bookings/payouts, or calls Stripe.
+async function handleRefundEvents(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Admin auth required' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const validated = validateRefundEventSearchRequest(req.query || {}, { schoolId });
+  if (!validated.ok) {
+    return res.status(validated.status).json({
+      error: true,
+      code: validated.code,
+      message: validated.message,
+    });
+  }
+
+  try {
+    const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
+    const result = await searchRefundEvents({ sql, input: validated.input });
+    if (!result.ok) {
+      return res.status(result.status || 400).json({
+        error: true,
+        code: result.code || 'REFUND_EVENTS_FAILED',
+        message: result.message || 'Refund events could not be loaded.',
+      });
+    }
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('admin refund-events error:', err.message);
+    reportError('/api/admin', err);
+    return res.status(500).json({
+      error: true,
+      code: 'REFUND_EVENTS_FAILED',
+      message: 'Failed to load refund events.',
     });
   }
 }

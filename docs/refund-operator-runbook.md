@@ -29,6 +29,7 @@ This is an operational guide only. It does not authorise UI changes, API changes
 - Already-paid-out direct bookings and missing fee evidence are blocked/manual-review cases, not automatic refunds.
 - `POST /api/admin?action=record-manual-bank-refund` is ledger-only. It requires a refund preview, admin auth, `operator_go: "RECORD_MANUAL_BANK_REFUND_CONFIRMED"`, a stable `idempotency_key`, and a `manual_bank_reference`. Optional `evidence_reference` and `operator_note` are stored in refund ledger metadata.
 - Manual bank recording writes `refund_events(status='executed')` and `refund_event_lines` with `metadata.refund_channel = "manual_bank"`. It does not call `stripe.refunds.create`, change booking status, edit payout rows, create credit-source adjustments, or mutate learner credit.
+- `GET /api/admin?action=refund-events` is read-only refund-event discovery/detail. It is admin-authenticated and school-scoped. Operators can search recent refund events by event ID, idempotency key, Stripe refund/payment references, learner ID/name/email, refund type/status, and date window. Detail loads the event metadata, ledger lines, and notes timeline.
 - `GET /api/admin?action=refund-notes&refund_event_id=...` and `POST /api/admin?action=add-refund-note` provide an admin-only notes timeline for operator context, evidence references, incidents, and repair decisions. Notes are context-only; they do not repair, mutate, or rebalance refund accounting.
 
 ## Refund Decision Flow
@@ -119,6 +120,7 @@ Before recording:
 
 After an automatic execute result:
 
+- Use Refund Operations search if you need to find the event by idempotency key, Stripe reference, learner, type/status, or recent date range.
 - Stripe refund exists where applicable and its ID matches the execute response.
 - `refund_events` has one executed event for the idempotency key.
 - `refund_event_lines` exist and match the preview/execute amount breakdown.
@@ -132,6 +134,7 @@ After an automatic execute result:
 
 After a manual bank record result:
 
+- Use Refund Operations search if you need to find the event by bank-record idempotency key, learner, type/status, or recent date range.
 - The bank transfer/reference exists outside Stripe and matches `metadata.manual_bank_reference`.
 - Any captured bank evidence reference and operator note are present in `metadata.evidence_reference` and `metadata.operator_note`.
 - `refund_events` has one executed event for the idempotency key with `metadata.refund_channel = "manual_bank"` and no `stripe_refund_id`.
@@ -194,5 +197,5 @@ If the backend reports `INCOMPLETE_REFUND_LEDGER`:
 These are non-operative notes for later slices:
 
 - Enrich preview responses with clearer operator labels for supported execute vs manual-review cases.
-- Add richer refund-event discovery/search so old incidents can be found without knowing the event ID.
+- Keep refund-event discovery/search stable and extend only if operators need additional read-only filters.
 - Add a dedicated repair workflow for Stripe-success/local-ledger-failure cases.

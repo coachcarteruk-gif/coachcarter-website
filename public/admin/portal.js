@@ -86,7 +86,10 @@ function showSection(name) {
   if (name === 'learners')      loadLearners();
   if (name === 'lesson-types')  loadLessonTypes();
   if (name === 'payouts')       loadPayouts();
-  if (name === 'refund-preview') resetRefundPreviewMessages();
+  if (name === 'refund-preview') {
+    resetRefundPreviewMessages();
+    loadRefundEvents();
+  }
   if (name === 'referrals')     loadReferrals();
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
@@ -2853,6 +2856,140 @@ function renderRefundNotesTimeline(notes) {
   }).join('');
 }
 
+function refundEventStatusBadge(status) {
+  const map = {
+    executed: 'badge-green',
+    blocked: 'badge-red',
+    manual_review: 'badge-amber',
+    previewed: 'badge-blue'
+  };
+  return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + esc(status || '-') + '</span>';
+}
+
+function buildRefundEventsSearchParams() {
+  const params = new URLSearchParams({ action: 'refund-events' });
+  const q = (document.getElementById('refund-events-q')?.value || '').trim();
+  const type = document.getElementById('refund-events-type')?.value || '';
+  const status = document.getElementById('refund-events-status')?.value || '';
+  const recent = (document.getElementById('refund-events-recent')?.value || '').trim();
+  if (q) params.set('q', q);
+  if (type) params.set('refund_type', type);
+  if (status) params.set('status', status);
+  if (recent && !q) params.set('recent_days', recent);
+  params.set('limit', '25');
+  return params;
+}
+
+function renderRefundEventRows(events) {
+  if (!Array.isArray(events) || events.length === 0) {
+    return '<div class="empty-state" style="padding:20px 12px;">No refund events found for those filters.</div>';
+  }
+  return '<div class="table-wrap"><table class="data-table"><thead><tr>' +
+    '<th>Event</th><th>Created</th><th>Learner</th><th>Type</th><th>Status</th><th>Returned</th><th>References</th><th>Actions</th>' +
+    '</tr></thead><tbody>' +
+    events.map(function (event) {
+      const refs = [
+        event.stripe_refund_id ? 'Stripe ' + esc(event.stripe_refund_id) : '',
+        event.idempotency_key ? 'Key ' + esc(event.idempotency_key) : ''
+      ].filter(Boolean).join('<br>');
+      return '<tr>' +
+        '<td><strong>#' + esc(event.id) + '</strong><br><span style="font-size:0.78rem;color:var(--muted);">' + esc(event.refund_type || '-') + '</span></td>' +
+        '<td>' + esc(event.created_at || '-') + '</td>' +
+        '<td>' + esc(event.learner_name || ('Learner #' + (event.learner_id || '-'))) + '<br><span style="font-size:0.78rem;color:var(--muted);">' + esc(event.learner_email || '') + '</span></td>' +
+        '<td>' + esc(event.refund_type || '-') + '</td>' +
+        '<td>' + refundEventStatusBadge(event.status) + '</td>' +
+        '<td>' + fmtPence(Number(event.net_refund_pence || 0)) + '</td>' +
+        '<td style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:0.78rem;word-break:break-all;">' + (refs || '-') + '</td>' +
+        '<td><button type="button" class="btn btn-sm" data-action="open-refund-event" data-id="' + esc(event.id) + '">Open</button></td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody></table></div>';
+}
+
+async function loadRefundEvents(e) {
+  if (e) e.preventDefault();
+  const results = document.getElementById('refund-events-results');
+  if (!results) return;
+  const detail = document.getElementById('refund-event-detail');
+  const err = document.getElementById('refund-events-error');
+  const state = document.getElementById('refund-events-state');
+  const btn = document.getElementById('btn-refund-events-search');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+  if (detail) { detail.style.display = 'none'; detail.innerHTML = ''; }
+  results.innerHTML = '<div class="empty-state" style="padding:20px 12px;">Loading refund events...</div>';
+  if (state) { state.textContent = 'Loading'; state.className = 'badge badge-blue'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Searching...'; }
+  try {
+    const params = buildRefundEventsSearchParams();
+    const res = await fetchAdmin('/api/admin?' + params.toString(), { headers: HEADERS });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.message || data.error || 'Refund event search failed.');
+    results.innerHTML = renderRefundEventRows(data.events || []);
+    if (state) {
+      state.textContent = (data.events || []).length + ' found';
+      state.className = 'badge badge-gray';
+    }
+  } catch (error) {
+    results.innerHTML = '<div class="empty-state" style="padding:20px 12px;color:#991b1b;">Refund event search failed.</div>';
+    if (err) {
+      err.textContent = error.message || 'Refund event search failed.';
+      err.style.display = 'block';
+    }
+    if (state) { state.textContent = 'Error'; state.className = 'badge badge-red'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Search events'; }
+  }
+}
+
+function renderRefundEventDetail(data) {
+  const event = data?.event || {};
+  return '<div style="border-top:1px solid var(--border);padding-top:18px;">' +
+    '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">' +
+      '<div>' +
+        '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0;">Refund event #' + esc(event.id) + '</h3>' +
+        '<div style="font-size:0.84rem;color:var(--muted);margin-top:3px;">Ledger, metadata, and notes context.</div>' +
+      '</div>' +
+      refundEventStatusBadge(event.status) +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px;margin-bottom:18px;">' +
+      refundKv('Learner', event.learner_name || ('Learner #' + (event.learner_id || '-'))) +
+      refundKv('Learner email', event.learner_email) +
+      refundKv('Refund type', event.refund_type) +
+      refundKv('Idempotency key', event.idempotency_key) +
+      refundKv('Stripe refund ID', event.stripe_refund_id || 'Not applicable') +
+      refundKv('Stripe payment intent', event.stripe_payment_intent_id || '-') +
+      refundKv('Gross refund', fmtPence(Number(event.gross_refund_pence || 0))) +
+      refundKv('Processing fee withheld', fmtPence(Number(event.processing_fee_withheld_pence || 0))) +
+      refundKv('Returned amount', fmtPence(Number(event.net_refund_pence || 0))) +
+      refundKv('Created by', event.admin_name || event.admin_email || event.created_by) +
+    '</div>' +
+    '<div style="margin-bottom:18px;">' +
+      '<h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 10px;">Ledger lines</h3>' +
+      renderRefundLines(data.lines || []) +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:18px;">' +
+      '<div><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Metadata</h3>' + refundObjectRows(event.metadata) + '</div>' +
+      '<div><h3 style="font-family:var(--font-head);font-size:1rem;margin:0 0 8px;">Notes timeline</h3>' + renderRefundNotesTimeline(data.notes || []) + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+async function openRefundEvent(refundEventId) {
+  const detail = document.getElementById('refund-event-detail');
+  if (!detail || !refundEventId) return;
+  detail.style.display = 'block';
+  detail.innerHTML = '<div class="empty-state" style="padding:20px 12px;">Loading refund event #' + esc(refundEventId) + '...</div>';
+  try {
+    const params = new URLSearchParams({ action: 'refund-events', refund_event_id: String(refundEventId) });
+    const res = await fetchAdmin('/api/admin?' + params.toString(), { headers: HEADERS });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.message || data.error || 'Refund event detail failed.');
+    detail.innerHTML = renderRefundEventDetail(data);
+  } catch (error) {
+    detail.innerHTML = '<div style="color:#991b1b;background:var(--red-bg);border-radius:8px;padding:10px 12px;">' + esc(error.message || 'Failed to load refund event.') + '</div>';
+  }
+}
+
 async function loadRefundNotes(refundEventId) {
   const list = document.getElementById('refund-notes-list');
   if (!list || !refundEventId) return;
@@ -3258,6 +3395,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'execute-refund') executeRefundFromPreview();
   else if (a === 'record-manual-bank-refund') recordManualBankRefundFromPreview();
   else if (a === 'add-refund-note') addRefundNoteFromPanel();
+  else if (a === 'open-refund-event') openRefundEvent(parseInt(t.dataset.id, 10));
   else if (a === 'mark-complete') markComplete(parseInt(t.dataset.id, 10));
   else if (a === 'show-learner-detail') showLearnerDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-adjust-credits') openAdjustCredits(t.dataset.learnerId, parseInt(t.dataset.balance, 10));
@@ -3434,6 +3572,8 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-process-payouts', processPayoutsNow);
   var refundForm = document.getElementById('refund-preview-form');
   if (refundForm) refundForm.addEventListener('submit', submitRefundPreview);
+  var refundEventsForm = document.getElementById('refund-events-search-form');
+  if (refundEventsForm) refundEventsForm.addEventListener('submit', loadRefundEvents);
   var refundType = document.getElementById('refund-type');
   if (refundType) {
     refundType.addEventListener('change', function () {
