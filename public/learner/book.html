@@ -23,12 +23,10 @@
   <script src="/shared/dark-mode.js" defer></script>
   <script src="/shared/font-swap.js" defer></script>
   <style>
-    /* ── BOOK A LESSON — slot feed dossier ───
-       Same DL25 vocabulary as Examiner + buy-credits. Slot feed cards
-       restyled with mono instructor labels, tabular times, accent
-       border-on-hover. Chrome around them: doc header, compact masthead,
-       status strip replacing the banner stack, postcode prompt promoted
-       to a proper missing-info card.
+    /* ── BOOK A LESSON — learner booking calendar ───
+       Same DL25 vocabulary as Examiner + buy-credits. The page now leads
+       with learner choices: lesson length, date, then grouped time buttons.
+       Status rows and postcode prompt keep the existing booking safeguards.
 
        JS-touched class names preserved: feed-card, feed-card-accent,
        feed-card-body, feed-card-time, feed-card-instructor, feed-card-chevron,
@@ -45,29 +43,12 @@
     /* ── PAGE ── */
     .page { max-width: 760px; margin: 0 auto; padding: 28px 24px 64px; }
 
-    /* ── DOC HEADER ── */
-    .doc-header {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px;
-      font-family: var(--font-mono); font-size: 0.66rem;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
-      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
-      margin-bottom: 24px;
-    }
-    .doc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .doc-header-left > span:not(.doc-stamp) {
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .doc-stamp {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 9px; border-radius: 3px;
-      background: var(--accent); color: #fff; font-weight: 700;
-      letter-spacing: 0.1em; flex-shrink: 0;
-    }
-    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
-
     /* ── HERO (compact — this page is task-first) ── */
-    .book-hero { margin-bottom: 24px; }
+    .book-hero {
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
     .hero-eyebrow {
       font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
       color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase;
@@ -84,6 +65,55 @@
     .book-subtitle {
       color: var(--muted); font-size: 0.92rem; line-height: 1.5;
       max-width: 52ch;
+    }
+
+    /* ── BOOKING CONTROLS ── */
+    .booking-controls {
+      display: grid;
+      gap: 10px;
+      margin: 20px 0 14px;
+    }
+    .control-label {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .lesson-length-segmented {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .lesson-length-option {
+      min-height: 44px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--primary);
+      padding: 9px 14px;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.15s;
+    }
+    .lesson-length-option:hover {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+    }
+    .lesson-length-option:active { transform: scale(0.98); }
+    .lesson-length-option[aria-pressed="true"] {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+    .lesson-length-option:disabled {
+      cursor: wait;
+      opacity: 0.55;
     }
 
     /* ── STATUS STRIP — banners collapse here as document rows ── */
@@ -271,7 +301,243 @@
       color: var(--muted); letter-spacing: 0.04em;
     }
 
-    /* ── SLOT FEED ── */
+    /* ── DATE STRIP + TIME GROUPS ── */
+    .booking-calendar {
+      display: grid;
+      gap: 18px;
+    }
+    .date-strip-wrap {
+      margin: 4px -2px 2px;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    .date-strip {
+      display: flex;
+      gap: 8px;
+      padding: 2px 2px 8px;
+    }
+    .date-chip {
+      min-width: 76px;
+      min-height: 64px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--primary);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+      touch-action: manipulation;
+      flex: 0 0 auto;
+      transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.15s;
+    }
+    .date-chip:hover {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+    }
+    .date-chip:active { transform: scale(0.98); }
+    .date-chip[aria-pressed="true"] {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+    .date-chip.no-slots {
+      color: var(--muted);
+      background: transparent;
+    }
+    .date-chip-day {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.64rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .date-chip-date {
+      display: block;
+      margin-top: 3px;
+      font-family: var(--font-head);
+      font-size: 1.05rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .date-chip-state {
+      display: block;
+      margin-top: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .time-groups {
+      display: grid;
+      gap: 20px;
+    }
+    .time-group {
+      display: grid;
+      gap: 10px;
+    }
+    .time-group-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+    }
+    .time-group-title::after {
+      content: '';
+      height: 1px;
+      flex: 1;
+      background: var(--border);
+    }
+    .time-button-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+      gap: 8px;
+    }
+    .time-slot-button {
+      min-height: 58px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--primary);
+      padding: 10px 12px;
+      text-align: left;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: border-color 0.2s, background 0.2s, transform 0.15s;
+    }
+    .time-slot-button:hover {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+      transform: translateY(-1px);
+    }
+    .time-slot-button:active { transform: translateY(0) scale(0.99); }
+    .time-slot-button[aria-pressed="true"] {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+    .time-slot-main {
+      display: block;
+      font-family: var(--font-head);
+      font-size: 1.1rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
+    }
+    .time-slot-meta {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1.35;
+    }
+    .time-slot-button .slot-avatar {
+      display: inline-flex;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    .calendar-empty {
+      padding: 28px 18px;
+      border: 1.5px dashed var(--border);
+      border-radius: 12px;
+      text-align: center;
+      color: var(--muted);
+      background: var(--surface);
+    }
+    .calendar-empty h3 {
+      font-family: var(--font-head);
+      font-size: 1.05rem;
+      color: var(--primary);
+      margin-bottom: 6px;
+      letter-spacing: -0.01em;
+    }
+    .sr-live {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* ── SELECTED SLOT SUMMARY ── */
+    .page.has-selected-slot { padding-bottom: 168px; }
+    .selected-slot-summary {
+      position: sticky;
+      bottom: max(12px, env(safe-area-inset-bottom));
+      z-index: 80;
+      display: none;
+      align-items: center;
+      gap: 14px;
+      margin: 22px 0 0;
+      padding: 14px;
+      border: 1.5px solid var(--accent);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--white) 94%, var(--accent-mid));
+      box-shadow: 0 14px 36px rgba(0,0,0,0.16);
+    }
+    .selected-slot-summary.is-visible { display: flex; }
+    .selected-slot-copy {
+      flex: 1;
+      min-width: 0;
+      display: grid;
+      gap: 3px;
+    }
+    .selected-slot-label {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .selected-slot-title {
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+    .selected-slot-meta {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1.35;
+    }
+    .selected-slot-continue {
+      min-height: 44px;
+      border: none;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      padding: 11px 18px;
+      font-family: var(--font-head);
+      font-size: 0.95rem;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+      touch-action: manipulation;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .selected-slot-continue:hover { background: var(--accent-dk); }
+    .selected-slot-continue:active { transform: scale(0.98); }
+
+    /* ── LEGACY SLOT FEED SUPPORT ── */
     .slot-feed { display: flex; flex-direction: column; gap: 6px; }
     .overflow-section { display: block; margin-top: 12px; }
     .overflow-heading {
@@ -300,6 +566,9 @@
       border: 1.5px solid var(--border);
       border-radius: 12px;
       padding: 14px 18px;
+      width: 100%;
+      text-align: left;
+      color: inherit;
       cursor: pointer;
       transition: border-color 0.2s, background 0.2s, transform 0.15s;
       -webkit-tap-highlight-color: transparent;
@@ -381,15 +650,57 @@
     .repeat-section { margin: 12px 0; padding: 12px; background: var(--surface); border-radius: 10px; }
     .repeat-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
     .repeat-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
-    .repeat-options { margin-top: 10px; display: none; }
+    .repeat-options { margin-top: 12px; display: none; }
     .repeat-options.open { display: block; }
-    .repeat-weeks-select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: var(--white); color: var(--primary); }
-    .repeat-dates { margin-top: 10px; }
-    .repeat-date-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.82rem; border-bottom: 1px solid var(--border); }
+    .repeat-weeks-select { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .repeat-count-label {
+      display: block;
+      margin-bottom: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 800;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .repeat-count-control {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .repeat-count-btn {
+      min-height: 44px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--white);
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 800;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.15s;
+    }
+    .repeat-count-btn:hover {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+    }
+    .repeat-count-btn:active { transform: scale(0.98); }
+    .repeat-count-btn[aria-pressed="true"] {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+    .repeat-dates { margin-top: 12px; }
+    .repeat-date-item { display: flex; align-items: center; gap: 9px; padding: 8px 0; font-size: 0.82rem; border-bottom: 1px solid var(--border); }
     .repeat-date-item:last-child { border-bottom: none; }
-    .repeat-date-item .repeat-num { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: white; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .repeat-date-item .repeat-num { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: white; font-size: 0.68rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .repeat-date-copy { display: grid; gap: 2px; min-width: 0; }
+    .repeat-date-title { color: var(--primary); font-weight: 700; }
+    .repeat-date-subtitle { color: var(--muted); font-size: 0.74rem; }
     .repeat-date-item.conflict .repeat-num { background: var(--red); }
     .repeat-date-item.conflict { color: var(--red); }
+    .repeat-date-status { margin-left: auto; font-size: 0.72rem; font-weight: 800; color: var(--red); white-space: nowrap; }
     .repeat-total { margin-top: 10px; font-size: 0.82rem; font-weight: 600; color: var(--muted); padding: 8px 10px; background: var(--white); border-radius: 8px; border: 1px solid var(--border); }
     .repeat-conflict-warning { margin-top: 8px; padding: 8px 10px; background: var(--red-lt); border: 1px solid var(--red); border-radius: 8px; font-size: 0.8rem; color: var(--red); }
 
@@ -429,6 +740,31 @@
     .modal-detail-row { display: flex; justify-content: space-between; }
     .modal-detail-row span:first-child { color: var(--muted); }
     .modal-detail-row span:last-child { font-weight: 700; }
+    .modal-detail-row.modal-status-row span:last-child {
+      color: var(--muted);
+      font-style: italic;
+      font-weight: 600;
+    }
+    .modal-detail-row.modal-error-row {
+      align-items: flex-start;
+      gap: 12px;
+      color: var(--red);
+    }
+    .modal-detail-row.modal-error-row span:last-child {
+      color: var(--red);
+      line-height: 1.4;
+      text-align: right;
+      max-width: 68%;
+    }
+    .modal-section-title {
+      margin: 18px 0 8px;
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 800;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
     .modal-credit-note { font-size: 0.825rem; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
     .modal-credit-note strong { color: var(--accent); }
     .modal-actions { display: flex; gap: 12px; }
@@ -541,6 +877,15 @@
     @media (max-width: 700px) {
       .cal-toolbar { gap: 10px; }
       .page { padding: 24px 18px 48px; }
+      .page.has-selected-slot { padding-bottom: 184px; }
+      .time-button-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .time-slot-button { min-height: 64px; }
+      .date-chip { min-width: 72px; }
+      .selected-slot-summary {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .selected-slot-continue { width: 100%; }
     }
   </style>
 <script src="/sidebar.js"></script>
@@ -552,18 +897,10 @@
 <main class="page">
   <h1 class="visually-hidden" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Book a driving lesson</h1>
 
-  <header class="doc-header">
-    <div class="doc-header-left">
-      <span class="doc-stamp">CC</span>
-      <span>Slot feed<span class="doc-meta-dot">·</span>Next available</span>
-    </div>
-    <span>12 weeks ahead</span>
-  </header>
-
   <section class="book-hero">
-    <div class="hero-eyebrow">Pick a slot</div>
-    <h2 class="book-title">Book a <em>lesson</em>.</h2>
-    <p class="book-subtitle">Browse open slots from your instructor. Tap any time to confirm — use hours from your balance or pay for it as a one-off.</p>
+    <div class="hero-eyebrow">Book a lesson</div>
+    <h2 class="book-title">Choose a <em>lesson time</em>.</h2>
+    <p class="book-subtitle">Pick the lesson length, date, and time that work for you. We will only show times your instructor can cover.</p>
   </section>
 
   <!-- Welcome banner -->
@@ -609,6 +946,14 @@
     <p class="postcode-prompt-error" id="postcodeError"></p>
   </div>
 
+  <!-- Lesson length control -->
+  <section class="booking-controls" aria-labelledby="lessonLengthLabel">
+    <div class="control-label" id="lessonLengthLabel">Lesson length</div>
+    <div class="lesson-length-segmented" id="lessonLengthControls" role="group" aria-labelledby="lessonLengthLabel">
+      <button class="lesson-length-option" type="button" disabled>Loading lengths</button>
+    </div>
+  </section>
+
   <!-- Toolbar: instructor filter -->
   <div class="cal-toolbar" id="calToolbar">
     <select class="filter-select" id="instructorFilter">
@@ -621,7 +966,9 @@
     <span id="travelHiddenText"></span>
   </div>
 
-  <!-- Slot feed content -->
+  <div class="sr-live" id="bookingLiveRegion" aria-live="polite"></div>
+
+  <!-- Booking calendar content -->
   <div id="calContent">
     <div id="slot-skeleton">
       <div class="skeleton skeleton-card"></div>
@@ -635,8 +982,17 @@
   <!-- Feed footer -->
   <div class="feed-footer" id="feedFooter" style="display:none">
     <div class="feed-status" id="feedStatus"></div>
-    <button class="btn-load-more" id="btnLoadMore">Show more slots</button>
+    <button class="btn-load-more" id="btnLoadMore">Show later dates</button>
   </div>
+
+  <section class="selected-slot-summary" id="selectedSlotSummary" aria-live="polite" aria-label="Selected lesson time">
+    <div class="selected-slot-copy">
+      <span class="selected-slot-label">Selected time</span>
+      <strong class="selected-slot-title" id="selectedSlotTitle">Choose a time</strong>
+      <span class="selected-slot-meta" id="selectedSlotMeta"></span>
+    </div>
+    <button class="selected-slot-continue" type="button" id="selectedSlotContinue" data-action="continue-selected-slot">Continue</button>
+  </section>
 
 </main>
 
@@ -657,16 +1013,16 @@
           <span>Lesson</span>
           <select id="mdLessonTypeSelect" style="border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:0.9rem;background:var(--white);color:var(--primary);font-weight:600;max-width:60%"></select>
         </div>
-        <div id="mdUsualHint" style="display:none;font-size:0.75rem;color:var(--muted);text-align:right;margin-top:-4px">Using your usual length</div>
+        <div id="mdUsualHint" style="display:none;font-size:0.75rem;color:var(--muted);text-align:right;margin-top:-4px">Selected on the page</div>
         <div class="modal-detail-row" id="mdSingleTypeRow" style="display:none">
           <span>Lesson</span>
           <span id="mdSingleType">—</span>
         </div>
-        <div class="modal-detail-row" id="mdLoadingRow" style="display:none">
+        <div class="modal-detail-row modal-status-row" id="mdLoadingRow" style="display:none">
           <span>Lesson</span>
           <span style="color:var(--muted);font-style:italic">Checking durations…</span>
         </div>
-        <div class="modal-detail-row" id="mdNoFitRow" style="display:none;color:#b91c1c">
+        <div class="modal-detail-row modal-error-row" id="mdNoFitRow" style="display:none">
           <span>Lesson</span>
           <span id="mdNoFitText" style="font-weight:600">No lesson lengths fit this slot</span>
         </div>
@@ -722,6 +1078,7 @@
       </div>
 
       <div style="margin:12px 0">
+        <div class="modal-section-title">Lesson details</div>
         <label for="mdDropoff" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off address (optional)</label>
         <input type="text" id="mdDropoff" placeholder="e.g. School, work, test centre…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
       </div>
@@ -732,6 +1089,14 @@
           <span>Repeat weekly</span>
         </label>
         <div class="repeat-options" id="repeatOptions">
+          <span class="repeat-count-label" id="repeatCountLabel">Book this time for</span>
+          <div class="repeat-count-control" role="group" aria-labelledby="repeatCountLabel">
+            <button class="repeat-count-btn" type="button" data-action="set-repeat-weeks" data-repeat-weeks="2" aria-pressed="false">2</button>
+            <button class="repeat-count-btn" type="button" data-action="set-repeat-weeks" data-repeat-weeks="3" aria-pressed="false">3</button>
+            <button class="repeat-count-btn" type="button" data-action="set-repeat-weeks" data-repeat-weeks="4" aria-pressed="true">4</button>
+            <button class="repeat-count-btn" type="button" data-action="set-repeat-weeks" data-repeat-weeks="6" aria-pressed="false">6</button>
+            <button class="repeat-count-btn" type="button" data-action="set-repeat-weeks" data-repeat-weeks="8" aria-pressed="false">8</button>
+          </div>
           <select class="repeat-weeks-select" id="repeatWeeksSelect">
             <option value="2">2 weeks</option>
             <option value="3">3 weeks</option>

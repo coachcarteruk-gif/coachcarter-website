@@ -19,6 +19,8 @@ let paymentsEnabled = true; // assume true until balance API tells us otherwise
 let instructors   = [];
 let lessonTypes   = [];
 let selectedLessonType = null; // current lesson type object
+let selectedDate  = null;
+let selectedSlot  = null;
 let slotCache     = {}; // dateStr -> [slot, ...]
 let loadedRanges  = [];
 let feedFrom      = null; // Date: start of loaded window (always today)
@@ -160,7 +162,7 @@ function init() {
               const sel = document.getElementById('instructorFilter');
               if (sel.querySelector(`option[value="${booking.instructor_id}"]`)) {
                 sel.value = String(booking.instructor_id);
-                loadedRanges = []; slotCache = {};
+                loadedRanges = []; slotCache = {}; selectedDate = null; clearSelectedSlot();
                 await initFeed();
               }
               startRescheduleMode(
@@ -256,23 +258,107 @@ async function loadLessonTypes() {
     if (!res.ok) throw new Error(data.error);
     lessonTypes = data.lesson_types || [];
     hasFreeTrialSlot = lessonTypes.some(lt => lt && lt.slug === 'trial');
-    // Slot-first: cache the full bookable list (sans trial) and pick the
-    // smallest active duration as the provisional feed duration. The duration
-    // dropdown inside the booking modal is built from this list.
     availableLessonTypes = lessonTypes.filter(lt => lt && lt.slug !== 'trial');
-    if (availableLessonTypes.length > 0) {
-      const minLt = availableLessonTypes.reduce((a, b) => (a.duration_minutes <= b.duration_minutes ? a : b));
-      slotFeedDuration = minLt.duration_minutes;
-      slotFeedLessonTypeId = minLt.id;
-    }
-    // Slot-first: selectedLessonType is set by the modal's duration picker
-    // when the user clicks a slot, not at page-load time. The ?type= URL
-    // params (preselectedTypeSlug / preselectedTypeId) are read directly by
-    // loadDurationsForSlot to drive the dropdown preselect.
+    choosePageLessonType();
+    renderLessonLengthControls();
   } catch (err) {
     console.error('Failed to load lesson types:', err);
     lessonTypes = [{ id: null, name: 'Standard Lesson', slug: 'standard', duration_minutes: 90, price_pence: DEFAULT_PRICE_PENCE, colour: '#3b82f6' }];
+    availableLessonTypes = lessonTypes.slice();
+    choosePageLessonType();
+    renderLessonLengthControls();
   }
+}
+
+function normaliseLessonType(lt) {
+  if (!lt) return null;
+  return { ...lt, id: lt.id || lt.lesson_type_id };
+}
+
+function choosePageLessonType() {
+  if (!availableLessonTypes.length) {
+    selectedLessonType = null;
+    slotFeedLessonTypeId = null;
+    return;
+  }
+
+  let chosen = null;
+  if (selectedLessonType && selectedLessonType.id) {
+    chosen = availableLessonTypes.find(lt => String(lt.id || lt.lesson_type_id) === String(selectedLessonType.id));
+  }
+  if (!chosen && preselectedTypeSlug) {
+    chosen = availableLessonTypes.find(lt => lt.slug === preselectedTypeSlug);
+  }
+  if (!chosen && preselectedTypeId) {
+    chosen = availableLessonTypes.find(lt => String(lt.id || lt.lesson_type_id) === String(preselectedTypeId));
+  }
+  if (!chosen) {
+    try {
+      const lastId = localStorage.getItem('cc_last_lesson_type_id');
+      if (lastId) chosen = availableLessonTypes.find(lt => String(lt.id || lt.lesson_type_id) === String(lastId));
+    } catch (_) {}
+  }
+  if (!chosen) {
+    chosen = availableLessonTypes.reduce((a, b) => (a.duration_minutes <= b.duration_minutes ? a : b));
+  }
+
+  selectedLessonType = normaliseLessonType(chosen);
+  slotFeedDuration = selectedLessonType.duration_minutes;
+  slotFeedLessonTypeId = selectedLessonType.id;
+}
+
+function lessonLengthLabel(lt) {
+  if (!lt) return 'Lesson';
+  const mins = Number(lt.duration_minutes || 0);
+  if (mins === 120) return '2 hr';
+  if (mins > 0 && mins % 60 === 0) return `${mins / 60} hr`;
+  return `${mins} min`;
+}
+
+function renderLessonLengthControls() {
+  const container = document.getElementById('lessonLengthControls');
+  if (!container) return;
+  if (!availableLessonTypes.length) {
+    container.innerHTML = '<button class="lesson-length-option" type="button" disabled>No lesson lengths available</button>';
+    return;
+  }
+  container.innerHTML = availableLessonTypes
+    .slice()
+    .sort((a, b) => a.duration_minutes - b.duration_minutes)
+    .map(lt => {
+      const id = lt.id || lt.lesson_type_id;
+      const selected = selectedLessonType && String(selectedLessonType.id) === String(id);
+      const label = lessonLengthLabel(lt);
+      const fullLabel = `${lt.name || label}, ${formatHours(lt.duration_minutes)}`;
+      return `<button class="lesson-length-option" type="button"
+        data-action="select-lesson-type"
+        data-lesson-type-id="${esc(id)}"
+        aria-pressed="${selected ? 'true' : 'false'}"
+        aria-label="${esc(fullLabel)}">${esc(label)}</button>`;
+    })
+    .join('');
+}
+
+function selectLessonType(lessonTypeId) {
+  const next = availableLessonTypes.find(lt => String(lt.id || lt.lesson_type_id) === String(lessonTypeId));
+  if (!next) return;
+  selectedLessonType = normaliseLessonType(next);
+  slotFeedDuration = selectedLessonType.duration_minutes;
+  slotFeedLessonTypeId = selectedLessonType.id;
+  selectedDate = null;
+  clearSelectedSlot();
+  loadedRanges = [];
+  slotCache = {};
+  overflowMode = false;
+  overflowCache = null;
+  overflowFingerprint = null;
+  setLastLessonType(selectedLessonType);
+  renderLessonLengthControls();
+  initFeed();
+  window.posthog && posthog.capture('booking_lesson_length_selected', {
+    lesson_type_slug: selectedLessonType.slug,
+    duration_minutes: selectedLessonType.duration_minutes
+  });
 }
 
 // ─── Instructors ─────────────────────────────────────────────────────────────
@@ -362,6 +448,8 @@ async function savePickupPostcode() {
     // Re-fetch slots with travel filter now active
     loadedRanges = [];
     slotCache = {};
+    selectedDate = null;
+    clearSelectedSlot();
     initFeed();
   } catch (err) {
     errEl.textContent = err.message || 'Failed to save';
@@ -427,21 +515,22 @@ function getLearnerPostcode() {
 }
 
 // ─── Feed controls ──────────────────────────────────────────────────────────
-function onFilterChange() {
+async function onFilterChange() {
   loadedRanges = []; slotCache = {};
+  selectedDate = null;
+  clearSelectedSlot();
   // Lesson-type / postcode filters affect alternatives too — overflow cache is per (ltId|postcode).
   // Instructor change just re-runs initFeed() which will rebuild overflow detection from scratch.
   overflowMode = false;
   overflowCache = null;
   overflowFingerprint = null;
-  loadLessonTypes();
+  await loadLessonTypes();
   initFeed();
 }
 
 async function initFeed() {
-  // Slot-first: feed loads at the smallest active duration regardless of any
-  // single "selected" lesson type. The API emits starts on the booking
-  // increment; the final duration is picked inside the modal.
+  choosePageLessonType();
+  renderLessonLengthControls();
   feedFrom = new Date(); feedFrom.setHours(0,0,0,0);
   feedTo = addDaysLocal(feedFrom, FEED_CHUNK_DAYS - 1);
   const maxDate = addDaysLocal(feedFrom, FEED_MAX_DAYS);
@@ -511,10 +600,8 @@ async function fetchFeedSlots(fromDate, toDate, opts) {
   if (to > maxDate) to = maxDate;
 
   const instructorId = opts.omitInstructor ? '' : document.getElementById('instructorFilter').value;
-  // Slot-first: feed renders from a provisional duration, agnostic of which
-  // lesson type the learner will eventually pick. The lesson_type_id sets
-  // that provisional slot length; min_duration_only=1 tells the API to skip the
-  // offered_lesson_types filter (per-duration check happens on slot click).
+  // The page-level lesson length sets the rendered slot length. The later
+  // durations-for-slot call remains the server validation before booking.
   const ltId = slotFeedLessonTypeId || (selectedLessonType && selectedLessonType.id) || '';
   const cacheKey = `${from}|${to}|${instructorId}|${ltId}|mdo`;
   if (!opts.skipRangeDedup && loadedRanges.includes(cacheKey)) return true;
@@ -571,8 +658,255 @@ async function fetchFeedSlots(fromDate, toDate, opts) {
   }
 }
 
-// Build the inner slot-feed HTML (date headers + cards) from a flat slot list.
-// Shared by the normal feed and the overflow-alternatives feed.
+function getDateRangeStrings(fromDate, toDate) {
+  const dates = [];
+  if (!fromDate || !toDate) return dates;
+  let cursor = new Date(fromDate);
+  cursor.setHours(0,0,0,0);
+  const end = new Date(toDate);
+  end.setHours(0,0,0,0);
+  while (cursor <= end) {
+    dates.push(fmtDate(cursor));
+    cursor = addDaysLocal(cursor, 1);
+  }
+  return dates;
+}
+
+function getVisibleSlotsFromCache(cache) {
+  const allSlots = [];
+  const fromStr = fmtDate(feedFrom);
+  const toStr = fmtDate(feedTo);
+  for (const ds in (cache || {})) {
+    if (ds < fromStr || ds > toStr) continue;
+    for (const s of cache[ds]) allSlots.push(s);
+  }
+  allSlots.sort(sortSlots);
+  return allSlots;
+}
+
+function sortSlots(a, b) {
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+  if (a.start_time !== b.start_time) return a.start_time < b.start_time ? -1 : 1;
+  return String(a.instructor_name || '').localeCompare(String(b.instructor_name || ''));
+}
+
+function ensureSelectedDate(cache) {
+  const dateRange = getDateRangeStrings(feedFrom, feedTo);
+  if (selectedDate && dateRange.includes(selectedDate)) return selectedDate;
+  const firstWithSlots = dateRange.find(ds => cache && cache[ds] && cache[ds].length > 0);
+  selectedDate = firstWithSlots || dateRange[0] || null;
+  return selectedDate;
+}
+
+function dateDisplayParts(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const isToday = dateStr === fmtDate(today);
+  const isTomorrow = dateStr === fmtDate(addDaysLocal(today, 1));
+  return {
+    day: isToday ? 'Today' : isTomorrow ? 'Tomorrow' : DAY_SHORT[d.getDay()],
+    date: `${d.getDate()} ${MON_SHORT[d.getMonth()]}`,
+    full: d.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
+  };
+}
+
+function renderDateStrip(cache) {
+  const dates = getDateRangeStrings(feedFrom, feedTo);
+  if (!dates.length) return '';
+  const buttons = dates.map(ds => {
+    const count = cache && cache[ds] ? cache[ds].length : 0;
+    const selected = ds === selectedDate;
+    const parts = dateDisplayParts(ds);
+    const state = count > 0 ? `${count} slot${count === 1 ? '' : 's'}` : 'Full';
+    const label = `${parts.full}, ${count > 0 ? state + ' available' : 'no slots available'}`;
+    return `<button class="date-chip${count === 0 ? ' no-slots' : ''}" type="button"
+      data-action="select-date"
+      data-date="${esc(ds)}"
+      aria-pressed="${selected ? 'true' : 'false'}"
+      ${selected ? 'aria-current="date"' : ''}
+      aria-label="${esc(label)}">
+      <span class="date-chip-day">${esc(parts.day)}</span>
+      <span class="date-chip-date">${esc(parts.date)}</span>
+      <span class="date-chip-state">${esc(state)}</span>
+    </button>`;
+  }).join('');
+  return `<div class="date-strip-wrap" aria-label="Available dates"><div class="date-strip">${buttons}</div></div>`;
+}
+
+function slotStartMinutes(slot) {
+  const [h, m] = String(slot.start_time || '00:00').split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function formatTimeDisplay(time) {
+  return String(time || '').slice(0, 5);
+}
+
+function slotKeyFromParts(date, start, instructorId, transmissionType) {
+  return `${date || ''}|${start || ''}|${instructorId || ''}|${normaliseTransmissionType(transmissionType) || ''}`;
+}
+
+function slotKeyFromDataset(dataset) {
+  return slotKeyFromParts(dataset.date, dataset.start, dataset.instructorId, dataset.transmissionType);
+}
+
+function slotKeyFromSlot(slot) {
+  return slotKeyFromParts(slot.date, slot.start_time, slot.instructor_id, slot.transmission_type);
+}
+
+function renderTimeGroups(slotsForDate, opts) {
+  opts = opts || {};
+  if (!selectedDate) return '';
+  const selectedParts = dateDisplayParts(selectedDate);
+  if (!slotsForDate.length) {
+    return `<div class="calendar-empty">
+      <h3>No times on ${esc(selectedParts.day.toLowerCase() === 'today' || selectedParts.day.toLowerCase() === 'tomorrow' ? selectedParts.day : selectedParts.date)}</h3>
+      <p>Choose another date above or show later dates.</p>
+    </div>`;
+  }
+
+  const groups = [
+    { key: 'morning', label: 'Morning', slots: [] },
+    { key: 'afternoon', label: 'Afternoon', slots: [] },
+    { key: 'evening', label: 'Evening', slots: [] }
+  ];
+  for (const slot of slotsForDate.slice().sort(sortSlots)) {
+    const mins = slotStartMinutes(slot);
+    if (mins < 12 * 60) groups[0].slots.push(slot);
+    else if (mins < 17 * 60) groups[1].slots.push(slot);
+    else groups[2].slots.push(slot);
+  }
+
+  const showInstructor = opts.showInstructor;
+  const selectedLength = selectedLessonType ? `${formatHours(selectedLessonType.duration_minutes)} lesson` : 'lesson';
+  const html = groups
+    .filter(group => group.slots.length > 0)
+    .map(group => {
+      const buttons = group.slots.map(s => {
+        const transmission = normaliseTransmissionType(s.transmission_type) || 'both';
+        const instructorName = s.instructor_name || 'Instructor';
+        const avatar = s.instructor_avatar
+          ? `<span class="slot-avatar"><img src="${esc(s.instructor_avatar)}" alt=""></span>`
+          : `<span class="slot-avatar">${esc((instructorName || '?')[0])}</span>`;
+        const meta = showInstructor
+          ? `${avatar}${esc(instructorName)} · ${esc(transmissionLabel(transmission))}`
+          : esc(transmissionLabel(transmission));
+        const accessible = `Select ${formatTimeDisplay(s.start_time)} with ${instructorName}, ${transmissionLabel(transmission)}, ${selectedLength}`;
+        const isSelected = !!selectedSlot && slotKeyFromSlot(s) === slotKeyFromDataset(selectedSlot);
+        return `<button class="time-slot-button" type="button"
+          data-action="select-slot"
+          data-instructor-id="${esc(s.instructor_id)}"
+          data-date="${esc(s.date)}"
+          data-start="${esc(s.start_time)}"
+          data-end="${esc(s.end_time)}"
+          data-transmission-type="${esc(transmission)}"
+          data-instructor-name="${esc(instructorName)}"
+          aria-pressed="${isSelected ? 'true' : 'false'}"
+          aria-label="${esc(accessible)}">
+          <span class="time-slot-main">${esc(formatTimeDisplay(s.start_time))}</span>
+          <span class="time-slot-meta">${meta}</span>
+        </button>`;
+      }).join('');
+      return `<section class="time-group" aria-labelledby="timeGroup${group.key}">
+        <h3 class="time-group-title" id="timeGroup${group.key}">${group.label}</h3>
+        <div class="time-button-grid">${buttons}</div>
+      </section>`;
+    })
+    .join('');
+  return `<div class="time-groups">${html}</div>`;
+}
+
+function renderBookingCalendar(cache, opts) {
+  opts = opts || {};
+  ensureSelectedDate(cache);
+  const slotsForDate = ((cache && cache[selectedDate]) || []).slice().sort(sortSlots);
+  const dateStrip = renderDateStrip(cache);
+  const timeGroups = renderTimeGroups(slotsForDate, opts);
+  const live = document.getElementById('bookingLiveRegion');
+  if (live && selectedDate) {
+    const parts = dateDisplayParts(selectedDate);
+    live.textContent = `Showing ${slotsForDate.length} time${slotsForDate.length === 1 ? '' : 's'} for ${parts.full}`;
+  }
+  return `<div class="booking-calendar">${dateStrip}${timeGroups}</div>`;
+}
+
+function selectDate(dateStr) {
+  selectedDate = dateStr;
+  clearSelectedSlot();
+  renderFeed();
+}
+
+function slotDatasetFromButton(buttonEl) {
+  return {
+    instructorId: buttonEl.dataset.instructorId || '',
+    date: buttonEl.dataset.date || '',
+    start: buttonEl.dataset.start || '',
+    end: buttonEl.dataset.end || '',
+    transmissionType: normaliseTransmissionType(buttonEl.dataset.transmissionType) || 'both',
+    instructorName: buttonEl.dataset.instructorName || 'Instructor'
+  };
+}
+
+function setPressedSlotState() {
+  document.querySelectorAll('[data-action="select-slot"]').forEach(button => {
+    const isSelected = !!selectedSlot && slotKeyFromDataset(button.dataset) === slotKeyFromDataset(selectedSlot);
+    button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+  });
+}
+
+function selectedSlotDateLabel() {
+  if (!selectedSlot || !selectedSlot.date) return '';
+  const parts = dateDisplayParts(selectedSlot.date);
+  return parts.day === 'Today' || parts.day === 'Tomorrow' ? parts.day : parts.full.replace(/\s+\d{4}$/, '');
+}
+
+function renderSelectedSlotSummary() {
+  const summary = document.getElementById('selectedSlotSummary');
+  const page = document.querySelector('.page');
+  if (!summary || !page) return;
+
+  if (!selectedSlot) {
+    summary.classList.remove('is-visible');
+    page.classList.remove('has-selected-slot');
+    return;
+  }
+
+  const title = document.getElementById('selectedSlotTitle');
+  const meta = document.getElementById('selectedSlotMeta');
+  const cta = document.getElementById('selectedSlotContinue');
+  const dateLabel = selectedSlotDateLabel();
+  const lengthLabel = selectedLessonType ? formatHours(selectedLessonType.duration_minutes) : 'Selected length';
+  const transmission = transmissionLabel(selectedSlot.transmissionType);
+  title.textContent = `${dateLabel} at ${formatTimeDisplay(selectedSlot.start)}`;
+  meta.textContent = `${selectedSlot.instructorName} · ${lengthLabel} · ${transmission} · Credit or payment checked next`;
+  cta.textContent = pendingReschedule ? 'Move lesson' : 'Continue';
+  summary.classList.add('is-visible');
+  page.classList.add('has-selected-slot');
+}
+
+function clearSelectedSlot() {
+  selectedSlot = null;
+  setPressedSlotState();
+  renderSelectedSlotSummary();
+}
+
+function selectSlotFromButton(buttonEl) {
+  selectedSlot = slotDatasetFromButton(buttonEl);
+  selectedDate = selectedSlot.date || selectedDate;
+  setPressedSlotState();
+  renderSelectedSlotSummary();
+  const live = document.getElementById('bookingLiveRegion');
+  if (live) {
+    live.textContent = `Selected ${formatTimeDisplay(selectedSlot.start)} with ${selectedSlot.instructorName}. Continue to review.`;
+  }
+}
+
+function continueSelectedSlot() {
+  if (!selectedSlot) return;
+  openBookModal({ dataset: selectedSlot });
+}
+
+// Legacy helper retained for older fallback surfaces; cards are real buttons.
 function buildSlotFeedHtml(allSlots) {
   const today = new Date(); today.setHours(0,0,0,0);
   let html = '<div class="slot-feed">';
@@ -595,13 +929,17 @@ function buildSlotFeedHtml(allSlots) {
     const avatar = s.instructor_avatar
       ? `<span class="slot-avatar"><img src="${esc(s.instructor_avatar)}" alt=""></span>`
       : `<span class="slot-avatar">${esc((s.instructor_name || '?')[0])}</span>`;
-    html += `<div class="feed-card" data-action="open-book-modal"
+    const accessible = `Select ${timeStr} with ${s.instructor_name || 'Instructor'}, ${transmissionLabel(transmission)}`;
+    const isSelected = !!selectedSlot && slotKeyFromSlot(s) === slotKeyFromDataset(selectedSlot);
+    html += `<button class="feed-card" type="button" data-action="select-slot"
       data-instructor-id="${s.instructor_id}"
       data-date="${s.date}"
       data-start="${s.start_time}"
       data-end="${s.end_time}"
       data-transmission-type="${transmission}"
-      data-instructor-name="${esc(s.instructor_name || '')}">
+      data-instructor-name="${esc(s.instructor_name || '')}"
+      aria-pressed="${isSelected ? 'true' : 'false'}"
+      aria-label="${esc(accessible)}">
       <div class="feed-card-accent" style="background:${colour}"></div>
       <div class="feed-card-body">
         <div class="feed-card-time">${timeStr}</div>
@@ -609,7 +947,7 @@ function buildSlotFeedHtml(allSlots) {
         <div class="feed-card-meta">${transmissionLabel(transmission)}</div>
       </div>
       <svg class="feed-card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-    </div>`;
+    </button>`;
   }
   html += '</div>';
   return html;
@@ -624,18 +962,7 @@ function renderFeed() {
     const fullName = (chosen && chosen.name) || 'this instructor';
     const firstName = fullName.includes(' ') ? fullName.split(' ')[0] : fullName;
 
-    // Render alternatives within the same date window as the normal feed.
-    const altSlots = [];
-    const fromStr = fmtDate(feedFrom);
-    const toStr = fmtDate(feedTo);
-    for (const ds in (overflowCache || {})) {
-      if (ds < fromStr || ds > toStr) continue;
-      for (const s of overflowCache[ds]) altSlots.push(s);
-    }
-    altSlots.sort((a, b) => {
-      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-      return a.start_time < b.start_time ? -1 : 1;
-    });
+    const altSlots = getVisibleSlotsFromCache(overflowCache);
 
     if (altSlots.length === 0) {
       // Edge case: even alternatives have no slots in the loaded window.
@@ -646,8 +973,8 @@ function renderFeed() {
         <div class="empty-state">
           <div class="empty-icon">📅</div>
           <h3>No slots with ${esc(firstName)} in the next 12 weeks.</h3>
-          <p>No slots found with our other instructors either. Try a different lesson type or check back later.</p>
-        </div>`;
+        <p>No slots found with our other instructors either. Try a different lesson type or check back later.</p>
+      </div>`;
       updateFeedFooter(0);
       return;
     }
@@ -656,24 +983,14 @@ function renderFeed() {
       <div class="overflow-section">
         <h3 class="overflow-heading">No slots with ${esc(firstName)} in the next 12 weeks.</h3>
         <p class="overflow-subhead">Slots with our other instructors:</p>
-        ${buildSlotFeedHtml(altSlots)}
+        ${renderBookingCalendar(overflowCache, { showInstructor: true })}
       </div>`;
     document.getElementById('calContent').innerHTML = html;
     updateFeedFooter(altSlots.length);
     return;
   }
 
-  const allSlots = [];
-  const fromStr = fmtDate(feedFrom);
-  const toStr = fmtDate(feedTo);
-  for (const ds in slotCache) {
-    if (ds < fromStr || ds > toStr) continue;
-    for (const s of slotCache[ds]) allSlots.push(s);
-  }
-  allSlots.sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-    return a.start_time < b.start_time ? -1 : 1;
-  });
+  const allSlots = getVisibleSlotsFromCache(slotCache);
 
   if (allSlots.length === 0) {
     document.getElementById('calContent').innerHTML = `
@@ -686,7 +1003,8 @@ function renderFeed() {
     return;
   }
 
-  document.getElementById('calContent').innerHTML = buildSlotFeedHtml(allSlots);
+  const showInstructor = !document.getElementById('instructorFilter').value;
+  document.getElementById('calContent').innerHTML = renderBookingCalendar(slotCache, { showInstructor });
   updateFeedFooter(allSlots.length);
 }
 
@@ -705,7 +1023,7 @@ function updateFeedFooter(slotCount) {
     : 'No slots found in this period';
   btn.style.display = atMax ? 'none' : 'inline-block';
   btn.disabled = false;
-  btn.textContent = 'Show more slots';
+  btn.textContent = 'Show later dates';
 }
 
 async function loadMoreSlots() {
@@ -722,7 +1040,7 @@ async function loadMoreSlots() {
   feedTo = newTo;
   const ok = await fetchFeedSlots(newFrom, newTo);
   if (ok !== false) renderFeed();
-  else { btn.disabled = false; btn.textContent = 'Show more slots'; }
+  else { btn.disabled = false; btn.textContent = 'Show later dates'; }
 }
 window.loadMoreSlots = loadMoreSlots;
 
@@ -831,9 +1149,10 @@ function openBookModal(el) {
   document.getElementById('mdNoFitRow').style.display = 'none';
   document.getElementById('mdLoadingRow').style.display = 'flex';
   document.getElementById('mdDuration').textContent = '—';
+  document.getElementById('modalCreditPath').style.display = 'none';
+  document.getElementById('modalPayPath').style.display = 'none';
   document.getElementById('btnPayAndBook').disabled = true;
   document.getElementById('btnConfirmBook') && (document.getElementById('btnConfirmBook').disabled = true);
-  selectedLessonType = null;
 
   // Guest vs authed UI scaffolding (independent of duration choice).
   if (isGuest) {
@@ -934,12 +1253,65 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
       document.getElementById('mdNoFitText').textContent = reasonText;
       document.getElementById('mdNoFitRow').style.display = 'flex';
       document.getElementById('mdDuration').textContent = '—';
+      document.getElementById('modalCreditPath').style.display = 'none';
+      document.getElementById('modalPayPath').style.display = 'none';
       // Disable both confirm paths; user has to close + pick another slot.
       document.getElementById('btnPayAndBook').disabled = true;
       const credBtn = document.getElementById('btnConfirmBook');
       if (credBtn) credBtn.disabled = true;
       return;
     }
+
+    const requestedId = selectedLessonType && selectedLessonType.id ? String(selectedLessonType.id) : '';
+    const validatedType = requestedId
+      ? fitting.find(d => String(d.lesson_type_id) === requestedId)
+      : fitting[0];
+
+    if (!validatedType) {
+      const requested = requestedId
+        ? durations.find(d => String(d.lesson_type_id) === requestedId)
+        : null;
+      const reason = requested && requested.reason;
+      const reasonText = reason === 'travel' ? 'travel time prevents this lesson length here'
+                       : reason === 'clash' ? 'this length clashes with an existing booking'
+                       : reason === 'window' ? 'this lesson length runs outside the instructor\'s available window'
+                       : reason === 'notice' ? 'this time is too short notice for that length'
+                       : reason === 'advance' ? 'this date is outside the instructor\'s booking window'
+                       : reason === 'not_offered' ? 'this instructor does not offer that length'
+                       : 'the selected lesson length does not fit this time';
+      document.getElementById('mdNoFitText').textContent = `${selectedLessonType ? selectedLessonType.name : 'Selected lesson'}: ${reasonText}. Choose another time or lesson length.`;
+      document.getElementById('mdNoFitRow').style.display = 'flex';
+      document.getElementById('mdDuration').textContent = '—';
+      document.getElementById('modalCreditPath').style.display = 'none';
+      document.getElementById('modalPayPath').style.display = 'none';
+      document.getElementById('btnPayAndBook').disabled = true;
+      const credBtn = document.getElementById('btnConfirmBook');
+      if (credBtn) credBtn.disabled = true;
+      window.posthog && posthog.capture('selected_duration_no_fit', {
+        instructor_id: slot.instructor_id,
+        date: slot.date,
+        start_time: slot.start_time,
+        lesson_type_slug: selectedLessonType?.slug,
+        reason: reason || null
+      });
+      return;
+    }
+
+    document.getElementById('mdSingleType').textContent = `${validatedType.name} - ${formatHours(validatedType.duration_minutes)} - £${(validatedType.price_pence / 100).toFixed(2)}`;
+    document.getElementById('mdSingleTypeRow').style.display = 'flex';
+    const pageSelectedHint = document.getElementById('mdUsualHint');
+    if (pageSelectedHint) pageSelectedHint.style.display = 'block';
+    applyLessonTypeToModal(validatedType, isGuest, needsProfileFields);
+    window.posthog && posthog.capture('duration_selected', {
+      lesson_type_slug: validatedType.slug,
+      duration_minutes: validatedType.duration_minutes,
+      price_pence: validatedType.price_pence,
+      was_preselected: true,
+      source: requestedId ? 'page_control' : 'default',
+      fits: true,
+      all_options: durations.map(d => d.slug)
+    });
+    return;
 
     // Auto-collapse when there's only one option for the school AND only one fits.
     if (durations.length === 1 && fitting.length === 1) {
@@ -974,15 +1346,19 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
       opt.textContent = `${d.name} — ${formatHours(d.duration_minutes)} — unavailable (${why})`;
       select.appendChild(opt);
     }
-    // Preselect order: ?type= URL slug → cc_last_lesson_type_id (returning
-    // learner default) → first fitting (smallest). No expiry on the
-    // localStorage value — driving lessons are infrequent, want stickiness.
+    // Preselect order: page-level lesson length → ?type= URL slug →
+    // cc_last_lesson_type_id (returning learner default) → first fitting
+    // (smallest). No expiry on localStorage; lessons are infrequent.
     let preselected = null;
     let preselectSource = 'default';
-    if (preselectedTypeSlug) {
+    if (selectedLessonType && selectedLessonType.id) {
+      preselected = fitting.find(d => String(d.lesson_type_id) === String(selectedLessonType.id));
+      if (preselected) preselectSource = 'page_control';
+    }
+    if (!preselected && preselectedTypeSlug) {
       preselected = fitting.find(d => d.slug === preselectedTypeSlug);
       if (preselected) preselectSource = 'url_param';
-    } else if (preselectedTypeId) {
+    } else if (!preselected && preselectedTypeId) {
       preselected = fitting.find(d => String(d.lesson_type_id) === String(preselectedTypeId));
       if (preselected) preselectSource = 'url_param';
     }
@@ -1033,6 +1409,8 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
     document.getElementById('mdLoadingRow').style.display = 'none';
     document.getElementById('mdNoFitText').textContent = 'Could not load lesson options. Please try another slot.';
     document.getElementById('mdNoFitRow').style.display = 'flex';
+    document.getElementById('modalCreditPath').style.display = 'none';
+    document.getElementById('modalPayPath').style.display = 'none';
   }
 }
 
@@ -1072,6 +1450,7 @@ function closeBookModal() {
   document.getElementById('bookModal').classList.remove('open');
   document.getElementById('repeatToggle').checked = false;
   document.getElementById('repeatOptions').classList.remove('open');
+  setRepeatWeeks(4, { skipUpdate: true });
   repeatConflicts = [];
   setTimeout(() => {
     document.getElementById('bookConfirmStep').style.display = 'block';
@@ -1085,6 +1464,7 @@ let repeatConflicts = [];
 function toggleRepeatOptions() {
   const open = document.getElementById('repeatToggle').checked;
   document.getElementById('repeatOptions').classList.toggle('open', open);
+  syncRepeatCountButtons();
   if (open) updateRepeatDates();
   updateDeductDisplay();
 }
@@ -1092,6 +1472,26 @@ function toggleRepeatOptions() {
 function getRepeatWeeks() {
   if (!document.getElementById('repeatToggle').checked) return 1;
   return parseInt(document.getElementById('repeatWeeksSelect').value, 10);
+}
+
+function syncRepeatCountButtons() {
+  const select = document.getElementById('repeatWeeksSelect');
+  if (!select) return;
+  document.querySelectorAll('.repeat-count-btn').forEach(btn => {
+    const selected = btn.dataset.repeatWeeks === select.value;
+    btn.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  });
+}
+
+function setRepeatWeeks(weeks, opts) {
+  opts = opts || {};
+  const select = document.getElementById('repeatWeeksSelect');
+  if (!select) return;
+  select.value = String(weeks);
+  syncRepeatCountButtons();
+  if (!opts.skipUpdate && document.getElementById('repeatToggle')?.checked) {
+    updateRepeatDates();
+  }
 }
 
 async function updateRepeatDates() {
@@ -1135,17 +1535,21 @@ async function updateRepeatDates() {
   container.innerHTML = dates.map((d, i) => {
     const display = new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
     const isConflict = repeatConflicts.includes(d);
+    const title = i === 0 ? 'First lesson' : `Lesson ${i + 1}`;
     return `<div class="repeat-date-item${isConflict ? ' conflict' : ''}">
       <span class="repeat-num">${i + 1}</span>
-      <span>${display} at ${pendingSlot.start_time}</span>
-      ${isConflict ? '<span style="margin-left:auto;font-weight:600">Unavailable</span>' : ''}
+      <span class="repeat-date-copy">
+        <span class="repeat-date-title">${title}</span>
+        <span class="repeat-date-subtitle">${display} at ${pendingSlot.start_time}</span>
+      </span>
+      ${isConflict ? '<span class="repeat-date-status">Unavailable</span>' : ''}
     </div>`;
   }).join('');
 
   // Conflict warning
   const warning = document.getElementById('repeatConflictWarning');
   if (repeatConflicts.length > 0) {
-    warning.textContent = `${repeatConflicts.length} slot(s) unavailable. All slots must be free to book a series.`;
+    warning.textContent = `${repeatConflicts.length} repeat date${repeatConflicts.length === 1 ? '' : 's'} unavailable. Pick fewer lessons or choose another time.`;
     warning.style.display = 'block';
   } else {
     warning.style.display = 'none';
@@ -1400,6 +1804,8 @@ function showBookSuccess(weeks, dates) {
 function refreshAfterBooking() {
   // Clear cache and reload
   loadedRanges = []; slotCache = {};
+  selectedDate = null;
+  clearSelectedSlot();
   Promise.all([loadUpcoming(), initFeed()]);
 }
 
@@ -1547,6 +1953,8 @@ async function confirmCancel() {
     document.getElementById('cancelModal').classList.remove('open');
     showToast(data.message, data.credit_returned !== false ? 'success' : '');
     loadedRanges = []; slotCache = {};
+    selectedDate = null;
+    clearSelectedSlot();
     await Promise.all([loadUpcoming(), initFeed()]);
   } catch (err) {
     showToast(err.message || 'Cancellation failed.', 'error');
@@ -1569,6 +1977,7 @@ window.startRescheduleMode = startRescheduleMode;
 function cancelRescheduleMode() {
   pendingReschedule = null;
   document.getElementById('rescheduleBanner').style.display = 'none';
+  renderSelectedSlotSummary();
 }
 window.cancelRescheduleMode = cancelRescheduleMode;
 
@@ -1617,6 +2026,8 @@ async function confirmReschedule(newSlot) {
     cancelRescheduleMode();
     showToast(data.message || 'Lesson rescheduled successfully!', 'success');
     loadedRanges = []; slotCache = {};
+    selectedDate = null;
+    clearSelectedSlot();
     await Promise.all([loadUpcoming(), initFeed()]);
   } catch (err) {
     showToast(err.message || 'Reschedule failed.', 'error');
@@ -1712,6 +2123,16 @@ document.addEventListener('click', function (e) {
   var action = target.dataset.action;
   if (action === 'open-book-modal') {
     openBookModal(target);
+  } else if (action === 'select-slot') {
+    selectSlotFromButton(target);
+  } else if (action === 'continue-selected-slot') {
+    continueSelectedSlot();
+  } else if (action === 'select-lesson-type') {
+    selectLessonType(target.dataset.lessonTypeId);
+  } else if (action === 'select-date') {
+    selectDate(target.dataset.date);
+  } else if (action === 'set-repeat-weeks') {
+    setRepeatWeeks(target.dataset.repeatWeeks);
   }
 });
 
@@ -1736,7 +2157,7 @@ document.addEventListener('click', function (e) {
   var repeatToggle = document.getElementById('repeatToggle');
   if (repeatToggle) repeatToggle.addEventListener('change', toggleRepeatOptions);
   var repeatWeeks = document.getElementById('repeatWeeksSelect');
-  if (repeatWeeks) repeatWeeks.addEventListener('change', updateRepeatDates);
+  if (repeatWeeks) repeatWeeks.addEventListener('change', function () { syncRepeatCountButtons(); updateRepeatDates(); });
   var cancelSeries = document.getElementById('cancelSeriesCheck');
   if (cancelSeries) cancelSeries.addEventListener('change', toggleCancelSeriesInfo);
   var cancelAck = document.getElementById('cancelAckCheck');
