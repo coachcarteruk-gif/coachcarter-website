@@ -59,6 +59,8 @@ async function setupPortalPage(page, previews) {
     window.__executeCalls = [];
     window.__manualBankCalls = [];
     window.__refundNoteCalls = [];
+    window.__refundEventSearchCalls = [];
+    window.__refundEventDetailCalls = [];
     window.ccAdminAuth = {
       logout: () => {},
       fetchAuthed: async (url, options = {}) => {
@@ -87,6 +89,47 @@ async function setupPortalPage(page, previews) {
         if (url.includes('action=record-manual-bank-refund')) {
           window.__manualBankCalls.push(JSON.parse(options.body || '{}'));
           return json({ error: true, code: 'SIMULATED_MANUAL_BANK_HOLD', message: 'Simulated manual bank response.' }, 502);
+        }
+        if (url.includes('action=refund-events')) {
+          if (url.includes('refund_event_id=')) {
+            window.__refundEventDetailCalls.push(url);
+            return json({
+              ok: true,
+              event: {
+                id: 900,
+                learner_id: 61,
+                learner_name: 'Alex Learner',
+                learner_email: 'alex@example.test',
+                refund_type: 'direct_slot',
+                status: 'executed',
+                gross_refund_pence: 8250,
+                processing_fee_withheld_pence: 144,
+                net_refund_pence: 8106,
+                stripe_refund_id: 're_slot_900',
+                idempotency_key: 'refund-ui-900',
+                metadata: { refund_channel: 'manual_bank', evidence_reference: 'OPS-900' },
+                created_at: '2026-06-03T10:00:00.000Z',
+              },
+              lines: [{ id: 1, lesson_booking_id: 7001, gross_pence_removed: 8250, source_fee_pence_used: 144, fee_withheld_pence: 144, net_refund_pence: 8106 }],
+              notes: [{ id: 8, note_type: 'incident', incident_status: 'watching', body: 'Incident context only.', created_at: '2026-06-03T11:00:00.000Z' }],
+            });
+          }
+          window.__refundEventSearchCalls.push(url);
+          return json({
+            ok: true,
+            events: [{
+              id: 900,
+              learner_id: 61,
+              learner_name: 'Alex Learner',
+              learner_email: 'alex@example.test',
+              refund_type: 'direct_slot',
+              status: 'executed',
+              net_refund_pence: 8106,
+              stripe_refund_id: 're_slot_900',
+              idempotency_key: 'refund-ui-900',
+              created_at: '2026-06-03T10:00:00.000Z',
+            }],
+          });
         }
         if (url.includes('action=refund-notes')) return json({ ok: true, notes: [] });
         if (url.includes('action=add-refund-note')) {
@@ -282,6 +325,58 @@ test.describe('admin refund preview UI', () => {
     expect(addNote).toContain("btn.disabled = false");
     expect(addNote).not.toContain('gross_refund_pence');
     expect(addNote).not.toContain('stripe_refund_id');
+  });
+
+  test('adds refund-event search and detail visibility without mutation actions', () => {
+    const buildSearch = sourceFor('buildRefundEventsSearchParams');
+    const loadSearch = sourceFor('loadRefundEvents');
+    const openDetail = sourceFor('openRefundEvent');
+    const renderDetail = sourceFor('renderRefundEventDetail');
+
+    expect(portalHtml).toContain('id="refund-events-search-form"');
+    expect(portalHtml).toContain('id="refund-events-results"');
+    expect(portalHtml).toContain('id="refund-event-detail"');
+    expect(buildSearch).toContain("action: 'refund-events'");
+    expect(buildSearch).toContain("params.set('refund_type', type)");
+    expect(buildSearch).toContain("params.set('status', status)");
+    expect(buildSearch).toContain("params.set('recent_days', recent)");
+    expect(buildSearch).toContain('if (recent && !q)');
+    expect(loadSearch).toContain("fetchAdmin('/api/admin?' + params.toString()");
+    expect(openDetail).toContain("refund_event_id: String(refundEventId)");
+    expect(renderDetail).toContain('Ledger lines');
+    expect(renderDetail).toContain('Metadata');
+    expect(renderDetail).toContain('Notes timeline');
+    expect(renderDetail).toContain('renderRefundNotesTimeline(data.notes || [])');
+    expect(loadSearch).not.toContain("method: 'POST'");
+    expect(openDetail).not.toContain("method: 'POST'");
+  });
+
+  test('behaviorally searches and opens refund events in the operations panel', async ({ page }) => {
+    await setupPortalPage(page, []);
+    await page.fill('#refund-events-q', 'alex@example.test');
+    await page.selectOption('#refund-events-type', 'direct_slot');
+    await page.selectOption('#refund-events-status', 'executed');
+    await page.fill('#refund-events-recent', '60');
+    await page.click('#btn-refund-events-search');
+
+    await expect(page.locator('#refund-events-results')).toContainText('Alex Learner');
+    await expect(page.locator('#refund-events-results')).toContainText('re_slot_900');
+    const searchCalls = await page.evaluate(() => window.__refundEventSearchCalls);
+    expect(searchCalls[0]).toContain('action=refund-events');
+    expect(searchCalls[0]).toContain('q=alex%40example.test');
+    expect(searchCalls[0]).toContain('refund_type=direct_slot');
+    expect(searchCalls[0]).toContain('status=executed');
+    expect(searchCalls[0]).not.toContain('recent_days=60');
+
+    await page.click('[data-action="open-refund-event"][data-id="900"]');
+    await expect(page.locator('#refund-event-detail')).toContainText('Refund event #900');
+    await expect(page.locator('#refund-event-detail')).toContainText('Ledger lines');
+    await expect(page.locator('#refund-event-detail')).toContainText('Incident context only.');
+    const detailCalls = await page.evaluate(() => window.__refundEventDetailCalls);
+    expect(detailCalls).toHaveLength(1);
+    expect(detailCalls[0]).toContain('refund_event_id=900');
+    expect(await page.evaluate(() => window.__executeCalls)).toEqual([]);
+    expect(await page.evaluate(() => window.__manualBankCalls)).toEqual([]);
   });
 
   test('behaviorally gates execute, reuses idempotency, and sends only expected execute body', async ({ page }) => {
