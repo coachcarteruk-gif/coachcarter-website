@@ -1006,11 +1006,8 @@ function updateFeedFooter(slotCount) {
   const footer = document.getElementById('feedFooter');
   const status = document.getElementById('feedStatus');
   const btn = document.getElementById('btnLoadMore');
-  footer.style.display = 'block';
-
-  status.textContent = slotCount > 0
-    ? `Showing ${slotCount} available slot${slotCount !== 1 ? 's' : ''} in the next 4 weeks`
-    : 'No slots found in the next 4 weeks';
+  if (footer) footer.style.display = 'none';
+  if (status) status.textContent = '';
   if (btn) {
     btn.hidden = true;
     btn.style.display = 'none';
