@@ -323,6 +323,36 @@ Docs to load before implementation:
 - `PROJECT.md`
 - `CLAUDE.md`
 
+Stage Progress - 2026-06-05:
+
+- Implemented as a read-only audit, documentation, and guardrail-test stage on branch `codex/stage-3-payment-method-guardrails`.
+- Current Stripe Checkout creators were identified:
+  - `api/slots.js?action=checkout-slot` for authenticated direct Pay As You Go booking.
+  - `api/slots.js?action=checkout-slot-guest` for guest direct Pay As You Go booking.
+  - `api/offers.js` for instructor-created lesson offers.
+  - dormant `api/credits.js?action=checkout` code retained behind the retired Lesson Credit purchase guard for historical compatibility/operator recovery context.
+- Current PaymentIntent creation was identified only in dormant `api/credits.js?action=create-payment-intent` code behind the retired Lesson Credit purchase guard.
+- Direct Pay As You Go and offer Checkout Sessions currently rely on Stripe dynamic payment methods. Klarna is not hardcoded in production checkout creation; payment method availability is controlled by Stripe eligibility/Dashboard configuration unless a future product-specific payment method configuration is deliberately introduced.
+- Existing webhook handling already preserves async payment method safety by ignoring unpaid `checkout.session.completed` events and waiting for `checkout.session.async_payment_succeeded` before booking/granting supported paid flows.
+- Stage 3 did not change production Stripe/Klarna configuration because Reserved Weekly Slot and Paid-In-Full Reward do not exist yet, and the agreed scope excludes implementing them in this stage.
+- Guardrail tests now document the expected current Checkout surface count, prevent current Checkout payloads from pinning `payment_method_types`, confirm retired Lesson Credit checkout/PaymentIntent paths stop before SQL/Stripe work, and pin direct booking Checkout to server-calculated `pricePence` rather than client-submitted payment data.
+
+Stage 3 intentionally left untouched:
+
+- No Stripe Dashboard or Klarna production configuration changes.
+- No Reserved Weekly Slot implementation.
+- No Paid-In-Full Reward implementation.
+- No Pay by Bank implementation.
+- No database migrations.
+- No refund, cancellation, payout, booking lifecycle, BCS refund execution, or financial ledger changes.
+- No changes to existing Lesson Credit, `learner_credit_balances`, `booking_credit_sources`, or `credit_source_adjustments`.
+
+Stage 3 remaining risks and follow-up notes:
+
+- The roadmap rule "limit Klarna to reserved weekly slot blocks" cannot be safely enforced until the reserved weekly block product and its payment surface exist.
+- Future implementation needs a deliberate product-scoped payment method configuration mechanism, not an ad hoc change to today's direct Pay As You Go checkout.
+- Pay by Bank eligibility, settlement timing, refund behaviour, Connect support, and pricing remain open for Stage 6.
+
 ### Stage 4: Reserved Weekly Slot UX
 
 Goal: make recurring same-slot booking prominent and understandable.
@@ -434,6 +464,8 @@ These should be answered before the relevant implementation stage begins.
 1. What is the verified Stripe Pay by Bank settlement timing, refund behaviour, Connect/account availability, and account-specific pricing?
 2. What exact reservation or hold model should represent "provisionally booked / payment pending" without changing booking, refund, cancellation, or payout semantics?
 3. What timeout or follow-up rule should apply if a Pay by Bank payment remains pending or fails after the weekly block has been provisionally booked?
+4. What exact mechanism should scope payment method availability by product once Reserved Weekly Slot exists: Stripe Dashboard-only dynamic payment methods, Stripe `payment_method_configurations`, `excluded_payment_method_types`, or another configuration path?
+5. What exact eligibility threshold makes a reserved weekly block Klarna-eligible: beyond the ordinary 28-day self-serve booking window, a minimum number of weeks, a minimum amount, or a combination?
 
 ## Suggested First Implementation Prompt
 
