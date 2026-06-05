@@ -1554,7 +1554,7 @@ footer a:hover { color: var(--accent); }
       </div>
       <div class="stat-item">
         <div class="stat-num" id="hero-stat-2-value">15%</div>
-        <div class="stat-label" id="hero-stat-2-label">Max discount on<br>bulk packages</div>
+        <div class="stat-label" id="hero-stat-2-label">Direct booking<br>available online</div>
       </div>
       <div class="stat-divider"></div>
       <div class="stat-item">
@@ -1623,7 +1623,7 @@ footer a:hover { color: var(--accent); }
           <div class="mini-stat-icon">⬆️</div>
           <div class="mini-stat-text">
             <div class="mini-stat-title">Easy to upgrade</div>
-            <div class="mini-stat-sub">Move onto a bulk package whenever you're ready to save</div>
+            <div class="mini-stat-sub">Use existing Lesson Credit when you have it, or pay directly at booking</div>
           </div>
         </div>
         <div class="mini-stat">
@@ -1643,48 +1643,48 @@ footer a:hover { color: var(--accent); }
 <section class="packages-section" id="packages">
   <div class="section-wrap">
     <div class="section-intro reveal">
-      <div class="section-tag-line">Bulk Packages</div>
-      <h2 class="section-title" id="section-packages-title">Bulk Hour Packages</h2>
-      <p class="section-sub" id="section-packages-subtitle">Buy hours up front for a selected instructor. Live checkout shows the final instructor-specific rate and any available package saving.</p>
+      <div class="section-tag-line">Lesson Credit</div>
+      <h2 class="section-title" id="section-packages-title">Existing Lesson Credit</h2>
+      <p class="section-sub" id="section-packages-subtitle">Existing Lesson Credit still works for eligible bookings. New self-serve credit packages are retired, so new learners can book a lesson and pay directly.</p>
     </div>
 
     <div class="pkg-calculator reveal">
       <div class="pkg-calc-left">
-        <h3>Find your saving</h3>
-        <p>Slide to preview the package for the public CoachCarter rate. Your live checkout confirms the final instructor-specific price.</p>
+        <h3>Book directly</h3>
+        <p>Choose a lesson time online. If you have existing Lesson Credit with that instructor, the booking flow will offer it automatically; otherwise you can pay for the lesson directly.</p>
         <div class="pkg-slider-wrap">
           <div class="pkg-slider-label">
-            <span>Hours in package</span>
-            <span class="pkg-slider-val" id="pkg-hrs-display">30 hrs</span>
+            <span>Lesson Credit status</span>
+            <span class="pkg-slider-val" id="pkg-hrs-display">Existing credit</span>
           </div>
           <input type="range" class="pkg-range" id="pkg-slider" min="0" max="4" step="1" value="2">
           <div class="pkg-steps">
-            <span>10hrs</span><span>20hrs</span><span>30hrs</span><span>40hrs</span><span>50hrs</span>
+            <span>Book</span><span>Pay</span><span>Learn</span><span>Track</span><span>Repeat</span>
           </div>
         </div>
       </div>
       <div class="pkg-calc-right">
         <div class="pkg-result-row">
-          <span class="pkg-result-label">Standard price</span>
-          <span class="pkg-result-val" id="pkg-std-price">£1,800</span>
+          <span class="pkg-result-label">Credit purchase</span>
+          <span class="pkg-result-val" id="pkg-std-price">Retired</span>
         </div>
         <div class="pkg-result-row">
-          <span class="pkg-result-label">Your discount</span>
-          <span class="pkg-result-val orange" id="pkg-discount-pct">10%</span>
+          <span class="pkg-result-label">Existing credit</span>
+          <span class="pkg-result-val orange" id="pkg-discount-pct">Still usable</span>
         </div>
         <div class="pkg-result-row">
-          <span class="pkg-result-label">You save</span>
-          <span class="pkg-result-val saving" id="pkg-saving">£180</span>
+          <span class="pkg-result-label">No credit?</span>
+          <span class="pkg-result-val saving" id="pkg-saving">Pay at booking</span>
         </div>
         <div class="pkg-result-row">
-          <span class="pkg-result-label">Price per hour</span>
-          <span class="pkg-result-val orange" id="pkg-per-hr">£54</span>
+          <span class="pkg-result-label">Booking</span>
+          <span class="pkg-result-val orange" id="pkg-per-hr">Online</span>
         </div>
         <div class="pkg-result-total">
-          <div class="pkg-result-total-label">Total package price</div>
-          <div class="pkg-result-total-num" id="pkg-total">£1,620</div>
+          <div class="pkg-result-total-label">Next step</div>
+          <div class="pkg-result-total-num" id="pkg-total">Book directly</div>
         </div>
-        <button class="btn-lg primary" id="btn-package">Buy this package →</button>
+        <button class="btn-lg primary" id="btn-package">Book a lesson →</button>
       </div>
     </div>
 
@@ -1728,10 +1728,10 @@ footer a:hover { color: var(--accent); }
 
       <div class="testimonial-card reveal">
         <div class="testimonial-stars">★★★★★</div>
-        <p class="testimonial-text">"The bulk package saved me a good chunk of money and the lessons were always well-structured. Booked online the same evening and had my first lesson within the week."</p>
+        <p class="testimonial-text">"The lessons were always well-structured. Booked online the same evening and had my first lesson within the week."</p>
         <div class="testimonial-author">
           <span class="testimonial-name">James T.</span>
-          <span class="testimonial-meta">30-hour Bulk Package</span>
+          <span class="testimonial-meta">Online booking</span>
         </div>
       </div>
 
@@ -1786,7 +1786,7 @@ footer a:hover { color: var(--accent); }
               <option value="" disabled selected>Choose an option</option>
               <option value="general">General question</option>
               <option value="booking">Booking enquiry</option>
-              <option value="bulk-packages">Bulk packages</option>
+              <option value="bulk-packages">Existing Lesson Credit</option>
               <option value="availability">Check availability</option>
               <!-- <option value="pass-guarantee">Test Ready Guarantee</option> hidden 2026-04-28 -->
             </select>

@@ -7,6 +7,12 @@ const { grantCredits } = require('./_credit-grant');
 
 const STANDARD_LESSON_MINUTES = 90;
 const MIN_HOURS_PER_PURCHASE = 1;
+const SELF_SERVE_CREDIT_PURCHASES_ENABLED = false;
+const CREDIT_PURCHASE_RETIRED_RESPONSE = {
+  error: true,
+  code: 'CREDIT_PURCHASE_RETIRED',
+  message: 'Self-serve Lesson Credit purchases are retired. Existing Lesson Credit can still be used to book lessons.'
+};
 
 function verifyAuth(req) {
   return requireAuth(req, { roles: ['learner', 'admin'] });
@@ -291,14 +297,17 @@ async function handleBalance(req, res) {
 }
 
 // ── POST /api/credits?action=checkout ────────────────────────────────────────
-// Creates a Stripe checkout session for buying hours.
-// Body: { hours: number } — hours to purchase (e.g., 1, 1.5, 3, 6, 12, etc.)
-// Also accepts { quantity: number } for backwards compatibility (treats as lessons, converts to hours)
+// Retired self-serve Lesson Credit checkout. The implementation below stays
+// dormant for compatibility with historical metadata and potential operator
+// recovery, but learner-facing requests are blocked before any pricing/Stripe work.
 async function handleCheckout(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  if (!SELF_SERVE_CREDIT_PURCHASES_ENABLED) {
+    return res.status(410).json(CREDIT_PURCHASE_RETIRED_RESPONSE);
+  }
   const schoolId = user.school_id || 1;
 
   // SMS-only learners can have no email on their account. Stripe rejects
@@ -391,14 +400,16 @@ async function handleCheckout(req, res) {
 }
 
 // POST /api/credits?action=create-payment-intent
-// Native PaymentSheet prep: creates a Stripe PaymentIntent for buying hours.
-// Body mirrors web checkout: { hours, instructor_id }. Pricing remains fully
-// server-side and uses the same metadata contract as Checkout.
+// Retired native PaymentSheet prep for Lesson Credit purchases. Existing
+// PaymentIntents already created before retirement are still handled by webhook.
 async function handleCreatePaymentIntent(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const user = verifyLearnerAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  if (!SELF_SERVE_CREDIT_PURCHASES_ENABLED) {
+    return res.status(410).json(CREDIT_PURCHASE_RETIRED_RESPONSE);
+  }
   const schoolId = user.school_id || 1;
 
   const emailValid = user.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(user.email).trim());

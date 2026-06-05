@@ -5,107 +5,49 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
 
-test.describe('learner instructor-aware credit purchase UI', () => {
-  test('buy-credits page renders and loads an instructor selector', () => {
+test.describe('learner read-only Lesson Credit UI', () => {
+  test('legacy buy-credits route renders as an existing Lesson Credit balance page', () => {
     const html = read('public/learner/buy-credits.html');
     const js = read('public/learner/buy-credits.js');
 
     expect(html).toContain('id="instructorSelect"');
-    expect(html).toContain('Choose instructor');
     expect(html).toContain('id="creditsTitle"');
     expect(html).toContain('id="pricingRateValue"');
     expect(html).toContain('id="packagesNote"');
+    expect(html).toContain('#btnCheckout');
+    expect(html).toContain('display: none !important;');
+    expect(js).toContain('function renderRetiredPageShell()');
+    expect(js).toContain('Existing Lesson Credit is still available');
+    expect(js).toContain('New self-serve top-ups are retired');
     expect(js).toContain("fetch('/api/instructors?action=list')");
     expect(js).toContain("parseInt(params.get('instructor_id'), 10)");
-    expect(js).toContain('opt.selected = Number(inst.id) === Number(currentInstructorId)');
   });
 
-  test('buy-credits fetches bulk pricing for the selected instructor', () => {
+  test('Lesson Credit page fetches aggregate and selected-instructor balances only', () => {
     const js = read('public/learner/buy-credits.js');
 
-    expect(js).toContain("var url = '/api/credits?action=bulk-pricing&t=' + Date.now();");
-    expect(js).toContain("if (!currentInstructorId) {");
+    expect(js).toContain("var url = '/api/credits?action=balance';");
     expect(js).toContain("url += '&instructor_id=' + encodeURIComponent(currentInstructorId)");
-    expect(js).toContain('BULK_TIERS_ENABLED = data.bulk_tiers_enabled === true;');
-    expect(js).toContain('PRICING_LOADED = Number.isFinite(PRICE_PER_HOUR_PENCE) && PRICE_PER_HOUR_PENCE > 0;');
-    expect(js).toContain('await loadBulkPricing();');
-    expect(js).toContain('renderPackageCards();');
-    expect(js).toContain('selectPkg(qty);');
+    expect(js).toContain('data.selected_instructor_balance_minutes');
+    expect(js).toContain('data.balance_minutes || 0');
+    expect(js).toContain("document.getElementById('creditBalanceRows') || document.getElementById('packages')");
+    expect(js).not.toContain('/api/credits?action=checkout');
+    expect(js).not.toContain('/api/lesson-types?action=list');
+    expect(js).not.toContain('checkoutBusy');
   });
 
-  test('buy-credits changing instructor reloads pricing, packages, summary, and balance', () => {
-    const js = read('public/learner/buy-credits.js');
+  test('learner navigation no longer exposes a Buy Credits entry point', () => {
+    const sidebar = read('public/sidebar.js');
+    const dashboard = read('public/learner/index.html');
+    const bookHtml = read('public/learner/book.html');
+    const bookJs = read('public/learner/book.js');
 
-    expect(js).toContain("instructorSelect.addEventListener('change', async function ()");
-    expect(js).toContain('currentInstructorId = Number.isInteger(parsed) && parsed > 0 ? parsed : null;');
-    expect(js).toContain('await loadBulkPricing();');
-    expect(js).toContain('renderPackageCards();');
-    expect(js).toContain('renderSingleLessonCards();');
-    expect(js).toContain('selectPkg(qty);');
-    expect(js).toContain('if (isAuthed) loadBalance();');
-    expect(js).toContain('if (requestId !== pricingRequestSeq) return;');
-  });
-
-  test('buy-credits selected instructor copy shows rate and scoped balance labels', () => {
-    const js = read('public/learner/buy-credits.js');
-
-    expect(js).toContain("setText('creditsTitle', 'Credits for ' + name)");
-    expect(js).toContain("setText('balanceLabel', 'Hours with ' + name)");
-    expect(js).toContain("setText('pricingRateValue', PRICING_LOADED ? fmt(PRICE_PER_HOUR_PENCE) + '/hr' : 'Loading...')");
-    expect(js).toContain("setText('packagesNote', 'Credit pricing appears after you choose an instructor.')");
-    expect(js).toContain('function renderNeutralBalance()');
-    expect(js).toContain("if (!currentInstructorId) {\n      renderNeutralBalance();\n      return;\n    }");
-    expect(js).toContain('var mins = data.selected_instructor_balance_minutes != null ? data.selected_instructor_balance_minutes : 0;');
-  });
-
-  test('buy-credits handles bulk tiers disabled without savings copy', () => {
-    const js = read('public/learner/buy-credits.js');
-
-    expect(js).toContain('BULK_TIERS_ENABLED = data.bulk_tiers_enabled === true;');
-    expect(js).toContain('if (BULK_TIERS_ENABLED) {');
-    expect(js).toContain("does not currently offer bulk discounts");
-    expect(js).toContain("var isPopular = BULK_TIERS_ENABLED && h === 12;");
-    expect(js).toContain("var savePill = totals.pct > 0 ? '<span class=\"pkg-save\">Save ' + totals.pct + '%</span>' : '';");
-    expect(js).toContain("discountRow.style.display = 'none';");
-  });
-
-  test('buy-credits blocks checkout until an instructor is selected', () => {
-    const js = read('public/learner/buy-credits.js');
-
-    expect(js).toContain('function requireInstructorSelection()');
-    expect(js).toContain("showToast('Choose an instructor before checkout.', 'error')");
-    expect(js).toContain('if (!requireInstructorSelection()) return;');
-    expect(js).toContain('return !!currentInstructorId && PRICING_LOADED && !checkoutBusy;');
-    expect(js).toContain('checkoutBtn.disabled = !allowed');
-    expect(js).toContain("document.querySelectorAll('.sl-buy-btn')");
-  });
-
-  test('buy-credits sends instructor_id for package and single-lesson checkout', () => {
-    const js = read('public/learner/buy-credits.js');
-
-    expect(js).toContain('var payload = { hours: qty, instructor_id: currentInstructorId };');
-    expect(js).toContain('var payload = { hours: hours, instructor_id: currentInstructorId };');
-    expect(js).not.toContain('var payload = { hours: qty };\n      if (currentInstructorId)');
-    expect(js).not.toContain('var payload = { hours: hours };\n      if (currentInstructorId)');
-  });
-
-  test('buy-credits excludes free-trial lesson type from paid single-lesson cards', () => {
-    const js = read('public/learner/buy-credits.js');
-
-    expect(js).toContain('function isPaidLessonType(lt)');
-    expect(js).toContain("lt.slug !== 'trial'");
-    expect(js).toContain('lessonTypes = (data.lesson_types || []).filter(isPaidLessonType);');
-    expect(js).toContain("showToast('Free trials are booked from the free trial page.', 'error')");
-  });
-
-  test('buy-credits login redirect preserves instructor context', () => {
-    const js = read('public/learner/buy-credits.js');
-
-    expect(js).toContain('function buyCreditsPath()');
-    expect(js).toContain("path += '?instructor_id=' + encodeURIComponent(currentInstructorId)");
-    expect(js).toContain('var redirect = encodeURIComponent(buyCreditsPath())');
-    expect(js).toContain('/learner/login.html?redirect=');
-    expect(js).toContain("+ redirect +");
+    expect(sidebar).not.toContain("label: 'Buy Credits'");
+    expect(dashboard).toContain('<a href="/learner/profile.html" class="stat-cell" id="stat-balance">');
+    expect(bookHtml).not.toContain('href="/learner/buy-credits.html"');
+    expect(bookHtml).toContain('You can still pay when you book.');
+    expect(bookJs).not.toContain('buyCreditsUrlForSlot');
+    expect(bookJs).not.toContain('/learner/buy-credits.html?instructor_id=');
   });
 });
 
@@ -131,13 +73,15 @@ test.describe('learner booking modal instructor-aware credit balance', () => {
     expect(js).not.toContain('const hasCreds = balanceMinutes >= totalMins;');
   });
 
-  test('booking modal buy-credit links pass selected slot instructor_id', () => {
+  test('booking modal does not link to retired buy-credit journeys', () => {
     const js = read('public/learner/book.js');
+    const html = read('public/learner/book.html');
 
-    expect(js).toContain('function buyCreditsUrlForSlot(slot)');
-    expect(js).toContain('/learner/buy-credits.html?instructor_id=${encodeURIComponent(slot.instructor_id)}');
-    expect(js).toContain('function updateModalBuyCreditLinks()');
-    expect(js).toContain('updateModalBuyCreditLinks();');
+    expect(html).not.toContain('href="/learner/buy-credits.html"');
+    expect(html).toContain('Existing Lesson Credit remains available for eligible bookings.');
+    expect(html).toContain('Eligible 48+ hour cancellations return as Lesson Credit.');
+    expect(js).not.toContain('function buyCreditsUrlForSlot');
+    expect(js).not.toContain('function updateModalBuyCreditLinks');
   });
 
   test('booking modal excludes trial durations but keeps the guest free-trial CTA link', () => {

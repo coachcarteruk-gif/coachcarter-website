@@ -16,7 +16,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 - **Admin portal** — instructors, bookings, availability, videos, dashboard
 - **Classroom** — public video library with grid + reels UI
 - **Examiner Knowledge Base** — interactive quiz + AI chat based on DVSA DL25 marking sheet
-- **AI Lesson Advisor** — conversational AI sales assistant with Stripe checkout integration
+- **AI Lesson Advisor** — conversational AI lesson-planning assistant. Self-serve credit checkout links are retired.
 
 ---
 
@@ -62,7 +62,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── migrate.js                  # DB migration runner (protected by MIGRATION_SECRET)
 │   ├── learner.js                  # Learner sessions, progress, profile, competency, onboarding
 │   ├── magic-link.js               # Learner magic-link login: send, validate, verify
-│   ├── credits.js                  # Credit balance, Stripe checkout, bulk discounts
+│   ├── credits.js                  # Credit balance, retired self-serve credit checkout, verification for in-flight sessions
 │   ├── slots.js                    # Slot generation, booking, cancellation, my-bookings, pay-per-slot checkout
 │   ├── instructors.js              # Instructor CRUD + availability (admin-protected)
 │   ├── instructor.js               # Instructor portal: magic-link login, schedule, profile
@@ -74,7 +74,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── webhook.js                  # Stripe webhook handler
 │   ├── guarantee-price.js          # Dynamic Pass Programme pricing (read/override) — Pass Programme is hidden, increment-on-purchase retired with PR-J 2026-05-19
 │   ├── update-status.js            # Booking status update
-│   ├── advisor.js                  # AI Lesson Advisor with Stripe tool_use checkout
+│   ├── advisor.js                  # AI Lesson Advisor; checkout tool retired
 │   ├── ask-examiner.js             # AI examiner chat with personalised learner context
 │   ├── address-lookup.js           # Address autocomplete API
 │   ├── cron-retention.js           # GDPR data retention cron (weekly, archives/purges inactive data)
@@ -95,7 +95,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── classroom.html              # Video library — grid + reels dual mode (public)
 │   ├── availability.html           # Availability/booking page
 │   ├── learner-journey.html        # Pricing page — tiers, PAYG, and Pass Programme with dynamic pricing
-│   ├── lessons.html                # Bulk packages marketing page. Bulk hours buy via /api/credits?action=checkout (login wall, PR-J 2026-05-19). PAYG buttons redirect to /learner/book.html. Pass Programme hidden 2026-04-28.
+│   ├── lessons.html                # Lesson options marketing page. Self-serve credit packages retired; CTAs route to booking. Pass Programme hidden 2026-04-28.
 │   ├── admin.html                  # Redirect shim → /admin/login.html
 │   ├── admin-availability.html     # Standalone admin availability management
 │   ├── maintenance.html            # Maintenance mode page
@@ -127,7 +127,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   │   ├── login.html              # Magic-link login (email or SMS)
 │   │   ├── verify.html             # Token verification page (two-step: validate then verify)
 │   │   ├── book.html               # Lesson booking calendar — monthly/weekly/daily views (credit or pay-per-slot)
-│   │   ├── buy-credits.html        # Buy lesson credits via Stripe
+│   │   ├── buy-credits.html        # Read-only existing Lesson Credit balance page
 │   │   ├── log-session.html        # Log a driving session (3-step wizard, 17 skills, fault tallies)
 │   │   ├── videos.html             # Video library (behind login)
 │   │   ├── advisor.html            # AI Lesson Advisor chat page
@@ -252,7 +252,9 @@ The site uses a unified competency framework (10 DL25 categories, 39 sub-skills)
 
 ### How credits work
 
-Learners buy hours, stored per learner/instructor in `learner_credit_balances`, via Stripe (Klarna available). New credit purchases are priced server-side for the selected instructor:
+Existing Lesson Credit is stored per learner/instructor in `learner_credit_balances`. Learner-facing self-serve credit purchases are retired as of Stage 2 of the pricing/booking work; learners without enough Lesson Credit use direct pay-and-book instead. Existing balances remain spendable and eligible cancellation/reschedule/admin-return behaviour is unchanged.
+
+Historical and operator credit rows keep their snapshotted pricing:
 
 Rate precedence is learner/instructor custom rate → instructor hourly rate → school default `schools.config.pricing.bulk_hourly_pence`. School-wide tiers live in `schools.config.pricing.bulk_discount_tiers`, but apply only when the selected instructor has `instructors.bulk_tiers_enabled = TRUE`. New instructors default off; Fraser is grandfathered on. Existing credit rows keep their snapshotted `effective_rate_pence_per_minute`.
 
@@ -260,7 +262,7 @@ The school default is currently **£55 per hour** (£82.50 for a standard 1.5-ho
 
 Admins can set `instructors.hourly_rate_pence` when creating/editing instructors; leaving it blank stores NULL and inherits the school default. Admins can also set `bulk_tiers_enabled`, and instructors can manage the same opt-in from their profile.
 
-`/learner/buy-credits.html` is selected-instructor-aware: learners must choose an instructor before checkout, the page fetches `/api/credits?action=bulk-pricing&instructor_id=...`, labels the balance as hours with that instructor, shows the effective hourly rate returned by the server, and only shows discount/savings copy when that instructor has opted into bulk tiers. Checkout still posts `{ hours, instructor_id }`; the server remains the pricing source of truth.
+`/learner/buy-credits.html` remains only as a read-only existing Lesson Credit balance page for old bookmarks. It fetches `/api/credits?action=balance`, can filter by instructor, and does not create checkout sessions.
 
 Direct pay-and-book uses the same effective hourly fallback for the selected instructor and lesson duration: learner/instructor custom rate → instructor hourly rate → school default `bulk_hourly_pence`. Bulk discount tiers do not apply to direct single-slot payments. The booking modal gets these prices from server APIs and checkout sends only slot/instructor/lesson-type context, not a client-side amount.
 
@@ -281,7 +283,7 @@ Instructor-created paid offers now freeze their final per-lesson price into `les
 - **With hours balance:** Duration deducted from the selected instructor's `learner_credit_balances.balance_minutes` row on booking; returned automatically to the booking instructor's row on 48+ hour cancellations
 - **Without balance (pay-per-slot):** Slot reserved for 10 minutes during Stripe Checkout; on payment, hours added + deducted atomically, booking created, .ics calendar attachment sent to both parties
 - **Guest checkout (no account):** Unauthenticated learners can book via `checkout-slot-guest`. They provide name, email, phone, and pickup address in the booking modal. The API creates a learner account immediately (find-or-create by email), reserves the slot with the real learner_id, then redirects to Stripe. The existing webhook handles the rest unchanged. Rate limited by IP and phone number. Guest bookings tagged with `created_by = 'guest_checkout'`
-- **Spectator mode (April 2026):** `/learner/book.html` is publicly accessible — every "Book" CTA across the marketing surface routes there directly (no login redirect). Logged-out visitors see a `#guestBanner` and a guest-aware sidebar (Buy Credits, Upcoming, Profile filtered out via `authOnly`). Inside the booking modal, when the school's lesson types include a row with `slug='trial'`, an inline CTA "Claim this as your free trial →" redirects to `/free-trial.html?instructor_id=…&date=…`. The slot is not force-converted; the trial handler enforces strict duration matching, so the guest re-picks a real trial slot on the dedicated page (which honours the hints by filtering and scrolling).
+- **Spectator mode (April 2026; credit purchase update June 2026):** `/learner/book.html` is publicly accessible — every "Book" CTA across the marketing surface routes there directly (no login redirect). Logged-out visitors see a `#guestBanner` and a guest-aware sidebar (Upcoming and Profile filtered out via `authOnly`). The old `buy-credits.html` route is read-only for existing Lesson Credit balances, not a purchase page. Inside the booking modal, when the school's lesson types include a row with `slug='trial'`, an inline CTA "Claim this as your free trial →" redirects to `/free-trial.html?instructor_id=…&date=…`. The slot is not force-converted; the trial handler enforces strict duration matching, so the guest re-picks a real trial slot on the dedicated page (which honours the hints by filtering and scrolling).
 - **Free trial (self-serve, no payment):** Public `/free-trial.html` page lets anyone book a 1-hour free first lesson without an account. POSTs to `/api/slots?action=book-free-trial`, which creates a `confirmed` booking with `payment_method='free'`, `created_by='free_trial_self_serve'`, `minutes_deducted=0`. No Stripe involved. Email confirmation includes a magic-link so the guest can sign in to manage the booking. Guarded against repeat use by email or phone (any status — cancelled trials count). Instructors must include `"trial"` in their `offered_lesson_types` (or have it `NULL`) to be surfaced. The page also accepts optional `?instructor_id=` and `?date=` hints (used by the `book.html` "claim as free trial" CTA) — `instructor_id` filters the slot feed, `date` highlights and scrolls to the matching day group via `.day-group--preselected`.
 - **Demo instructor:** Bookings against the demo instructor (email `demo@coachcarter.uk`) are free — no credit check or deduction. The demo instructor is excluded from real booking flows via email check in `api/instructors.js` and `api/slots.js`. No emails sent to the demo instructor on book/cancel. Cancel returns no credits (since none were taken).
 - Race condition protection via DB unique index on `(instructor_id, scheduled_date, start_time)` + slot reservations table
@@ -392,9 +394,9 @@ Replaced the retired `api/waitlist.js` (May 2026). Weekly availability is now th
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `balance` | GET | Yes | Returns aggregate `balance_minutes`, `balance_hours`, `credit_balance`, recent transactions, and per-instructor `balances: [{ instructor_id, instructor_name, balance_minutes, balance_hours }]`. Optional `instructor_id` validates school scope and adds `selected_instructor_balance_minutes` / `selected_instructor_balance_hours`. |
-| `checkout` | POST | Yes | Creates Stripe checkout for hours purchase. Body: `{ hours, instructor_id }` (or legacy `{ quantity, instructor_id }` for lesson count). New learner-facing purchases require an active same-school instructor; Stripe metadata includes `instructor_id`, `amount_pence`, `discount_pct`, and `effective_rate_pence_per_minute` from the instructor-aware server total. |
-| `create-payment-intent` | POST | Learner | Native PaymentSheet credit purchase prep. Body: `{ hours, instructor_id }` (or legacy `{ quantity, instructor_id }`). Requires an active same-school instructor, prices via `calcBulkTotal(sql, schoolId, hours, { instructorId, learnerId })`, creates a Stripe PaymentIntent with the same `credit_purchase` metadata contract as Checkout, and returns `{ clientSecret, paymentIntentId, ...pricingEcho }`. `payment_intent.succeeded` grants through the shared `grantCredits` path using PaymentIntent idempotency. |
-| `bulk-pricing` | GET | No | Public pricing contract for buy-credits UI. Optional `instructor_id` validates same-school active non-demo instructor and returns instructor-aware `hourly_pence`, applicable `discount_tiers`, `bulk_tiers_enabled`, and `rate_source`; optional `hours` also returns `full_pence`, `discount_pct`, `discount_amount_pence`, and `total_pence`. |
+| `checkout` | POST | Yes | Retired for learner self-serve Lesson Credit purchases. Returns `410 CREDIT_PURCHASE_RETIRED`; existing in-flight paid sessions are still handled by `verify`/webhook. |
+| `create-payment-intent` | POST | Learner | Retired for native self-serve Lesson Credit purchases. Returns `410 CREDIT_PURCHASE_RETIRED`; existing webhook handling remains for PaymentIntents already created before retirement. |
+| `bulk-pricing` | GET | No | Read-only pricing contract retained for admin/legacy display compatibility. Optional `instructor_id` validates same-school active non-demo instructor and returns instructor-aware `hourly_pence`, applicable `discount_tiers`, `bulk_tiers_enabled`, and `rate_source`; optional `hours` also returns `full_pence`, `discount_pct`, `discount_amount_pence`, and `total_pence`. It does not create purchases. |
 | `verify` | GET | Yes | Post-checkout safety net. Params: `session_id` (Stripe checkout session ID). Checks Stripe payment status and grants credits idempotently if webhook missed them. Returns `{ ok, already_processed }` or `{ ok, granted, hours, minutes }`. Referrer rewards are NOT issued here — `cron-referral-rewards.js` handles them per completed lesson |
 
 ### API — `api/r.js` (referral short URL)
@@ -485,7 +487,7 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 
 | Endpoint | Method | Auth | Description |
 |---|---|---|---|
-| (single endpoint) | POST | Yes | AI lesson advisor chat with Claude tool_use — recommends hour packages and creates Stripe Checkout sessions (£55/hr base, up to 25% discount, 1.5–30 hours) |
+| (single endpoint) | POST | Yes | AI lesson advisor chat. Recommends lesson planning and booking next steps; the old credit checkout tool is retired. |
 
 ### API — `api/reviews.js`
 
@@ -715,7 +717,7 @@ Two alarm triggers:
 
 `instructors.hourly_rate_pence` is the admin-editable per-instructor lesson rate override used after any learner/instructor custom rate and before the school default. `instructors.bulk_tiers_enabled` controls whether school-defined bulk discounts apply to future credit purchases for that instructor; when true, the instructor absorbs the discount. It does not discount direct pay-and-book single-slot payments.
 
-**`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). Used by direct booking checkout, lesson-types/duration pricing APIs, credit checkout, earnings view, and payout calculations. Direct pay-and-book pricing uses custom learner rate → instructor hourly rate → school `bulk_hourly_pence`; bulk discounts remain credit-package only.
+**`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). Used by direct booking checkout, lesson-types/duration pricing APIs, historical credit pricing, earnings view, and payout calculations. Direct pay-and-book pricing uses custom learner rate → instructor hourly rate → school `bulk_hourly_pence`; bulk discounts remain historical credit-package only.
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
 
@@ -879,12 +881,12 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Magic link tokens** — two-step flow (validate then verify) prevents email-client link prefetchers from consuming tokens; `verify` is POST-only
 - **Slot reservations** — 10-minute TTL; expired reservations are excluded from availability but cleaned up lazily (on next webhook or when table is queried)
 - **Dynamic pricing table** — `guarantee_pricing` is auto-created and seeded on first call to `/api/guarantee-price`. The webhook-driven price increment was retired with PR-J (2026-05-19) when the legacy Stripe checkout was deleted. The Pass Programme is hidden on the marketing site; the table now serves as a read-only admin-override source for `current_price` if it's ever re-enabled.
-- **Pricing page routing** — all site nav "Pricing" links point to `/learner-journey.html`, not `/lessons.html`. `/lessons.html` is now a bulk-packages marketing page that funnels into `/api/credits?action=checkout` (login wall required). PAYG buttons redirect to `/learner/book.html` instead of running a Stripe checkout themselves (PR-J 2026-05-19).
+- **Pricing page routing** — all site nav "Pricing" links point to `/learner-journey.html`, not `/lessons.html`. `/lessons.html` no longer creates self-serve credit-package checkout sessions; CTAs route learners into booking/pay-and-book.
 - **PostHog analytics** — all pages include the PostHog snippet for event tracking and session recording
 - **competency-config.js** — shared across 6 pages; changes affect quiz, mock test, log session, progress, onboarding, and AI context
 - **sidebar.js** — used on all 22+ pages; changes affect entire site navigation
 - **PWA caching** — service worker caches app shell; update CACHE_NAME version string in sw.js to bust cache on deploy
-- **Stripe tool_use** — the AI Advisor uses Claude's tool_use to create checkouts; pricing bounds enforced server-side in api/advisor.js
+- **AI Advisor checkout** — the AI Advisor no longer creates credit-package checkout links. It can advise on lesson planning and directs learners to booking/pay-and-book.
 
 ---
 
@@ -896,7 +898,7 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Foundation cleanup** (#75–78) — centralised DB migration (`db/migration.sql` + `/api/migrate`), extracted shared CSS/JS into `public/shared/` (removed ~984 lines of duplicated CSS), wired up shared auth JS (`ccAuth.getAuth()`, `ccAuth.logout()`), added email error alerts on all 500 errors (`api/_error-alert.js`)
 - **PWA support** (#62) — manifest, service worker, install prompt, offline page, generated icons
 - **Codebase cleanup** (#61) — fixed migration numbering, extracted shared auth/mail helpers, removed dead files
-- **AI Lesson Advisor** (#60) — conversational AI sales assistant using Claude tool_use to recommend lesson packages and create Stripe checkouts dynamically within pricing bounds
+- **AI Lesson Advisor** (#60) — conversational AI assistant for lesson planning. Its old credit checkout tool is retired.
 - **Learner onboarding** (#59) — 3-step "Build Your Driving Profile" flow (prior experience, initial 17-skill self-assessment), dashboard profile completion card, AI personalisation (Ask the Examiner now reads full learner profile)
 - **My Progress page** (#57) — radar chart, skill breakdown table, mock test history, readiness scores, session timeline
 - **Mock Test & Log Session upgrade** (#56) — mock driving test with 3 x 10-min parts and full DL25 fault recording, log session upgraded to 17 skills with fault tallies

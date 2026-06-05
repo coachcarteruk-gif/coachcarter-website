@@ -223,18 +223,6 @@ function formatBalanceHours(mins) {
   return hrs % 1 === 0 ? `${hrs} hr${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hrs`;
 }
 
-function buyCreditsUrlForSlot(slot) {
-  if (!slot || !slot.instructor_id) return '/learner/buy-credits.html';
-  return `/learner/buy-credits.html?instructor_id=${encodeURIComponent(slot.instructor_id)}`;
-}
-
-function updateModalBuyCreditLinks() {
-  const href = buyCreditsUrlForSlot(pendingSlot);
-  document.querySelectorAll('#modalCreditPath a[href^="/learner/buy-credits.html"], #modalPayPath a[href^="/learner/buy-credits.html"]').forEach(link => {
-    link.href = href;
-  });
-}
-
 function updateCreditBadge() {
   // Hide credits banner for guests (they have no account — guestBanner covers this case)
   // and when payments are disabled.
@@ -1109,7 +1097,6 @@ function openBookModal(el) {
     instructor_name: el.dataset.instructorName
   };
   selectedInstructorBalanceMinutes = 0;
-  updateModalBuyCreditLinks();
   const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
   document.getElementById('mdDate').textContent = dateDisplay;

@@ -74,8 +74,8 @@
         "subtitle": "Maximum flexibility. Book when you need, cancel when life happens."
       },
       "packages": {
-        "title": "Bulk Hour Packages",
-        "subtitle": "Buy hours up front for a selected instructor. Live checkout shows the final instructor-specific rate and any available package saving."
+        "title": "Existing Lesson Credit",
+        "subtitle": "Existing Lesson Credit still works for eligible bookings. New self-serve credit packages are retired, so new learners can book a lesson and pay directly."
       },
       "guarantee": {
         "title": "Test Ready Guarantee",
@@ -88,7 +88,7 @@
         "Book online or by phone",
         "Lesson length to suit you",
         "Progress tracked between lessons",
-        "Upgrade to a package anytime"
+        "Pay directly when you book"
       ],
       "core": [
         "Minimum 18 lessons (27 hrs)",
@@ -102,7 +102,7 @@
       "primary": "Book a Lesson",
       "secondary": "Talk to us first",
       "payg_button": "Book First Lesson Free →",
-      "package_button": "Buy this package →",
+      "package_button": "Book a lesson →",
       "guarantee_button": "Continue to Booking →"
     },
     "business": {

@@ -37,7 +37,9 @@ test.describe('1-hour lesson opt-in contract', () => {
     expect(slotsApi).toContain('} else if (!isLessonTypeOffered(offered, lt.slug)) {');
     expect(slotsApi).toContain('function rejectLessonTypeNotOffered(res)');
     expect(slotsApi).toContain('This instructor does not currently offer that lesson length.');
-    expect(slotsApi).toContain('SELECT id, name, email, phone, max_travel_minutes, offered_lesson_types FROM instructors');
+    expect(slotsApi).toContain('SELECT id, name, email, phone, max_travel_minutes, offered_lesson_types,');
+    expect(slotsApi).toContain('SELECT id, name, email, phone, COALESCE(buffer_minutes, 30) AS buffer_minutes,');
+    expect(slotsApi).toContain('max_travel_minutes, offered_lesson_types,');
     expect(slotsApi).toContain('if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {');
   });
 
@@ -52,15 +54,17 @@ test.describe('1-hour lesson opt-in contract', () => {
     expect(js).toContain('var offeredPayload = (enabledSlugs.length === allSlugs.length && !optInOnlyEnabled) ? null : enabledSlugs;');
   });
 
-  test('buy credits only shows single-lesson cards offered by the selected instructor and allows 1 hour checkout', () => {
+  test('retired credit purchase surface does not render single-lesson checkout cards', () => {
     const buyCredits = read('public/learner/buy-credits.js');
     const creditsApi = read('api/credits.js');
 
-    expect(buyCredits).toContain("if (!currentInstructorId) {\n      lessonTypes = [];");
-    expect(buyCredits).toContain("'/api/lesson-types?action=list&instructor_id=' + encodeURIComponent(currentInstructorId)");
-    expect(buyCredits).toContain('await loadLessonTypes();');
+    expect(buyCredits).not.toContain("'/api/lesson-types?action=list&instructor_id=' + encodeURIComponent(currentInstructorId)");
+    expect(buyCredits).not.toContain('buySingleLesson');
+    expect(buyCredits).not.toContain('/api/credits?action=checkout');
 
     expect(creditsApi).toContain('const MIN_HOURS_PER_PURCHASE = 1;');
+    expect(creditsApi).toContain('const SELF_SERVE_CREDIT_PURCHASES_ENABLED = false;');
+    expect(creditsApi).toContain("code: 'CREDIT_PURCHASE_RETIRED'");
     expect(creditsApi).toContain('hours < MIN_HOURS_PER_PURCHASE');
     expect(creditsApi).toContain('Hours must be between ${MIN_HOURS_PER_PURCHASE} and ${MAX_HOURS_PER_PURCHASE}');
   });

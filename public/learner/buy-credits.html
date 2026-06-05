@@ -633,6 +633,15 @@
       .programme-title { font-size: 1.25rem; }
       .programme-price { font-size: 2.1rem; }
     }
+    .single-lessons-section,
+    #packagesDivider,
+    #singleLessonLink,
+    #priceSummary,
+    #btnCheckout,
+    .payment-methods,
+    .klarna-note {
+      display: none !important;
+    }
   </style>
 <script src="/sidebar.js"></script>
 <script src="/shared/learner-auth.js"></script>
@@ -644,29 +653,29 @@
   <header class="doc-header">
     <div class="doc-header-left">
       <span class="doc-stamp">CC</span>
-      <span>Lesson credits<span class="doc-meta-dot">·</span>Top up your account</span>
+      <span>Lesson credit<span class="doc-meta-dot">·</span>Existing balance</span>
     </div>
-    <span>Klarna ready</span>
+    <span>Read-only</span>
   </header>
 
   <section class="credits-hero">
-    <div class="hero-eyebrow">Pay-as-you-learn</div>
-    <h1 id="creditsTitle">Choose an <em>instructor</em>.</h1>
-    <p class="subtitle" id="creditsSubtitle">Select an instructor to see their current hourly rate and available credit packages.</p>
+    <div class="hero-eyebrow">Lesson Credit</div>
+    <h1 id="creditsTitle">Lesson <em>Credit</em>.</h1>
+    <p class="subtitle" id="creditsSubtitle">Existing Lesson Credit remains available for booking eligible lessons. New self-serve top-ups are retired.</p>
   </section>
 
   <!-- Instructor context -->
   <section class="instructor-context" aria-labelledby="instructorSelectorLabel">
     <div class="instructor-context-row">
-      <label class="instructor-label" id="instructorSelectorLabel" for="instructorSelect">Choose instructor</label>
+      <label class="instructor-label" id="instructorSelectorLabel" for="instructorSelect">View balance for</label>
       <select class="instructor-select" id="instructorSelect">
         <option value="">Loading instructors...</option>
       </select>
     </div>
-    <p class="instructor-help" id="instructorHelp">Hours are held against the instructor you choose here.</p>
+    <p class="instructor-help" id="instructorHelp">Lesson Credit is scoped to the instructor it was issued against.</p>
     <div class="pricing-context" id="pricingContext">
-      <span>Selected hourly rate</span>
-      <span class="pricing-rate" id="pricingRateValue">Choose instructor</span>
+      <span>Selected balance</span>
+      <span class="pricing-rate" id="pricingRateValue">-</span>
     </div>
   </section>
 
@@ -678,31 +687,31 @@
       </svg>
     </div>
     <div>
-      <div class="balance-label" id="balanceLabel">Hours on account</div>
-      <div class="balance-value" id="balanceValue">—</div>
-      <div class="balance-unit" id="balanceUnit">hours</div>
+      <div class="balance-label" id="balanceLabel">Total hours</div>
+      <div class="balance-value" id="balanceValue">-</div>
+      <div class="balance-unit" id="balanceUnit">hours across instructors</div>
     </div>
     <div style="width: 1px;"></div>
   </div>
 
   <!-- Single lesson cards (dynamically rendered) -->
   <div class="single-lessons-section" id="singleLessonsSection" style="display:none">
-    <div class="section-label">Buy a single lesson</div>
-    <div class="single-lessons-title">Buy a single lesson</div>
+    <div class="section-label">Single lessons unavailable here</div>
+    <div class="single-lessons-title">Single lessons unavailable here</div>
     <div class="single-lessons-grid" id="singleLessonsGrid"></div>
   </div>
 
   <div class="section-divider" id="packagesDivider" style="display:none">
     <span class="section-divider-line"></span>
-    <span id="packagesDividerText">Or choose hour packages</span>
+    <span id="packagesDividerText">Existing balances only</span>
     <span class="section-divider-line"></span>
   </div>
 
   <!-- If no single-lesson section is shown, still label the packages.
        When the divider above IS shown (i.e. lesson types loaded), we hide
        this label via CSS to avoid two consecutive section headers. -->
-  <div class="section-label" id="packagesLabel">Choose an instructor</div>
-  <p class="packages-note" id="packagesNote">Credit pricing appears after you choose an instructor.</p>
+  <div class="section-label" id="packagesLabel">Existing balances</div>
+  <p class="packages-note" id="packagesNote">To book without enough Lesson Credit, choose a slot and use the pay-and-book option.</p>
 
   <!-- Package cards (rendered dynamically from API prices) -->
   <div class="packages" id="packages"></div>
@@ -726,19 +735,18 @@
   </div>
 
   <button class="btn-checkout" id="btnCheckout">
-    <span id="btnLabel">Buy 12 hours — £594.00</span>
+    <span id="btnLabel">Self-serve top-ups retired</span>
     <div class="spinner" id="btnSpinner"></div>
   </button>
 
   <!-- Payment methods strip -->
   <div class="payment-methods" aria-label="Payment methods">
-    <span class="pm-badge"><strong>Klarna</strong><span class="pm-dot">·</span>Pay in 3, interest-free</span>
-    <span class="pm-badge">Card<span class="pm-dot">·</span>Apple Pay<span class="pm-dot">·</span>Google Pay</span>
+    <span class="pm-badge">Pay-and-book remains available from the booking page</span>
   </div>
 
   <!-- Klarna note (hidden — kept for JS compat) -->
   <p class="klarna-note">
-    <strong>Pay in 3 with Klarna</strong> available at checkout — split the cost interest-free.
+    Self-serve credit checkout is retired.
   </p>
 
   <!-- Test Ready Guarantee section (temporarily hidden) -->
