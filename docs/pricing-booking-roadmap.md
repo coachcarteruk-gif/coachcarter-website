@@ -1,6 +1,6 @@
 # Pricing And Booking Roadmap
 
-Status: planning
+Status: implementation in progress
 Last updated: 2026-06-05
 
 ## Purpose
@@ -260,6 +260,48 @@ Docs to load before implementation:
 - `docs/per-instructor-credits-audit.md`
 - `PROJECT.md`
 - `CLAUDE.md`
+
+Stage Progress - 2026-06-05:
+
+- Implemented on branch `codex/stage-2-remove-learner-credit-purchases`.
+- `/api/credits?action=checkout` now returns `410 CREDIT_PURCHASE_RETIRED` before pricing, SQL, or Stripe checkout work runs.
+- `/api/credits?action=create-payment-intent` now returns `410 CREDIT_PURCHASE_RETIRED` before pricing, SQL, or Stripe PaymentIntent work runs.
+- Existing Lesson Credit remains preserved. `learner_credit_balances` stays the spendable credit source, and the existing spend path in booking remains available for eligible bookings.
+- Historical credit compatibility remains preserved. Existing webhook and verify handling for already-created or already-paid `credit_purchase` sessions/PaymentIntents was intentionally left in place.
+- Ledger behaviour was intentionally left untouched. `booking_credit_sources`, `credit_source_adjustments`, refund/cancellation/payout lifecycles, BCS refund execution, and booking status semantics were not changed.
+- `/learner/buy-credits.html` was converted into a read-only existing Lesson Credit balance page for old bookmarks. It loads balances through `/api/credits?action=balance`, supports selected-instructor balance context, and no longer posts to credit checkout.
+- Learner-facing buy/top-up entry points were removed or redirected from the booking modal, learner sidebar, learner dashboard balance tile, demo bottom navigation, public lessons package funnel, public/homepage copy, and marketing editor defaults.
+- The public `/lessons.html` package section now routes learners toward booking/pay-and-book instead of creating credit checkout sessions.
+- The AI Lesson Advisor no longer has a Stripe checkout tool, no longer creates credit checkout links, and no longer quotes fixed package pricing.
+- Copy was updated in `PROJECT.md`, `docs/navigation.md`, `public/config.json`, `public/index.html`, `public/terms.html`, `api/magic-link.js`, `api/slots.js`, `api/webhook.js`, `api/enquiries.js`, and admin/dashboard/editor surfaces to describe existing Lesson Credit rather than new self-serve bulk purchases.
+- Tests updated or added for retired credit purchase APIs, read-only learner credit UI, removed learner navigation entry points, public marketing pricing copy, one-hour lesson opt-in expectations, dynamic payment method coverage, and the reschedule-credit integration fixture date window.
+
+Validation recorded for Stage 2:
+
+- `npm.cmd test -- tests/learner-credit-ui.spec.js tests/credits-instructor-api.spec.js tests/marketing-pricing-copy.spec.js tests/one-hour-lesson-opt-in.spec.js tests/stripe-dynamic-payment-methods.spec.js` - 31 passed.
+- `npm.cmd run check:syntax` - OK 158 files.
+- `npm.cmd test -- tests/slots-credit-bcs.integration.spec.js tests/cancel-bcs-refund.integration.spec.js tests/reschedule-credit-returned.integration.spec.js` - 27 passed. The run printed outbound test email/SMS delivery errors after assertions, but exited successfully.
+- After final stale-copy cleanup, `npm.cmd test -- tests/marketing-pricing-copy.spec.js` - 3 passed.
+- After final stale-copy cleanup, `npm.cmd run check:syntax` - OK 158 files.
+
+Stage 2 intentionally left untouched:
+
+- No Stripe/Klarna configuration changes.
+- No Reserved Weekly Slot implementation.
+- No Paid-In-Full Reward implementation.
+- No Pay by Bank implementation.
+- No database migrations.
+- No hardcoded commercial numbers.
+- No refund, cancellation, payout, booking lifecycle, or BCS refund behaviour changes.
+- No mutation of historical financial ledger rows.
+
+Stage 2 remaining risks and follow-up notes:
+
+- The old `/learner/buy-credits.html` route remains as a read-only balance page for compatibility rather than being removed or redirected. Keep monitoring for stale external links or cached copy that still implies new top-ups.
+- `api/credits.js` still contains dormant checkout/PaymentIntent implementation behind the retired guard so historical metadata and possible operator recovery paths remain understandable. A later cleanup can decide whether to remove this dead path once no in-flight sessions depend on it.
+- `bulk-pricing` remains read-only for compatibility/admin or legacy display use. It should not be treated as approval to reintroduce learner-facing self-serve credit packages.
+- Some historical audit/runbook language still references prior credit purchase architecture. Update those docs only when that area is being worked on, so this Stage 2 PR stays scoped.
+- No new Stage 2 product decision is open before merge. Later stages still need the Pay by Bank, provisional hold, timeout/failure, and Reserved Weekly Slot policy decisions listed in Open Decisions.
 
 ### Stage 3: Payment Method Guardrails
 

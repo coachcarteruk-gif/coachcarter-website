@@ -127,7 +127,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   │   ├── login.html              # Magic-link login (email or SMS)
 │   │   ├── verify.html             # Token verification page (two-step: validate then verify)
 │   │   ├── book.html               # Lesson booking calendar — monthly/weekly/daily views (credit or pay-per-slot)
-│   │   ├── buy-credits.html        # Buy lesson credits via Stripe
+│   │   ├── buy-credits.html        # Read-only existing Lesson Credit balance page
 │   │   ├── log-session.html        # Log a driving session (3-step wizard, 17 skills, fault tallies)
 │   │   ├── videos.html             # Video library (behind login)
 │   │   ├── advisor.html            # AI Lesson Advisor chat page
@@ -487,7 +487,7 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 
 | Endpoint | Method | Auth | Description |
 |---|---|---|---|
-| (single endpoint) | POST | Yes | AI lesson advisor chat with Claude tool_use — recommends hour packages and creates Stripe Checkout sessions (£55/hr base, up to 25% discount, 1.5–30 hours) |
+| (single endpoint) | POST | Yes | AI lesson advisor chat. Recommends lesson planning and booking next steps; the old credit checkout tool is retired. |
 
 ### API — `api/reviews.js`
 
