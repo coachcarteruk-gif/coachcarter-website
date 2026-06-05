@@ -133,11 +133,11 @@ All three roles use email + password sign-in. Magic-link login was retired entir
 
 ## Advance Booking Window
 
-Self-serve learner bookings have a platform cap of 84 days (12 weeks) ahead — `MAX_DAYS_AHEAD = 84` in `api/slots.js`, `FEED_MAX_DAYS = 84` in `public/learner/book.js`. Instructors can reduce their learner-facing window from the instructor profile via `instructors.max_booking_days_ahead` (1–84 days). The effective self-serve window is the lesser of the platform cap and the instructor setting. The cap covers `?action=available`, `?action=book`, `?action=checkout-slot`, `?action=checkout-slot-guest`, `?action=reschedule`, `?action=book-free-trial`, and `?action=create-offer` (first-slot date).
+Self-serve learner bookings have a platform cap of 28 days (4 weeks) ahead — `MAX_DAYS_AHEAD = 28` in `api/slots.js`, `FEED_MAX_DAYS = 28` in `public/learner/book.js`. Instructors can reduce their learner-facing window from the instructor profile via `instructors.max_booking_days_ahead` (stored as 1–84 days for compatibility). The effective self-serve window is the lesser of the 28-day platform cap and the instructor setting. The cap covers `?action=available`, `?action=book`, `?action=checkout-slot`, `?action=checkout-slot-guest`, `?action=reschedule`, `?action=book-free-trial`, and `?action=create-offer` (first-slot date).
 
 The **only** path that may legitimately create bookings past this cap is `bookOfferSeries()` in `api/offers.js`, called from `api/webhook.js handleOfferBooking` and `handleFreeOffer`. An instructor sets `lesson_offers.max_repeat_weeks` (1–18) when creating the offer; the learner picks 1..max on the accept page; the webhook fans out a weekly series with `series_id`, skipping clashed weeks (existing booking, blackout, no DoW availability) and rolling to the next free week up to an 18-week lookahead from the original date. Pricing is per-lesson × N (Stripe `quantity`); if we can't fill all weeks, Stripe is partially refunded for the unused ones.
 
-Don't add paths that bypass the 12-week platform cap for ordinary learner self-serve booking. If an instructor wants to book a learner further out, they use the offer-with-repeats flow.
+Don't add paths that bypass the 4-week platform cap for ordinary learner self-serve booking. If an instructor wants to book a learner further out, they use the offer-with-repeats flow.
 
 ## Broadcast offers
 

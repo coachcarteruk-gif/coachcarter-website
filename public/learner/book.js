@@ -25,13 +25,12 @@ let slotCache     = {}; // dateStr -> [slot, ...]
 let loadedRanges  = [];
 let feedFrom      = null; // Date: start of loaded window (always today)
 let feedTo        = null; // Date: end of currently loaded window
-const FEED_CHUNK_DAYS = 14;
-const FEED_MAX_DAYS   = 84;
+const FEED_MAX_DAYS   = 28;
 // Overflow lead routing (plan item 1.2). When a specific instructor is selected
-// and they have zero slots across the full 84-day window, render a slot-feed of
+// and they have zero slots across the full 4-week window, render a slot-feed of
 // alternatives from the school's other active instructors. State below is reset
 // on filter change via onFilterChange().
-let overflowMode  = false;            // true when chosen instructor has 0 slots in 84d
+let overflowMode  = false;            // true when chosen instructor has 0 slots in 4 weeks
 let overflowCache = null;             // { dateStr: [slot, ...] } for alternatives, or null
 let overflowFingerprint = null;       // `${ltId}|${postcode}` — invalidates cache on change
 let pendingSlot   = null;
@@ -532,7 +531,7 @@ async function initFeed() {
   choosePageLessonType();
   renderLessonLengthControls();
   feedFrom = new Date(); feedFrom.setHours(0,0,0,0);
-  feedTo = addDaysLocal(feedFrom, FEED_CHUNK_DAYS - 1);
+  feedTo = addDaysLocal(feedFrom, FEED_MAX_DAYS);
   const maxDate = addDaysLocal(feedFrom, FEED_MAX_DAYS);
   if (feedTo > maxDate) feedTo = maxDate;
   slotCache = {};
@@ -542,18 +541,13 @@ async function initFeed() {
 
   const instructorId = document.getElementById('instructorFilter').value;
 
-  // Overflow lead routing (plan item 1.2). Only when a specific instructor is
-  // selected do we eagerly fetch the full 84-day window — needed to know whether
-  // they're truly empty (chunked load could falsely declare empty on chunk 1).
+  // Overflow lead routing (plan item 1.2). Fetch the full 4-week learner window
+  // in one go so learners don't need to reveal later dates manually.
   if (instructorId) {
     const fullTo = addDaysLocal(feedFrom, FEED_MAX_DAYS);
-    // Eager full-window fetch is needed to know if the chosen instructor is truly empty
-    // (chunked load could falsely declare empty after only chunk 1). Side benefit: when
-    // the learner picks one specific instructor, showing all 84 days of their diary at
-    // once is a better UX than chunked load-more clicks.
     const ok = await fetchFeedSlots(feedFrom, fullTo);
     if (ok === false) return;
-    feedTo = fullTo; // hide load-more — full window already rendered
+    feedTo = fullTo;
     const chosenHasSlots = Object.values(slotCache).some(arr => arr && arr.length > 0);
     if (!chosenHasSlots && instructors.length > 1) {
       // Fetch alternatives (all-instructor query) once, cache by lesson-type + postcode.
@@ -577,7 +571,7 @@ async function initFeed() {
     return;
   }
 
-  // No specific instructor — original chunked load path.
+  // No specific instructor — still fetch the complete learner window immediately.
   const ok = await fetchFeedSlots(feedFrom, feedTo);
   if (ok === false) return;
   renderFeed();
@@ -761,7 +755,7 @@ function renderTimeGroups(slotsForDate, opts) {
   if (!slotsForDate.length) {
     return `<div class="calendar-empty">
       <h3>No times on ${esc(selectedParts.day.toLowerCase() === 'today' || selectedParts.day.toLowerCase() === 'tomorrow' ? selectedParts.day : selectedParts.date)}</h3>
-      <p>Choose another date above or show later dates.</p>
+      <p>Choose another date above or check back later.</p>
     </div>`;
   }
 
@@ -955,7 +949,7 @@ function buildSlotFeedHtml(allSlots) {
 
 function renderFeed() {
   // Overflow lead routing (plan item 1.2): chosen instructor has zero slots
-  // across the full 84-day window. Render heading + subheading + alternatives.
+  // across the full 4-week window. Render heading + subheading + alternatives.
   if (overflowMode) {
     const chosenId = document.getElementById('instructorFilter').value;
     const chosen = instructors.find(i => String(i.id) === String(chosenId));
@@ -972,7 +966,7 @@ function renderFeed() {
       document.getElementById('calContent').innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">📅</div>
-          <h3>No slots with ${esc(firstName)} in the next 12 weeks.</h3>
+          <h3>No slots with ${esc(firstName)} in the next 4 weeks.</h3>
         <p>No slots found with our other instructors either. Try a different lesson type or check back later.</p>
       </div>`;
       updateFeedFooter(0);
@@ -981,7 +975,7 @@ function renderFeed() {
 
     const html = `
       <div class="overflow-section">
-        <h3 class="overflow-heading">No slots with ${esc(firstName)} in the next 12 weeks.</h3>
+        <h3 class="overflow-heading">No slots with ${esc(firstName)} in the next 4 weeks.</h3>
         <p class="overflow-subhead">Slots with our other instructors:</p>
         ${renderBookingCalendar(overflowCache, { showInstructor: true })}
       </div>`;
@@ -997,7 +991,7 @@ function renderFeed() {
       <div class="empty-state">
         <div class="empty-icon">📅</div>
         <h3>No slots available</h3>
-        <p>No slots found in the next ${FEED_CHUNK_DAYS} days. Try a different lesson type or check back later.</p>
+        <p>No slots found in the next 4 weeks. Try a different lesson type or check back later.</p>
       </div>`;
     updateFeedFooter(0);
     return;
@@ -1014,33 +1008,17 @@ function updateFeedFooter(slotCount) {
   const btn = document.getElementById('btnLoadMore');
   footer.style.display = 'block';
 
-  const today = new Date(); today.setHours(0,0,0,0);
-  const maxDate = addDaysLocal(today, FEED_MAX_DAYS);
-  const atMax = feedTo >= maxDate;
-
   status.textContent = slotCount > 0
-    ? `Showing ${slotCount} available slot${slotCount !== 1 ? 's' : ''}`
-    : 'No slots found in this period';
-  btn.style.display = atMax ? 'none' : 'inline-block';
-  btn.disabled = false;
-  btn.textContent = 'Show later dates';
+    ? `Showing ${slotCount} available slot${slotCount !== 1 ? 's' : ''} in the next 4 weeks`
+    : 'No slots found in the next 4 weeks';
+  if (btn) {
+    btn.hidden = true;
+    btn.style.display = 'none';
+  }
 }
 
 async function loadMoreSlots() {
-  const btn = document.getElementById('btnLoadMore');
-  btn.disabled = true;
-  btn.textContent = 'Loading…';
-
-  const newFrom = addDaysLocal(feedTo, 1);
-  const today = new Date(); today.setHours(0,0,0,0);
-  const maxDate = addDaysLocal(today, FEED_MAX_DAYS);
-  let newTo = addDaysLocal(newFrom, FEED_CHUNK_DAYS - 1);
-  if (newTo > maxDate) newTo = maxDate;
-
-  feedTo = newTo;
-  const ok = await fetchFeedSlots(newFrom, newTo);
-  if (ok !== false) renderFeed();
-  else { btn.disabled = false; btn.textContent = 'Show later dates'; }
+  return;
 }
 window.loadMoreSlots = loadMoreSlots;
 
@@ -1180,6 +1158,7 @@ function openBookModal(el) {
     const claimCta = document.getElementById('claimTrialCta');
     if (claimCta) claimCta.style.display = 'none';
     document.getElementById('repeatSection').style.display = '';
+    syncRepeatWindowOptions();
     if (needsProfileFields) {
       document.getElementById('profileFields').style.display = 'block';
       const hasPhone = !!(learnerProfile.phone && learnerProfile.phone.trim());
@@ -1483,10 +1462,53 @@ function syncRepeatCountButtons() {
   });
 }
 
+function maxRepeatLessonsForPendingSlot() {
+  if (!pendingSlot || !pendingSlot.date) return 4;
+  const today = new Date(); today.setUTCHours(0,0,0,0);
+  const slotDate = new Date(pendingSlot.date + 'T00:00:00Z');
+  const offsetDays = Math.max(0, Math.round((slotDate - today) / (24 * 60 * 60 * 1000)));
+  return Math.max(1, Math.min(4, Math.floor((FEED_MAX_DAYS - offsetDays) / 7) + 1));
+}
+
+function syncRepeatWindowOptions() {
+  const maxWeeks = maxRepeatLessonsForPendingSlot();
+  const repeatSection = document.getElementById('repeatSection');
+  const repeatToggle = document.getElementById('repeatToggle');
+  const select = document.getElementById('repeatWeeksSelect');
+  if (!repeatSection || !repeatToggle || !select) return maxWeeks;
+
+  const canRepeat = maxWeeks >= 2;
+  repeatSection.style.display = canRepeat ? '' : 'none';
+  if (!canRepeat) {
+    repeatToggle.checked = false;
+    document.getElementById('repeatOptions')?.classList.remove('open');
+  }
+
+  Array.from(select.options).forEach(option => {
+    const fits = parseInt(option.value, 10) <= maxWeeks;
+    option.disabled = !fits;
+    option.hidden = !fits;
+  });
+  document.querySelectorAll('.repeat-count-btn').forEach(btn => {
+    const fits = parseInt(btn.dataset.repeatWeeks, 10) <= maxWeeks;
+    btn.disabled = !fits;
+    btn.hidden = !fits;
+  });
+
+  const current = parseInt(select.value, 10);
+  if (!Number.isFinite(current) || current < 2 || current > maxWeeks) {
+    select.value = String(Math.min(4, Math.max(2, maxWeeks)));
+  }
+  syncRepeatCountButtons();
+  return maxWeeks;
+}
+
 function setRepeatWeeks(weeks, opts) {
   opts = opts || {};
   const select = document.getElementById('repeatWeeksSelect');
   if (!select) return;
+  const maxWeeks = maxRepeatLessonsForPendingSlot();
+  if (weeks > maxWeeks) weeks = maxWeeks;
   select.value = String(weeks);
   syncRepeatCountButtons();
   if (!opts.skipUpdate && document.getElementById('repeatToggle')?.checked) {

@@ -12,7 +12,7 @@ This spec is self-contained. Implementation can start from this document without
 
 ## Goal in one sentence
 
-When a learner picks a specific instructor on `book.html` and that instructor has zero bookable slots across the entire 12-week (84-day) booking window, replace the empty state with the same slot-feed showing slots from CCL's other active instructors.
+When a learner picks a specific instructor on `book.html` and that instructor has zero bookable slots across the entire 4-week (28-day) learner booking window, replace the empty state with the same calendar showing slots from CCL's other active instructors.
 
 ---
 
@@ -27,7 +27,7 @@ Instructor #2's first weeks will have a sparse diary. Without overflow routing, 
 The overflow section renders **only** when **all** of the following are true:
 
 1. The learner has selected a specific instructor via the `instructorFilter` dropdown (i.e. `instructorFilter.value` is non-empty).
-2. The chosen instructor has **zero** bookable slots in the next 84 days (`FEED_MAX_DAYS`).
+2. The chosen instructor has **zero** bookable slots in the next 28 days (`FEED_MAX_DAYS`).
 3. (Implicit) other active instructors at the school exist (otherwise overflow has nothing to show — fall back to the original empty state).
 
 When any of those is false:
@@ -35,7 +35,7 @@ When any of those is false:
 - Chosen instructor has slots (even one) → existing feed renders normally; no overflow.
 - Only one instructor exists at the school → existing empty state, no overflow.
 
-**Why "zero in 84 days" not "zero in 7 days":** instructors who book ahead may have all of weeks 1–8 booked but week 11 free. Triggering on 7-day emptiness would falsely surface alternatives and undermine instructors with healthy diaries. The 84-day window matches `FEED_MAX_DAYS` already used by the feed.
+**Why "zero in 28 days" not "zero in 7 days":** instructors who book ahead may have the first week fully booked but later weeks free. Triggering on 7-day emptiness would falsely surface alternatives and undermine instructors with healthy diaries. The 28-day window matches `FEED_MAX_DAYS` already used by the learner calendar.
 
 ---
 
@@ -47,7 +47,7 @@ Replace the current empty state at `public/learner/book.js:493`:
 <div class="empty-state">
   <div class="empty-icon">📅</div>
   <h3>No slots available</h3>
-  <p>No slots found in the next ${FEED_CHUNK_DAYS} days. ...</p>
+  <p>No slots found in the next 4 weeks. ...</p>
 </div>
 ```
 
@@ -55,7 +55,7 @@ With:
 
 ```html
 <div class="overflow-section">
-  <h3>No slots with [FirstName] in the next 12 weeks.</h3>
+  <h3>No slots with [FirstName] in the next 4 weeks.</h3>
   <p class="overflow-subhead">Slots with our other instructors:</p>
   <!-- slot feed renders here, same DOM structure as a normal feed -->
 </div>
@@ -63,9 +63,9 @@ With:
 
 Where `[FirstName]` is the chosen instructor's first name (split on first space, fallback to full name if no space). E.g. "Sarah" not "Sarah Henderson"; "Tom" not "Tom O'Brien".
 
-The slot feed below the heading uses the **same `feed-card` markup, same date headers, same load-more pagination** as the normal feed. Visual differentiation is achieved by each slot card already showing the instructor's name and avatar (existing behaviour at `book.js:522–525`).
+The calendar below the heading uses the **same date strip and time-group controls** as the normal learner booking surface. Visual differentiation is achieved by each time button showing the instructor's name and avatar when alternatives are shown.
 
-If after the fallback query the result *also* has zero slots (i.e. nobody at the school has any availability — extreme edge case), fall back to the original empty state with a note: "No slots found in the next 12 weeks. Please check back later."
+If after the fallback query the result *also* has zero slots (i.e. nobody at the school has any availability — extreme edge case), fall back to the original empty state with a note: "No slots found in the next 4 weeks. Please check back later."
 
 ---
 
@@ -89,9 +89,9 @@ All of these continue to apply when overflow is triggered.
 
 **Change 1 — detect zero-slots-for-chosen-instructor.**
 
-Inside `fetchFeedSlots()` or immediately after, check whether `instructorFilter.value` is non-empty AND the result for that instructor across the full 84-day window is empty. If so, set a flag, e.g. `overflowMode = true`.
+Inside `fetchFeedSlots()` or immediately after, check whether `instructorFilter.value` is non-empty AND the result for that instructor across the full 28-day window is empty. If so, set a flag, e.g. `overflowMode = true`.
 
-The cleanest hook is inside `renderFeed()` at the existing `if (allSlots.length === 0)` branch — that branch already runs when the chosen instructor has no slots in the loaded chunk. To check across the *full* 84 days, ensure the chunked load has covered all 84 days before deciding overflow has fired (i.e. don't trigger overflow on the first 30-day chunk; wait until the full window has been queried).
+The cleanest hook is inside `initFeed()` after fetching the full 28-day learner window so overflow is decided from the complete visible booking horizon.
 
 **Change 2 — when overflow is active, refetch without `instructor_id`.**
 
@@ -101,7 +101,7 @@ Cache the overflow result separately from the chosen-instructor cache so togglin
 
 **Change 3 — render the overflow section.**
 
-Replace the empty-state branch with the overflow heading + subheading + the existing feed-rendering loop (`for (const s of allSlots)` at `book.js:507`). The slot cards themselves are unchanged.
+Replace the empty-state branch with the overflow heading + subheading + the existing learner calendar rendering. The date and time buttons themselves are unchanged.
 
 **Change 4 — preserve the dropdown state.**
 
@@ -111,9 +111,9 @@ The chosen-instructor dropdown stays on the chosen instructor regardless of whic
 
 **Change 5 — minimal CSS additions.**
 
-Style the `.overflow-section` heading + subheading. Visually distinct from a date-divider but not louder than the slot cards. Recommend reusing the existing `h3` / `h2` styling and adding a small subtitle style for the "Slots with our other instructors:" line.
+Style the `.overflow-section` heading + subheading. Visually distinct from the date strip but not louder than the time buttons. Recommend reusing the existing `h3` / `h2` styling and adding a small subtitle style for the "Slots with our other instructors:" line.
 
-No new layout primitives needed — the slot feed below uses the existing `.slot-feed` container.
+No new layout primitives needed — the alternatives below use the existing learner booking calendar.
 
 ---
 
@@ -121,9 +121,9 @@ No new layout primitives needed — the slot feed below uses the existing `.slot
 
 | Case | Behaviour |
 |------|-----------|
-| Chosen instructor has 1+ slot anywhere in 84 days | Normal feed; no overflow. |
-| Chosen instructor has 0 slots in 84 days, school has other active instructors | Overflow renders. |
-| Chosen instructor has 0 slots, school has no other active instructors | Original empty state ("No slots found in the next 12 weeks…"). |
+| Chosen instructor has 1+ slot anywhere in 28 days | Normal calendar; no overflow. |
+| Chosen instructor has 0 slots in 28 days, school has other active instructors | Overflow renders. |
+| Chosen instructor has 0 slots, school has no other active instructors | Original empty state ("No slots found in the next 4 weeks..."). |
 | Learner clicks alternative slot | Booking modal opens with the alternative instructor. Page dropdown unchanged. After booking, page returns to chosen instructor's feed (still empty). |
 | Learner changes dropdown to "all instructors" while overflow is showing | Re-render in normal mode; overflow-specific UI vanishes. |
 | Learner changes dropdown from instructor A to instructor B (both have 0 slots) | Re-render with new heading "No slots with [B's first name]…" and same overflow data (cached, no refetch needed). |
@@ -148,8 +148,8 @@ These are deliberately deferred — addressed by separate plan items.
 
 The implementation is done when, on `book.html`:
 
-- [ ] Selecting an instructor from the dropdown who has zero slots in 84 days replaces the empty state with an overflow section.
-- [ ] The overflow heading reads "No slots with [FirstName] in the next 12 weeks." and the subheading reads "Slots with our other instructors:".
+- [ ] Selecting an instructor from the dropdown who has zero slots in 28 days replaces the empty state with an overflow section.
+- [ ] The overflow heading reads "No slots with [FirstName] in the next 4 weeks." and the subheading reads "Slots with our other instructors:".
 - [ ] First name is split on first space; full name used as fallback if no space exists.
 - [ ] The slot feed below shows slots from all *other* active instructors at the same school (chosen instructor self-excludes by virtue of having no slots).
 - [ ] Existing lesson-type, postcode, and travel-time filters continue to apply.
@@ -166,15 +166,15 @@ The implementation is done when, on `book.html`:
 
 The changes are concentrated in two functions in `book.js`:
 
-1. **`fetchFeedSlots()`** at `book.js:413`. Add a second fetch when the post-query result for the chosen instructor is zero across all 84 days. Cache the alternatives result separately.
+1. **`fetchFeedSlots()`**. Add a second fetch when the post-query result for the chosen instructor is zero across all 28 days. Cache the alternatives result separately.
 
-2. **`renderFeed()`** at `book.js:480`. Add a branch: if `overflowMode` and we have alternatives, render the overflow heading + subheading + loop over alternative slots using the existing card markup. Otherwise render the normal feed or empty state.
+2. **`renderFeed()`**. Add a branch: if `overflowMode` and we have alternatives, render the overflow heading + subheading + learner calendar with alternative slots. Otherwise render the normal calendar or empty state.
 
-The function `initFeed()` at `book.js:398` may also need a small adjustment so that the chunked load completes the full 84-day range before deciding overflow has fired — currently it loads chunk-by-chunk and could prematurely render an empty state on the first chunk. Cleanest approach: only check the overflow trigger after the full range has been fetched, or after the user clicks "load more" enough times to reach the 84-day cap.
+The function `initFeed()` should fetch the full 28-day range before deciding overflow has fired.
 
 Test fixtures needed:
 - An instructor with availability in some weeks (control — overflow should NOT fire).
-- An instructor with zero availability across 84 days (overflow trigger).
+- An instructor with zero availability across 28 days (overflow trigger).
 - A school with the test instructor as the only active instructor (overflow falls back to empty state).
 - Alternative instructors with mixed lesson types (verify lesson-type filter still applies).
 

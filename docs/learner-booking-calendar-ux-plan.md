@@ -379,7 +379,7 @@ Tasks:
 - Group slots for selected date into morning, afternoon, evening.
 - Render time chips instead of large feed cards.
 - Show empty state for a selected date with no slots.
-- Keep `Show more slots` as `Show later dates` or load more dates into the strip.
+- Do not expose `Show more slots` / `Show later dates`; the learner calendar loads the complete 4-week self-serve window.
 
 Acceptance criteria:
 
@@ -501,7 +501,7 @@ Recommended:
 
 ## Performance Considerations
 
-- Avoid rendering all 84 days of all-instructor slots as large DOM card lists.
+- Avoid rendering large all-instructor slot card lists; the self-serve learner calendar is capped to a 4-week date strip.
 - Render only the selected date's time buttons.
 - Keep date summaries lightweight.
 - Do not recalculate date grouping on every small interaction if the slot cache has not changed.

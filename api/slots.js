@@ -20,7 +20,7 @@
 //
 // Constraints enforced:
 //   - "from" may not be in the past
-//   - "to" may not exceed 84 days from today (12-week advance booking window)
+//   - "to" may not exceed 28 days from today (4-week advance booking window)
 //   - Max 31 days per request (for performance)
 //   - 48-hour cancellation policy for hours return
 
@@ -50,7 +50,7 @@ const {
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
 const SLOT_START_INCREMENT_MINUTES = 30;
-const MAX_DAYS_AHEAD      = 84;   // 12-week booking window (offer-driven series may exceed this — see api/webhook.js handleOfferBooking)
+const MAX_DAYS_AHEAD      = 28;   // 4-week booking window (offer-driven series may exceed this — see api/webhook.js handleOfferBooking)
 const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
 const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
