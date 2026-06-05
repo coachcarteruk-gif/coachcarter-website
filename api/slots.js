@@ -1766,7 +1766,7 @@ async function handleBook(req, res) {
       });
 
       if (!booked.ok && (booked.code === 'INSUFFICIENT_BALANCE' || booked.code === 'INSUFFICIENT_FIFO_SOURCES')) {
-        return res.status(402).json({ error: `Not enough hours. You need ${formatHours(totalMins)}. Please buy more hours.` });
+        return res.status(402).json({ error: `Not enough Lesson Credit. You need ${formatHours(totalMins)}. Please use pay-and-book for this slot.` });
       }
       if (!booked.ok && booked.code === 'SLOTS_UNAVAILABLE') {
         return res.status(409).json({

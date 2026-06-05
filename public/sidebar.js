@@ -180,7 +180,6 @@
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
       { icon: 'calendar', label: 'Lessons', href: '/learner/book.html', children: [
         { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
-        { icon: 'creditCard', label: 'Buy Credits', href: '/learner/buy-credits.html', authOnly: true },
         { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html', authOnly: true }
       ]},
       { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html', children: [
@@ -216,7 +215,7 @@
         { icon: 'home', label: 'Dashboard', href: '/learner/',
           activeOn: [] },
         { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
-          activeOn: ['/learner/lessons-hub', '/learner/buy-credits', '/learner/lessons'] },
+          activeOn: ['/learner/lessons-hub', '/learner/lessons'] },
         { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html',
           activeOn: ['/learner/log-session', '/learner/mock-test', '/learner/focused-practice', '/learner/progress'] },
         { icon: 'play', label: 'Learn', href: '/learner/ask-examiner.html',

@@ -148,14 +148,17 @@ function applyConfig() {
   if (paygPriceEl) paygPriceEl.textContent = '£' + paygLessonPrice;
 
   // Hero stats reduced 2026-04-28 — TRG hidden, so stats 3 & 4 now show "Free trial"
-  // and "DVSA approved" instead of programme price/duration. Stat 1 shows the
-  // public CoachCarter school-default rate; selected-instructor flows confirm
-  // the final price before checkout.
+  // and "DVSA approved" instead of programme price/duration. Stage 2 retires
+  // self-serve credit package messaging, so stat 2 stays direct-booking focused.
   const hourly = p.payg_hourly || (p.payg_lesson_price ? p.payg_lesson_price / 1.5 : 60);
   const stat1El = document.getElementById('hero-stat-1-value');
   const stat1LabelEl = document.getElementById('hero-stat-1-label');
   if (stat1El) stat1El.textContent = '£' + hourly;
   if (stat1LabelEl) stat1LabelEl.innerHTML = 'From per hour,<br>school default';
+  const stat2El = document.getElementById('hero-stat-2-value');
+  const stat2LabelEl = document.getElementById('hero-stat-2-label');
+  if (stat2El) stat2El.textContent = 'Online';
+  if (stat2LabelEl) stat2LabelEl.innerHTML = 'Direct booking<br>available';
 
   // TRG / Core Programme / calculator addon DOM was removed from lessons.html
   // 2026-04-28 (TRG hidden) and the JS hooks were retired 2026-05-19 (PR-J).
@@ -175,8 +178,8 @@ function applyConfig() {
     const setText = (id, val) => { const el = document.getElementById(id); if (el && val) el.textContent = val; };
     setText('section-payg-title', c.sections.payg?.title);
     setText('section-payg-subtitle', c.sections.payg?.subtitle);
-    setText('section-packages-title', c.sections.packages?.title);
-    setText('section-packages-subtitle', c.sections.packages?.subtitle);
+    setText('section-packages-title', 'Existing Lesson Credit');
+    setText('section-packages-subtitle', 'Existing Lesson Credit still works for eligible bookings. New self-serve credit packages are retired, so new learners can book a lesson and pay directly.');
     setText('section-guarantee-title', c.sections.guarantee?.title);
     setText('section-guarantee-subtitle', c.sections.guarantee?.subtitle);
   }
@@ -197,7 +200,7 @@ function applyConfig() {
     setText('nav-cta-primary', c.cta.primary);
     // hero-cta text is set in HTML ("Book your free trial →"); don't override from config.
     setText('btn-payg', c.cta.payg_button);
-    setText('btn-package', c.cta.package_button);
+    setText('btn-package', 'Book a lesson →');
     setText('btn-guarantee', c.cta.guarantee_button);
     setText('cta-primary', c.cta.primary);
     setText('cta-secondary', c.cta.secondary);
@@ -237,15 +240,13 @@ function updateComparisonTable(pricing) {
 function renderPackages() {
   const grid = document.getElementById('packages-grid');
   if (!grid) return;
-  grid.innerHTML = PACKAGES.map((pkg, i) =>
-    '<div class="pkg-card ' + (i === 4 ? 'popular' : '') + ' ' + (i === currentPkgIndex ? 'active' : '') + '" data-action="select-pkg" data-idx="' + i + '">' +
-      '<div class="pkg-hrs">' + pkg.hrs + '</div>' +
-      '<div class="pkg-hrs-label">hours</div>' +
-      '<div class="pkg-discount">' + (pkg.discount * 100) + '% off</div>' +
-      '<div class="pkg-total-price">£' + pkg.price.toLocaleString() + '</div>' +
-      '<div class="pkg-per-hr">£' + (pkg.price / pkg.hrs).toFixed(2) + ' / hr</div>' +
-    '</div>'
-  ).join('');
+  grid.innerHTML = '<div class="pkg-card active" aria-disabled="true">'
+    + '<div class="pkg-hrs">LC</div>'
+    + '<div class="pkg-hrs-label">Lesson Credit</div>'
+    + '<div class="pkg-discount">existing balances only</div>'
+    + '<div class="pkg-total-price">Book directly</div>'
+    + '<div class="pkg-per-hr">Pay-and-book remains available</div>'
+    + '</div>';
 }
 
 loadConfig();
@@ -258,22 +259,13 @@ function fmt(n) {
 }
 
 function updatePkg(idx) {
-  idx = parseInt(idx);
-  currentPkgIndex = idx;
-  const pkg = PACKAGES[idx];
-  if (!pkg) return;
-
-  const _lessonPrice = SITE_CONFIG.pricing?.payg_lesson_price || (SITE_CONFIG.pricing?.payg_hourly ? SITE_CONFIG.pricing.payg_hourly * 1.5 : 90);
-  const std = pkg.hrs * (_lessonPrice / 1.5);
-  const saving = std - pkg.price;
-  const perHr = pkg.price / pkg.hrs;
-
-  document.getElementById('pkg-hrs-display').textContent = pkg.hrs + ' hrs';
-  document.getElementById('pkg-std-price').textContent = fmt(std);
-  document.getElementById('pkg-discount-pct').textContent = (pkg.discount * 100) + '%';
-  document.getElementById('pkg-saving').textContent = '−' + fmt(saving);
-  document.getElementById('pkg-per-hr').textContent = fmt(perHr);
-  document.getElementById('pkg-total').textContent = fmt(pkg.price);
+  currentPkgIndex = parseInt(idx);
+  document.getElementById('pkg-hrs-display').textContent = 'Lesson Credit';
+  document.getElementById('pkg-std-price').textContent = '-';
+  document.getElementById('pkg-discount-pct').textContent = '-';
+  document.getElementById('pkg-saving').textContent = '-';
+  document.getElementById('pkg-per-hr').textContent = '-';
+  document.getElementById('pkg-total').textContent = 'Book directly';
 
   document.querySelectorAll('.pkg-card').forEach((card, i) => {
     card.classList.toggle('active', i === idx);
@@ -309,72 +301,10 @@ function openSetmoreBooking() {
   }
 }
 
-// Bulk-package purchase flow (PR-J, audit #13).
-//
-// Pre-PR-J this called /api/create-checkout-session with caller-controlled
-// line items and metadata, and the webhook routed through the legacy
-// in-memory `bookings` Map flow — the customer paid but no DB row was ever
-// written, so the hours never landed on a learner balance. The legacy
-// endpoint also let the caller dictate the price.
-//
-// Post-PR-J:
-//   • Login wall: anonymous visitors are bounced to /learner/login.html and
-//     returned to #packages after sign-in. We need learner_id + school_id
-//     in the Stripe metadata before the webhook can credit the right balance.
-//   • Server-priced: the only pricing input we send is hours. api/credits.js
-//     ?action=checkout re-prices via calcBulkTotal() — the slider price the
-//     user sees is rendered from the same /api/credits?action=bulk-pricing
-//     endpoint, so what's shown matches what's charged.
-//   • Instructor-scoped: this legacy public marketing funnel is CoachCarter /
-//     Fraser-specific until Slice 3 adds learner-facing instructor selection.
-//   • Lands on /learner/?hours_added=N&session_id=... — the same post-purchase
-//     verify-and-toast path the in-app buy-credits flow uses.
+// Retired bulk-package CTA handler. Kept for old inline event hooks, but now
+// routes users into booking instead of creating Lesson Credit checkout.
 async function startBulkCheckout(pkgIndex) {
-  const btn = event.target;
-  const originalText = btn.textContent;
-  btn.textContent = 'Loading…';
-  btn.disabled = true;
-
-  const restore = () => { btn.textContent = originalText; btn.disabled = false; };
-
-  try {
-    const pkg = PACKAGES[pkgIndex == null ? currentPkgIndex : pkgIndex];
-    if (!pkg) throw new Error('No package selected');
-
-    // Login wall — handleCheckout in api/credits.js requires a learner JWT.
-    // Bounce anonymous visitors to login and bring them back to #packages.
-    const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
-    if (!session) {
-      const redirect = encodeURIComponent('/lessons.html#packages');
-      window.location.href = '/learner/login.html?redirect=' + redirect;
-      return;
-    }
-
-    // Same fetch pattern the in-app buy-credits page uses. The cookie carries
-    // the JWT; we just need credentials: 'include' so it travels.
-    const response = await fetch('/api/credits?action=checkout', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hours: pkg.hrs, instructor_id: LEGACY_MARKETING_INSTRUCTOR_ID })
-    });
-
-    if (response.status === 401) {
-      // JWT expired between page load and click. Re-prompt.
-      const redirect = encodeURIComponent('/lessons.html#packages');
-      window.location.href = '/learner/login.html?redirect=' + redirect;
-      return;
-    }
-
-    if (!response.ok) throw new Error('Failed to create checkout (HTTP ' + response.status + ')');
-    const { url } = await response.json();
-    if (!url) throw new Error('No checkout URL returned');
-    window.location.href = url;
-  } catch (err) {
-    console.error('Bulk checkout error:', err);
-    restore();
-    alert('Something went wrong. Please try again or contact us directly.');
-  }
+  bookFreeTrial();
 }
 
 // SCROLL REVEAL

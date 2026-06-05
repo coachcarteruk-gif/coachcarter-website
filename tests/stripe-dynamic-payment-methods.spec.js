@@ -31,7 +31,6 @@ function checkoutSessionPayloads(source) {
 
 test('Checkout Sessions rely on Stripe dynamic payment methods', () => {
   const checkoutFiles = [
-    'api/advisor.js',
     'api/credits.js',
     'api/offers.js',
     'api/slots.js',

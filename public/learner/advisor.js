@@ -126,19 +126,8 @@ async function sendMessage(text) {
     const data = await res.json();
 
     if (data.type === 'checkout') {
-      // AI created a checkout — show the card
-      const summary = data.price_summary;
-      appendMessage('assistant', data.reply || "Great choice! Here's your checkout:");
-      conversationHistory.push({ role: 'assistant', content: data.reply || "Here's your checkout." });
-      renderCheckoutCard(summary, data.checkout_url);
-
-      if (typeof posthog !== 'undefined') {
-        posthog.capture('advisor_checkout_created', {
-          lessons: summary.qty,
-          total: summary.totalPounds,
-          discount_pct: summary.discountPct
-        });
-      }
+      appendMessage('assistant', data.reply || 'Self-serve Lesson Credit purchases are retired. You can book a lesson directly and pay at booking.');
+      conversationHistory.push({ role: 'assistant', content: data.reply || 'Self-serve Lesson Credit purchases are retired.' });
     } else if (data.type === 'auth_required') {
       // Needs login to buy
       appendMessage('assistant', data.reply || "You'll need to sign in first to complete your purchase.");
@@ -188,8 +177,7 @@ function renderCheckoutCard(summary, checkoutUrl) {
     '<div class="checkout-detail"><span class="label">Per lesson</span><span class="value">\u00A3' + summary.perLessonPounds + '</span></div>' +
     savings +
     '<div class="checkout-detail" style="border-top:2px solid var(--surface);padding-top:10px;margin-top:4px;"><span class="label" style="font-weight:700;">Total</span><span class="value" style="font-size:1.15rem;">\u00A3' + summary.totalPounds + '</span></div>' +
-    '<a href="' + checkoutUrl + '" class="checkout-btn">Pay Now \u2014 Secure Checkout \u2192</a>' +
-    '<div class="checkout-footer">Powered by Stripe \u00B7 Card &amp; Klarna accepted</div>';
+    '<div class="checkout-footer">Self-serve Lesson Credit purchases are retired.</div>';
 
   messages.appendChild(card);
   scrollToBottom();

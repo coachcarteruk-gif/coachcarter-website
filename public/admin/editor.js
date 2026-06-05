@@ -45,14 +45,14 @@ function getDefaultConfig() {
         subheadline: "Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week Test Ready Guarantee. Expert instructors, real results.",
         stats: [
           { value: "£90", label: "Per 1.5hr lesson" },
-          { value: "21%", label: "Max discount on bulk packages" },
+          { value: "Online", label: "Direct booking available" },
           { value: "£2,400", label: "Full Test Ready Guarantee programme" },
           { value: "18wk", label: "Structured programme to test day" }
         ]
       },
       sections: {
         payg: { title: "Pay As You Go", subtitle: "Maximum flexibility. Book when you need, cancel when life happens." },
-        packages: { title: "Bulk Hour Packages", subtitle: "Buy more hours up front and save up to 21%. The more committed you are, the better the deal." },
+        packages: { title: "Existing Lesson Credit", subtitle: "Existing Lesson Credit still works for eligible bookings. New self-serve credit packages are retired." },
         guarantee: { title: "The Test Ready Guarantee", subtitle: "18 weeks to your driving licence — or we keep going until you pass." }
       },
       features: {
@@ -63,7 +63,7 @@ function getDefaultConfig() {
         primary: "Book a Lesson",
         secondary: "Talk to us first",
         payg_button: "Book £60 lesson →",
-        package_button: "Buy this package →",
+        package_button: "Book a lesson →",
         guarantee_button: "Continue to Booking →"
       },
       business: {
@@ -105,7 +105,7 @@ function populateForm() {
     document.getElementById('heroStat1Value').value = c.hero.stats[0]?.value || '£60';
     document.getElementById('heroStat1Label').value = c.hero.stats[0]?.label || 'Per 1.5hr lesson';
     document.getElementById('heroStat2Value').value = c.hero.stats[1]?.value || '15%';
-    document.getElementById('heroStat2Label').value = c.hero.stats[1]?.label || 'Max discount on bulk packages';
+    document.getElementById('heroStat2Label').value = c.hero.stats[1]?.label || 'Direct booking available';
     document.getElementById('heroStat3Value').value = c.hero.stats[2]?.value || '£2,400';
     document.getElementById('heroStat3Label').value = c.hero.stats[2]?.label || 'Full Test Ready Guarantee programme';
     document.getElementById('heroStat4Value').value = c.hero.stats[3]?.value || '18wk';

@@ -174,92 +174,23 @@ function balanceSql({ selectedInstructorExists = true, selectedBalanceRows = [{ 
   };
 }
 
-test.describe('instructor-aware credit checkout API', () => {
-  test('checkout without instructor_id is rejected for normal learner purchase', async () => {
+test.describe('retired self-serve credit purchase API', () => {
+  test('checkout is retired for normal learner purchases and does not call Stripe', async () => {
     const stripeCalls = [];
     const credits = withMockedModules({
-      sql: checkoutSql(),
+      sql: async () => { throw new Error('checkout should not query SQL when retired'); },
       stripe: { checkout: { sessions: { create: async (payload) => { stripeCalls.push(payload); return { url: 'unused' }; } } } },
-    }, () => require('../api/credits'));
-
-    const res = await call(credits, {
-      method: 'POST',
-      query: { action: 'checkout' },
-      body: { hours: 1.5 },
-      headers: learnerHeaders({ method: 'POST' }),
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body).toMatchObject({ code: 'INSTRUCTOR_REQUIRED' });
-    expect(stripeCalls).toHaveLength(0);
-  });
-
-  test('checkout with valid same-school active instructor includes instructor_id in Stripe metadata', async () => {
-    const stripeCalls = [];
-    const calcCalls = [];
-    const credits = withMockedModules({
-      sql: checkoutSql({ validInstructor: true }),
-      stripe: { checkout: { sessions: { create: async (payload) => { stripeCalls.push(payload); return { url: 'https://stripe.test/ok' }; } } } },
-      pricing: {
-        MAX_HOURS_PER_PURCHASE: 36,
-        getBulkPricing: async () => ({ hourlyPence: 5500, discountTiers: [], source: 'mock' }),
-        calcBulkTotal: async (_sql, schoolId, hours, context) => {
-          calcCalls.push({ schoolId, hours, context });
-          return {
-            fullPence: 9000,
-            discountPct: 0,
-            discountAmt: 0,
-            totalPence: 9000,
-            pricePerHourPence: 6000,
-            discountTiers: [],
-            schoolDiscountTiers: [],
-            bulkTiersEnabled: false,
-            rateSource: 'instructor_rate',
-            _source: 'instructor_rate',
-          };
-        },
-      },
     }, () => require('../api/credits'));
 
     const res = await call(credits, {
       method: 'POST',
       query: { action: 'checkout' },
       body: { hours: 1.5, instructor_id: 4 },
-      headers: learnerHeaders({ method: 'POST', schoolId: 2 }),
-    });
-
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ url: 'https://stripe.test/ok' });
-    expect(calcCalls).toEqual([{ schoolId: 2, hours: 1.5, context: { instructorId: 4, learnerId: 10 } }]);
-    expect(stripeCalls).toHaveLength(1);
-    expect(stripeCalls[0].metadata).toMatchObject({
-      school_id: '2',
-      instructor_id: '4',
-      payment_type: 'credit_purchase',
-      amount_pence: '9000',
-      discount_pct: '0',
-      effective_rate_pence_per_minute: '100',
-    });
-    expect(stripeCalls[0].line_items[0].price_data.unit_amount).toBe(9000);
-    expect(stripeCalls[0].cancel_url).toBe('https://coachcarter.uk/learner/buy-credits.html?cancelled=true&instructor_id=4');
-  });
-
-  test('checkout with cross-school or inactive instructor is rejected', async () => {
-    const stripeCalls = [];
-    const credits = withMockedModules({
-      sql: checkoutSql({ validInstructor: false }),
-      stripe: { checkout: { sessions: { create: async (payload) => { stripeCalls.push(payload); return { url: 'unused' }; } } } },
-    }, () => require('../api/credits'));
-
-    const res = await call(credits, {
-      method: 'POST',
-      query: { action: 'checkout' },
-      body: { hours: 1.5, instructor_id: 999 },
       headers: learnerHeaders({ method: 'POST' }),
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(res.body).toMatchObject({ code: 'INVALID_INSTRUCTOR' });
+    expect(res.statusCode).toBe(410);
+    expect(res.body).toMatchObject({ error: true, code: 'CREDIT_PURCHASE_RETIRED' });
     expect(stripeCalls).toHaveLength(0);
   });
 
@@ -272,10 +203,10 @@ test.describe('instructor-aware credit checkout API', () => {
 });
 
 test.describe('native credit PaymentIntent API', () => {
-  test('create-payment-intent without instructor_id rejects and does not call Stripe', async () => {
+  test('create-payment-intent is retired and does not call Stripe', async () => {
     const stripeCalls = [];
     const credits = withMockedModules({
-      sql: checkoutSql(),
+      sql: async () => { throw new Error('PaymentIntent should not query SQL when retired'); },
       stripe: {
         paymentIntents: {
           create: async (payload) => {
@@ -289,115 +220,13 @@ test.describe('native credit PaymentIntent API', () => {
     const res = await call(credits, {
       method: 'POST',
       query: { action: 'create-payment-intent' },
-      body: { hours: 1.5 },
+      body: { hours: 1.5, instructor_id: 4 },
       headers: learnerHeaders({ method: 'POST' }),
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(res.body).toMatchObject({ code: 'INSTRUCTOR_REQUIRED' });
+    expect(res.statusCode).toBe(410);
+    expect(res.body).toMatchObject({ error: true, code: 'CREDIT_PURCHASE_RETIRED' });
     expect(stripeCalls).toHaveLength(0);
-  });
-
-  test('create-payment-intent with cross-school or inactive instructor rejects', async () => {
-    const stripeCalls = [];
-    const credits = withMockedModules({
-      sql: checkoutSql({ validInstructor: false }),
-      stripe: {
-        paymentIntents: {
-          create: async (payload) => {
-            stripeCalls.push(payload);
-            return { id: 'pi_unused', client_secret: 'secret_unused' };
-          },
-        },
-      },
-    }, () => require('../api/credits'));
-
-    const res = await call(credits, {
-      method: 'POST',
-      query: { action: 'create-payment-intent' },
-      body: { hours: 3, instructor_id: 999 },
-      headers: learnerHeaders({ method: 'POST' }),
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body).toMatchObject({ code: 'INVALID_INSTRUCTOR' });
-    expect(stripeCalls).toHaveLength(0);
-  });
-
-  test('valid create-payment-intent uses calcBulkTotal and writes Checkout-compatible metadata', async () => {
-    const stripeCalls = [];
-    const calcCalls = [];
-    const credits = withMockedModules({
-      sql: checkoutSql({ validInstructor: true }),
-      stripe: {
-        paymentIntents: {
-          create: async (payload) => {
-            stripeCalls.push(payload);
-            return { id: 'pi_credit_native', client_secret: 'pi_credit_native_secret' };
-          },
-        },
-      },
-      pricing: {
-        MAX_HOURS_PER_PURCHASE: 36,
-        getBulkPricing: async () => ({ hourlyPence: 5500, discountTiers: [], source: 'mock' }),
-        calcBulkTotal: async (_sql, schoolId, hours, context) => {
-          calcCalls.push({ schoolId, hours, context });
-          return {
-            fullPence: 65000,
-            discountPct: 5,
-            discountAmt: 3250,
-            totalPence: 61750,
-            pricePerHourPence: 6500,
-            discountTiers: [{ min_hours: 10, discount_pct: 5 }],
-            schoolDiscountTiers: [{ min_hours: 10, discount_pct: 5 }],
-            bulkTiersEnabled: true,
-            rateSource: 'custom_learner_rate',
-            _source: 'custom_learner_rate',
-          };
-        },
-      },
-    }, () => require('../api/credits'));
-
-    const res = await call(credits, {
-      method: 'POST',
-      query: { action: 'create-payment-intent' },
-      body: { hours: 10, instructor_id: 4, amount_pence: 1 },
-      headers: learnerHeaders({ method: 'POST', schoolId: 2 }),
-    });
-
-    expect(res.statusCode).toBe(200);
-    expect(calcCalls).toEqual([{ schoolId: 2, hours: 10, context: { instructorId: 4, learnerId: 10 } }]);
-    expect(stripeCalls).toHaveLength(1);
-    expect(stripeCalls[0]).toMatchObject({
-      amount: 61750,
-      currency: 'gbp',
-      automatic_payment_methods: { enabled: true },
-    });
-    expect(stripeCalls[0].metadata).toMatchObject({
-      payment_type: 'credit_purchase',
-      learner_id: '10',
-      school_id: '2',
-      instructor_id: '4',
-      minutes_purchased: '600',
-      hours_purchased: '10',
-      amount_pence: '61750',
-      discount_pct: '5',
-      effective_rate_pence_per_minute: '103',
-      credits_purchased: '7',
-    });
-    expect(res.body).toMatchObject({
-      ok: true,
-      clientSecret: 'pi_credit_native_secret',
-      paymentIntentId: 'pi_credit_native',
-      amount_pence: 61750,
-      full_pence: 65000,
-      discount_pct: 5,
-      discount_amount_pence: 3250,
-      price_per_hour_pence: 6500,
-      effective_rate_pence_per_minute: 103,
-      bulk_tiers_enabled: true,
-      rate_source: 'custom_learner_rate',
-    });
   });
 });
 
@@ -520,14 +349,14 @@ test.describe('instructor-aware credit balance API', () => {
   });
 });
 
-test.describe('public lessons bulk checkout instructor context', () => {
-  test('lessons.html bulk checkout sends the explicit legacy instructor context', () => {
+test.describe('public lessons retired bulk checkout', () => {
+  test('lessons.html bulk checkout helper no longer posts credit purchases', () => {
     const repoRoot = path.resolve(__dirname, '..');
     const lessonsSource = fs.readFileSync(path.join(repoRoot, 'public', 'lessons.js'), 'utf8').replace(/\r\n/g, '\n');
 
     expect(lessonsSource).toContain('const LEGACY_MARKETING_INSTRUCTOR_ID = 1;');
-    expect(lessonsSource).toContain('instructor_id: LEGACY_MARKETING_INSTRUCTOR_ID');
-    expect(lessonsSource).toContain('legacy public marketing funnel is CoachCarter');
+    expect(lessonsSource).toContain('async function startBulkCheckout(pkgIndex) {\n  bookFreeTrial();\n}');
+    expect(lessonsSource).not.toContain("fetch('/api/credits?action=checkout'");
   });
 });
 

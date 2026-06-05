@@ -603,9 +603,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     // 5 days out so the policy check passes.
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 35 });
 
-    const newDate = new Date(Date.now() + 70 * 86400000).toISOString().slice(0, 10);
-    const newHour = String(11 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
-    const newStartTime = `${newHour}:00`;
+    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 20);
 
     const slotsHandler = require('../api/slots');
     const jwt = makeLearnerJwt(learnerId);
@@ -648,9 +646,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
       absorbedBy: 'platform',
     });
 
-    const newDate = new Date(Date.now() + 74 * 86400000).toISOString().slice(0, 10);
-    const newHour = String(12 + (crypto.randomBytes(1)[0] % 4)).padStart(2, '0');
-    const newStartTime = `${newHour}:00`;
+    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 21);
 
     const slotsHandler = require('../api/slots');
     const jwt = makeLearnerJwt(learnerId);
@@ -712,7 +708,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     const { newDate, newStartTime } = await insertClashBookingWithRetry(
       clashLearnerId,
       TARGET_INSTRUCTOR_ID,
-      72
+      22
     );
 
     const slotsHandler = require('../api/slots');

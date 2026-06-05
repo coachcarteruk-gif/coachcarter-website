@@ -84,7 +84,7 @@ module.exports = async (req, res) => {
       const paymentType = session.metadata?.payment_type;
 
       if (paymentType === 'credit_purchase') {
-        // ── Credit purchase (in-app buy-credits + marketing bulk packages) ─
+        // Historical Lesson Credit purchase compatibility.
         await handleCreditPurchase(session);
       } else if (paymentType === 'slot_booking') {
         // ── Pay-per-slot: single lesson purchase + instant booking ─────

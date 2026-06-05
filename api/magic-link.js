@@ -497,7 +497,7 @@ async function sendReferralUsedEmail(referrerEmail, referrerName, newLearnerName
           ${referred} just signed up using your referral code. Thanks for spreading the word!
         </p>
         <p style="color: #555; font-size: 0.95rem; line-height: 1.6;">
-          Keep sharing your code — you'll earn free lesson time every time they buy credits.
+          Keep sharing your code — you'll earn free lesson time when their eligible paid lessons complete.
         </p>
         <p style="color: #999; font-size: 0.8rem; margin-top: 20px;">
           Check your dashboard to see your referral stats.

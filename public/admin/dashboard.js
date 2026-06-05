@@ -385,7 +385,7 @@ async function loadEnquiries() {
       'general': 'General',
       'booking': 'Booking',
       'pass-guarantee': 'Test Ready Guarantee',
-      'bulk-packages': 'Bulk Package',
+      'bulk-packages': 'Existing Lesson Credit',
       'availability': 'Availability'
     };
     
@@ -443,7 +443,7 @@ function viewEnquiry(id) {
         'general': 'General Question',
         'booking': 'Booking Enquiry',
         'pass-guarantee': 'Test Ready Guarantee Programme',
-        'bulk-packages': 'Bulk Packages',
+        'bulk-packages': 'Existing Lesson Credit',
         'availability': 'Check Availability'
       };
       
