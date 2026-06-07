@@ -812,6 +812,178 @@
       font-size: 0.88rem; font-weight: 600; color: #15803d;
     }
     .cal-synced-msg svg { flex-shrink: 0; stroke: #16a34a; }
+    .reserved-weekly-prompt {
+      text-align: left;
+      background: var(--accent-lt);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 10px 0 14px;
+    }
+    .reserved-weekly-prompt strong {
+      display: block;
+      color: var(--primary);
+      font-size: 0.92rem;
+      margin-bottom: 4px;
+    }
+    .reserved-weekly-prompt span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+    .reserved-weekly-prompt.compact {
+      display: none;
+      margin: 0 0 18px;
+    }
+    body.cc-paid-return .reserved-weekly-prompt.compact {
+      display: block;
+    }
+    .reserved-weekly-prompt .btn-inline-action {
+      margin-top: 10px;
+      width: 100%;
+    }
+    .btn-inline-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 0.88rem;
+      cursor: pointer;
+    }
+    .btn-inline-action:hover { background: var(--accent-dk); }
+    .recurring-block-modal { max-width: 520px; }
+    .recurring-block-intro {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      font-size: 0.88rem;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+    .recurring-block-intro strong {
+      display: block;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+    .recurring-count-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0 12px;
+    }
+    .recurring-step-btn,
+    .recurring-preset-btn {
+      border: 1px solid var(--border);
+      background: var(--white);
+      color: var(--primary);
+      border-radius: 8px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .recurring-step-btn {
+      width: 38px;
+      height: 38px;
+      font-size: 1.2rem;
+    }
+    .recurring-count-value {
+      flex: 1;
+      text-align: center;
+      font-family: var(--font-head);
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .recurring-presets {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .recurring-preset-btn {
+      padding: 8px 6px;
+      font-size: 0.82rem;
+    }
+    .recurring-preset-btn.active {
+      border-color: var(--accent);
+      background: var(--accent-lt);
+      color: var(--accent-dk);
+    }
+    .recurring-status-box {
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 12px 0;
+      font-size: 0.85rem;
+      line-height: 1.45;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .recurring-status-box.good {
+      background: var(--green-lt);
+      border-color: #86efac;
+      color: #166534;
+    }
+    .recurring-status-box.warn {
+      background: var(--accent-lt);
+      border-color: var(--accent);
+      color: var(--primary);
+    }
+    .recurring-week-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 12px 0 16px;
+    }
+    .recurring-week-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.84rem;
+      background: var(--white);
+    }
+    .recurring-week-row.selected {
+      border-color: #86efac;
+      background: var(--green-lt);
+    }
+    .recurring-week-row.unavailable {
+      color: var(--muted);
+      background: var(--bg);
+    }
+    .recurring-week-main strong {
+      display: block;
+      color: var(--primary);
+      font-size: 0.88rem;
+      margin-bottom: 2px;
+    }
+    .recurring-week-status {
+      font-size: 0.72rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .recurring-week-row.selected .recurring-week-status { color: #15803d; }
+    .recurring-confirmed-list {
+      margin: 10px 0 16px;
+      padding-left: 18px;
+      color: var(--primary);
+      font-size: 0.88rem;
+      line-height: 1.6;
+      text-align: left;
+    }
     .btn-done {
       display: block; width: 100%; margin-top: 16px;
       background: var(--accent); color: white; border: none;
@@ -919,6 +1091,12 @@
   <div class="banner banner-credits" id="guestBanner" data-tag="GST" style="display:none">
     <p>Browsing as a guest — pick any slot to pay &amp; book, or <a href="/learner/login.html?redirect=/learner/book.html">sign in</a> to use lesson hours.</p>
     <span></span>
+  </div>
+
+  <div class="reserved-weekly-prompt compact" id="reservedWeeklyPaidPrompt">
+    <strong>Want this time every week?</strong>
+    <span>Sign in to review your booking and reserve the same instructor, day, and time for future weekly lessons.</span>
+    <button class="btn-inline-action" id="btnOpenRecurringFromPaid" type="button">Review My Lessons</button>
   </div>
 
   <!-- Next lesson card -->
@@ -1144,6 +1322,11 @@
       <h2>Lesson booked.</h2>
       <p>Your lesson on <strong id="successDate">—</strong> at <strong id="successTime">—</strong> with <strong id="successInstructor">—</strong> is confirmed. Check your email for details.</p>
       <p id="successBalance" style="display:none;font-size:0.875rem;color:var(--muted);margin-top:-8px"></p>
+      <div class="reserved-weekly-prompt" id="reservedWeeklySuccessPrompt" style="display:none">
+        <strong>Want this time every week?</strong>
+        <span>Preview future weekly options with the same instructor, same day, and same time. Unavailable weeks are skipped.</span>
+        <button class="btn-inline-action" id="btnOpenRecurringFromSuccess" type="button">Preview weekly options</button>
+      </div>
       <!-- First-time: prompt to sync calendar -->
       <div id="calSyncPrompt" style="display:none">
         <a class="btn-add-calendar" id="btnSyncCalendar" href="#">
@@ -1165,6 +1348,50 @@
 </div>
 
 <!-- ── Cancel confirmation modal ── -->
+<div class="modal-overlay" id="recurringBlockModal">
+  <div class="modal recurring-block-modal">
+    <div class="modal-header">
+      <h2>Reserve this weekly slot</h2>
+      <button class="modal-close-x" aria-label="Close" id="recurringBlockCloseX">&times;</button>
+    </div>
+
+    <div class="recurring-block-intro">
+      <strong id="recurringBlockPattern">Same instructor, same day, same time</strong>
+      <span id="recurringBlockAnchorCopy">Choose 4-12 future weekly lessons to preview. Unavailable weeks are skipped.</span>
+    </div>
+
+    <div id="recurringBlockGate" class="recurring-status-box" style="display:none"></div>
+
+    <div id="recurringBlockControls">
+      <div class="modal-section-title">Future weekly lessons</div>
+      <div class="recurring-count-control">
+        <button class="recurring-step-btn" type="button" id="recurringMinus" aria-label="Fewer lessons">-</button>
+        <div class="recurring-count-value" id="recurringLessonCountLabel">4 lessons</div>
+        <button class="recurring-step-btn" type="button" id="recurringPlus" aria-label="More lessons">+</button>
+      </div>
+      <div class="recurring-presets" aria-label="Quick lesson counts">
+        <button class="recurring-preset-btn active" type="button" data-recurring-lessons="4">4</button>
+        <button class="recurring-preset-btn" type="button" data-recurring-lessons="6">6</button>
+        <button class="recurring-preset-btn" type="button" data-recurring-lessons="8">8</button>
+        <button class="recurring-preset-btn" type="button" data-recurring-lessons="10">10</button>
+        <button class="recurring-preset-btn" type="button" data-recurring-lessons="12">12</button>
+      </div>
+    </div>
+
+    <div id="recurringBlockLoading" class="recurring-status-box">Loading weekly options...</div>
+    <div id="recurringBlockPreview" style="display:none"></div>
+    <div id="recurringBlockConfirmed" class="modal-success" style="display:none"></div>
+
+    <div class="modal-actions" id="recurringBlockActions">
+      <button class="btn-modal-cancel" id="recurringBlockClose" type="button">Close</button>
+      <button class="btn-confirm" id="btnConfirmRecurringBlock" type="button" disabled>
+        <span id="recurringConfirmLabel">Confirm with Lesson Credit</span>
+        <div class="modal-spinner" id="recurringConfirmSpinner"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="cancelModal">
   <div class="modal cancel-modal">
     <div class="modal-header">

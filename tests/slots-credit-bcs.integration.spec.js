@@ -25,8 +25,10 @@ let sql;
 let learnerId;
 let instructorId;
 let lessonTypeId;
+let hasRecurringBlockTables = false;
 const createdBookingIds = new Set();
 const createdCreditTxIds = new Set();
+const createdRecurringBlockIds = new Set();
 
 function unique(label) {
   return `${label}_${crypto.randomBytes(6).toString('hex')}`;
@@ -38,6 +40,18 @@ function futureDate(daysAhead) {
 }
 
 async function resetState() {
+  if (hasRecurringBlockTables) {
+    if (createdRecurringBlockIds.size) {
+      await sql`DELETE FROM recurring_slot_block_items WHERE block_id = ANY(${[...createdRecurringBlockIds]})`;
+      await sql`DELETE FROM recurring_slot_blocks WHERE id = ANY(${[...createdRecurringBlockIds]})`;
+      createdRecurringBlockIds.clear();
+    }
+    await sql`
+      DELETE FROM recurring_slot_block_items
+      WHERE lesson_booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ${learnerId})
+    `;
+    await sql`DELETE FROM recurring_slot_blocks WHERE learner_id = ${learnerId}`;
+  }
   if (createdBookingIds.size) {
     await sql`DELETE FROM lesson_bookings WHERE id = ANY(${[...createdBookingIds]})`;
     createdBookingIds.clear();
@@ -147,6 +161,14 @@ test.describe('slots.js credit-funded BCS writer - integration', () => {
     if (!hasLcb) {
       throw new Error('Test branch is missing learner_credit_balances. Point POSTGRES_URL_TEST at an isolated Neon branch with latest main migrations applied.');
     }
+
+    const [hasRecurringBlocks] = await sql`
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = 'recurring_slot_blocks'
+    `;
+    hasRecurringBlockTables = !!hasRecurringBlocks;
 
     const [learner] = await sql`
       INSERT INTO learner_users (name, email, school_id, balance_minutes, credit_balance)
@@ -378,6 +400,85 @@ test.describe('slots.js credit-funded BCS writer - integration', () => {
     expect(rows[1].contribution_pence).toBe(12000);
   });
 
+  test('credit-funded recurring block writes block, booked items, bookings, and BCS atomically', async () => {
+    test.skip(!hasRecurringBlockTables, 'Test branch has not run the recurring_slot_blocks migration yet.');
+
+    await seedLcb(360);
+    await seedCreditSource({ minutes: 360, amountPence: 33000 });
+
+    const anchorDate = futureDate(190);
+    const [anchor] = await sql`
+      INSERT INTO lesson_bookings
+        (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+         lesson_type_id, minutes_deducted, school_id, list_price_pence, list_price_source)
+      VALUES
+        (${learnerId}, ${instructorId}, ${anchorDate}, '09:00', '10:30', ${SCHEDULED},
+         ${lessonTypeId}, 90, ${SCHOOL_ID}, 8250, 'stripe_metadata')
+      RETURNING id
+    `;
+    createdBookingIds.add(anchor.id);
+
+    const result = await bookCreditFundedSlotsTransaction({
+      connectionString: process.env.POSTGRES_URL_TEST,
+      learnerId,
+      instructorId,
+      schoolId: SCHOOL_ID,
+      bookingDates: [200, 207, 214, 221].map(date => ({ date: futureDate(date) })),
+      startTime: '09:00',
+      endTime: '10:30',
+      lessonTypeId,
+      durationMins: 90,
+      pickupAddress: '1 Test Street, London SW1A 1AA',
+      dropoffAddress: null,
+      seriesId: crypto.randomUUID(),
+      recurringBlock: {
+        anchorBookingId: anchor.id,
+        pricePerLessonPence: 8250,
+        totalPricePence: 33000,
+        priceSource: 'school_default',
+        metadata: { test: 'credit-funded-recurring-block' },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    result.createdBookings.forEach(b => createdBookingIds.add(b.id));
+    createdRecurringBlockIds.add(result.recurringBlock.id);
+
+    const [block] = await sql`
+      SELECT learner_id, instructor_id, school_id, anchor_booking_id,
+             status, funding_method, selected_lessons, total_price_pence
+        FROM recurring_slot_blocks
+       WHERE id = ${result.recurringBlock.id}
+    `;
+    expect(block.learner_id).toBe(learnerId);
+    expect(block.instructor_id).toBe(instructorId);
+    expect(block.school_id).toBe(SCHOOL_ID);
+    expect(block.anchor_booking_id).toBe(anchor.id);
+    expect(block.status).toBe('confirmed');
+    expect(block.funding_method).toBe('lesson_credit');
+    expect(block.selected_lessons).toBe(4);
+    expect(block.total_price_pence).toBe(33000);
+
+    const items = await sql`
+      SELECT lesson_booking_id, status, price_pence
+        FROM recurring_slot_block_items
+       WHERE block_id = ${result.recurringBlock.id}
+       ORDER BY scheduled_date
+    `;
+    expect(items).toHaveLength(4);
+    expect(items.map(i => i.status)).toEqual(['booked', 'booked', 'booked', 'booked']);
+    expect(items.map(i => i.price_pence)).toEqual([8250, 8250, 8250, 8250]);
+    expect(items.map(i => i.lesson_booking_id)).toEqual(result.createdBookings.map(b => b.id));
+
+    const bcs = await sql`
+      SELECT id
+        FROM booking_credit_sources
+       WHERE booking_id = ANY(${result.createdBookings.map(b => b.id)})
+    `;
+    expect(bcs).toHaveLength(4);
+    expect(result.balanceMinutes).toBe(0);
+  });
+
   test('insufficient locked LCB balance rolls back without booking or BCS rows', async () => {
     await seedLcb(60);
     await seedCreditSource({ minutes: 60, amountPence: 6000 });
@@ -399,6 +500,56 @@ test.describe('slots.js credit-funded BCS writer - integration', () => {
     expect(counts.bookings).toBe(0);
     expect(counts.bcs_rows).toBe(0);
     expect(counts.balance_minutes).toBe(60);
+  });
+
+  test('insufficient credit-funded recurring block rolls back without block, items, bookings, or BCS rows', async () => {
+    test.skip(!hasRecurringBlockTables, 'Test branch has not run the recurring_slot_blocks migration yet.');
+
+    await seedLcb(270);
+    await seedCreditSource({ minutes: 270, amountPence: 24750 });
+
+    const result = await bookCreditFundedSlotsTransaction({
+      connectionString: process.env.POSTGRES_URL_TEST,
+      learnerId,
+      instructorId,
+      schoolId: SCHOOL_ID,
+      bookingDates: [230, 237, 244, 251].map(date => ({ date: futureDate(date) })),
+      startTime: '09:00',
+      endTime: '10:30',
+      lessonTypeId,
+      durationMins: 90,
+      pickupAddress: '1 Test Street, London SW1A 1AA',
+      dropoffAddress: null,
+      seriesId: crypto.randomUUID(),
+      recurringBlock: {
+        anchorBookingId: null,
+        pricePerLessonPence: 8250,
+        totalPricePence: 33000,
+        priceSource: 'school_default',
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe('INSUFFICIENT_BALANCE');
+
+    const [counts] = await sql`
+      SELECT
+        (SELECT COUNT(*)::int FROM recurring_slot_blocks WHERE learner_id = ${learnerId}) AS blocks,
+        (SELECT COUNT(*)::int FROM recurring_slot_block_items rsbi
+          JOIN recurring_slot_blocks rsb ON rsb.id = rsbi.block_id
+         WHERE rsb.learner_id = ${learnerId}) AS items,
+        (SELECT COUNT(*)::int FROM lesson_bookings WHERE learner_id = ${learnerId}) AS bookings,
+        (SELECT COUNT(*)::int FROM booking_credit_sources bcs
+          JOIN credit_transactions ct ON ct.id = bcs.credit_transaction_id
+         WHERE ct.learner_id = ${learnerId}) AS bcs_rows,
+        (SELECT balance_minutes::int FROM learner_credit_balances
+         WHERE learner_id = ${learnerId} AND instructor_id = ${instructorId}) AS balance_minutes
+    `;
+    expect(counts.blocks).toBe(0);
+    expect(counts.items).toBe(0);
+    expect(counts.bookings).toBe(0);
+    expect(counts.bcs_rows).toBe(0);
+    expect(counts.balance_minutes).toBe(270);
   });
 
   test('blocking slot conflict inside transaction leaves LCB and BCS untouched', async () => {

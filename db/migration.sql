@@ -2333,6 +2333,70 @@ BEGIN
 END $$;
 CREATE INDEX IF NOT EXISTS idx_bcs_school ON booking_credit_sources(school_id);
 
+-- Recurring weekly lesson block foundation (June 2026).
+-- Confirmed credit-funded blocks create lesson_bookings immediately. Later
+-- bank-payment slices can use pending_payment + held item rows to block slots
+-- without treating them as paid bookings.
+CREATE TABLE IF NOT EXISTS recurring_slot_blocks (
+  id                         SERIAL PRIMARY KEY,
+  school_id                  INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  learner_id                 INTEGER NOT NULL REFERENCES learner_users(id) ON DELETE CASCADE,
+  instructor_id              INTEGER NOT NULL REFERENCES instructors(id),
+  anchor_booking_id          INTEGER REFERENCES lesson_bookings(id),
+  lesson_type_id             INTEGER REFERENCES lesson_types(id),
+  status                     TEXT NOT NULL CHECK (status IN ('pending_payment', 'confirmed', 'payment_failed', 'expired', 'released')),
+  funding_method             TEXT NOT NULL CHECK (funding_method IN ('lesson_credit', 'bank_payment')),
+  selected_lessons           INTEGER NOT NULL CHECK (selected_lessons BETWEEN 1 AND 12),
+  duration_minutes           INTEGER NOT NULL CHECK (duration_minutes > 0),
+  start_time                 TIME NOT NULL,
+  end_time                   TIME NOT NULL,
+  price_per_lesson_pence     INTEGER NOT NULL CHECK (price_per_lesson_pence >= 0),
+  total_price_pence          INTEGER NOT NULL CHECK (total_price_pence >= 0),
+  price_source               TEXT,
+  expires_at                 TIMESTAMPTZ,
+  confirmed_at               TIMESTAMPTZ,
+  released_at                TIMESTAMPTZ,
+  stripe_payment_intent_id   TEXT,
+  stripe_checkout_session_id TEXT,
+  metadata                   JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_recurring_blocks_school_status
+  ON recurring_slot_blocks(school_id, status);
+CREATE INDEX IF NOT EXISTS idx_recurring_blocks_learner
+  ON recurring_slot_blocks(learner_id, school_id);
+CREATE INDEX IF NOT EXISTS idx_recurring_blocks_instructor
+  ON recurring_slot_blocks(instructor_id, school_id);
+CREATE INDEX IF NOT EXISTS idx_recurring_blocks_anchor
+  ON recurring_slot_blocks(anchor_booking_id)
+  WHERE anchor_booking_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS recurring_slot_block_items (
+  id                SERIAL PRIMARY KEY,
+  block_id          INTEGER NOT NULL REFERENCES recurring_slot_blocks(id) ON DELETE CASCADE,
+  school_id         INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  instructor_id     INTEGER NOT NULL REFERENCES instructors(id),
+  lesson_booking_id INTEGER REFERENCES lesson_bookings(id),
+  scheduled_date    DATE NOT NULL,
+  start_time        TIME NOT NULL,
+  end_time          TIME NOT NULL,
+  status            TEXT NOT NULL CHECK (status IN ('held', 'booked', 'released')),
+  price_pence       INTEGER NOT NULL CHECK (price_pence >= 0),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (block_id, scheduled_date, start_time)
+);
+CREATE INDEX IF NOT EXISTS idx_recurring_items_block
+  ON recurring_slot_block_items(block_id);
+CREATE INDEX IF NOT EXISTS idx_recurring_items_school_status
+  ON recurring_slot_block_items(school_id, status, scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_recurring_items_instructor_slot
+  ON recurring_slot_block_items(instructor_id, scheduled_date, start_time);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_recurring_held_slot
+  ON recurring_slot_block_items(instructor_id, scheduled_date, start_time)
+  WHERE status = 'held';
+
 -- Cash-refund / dispute-clawback / admin-correction ledger. Additive — never
 -- mutate credit_transactions.minutes or amount_pence because BCS snapshots
 -- depend on those historical facts.

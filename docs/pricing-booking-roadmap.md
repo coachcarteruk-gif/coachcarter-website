@@ -374,6 +374,54 @@ Docs to load before implementation:
 - `PROJECT.md`
 - `CLAUDE.md`
 
+Stage Progress - 2026-06-05:
+
+- Audited the current recurring surfaces on branch `codex/stage-4-reserved-weekly-slot-ux`.
+- Existing instructor-created offers already support slot-pinned weekly repeat blocks through `lesson_offers.max_repeat_weeks` and the accept-offer repeat picker. The instructor sets a 1..18 week ceiling, the learner chooses the count on the accept page, Stripe charges per-lesson price x quantity, and `api/offers.js::bookOfferSeries()` fans out the weekly series after payment or free-offer acceptance.
+- Existing offer repeat fan-out is intentionally not the full future Reserved Weekly Slot product. It skips clashed later weeks and rolls to later same-day/time candidates up to the 18-week search window; partial paid repeats depend on refund/accounting paths that should not be broadened in Stage 4.
+- Existing learner self-serve repeat booking is available only to logged-in learners with enough same-instructor Lesson Credit. It posts `repeat_weeks` to `/api/slots?action=book`, is capped inside the 28-day self-serve booking window, and creates a `series_id` across the selected weekly bookings. Guest and Pay As You Go Stripe checkout paths remain single-slot only.
+- Stage 4 first implementation decision: use a post-booking visibility prompt only. Do not add a new modal booking option, new API action, new Stripe surface, new reserved-offer mutation, or new policy enforcement until representation/payment decisions are resolved.
+- Added a compact Reserved Weekly Slot prompt in `/learner/book.html` after successful in-page single bookings, plus a matching post-Stripe-return prompt for `?paid=1` Pay As You Go bookings. Copy asks learners to request a Reserved Weekly Slot offer for the same instructor, day, and time for 4, 6, or 10 weeks.
+- The prompt is intentionally hidden after an existing in-page weekly repeat booking, because the learner has already booked a series.
+
+Stage 4 intentionally left untouched:
+
+- No Payment Method Guardrail enforcement beyond Stage 3.
+- No Stripe/Klarna production config changes.
+- No Paid-In-Full Reward or Pay by Bank implementation.
+- No database migrations.
+- No refund, cancellation, payout, booking lifecycle, BCS refund execution, or financial ledger changes.
+- No changes to Lesson Credit, `learner_credit_balances`, `booking_credit_sources`, or `credit_source_adjustments`.
+
+Stage 4 remaining risks and follow-up notes:
+
+- The current code change still creates visibility only. It does not implement the recurring weekly block flow, new API routes, payment holds, migrations, credit mutation changes, or calendar read-model changes.
+- The future product representation decision is now captured in the Stage 4 recurring block decision record.
+- Existing instructor-created repeat offers still need a later alignment pass if the platform standardises all repeat behaviour around future weekly lesson count rather than calendar weeks.
+
+Stage 4 follow-up decisions after product review:
+
+- The future implementation contract is captured in `docs/pricing-booking-stage-4-recurring-block-decision-record.md`.
+- The agreed product shape is a post-booking recurring weekly block upsell, not a pre-payment change to ordinary single-slot checkout.
+- Recurring weekly blocks are future-only, 4-12 lessons, capped by matching availability inside the next 12 calendar weeks.
+- Recurring blocks should use a dedicated hold model, support full same-instructor Lesson Credit or bank transfer / Pay by Bank, exclude partial credit and Klarna in v1, and create real bookings only after credit confirmation or bank-payment confirmation.
+
+Stage 4 implementation foundation - 2026-06-07:
+
+- Added dedicated `recurring_slot_blocks` and `recurring_slot_block_items` tables to `db/migration.sql`.
+- Added `GET /api/slots?action=recurring-block-preview` as a read-only authenticated learner preview for an anchor booking. It returns the next 12 matching weekly candidates, skipped/unavailable reasons, server-side direct pricing, and same-instructor Lesson Credit sufficiency without holding slots or mutating credit.
+- Added `POST /api/slots?action=recurring-block-commit` for the first credit-funded slice only. It rebuilds the preview server-side, requires all selected future slots to remain available, requires full same-instructor Lesson Credit, then atomically creates the confirmed recurring block, booked item rows, future bookings, BCS rows, and LCB decrement through the existing credit-funded booking transaction.
+- Pending `held` recurring block items now block the availability feed, but this slice does not create bank-payment holds yet.
+- Still untouched: Pay by Bank, Stripe/Klarna/card recurring block payment, partial credit, expiry cron, admin release, calendar hold display, and notification templates.
+
+Stage 4 learner UI wiring - 2026-06-07:
+
+- Turned the post-booking Reserved Weekly Slot prompt into a preview action for successful single Lesson Credit bookings.
+- Added a compact recurring block preview modal on `/learner/book.html` that lets the learner choose 4-12 future weekly lessons, renders selected weeks and skipped/unavailable weeks from `recurring-block-preview`, and explains that unavailable weeks are skipped rather than stored.
+- Wired `Confirm with Lesson Credit` to `recurring-block-commit` only when the authenticated preview says `can_commit` and the same-instructor Lesson Credit is sufficient.
+- Paid-return prompts remain visible after `?paid=1`, but route learners to login/My Lessons because the return URL does not carry a reliable anchor booking ID in v1.
+- Still untouched: Pay by Bank, Stripe/Klarna/card recurring block payment, partial credit, guest auto-login/claim, bank-payment holds, refunds, payouts, cancellation policy, and notification templates.
+
 ### Stage 5: Reserved Slot Policy Enforcement
 
 Goal: protect instructor calendars when learners reserve future weekly slots.
@@ -462,10 +510,15 @@ This roadmap does not approve:
 These should be answered before the relevant implementation stage begins.
 
 1. What is the verified Stripe Pay by Bank settlement timing, refund behaviour, Connect/account availability, and account-specific pricing?
-2. What exact reservation or hold model should represent "provisionally booked / payment pending" without changing booking, refund, cancellation, or payout semantics?
-3. What timeout or follow-up rule should apply if a Pay by Bank payment remains pending or fails after the weekly block has been provisionally booked?
-4. What exact mechanism should scope payment method availability by product once Reserved Weekly Slot exists: Stripe Dashboard-only dynamic payment methods, Stripe `payment_method_configurations`, `excluded_payment_method_types`, or another configuration path?
-5. What exact eligibility threshold makes a reserved weekly block Klarna-eligible: beyond the ordinary 28-day self-serve booking window, a minimum number of weeks, a minimum amount, or a combination?
+2. What exact mechanism should scope payment method availability by product once Reserved Weekly Slot exists: Stripe Dashboard-only dynamic payment methods, Stripe `payment_method_configurations`, `excluded_payment_method_types`, or another configuration path?
+3. Should Paid-In-Full Reward remain a separate later product once recurring weekly blocks support Lesson Credit and bank transfer / Pay by Bank, and what reward threshold/config should apply if it does?
+
+Answered in `docs/pricing-booking-stage-4-recurring-block-decision-record.md`:
+
+- Recurring weekly blocks should use a dedicated hold model, not ordinary `lesson_bookings`, 10-minute `slot_reservations`, or `lesson_offers`.
+- Bank-payment recurring block holds expire after 48 hours; payment success confirms bookings, payment failure/expiry releases holds, and learner SMS/WhatsApp confirms success or failure.
+- Recurring weekly blocks are post-booking future-only upsells using 4-12 future weekly lessons capped by matching availability inside the next 12 calendar weeks.
+- Recurring weekly block v1 excludes Klarna and partial credit.
 
 ## Suggested First Implementation Prompt
 

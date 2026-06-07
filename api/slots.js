@@ -54,6 +54,9 @@ const MAX_DAYS_AHEAD      = 28;   // 4-week booking window (offer-driven series 
 const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
 const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
+const RECURRING_BLOCK_MIN_LESSONS = 4;
+const RECURRING_BLOCK_MAX_LESSONS = 12;
+const RECURRING_BLOCK_LOOKAHEAD_WEEKS = 12;
 const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
 const SLOT_TRANSMISSION_TYPES = new Set(['manual', 'automatic', 'both']);
 
@@ -210,7 +213,8 @@ async function slotFitsActiveAvailability(sql, {
   date,
   startTime,
   endTime,
-  transmissionType = null
+  transmissionType = null,
+  enforceBookingWindow = true
 }) {
   const slotStart = timeToMinutes(startTime);
   const slotEnd = timeToMinutes(endTime);
@@ -227,7 +231,7 @@ async function slotFitsActiveAvailability(sql, {
   `;
   if (!instructor) return false;
   const instructorTransmissionType = normaliseSlotTransmissionType(instructor.transmission_type) || 'manual';
-  if (!isDateWithinBookingWindow(date, instructor.max_booking_days_ahead)) return false;
+  if (enforceBookingWindow && !isDateWithinBookingWindow(date, instructor.max_booking_days_ahead)) return false;
 
   const minNoticeHours = Math.max(0, parseInt(instructor.min_booking_notice_hours, 10) || 0);
   if (minNoticeHours > 0) {
@@ -334,6 +338,8 @@ module.exports = async (req, res) => {
 
   if (action === 'available')    return handleAvailable(req, res);
   if (action === 'durations-for-slot') return handleDurationsForSlot(req, res);
+  if (action === 'recurring-block-preview') return handleRecurringBlockPreview(req, res);
+  if (action === 'recurring-block-commit') return handleRecurringBlockCommit(req, res);
   if (action === 'book')         return handleBook(req, res);
   if (action === 'checkout-slot') return handleCheckoutSlot(req, res);
   if (action === 'checkout-slot-guest') return handleCheckoutSlotGuest(req, res);
@@ -683,6 +689,35 @@ async function handleAvailable(req, res) {
 
     // Merge pending offers into reservations so they block slots
     reservations = reservations.concat(pendingOffers);
+
+    let recurringHolds = [];
+    try {
+      recurringHolds = instructor_id
+        ? await sql`
+            SELECT instructor_id,
+                   scheduled_date::text AS scheduled_date,
+                   start_time::text     AS start_time,
+                   end_time::text       AS end_time
+            FROM recurring_slot_block_items
+            WHERE scheduled_date BETWEEN ${from} AND ${to}
+              AND status = 'held'
+              AND instructor_id = ${instructor_id}
+              AND school_id = ${schoolId}
+          `
+        : await sql`
+            SELECT instructor_id,
+                   scheduled_date::text AS scheduled_date,
+                   start_time::text     AS start_time,
+                   end_time::text       AS end_time
+            FROM recurring_slot_block_items
+            WHERE scheduled_date BETWEEN ${from} AND ${to}
+              AND status = 'held'
+              AND school_id = ${schoolId}
+          `;
+    } catch (e) {
+      // Table may not exist before the recurring block migration has run.
+    }
+    reservations = reservations.concat(recurringHolds);
 
     // 2c. Load blackout date ranges overlapping the requested window
     let blackouts = [];
@@ -1160,6 +1195,17 @@ async function handleDurationsForSlot(req, res) {
           AND school_id = ${schoolId}
       `;
     } catch (_) {}
+    let recurringHolds = [];
+    try {
+      recurringHolds = await sql`
+        SELECT start_time::text AS start_time, end_time::text AS end_time
+        FROM recurring_slot_block_items
+        WHERE scheduled_date = ${date}
+          AND status = 'held'
+          AND instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
+      `;
+    } catch (_) {}
     let externalEvents = [];
     try {
       externalEvents = await sql`
@@ -1184,6 +1230,9 @@ async function handleDurationsForSlot(req, res) {
     }
     for (const o of pendingOffers) {
       blocks.push({ start: timeToMinutes(o.start_time), end: timeToMinutes(o.end_time), postcode: null });
+    }
+    for (const h of recurringHolds) {
+      blocks.push({ start: timeToMinutes(h.start_time), end: timeToMinutes(h.end_time), postcode: null });
     }
     for (const e of externalEvents) {
       if (!e.is_all_day && e.start_time && e.end_time) {
@@ -1297,6 +1346,7 @@ async function bookCreditFundedSlotsTransaction({
   seriesId,
   sourceTypes = CREDIT_BOOKING_SOURCE_TYPES,
   blockingStatuses = BLOCKING_STATUSES,
+  recurringBlock = null,
 }) {
   const totalMins = durationMins * bookingDates.length;
   const dateStrings = bookingDates.map(bd => bd.date);
@@ -1368,10 +1418,27 @@ async function bookCreditFundedSlotsTransaction({
       [instructorId, schoolId, dateStrings, startTime]
     );
 
+    let recurringHoldConflictRows = [];
+    const recurringItemsTable = await client.query(`SELECT to_regclass('public.recurring_slot_block_items') AS relation_name`);
+    if (recurringItemsTable.rows[0]?.relation_name) {
+      const recurringHoldConflicts = await client.query(
+        `SELECT scheduled_date::text AS date, start_time::text
+           FROM recurring_slot_block_items
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = ANY($3::date[])
+            AND start_time = $4
+            AND status = 'held'`,
+        [instructorId, schoolId, dateStrings, startTime]
+      );
+      recurringHoldConflictRows = recurringHoldConflicts.rows;
+    }
+
     const takenDates = new Set([
       ...bookingConflicts.rows.map(c => String(c.date).slice(0, 10)),
       ...reservations.rows.map(r => String(r.date).slice(0, 10)),
       ...offerConflicts.rows.map(o => String(o.date).slice(0, 10)),
+      ...recurringHoldConflictRows.map(h => String(h.date).slice(0, 10)),
     ]);
     if (takenDates.size > 0) {
       abortBookingTransaction({
@@ -1434,6 +1501,37 @@ async function bookCreditFundedSlotsTransaction({
       });
     }
 
+    let recurringBlockRow = null;
+    if (recurringBlock) {
+      const insertedBlock = await client.query(
+        `INSERT INTO recurring_slot_blocks
+           (school_id, learner_id, instructor_id, anchor_booking_id, lesson_type_id,
+            status, funding_method, selected_lessons, duration_minutes, start_time, end_time,
+            price_per_lesson_pence, total_price_pence, price_source, confirmed_at, metadata)
+         VALUES
+           ($1, $2, $3, $4, $5,
+            'confirmed', 'lesson_credit', $6, $7, $8, $9,
+            $10, $11, $12, NOW(), $13::jsonb)
+         RETURNING id, status, funding_method, selected_lessons, total_price_pence`,
+        [
+          schoolId,
+          learnerId,
+          instructorId,
+          recurringBlock.anchorBookingId || null,
+          lessonTypeId,
+          bookingDates.length,
+          durationMins,
+          startTime,
+          endTime,
+          recurringBlock.pricePerLessonPence || 0,
+          recurringBlock.totalPricePence || 0,
+          recurringBlock.priceSource || null,
+          JSON.stringify(recurringBlock.metadata || {}),
+        ]
+      );
+      recurringBlockRow = insertedBlock.rows[0];
+    }
+
     const bookingTargets = [];
     const createdBookings = [];
     for (const bd of bookingDates) {
@@ -1466,6 +1564,31 @@ async function bookCreditFundedSlotsTransaction({
           });
         }
         throw err;
+      }
+    }
+
+    if (recurringBlockRow) {
+      for (let i = 0; i < createdBookings.length; i++) {
+        const booking = createdBookings[i];
+        const bd = bookingDates[i];
+        await client.query(
+          `INSERT INTO recurring_slot_block_items
+             (block_id, school_id, instructor_id, lesson_booking_id,
+              scheduled_date, start_time, end_time, status, price_pence)
+           VALUES
+             ($1, $2, $3, $4,
+              $5, $6, $7, 'booked', $8)`,
+          [
+            recurringBlockRow.id,
+            schoolId,
+            instructorId,
+            booking.id,
+            bd.date,
+            startTime,
+            endTime,
+            recurringBlock.pricePerLessonPence || 0,
+          ]
+        );
       }
     }
 
@@ -1529,6 +1652,7 @@ async function bookCreditFundedSlotsTransaction({
       createdBookings,
       balanceMinutes: Number(decremented.rows[0].balance_minutes || 0),
       bcsRows,
+      recurringBlock: recurringBlockRow,
     };
     });
   } catch (err) {
@@ -1536,6 +1660,410 @@ async function bookCreditFundedSlotsTransaction({
       return err.result;
     }
     throw err;
+  }
+}
+
+function parseRecurringBlockLessons(value) {
+  const lessons = parseInt(value, 10);
+  if (!Number.isInteger(lessons) || lessons < RECURRING_BLOCK_MIN_LESSONS || lessons > RECURRING_BLOCK_MAX_LESSONS) {
+    return null;
+  }
+  return lessons;
+}
+
+function recurringBlockLessonCountError() {
+  return `lessons must be between ${RECURRING_BLOCK_MIN_LESSONS} and ${RECURRING_BLOCK_MAX_LESSONS}`;
+}
+
+async function getRecurringAnchorBooking(sql, { bookingId, learnerId, schoolId }) {
+  const id = parseInt(bookingId, 10);
+  if (!Number.isInteger(id) || id <= 0) return null;
+
+  const [anchor] = await sql`
+    SELECT lb.id,
+           lb.learner_id,
+           lb.instructor_id,
+           lb.school_id,
+           lb.scheduled_date::text AS scheduled_date,
+           lb.start_time::text AS start_time,
+           lb.end_time::text AS end_time,
+           lb.lesson_type_id,
+           lb.pickup_address,
+           lb.dropoff_address,
+           lb.transmission_type,
+           lt.name AS lesson_type_name,
+           lt.slug AS lesson_type_slug,
+           lt.duration_minutes,
+           i.name AS instructor_name,
+           i.offered_lesson_types
+      FROM lesson_bookings lb
+      JOIN instructors i ON i.id = lb.instructor_id
+                        AND i.school_id = lb.school_id
+                        AND i.active = true
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+                               AND lt.school_id = lb.school_id
+     WHERE lb.id = ${id}
+       AND lb.learner_id = ${learnerId}
+       AND lb.school_id = ${schoolId}
+       AND lb.status = ${SCHEDULED}
+  `;
+  return anchor || null;
+}
+
+async function buildRecurringSlotConflictIndex(sql, {
+  schoolId,
+  instructorId,
+  dates,
+  startTime,
+  endTime,
+}) {
+  const conflicts = new Map();
+  const add = (date, reason) => {
+    const key = String(date).slice(0, 10);
+    if (!conflicts.has(key)) conflicts.set(key, reason);
+  };
+
+  const bookings = await sql`
+    SELECT scheduled_date::text AS date
+      FROM lesson_bookings
+     WHERE instructor_id = ${instructorId}
+       AND school_id = ${schoolId}
+       AND scheduled_date = ANY(${dates})
+       AND status = ANY(${BLOCKING_STATUSES}::text[])
+       AND start_time < ${endTime}::time
+       AND end_time > ${startTime}::time
+  `;
+  bookings.forEach(row => add(row.date, 'already_booked'));
+
+  const reservations = await sql`
+    SELECT scheduled_date::text AS date
+      FROM slot_reservations
+     WHERE instructor_id = ${instructorId}
+       AND school_id = ${schoolId}
+       AND scheduled_date = ANY(${dates})
+       AND expires_at > NOW()
+       AND start_time < ${endTime}::time
+       AND end_time > ${startTime}::time
+  `;
+  reservations.forEach(row => add(row.date, 'reserved'));
+
+  try {
+    const offers = await sql`
+      SELECT scheduled_date::text AS date
+        FROM lesson_offers
+       WHERE instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
+         AND scheduled_date = ANY(${dates})
+         AND status = 'pending'
+         AND expires_at > NOW()
+         AND start_time < ${endTime}::time
+         AND end_time > ${startTime}::time
+    `;
+    offers.forEach(row => add(row.date, 'pending_offer'));
+  } catch (_) {}
+
+  try {
+    const holds = await sql`
+      SELECT scheduled_date::text AS date
+        FROM recurring_slot_block_items
+       WHERE instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
+         AND scheduled_date = ANY(${dates})
+         AND status = 'held'
+         AND start_time < ${endTime}::time
+         AND end_time > ${startTime}::time
+    `;
+    holds.forEach(row => add(row.date, 'pending_weekly_block'));
+  } catch (_) {}
+
+  return conflicts;
+}
+
+async function buildRecurringBlockPreview(sql, {
+  anchorBookingId,
+  learnerId,
+  schoolId,
+  lessons,
+}) {
+  const selectedLessons = parseRecurringBlockLessons(lessons);
+  if (!selectedLessons) {
+    return { ok: false, code: 'INVALID_LESSONS', message: recurringBlockLessonCountError() };
+  }
+
+  const anchor = await getRecurringAnchorBooking(sql, { bookingId: anchorBookingId, learnerId, schoolId });
+  if (!anchor) {
+    return { ok: false, code: 'ANCHOR_NOT_FOUND', message: 'Anchor booking not found' };
+  }
+
+  const durationMins = parseInt(anchor.duration_minutes, 10) || (timeToMinutes(anchor.end_time) - timeToMinutes(anchor.start_time));
+  const startTime = String(anchor.start_time).slice(0, 5);
+  const endTime = String(anchor.end_time).slice(0, 5);
+  const requestedTransmissionType = parseRequestTransmissionType(anchor.transmission_type);
+  const anchorDate = parseDate(String(anchor.scheduled_date).slice(0, 10));
+  const candidateDates = [];
+  for (let week = 1; week <= RECURRING_BLOCK_LOOKAHEAD_WEEKS; week++) {
+    candidateDates.push(formatDate(addDays(anchorDate, week * 7)));
+  }
+
+  const conflictIndex = await buildRecurringSlotConflictIndex(sql, {
+    schoolId,
+    instructorId: anchor.instructor_id,
+    dates: candidateDates,
+    startTime,
+    endTime,
+  });
+
+  const weeks = [];
+  const selectedSlots = [];
+  for (let i = 0; i < candidateDates.length; i++) {
+    const date = candidateDates[i];
+    let status = 'available';
+    let reason = null;
+
+    if (conflictIndex.has(date)) {
+      status = 'unavailable';
+      reason = conflictIndex.get(date);
+    } else {
+      const fitsAvailability = await slotFitsActiveAvailability(sql, {
+        instructorId: anchor.instructor_id,
+        schoolId,
+        date,
+        startTime,
+        endTime,
+        transmissionType: requestedTransmissionType,
+        enforceBookingWindow: false,
+      });
+      if (!fitsAvailability) {
+        status = 'unavailable';
+        reason = 'outside_availability';
+      }
+    }
+
+    const canSelect = status === 'available' && selectedSlots.length < selectedLessons;
+    const weekRow = {
+      week: i + 1,
+      date,
+      start_time: startTime,
+      end_time: endTime,
+      status,
+      selected: canSelect,
+    };
+    if (reason) weekRow.reason = reason;
+    weeks.push(weekRow);
+    if (canSelect) selectedSlots.push({ date, start_time: startTime, end_time: endTime });
+  }
+
+  const pricing = await calcDirectLessonPrice(sql, {
+    schoolId,
+    instructorId: anchor.instructor_id,
+    learnerId,
+    durationMinutes: durationMins,
+  });
+
+  const [balance] = await sql`
+    SELECT COALESCE(balance_minutes, 0)::int AS balance_minutes
+      FROM learner_credit_balances
+     WHERE learner_id = ${learnerId}
+       AND instructor_id = ${anchor.instructor_id}
+       AND school_id = ${schoolId}
+  `;
+  const balanceMinutes = Number(balance?.balance_minutes || 0);
+  const requiredMinutes = durationMins * selectedLessons;
+  const availableCount = weeks.filter(w => w.status === 'available').length;
+
+  return {
+    ok: true,
+    anchor: {
+      booking_id: anchor.id,
+      date: String(anchor.scheduled_date).slice(0, 10),
+      start_time: startTime,
+      end_time: endTime,
+      instructor_id: anchor.instructor_id,
+      instructor_name: anchor.instructor_name,
+      lesson_type_id: anchor.lesson_type_id,
+      lesson_type_name: anchor.lesson_type_name,
+      duration_minutes: durationMins,
+      pickup_address: anchor.pickup_address || null,
+      dropoff_address: anchor.dropoff_address || null,
+    },
+    requested_lessons: selectedLessons,
+    selected_lessons: selectedSlots.length,
+    available_lessons: availableCount,
+    max_selectable_lessons: Math.min(RECURRING_BLOCK_MAX_LESSONS, availableCount),
+    can_commit: selectedSlots.length === selectedLessons && selectedLessons >= RECURRING_BLOCK_MIN_LESSONS,
+    selected_slots: selectedSlots,
+    weeks,
+    pricing: {
+      price_per_lesson_pence: pricing.pricePence,
+      total_price_pence: pricing.pricePence * selectedSlots.length,
+      requested_total_price_pence: pricing.pricePence * selectedLessons,
+      price_source: pricing.source,
+    },
+    credit: {
+      balance_minutes: balanceMinutes,
+      required_minutes: requiredMinutes,
+      has_sufficient_credit: balanceMinutes >= requiredMinutes,
+    },
+  };
+}
+
+async function handleRecurringBlockPreview(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const preview = await buildRecurringBlockPreview(sql, {
+      anchorBookingId: req.query.booking_id,
+      learnerId: user.id,
+      schoolId,
+      lessons: req.query.lessons || RECURRING_BLOCK_MIN_LESSONS,
+    });
+
+    if (!preview.ok && preview.code === 'INVALID_LESSONS') {
+      return res.status(400).json({ error: true, code: preview.code, message: preview.message });
+    }
+    if (!preview.ok && preview.code === 'ANCHOR_NOT_FOUND') {
+      return res.status(404).json({ error: true, code: preview.code, message: preview.message });
+    }
+    if (!preview.ok) {
+      return res.status(400).json({ error: true, code: preview.code || 'PREVIEW_FAILED', message: preview.message || 'Preview failed' });
+    }
+
+    return res.json({ ok: true, ...preview });
+  } catch (err) {
+    console.error('recurring-block-preview error:', err);
+    reportError('/api/slots?action=recurring-block-preview', err);
+    return res.status(500).json({ error: true, code: 'PREVIEW_FAILED', message: 'Failed to preview recurring block' });
+  }
+}
+
+async function handleRecurringBlockCommit(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+  const { anchor_booking_id, lessons } = req.body || {};
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const preview = await buildRecurringBlockPreview(sql, {
+      anchorBookingId: anchor_booking_id,
+      learnerId: user.id,
+      schoolId,
+      lessons,
+    });
+
+    if (!preview.ok && preview.code === 'INVALID_LESSONS') {
+      return res.status(400).json({ error: true, code: preview.code, message: preview.message });
+    }
+    if (!preview.ok && preview.code === 'ANCHOR_NOT_FOUND') {
+      return res.status(404).json({ error: true, code: preview.code, message: preview.message });
+    }
+    if (!preview.ok) {
+      return res.status(400).json({ error: true, code: preview.code || 'PREVIEW_FAILED', message: preview.message || 'Preview failed' });
+    }
+    if (!preview.can_commit) {
+      return res.status(409).json({
+        error: true,
+        code: 'SLOTS_UNAVAILABLE',
+        message: 'Not enough matching future weekly slots are available. Please review the refreshed preview.',
+        preview,
+      });
+    }
+    if (!preview.credit.has_sufficient_credit) {
+      return res.status(402).json({
+        error: true,
+        code: 'INSUFFICIENT_CREDIT',
+        message: 'Not enough same-instructor Lesson Credit for this weekly block.',
+        preview,
+      });
+    }
+
+    const seriesId = crypto.randomUUID();
+    const booked = await bookCreditFundedSlotsTransaction({
+      connectionString: process.env.POSTGRES_URL,
+      learnerId: user.id,
+      instructorId: Number(preview.anchor.instructor_id),
+      schoolId,
+      bookingDates: preview.selected_slots.map(slot => ({ date: slot.date })),
+      startTime: preview.anchor.start_time,
+      endTime: preview.anchor.end_time,
+      lessonTypeId: preview.anchor.lesson_type_id,
+      durationMins: preview.anchor.duration_minutes,
+      pickupAddress: preview.anchor.pickup_address,
+      dropoffAddress: preview.anchor.dropoff_address,
+      seriesId,
+      recurringBlock: {
+        anchorBookingId: preview.anchor.booking_id,
+        pricePerLessonPence: preview.pricing.price_per_lesson_pence,
+        totalPricePence: preview.pricing.requested_total_price_pence,
+        priceSource: preview.pricing.price_source,
+        metadata: {
+          source: 'recurring_block_credit_commit',
+          lookahead_weeks: RECURRING_BLOCK_LOOKAHEAD_WEEKS,
+        },
+      },
+    });
+
+    if (!booked.ok && (booked.code === 'INSUFFICIENT_BALANCE' || booked.code === 'INSUFFICIENT_FIFO_SOURCES')) {
+      return res.status(402).json({
+        error: true,
+        code: 'INSUFFICIENT_CREDIT',
+        message: 'Not enough same-instructor Lesson Credit for this weekly block.',
+      });
+    }
+    if (!booked.ok && booked.code === 'SLOTS_UNAVAILABLE') {
+      return res.status(409).json({
+        error: true,
+        code: 'SLOTS_UNAVAILABLE',
+        message: 'One or more selected slots are no longer available. Please refresh the preview.',
+        conflicts: booked.conflicts || [],
+        available: booked.available || [],
+      });
+    }
+    if (!booked.ok && booked.code === 'LCB_SCOPE_INVARIANT') {
+      throw new Error(booked.message || 'LCB_SCOPE_INVARIANT');
+    }
+    if (!booked.ok) {
+      throw new Error(`Recurring block credit commit failed: ${booked.code || 'UNKNOWN'}`);
+    }
+
+    try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id} AND school_id = ${schoolId}`; } catch (_) {}
+
+    for (const b of booked.createdBookings) {
+      supersedeBroadcastSiblings({
+        instructor_id: preview.anchor.instructor_id,
+        scheduled_date: String(b.scheduled_date).slice(0, 10),
+        start_time: String(b.start_time).slice(0, 5),
+        school_id: schoolId
+      }).catch(err => console.warn('supersede on recurring block commit failed:', err.message));
+    }
+
+    return res.status(201).json({
+      ok: true,
+      block_id: booked.recurringBlock?.id,
+      status: booked.recurringBlock?.status || 'confirmed',
+      funding_method: booked.recurringBlock?.funding_method || 'lesson_credit',
+      series_id: seriesId,
+      booking_ids: booked.createdBookings.map(b => b.id),
+      dates: preview.selected_slots.map(slot => slot.date),
+      selected_lessons: preview.requested_lessons,
+      balance_minutes: booked.balanceMinutes,
+      pricing: {
+        price_per_lesson_pence: preview.pricing.price_per_lesson_pence,
+        total_price_pence: preview.pricing.requested_total_price_pence,
+        price_source: preview.pricing.price_source,
+      },
+    });
+  } catch (err) {
+    console.error('recurring-block-commit error:', err);
+    reportError('/api/slots?action=recurring-block-commit', err);
+    return res.status(500).json({ error: true, code: 'COMMIT_FAILED', message: 'Failed to confirm recurring block' });
   }
 }
 
@@ -3894,6 +4422,8 @@ function formatDateDisplay(str) {
 }
 
 module.exports._bookCreditFundedSlotsTransaction = bookCreditFundedSlotsTransaction;
+module.exports._buildRecurringBlockPreview = buildRecurringBlockPreview;
+module.exports._parseRecurringBlockLessons = parseRecurringBlockLessons;
 module.exports._CREDIT_BOOKING_SOURCE_TYPES = CREDIT_BOOKING_SOURCE_TYPES;
 module.exports._hasBufferedSlotConflict = hasBufferedSlotConflict;
 module.exports._findAdjacentTravelSpacingConflict = findAdjacentTravelSpacingConflict;
