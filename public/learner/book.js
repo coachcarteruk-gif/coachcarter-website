@@ -9,6 +9,8 @@ const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','
 const MON_FULL  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 const DEFAULT_PRICE_PENCE = 8250; // fallback if lesson-types API fails
+const RECURRING_BLOCK_MIN_LESSONS = 4;
+const RECURRING_BLOCK_MAX_LESSONS = 12;
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let auth          = null; // null when browsing as guest; { user, ... } when logged in
@@ -41,6 +43,12 @@ let preselectedTypeId = null;
 let prefilledName = null; // from ?name= URL param (shareable booking link)
 let pendingReschedule = null; // { bookingId, date, start, end, instructorName, instructorId }
 let lastBookingId = null;
+let recurringAnchorBookingId = null;
+let recurringAnchorContext = null;
+let recurringLessonCount = RECURRING_BLOCK_MIN_LESSONS;
+let recurringPreview = null;
+let recurringPreviewBusy = false;
+let recurringCommitBusy = false;
 let learnerProfile = { phone: '', pickup_address: '' };
 let hasFreeTrialSlot = false; // true if current school has a lesson_type with slug='trial'
 // Slot-first state: full list of selectable lesson types (excludes 'trial')
@@ -67,7 +75,10 @@ function init() {
     const paidMsg = auth
       ? 'Payment successful — your lesson is booked! Check your email for details.'
       : 'Booking confirmed! Check your email for details and a link to manage your bookings.';
+    document.body.classList.add('cc-paid-return');
     showToast(paidMsg, 'success');
+    const paidPrompt = document.getElementById('reservedWeeklyPaidPrompt');
+    if (paidPrompt) paidPrompt.style.display = 'block';
     window.history.replaceState({}, '', '/learner/book.html');
   }
   if (params.get('cancelled') === '1') {
@@ -88,6 +99,18 @@ function init() {
   document.getElementById('bookModalCloseX').onclick = closeBookModal;
   document.getElementById('btnConfirmBook').onclick = confirmBookWithCredit;
   document.getElementById('btnPayAndBook').onclick = confirmPayAndBook;
+  const successRecurringBtn = document.getElementById('btnOpenRecurringFromSuccess');
+  if (successRecurringBtn) successRecurringBtn.onclick = () => openRecurringBlockModal('success');
+  const paidRecurringBtn = document.getElementById('btnOpenRecurringFromPaid');
+  if (paidRecurringBtn) paidRecurringBtn.onclick = handlePaidRecurringPrompt;
+  document.getElementById('recurringBlockClose').onclick = closeRecurringBlockModal;
+  document.getElementById('recurringBlockCloseX').onclick = closeRecurringBlockModal;
+  document.getElementById('recurringMinus').onclick = () => setRecurringLessonCount(recurringLessonCount - 1);
+  document.getElementById('recurringPlus').onclick = () => setRecurringLessonCount(recurringLessonCount + 1);
+  document.querySelectorAll('[data-recurring-lessons]').forEach(btn => {
+    btn.addEventListener('click', () => setRecurringLessonCount(parseInt(btn.dataset.recurringLessons, 10)));
+  });
+  document.getElementById('btnConfirmRecurringBlock').onclick = confirmRecurringBlockWithCredit;
   const claimTrialLink = document.getElementById('claimTrialLink');
   if (claimTrialLink) claimTrialLink.onclick = handleClaimTrialClick;
   document.getElementById('btnSuccessDone').onclick = closeBookModal;
@@ -100,13 +123,15 @@ function init() {
 
   // Close modals on overlay click
   document.getElementById('bookModal').addEventListener('click', e => { if (e.target === document.getElementById('bookModal')) closeBookModal(); });
+  document.getElementById('recurringBlockModal').addEventListener('click', e => { if (e.target === document.getElementById('recurringBlockModal')) closeRecurringBlockModal(); });
   document.getElementById('cancelModal').addEventListener('click', e => { if (e.target === document.getElementById('cancelModal')) closeCancelModal(); });
   document.getElementById('rescheduleModal').addEventListener('click', e => { if (e.target === document.getElementById('rescheduleModal')) closeRescheduleModal(); });
 
   // Close modals on Escape key
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (document.getElementById('bookModal').classList.contains('open')) closeBookModal();
+    if (document.getElementById('recurringBlockModal').classList.contains('open')) closeRecurringBlockModal();
+    else if (document.getElementById('bookModal').classList.contains('open')) closeBookModal();
     else if (document.getElementById('cancelModal').classList.contains('open')) closeCancelModal();
     else if (document.getElementById('rescheduleModal').classList.contains('open')) closeRescheduleModal();
   });
@@ -1772,6 +1797,7 @@ async function confirmPayAndBook() {
 
 function showBookSuccess(weeks, dates) {
   const successStep = document.getElementById('bookSuccessStep');
+  const isSingleBooking = !(weeks && weeks > 1);
   if (weeks && weeks > 1 && dates) {
     const dateList = dates.map(d => {
       const display = new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -1799,12 +1825,289 @@ function showBookSuccess(weeks, dates) {
     balanceEl.style.display = 'none';
   }
 
+  const reservedWeeklyPrompt = document.getElementById('reservedWeeklySuccessPrompt');
+  if (reservedWeeklyPrompt) {
+    reservedWeeklyPrompt.style.display = weeks && weeks > 1 ? 'none' : 'block';
+  }
+  recurringAnchorBookingId = isSingleBooking ? lastBookingId : null;
+  recurringAnchorContext = isSingleBooking && pendingSlot ? {
+    date: pendingSlot.date,
+    start_time: pendingSlot.start_time,
+    instructor_name: pendingSlot.instructor_name
+  } : null;
+
   const showSync = shouldShowCalSync();
   document.getElementById('calSyncPrompt').style.display = showSync ? 'block' : 'none';
   document.getElementById('calSyncedNote').style.display = showSync ? 'none' : 'block';
 
   document.getElementById('bookConfirmStep').style.display = 'none';
   successStep.style.display = 'block';
+}
+
+function handlePaidRecurringPrompt() {
+  window.location.href = auth ? '/learner/lessons.html' : '/learner/login.html';
+}
+
+function closeRecurringBlockModal() {
+  document.getElementById('recurringBlockModal').classList.remove('open');
+}
+
+function clampRecurringLessons(value) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return RECURRING_BLOCK_MIN_LESSONS;
+  return Math.max(RECURRING_BLOCK_MIN_LESSONS, Math.min(RECURRING_BLOCK_MAX_LESSONS, parsed));
+}
+
+function setRecurringLessonCount(value, opts = {}) {
+  recurringLessonCount = clampRecurringLessons(value);
+  document.getElementById('recurringLessonCountLabel').textContent = `${recurringLessonCount} lessons`;
+  document.getElementById('recurringMinus').disabled = recurringLessonCount <= RECURRING_BLOCK_MIN_LESSONS;
+  document.getElementById('recurringPlus').disabled = recurringLessonCount >= RECURRING_BLOCK_MAX_LESSONS;
+  document.querySelectorAll('[data-recurring-lessons]').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.recurringLessons, 10) === recurringLessonCount);
+  });
+  if (!opts.skipLoad && document.getElementById('recurringBlockModal').classList.contains('open')) {
+    loadRecurringBlockPreview();
+  }
+}
+
+function formatRecurringDate(dateStr) {
+  return new Date(dateStr + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+function formatMoneyPence(pence) {
+  return String.fromCharCode(163) + (Number(pence || 0) / 100).toFixed(2);
+}
+
+function formatRecurringReason(reason) {
+  switch (reason) {
+    case 'booking_conflict': return 'Already booked';
+    case 'recurring_hold_conflict': return 'Held by another weekly block';
+    case 'blackout': return 'Instructor unavailable';
+    case 'outside_availability': return 'No matching availability';
+    default: return reason ? reason.replace(/_/g, ' ') : 'Unavailable';
+  }
+}
+
+function setRecurringGate(message, tone = '') {
+  const gate = document.getElementById('recurringBlockGate');
+  gate.textContent = message || '';
+  gate.className = 'recurring-status-box' + (tone ? ' ' + tone : '');
+  gate.style.display = message ? 'block' : 'none';
+}
+
+function openRecurringBlockModal(source) {
+  window.posthog && posthog.capture('recurring_block_preview_opened', { source });
+  clearSlotTimer();
+  document.getElementById('bookModal').classList.remove('open');
+  document.getElementById('recurringBlockModal').classList.add('open');
+  document.getElementById('recurringBlockConfirmed').style.display = 'none';
+  document.getElementById('recurringBlockPreview').style.display = 'none';
+  document.getElementById('recurringBlockActions').style.display = 'flex';
+  document.getElementById('recurringBlockControls').style.display = 'block';
+  document.getElementById('btnConfirmRecurringBlock').disabled = true;
+  document.getElementById('recurringConfirmSpinner').style.display = 'none';
+  document.getElementById('recurringConfirmLabel').textContent = 'Confirm with Lesson Credit';
+  setRecurringLessonCount(recurringLessonCount || RECURRING_BLOCK_MIN_LESSONS, { skipLoad: true });
+  updateRecurringAnchorCopy(null);
+
+  if (!auth) {
+    document.getElementById('recurringBlockControls').style.display = 'none';
+    document.getElementById('recurringBlockLoading').style.display = 'none';
+    setRecurringGate('Sign in first, then open My Lessons to reserve a weekly block from your confirmed booking.', 'warn');
+    return;
+  }
+  if (!recurringAnchorBookingId) {
+    document.getElementById('recurringBlockControls').style.display = 'none';
+    document.getElementById('recurringBlockLoading').style.display = 'none';
+    setRecurringGate('Open My Lessons after sign-in to choose the booking you want to use as the weekly pattern.', 'warn');
+    return;
+  }
+
+  setRecurringGate('', '');
+  loadRecurringBlockPreview();
+}
+
+function updateRecurringAnchorCopy(preview) {
+  const pattern = document.getElementById('recurringBlockPattern');
+  const copy = document.getElementById('recurringBlockAnchorCopy');
+  const anchor = preview && preview.anchor;
+  if (anchor) {
+    const day = new Date(anchor.date + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
+    pattern.textContent = `${anchor.instructor_name} - ${day} at ${anchor.start_time}`;
+    copy.textContent = 'Same instructor, same day, same time. Unavailable weeks are skipped.';
+  } else if (recurringAnchorContext) {
+    const day = new Date(recurringAnchorContext.date + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
+    pattern.textContent = `${recurringAnchorContext.instructor_name} - ${day} at ${recurringAnchorContext.start_time}`;
+    copy.textContent = 'Same instructor, same day, same time. Unavailable weeks are skipped.';
+  } else {
+    pattern.textContent = 'Same instructor, same day, same time';
+    copy.textContent = 'Choose 4-12 future weekly lessons to preview. Unavailable weeks are skipped.';
+  }
+}
+
+async function loadRecurringBlockPreview() {
+  if (!auth || !recurringAnchorBookingId || recurringPreviewBusy) return;
+  recurringPreviewBusy = true;
+  recurringPreview = null;
+  document.getElementById('recurringBlockLoading').textContent = 'Loading weekly options...';
+  document.getElementById('recurringBlockLoading').style.display = 'block';
+  document.getElementById('recurringBlockPreview').style.display = 'none';
+  document.getElementById('btnConfirmRecurringBlock').disabled = true;
+  try {
+    const url = `/api/slots?action=recurring-block-preview&booking_id=${encodeURIComponent(recurringAnchorBookingId)}&lessons=${encodeURIComponent(recurringLessonCount)}`;
+    const res = await ccAuth.fetchAuthed(url);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Could not load weekly options');
+    recurringPreview = data;
+    updateRecurringAnchorCopy(data);
+    renderRecurringBlockPreview();
+  } catch (err) {
+    document.getElementById('recurringBlockLoading').style.display = 'none';
+    document.getElementById('recurringBlockPreview').style.display = 'block';
+    document.getElementById('recurringBlockPreview').innerHTML = `<div class="recurring-status-box warn">${esc(err.message || 'Could not load weekly options.')}</div>`;
+  } finally {
+    recurringPreviewBusy = false;
+  }
+}
+
+function renderRecurringBlockPreview() {
+  if (!recurringPreview) return;
+  document.getElementById('recurringBlockLoading').style.display = 'none';
+  const previewEl = document.getElementById('recurringBlockPreview');
+  previewEl.style.display = 'block';
+
+  const credit = recurringPreview.credit || {};
+  const pricing = recurringPreview.pricing || {};
+  const hasEnoughCredit = !!credit.has_sufficient_credit;
+  const canCommit = !!(recurringPreview.can_commit && recurringPreview.credit && recurringPreview.credit.has_sufficient_credit && auth);
+  const requiredHours = formatHours(credit.required_minutes || 0);
+  const balanceHours = formatHours(credit.balance_minutes || 0);
+  const totalPrice = formatMoneyPence(pricing.requested_total_price_pence || pricing.total_price_pence || 0);
+  const selected = recurringPreview.selected_lessons || 0;
+  const requested = recurringPreview.requested_lessons || recurringLessonCount;
+
+  const weekRows = (recurringPreview.weeks || []).map(week => {
+    const rowClass = week.selected ? ' selected' : (week.status === 'available' ? '' : ' unavailable');
+    const label = week.selected ? 'Selected' : (week.status === 'available' ? 'Available' : 'Skipped');
+    const detail = week.status === 'available'
+      ? `${week.start_time} - ${week.end_time}`
+      : formatRecurringReason(week.reason);
+    return `<div class="recurring-week-row${rowClass}">
+      <div class="recurring-week-main">
+        <strong>${esc(formatRecurringDate(week.date))}</strong>
+        <span>${esc(detail)}</span>
+      </div>
+      <span class="recurring-week-status">${esc(label)}</span>
+    </div>`;
+  }).join('');
+
+  const availabilityBox = recurringPreview.can_commit
+    ? `<div class="recurring-status-box good">${selected} future weekly lessons selected. Unavailable weeks are skipped and not stored.</div>`
+    : `<div class="recurring-status-box warn">${selected} of ${requested} requested lessons are available. Pick fewer lessons or choose another slot pattern.</div>`;
+
+  const creditBox = hasEnoughCredit
+    ? `<div class="recurring-status-box good">You have ${esc(balanceHours)} Lesson Credit with this instructor. This block needs ${esc(requiredHours)} (${esc(totalPrice)}). You can confirm it now.</div>`
+    : `<div class="recurring-status-box warn">You have ${esc(balanceHours)} Lesson Credit with this instructor. This block needs ${esc(requiredHours)} (${esc(totalPrice)}). The bank-payment hold option is coming later, so ask your instructor for help with this block for now.</div>`;
+
+  previewEl.innerHTML = `
+    ${availabilityBox}
+    ${creditBox}
+    <div class="modal-section-title">Weekly preview</div>
+    <div class="recurring-week-list">${weekRows}</div>
+  `;
+
+  document.getElementById('btnConfirmRecurringBlock').disabled = !canCommit || recurringCommitBusy;
+}
+
+async function confirmRecurringBlockWithCredit() {
+  if (!recurringPreview || recurringCommitBusy) return;
+  const canCommit = !!(recurringPreview.can_commit && recurringPreview.credit && recurringPreview.credit.has_sufficient_credit && auth);
+  if (!canCommit) return;
+
+  recurringCommitBusy = true;
+  const btn = document.getElementById('btnConfirmRecurringBlock');
+  const label = document.getElementById('recurringConfirmLabel');
+  const spinner = document.getElementById('recurringConfirmSpinner');
+  btn.disabled = true;
+  label.textContent = 'Confirming...';
+  spinner.style.display = 'block';
+
+  let confirmed = false;
+  try {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=recurring-block-commit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anchor_booking_id: recurringAnchorBookingId,
+        lessons: recurringLessonCount
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (data.code === 'SLOTS_UNAVAILABLE') {
+        showToast('Some weekly slots changed. Review the refreshed preview.', 'error');
+        if (data.preview) {
+          recurringPreview = data.preview;
+          updateRecurringAnchorCopy(data.preview);
+          renderRecurringBlockPreview();
+        } else {
+          await loadRecurringBlockPreview();
+        }
+        return;
+      }
+      if (data.code === 'INSUFFICIENT_CREDIT') {
+        showToast('Not enough same-instructor Lesson Credit for this block.', 'error');
+        if (data.preview) {
+          recurringPreview = data.preview;
+          updateRecurringAnchorCopy(data.preview);
+          renderRecurringBlockPreview();
+        } else {
+          await loadRecurringBlockPreview();
+        }
+        return;
+      }
+      throw new Error(data.message || data.error || 'Could not confirm weekly block');
+    }
+
+    selectedInstructorBalanceMinutes = data.balance_minutes || 0;
+    loadCreditBalance();
+    renderRecurringBlockConfirmed(data);
+    confirmed = true;
+    refreshAfterBooking();
+    showToast('Weekly lesson block confirmed.', 'success');
+  } catch (err) {
+    showToast(err.message || 'Could not confirm weekly block.', 'error');
+  } finally {
+    recurringCommitBusy = false;
+    spinner.style.display = 'none';
+    label.textContent = 'Confirm with Lesson Credit';
+    if (recurringPreview && !confirmed) renderRecurringBlockPreview();
+  }
+}
+
+function renderRecurringBlockConfirmed(data) {
+  document.getElementById('recurringBlockControls').style.display = 'none';
+  document.getElementById('recurringBlockPreview').style.display = 'none';
+  document.getElementById('recurringBlockLoading').style.display = 'none';
+  document.getElementById('btnConfirmRecurringBlock').disabled = true;
+  document.getElementById('recurringBlockActions').style.display = 'none';
+  const dates = (data.dates || []).map(d => `<li>${esc(formatRecurringDate(d))}</li>`).join('');
+  const remaining = formatHours(data.balance_minutes || 0);
+  const confirmed = document.getElementById('recurringBlockConfirmed');
+  confirmed.innerHTML = `
+    <div class="modal-success-icon">✓</div>
+    <h2>Weekly block confirmed.</h2>
+    <p>Your selected future lessons are booked with Lesson Credit.</p>
+    <ul class="recurring-confirmed-list">${dates}</ul>
+    <p>Remaining credit with this instructor: ${esc(remaining)}.</p>
+    <button class="btn-done" type="button" id="recurringConfirmedDone">Done</button>
+  `;
+  confirmed.style.display = 'block';
+  document.getElementById('recurringConfirmedDone').onclick = closeRecurringBlockModal;
 }
 
 function refreshAfterBooking() {

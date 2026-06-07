@@ -46,7 +46,7 @@
 | `instructor-auth.js` | none → instructor | Login, change-password (forced on first sign-in via `must_change_password`) |
 | `instructors.js` | public/instructor | Public instructor profile lookups (used by booking page) |
 | `admin.js` | admin | Dashboard, bookings, instructor CRUD, learner management, credit adjustment, set-instructor-password, forgot-password code flow |
-| `slots.js` | mostly learner | available (12-wk cap), durations-for-slot, book (+ `repeat_weeks` 1–8), checkout-slot, checkout-slot-guest, book-free-trial, cancel (+ cancel_series), reschedule, my-bookings, series-info |
+| `slots.js` | mostly learner | available (12-wk cap), durations-for-slot, recurring-block-preview, recurring-block-commit (Lesson Credit only), book (+ `repeat_weeks` 1–8), checkout-slot, checkout-slot-guest, book-free-trial, cancel (+ cancel_series), reschedule, my-bookings, series-info |
 | `offers.js` | public (token) | get-offer, accept-offer (with `repeat_weeks`), expire-offers (cron). Exports `bookOfferSeries()` for the webhook |
 | `lesson-types.js` | mixed | CRUD for lesson types per school; instructor-scoped list filters opt-in-only lesson types such as paid `1hr` unless explicitly enabled |
 | `schools.js` | superadmin | School onboarding + config (per-school feature flags via `schools.config` JSONB) |
@@ -116,7 +116,7 @@ Per-instructor credit portability note: [`docs/per-instructor-credits-audit.md`]
 **Multi-tenancy:** `schools`, `school_payouts`
 **Users:** `learner_users`, `instructors`, `admin_users`
 **Auth (legacy magic-link, kept for SMS / password-reset codes):** `magic_link_tokens`, `instructor_login_tokens`
-**Scheduling:** `instructor_availability`, `instructor_availability_overrides`, `instructor_blackout_dates`, `instructor_external_events`, `lesson_bookings`, `slot_reservations`, `learner_availability`, ~~`lesson_confirmations`~~ *(dormant May 2026 — drop scheduled in follow-up migration once the rollback window has elapsed)*
+**Scheduling:** `instructor_availability`, `instructor_availability_overrides`, `instructor_blackout_dates`, `instructor_external_events`, `lesson_bookings`, `slot_reservations`, `recurring_slot_blocks`, `recurring_slot_block_items`, `learner_availability`, ~~`lesson_confirmations`~~ *(dormant May 2026 — drop scheduled in follow-up migration once the rollback window has elapsed)*
 **Lesson catalogue:** `lesson_types`, `lesson_offers` (manual + broadcast, with `max_repeat_weeks` for recurring series)
 **Notifications:** `sent_reminders`
 **Payments:** `credit_transactions`, `booking_credit_sources`, `credit_source_adjustments`, `refund_events`, `refund_event_lines`, `instructor_payouts`, `payout_line_items`, `guarantee_pricing`
@@ -181,6 +181,9 @@ Per-instructor credit portability note: [`docs/per-instructor-credits-audit.md`]
 - **Klarna BNPL** — webhook handles `async_payment_succeeded` for Klarna's deferred-confirmation flow.
 - **Setmore sync (ongoing)** — every 15 min cron pulls Fraser's Setmore bookings as real `lesson_bookings` rows with `created_by='setmore_sync'`, `setmore_key` for idempotency. Edits protected via `edited_at`. Service mapping hardcoded.
 - **Booking-status three-state restructure (15 May 2026)** — `lesson_bookings.status` collapsed from seven values to three: `scheduled` / `chargeable` / `refunded` (CHECK constraint enforced). New shared module `api/_booking-status.js` holds the constants + predicates. New column `lesson_bookings.credit_forfeited` records "no credit returned, instructor still paid" for sub-48h cancellations. Dual-confirmation flow deleted (`_confirmation-resolver.js`, `confirm-lesson.html`, prompt-confirmations + auto-confirm crons, admin `resolve-dispute`). New cron `api/cron-auto-complete.js` flips `scheduled → chargeable` at `end_time + 1 hour`. Payout filter (`api/_payout-helpers.js`) now `lb.status = 'chargeable'` only. **App port implication:** the status strings are part of the API contract — any TS port must use the same three literal values; reuse the constants module verbatim. See `BOOKING-STATUS-RESTRUCTURE-PLAN.md`, `docs/booking-statuses.md`.
+
+**Notable additions (June 2026):**
+- **Recurring weekly block foundation** — `recurring_slot_blocks` and `recurring_slot_block_items` represent future weekly blocks separately from ordinary bookings, 10-minute Stripe `slot_reservations`, and `lesson_offers`. `api/slots.js?action=recurring-block-preview` is a read-only authenticated learner preview for an anchor booking. `api/slots.js?action=recurring-block-commit` currently supports full same-instructor Lesson Credit only and atomically creates the confirmed block, booked item rows, future bookings, BCS rows, and scoped LCB decrement. Native booking screens should call these endpoints rather than reimplementing 12-week pattern generation, pricing, or credit sufficiency client-side.
 
 ### Critical Design Decisions Already Made
 

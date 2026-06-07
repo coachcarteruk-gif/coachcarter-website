@@ -84,6 +84,55 @@ test.describe('learner booking modal instructor-aware credit balance', () => {
     expect(js).not.toContain('function updateModalBuyCreditLinks');
   });
 
+  test('booking success wires Reserved Weekly Slot preview after single bookings only', () => {
+    const js = read('public/learner/book.js');
+    const html = read('public/learner/book.html');
+
+    expect(html).toContain('id="reservedWeeklySuccessPrompt"');
+    expect(html).toContain('id="reservedWeeklyPaidPrompt"');
+    expect(html).toContain('id="btnOpenRecurringFromSuccess"');
+    expect(html).toContain('id="recurringBlockModal"');
+    expect(html).toContain('Preview weekly options');
+    expect(html).toContain('Same instructor, same day, same time');
+    expect(html).toContain('Unavailable weeks are skipped');
+    expect(html).toContain('Choose 4-12 future weekly lessons');
+    expect(html).toContain('body.cc-paid-return .reserved-weekly-prompt.compact');
+    expect(js).toContain("document.body.classList.add('cc-paid-return')");
+    expect(js).toContain("document.getElementById('reservedWeeklyPaidPrompt')");
+    expect(js).toContain("document.getElementById('reservedWeeklySuccessPrompt')");
+    expect(js).toContain("reservedWeeklyPrompt.style.display = weeks && weeks > 1 ? 'none' : 'block';");
+    expect(js).toContain('recurringAnchorBookingId = isSingleBooking ? lastBookingId : null;');
+    expect(js).toContain("window.location.href = auth ? '/learner/lessons.html' : '/learner/login.html';");
+  });
+
+  test('booking UI calls recurring block preview and credit-funded commit only', () => {
+    const js = read('public/learner/book.js');
+    const html = read('public/learner/book.html');
+
+    expect(js).toContain('/api/slots?action=recurring-block-preview');
+    expect(js).toContain('/api/slots?action=recurring-block-commit');
+    expect(js).toContain('anchor_booking_id: recurringAnchorBookingId');
+    expect(js).toContain('lessons: recurringLessonCount');
+    expect(js).toContain("if (data.code === 'SLOTS_UNAVAILABLE')");
+    expect(js).toContain("if (data.code === 'INSUFFICIENT_CREDIT')");
+    expect(js).toContain('The bank-payment hold option is coming later');
+    expect(html).toContain('Confirm with Lesson Credit');
+    expect(js).not.toContain('recurring-block-checkout');
+    expect(js).not.toContain('recurring-block-payment');
+    expect(js).not.toContain('Pay by Bank');
+    expect(js).not.toContain('Klarna');
+  });
+
+  test('recurring block commit requires server commit flag and sufficient same-instructor credit', () => {
+    const js = read('public/learner/book.js');
+
+    expect(js).toContain('const hasEnoughCredit = !!credit.has_sufficient_credit;');
+    expect(js).toContain('const canCommit = !!(recurringPreview.can_commit && recurringPreview.credit && recurringPreview.credit.has_sufficient_credit && auth);');
+    expect(js).toContain("document.getElementById('btnConfirmRecurringBlock').disabled = !canCommit || recurringCommitBusy;");
+    expect(js).toContain('selectedInstructorBalanceMinutes = data.balance_minutes || 0;');
+    expect(js).toContain('loadCreditBalance();');
+  });
+
   test('booking modal excludes trial durations but keeps the guest free-trial CTA link', () => {
     const js = read('public/learner/book.js');
     const html = read('public/learner/book.html');
