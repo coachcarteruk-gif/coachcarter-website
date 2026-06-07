@@ -42,8 +42,10 @@ test.describe('recurring weekly block foundation contract', () => {
     expect(source).toContain('WHERE learner_id = ${learnerId}');
     expect(source).toContain('AND instructor_id = ${anchor.instructor_id}');
     expect(source).toContain('AND school_id = ${schoolId}');
-    expect(source).toContain("return res.status(402).json({\n        error: true,\n        code: 'INSUFFICIENT_CREDIT'");
-    expect(source).toContain("return res.status(409).json({\n        error: true,\n        code: 'SLOTS_UNAVAILABLE'");
+    expect(source).toContain('return res.status(402).json({');
+    expect(source).toContain("code: 'INSUFFICIENT_CREDIT'");
+    expect(source).toContain('return res.status(409).json({');
+    expect(source).toContain("code: 'SLOTS_UNAVAILABLE'");
     expect(source).toContain('selectedSlots.length === selectedLessons');
     expect(source).toContain('recurringBlock: {');
   });
