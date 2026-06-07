@@ -4212,12 +4212,45 @@ async function handleMyBookings(req, res) {
         COALESCE(lb.reschedule_count, 0) AS reschedule_count,
         lb.rescheduled_from, lb.pickup_address, lb.dropoff_address,
         lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
+        rsb.id AS recurring_slot_block_id,
+        rsbi.id AS recurring_slot_block_item_id,
+        COALESCE(rsb.status = 'confirmed' AND rsbi.status = 'booked', false) AS is_reserved_weekly_slot,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked' THEN 6
+          ELSE NULL
+        END AS reserved_move_notice_days,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
+          THEN to_char(lb.scheduled_date::date + lb.start_time::time - INTERVAL '6 days', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+          ELSE NULL
+        END AS reserved_move_request_deadline,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
+          THEN (NOW() < (lb.scheduled_date::date + lb.start_time::time - INTERVAL '6 days'))
+          ELSE NULL
+        END AS reserved_move_policy_open,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
+          THEN 'policy_visible_admin_override'
+          ELSE NULL
+        END AS reserved_move_policy_mode,
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
         lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
         COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      LEFT JOIN recurring_slot_block_items rsbi
+        ON rsbi.lesson_booking_id = lb.id
+       AND rsbi.school_id = COALESCE(lb.school_id, 1)
+       AND rsbi.instructor_id = lb.instructor_id
+       AND rsbi.status = 'booked'
+      LEFT JOIN recurring_slot_blocks rsb
+        ON rsb.id = rsbi.block_id
+       AND rsb.school_id = COALESCE(lb.school_id, 1)
+       AND rsb.learner_id = lb.learner_id
+       AND rsb.instructor_id = lb.instructor_id
+       AND rsb.status = 'confirmed'
       WHERE lb.learner_id = ${user.id}
         AND COALESCE(lb.school_id, 1) = ${schoolId}
         AND lb.status = ${SCHEDULED}
@@ -4233,12 +4266,45 @@ async function handleMyBookings(req, res) {
         COALESCE(lb.reschedule_count, 0) AS reschedule_count,
         lb.rescheduled_from, lb.pickup_address, lb.dropoff_address,
         lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
+        rsb.id AS recurring_slot_block_id,
+        rsbi.id AS recurring_slot_block_item_id,
+        COALESCE(rsb.status = 'confirmed' AND rsbi.status = 'booked', false) AS is_reserved_weekly_slot,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked' THEN 6
+          ELSE NULL
+        END AS reserved_move_notice_days,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
+          THEN to_char(lb.scheduled_date::date + lb.start_time::time - INTERVAL '6 days', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+          ELSE NULL
+        END AS reserved_move_request_deadline,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
+          THEN (NOW() < (lb.scheduled_date::date + lb.start_time::time - INTERVAL '6 days'))
+          ELSE NULL
+        END AS reserved_move_policy_open,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
+          THEN 'policy_visible_admin_override'
+          ELSE NULL
+        END AS reserved_move_policy_mode,
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
         lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
         COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      LEFT JOIN recurring_slot_block_items rsbi
+        ON rsbi.lesson_booking_id = lb.id
+       AND rsbi.school_id = COALESCE(lb.school_id, 1)
+       AND rsbi.instructor_id = lb.instructor_id
+       AND rsbi.status = 'booked'
+      LEFT JOIN recurring_slot_blocks rsb
+        ON rsb.id = rsbi.block_id
+       AND rsb.school_id = COALESCE(lb.school_id, 1)
+       AND rsb.learner_id = lb.learner_id
+       AND rsb.instructor_id = lb.instructor_id
+       AND rsb.status = 'confirmed'
       WHERE lb.learner_id = ${user.id}
         AND COALESCE(lb.school_id, 1) = ${schoolId}
         AND NOT (lb.status = ${SCHEDULED} AND lb.scheduled_date >= ${nowISO})

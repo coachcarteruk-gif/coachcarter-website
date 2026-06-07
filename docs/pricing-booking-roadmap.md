@@ -446,6 +446,16 @@ Docs to load before implementation:
 - `docs/per-instructor-credits-audit.md`
 - `CLAUDE.md`
 
+Stage 5 first slice - 2026-06-07:
+
+- Added `docs/pricing-booking-stage-5-reserved-slot-policy-decision-record.md`.
+- Confirmed representation: reserved weekly lessons stay ordinary `lesson_bookings` rows in the existing three-state lifecycle, identified by a same-school/same-instructor `recurring_slot_block_items.status='booked'` link to a confirmed `recurring_slot_blocks` parent.
+- Chose policy visibility/admin handling for the 6-day move rule in v1, not automatic backend enforcement.
+- Added reserved-slot read fields to `/api/slots?action=my-bookings`: `is_reserved_weekly_slot`, linked block/item IDs, move notice days, move request deadline, policy-open boolean, and `reserved_move_policy_mode='policy_visible_admin_override'`.
+- Added My Lessons copy for confirmed reserved weekly slots so learners can see the 6-day move policy while cancellation credit returns still reference the existing 48-hour rule.
+- Added contract tests for representation, movement policy visibility, cancellation timing non-regression, school scope, and instructor scope.
+- Left cancellation, learner reschedule, refund, payout, Stripe, Pay by Bank, Klarna/card, BCS refund execution, credit-ledger mutation, and notification behaviour unchanged.
+
 ### Stage 6: Paid-In-Full Reward
 
 Goal: introduce the self-serve best-value upfront option without turning payment method costs into customer-facing surcharges.

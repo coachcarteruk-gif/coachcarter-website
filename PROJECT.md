@@ -422,7 +422,7 @@ Bound to `/r/:code` via a `vercel.json` rewrite. No `?action=` routing — this 
 | `book-free-trial` | POST | No | Self-serve free trial booking. No Stripe. Body matches `checkout-slot-guest` plus optional `referral_code`. Resolves the `trial` lesson type (id 37, school 1), runs a one-trial-per-learner guard (email OR phone, any status), creates a `scheduled` booking with `payment_method='free'`, generates a 7-day magic-link token, emails learner + instructor. Rate limited: 10/IP/hr + 3/phone/hr |
 | `cancel` | POST | Yes | Cancel a booking. 48h+ notice → status flips to `refunded` and `minutes_deducted` returned to balance. <48h notice → status stays `scheduled` with `credit_forfeited = TRUE` so the hourly cron later flips it to `chargeable` and the instructor is still paid. See `docs/booking-statuses.md`. |
 | `reschedule` | POST | Yes | Move a scheduled booking to a new slot (48hr+ notice, max 2 per chain, no balance change) |
-| `my-bookings` | GET | Yes | Learner's bookings with lesson type info (name, colour, duration) |
+| `my-bookings` | GET | Yes | Learner's bookings with lesson type info (name, colour, duration). Confirmed recurring-block bookings also include reserved-slot read fields: `is_reserved_weekly_slot`, `recurring_slot_block_id`, `recurring_slot_block_item_id`, `reserved_move_notice_days`, `reserved_move_request_deadline`, `reserved_move_policy_open`, and `reserved_move_policy_mode`. These fields are policy visibility only; learner cancellation and reschedule mutations still use the existing 48h/booking-status rules. |
 
 ### API — `api/calendar.js`
 

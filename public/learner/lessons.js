@@ -271,6 +271,12 @@
       html += '<div class="lesson-address">' + esc(addr) + '</div>';
     }
 
+    if (!isPast && b.is_reserved_weekly_slot) {
+      html += '<div class="reserved-policy-note">' +
+        '<strong>Reserved weekly slot.</strong> ' + reservedMoveCopy(b) +
+        '</div>';
+    }
+
     if (canAct) {
       html += '<div class="lesson-actions">';
       html += '<button class="btn-lesson calendar" data-action="download-calendar" data-booking-id="' + b.id + '">Add to Calendar</button>';
@@ -426,6 +432,28 @@
 
   function closeRescheduleModal() {
     document.getElementById('rescheduleModal').classList.remove('open');
+  }
+
+  function reservedMoveCopy(b) {
+    var deadline = formatReservedMoveDeadline(b.reserved_move_request_deadline);
+    if (deadline && b.reserved_move_policy_open === true) {
+      return 'Move requests are open until ' + deadline + '. After that, your instructor or admin can review goodwill moves.';
+    }
+    if (deadline) {
+      return 'The 6-day move window closed on ' + deadline + '. Ask your instructor or admin if a goodwill move is needed.';
+    }
+    return 'Move requests use the 6-day policy; cancellation credit returns still follow the 48-hour rule.';
+  }
+
+  function formatReservedMoveDeadline(value) {
+    if (!value) return '';
+    var parsed = new Date(value);
+    if (isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleDateString('en-GB', {
+      weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'
+    }) + ' at ' + parsed.toLocaleTimeString('en-GB', {
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC'
+    });
   }
 
   function esc(s) {
