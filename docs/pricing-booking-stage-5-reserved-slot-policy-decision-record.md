@@ -15,7 +15,9 @@ Reserved weekly slots are represented as ordinary confirmed lesson bookings plus
 
 This keeps the booking lifecycle at the existing three states only: `scheduled`, `chargeable`, and `refunded`.
 
-Stage 5 starts with policy visibility and read-model flags. It does not automatically enforce the 6-day move rule in the first slice.
+Stage 5 started with policy visibility and read-model flags. The learner self-serve policy-move slice now enforces the 6-day rule through a reserved-slot-specific endpoint.
+
+The follow-up admin-goodwill move decision and backend action are captured in `docs/pricing-booking-stage-5-admin-goodwill-move-decision-record.md`.
 
 ## First Slice Decision
 
@@ -51,8 +53,9 @@ Starting policy:
 First implementation mode:
 
 - policy is visible through read-model fields and learner copy
-- automatic backend enforcement is deferred
-- admin override tooling is deferred
+- learner self-serve policy moves use `POST /api/slots?action=reserved-policy-move`
+- the generic learner `reschedule` action refuses Reserved Weekly Slot occurrences so the 6-day rule cannot be bypassed
+- under-6-day learner attempts return `RESERVED_MOVE_NOTICE_TOO_SHORT`
 - no new booking status is introduced
 
 The read model returns:
@@ -76,7 +79,7 @@ Stage 5 does not broaden automatic refunds and does not add new BCS refund execu
 
 ## Non-Goals
 
-This stage does not implement:
+The first Stage 5 slice did not implement:
 
 - Pay by Bank
 - Stripe, card, Apple Pay, or Klarna recurring block payment
@@ -91,12 +94,29 @@ This stage does not implement:
 
 ## Future Slices
 
-Before automatic enforcement is considered, design and test:
+The admin-goodwill backend slice answered the admin override design questions:
 
-- whether learner self-serve reschedule should be blocked under 6 days for reserved slots
-- whether the backend should return a distinct machine-readable refusal code
-- how admin/instructor goodwill moves are requested, approved, audit-logged, and displayed
-- whether moving one reserved booking should preserve the recurring block item link or mark it released and create a replacement item
+- under-6-day reserved moves are admin-only goodwill moves
+- the admin action is reserved-slot-specific, not a generic edit label
+- scope stays same school, learner, instructor, lesson type, and duration
+- the original block item is marked `released`
+- a replacement `booked` item is created for the moved occurrence
+- BCS attribution is copied to the replacement booking when present
+- Stripe, refunds, payout rows, learner-credit balances, and historical financial ledgers are not mutated
+
+The learner policy-move slice answered the self-serve design questions:
+
+- policy-compliant learner moves use a reserved-slot-specific action, not the generic reschedule mutation
+- the replacement stays same school, learner, instructor, lesson type, and duration
+- the old booking is marked `refunded` with `credit_returned = TRUE`
+- the old recurring item is marked `released`
+- a replacement recurring item is created as `booked`
+- BCS attribution is copied to the replacement booking
+- learner-credit balances, Stripe refunds, refund ledgers, payout rows, payment flows, and notifications are not mutated
+
+Still deferred after learner policy moves:
+
+- whether instructor goodwill approval tooling should exist
 - how calendar and notification copy should distinguish a policy move from a normal reschedule
 
 Any enforcement slice must use `api/_booking-status.js` constants in backend control flow and must include focused tests for school scope, instructor scope, cancellation timing, and payout/refund non-regression.

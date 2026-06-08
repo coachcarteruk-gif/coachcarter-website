@@ -71,6 +71,7 @@ function init() {
   preselectedTypeId = params.get('type_id'); // ?type_id=3 (from reschedule)
   prefilledName = params.get('name'); // ?name=Joe (shareable booking link from instructor)
   const rescheduleBookingId = params.get('reschedule'); // ?reschedule=BOOKING_ID
+  const reservedMoveBookingId = params.get('reserved_move'); // ?reserved_move=BOOKING_ID
   if (params.get('paid') === '1') {
     const paidMsg = auth
       ? 'Payment successful — your lesson is booked! Check your email for details.'
@@ -174,13 +175,14 @@ function init() {
       initFeed();
       showPostcodePromptIfNeeded();
 
-      // Activate reschedule mode if ?reschedule=BOOKING_ID is in the URL
-      if (rescheduleBookingId && auth) {
+      // Activate reschedule / reserved move mode if the URL points at an existing booking.
+      const moveBookingId = reservedMoveBookingId || rescheduleBookingId;
+      if (moveBookingId && auth) {
         try {
           const res = await ccAuth.fetchAuthed('/api/slots?action=my-bookings');
           const data = await res.json();
           if (res.ok) {
-            const booking = (data.upcoming || []).find(b => String(b.id) === rescheduleBookingId);
+            const booking = (data.upcoming || []).find(b => String(b.id) === moveBookingId);
             if (booking) {
               // Pre-select the instructor filter to show only their slots
               const sel = document.getElementById('instructorFilter');
@@ -195,7 +197,8 @@ function init() {
                 booking.start_time.slice(0, 5),
                 booking.end_time.slice(0, 5),
                 booking.instructor_name,
-                booking.instructor_id
+                booking.instructor_id,
+                !!reservedMoveBookingId
               );
               // Clean the URL
               window.history.replaceState({}, '', '/learner/book.html');
@@ -2273,13 +2276,13 @@ async function confirmCancel() {
 }
 
 // ─── Reschedule flow ────────────────────────────────────────────────────────
-function startRescheduleMode(bookingId, date, start, end, instructorName, instructorId) {
-  pendingReschedule = { bookingId, date, start, end, instructorName, instructorId };
+function startRescheduleMode(bookingId, date, start, end, instructorName, instructorId, isReservedMove) {
+  pendingReschedule = { bookingId, date, start, end, instructorName, instructorId, isReservedMove: !!isReservedMove };
   const dateStr = new Date(date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
   document.getElementById('rescheduleBannerText').textContent = `${dateStr} at ${start} with ${instructorName}`;
   document.getElementById('rescheduleBanner').style.display = 'flex';
-  showToast('Select a new time slot below to reschedule your lesson', '');
+  showToast(isReservedMove ? 'Select an available replacement for your reserved lesson' : 'Select a new time slot below to reschedule your lesson', '');
 }
 window.startRescheduleMode = startRescheduleMode;
 
@@ -2300,7 +2303,15 @@ function openRescheduleConfirm(newSlot) {
   document.getElementById('rmOldDateTime').textContent = `${oldDateStr} at ${pendingReschedule.start}`;
   document.getElementById('rmNewDateTime').textContent = `${newDateStr} at ${newSlot.start_time}`;
   document.getElementById('rmInstructor').textContent = pendingReschedule.instructorName;
-  document.getElementById('rescheduleBtnLabel').textContent = 'Move lesson';
+  const title = document.querySelector('#rescheduleModal h2');
+  const note = document.querySelector('#rescheduleModal .modal-credit-note');
+  if (title) title.textContent = pendingReschedule.isReservedMove ? 'Move reserved lesson?' : 'Reschedule lesson?';
+  if (note) {
+    note.textContent = pendingReschedule.isReservedMove
+      ? 'No balance change. This moves one Reserved Weekly Slot occurrence and releases the old weekly slot.'
+      : 'No balance change — your lesson is simply being moved to the new time.';
+  }
+  document.getElementById('rescheduleBtnLabel').textContent = pendingReschedule.isReservedMove ? 'Move reserved lesson' : 'Move lesson';
   document.getElementById('rescheduleSpinner').style.display = 'none';
   document.getElementById('btnConfirmReschedule').disabled = false;
   document.getElementById('btnConfirmReschedule').onclick = () => confirmReschedule(newSlot);
@@ -2314,12 +2325,14 @@ window.closeRescheduleModal = closeRescheduleModal;
 
 async function confirmReschedule(newSlot) {
   const btn = document.getElementById('btnConfirmReschedule');
+  const isReservedMove = !!pendingReschedule?.isReservedMove;
   btn.disabled = true;
   document.getElementById('rescheduleBtnLabel').textContent = 'Moving…';
   document.getElementById('rescheduleSpinner').style.display = 'block';
 
   try {
-    const res = await ccAuth.fetchAuthed('/api/slots?action=reschedule', {
+    const action = isReservedMove ? 'reserved-policy-move' : 'reschedule';
+    const res = await ccAuth.fetchAuthed('/api/slots?action=' + action, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2329,11 +2342,11 @@ async function confirmReschedule(newSlot) {
       })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    if (!res.ok) throw new Error(data.message || data.error);
 
     closeRescheduleModal();
     cancelRescheduleMode();
-    showToast(data.message || 'Lesson rescheduled successfully!', 'success');
+    showToast(data.message || (isReservedMove ? 'Reserved lesson moved successfully!' : 'Lesson rescheduled successfully!'), 'success');
     loadedRanges = []; slotCache = {};
     selectedDate = null;
     clearSelectedSlot();
@@ -2341,7 +2354,7 @@ async function confirmReschedule(newSlot) {
   } catch (err) {
     showToast(err.message || 'Reschedule failed.', 'error');
     btn.disabled = false;
-    document.getElementById('rescheduleBtnLabel').textContent = 'Move lesson';
+    document.getElementById('rescheduleBtnLabel').textContent = isReservedMove ? 'Move reserved lesson' : 'Move lesson';
     document.getElementById('rescheduleSpinner').style.display = 'none';
   }
 }

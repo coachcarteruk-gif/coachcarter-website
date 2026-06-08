@@ -12,6 +12,9 @@
 //     → cancel a booking; returns hours if 48+ hours notice
 //     → optional cancel_series: cancels all future bookings in the series
 //
+//   POST /api/slots?action=reserved-policy-move (JWT auth required)
+//     → learner self-serve move for a Reserved Weekly Slot occurrence with 6+ days notice
+//
 //   GET  /api/slots?action=my-bookings   (JWT auth required)
 //     → upcoming + recent past bookings for the authenticated learner
 //
@@ -57,8 +60,11 @@ const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
 const RECURRING_BLOCK_MIN_LESSONS = 4;
 const RECURRING_BLOCK_MAX_LESSONS = 12;
 const RECURRING_BLOCK_LOOKAHEAD_WEEKS = 12;
+const RESERVED_MOVE_NOTICE_DAYS = 6;
 const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
 const SLOT_TRANSMISSION_TYPES = new Set(['manual', 'automatic', 'both']);
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_HHMM_RE = /^\d{2}:\d{2}$/;
 
 class BookingTransactionAbort extends Error {
   constructor(result) {
@@ -66,6 +72,19 @@ class BookingTransactionAbort extends Error {
     this.name = 'BookingTransactionAbort';
     this.result = { ok: false, ...(result || {}) };
   }
+}
+
+class ReservedPolicyMoveAbort extends Error {
+  constructor(statusCode, payload) {
+    super(payload?.message || payload?.error || payload?.code || 'Reserved policy move refused');
+    this.name = 'ReservedPolicyMoveAbort';
+    this.statusCode = statusCode;
+    this.payload = payload;
+  }
+}
+
+function abortReservedPolicyMove(statusCode, payload) {
+  throw new ReservedPolicyMoveAbort(statusCode, payload);
 }
 
 function abortBookingTransaction(result) {
@@ -345,6 +364,7 @@ module.exports = async (req, res) => {
   if (action === 'checkout-slot-guest') return handleCheckoutSlotGuest(req, res);
   if (action === 'book-free-trial') return handleBookFreeTrial(req, res);
   if (action === 'cancel')       return handleCancel(req, res);
+  if (action === 'reserved-policy-move') return handleReservedPolicyMove(req, res);
   if (action === 'reschedule')   return handleReschedule(req, res);
   if (action === 'my-bookings')  return handleMyBookings(req, res);
   if (action === 'series-info')  return handleSeriesInfo(req, res);
@@ -3888,6 +3908,528 @@ async function handleCancel(req, res) {
 // ── POST /api/slots?action=reschedule ────────────────────────────────────────
 // Body: { booking_id, new_date, new_start_time }
 // Atomically moves a confirmed booking to a new time slot (no credit change).
+function normaliseMoveTimeHHMM(value) {
+  const text = String(value || '').trim();
+  if (!TIME_HHMM_RE.test(text)) return null;
+  const [hh, mm] = text.split(':').map(Number);
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return text;
+}
+
+async function ensureReservedReplacementFitsAvailability(client, booking, {
+  schoolId,
+  newDate,
+  newStartTime,
+  newEndTime,
+}) {
+  const slotStart = timeToMinutes(newStartTime);
+  const slotEnd = timeToMinutes(newEndTime);
+  const dayOfWeek = new Date(`${newDate}T00:00:00Z`).getUTCDay();
+
+  const instructorResult = await client.query(
+    `SELECT COALESCE(min_booking_notice_hours, 24)::int AS min_booking_notice_hours,
+            COALESCE(transmission_type, 'manual') AS transmission_type,
+            active
+       FROM instructors
+      WHERE id = $1
+        AND school_id = $2`,
+    [booking.instructor_id, schoolId]
+  );
+  const instructor = instructorResult.rows[0];
+  if (!instructor || instructor.active !== true) {
+    abortReservedPolicyMove(409, {
+      error: true,
+      code: 'INSTRUCTOR_UNAVAILABLE',
+      message: 'That replacement slot is not available',
+    });
+  }
+
+  const minNoticeHours = Math.max(0, parseInt(instructor.min_booking_notice_hours, 10) || 0);
+  const newSlotStart = new Date(`${newDate}T${newStartTime}:00Z`);
+  if (minNoticeHours > 0 && ((newSlotStart.getTime() - Date.now()) / 3600000) < minNoticeHours) {
+    abortReservedPolicyMove(409, {
+      error: true,
+      code: 'SLOT_BEFORE_MIN_NOTICE',
+      message: 'That replacement slot is not available',
+    });
+  }
+
+  const blackout = await client.query(
+    `SELECT 1
+       FROM instructor_blackout_dates
+      WHERE instructor_id = $1
+        AND school_id = $2
+        AND blackout_date <= $3::date
+        AND end_date >= $3::date
+      LIMIT 1`,
+    [booking.instructor_id, schoolId, newDate]
+  );
+  if (blackout.rowCount > 0) {
+    abortReservedPolicyMove(409, {
+      error: true,
+      code: 'SLOT_BLACKED_OUT',
+      message: 'That replacement slot is not available',
+    });
+  }
+
+  let externalEvents = { rows: [] };
+  try {
+    externalEvents = await client.query(
+      `SELECT start_time::text AS start_time, end_time::text AS end_time, is_all_day
+         FROM instructor_external_events
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND event_date = $3::date`,
+      [booking.instructor_id, schoolId, newDate]
+    );
+  } catch (_) {}
+  if (externalEvents.rows.some(e => e.is_all_day)) {
+    abortReservedPolicyMove(409, {
+      error: true,
+      code: 'SLOT_BLOCKED_BY_EXTERNAL_EVENT',
+      message: 'That replacement slot is not available',
+    });
+  }
+  if (externalEvents.rows.some(e => slotStart < timeToMinutes(e.end_time) && slotEnd > timeToMinutes(e.start_time))) {
+    abortReservedPolicyMove(409, {
+      error: true,
+      code: 'SLOT_BLOCKED_BY_EXTERNAL_EVENT',
+      message: 'That replacement slot is not available',
+    });
+  }
+
+  const weeklyWindows = await client.query(
+    `SELECT start_time::text AS start_time, end_time::text AS end_time
+       FROM instructor_availability
+      WHERE instructor_id = $1
+        AND school_id = $2
+        AND day_of_week = $3
+        AND active = true`,
+    [booking.instructor_id, schoolId, dayOfWeek]
+  );
+
+  let overrideWindows = { rows: [] };
+  try {
+    overrideWindows = await client.query(
+      `SELECT start_time::text AS start_time, end_time::text AS end_time,
+              COALESCE(transmission_type, 'both') AS transmission_type
+         FROM instructor_availability_overrides
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND override_date = $3::date
+          AND active = true`,
+      [booking.instructor_id, schoolId, newDate]
+    );
+  } catch (_) {}
+
+  const instructorTransmission = normaliseSlotTransmissionType(instructor.transmission_type) || 'manual';
+  const requestedTransmission = normaliseSlotTransmissionType(booking.transmission_type) || 'manual';
+  const windows = [
+    ...weeklyWindows.rows.map(w => ({ ...w, transmission_type: instructorTransmission })),
+    ...overrideWindows.rows
+      .map(w => ({
+        ...w,
+        transmission_type: clampSlotTransmissionType(w.transmission_type, instructorTransmission),
+      }))
+      .filter(w => w.transmission_type),
+  ];
+
+  const fits = windows.some(w => {
+    const windowStart = timeToMinutes(w.start_time);
+    const windowEnd = timeToMinutes(w.end_time);
+    return slotStart >= windowStart &&
+           slotEnd <= windowEnd &&
+           slotSupportsTransmission(w.transmission_type, requestedTransmission);
+  });
+
+  if (!fits) {
+    abortReservedPolicyMove(409, {
+      error: true,
+      code: 'SLOT_OUTSIDE_AVAILABILITY',
+      message: 'That replacement slot is not available',
+    });
+  }
+}
+
+// Body: { booking_id, new_date, new_start_time }
+// Learner self-serve move for one confirmed Reserved Weekly Slot occurrence.
+async function handleReservedPolicyMove(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: true, code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' });
+
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: true, code: 'UNAUTHORISED', message: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  const bookingId = parseInt(req.body?.booking_id, 10);
+  const newDate = String(req.body?.new_date || '').trim();
+  const newStartTime = normaliseMoveTimeHHMM(req.body?.new_start_time);
+
+  if (!Number.isInteger(bookingId) || bookingId <= 0) {
+    return res.status(400).json({ error: true, code: 'INVALID_BOOKING_ID', message: 'booking_id is required' });
+  }
+  if (!ISO_DATE_RE.test(newDate) || !parseDate(newDate)) {
+    return res.status(400).json({ error: true, code: 'INVALID_NEW_DATE', message: 'new_date must be YYYY-MM-DD' });
+  }
+  if (!newStartTime) {
+    return res.status(400).json({ error: true, code: 'INVALID_NEW_START_TIME', message: 'new_start_time must be HH:MM' });
+  }
+
+  try {
+    const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const bookingResult = await client.query(
+        `SELECT
+           lb.id,
+           lb.learner_id,
+           lb.instructor_id,
+           lb.school_id,
+           lb.status,
+           lb.scheduled_date::text AS scheduled_date,
+           lb.start_time::text AS start_time,
+           lb.end_time::text AS end_time,
+           lb.lesson_type_id,
+           lb.minutes_deducted,
+           COALESCE(lb.reschedule_count, 0)::int AS reschedule_count,
+           lb.pickup_address,
+           lb.dropoff_address,
+           lb.payment_method,
+           lb.stripe_fee_pence,
+           lb.stripe_fee_source,
+           lb.list_price_pence,
+           lb.list_price_source,
+           COALESCE(lb.transmission_type, 'manual') AS transmission_type,
+           rsb.id AS recurring_slot_block_id,
+           rsbi.id AS recurring_slot_block_item_id,
+           rsbi.price_pence AS recurring_item_price_pence
+         FROM lesson_bookings lb
+         JOIN recurring_slot_block_items rsbi
+           ON rsbi.lesson_booking_id = lb.id
+          AND rsbi.school_id = lb.school_id
+          AND rsbi.instructor_id = lb.instructor_id
+          AND rsbi.status = 'booked'
+         JOIN recurring_slot_blocks rsb
+           ON rsb.id = rsbi.block_id
+          AND rsb.school_id = lb.school_id
+          AND rsb.learner_id = lb.learner_id
+          AND rsb.instructor_id = lb.instructor_id
+          AND rsb.status = 'confirmed'
+         WHERE lb.id = $1
+           AND lb.learner_id = $2
+           AND lb.school_id = $3
+           AND lb.status = $4
+         FOR UPDATE OF lb, rsbi, rsb`,
+        [bookingId, user.id, schoolId, SCHEDULED]
+      );
+      const booking = bookingResult.rows[0];
+      if (!booking) {
+        abortReservedPolicyMove(404, {
+          error: true,
+          code: 'RESERVED_BOOKING_NOT_FOUND',
+          message: 'Confirmed reserved weekly booking not found',
+        });
+      }
+
+      const oldDate = String(booking.scheduled_date).slice(0, 10);
+      const oldStart = String(booking.start_time).slice(0, 5);
+      if (newDate === oldDate && newStartTime === oldStart) {
+        abortReservedPolicyMove(400, {
+          error: true,
+          code: 'SAME_RESERVED_SLOT',
+          message: 'New time is the same as the current reserved lesson',
+        });
+      }
+
+      const oldLessonStart = new Date(`${oldDate}T${oldStart}:00Z`);
+      if (oldLessonStart.getTime() <= Date.now()) {
+        abortReservedPolicyMove(400, {
+          error: true,
+          code: 'RESERVED_LESSON_ALREADY_STARTED',
+          message: 'Cannot move a reserved lesson that has already started',
+        });
+      }
+
+      const noticeDays = (oldLessonStart.getTime() - Date.now()) / 86400000;
+      if (noticeDays < RESERVED_MOVE_NOTICE_DAYS) {
+        abortReservedPolicyMove(409, {
+          error: true,
+          code: 'RESERVED_MOVE_NOTICE_TOO_SHORT',
+          message: 'Reserved lessons can only be moved by learners with at least 6 days notice',
+        });
+      }
+
+      const newStart = timeToMinutes(newStartTime);
+      const originalDuration = timeToMinutes(booking.end_time) - timeToMinutes(booking.start_time);
+      const durationMinutes = originalDuration > 0 ? originalDuration : Number(booking.minutes_deducted || 0);
+      if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+        abortReservedPolicyMove(400, {
+          error: true,
+          code: 'UNKNOWN_BOOKING_DURATION',
+          message: 'Could not determine the reserved lesson duration',
+        });
+      }
+
+      const newEndMins = newStart + durationMinutes;
+      if (newEndMins > 24 * 60) {
+        abortReservedPolicyMove(400, {
+          error: true,
+          code: 'NEW_SLOT_ENDS_AFTER_DAY',
+          message: 'The replacement slot would finish after the end of the day',
+        });
+      }
+      const newEndTime = minutesToTime(newEndMins);
+      const newSlotStart = new Date(`${newDate}T${newStartTime}:00Z`);
+      if (newSlotStart.getTime() <= Date.now()) {
+        abortReservedPolicyMove(400, {
+          error: true,
+          code: 'NEW_SLOT_IN_PAST',
+          message: 'The replacement slot must be in the future',
+        });
+      }
+
+      await ensureReservedReplacementFitsAvailability(client, booking, {
+        schoolId,
+        newDate,
+        newStartTime,
+        newEndTime,
+      });
+
+      const bookingConflict = await client.query(
+        `SELECT id
+           FROM lesson_bookings
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+            AND status = ANY($6::text[])
+            AND id <> $7
+          LIMIT 1`,
+        [booking.instructor_id, schoolId, newDate, newStartTime, newEndTime, BLOCKING_STATUSES, booking.id]
+      );
+      if (bookingConflict.rowCount > 0) {
+        abortReservedPolicyMove(409, {
+          error: true,
+          code: 'SLOT_UNAVAILABLE',
+          message: 'That replacement slot is already booked',
+        });
+      }
+
+      const activeReservation = await client.query(
+        `SELECT id
+           FROM slot_reservations
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+            AND expires_at > NOW()
+          LIMIT 1`,
+        [booking.instructor_id, schoolId, newDate, newStartTime, newEndTime]
+      );
+      if (activeReservation.rowCount > 0) {
+        abortReservedPolicyMove(409, {
+          error: true,
+          code: 'SLOT_RESERVED',
+          message: 'Someone is currently booking that replacement slot',
+        });
+      }
+
+      const pendingOffer = await client.query(
+        `SELECT id
+           FROM lesson_offers
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+            AND status = 'pending'
+            AND expires_at > NOW()
+          LIMIT 1`,
+        [booking.instructor_id, schoolId, newDate, newStartTime, newEndTime]
+      );
+      if (pendingOffer.rowCount > 0) {
+        abortReservedPolicyMove(409, {
+          error: true,
+          code: 'SLOT_HAS_PENDING_OFFER',
+          message: 'That replacement slot has a pending offer',
+        });
+      }
+
+      const recurringConflict = await client.query(
+        `SELECT id, status
+           FROM recurring_slot_block_items
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+            AND status IN ('held', 'booked')
+            AND id <> $6
+          LIMIT 1`,
+        [booking.instructor_id, schoolId, newDate, newStartTime, newEndTime, booking.recurring_slot_block_item_id]
+      );
+      if (recurringConflict.rowCount > 0) {
+        abortReservedPolicyMove(409, {
+          error: true,
+          code: 'SLOT_HELD_FOR_RECURRING_BLOCK',
+          message: 'That replacement slot is held for a recurring block',
+        });
+      }
+
+      const sameBlockItem = await client.query(
+        `SELECT id, status
+           FROM recurring_slot_block_items
+          WHERE block_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time = $4::time
+          LIMIT 1`,
+        [booking.recurring_slot_block_id, schoolId, newDate, newStartTime]
+      );
+      if (sameBlockItem.rowCount > 0) {
+        abortReservedPolicyMove(409, {
+          error: true,
+          code: 'REPLACEMENT_ALREADY_IN_BLOCK',
+          message: 'That replacement slot is already represented in this reserved weekly block',
+        });
+      }
+
+      const refundedBcs = await client.query(
+        `UPDATE booking_credit_sources
+            SET refunded_at = NOW()
+          WHERE booking_id = $1
+            AND school_id = $2
+            AND refunded_at IS NULL
+          RETURNING id`,
+        [booking.id, schoolId]
+      );
+      const refundedBcsIds = refundedBcs.rows.map(row => row.id);
+
+      await client.query(
+        `UPDATE lesson_bookings
+            SET status = $1,
+                credit_returned = TRUE,
+                cancelled_at = NOW()
+          WHERE id = $2
+            AND learner_id = $3
+            AND school_id = $4
+            AND status = $5`,
+        [REFUNDED, booking.id, user.id, schoolId, SCHEDULED]
+      );
+
+      const insertedBooking = await client.query(
+        `INSERT INTO lesson_bookings
+           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+            rescheduled_from, reschedule_count, pickup_address, dropoff_address,
+            lesson_type_id, minutes_deducted, school_id, created_by, payment_method,
+            stripe_fee_pence, stripe_fee_source, list_price_pence, list_price_source,
+            transmission_type)
+         VALUES
+           ($1, $2, $3::date, $4::time, $5::time, $6,
+            $7, $8, $9, $10,
+            $11, $12, $13, 'learner', $14,
+            $15, $16, $17, $18,
+            $19)
+         RETURNING id, scheduled_date::text, start_time::text, end_time::text, status`,
+        [
+          booking.learner_id,
+          booking.instructor_id,
+          newDate,
+          newStartTime,
+          newEndTime,
+          SCHEDULED,
+          booking.id,
+          booking.reschedule_count,
+          booking.pickup_address || null,
+          booking.dropoff_address || null,
+          booking.lesson_type_id || null,
+          booking.minutes_deducted != null ? booking.minutes_deducted : null,
+          schoolId,
+          booking.payment_method || null,
+          booking.stripe_fee_pence != null ? booking.stripe_fee_pence : null,
+          booking.stripe_fee_source || null,
+          booking.list_price_pence != null ? booking.list_price_pence : null,
+          booking.list_price_source || null,
+          booking.transmission_type || 'manual',
+        ]
+      );
+      const newBooking = insertedBooking.rows[0];
+
+      if (refundedBcsIds.length > 0) {
+        await client.query(
+          `INSERT INTO booking_credit_sources
+             (school_id, booking_id, credit_transaction_id, minutes_drawn,
+              rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by,
+              refunded_at)
+           SELECT
+             school_id, $1, credit_transaction_id, minutes_drawn,
+             rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by,
+             NULL
+             FROM booking_credit_sources
+            WHERE id = ANY($2::int[])
+              AND school_id = $3
+              AND refunded_at IS NOT NULL
+           ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING`,
+          [newBooking.id, refundedBcsIds, schoolId]
+        );
+      }
+
+      await client.query(
+        `UPDATE recurring_slot_block_items
+            SET status = 'released',
+                updated_at = NOW()
+          WHERE id = $1
+            AND school_id = $2
+            AND status = 'booked'`,
+        [booking.recurring_slot_block_item_id, schoolId]
+      );
+
+      const insertedItem = await client.query(
+        `INSERT INTO recurring_slot_block_items
+           (block_id, school_id, instructor_id, lesson_booking_id,
+            scheduled_date, start_time, end_time, status, price_pence)
+         VALUES
+           ($1, $2, $3, $4,
+            $5::date, $6::time, $7::time, 'booked', $8)
+         RETURNING id`,
+        [
+          booking.recurring_slot_block_id,
+          schoolId,
+          booking.instructor_id,
+          newBooking.id,
+          newDate,
+          newStartTime,
+          newEndTime,
+          booking.recurring_item_price_pence || 0,
+        ]
+      );
+
+      return {
+        old_booking_id: booking.id,
+        new_booking_id: newBooking.id,
+        recurring_slot_block_id: booking.recurring_slot_block_id,
+        released_recurring_slot_block_item_id: booking.recurring_slot_block_item_id,
+        replacement_recurring_slot_block_item_id: insertedItem.rows[0].id,
+        movement_type: 'reserved_policy_move',
+        old_slot: { date: oldDate, start_time: oldStart, end_time: String(booking.end_time).slice(0, 5) },
+        new_slot: { date: newDate, start_time: newStartTime, end_time: newEndTime },
+        copied_booking_credit_source_count: refundedBcsIds.length,
+      };
+    });
+
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    if (err instanceof ReservedPolicyMoveAbort) {
+      return res.status(err.statusCode).json(err.payload);
+    }
+    if (err?.code === '23505' || err?.message?.includes('uq_booking_slot')) {
+      return res.status(409).json({ error: true, code: 'SLOT_UNAVAILABLE', message: 'That replacement slot is no longer available' });
+    }
+    console.error('slots reserved-policy-move error:', err);
+    reportError('/api/slots?action=reserved-policy-move', err);
+    return res.status(500).json({ error: true, code: 'RESERVED_POLICY_MOVE_FAILED', message: 'Failed to move reserved lesson' });
+  }
+}
+
 async function handleReschedule(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -3937,7 +4479,21 @@ async function handleReschedule(req, res) {
              lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
              COALESCE(lb.reschedule_count, 0) AS reschedule_count,
              COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS type_duration_minutes,
-             lt.name AS lesson_type_name
+             lt.name AS lesson_type_name,
+             EXISTS (
+               SELECT 1
+                 FROM recurring_slot_block_items rsbi
+                 JOIN recurring_slot_blocks rsb
+                   ON rsb.id = rsbi.block_id
+                  AND rsb.school_id = COALESCE(lb.school_id, 1)
+                  AND rsb.learner_id = lb.learner_id
+                  AND rsb.instructor_id = lb.instructor_id
+                  AND rsb.status = 'confirmed'
+                WHERE rsbi.lesson_booking_id = lb.id
+                  AND rsbi.school_id = COALESCE(lb.school_id, 1)
+                  AND rsbi.instructor_id = lb.instructor_id
+                  AND rsbi.status = 'booked'
+             ) AS is_reserved_weekly_slot
       FROM lesson_bookings lb
       JOIN instructors i    ON i.id  = lb.instructor_id
       JOIN learner_users lu ON lu.id = lb.learner_id
@@ -3962,6 +4518,20 @@ async function handleReschedule(req, res) {
     // Check 48-hour reschedule window (same as cancellation policy)
     const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
     const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
+    if (booking.is_reserved_weekly_slot) {
+      if ((hoursUntil / 24) < RESERVED_MOVE_NOTICE_DAYS) {
+        return res.status(409).json({
+          error: true,
+          code: 'RESERVED_MOVE_NOTICE_TOO_SHORT',
+          message: 'Reserved lessons can only be moved by learners with at least 6 days notice.'
+        });
+      }
+      return res.status(409).json({
+        error: true,
+        code: 'RESERVED_MOVE_REQUIRES_POLICY_ENDPOINT',
+        message: 'Use Move reserved lesson for Reserved Weekly Slot occurrences.'
+      });
+    }
     if (hoursUntil < CANCEL_HOURS_CUTOFF)
       return res.status(400).json({
         error: `Cannot reschedule with less than ${CANCEL_HOURS_CUTOFF} hours' notice. You can still cancel, but the lesson will be forfeited.`
