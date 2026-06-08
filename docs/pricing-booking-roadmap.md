@@ -26,14 +26,15 @@ The platform should keep lesson purchasing frictionless, but it should stop comb
 
 ## Product Architecture
 
-CoachCarter should move toward two clear purchasing and booking products, one lesson-credit account mechanism, and one payment reward layer.
+CoachCarter should move toward two clear purchasing and booking products, one lesson-credit account mechanism, and one reserved-block bank payment layer.
 
 ### 1. Pay As You Go
 
 Pay As You Go is the default low-commitment option.
 
 - Sold at the learner's normal hourly rate.
-- Payment methods can include card and Klarna.
+- Payment methods should be immediate-confirmation methods only.
+- No pending-payment or provisional-hold states.
 - No discount.
 - Uses standard booking availability.
 - Uses the standard cancellation policy unless changed elsewhere.
@@ -73,14 +74,11 @@ Commercial role:
 Reserved Weekly Slot should become the main "serious learner" journey.
 
 - Learner reserves the same instructor, day, and time for a block of future weeks.
-- Suggested options:
-  - 4 weeks
-  - 6 weeks
-  - 10 weeks
+- Learner chooses 4 to 12 future weekly lessons, capped by matching availability inside the next 12 calendar weeks.
 - This should be more visible than it is today.
 - The booking UI should prompt learners after a booking:
   - "Reserve this slot weekly"
-  - "Keep this time for the next 4, 6, or 10 weeks"
+  - "Keep this time weekly"
 - Reserved slots should have clearer move/cancellation rules than ordinary flexible bookings.
 
 Commercial role:
@@ -90,35 +88,39 @@ Commercial role:
 - Makes the real customer benefit clearer than "buy credits".
 - Protects future instructor availability from casual speculative booking.
 
-### 4. Paid-In-Full Reward
+### 4. Bank-Funded Reserved Blocks
 
-Paid-In-Full Reward is the best-value payment layer for learners who commit upfront.
+Bank-funded Reserved Weekly Slot blocks are the upfront payment path for learners who want a recurring weekly slot but do not have enough same-instructor Lesson Credit.
 
-- Offered only where payment is genuinely upfront and low-cost enough to justify the reward.
-- Stripe Pay by Bank is the preferred route to investigate.
-- Recommended starting reward: 3% off the full standard price of the reserved weekly block, configured rather than hardcoded.
-- Card/Klarna can remain available at the standard rate for eligible reserved weekly blocks, but should not receive the deepest reward.
-- The language should frame this as a reward for upfront commitment, not a penalty for using card or Klarna.
+- Stripe Pay by Bank is the preferred route to investigate for v1.
+- Pay by Bank should be available only for Reserved Weekly Slot blocks, not ordinary Pay As You Go bookings.
+- The learner pays for the whole selected block upfront.
+- No partial Lesson Credit plus bank payment in v1.
+- No card, Apple Pay, or Klarna for Reserved Weekly Slot block payment in v1.
+- No Paid-In-Full Reward discount in v1.
 - The first version should aim to be self-serve from day one.
-- Reserved weekly slots paid by Pay by Bank may be provisionally booked while payment is pending, then confirmed after Stripe reports successful payment.
+- A short 10-minute checkout hold may protect selected future slots while the learner completes bank payment.
+- Any pending state exists only because the bank payment has not confirmed yet; it is not a long-running reservation feature.
 
 Commercial role:
 
 - Supports cashflow for marketing.
 - Protects margin.
-- Keeps professional payment options available without subsidising expensive payment methods.
+- Keeps the recurring-slot commitment clear without subsidising expensive payment methods.
+
+Paid-In-Full Reward is deferred. If it returns later, the reward percentage must be configured rather than hardcoded, and it should be justified by measured payment cost and commercial benefit.
 
 ## Payment Framing
 
 Avoid customer-facing wording like:
 
-> Klarna costs us more, so you pay more.
+> Card fees cost us more, so you cannot use card here.
 
 Prefer wording like:
 
-> Pay flexibly at the standard rate, or choose the paid-in-full option for the best value.
+> Reserve your weekly block with Lesson Credit or pay for the block upfront by bank payment.
 
-This preserves the professional feel of online payments while allowing a clear upfront-payment reward.
+This preserves the professional feel of online payments while keeping the product rule simple.
 
 ## Proposed Rules
 
@@ -134,16 +136,25 @@ Buying more credit should not automatically create a discount.
 
 Bulk value should be available only through explicit products or campaigns, such as:
 
-- paid-in-full reward
+- future paid-in-full reward, if deliberately reintroduced
 - reserved weekly slot offer
 - limited quiet-period offer
 - admin-created special offer
 
 ### Payment Method Rule
 
-Klarna and card payments can be kept for convenience at standard pricing where the product journey allows them.
+Klarna should be removed from every checkout surface.
 
-Klarna should be limited to reserved weekly slot blocks that go beyond the ordinary self-serve booking window. The best-value paid-in-full reward should sit beside Klarna as the lower-cost upfront alternative.
+Pay As You Go should use payment methods that result in immediate payment confirmation, with no pending holds or async reservation states.
+
+Reserved Weekly Slot blocks should use:
+
+- full same-instructor Lesson Credit, where sufficient
+- Pay by Bank for the whole selected block, where credit is insufficient
+
+Reserved Weekly Slot block v1 should not offer card, Apple Pay, Klarna, or partial-credit split payment.
+
+The implementation needs a deliberate product-scoped payment method configuration mechanism rather than an ad hoc change to every Stripe Checkout call.
 
 ### Booking Window Rule
 
@@ -165,7 +176,7 @@ Starting policy:
 
 - 48 or more hours notice: learner can move the reserved lesson, subject to availability
 - under 48 hours notice: booking remains committed unless the instructor or admin offers a goodwill move
-- first implementation should introduce this as visible policy/admin handling, not automatic hard enforcement
+- Stage 5 now enforces this through reserved-slot-specific learner/admin move paths
 
 This is separate from the existing late-cancellation payout rule. Implementation must avoid accidentally reintroducing old dual-confirmation or "did the lesson happen?" flows.
 
@@ -189,7 +200,7 @@ The learner should quickly understand the difference between:
 - "I want one lesson" -> Pay As You Go
 - "I have lesson value on my account" -> Lesson Credit
 - "I want this same weekly slot" -> Reserved Weekly Slot
-- "I want the best value and can pay upfront" -> Paid-In-Full Reward
+- "I want this weekly slot and can pay for the block upfront" -> Reserved Weekly Slot by bank payment
 
 The booking flow should make the recurring slot option visible at the right time, especially immediately after a learner books a desirable slot.
 
@@ -211,7 +222,7 @@ Admins should be able to explain the model simply:
 - standard lessons are standard price
 - lesson credit is honoured account value
 - recurring slots protect a weekly time
-- best-value pricing is for paid-in-full commitment
+- bank payment is for upfront reserved weekly blocks
 - special offers are deliberate campaigns
 
 Over time, commercial numbers should live in admin-editable configuration, DB columns, JSONB, or admin-managed tables rather than hardcoded constants.
@@ -229,12 +240,12 @@ Tasks:
   - Pay As You Go
   - Lesson Credit
   - Reserved Weekly Slot
-  - Paid-In-Full Reward
+  - Bank-Funded Reserved Blocks
 - Draft customer-facing copy for each product.
 - Draft admin/instructor explanation copy.
 - Decide whether the first implementation will hide, disable, or reprice existing discounted credit packages.
 - Confirm Lesson Credit as account value only, with self-serve learner credit purchases removed from the preferred future model.
-- Confirm Paid-In-Full Reward as self-serve from day one, if Pay by Bank confirmation and provisional booking holds can be implemented safely.
+- Confirm Paid-In-Full Reward as deferred from v1.
 
 Deliverable:
 
@@ -310,9 +321,9 @@ Goal: stop pairing the best-value reward with expensive payment methods while pr
 Tasks:
 
 - Identify where Stripe Checkout, PaymentIntent, Klarna, and credit package payment methods are configured.
-- Limit Klarna to reserved weekly slot blocks that go beyond the ordinary self-serve booking window, subject to Stripe configuration feasibility.
-- Ensure card/Klarna standard-price purchases remain possible where intended for eligible reserved weekly blocks.
-- Ensure paid-in-full reward is not presented as a payment-method surcharge.
+- Keep Pay As You Go on immediate-confirmation payment methods only.
+- Remove Klarna from every checkout surface.
+- Ensure future Reserved Weekly Slot block payment is product-scoped to Pay by Bank only, with no card/Klarna fallback in v1.
 - Preserve Stripe idempotency and metadata contracts.
 - Add focused tests around payment method availability and server-side amount calculation.
 
@@ -349,9 +360,9 @@ Stage 3 intentionally left untouched:
 
 Stage 3 remaining risks and follow-up notes:
 
-- The roadmap rule "limit Klarna to reserved weekly slot blocks" cannot be safely enforced until the reserved weekly block product and its payment surface exist.
+- Klarna removal still needs a focused implementation pass across all live Stripe checkout surfaces and any Stripe Dashboard/payment-method configuration that can expose Klarna.
 - Future implementation needs a deliberate product-scoped payment method configuration mechanism, not an ad hoc change to today's direct Pay As You Go checkout.
-- Pay by Bank eligibility, settlement timing, refund behaviour, Connect support, and pricing remain open for Stage 6.
+- Pay by Bank eligibility, settlement timing, refund behaviour, platform-account support, and account-specific pricing remain open for Stage 6.
 
 ### Stage 4: Reserved Weekly Slot UX
 
@@ -404,7 +415,8 @@ Stage 4 follow-up decisions after product review:
 - The future implementation contract is captured in `docs/pricing-booking-stage-4-recurring-block-decision-record.md`.
 - The agreed product shape is a post-booking recurring weekly block upsell, not a pre-payment change to ordinary single-slot checkout.
 - Recurring weekly blocks are future-only, 4-12 lessons, capped by matching availability inside the next 12 calendar weeks.
-- Recurring blocks should use a dedicated hold model, support full same-instructor Lesson Credit or bank transfer / Pay by Bank, exclude partial credit and Klarna in v1, and create real bookings only after credit confirmation or bank-payment confirmation.
+- Recurring blocks should use a dedicated hold model, support full same-instructor Lesson Credit or Pay by Bank, exclude partial credit, card, Apple Pay, and Klarna in v1, and create real bookings only after credit confirmation or bank-payment confirmation.
+- Bank-payment holds should be short checkout holds, starting at 10 minutes, not a long-running reservation feature.
 
 Stage 4 implementation foundation - 2026-06-07:
 
@@ -412,7 +424,7 @@ Stage 4 implementation foundation - 2026-06-07:
 - Added `GET /api/slots?action=recurring-block-preview` as a read-only authenticated learner preview for an anchor booking. It returns the next 12 matching weekly candidates, skipped/unavailable reasons, server-side direct pricing, and same-instructor Lesson Credit sufficiency without holding slots or mutating credit.
 - Added `POST /api/slots?action=recurring-block-commit` for the first credit-funded slice only. It rebuilds the preview server-side, requires all selected future slots to remain available, requires full same-instructor Lesson Credit, then atomically creates the confirmed recurring block, booked item rows, future bookings, BCS rows, and LCB decrement through the existing credit-funded booking transaction.
 - Pending `held` recurring block items now block the availability feed, but this slice does not create bank-payment holds yet.
-- Still untouched: Pay by Bank, Stripe/Klarna/card recurring block payment, partial credit, expiry cron, admin release, calendar hold display, and notification templates.
+- Still untouched: Pay by Bank recurring block payment, Klarna removal, partial credit, 10-minute expiry/release handling, admin release, calendar hold display, and notification templates.
 
 Stage 4 learner UI wiring - 2026-06-07:
 
@@ -420,7 +432,7 @@ Stage 4 learner UI wiring - 2026-06-07:
 - Added a compact recurring block preview modal on `/learner/book.html` that lets the learner choose 4-12 future weekly lessons, renders selected weeks and skipped/unavailable weeks from `recurring-block-preview`, and explains that unavailable weeks are skipped rather than stored.
 - Wired `Confirm with Lesson Credit` to `recurring-block-commit` only when the authenticated preview says `can_commit` and the same-instructor Lesson Credit is sufficient.
 - Paid-return prompts remain visible after `?paid=1`, but route learners to login/My Lessons because the return URL does not carry a reliable anchor booking ID in v1.
-- Still untouched: Pay by Bank, Stripe/Klarna/card recurring block payment, partial credit, guest auto-login/claim, bank-payment holds, refunds, payouts, cancellation policy, and notification templates.
+- Still untouched: Pay by Bank recurring block payment, Klarna removal, partial credit, guest auto-login/claim, 10-minute bank-payment holds, refunds, payouts, cancellation policy, and notification templates.
 
 ### Stage 5: Reserved Slot Policy Enforcement
 
@@ -451,7 +463,7 @@ Stage 5 first slice - 2026-06-07:
 - Added `docs/pricing-booking-stage-5-reserved-slot-policy-decision-record.md`.
 - Confirmed representation: reserved weekly lessons stay ordinary `lesson_bookings` rows in the existing three-state lifecycle, identified by a same-school/same-instructor `recurring_slot_block_items.status='booked'` link to a confirmed `recurring_slot_blocks` parent.
 - Chose policy visibility/admin handling for the reserved move rule in v1, not automatic backend enforcement.
-- Added reserved-slot read fields to `/api/slots?action=my-bookings`: `is_reserved_weekly_slot`, linked block/item IDs, move notice days, move request deadline, policy-open boolean, and `reserved_move_policy_mode='policy_visible_admin_override'`.
+- Added reserved-slot read fields to `/api/slots?action=my-bookings`: `is_reserved_weekly_slot`, linked block/item IDs, 48-hour move notice metadata, move request deadline, policy-open boolean, and `reserved_move_policy_mode='policy_visible_admin_override'`.
 - Added My Lessons copy for confirmed reserved weekly slots so learners can see the move policy while cancellation credit returns still reference the existing 48-hour rule.
 - Added contract tests for representation, movement policy visibility, cancellation timing non-regression, school scope, and instructor scope.
 - Left cancellation, learner reschedule, refund, payout, Stripe, Pay by Bank, Klarna/card, BCS refund execution, credit-ledger mutation, and notification behaviour unchanged.
@@ -486,23 +498,26 @@ Stage 5 learner policy move slice - 2026-06-08:
 - Learner My Lessons now labels ordinary bookings `Reschedule lesson`, eligible reserved 48+ hour bookings `Move reserved lesson`, and reserved under-48-hour bookings with policy/admin-goodwill copy and no self-serve move action.
 - Left learner-credit balances, Stripe refunds, refund ledgers, payout rows, payment flows, Pay by Bank, Klarna/card recurring payments, and notifications unchanged.
 
-### Stage 6: Paid-In-Full Reward
+### Stage 6: Bank-Funded Reserved Blocks And Klarna Removal
 
-Goal: introduce the self-serve best-value upfront option without turning payment method costs into customer-facing surcharges.
+Goal: add the self-serve bank-payment path for Reserved Weekly Slot blocks while removing Klarna and avoiding new pending states on ordinary Pay As You Go bookings.
 
 Tasks:
 
-- Implement Paid-In-Full Reward as self-serve from day one if Pay by Bank confirmation, provisional booking holds, and notifications can be implemented safely.
-- Define the 3% starting reward as configuration, not a hardcoded constant.
-- Verify Stripe Pay by Bank account availability, settlement timing, Connect support, refund behaviour, and account-specific pricing.
-- Define how Pay by Bank is shown.
-- Define how payment confirmation is recorded.
-- Define how reserved weekly slots are provisionally booked while payment is pending.
-- Send learner and instructor provisional booking SMS while payment is pending.
-- Send follow-up confirmation SMS after Stripe confirms payment.
-- Decide whether paid-in-full reward creates confirmed reserved bookings directly, or uses a separate hold/reservation model before confirmation.
-- Ensure audit logging for admin mutations.
+- Remove Klarna from every checkout surface and any Stripe configuration that can expose Klarna to CoachCarter learners.
+- Keep ordinary Pay As You Go bookings on immediate-confirmation payment methods only.
+- Verify Stripe Pay by Bank account availability, settlement timing, refund behaviour, platform-account support, and account-specific pricing.
+- Define the product-scoped Stripe configuration mechanism for Reserved Weekly Slot Pay by Bank checkout.
+- Implement Pay by Bank only for Reserved Weekly Slot blocks where same-instructor Lesson Credit is insufficient.
+- Require the learner to pay for the whole selected block upfront.
+- Exclude card, Apple Pay, Klarna, and partial Lesson Credit plus bank payment in v1.
+- Create a 10-minute pending recurring-block hold when bank checkout starts, and block those selected slots from availability during the hold.
+- Confirm the block only after Stripe reports successful payment.
+- Release holds and show the correct learner-facing message when checkout expires, payment fails, or the selected slots are no longer available.
+- Decide whether eligible 48h+ cancellation value for bank-paid blocks returns as Lesson Credit by default, becomes an operator cash-refund workflow, or uses a hybrid policy.
+- Ensure audit logging for admin release/failure/recovery mutations.
 - Ensure financial records remain consistent and tenant-scoped.
+- Leave Paid-In-Full Reward discounting out of v1.
 
 Docs to load before implementation:
 
@@ -549,24 +564,30 @@ This roadmap does not approve:
 
 These should be answered before the relevant implementation stage begins.
 
-1. What is the verified Stripe Pay by Bank settlement timing, refund behaviour, Connect/account availability, and account-specific pricing?
-2. What exact mechanism should scope payment method availability by product once Reserved Weekly Slot exists: Stripe Dashboard-only dynamic payment methods, Stripe `payment_method_configurations`, `excluded_payment_method_types`, or another configuration path?
-3. Should Paid-In-Full Reward remain a separate later product once recurring weekly blocks support Lesson Credit and bank transfer / Pay by Bank, and what reward threshold/config should apply if it does?
+1. What is the verified Stripe Pay by Bank settlement timing, refund behaviour, platform-account availability, and account-specific pricing?
+2. What exact mechanism should scope payment method availability by product once Reserved Weekly Slot Pay by Bank exists: Stripe Dashboard-only dynamic payment methods, Stripe `payment_method_configurations`, `excluded_payment_method_types`, or another configuration path?
+3. For bank-paid recurring blocks, should an eligible 48h+ cancellation return Lesson Credit by default, become an operator cash-refund workflow, or use a hybrid default-credit/admin-refund policy?
+4. What is the minimum v1 notification/copy set for bank-payment success, failure, and expiry?
 
 Answered in `docs/pricing-booking-stage-4-recurring-block-decision-record.md`:
 
 - Recurring weekly blocks should use a dedicated hold model, not ordinary `lesson_bookings`, 10-minute `slot_reservations`, or `lesson_offers`.
-- Bank-payment recurring block holds expire after 48 hours; payment success confirms bookings, payment failure/expiry releases holds, and learner SMS/WhatsApp confirms success or failure.
+- Bank-payment recurring block holds should start with a 10-minute checkout window; payment success confirms bookings, payment failure/expiry releases holds, and the learner sees the correct success/failure/expiry message.
 - Recurring weekly blocks are post-booking future-only upsells using 4-12 future weekly lessons capped by matching availability inside the next 12 calendar weeks.
-- Recurring weekly block v1 excludes Klarna and partial credit.
+- Recurring weekly block v1 excludes Klarna, card, Apple Pay, and partial credit.
+- Paid-In-Full Reward is deferred from v1.
+- Pay by Bank belongs only to Reserved Weekly Slot blocks, not ordinary Pay As You Go.
+- Pending payment state is due only to bank payment confirmation, not a reservation feature.
 
 ## Current Remaining Work
 
-Last updated: 2026-06-08 after Stage 5 learner policy move.
+Last updated: 2026-06-08 after Stage 5 48-hour merge and Stage 6 product review.
 
 ### Next Recommended Slice
 
-Stage 5's core policy loop is now closed for admin under-48-hour goodwill moves and learner 48+ hour policy moves. Before touching Stage 6 payments, do a short review pass only if operator/instructor notification copy is required for reserved-slot moves.
+Stage 5's core policy loop is now closed for admin under-48-hour goodwill moves and learner 48+ hour policy moves.
+
+Next recommended slice: create the Stage 6 implementation decision record and Stripe/payment-method audit for Klarna removal plus Reserved Weekly Slot Pay by Bank. Do this before touching live payment creation code.
 
 ### Later Stage 5 Work
 
@@ -577,19 +598,24 @@ Still deferred:
 
 ### Stage 6 Work Not Started
 
-Paid-In-Full Reward remains unimplemented.
+Bank-funded Reserved Weekly Slot blocks remain unimplemented.
 
 Before implementation, verify and document:
 
+- where Klarna can currently appear, including Stripe Dashboard/dynamic payment method settings
 - Stripe Pay by Bank availability for the account
-- settlement timing
-- Connect support
+- settlement timing and webhook event sequencing
 - original-method refund behaviour
 - account-specific pricing
 - the product-scoped payment-method configuration mechanism
-- the configured reward threshold, if Paid-In-Full Reward remains separate from ordinary bank-funded recurring blocks
+- the 10-minute checkout-hold lifecycle and release path
+- whether expiry/release needs a cron, scheduled job, or opportunistic cleanup
+- the learner-facing messages for expiry, payment failure, and lost availability
+- whether eligible 48h+ cancellation value returns as Lesson Credit, cash refund workflow, or hybrid policy
 
-Do not add Pay by Bank, Klarna/card recurring block payment, payment holds, expiry cron, or payment notifications until those decisions are settled.
+Do not add Pay by Bank, payment holds, expiry cron, payment notifications, or refund-policy changes until those decisions are settled.
+
+Paid-In-Full Reward remains deferred from v1. Card, Apple Pay, Klarna, and partial-credit split payment remain excluded from Reserved Weekly Slot block payment v1.
 
 ### Stage 7 Work Not Started
 

@@ -15,9 +15,9 @@ The recurring block is future-only. It does not include the already-booked one-o
 Recurring blocks can be confirmed in two ways:
 
 - If the learner has enough same-instructor Lesson Credit for the full selected block, the block is booked immediately and credit is deducted immediately.
-- If the learner does not have enough same-instructor Lesson Credit, the selected future slots are held for up to 48 hours while bank transfer / Pay by Bank payment confirms.
+- If the learner does not have enough same-instructor Lesson Credit, the selected future slots are held for a short checkout window, starting at 10 minutes, while Pay by Bank payment starts and confirms.
 
-No partial credit is supported in v1. No Klarna or card checkout is supported for recurring blocks in v1.
+No partial credit is supported in v1. No Klarna, card, or Apple Pay checkout is supported for recurring blocks in v1.
 
 ## Naming
 
@@ -98,7 +98,7 @@ If the learner has enough same-instructor Lesson Credit to cover the full select
 - create the recurring block record
 - create all selected bookings immediately
 - deduct the full required same-instructor Lesson Credit immediately
-- do not create a 48-hour bank-payment hold
+- do not create a bank-payment checkout hold
 
 Credit must be all-or-nothing in v1. Do not support partial credit plus bank payment.
 
@@ -111,14 +111,14 @@ If the learner does not have enough same-instructor Lesson Credit:
 - create the recurring block record
 - create held item rows for each selected future slot
 - block those slots from availability
-- start bank transfer / Pay by Bank payment
-- hold slots for up to 48 hours while payment confirms
+- start Pay by Bank payment
+- hold slots for a 10-minute checkout window while payment starts and confirms
 
 Outcomes:
 
 - Payment confirms before expiry: convert held items into confirmed bookings.
 - Payment fails: release holds.
-- Payment remains unconfirmed at 48 hours: expire the block and release holds.
+- Payment remains unconfirmed at checkout expiry: expire the block and release holds.
 
 No Klarna, card, or Apple Pay for recurring blocks in v1.
 
@@ -195,11 +195,13 @@ Admin may manually release pending holds. Instructors may see pending holds but 
 
 ## Notifications
 
+Stage 6 should confirm the minimum v1 notification and on-screen copy set before implementation. The notes below are the earlier product expectation, not approval to add payment notifications without that decision pass.
+
 ### Hold Start
 
 When a bank-payment recurring block starts:
 
-- show an on-screen confirmation that selected future slots are held for up to 48 hours
+- show an on-screen confirmation that selected future slots are held during the 10-minute checkout window
 - do not send SMS
 - do not send email
 
@@ -215,7 +217,7 @@ Do not send one email per lesson in the block.
 
 ### Payment Failure Or Expiry
 
-For bank-payment failure or 48-hour expiry:
+For bank-payment failure or checkout expiry:
 
 - release holds
 - send learner SMS / WhatsApp failure or expiry confirmation
@@ -230,7 +232,7 @@ Foundation slice added 2026-06-07:
 - `POST /api/slots?action=recurring-block-commit` implements only the full same-instructor Lesson Credit path. It revalidates selected slots, rejects insufficient credit without partial-credit fallback, and uses the existing credit-funded booking transaction so block creation, future bookings, BCS attribution, and LCB decrement succeed or roll back together.
 - `held` recurring block items are treated as availability blockers, preparing for a later bank-payment hold slice.
 
-Not implemented yet: Pay by Bank, card, Klarna, partial credit, expiry/failure release, admin manual release, calendar hold display, and block-level notification templates.
+Not implemented yet: Pay by Bank, Klarna removal, partial credit, expiry/failure release, admin manual release, calendar hold display, and block-level notification templates.
 
 ## Open Follow-Up Questions
 
@@ -238,10 +240,10 @@ The decisions above settle the core v1 product contract. Follow-up implementatio
 
 - exact database schema, constraints, and indexes
 - exact Stripe/Pay by Bank implementation surface and webhook events
-- exact cron or scheduled job that expires 48-hour holds
+- exact cron, scheduled job, or opportunistic cleanup that expires 10-minute checkout holds
 - exact admin release endpoint and audit log event
 - exact calendar read-model changes for pending holds
 - exact notification templates
 - focused tests around school scope, instructor scope, credit sufficiency, all-or-nothing commit, expiry, payment success, payment failure, and admin release
 
-Payment Method Guardrail, Paid-In-Full Reward, Klarna eligibility, and Pay by Bank commercial configuration remain outside this Stage 4 decision record unless explicitly pulled into a later implementation stage.
+Payment Method Guardrail, Paid-In-Full Reward, Klarna removal, and Pay by Bank commercial configuration remain outside this Stage 4 decision record unless explicitly pulled into a later implementation stage.

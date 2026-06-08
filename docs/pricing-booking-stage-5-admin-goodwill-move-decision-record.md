@@ -19,7 +19,7 @@ Ordinary Pay As You Go and other one-off self-serve checkout bookings keep the e
 
 ### Learner Policy Move
 
-If a confirmed reserved weekly lesson is 6 or more days away, the learner can move that occurrence to another available slot:
+If a confirmed reserved weekly lesson is 48 or more hours away, the learner can move that occurrence to another available slot:
 
 - same school
 - same learner
