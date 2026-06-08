@@ -689,6 +689,7 @@ async function saveBlackouts() {
 // ══════════════════════════════════════════════════════════════════
 let allBookings = [];
 let currentBookingFilter = '';
+let reservedGoodwillBookingId = null;
 
 async function loadBookings() {
   try {
@@ -710,6 +711,40 @@ function filterBookings(btn, status) {
   renderBookings();
 }
 
+function bookingReservedLabel(b) {
+  if (!b.is_reserved_weekly_slot) return '';
+  return '<br><span class="badge badge-amber" title="Confirmed Reserved Weekly Slot occurrence" style="margin-top:5px;">Reserved weekly slot</span>';
+}
+
+function reservedPolicyCopy(b) {
+  if (!b.is_reserved_weekly_slot) return '';
+  if (b.reserved_goodwill_move_open) return 'Under 6 days: admin exception only';
+  if (b.reserved_move_policy_open) return '6+ days: learner self-serve move available';
+  return 'Reserved weekly slot';
+}
+
+function bookingActionHtml(b) {
+  if (b.status !== 'scheduled') {
+    return '<button class="btn btn-sm" data-action="open-refund-preview" data-id="' + b.id + '">Refund preview</button>';
+  }
+
+  if (b.is_reserved_weekly_slot) {
+    var policyCopy = reservedPolicyCopy(b);
+    if (b.reserved_goodwill_move_open) {
+      return '<button class="btn btn-sm btn-primary" data-action="open-reserved-goodwill-move" data-id="' + b.id + '" style="margin-right:4px">Goodwill move</button>' +
+        '<button class="btn btn-sm" data-action="open-refund-preview" data-id="' + b.id + '">Refund preview</button>' +
+        '<div style="font-size:0.72rem;color:var(--muted);margin-top:5px;">' + esc(policyCopy) + '</div>';
+    }
+    return '<button class="btn btn-sm" disabled title="' + esc(policyCopy) + '" style="margin-right:4px;opacity:0.62;cursor:not-allowed;">Move reserved lesson</button>' +
+      '<button class="btn btn-sm" data-action="open-refund-preview" data-id="' + b.id + '">Refund preview</button>' +
+      '<div style="font-size:0.72rem;color:var(--muted);margin-top:5px;">' + esc(policyCopy) + '</div>';
+  }
+
+  return '<button class="btn btn-sm" data-action="edit-booking" data-id="' + b.id + '" title="Edit booking details" style="margin-right:4px">Reschedule lesson</button>' +
+    '<button class="btn btn-sm btn-success" data-action="mark-complete" data-id="' + b.id + '" style="margin-right:4px">Complete</button>' +
+    '<button class="btn btn-sm" data-action="open-refund-preview" data-id="' + b.id + '">Refund preview</button>';
+}
+
 function renderBookings() {
   const body = document.getElementById('bookings-body');
   let filtered = allBookings;
@@ -723,19 +758,15 @@ function renderBookings() {
   }
 
   body.innerHTML = filtered.map(b => {
-    const canEdit = b.status === 'scheduled';
-    const canComplete = b.status === 'scheduled';
     const typeLabel = b.lesson_type_name ? '<br><span style="font-size:0.78rem;color:var(--muted)">' + esc(b.lesson_type_name) + '</span>' : '';
     return '<tr>' +
       '<td>' + formatDate(b.scheduled_date) + '</td>' +
       '<td>' + formatTime(b.start_time) + ' – ' + formatTime(b.end_time) + typeLabel + '</td>' +
       '<td><strong>' + esc(b.learner_name) + '</strong><br><span style="font-size:0.8rem;color:var(--muted)">' + esc(b.learner_email) + '</span></td>' +
       '<td>' + esc(b.instructor_name) + '</td>' +
-      '<td>' + statusBadge(b.status) + (b.edited_at ? ' <span style="font-size:0.7rem;color:var(--muted)">(edited)</span>' : '') + '</td>' +
+      '<td>' + statusBadge(b.status) + (b.edited_at ? ' <span style="font-size:0.7rem;color:var(--muted)">(edited)</span>' : '') + bookingReservedLabel(b) + '</td>' +
       '<td style="white-space:nowrap">' +
-        (canEdit ? '<button class="btn btn-sm" data-action="edit-booking" data-id="' + b.id + '" style="margin-right:4px">Edit</button>' : '') +
-        (canComplete ? '<button class="btn btn-sm btn-success" data-action="mark-complete" data-id="' + b.id + '">Complete</button>' : '') +
-        '<button class="btn btn-sm" data-action="open-refund-preview" data-id="' + b.id + '" style="margin-left:4px">Refund preview</button>' +
+        bookingActionHtml(b) +
       '</td>' +
     '</tr>';
   }).join('');
@@ -859,6 +890,80 @@ async function confirmAdminEditBooking(forceOverride) {
     toast(err.message || 'Failed to edit', 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Save changes';
+  }
+}
+
+function setReservedGoodwillStatus(message, type) {
+  var el = document.getElementById('reservedGoodwillStatus');
+  if (!el) return;
+  if (!message) {
+    el.style.display = 'none';
+    el.textContent = '';
+    return;
+  }
+  el.textContent = message;
+  el.style.display = 'block';
+  el.style.background = type === 'success' ? 'var(--green-bg)' : 'var(--red-bg)';
+  el.style.color = type === 'success' ? '#166534' : '#991b1b';
+}
+
+function openReservedGoodwillMove(bookingId) {
+  var b = allBookings.find(function(x) { return x.id === bookingId; });
+  if (!b || !b.is_reserved_weekly_slot || !b.reserved_goodwill_move_open) {
+    toast('Goodwill move is only available for reserved weekly lessons under 6 days', 'error');
+    return;
+  }
+  reservedGoodwillBookingId = bookingId;
+  document.getElementById('reservedGoodwillSummary').innerHTML =
+    '<strong>' + esc(b.learner_name) + '</strong> with ' + esc(b.instructor_name) +
+    '<br>' + formatDate(b.scheduled_date) + ', ' + formatTime(b.start_time) + '-' + formatTime(b.end_time) +
+    '<br><span style="color:var(--muted);">Same learner, instructor, lesson type, and duration only.</span>';
+  document.getElementById('reservedGoodwillDate').value = '';
+  document.getElementById('reservedGoodwillStartTime').value = '';
+  document.getElementById('reservedGoodwillReason').value = '';
+  setReservedGoodwillStatus('', '');
+  openModal('modal-reserved-goodwill-move');
+}
+
+function closeReservedGoodwillMove() {
+  reservedGoodwillBookingId = null;
+  closeModal('modal-reserved-goodwill-move');
+}
+
+async function submitReservedGoodwillMove() {
+  if (!reservedGoodwillBookingId) return setReservedGoodwillStatus('Select a reserved booking first.', 'error');
+  var newDate = document.getElementById('reservedGoodwillDate').value;
+  var newStartTime = document.getElementById('reservedGoodwillStartTime').value.slice(0, 5);
+  var reason = document.getElementById('reservedGoodwillReason').value.trim();
+  if (!newDate) return setReservedGoodwillStatus('Choose a replacement date.', 'error');
+  if (!newStartTime) return setReservedGoodwillStatus('Choose a replacement start time.', 'error');
+  if (!reason) return setReservedGoodwillStatus('Enter a reason for the audit log.', 'error');
+
+  var btn = document.getElementById('reservedGoodwillSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Moving...';
+  setReservedGoodwillStatus('', '');
+  try {
+    var res = await fetchAdmin('/api/admin?action=reserved-goodwill-move', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        booking_id: reservedGoodwillBookingId,
+        new_date: newDate,
+        new_start_time: newStartTime,
+        reason: reason
+      })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Failed to goodwill move reserved lesson');
+    toast('Reserved lesson moved', 'success');
+    closeReservedGoodwillMove();
+    loadBookings();
+  } catch (err) {
+    setReservedGoodwillStatus(err.message || 'Failed to goodwill move reserved lesson', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Goodwill move';
   }
 }
 
@@ -3500,6 +3605,9 @@ document.addEventListener('click', function (e) {
   else if (a === 'remove-window') removeWindow(parseInt(t.dataset.idx, 10));
   else if (a === 'remove-blackout') removeBlackout(parseInt(t.dataset.idx, 10));
   else if (a === 'edit-booking') openAdminEditBooking(parseInt(t.dataset.id, 10));
+  else if (a === 'open-reserved-goodwill-move') openReservedGoodwillMove(parseInt(t.dataset.id, 10));
+  else if (a === 'close-reserved-goodwill-move') closeReservedGoodwillMove();
+  else if (a === 'submit-reserved-goodwill-move') submitReservedGoodwillMove();
   else if (a === 'open-refund-preview') openRefundPreviewFromBooking(parseInt(t.dataset.id, 10));
   else if (a === 'execute-refund') executeRefundFromPreview();
   else if (a === 'record-manual-bank-refund') recordManualBankRefundFromPreview();
@@ -3709,6 +3817,8 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-clear-bulk', clearBulkSelection);
   var adminModal = document.getElementById('adminEditBookingModal');
   if (adminModal) adminModal.addEventListener('click', function (e) { if (e.target === adminModal) closeAdminEditBooking(); });
+  var reservedGoodwillModal = document.getElementById('modal-reserved-goodwill-move');
+  if (reservedGoodwillModal) reservedGoodwillModal.addEventListener('click', function (e) { if (e.target === reservedGoodwillModal) closeReservedGoodwillMove(); });
   var editTime = document.getElementById('adminEditTime');
   if (editTime) editTime.addEventListener('input', updateAdminEditEnd);
   var editType = document.getElementById('adminEditType');

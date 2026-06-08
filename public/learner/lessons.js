@@ -45,7 +45,8 @@
           target.dataset.end,
           target.dataset.instructorName,
           parseInt(target.dataset.instructorId, 10),
-          target.dataset.lessonTypeId ? parseInt(target.dataset.lessonTypeId, 10) : null
+          target.dataset.lessonTypeId ? parseInt(target.dataset.lessonTypeId, 10) : null,
+          target.dataset.reservedMove === '1'
         );
       } else if (action === 'rebook') {
         window.location.href = target.dataset.url;
@@ -233,7 +234,9 @@
     var lessonMs = new Date(b.scheduled_date + 'T' + b.start_time + 'Z').getTime();
     var hoursUntil = (lessonMs - Date.now()) / 3600000;
     var canAct = !isPast && hoursUntil > 0;
-    var canReschedule = canAct && hoursUntil >= 48 && (b.reschedule_count || 0) < 2;
+    var isReserved = !!b.is_reserved_weekly_slot;
+    var canReservedMove = canAct && isReserved && b.reserved_move_policy_open === true;
+    var canReschedule = canAct && !isReserved && hoursUntil >= 48 && (b.reschedule_count || 0) < 2;
 
     var cardClass = 'lesson-card';
     if (isPast) cardClass += ' past';
@@ -281,8 +284,10 @@
       html += '<div class="lesson-actions">';
       html += '<button class="btn-lesson calendar" data-action="download-calendar" data-booking-id="' + b.id + '">Add to Calendar</button>';
       var rCount = b.reschedule_count || 0;
-      if (canReschedule) {
-        var rLabel = rCount === 0 ? 'Reschedule' : 'Reschedule (' + rCount + ' of 2 used)';
+      if (canReservedMove || canReschedule) {
+        var rLabel = canReservedMove
+          ? 'Move reserved lesson'
+          : (rCount === 0 ? 'Reschedule lesson' : 'Reschedule lesson (' + rCount + ' of 2 used)');
         html += '<button class="btn-lesson reschedule" data-action="open-reschedule-modal"' +
           ' data-booking-id="' + b.id + '"' +
           ' data-date="' + b.scheduled_date + '"' +
@@ -290,9 +295,10 @@
           ' data-end="' + end + '"' +
           ' data-instructor-name="' + esc(b.instructor_name) + '"' +
           ' data-instructor-id="' + b.instructor_id + '"' +
+          (canReservedMove ? ' data-reserved-move="1"' : '') +
           (b.lesson_type_id ? ' data-lesson-type-id="' + b.lesson_type_id + '"' : '') +
           '>' + rLabel + '</button>';
-      } else if (canAct && hoursUntil >= 48 && rCount >= 2) {
+      } else if (!isReserved && canAct && hoursUntil >= 48 && rCount >= 2) {
         html += '<span style="font-size:0.75rem;color:var(--muted);padding:4px 0">Reschedule limit reached</span>';
       }
       html += '<button class="btn-lesson cancel" data-action="open-cancel-modal"' +
@@ -417,13 +423,21 @@
     }
   }
 
-  function openRescheduleModal(bookingId, date, start, end, instructorName, instructorId, lessonTypeId) {
+  function openRescheduleModal(bookingId, date, start, end, instructorName, instructorId, lessonTypeId, isReservedMove) {
     var dateStr = new Date(date + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+    var title = document.querySelector('#rescheduleModal h2');
+    var note = document.querySelector('#rescheduleModal .modal-credit-note');
+    if (title) title.textContent = isReservedMove ? 'Move reserved lesson' : 'Reschedule lesson';
+    if (note) {
+      note.textContent = isReservedMove
+        ? "You'll be taken to the booking page where you can pick an available replacement with the same instructor and duration."
+        : "To reschedule, you'll be taken to the booking page where you can pick a new time slot.";
+    }
     document.getElementById('rmCurrentDateTime').textContent = dateStr + ' at ' + start;
     document.getElementById('rmInstructor').textContent = instructorName;
     document.getElementById('btnGoReschedule').onclick = function () {
-      var url = '/learner/book.html?reschedule=' + bookingId + '&instructor=' + instructorId;
+      var url = '/learner/book.html?' + (isReservedMove ? 'reserved_move=' : 'reschedule=') + bookingId + '&instructor=' + instructorId;
       if (lessonTypeId) url += '&type_id=' + lessonTypeId;
       window.location.href = url;
     };

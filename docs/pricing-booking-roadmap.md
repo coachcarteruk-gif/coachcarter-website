@@ -1,7 +1,7 @@
 # Pricing And Booking Roadmap
 
 Status: implementation in progress
-Last updated: 2026-06-05
+Last updated: 2026-06-08
 
 ## Purpose
 
@@ -456,6 +456,36 @@ Stage 5 first slice - 2026-06-07:
 - Added contract tests for representation, movement policy visibility, cancellation timing non-regression, school scope, and instructor scope.
 - Left cancellation, learner reschedule, refund, payout, Stripe, Pay by Bank, Klarna/card, BCS refund execution, credit-ledger mutation, and notification behaviour unchanged.
 
+Stage 5 admin-goodwill move slice - 2026-06-07:
+
+- Added `docs/pricing-booking-stage-5-admin-goodwill-move-decision-record.md`.
+- Clarified that the 6-day move rule belongs to the Reserved Weekly Slot product, not to Pay by Bank itself.
+- Clarified that ordinary one-off Pay As You Go checkout bookings keep the existing 48-hour cancellation rule only.
+- Chose a real admin-only goodwill move mutation for under-6-day reserved weekly occurrences.
+- Added `POST /api/admin?action=reserved-goodwill-move` for same-school, same-learner, same-instructor, same-lesson-type, same-duration goodwill moves.
+- The admin action marks the old booking `refunded` with `credit_returned = TRUE`, creates a replacement `scheduled` booking, releases the original `recurring_slot_block_items` row, creates a replacement booked item, and copies BCS attribution when present.
+- The admin action does not mutate learner-credit balances, Stripe refunds, refund ledgers, payout rows, Pay by Bank, Klarna/card payment flows, or notifications.
+
+Stage 5 admin portal goodwill UI slice - 2026-06-08:
+
+- Added confirmed Reserved Weekly Slot read metadata to `/api/admin?action=all-bookings` for admin display, including linked block/item IDs, 6-day move policy state, and under-6-day goodwill eligibility.
+- The admin bookings list labels confirmed reserved weekly occurrences.
+- Ordinary scheduled bookings keep the `Reschedule lesson` operator action. In that admin UI slice, reserved 6+ day occurrences showed disabled `Move reserved lesson` copy until the learner policy move slice landed.
+- Under-6-day reserved occurrences expose an admin-only `Goodwill move` action and a small modal for replacement date, replacement start time, and audit-log reason.
+- The modal posts only `{ booking_id, new_date, new_start_time, reason }` to `POST /api/admin?action=reserved-goodwill-move` and refreshes bookings after success.
+- Left learner self-serve enforcement, refund, payment, payout, Stripe, BCS refund execution, learner-credit balance, and notification behaviour unchanged.
+
+Stage 5 learner policy move slice - 2026-06-08:
+
+- Added reserved-slot-specific `POST /api/slots?action=reserved-policy-move` for learner-authenticated 6+ day Reserved Weekly Slot occurrence moves.
+- Kept ordinary one-off learner reschedules on the existing `POST /api/slots?action=reschedule` path.
+- The generic learner reschedule path now refuses confirmed Reserved Weekly Slot occurrences so the 6-day rule cannot be bypassed through the old endpoint.
+- Learner policy moves require same school, learner, instructor, lesson type, and duration, and require the replacement slot to be available.
+- The learner action marks the old booking `refunded` with `credit_returned = TRUE`, creates a replacement `scheduled` booking, releases the old recurring item, creates a replacement `booked` recurring item, and copies BCS attribution.
+- Under-6-day learner attempts return `RESERVED_MOVE_NOTICE_TOO_SHORT`.
+- Learner My Lessons now labels ordinary bookings `Reschedule lesson`, eligible reserved 6+ day bookings `Move reserved lesson`, and reserved under-6-day bookings with policy/admin-goodwill copy and no self-serve move action.
+- Left learner-credit balances, Stripe refunds, refund ledgers, payout rows, payment flows, Pay by Bank, Klarna/card recurring payments, and notifications unchanged.
+
 ### Stage 6: Paid-In-Full Reward
 
 Goal: introduce the self-serve best-value upfront option without turning payment method costs into customer-facing surcharges.
@@ -530,10 +560,39 @@ Answered in `docs/pricing-booking-stage-4-recurring-block-decision-record.md`:
 - Recurring weekly blocks are post-booking future-only upsells using 4-12 future weekly lessons capped by matching availability inside the next 12 calendar weeks.
 - Recurring weekly block v1 excludes Klarna and partial credit.
 
-## Suggested First Implementation Prompt
+## Current Remaining Work
 
-Start with Stage 1 only.
+Last updated: 2026-06-08 after Stage 5 learner policy move.
 
-The first implementation chat should not change payment amounts, Stripe configuration, refund behaviour, cancellation behaviour, or credit ledgers. It should produce the decision record and copy needed to make the next engineering stage safe and unambiguous.
+### Next Recommended Slice
 
-Stage 1 decision output is now captured in `docs/pricing-booking-stage-1-decision-record.md`.
+Stage 5's core policy loop is now closed for admin under-6-day goodwill moves and learner 6+ day policy moves. Before touching Stage 6 payments, do a short review pass only if operator/instructor notification copy is required for reserved-slot moves.
+
+### Later Stage 5 Work
+
+Still deferred:
+
+- instructor approval workflow for goodwill moves, if needed
+- notification copy for reserved-slot moves
+
+### Stage 6 Work Not Started
+
+Paid-In-Full Reward remains unimplemented.
+
+Before implementation, verify and document:
+
+- Stripe Pay by Bank availability for the account
+- settlement timing
+- Connect support
+- original-method refund behaviour
+- account-specific pricing
+- the product-scoped payment-method configuration mechanism
+- the configured reward threshold, if Paid-In-Full Reward remains separate from ordinary bank-funded recurring blocks
+
+Do not add Pay by Bank, Klarna/card recurring block payment, payment holds, expiry cron, or payment notifications until those decisions are settled.
+
+### Stage 7 Work Not Started
+
+Tactical Offers remain unimplemented.
+
+Before implementation, define offer types, scope them by school/instructor where relevant, snapshot discounted effective rates, and keep them separate from normal Lesson Credit.

@@ -85,6 +85,7 @@ const { deleteLearnerCascade } = require('./_gdpr');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
+const { withNeonTransaction } = require('./_db-transaction');
 
 function createStripeClient() {
   return require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -102,6 +103,46 @@ function buildScopedDurationCreditRefusal(delta, availableMinutes, style = 'admi
   return style === 'instructor'
     ? `Learner has insufficient balance. Needs ${delta} more minutes but has ${balance}.`
     : `Learner has insufficient balance (needs ${delta} more minutes, has ${balance})`;
+}
+
+const ADMIN_ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ADMIN_TIME_HHMM_RE = /^\d{2}:\d{2}$/;
+const RESERVED_MOVE_NOTICE_DAYS = 6;
+
+class ReservedGoodwillMoveAbort extends Error {
+  constructor(statusCode, payload) {
+    super(payload?.message || payload?.error || payload?.code || 'Reserved goodwill move refused');
+    this.name = 'ReservedGoodwillMoveAbort';
+    this.statusCode = statusCode;
+    this.payload = payload;
+  }
+}
+
+function abortReservedGoodwillMove(statusCode, payload) {
+  throw new ReservedGoodwillMoveAbort(statusCode, payload);
+}
+
+function isValidAdminIsoDate(value) {
+  if (!ADMIN_ISO_DATE_RE.test(String(value || ''))) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function normaliseAdminTimeHHMM(value) {
+  const text = String(value || '').trim();
+  if (!ADMIN_TIME_HHMM_RE.test(text)) return null;
+  const [hh, mm] = text.split(':').map(Number);
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return text;
+}
+
+function adminTimeToMinutes(value) {
+  const [hh, mm] = String(value || '').slice(0, 5).split(':').map(Number);
+  return (hh * 60) + mm;
+}
+
+function adminMinutesToTime(minutes) {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
 function parseHourlyRatePence(value, { allowOmitted = false } = {}) {
@@ -171,6 +212,7 @@ module.exports = async (req, res) => {
   if (action === 'dashboard-stats') return handleDashboardStats(req, res);
   if (action === 'all-bookings')    return handleAllBookings(req, res);
   if (action === 'edit-booking')    return handleEditBooking(req, res);
+  if (action === 'reserved-goodwill-move') return handleReservedGoodwillMove(req, res);
   if (action === 'mark-complete')   return handleMarkComplete(req, res);
   if (action === 'all-instructors')   return handleAllInstructors(req, res);
   if (action === 'create-instructor') return handleCreateInstructor(req, res);
@@ -461,6 +503,37 @@ async function handleAllBookings(req, res) {
         lb.lesson_type_id,
         lb.minutes_deducted,
         lb.edited_at,
+        rsb.id AS recurring_slot_block_id,
+        rsbi.id AS recurring_slot_block_item_id,
+        COALESCE(rsb.status = 'confirmed' AND rsbi.status = 'booked', false) AS is_reserved_weekly_slot,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked' THEN ${RESERVED_MOVE_NOTICE_DAYS}
+          ELSE NULL
+        END AS reserved_move_notice_days,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
+          THEN to_char(lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_DAYS}::integer * INTERVAL '1 day'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+          ELSE NULL
+        END AS reserved_move_request_deadline,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
+          THEN (NOW() < (lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_DAYS}::integer * INTERVAL '1 day')))
+          ELSE NULL
+        END AS reserved_move_policy_open,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
+          THEN (
+            lb.status = ${SCHEDULED}
+            AND NOW() < (lb.scheduled_date::date + lb.start_time::time)
+            AND NOW() >= (lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_DAYS}::integer * INTERVAL '1 day'))
+          )
+          ELSE false
+        END AS reserved_goodwill_move_open,
+        CASE
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
+          THEN 'policy_visible_admin_override'
+          ELSE NULL
+        END AS reserved_move_policy_mode,
         lt.name AS lesson_type_name,
         COALESCE(lt.duration_minutes, 90) AS duration_minutes,
         lu.id   AS learner_id,
@@ -474,6 +547,17 @@ async function handleAllBookings(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       JOIN instructors i    ON i.id  = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      LEFT JOIN recurring_slot_block_items rsbi
+        ON rsbi.lesson_booking_id = lb.id
+       AND rsbi.school_id = lb.school_id
+       AND rsbi.instructor_id = lb.instructor_id
+       AND rsbi.status = 'booked'
+      LEFT JOIN recurring_slot_blocks rsb
+        ON rsb.id = rsbi.block_id
+       AND rsb.school_id = lb.school_id
+       AND rsb.learner_id = lb.learner_id
+       AND rsb.instructor_id = lb.instructor_id
+       AND rsb.status = 'confirmed'
       WHERE lb.school_id = ${schoolId}
         AND (${statusFilter}::text IS NULL OR lb.status = ${statusFilter})
         AND (${instructorFilter}::integer IS NULL OR lb.instructor_id = ${instructorFilter})
@@ -692,7 +776,390 @@ async function handleEditBooking(req, res) {
   }
 }
 
-// ── POST /api/admin?action=mark-complete ──────────────────────────────────────
+// -- POST /api/admin?action=reserved-goodwill-move ----------------------------
+// Body: { booking_id, new_date, new_start_time, reason }
+// Admin-only under-6-day exception for one confirmed reserved weekly occurrence.
+async function handleReservedGoodwillMove(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const bookingId = parseInt(req.body?.booking_id, 10);
+  const newDate = String(req.body?.new_date || '').trim();
+  const newStartTime = normaliseAdminTimeHHMM(req.body?.new_start_time);
+  const reason = String(req.body?.reason || '').trim();
+
+  if (!Number.isInteger(bookingId) || bookingId <= 0) {
+    return res.status(400).json({ error: true, code: 'INVALID_BOOKING_ID', message: 'booking_id is required' });
+  }
+  if (!isValidAdminIsoDate(newDate)) {
+    return res.status(400).json({ error: true, code: 'INVALID_NEW_DATE', message: 'new_date must be YYYY-MM-DD' });
+  }
+  if (!newStartTime) {
+    return res.status(400).json({ error: true, code: 'INVALID_NEW_START_TIME', message: 'new_start_time must be HH:MM' });
+  }
+  if (!reason) {
+    return res.status(400).json({ error: true, code: 'GOODWILL_REASON_REQUIRED', message: 'A reason is required for the audit log' });
+  }
+
+  try {
+    const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const bookingResult = await client.query(
+        `SELECT
+           lb.id,
+           lb.learner_id,
+           lb.instructor_id,
+           lb.school_id,
+           lb.status,
+           lb.scheduled_date::text AS scheduled_date,
+           lb.start_time::text AS start_time,
+           lb.end_time::text AS end_time,
+           lb.lesson_type_id,
+           lb.minutes_deducted,
+           COALESCE(lb.reschedule_count, 0)::int AS reschedule_count,
+           lb.pickup_address,
+           lb.dropoff_address,
+           lb.payment_method,
+           lb.stripe_fee_pence,
+           lb.stripe_fee_source,
+           lb.list_price_pence,
+           lb.list_price_source,
+           COALESCE(lb.transmission_type, 'manual') AS transmission_type,
+           rsb.id AS recurring_slot_block_id,
+           rsbi.id AS recurring_slot_block_item_id,
+           rsbi.price_pence AS recurring_item_price_pence
+         FROM lesson_bookings lb
+         JOIN recurring_slot_block_items rsbi
+           ON rsbi.lesson_booking_id = lb.id
+          AND rsbi.school_id = lb.school_id
+          AND rsbi.instructor_id = lb.instructor_id
+          AND rsbi.status = 'booked'
+         JOIN recurring_slot_blocks rsb
+           ON rsb.id = rsbi.block_id
+          AND rsb.school_id = lb.school_id
+          AND rsb.learner_id = lb.learner_id
+          AND rsb.instructor_id = lb.instructor_id
+          AND rsb.status = 'confirmed'
+         WHERE lb.id = $1
+           AND lb.school_id = $2
+           AND lb.status = $3
+         FOR UPDATE OF lb, rsbi, rsb`,
+        [bookingId, schoolId, SCHEDULED]
+      );
+      const booking = bookingResult.rows[0];
+      if (!booking) {
+        abortReservedGoodwillMove(404, {
+          error: true,
+          code: 'RESERVED_BOOKING_NOT_FOUND',
+          message: 'Confirmed reserved weekly booking not found',
+        });
+      }
+
+      const oldDate = String(booking.scheduled_date).slice(0, 10);
+      const oldStart = String(booking.start_time).slice(0, 5);
+      if (newDate === oldDate && newStartTime === oldStart) {
+        abortReservedGoodwillMove(400, {
+          error: true,
+          code: 'SAME_RESERVED_SLOT',
+          message: 'New time is the same as the current reserved lesson',
+        });
+      }
+
+      const oldLessonStart = new Date(`${oldDate}T${oldStart}:00Z`);
+      if (oldLessonStart.getTime() <= Date.now()) {
+        abortReservedGoodwillMove(400, {
+          error: true,
+          code: 'RESERVED_LESSON_ALREADY_STARTED',
+          message: 'Cannot goodwill move a reserved lesson that has already started',
+        });
+      }
+
+      const noticeDays = (oldLessonStart.getTime() - Date.now()) / 86400000;
+      if (noticeDays >= RESERVED_MOVE_NOTICE_DAYS) {
+        abortReservedGoodwillMove(409, {
+          error: true,
+          code: 'RESERVED_POLICY_MOVE_OPEN',
+          message: 'This reserved lesson is still inside the 6-day policy move window. Use the policy-compliant reserved move path when it ships.',
+        });
+      }
+
+      const newStart = adminTimeToMinutes(newStartTime);
+      const originalDuration = adminTimeToMinutes(booking.end_time) - adminTimeToMinutes(booking.start_time);
+      const durationMinutes = originalDuration > 0 ? originalDuration : Number(booking.minutes_deducted || 0);
+      if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+        abortReservedGoodwillMove(400, {
+          error: true,
+          code: 'UNKNOWN_BOOKING_DURATION',
+          message: 'Could not determine the reserved lesson duration',
+        });
+      }
+      const newEndMins = newStart + durationMinutes;
+      if (newEndMins > 24 * 60) {
+        abortReservedGoodwillMove(400, {
+          error: true,
+          code: 'NEW_SLOT_ENDS_AFTER_DAY',
+          message: 'The replacement slot would finish after the end of the day',
+        });
+      }
+      const newEndTime = adminMinutesToTime(newEndMins);
+
+      const newSlotStart = new Date(`${newDate}T${newStartTime}:00Z`);
+      if (newSlotStart.getTime() <= Date.now()) {
+        abortReservedGoodwillMove(400, {
+          error: true,
+          code: 'NEW_SLOT_IN_PAST',
+          message: 'The replacement slot must be in the future',
+        });
+      }
+
+      const bookingConflict = await client.query(
+        `SELECT id
+           FROM lesson_bookings
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+            AND status = ANY($6::text[])
+            AND id <> $7
+          LIMIT 1`,
+        [booking.instructor_id, schoolId, newDate, newStartTime, newEndTime, BLOCKING_STATUSES, booking.id]
+      );
+      if (bookingConflict.rowCount > 0) {
+        abortReservedGoodwillMove(409, {
+          error: true,
+          code: 'SLOT_UNAVAILABLE',
+          message: 'That replacement slot is already booked',
+        });
+      }
+
+      const activeReservation = await client.query(
+        `SELECT id
+           FROM slot_reservations
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+            AND expires_at > NOW()
+          LIMIT 1`,
+        [booking.instructor_id, schoolId, newDate, newStartTime, newEndTime]
+      );
+      if (activeReservation.rowCount > 0) {
+        abortReservedGoodwillMove(409, {
+          error: true,
+          code: 'SLOT_RESERVED',
+          message: 'Someone is currently booking that replacement slot',
+        });
+      }
+
+      const pendingOffer = await client.query(
+        `SELECT id
+           FROM lesson_offers
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+            AND status = 'pending'
+            AND expires_at > NOW()
+          LIMIT 1`,
+        [booking.instructor_id, schoolId, newDate, newStartTime, newEndTime]
+      );
+      if (pendingOffer.rowCount > 0) {
+        abortReservedGoodwillMove(409, {
+          error: true,
+          code: 'SLOT_HAS_PENDING_OFFER',
+          message: 'That replacement slot has a pending offer',
+        });
+      }
+
+      const recurringConflict = await client.query(
+        `SELECT id, status
+           FROM recurring_slot_block_items
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+            AND status IN ('held', 'booked')
+            AND id <> $6
+          LIMIT 1`,
+        [booking.instructor_id, schoolId, newDate, newStartTime, newEndTime, booking.recurring_slot_block_item_id]
+      );
+      if (recurringConflict.rowCount > 0) {
+        abortReservedGoodwillMove(409, {
+          error: true,
+          code: 'SLOT_HELD_FOR_RECURRING_BLOCK',
+          message: 'That replacement slot is held for a recurring block',
+        });
+      }
+
+      const sameBlockItem = await client.query(
+        `SELECT id, status
+           FROM recurring_slot_block_items
+          WHERE block_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time = $4::time
+          LIMIT 1`,
+        [booking.recurring_slot_block_id, schoolId, newDate, newStartTime]
+      );
+      if (sameBlockItem.rowCount > 0) {
+        abortReservedGoodwillMove(409, {
+          error: true,
+          code: 'REPLACEMENT_ALREADY_IN_BLOCK',
+          message: 'That replacement slot is already represented in this reserved weekly block',
+        });
+      }
+
+      const refundedBcs = await client.query(
+        `UPDATE booking_credit_sources
+            SET refunded_at = NOW()
+          WHERE booking_id = $1
+            AND school_id = $2
+            AND refunded_at IS NULL
+          RETURNING id`,
+        [booking.id, schoolId]
+      );
+      const refundedBcsIds = refundedBcs.rows.map(row => row.id);
+
+      await client.query(
+        `UPDATE lesson_bookings
+            SET status = $1,
+                credit_returned = TRUE,
+                cancelled_at = NOW()
+          WHERE id = $2
+            AND school_id = $3
+            AND status = $4`,
+        [REFUNDED, booking.id, schoolId, SCHEDULED]
+      );
+
+      const insertedBooking = await client.query(
+        `INSERT INTO lesson_bookings
+           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+            rescheduled_from, reschedule_count, pickup_address, dropoff_address,
+            lesson_type_id, minutes_deducted, school_id, created_by, payment_method,
+            stripe_fee_pence, stripe_fee_source, list_price_pence, list_price_source,
+            transmission_type)
+         VALUES
+           ($1, $2, $3::date, $4::time, $5::time, $6,
+            $7, $8, $9, $10,
+            $11, $12, $13, 'admin', $14,
+            $15, $16, $17, $18,
+            $19)
+         RETURNING id, scheduled_date::text, start_time::text, end_time::text, status`,
+        [
+          booking.learner_id,
+          booking.instructor_id,
+          newDate,
+          newStartTime,
+          newEndTime,
+          SCHEDULED,
+          booking.id,
+          booking.reschedule_count,
+          booking.pickup_address || null,
+          booking.dropoff_address || null,
+          booking.lesson_type_id || null,
+          booking.minutes_deducted != null ? booking.minutes_deducted : null,
+          schoolId,
+          booking.payment_method || null,
+          booking.stripe_fee_pence != null ? booking.stripe_fee_pence : null,
+          booking.stripe_fee_source || null,
+          booking.list_price_pence != null ? booking.list_price_pence : null,
+          booking.list_price_source || null,
+          booking.transmission_type || 'manual',
+        ]
+      );
+      const newBooking = insertedBooking.rows[0];
+
+      if (refundedBcsIds.length > 0) {
+        await client.query(
+          `INSERT INTO booking_credit_sources
+             (school_id, booking_id, credit_transaction_id, minutes_drawn,
+              rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by,
+              refunded_at)
+           SELECT
+             school_id, $1, credit_transaction_id, minutes_drawn,
+             rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by,
+             NULL
+             FROM booking_credit_sources
+            WHERE id = ANY($2::int[])
+              AND school_id = $3
+              AND refunded_at IS NOT NULL
+           ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING`,
+          [newBooking.id, refundedBcsIds, schoolId]
+        );
+      }
+
+      await client.query(
+        `UPDATE recurring_slot_block_items
+            SET status = 'released',
+                updated_at = NOW()
+          WHERE id = $1
+            AND school_id = $2
+            AND status = 'booked'`,
+        [booking.recurring_slot_block_item_id, schoolId]
+      );
+
+      const insertedItem = await client.query(
+        `INSERT INTO recurring_slot_block_items
+           (block_id, school_id, instructor_id, lesson_booking_id,
+            scheduled_date, start_time, end_time, status, price_pence)
+         VALUES
+           ($1, $2, $3, $4,
+            $5::date, $6::time, $7::time, 'booked', $8)
+         RETURNING id`,
+        [
+          booking.recurring_slot_block_id,
+          schoolId,
+          booking.instructor_id,
+          newBooking.id,
+          newDate,
+          newStartTime,
+          newEndTime,
+          booking.recurring_item_price_pence || 0,
+        ]
+      );
+
+      return {
+        old_booking_id: booking.id,
+        new_booking_id: newBooking.id,
+        recurring_slot_block_id: booking.recurring_slot_block_id,
+        released_recurring_slot_block_item_id: booking.recurring_slot_block_item_id,
+        replacement_recurring_slot_block_item_id: insertedItem.rows[0].id,
+        movement_type: 'reserved_goodwill_admin_move',
+        old_slot: { date: oldDate, start_time: oldStart, end_time: String(booking.end_time).slice(0, 5) },
+        new_slot: { date: newDate, start_time: newStartTime, end_time: newEndTime },
+        copied_booking_credit_source_count: refundedBcsIds.length,
+      };
+    });
+
+    const sql = neon(process.env.POSTGRES_URL);
+    await logAudit(sql, {
+      adminId: admin.id,
+      adminEmail: admin.email,
+      action: 'reserved_goodwill_admin_move',
+      targetType: 'booking',
+      targetId: bookingId,
+      details: { ...result, reason },
+      schoolId,
+      req,
+    });
+
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    if (err instanceof ReservedGoodwillMoveAbort) {
+      return res.status(err.statusCode).json(err.payload);
+    }
+    console.error('admin reserved-goodwill-move error:', err);
+    reportError('/api/admin?action=reserved-goodwill-move', err);
+    return res.status(500).json({ error: true, code: 'RESERVED_GOODWILL_MOVE_FAILED', message: 'Failed to move reserved lesson' });
+  }
+}
+
+// -- POST /api/admin?action=mark-complete -------------------------------------
 async function handleMarkComplete(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 

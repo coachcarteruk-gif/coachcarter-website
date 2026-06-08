@@ -264,6 +264,8 @@ body {
 .modal input[type="email"],
 .modal input[type="tel"],
 .modal input[type="url"],
+.modal input[type="date"],
+.modal input[type="time"],
 .modal textarea,
 .modal select {
   width: 100%; padding: 10px 12px; border: 1px solid var(--border);
@@ -1172,6 +1174,31 @@ body {
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">
       <button class="btn" id="btn-close-admin-edit">Cancel</button>
       <button class="btn btn-success" id="adminEditSaveBtn">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reserved Goodwill Move Modal -->
+<div class="modal-overlay" id="modal-reserved-goodwill-move">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-title">Goodwill move</div>
+    <div id="reservedGoodwillSummary" style="font-size:0.88rem;color:var(--muted);line-height:1.45;margin-bottom:16px;"></div>
+    <div class="form-group">
+      <label for="reservedGoodwillDate">Replacement date</label>
+      <input type="date" id="reservedGoodwillDate">
+    </div>
+    <div class="form-group">
+      <label for="reservedGoodwillStartTime">Replacement start time</label>
+      <input type="time" id="reservedGoodwillStartTime" step="300">
+    </div>
+    <div class="form-group">
+      <label for="reservedGoodwillReason">Reason</label>
+      <textarea id="reservedGoodwillReason" placeholder="Short reason for the audit log"></textarea>
+    </div>
+    <div id="reservedGoodwillStatus" role="alert" style="display:none;padding:10px 12px;border-radius:8px;background:var(--red-bg);color:#991b1b;font-size:0.84rem;line-height:1.35;"></div>
+    <div class="modal-actions">
+      <button class="btn" data-action="close-reserved-goodwill-move">Cancel</button>
+      <button class="btn btn-primary" data-action="submit-reserved-goodwill-move" id="reservedGoodwillSubmitBtn">Goodwill move</button>
     </div>
   </div>
 </div>
