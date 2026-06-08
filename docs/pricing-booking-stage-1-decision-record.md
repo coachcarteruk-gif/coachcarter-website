@@ -103,7 +103,7 @@ Recommended reschedule policy prompt:
 
 Policy-page wording:
 
-> Reserved weekly lessons can be moved with at least 6 days notice, subject to instructor availability. For example, if your lesson is on a Wednesday, you can request to move it up to and including the previous Wednesday. Inside 6 days, the booking is committed unless your instructor or admin offers a goodwill move.
+> Reserved weekly lessons can be moved with at least 48 hours notice, subject to instructor availability. Inside 48 hours, the booking is committed unless your instructor or admin offers a goodwill move.
 
 Use this when:
 
@@ -228,8 +228,8 @@ Implementation note for later stages: the "pencilled in" state should be designe
 - Future Lesson Credit is for existing balances, reschedules, eligible cancellation returns, instructor cancellations, goodwill, and admin adjustments.
 - Reserved Weekly Slot is the primary commitment journey.
 - Reserved Weekly Slot should require upfront payment for the repeated weekly block.
-- Reserved Weekly Slot movement should require at least 6 days notice as visible policy first. For example, a Wednesday lesson can be moved any time up to and including the previous Wednesday, subject to availability.
-- During the transition, the 6-day Reserved Weekly Slot move rule should not be enforced automatically in code. Instructors and admins can choose to offer goodwill rescheduling inside the 6-day window.
+- Reserved Weekly Slot movement should require at least 48 hours notice as visible policy first, matching the existing cancellation and value-return rule.
+- Stage 5 now enforces the 48-hour Reserved Weekly Slot move rule through the reserved-slot-specific learner move endpoint. Instructors and admins can choose to offer goodwill rescheduling inside the 48-hour window.
 - Paid-In-Full Reward is the primary best-value payment layer, not a separate booking type.
 - Paid-In-Full Reward should start as a configurable 3% reward against the full standard price of the reserved weekly block.
 - Card and Klarna language should describe standard flexible payment, not a penalty.
@@ -247,7 +247,7 @@ The following decisions were added after reviewing the first decision record dra
 - Standard self-serve lesson purchases should stay inside the existing 4-week booking window.
 - CoachCarter should remove self-serve learner credit purchases from the preferred future customer model. Lessons inside the 4-week window are bought directly, and Lesson Credit is used for existing purchased balances, rescheduling, eligible cancellations, instructor cancellations, goodwill, and admin adjustments.
 - Reserved Weekly Slot should require upfront payment for the repeated weekly block.
-- Reserved Weekly Slot movement should require at least 6 days notice as visible policy first. During the transition, instructors and admins can choose to offer goodwill rescheduling inside the 6-day window.
+- Reserved Weekly Slot movement should require at least 48 hours notice. Stage 5 now enforces this through the reserved-slot-specific learner move endpoint, while instructors and admins can choose to offer goodwill rescheduling inside the 48-hour window.
 - Klarna should be available only for regular weekly reserved slot purchases that stretch beyond the ordinary self-serve booking window, not every standard-rate purchase type. This is the eligibility rule unless later implementation discovers a Stripe/product constraint that requires a narrower rule.
 - Paid-In-Full Reward should sit beside Reserved Weekly Slot as the best-value upfront alternative. The recommended starting reward is 3% off the full standard block price, configured rather than hardcoded, so the customer benefits and CoachCarter keeps better margin than a Klarna-funded block.
 - Tactical offers should be configured per school, with instructor-level opt-in.

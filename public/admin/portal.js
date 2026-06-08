@@ -718,8 +718,8 @@ function bookingReservedLabel(b) {
 
 function reservedPolicyCopy(b) {
   if (!b.is_reserved_weekly_slot) return '';
-  if (b.reserved_goodwill_move_open) return 'Under 6 days: admin exception only';
-  if (b.reserved_move_policy_open) return '6+ days: learner self-serve move available';
+  if (b.reserved_goodwill_move_open) return 'Under 48 hours: admin exception only';
+  if (b.reserved_move_policy_open) return '48+ hours: learner self-serve move available';
   return 'Reserved weekly slot';
 }
 
@@ -910,7 +910,7 @@ function setReservedGoodwillStatus(message, type) {
 function openReservedGoodwillMove(bookingId) {
   var b = allBookings.find(function(x) { return x.id === bookingId; });
   if (!b || !b.is_reserved_weekly_slot || !b.reserved_goodwill_move_open) {
-    toast('Goodwill move is only available for reserved weekly lessons under 6 days', 'error');
+    toast('Goodwill move is only available for reserved weekly lessons under 48 hours', 'error');
     return;
   }
   reservedGoodwillBookingId = bookingId;

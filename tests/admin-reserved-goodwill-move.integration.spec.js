@@ -256,7 +256,7 @@ test.afterEach(async () => {
 test.describe('admin reserved goodwill move', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('moves one under-6-day reserved occurrence with replacement item and copied BCS attribution', async () => {
+  test('moves one under-48-hour reserved occurrence with replacement item and copied BCS attribution', async () => {
     test.skip(!hasSchema, 'Test database has not run recurring block / BCS migrations');
     test.skip(!instructorId, 'Test database needs an active instructor in school 1');
 
