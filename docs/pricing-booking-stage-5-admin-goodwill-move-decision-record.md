@@ -6,14 +6,14 @@ Scope: Stage 5 of `docs/pricing-booking-roadmap.md`, after the reserved-slot pol
 
 ## Summary
 
-Reserved weekly slot movement has two rules that must stay separate:
+Reserved weekly slot movement now uses the same notice window as cancellation:
 
-- `6 days` is the Reserved Weekly Slot product move-permission rule.
-- `48 hours` is the existing booking cancellation, credit-return, and instructor-payment rule.
+- `48 hours` is the Reserved Weekly Slot move-permission rule.
+- `48 hours` is also the existing booking cancellation, credit-return, and instructor-payment rule.
 
-The 6-day rule belongs to the Reserved Weekly Slot product, not to a payment method. It applies to confirmed bookings created from a reserved weekly block, whether the block was funded by Lesson Credit in the current implementation or by future Pay by Bank / bank-payment flows.
+The move rule belongs to the Reserved Weekly Slot product, not to a payment method. It applies to confirmed bookings created from a reserved weekly block, whether the block was funded by Lesson Credit in the current implementation or by future Pay by Bank / bank-payment flows.
 
-Ordinary Pay As You Go and other one-off self-serve checkout bookings keep the existing 48-hour cancellation rule only. They do not inherit the reserved-slot 6-day move policy.
+Ordinary Pay As You Go and other one-off self-serve checkout bookings keep the existing 48-hour cancellation/reschedule rule. They do not use the reserved-slot-specific move endpoint.
 
 ## Policy Decisions
 
@@ -30,11 +30,11 @@ If a confirmed reserved weekly lesson is 6 or more days away, the learner can mo
 
 This encourages early movement because the original protected slot is released with enough time for another learner to book it.
 
-Learner self-serve enforcement now uses `POST /api/slots?action=reserved-policy-move` for policy-compliant 6+ day Reserved Weekly Slot moves. The generic learner reschedule action refuses reserved weekly occurrences so ordinary one-off reschedules keep their existing behaviour without becoming a policy bypass.
+Learner self-serve enforcement now uses `POST /api/slots?action=reserved-policy-move` for policy-compliant 48+ hour Reserved Weekly Slot moves. The generic learner reschedule action refuses reserved weekly occurrences so ordinary one-off reschedules keep their existing behaviour without becoming a reserved-slot policy bypass.
 
 ### Admin Goodwill Move
 
-If a confirmed reserved weekly lesson is under 6 days away, the booking remains committed unless an admin grants a goodwill move.
+If a confirmed reserved weekly lesson is under 48 hours away, the booking remains committed unless an admin grants a goodwill move.
 
 In v1, a goodwill move means:
 
@@ -68,7 +68,7 @@ Use these labels:
 
 - Ordinary learner reschedule: `Reschedule lesson`
 - Policy-compliant reserved move: `Move reserved lesson`
-- Under-6-day admin exception: `Goodwill move`
+- Under-48-hour admin exception: `Goodwill move`
 
 Use these machine/audit labels:
 
@@ -100,23 +100,23 @@ The action must derive scope from authenticated admin context and existing rows:
 
 The replacement booking must use the same instructor as the original reserved occurrence. Cross-instructor, cross-school, different-duration, and different-lesson-type moves are deferred.
 
-## 48-Hour Cancellation Rule Versus 6-Day Move Rule
+## 48-Hour Rule
 
 The 48-hour rule decides cancellation value and instructor payment:
 
 - cancel 48 or more hours before the lesson: booking becomes `refunded`, eligible Lesson Credit returns, instructor is not paid for that booking
 - cancel under 48 hours: booking stays `scheduled`, `credit_forfeited = TRUE`, cron later flips it to `chargeable`, instructor remains payable
 
-The 6-day rule decides whether a reserved weekly occurrence can be moved through normal learner self-serve:
+The same 48-hour rule decides whether a reserved weekly occurrence can be moved through normal learner self-serve:
 
-- 6 or more days before the reserved lesson: learner policy move should be allowed later, subject to availability
-- under 6 days: no ordinary self-serve move; admin goodwill move only
+- 48 or more hours before the reserved lesson: learner policy move is allowed, subject to availability
+- under 48 hours: no ordinary self-serve move; admin goodwill move only
 
-These rules can overlap. For example, a reserved lesson 4 days away is still outside the future learner move window even though it is more than 48 hours away. The learner may still cancel under the existing 48-hour cancellation rule, but that is a cancellation, not preservation of the reserved occurrence as a moved lesson.
+This keeps the customer policy simple: move or cancel with at least 48 hours notice; under 48 hours, the lesson remains committed unless admin grants goodwill.
 
 ## Deferred
 
-Deferred after automatic 6-day learner enforcement:
+Deferred after automatic 48-hour learner enforcement:
 
 - instructor-side goodwill approval tooling
 - full learner request and approval workflow

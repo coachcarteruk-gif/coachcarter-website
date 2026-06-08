@@ -26,7 +26,7 @@ test.describe('admin reserved goodwill move UI', () => {
     expect(allBookings).toContain('rsb.id AS recurring_slot_block_id');
     expect(allBookings).toContain('rsbi.id AS recurring_slot_block_item_id');
     expect(allBookings).toContain('AS is_reserved_weekly_slot');
-    expect(allBookings).toContain('reserved_move_notice_days');
+    expect(allBookings).toContain('reserved_move_notice_hours');
     expect(allBookings).toContain('reserved_move_request_deadline');
     expect(allBookings).toContain('reserved_move_policy_open');
     expect(allBookings).toContain('reserved_goodwill_move_open');
