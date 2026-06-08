@@ -107,7 +107,7 @@ function buildScopedDurationCreditRefusal(delta, availableMinutes, style = 'admi
 
 const ADMIN_ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ADMIN_TIME_HHMM_RE = /^\d{2}:\d{2}$/;
-const RESERVED_MOVE_NOTICE_DAYS = 6;
+const RESERVED_MOVE_NOTICE_HOURS = 48;
 
 class ReservedGoodwillMoveAbort extends Error {
   constructor(statusCode, payload) {
@@ -507,17 +507,17 @@ async function handleAllBookings(req, res) {
         rsbi.id AS recurring_slot_block_item_id,
         COALESCE(rsb.status = 'confirmed' AND rsbi.status = 'booked', false) AS is_reserved_weekly_slot,
         CASE
-          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked' THEN ${RESERVED_MOVE_NOTICE_DAYS}
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked' THEN ${RESERVED_MOVE_NOTICE_HOURS}
           ELSE NULL
-        END AS reserved_move_notice_days,
+        END AS reserved_move_notice_hours,
         CASE
           WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
-          THEN to_char(lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_DAYS}::integer * INTERVAL '1 day'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+          THEN to_char(lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_HOURS}::integer * INTERVAL '1 hour'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
           ELSE NULL
         END AS reserved_move_request_deadline,
         CASE
           WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
-          THEN (NOW() < (lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_DAYS}::integer * INTERVAL '1 day')))
+          THEN (NOW() < (lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_HOURS}::integer * INTERVAL '1 hour')))
           ELSE NULL
         END AS reserved_move_policy_open,
         CASE
@@ -525,7 +525,7 @@ async function handleAllBookings(req, res) {
           THEN (
             lb.status = ${SCHEDULED}
             AND NOW() < (lb.scheduled_date::date + lb.start_time::time)
-            AND NOW() >= (lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_DAYS}::integer * INTERVAL '1 day'))
+            AND NOW() >= (lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_HOURS}::integer * INTERVAL '1 hour'))
           )
           ELSE false
         END AS reserved_goodwill_move_open,
@@ -778,7 +778,7 @@ async function handleEditBooking(req, res) {
 
 // -- POST /api/admin?action=reserved-goodwill-move ----------------------------
 // Body: { booking_id, new_date, new_start_time, reason }
-// Admin-only under-6-day exception for one confirmed reserved weekly occurrence.
+// Admin-only under-48-hour exception for one confirmed reserved weekly occurrence.
 async function handleReservedGoodwillMove(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const admin = verifyAdminJWT(req);
@@ -875,12 +875,12 @@ async function handleReservedGoodwillMove(req, res) {
         });
       }
 
-      const noticeDays = (oldLessonStart.getTime() - Date.now()) / 86400000;
-      if (noticeDays >= RESERVED_MOVE_NOTICE_DAYS) {
+      const noticeHours = (oldLessonStart.getTime() - Date.now()) / 3600000;
+      if (noticeHours >= RESERVED_MOVE_NOTICE_HOURS) {
         abortReservedGoodwillMove(409, {
           error: true,
           code: 'RESERVED_POLICY_MOVE_OPEN',
-          message: 'This reserved lesson is still inside the 6-day policy move window. Use the policy-compliant reserved move path when it ships.',
+          message: 'This reserved lesson can still be moved by the learner with at least 48 hours notice.',
         });
       }
 

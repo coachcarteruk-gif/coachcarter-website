@@ -454,9 +454,9 @@
       return 'Move requests are open until ' + deadline + '. After that, your instructor or admin can review goodwill moves.';
     }
     if (deadline) {
-      return 'The 6-day move window closed on ' + deadline + '. Ask your instructor or admin if a goodwill move is needed.';
+      return 'The 48-hour move window closed on ' + deadline + '. Ask your instructor or admin if a goodwill move is needed.';
     }
-    return 'Move requests use the 6-day policy; cancellation credit returns still follow the 48-hour rule.';
+    return 'Move requests and cancellation credit returns use the 48-hour policy.';
   }
 
   function formatReservedMoveDeadline(value) {

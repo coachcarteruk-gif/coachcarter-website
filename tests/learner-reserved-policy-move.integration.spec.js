@@ -303,7 +303,7 @@ test.afterEach(async () => {
 test.describe('learner reserved policy move', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('moves one 6+ day reserved occurrence with replacement item and copied BCS attribution', async () => {
+  test('moves one 48+ hour reserved occurrence with replacement item and copied BCS attribution', async () => {
     test.skip(!hasSchema, 'Test database has not run recurring block / BCS migrations');
     test.skip(!instructorId, 'Test database needs an active instructor in school 1');
 
@@ -404,11 +404,11 @@ test.describe('learner reserved policy move', () => {
     expect(afterLcb[0].balance_minutes).toBe(beforeLcb[0].balance_minutes);
   });
 
-  test('refuses under-6-day reserved policy moves with a machine-readable code', async () => {
+  test('refuses under-48-hour reserved policy moves with a machine-readable code', async () => {
     test.skip(!hasSchema, 'Test database has not run recurring block / BCS migrations');
     test.skip(!instructorId, 'Test database needs an active instructor in school 1');
 
-    const fixture = await createReservedOccurrence({ daysAhead: 2 });
+    const fixture = await createReservedOccurrence({ daysAhead: 1 });
     const replacement = await findFreeSlot(10, 15);
     await addReplacementAvailability(replacement);
 

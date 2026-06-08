@@ -13,7 +13,7 @@
 //     → optional cancel_series: cancels all future bookings in the series
 //
 //   POST /api/slots?action=reserved-policy-move (JWT auth required)
-//     → learner self-serve move for a Reserved Weekly Slot occurrence with 6+ days notice
+//     → learner self-serve move for a Reserved Weekly Slot occurrence with 48+ hours notice
 //
 //   GET  /api/slots?action=my-bookings   (JWT auth required)
 //     → upcoming + recent past bookings for the authenticated learner
@@ -60,7 +60,7 @@ const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
 const RECURRING_BLOCK_MIN_LESSONS = 4;
 const RECURRING_BLOCK_MAX_LESSONS = 12;
 const RECURRING_BLOCK_LOOKAHEAD_WEEKS = 12;
-const RESERVED_MOVE_NOTICE_DAYS = 6;
+const RESERVED_MOVE_NOTICE_HOURS = 48;
 const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
 const SLOT_TRANSMISSION_TYPES = new Set(['manual', 'automatic', 'both']);
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -4147,12 +4147,12 @@ async function handleReservedPolicyMove(req, res) {
         });
       }
 
-      const noticeDays = (oldLessonStart.getTime() - Date.now()) / 86400000;
-      if (noticeDays < RESERVED_MOVE_NOTICE_DAYS) {
+      const noticeHours = (oldLessonStart.getTime() - Date.now()) / 3600000;
+      if (noticeHours < RESERVED_MOVE_NOTICE_HOURS) {
         abortReservedPolicyMove(409, {
           error: true,
           code: 'RESERVED_MOVE_NOTICE_TOO_SHORT',
-          message: 'Reserved lessons can only be moved by learners with at least 6 days notice',
+          message: 'Reserved lessons can only be moved by learners with at least 48 hours notice',
         });
       }
 
@@ -4519,11 +4519,11 @@ async function handleReschedule(req, res) {
     const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
     const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
     if (booking.is_reserved_weekly_slot) {
-      if ((hoursUntil / 24) < RESERVED_MOVE_NOTICE_DAYS) {
+      if (hoursUntil < RESERVED_MOVE_NOTICE_HOURS) {
         return res.status(409).json({
           error: true,
           code: 'RESERVED_MOVE_NOTICE_TOO_SHORT',
-          message: 'Reserved lessons can only be moved by learners with at least 6 days notice.'
+          message: 'Reserved lessons can only be moved by learners with at least 48 hours notice.'
         });
       }
       return res.status(409).json({
@@ -4786,17 +4786,17 @@ async function handleMyBookings(req, res) {
         rsbi.id AS recurring_slot_block_item_id,
         COALESCE(rsb.status = 'confirmed' AND rsbi.status = 'booked', false) AS is_reserved_weekly_slot,
         CASE
-          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked' THEN 6
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked' THEN ${RESERVED_MOVE_NOTICE_HOURS}
           ELSE NULL
-        END AS reserved_move_notice_days,
+        END AS reserved_move_notice_hours,
         CASE
           WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
-          THEN to_char(lb.scheduled_date::date + lb.start_time::time - INTERVAL '6 days', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+          THEN to_char(lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_HOURS}::integer * INTERVAL '1 hour'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
           ELSE NULL
         END AS reserved_move_request_deadline,
         CASE
           WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
-          THEN (NOW() < (lb.scheduled_date::date + lb.start_time::time - INTERVAL '6 days'))
+          THEN (NOW() < (lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_HOURS}::integer * INTERVAL '1 hour')))
           ELSE NULL
         END AS reserved_move_policy_open,
         CASE
@@ -4840,17 +4840,17 @@ async function handleMyBookings(req, res) {
         rsbi.id AS recurring_slot_block_item_id,
         COALESCE(rsb.status = 'confirmed' AND rsbi.status = 'booked', false) AS is_reserved_weekly_slot,
         CASE
-          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked' THEN 6
+          WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked' THEN ${RESERVED_MOVE_NOTICE_HOURS}
           ELSE NULL
-        END AS reserved_move_notice_days,
+        END AS reserved_move_notice_hours,
         CASE
           WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
-          THEN to_char(lb.scheduled_date::date + lb.start_time::time - INTERVAL '6 days', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+          THEN to_char(lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_HOURS}::integer * INTERVAL '1 hour'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
           ELSE NULL
         END AS reserved_move_request_deadline,
         CASE
           WHEN rsb.status = 'confirmed' AND rsbi.status = 'booked'
-          THEN (NOW() < (lb.scheduled_date::date + lb.start_time::time - INTERVAL '6 days'))
+          THEN (NOW() < (lb.scheduled_date::date + lb.start_time::time - (${RESERVED_MOVE_NOTICE_HOURS}::integer * INTERVAL '1 hour')))
           ELSE NULL
         END AS reserved_move_policy_open,
         CASE

@@ -159,12 +159,12 @@ This avoids using credits as an open-ended claim on far-future diary capacity.
 
 ### Reserved Slot Move Rule
 
-Reserved weekly slots should be moveable with enough notice for the instructor to refill or reorganise the diary.
+Reserved weekly slots should use the same clean notice window as ordinary learner cancellation and reschedule behaviour.
 
 Starting policy:
 
-- 6 or more days notice: learner can request to move the reserved lesson, subject to availability
-- under 6 days notice: booking remains committed unless the instructor or admin offers a goodwill move
+- 48 or more hours notice: learner can move the reserved lesson, subject to availability
+- under 48 hours notice: booking remains committed unless the instructor or admin offers a goodwill move
 - first implementation should introduce this as visible policy/admin handling, not automatic hard enforcement
 
 This is separate from the existing late-cancellation payout rule. Implementation must avoid accidentally reintroducing old dual-confirmation or "did the lesson happen?" flows.
@@ -429,7 +429,7 @@ Goal: protect instructor calendars when learners reserve future weekly slots.
 Tasks:
 
 - Define how reserved weekly slots are represented in the existing booking model.
-- Decide whether the 6-day move rule is enforced automatically, shown as policy, or handled by admin override in the first version.
+- Decide whether the reserved move rule is enforced automatically, shown as policy, or handled by admin override in the first version.
 - Avoid broadening automatic refund behaviour.
 - Preserve the three-state booking lifecycle:
   - `scheduled`
@@ -450,40 +450,40 @@ Stage 5 first slice - 2026-06-07:
 
 - Added `docs/pricing-booking-stage-5-reserved-slot-policy-decision-record.md`.
 - Confirmed representation: reserved weekly lessons stay ordinary `lesson_bookings` rows in the existing three-state lifecycle, identified by a same-school/same-instructor `recurring_slot_block_items.status='booked'` link to a confirmed `recurring_slot_blocks` parent.
-- Chose policy visibility/admin handling for the 6-day move rule in v1, not automatic backend enforcement.
+- Chose policy visibility/admin handling for the reserved move rule in v1, not automatic backend enforcement.
 - Added reserved-slot read fields to `/api/slots?action=my-bookings`: `is_reserved_weekly_slot`, linked block/item IDs, move notice days, move request deadline, policy-open boolean, and `reserved_move_policy_mode='policy_visible_admin_override'`.
-- Added My Lessons copy for confirmed reserved weekly slots so learners can see the 6-day move policy while cancellation credit returns still reference the existing 48-hour rule.
+- Added My Lessons copy for confirmed reserved weekly slots so learners can see the move policy while cancellation credit returns still reference the existing 48-hour rule.
 - Added contract tests for representation, movement policy visibility, cancellation timing non-regression, school scope, and instructor scope.
 - Left cancellation, learner reschedule, refund, payout, Stripe, Pay by Bank, Klarna/card, BCS refund execution, credit-ledger mutation, and notification behaviour unchanged.
 
 Stage 5 admin-goodwill move slice - 2026-06-07:
 
 - Added `docs/pricing-booking-stage-5-admin-goodwill-move-decision-record.md`.
-- Clarified that the 6-day move rule belongs to the Reserved Weekly Slot product, not to Pay by Bank itself.
+- Clarified that the move rule belongs to the Reserved Weekly Slot product, not to Pay by Bank itself.
 - Clarified that ordinary one-off Pay As You Go checkout bookings keep the existing 48-hour cancellation rule only.
-- Chose a real admin-only goodwill move mutation for under-6-day reserved weekly occurrences.
+- Chose a real admin-only goodwill move mutation for under-48-hour reserved weekly occurrences.
 - Added `POST /api/admin?action=reserved-goodwill-move` for same-school, same-learner, same-instructor, same-lesson-type, same-duration goodwill moves.
 - The admin action marks the old booking `refunded` with `credit_returned = TRUE`, creates a replacement `scheduled` booking, releases the original `recurring_slot_block_items` row, creates a replacement booked item, and copies BCS attribution when present.
 - The admin action does not mutate learner-credit balances, Stripe refunds, refund ledgers, payout rows, Pay by Bank, Klarna/card payment flows, or notifications.
 
 Stage 5 admin portal goodwill UI slice - 2026-06-08:
 
-- Added confirmed Reserved Weekly Slot read metadata to `/api/admin?action=all-bookings` for admin display, including linked block/item IDs, 6-day move policy state, and under-6-day goodwill eligibility.
+- Added confirmed Reserved Weekly Slot read metadata to `/api/admin?action=all-bookings` for admin display, including linked block/item IDs, 48-hour move policy state, and under-48-hour goodwill eligibility.
 - The admin bookings list labels confirmed reserved weekly occurrences.
-- Ordinary scheduled bookings keep the `Reschedule lesson` operator action. In that admin UI slice, reserved 6+ day occurrences showed disabled `Move reserved lesson` copy until the learner policy move slice landed.
-- Under-6-day reserved occurrences expose an admin-only `Goodwill move` action and a small modal for replacement date, replacement start time, and audit-log reason.
+- Ordinary scheduled bookings keep the `Reschedule lesson` operator action. In that admin UI slice, reserved 48+ hour occurrences showed disabled `Move reserved lesson` copy until the learner policy move slice landed.
+- Under-48-hour reserved occurrences expose an admin-only `Goodwill move` action and a small modal for replacement date, replacement start time, and audit-log reason.
 - The modal posts only `{ booking_id, new_date, new_start_time, reason }` to `POST /api/admin?action=reserved-goodwill-move` and refreshes bookings after success.
 - Left learner self-serve enforcement, refund, payment, payout, Stripe, BCS refund execution, learner-credit balance, and notification behaviour unchanged.
 
 Stage 5 learner policy move slice - 2026-06-08:
 
-- Added reserved-slot-specific `POST /api/slots?action=reserved-policy-move` for learner-authenticated 6+ day Reserved Weekly Slot occurrence moves.
+- Added reserved-slot-specific `POST /api/slots?action=reserved-policy-move` for learner-authenticated 48+ hour Reserved Weekly Slot occurrence moves.
 - Kept ordinary one-off learner reschedules on the existing `POST /api/slots?action=reschedule` path.
-- The generic learner reschedule path now refuses confirmed Reserved Weekly Slot occurrences so the 6-day rule cannot be bypassed through the old endpoint.
+- The generic learner reschedule path now refuses confirmed Reserved Weekly Slot occurrences so reserved moves stay on the reserved-slot-specific endpoint.
 - Learner policy moves require same school, learner, instructor, lesson type, and duration, and require the replacement slot to be available.
 - The learner action marks the old booking `refunded` with `credit_returned = TRUE`, creates a replacement `scheduled` booking, releases the old recurring item, creates a replacement `booked` recurring item, and copies BCS attribution.
-- Under-6-day learner attempts return `RESERVED_MOVE_NOTICE_TOO_SHORT`.
-- Learner My Lessons now labels ordinary bookings `Reschedule lesson`, eligible reserved 6+ day bookings `Move reserved lesson`, and reserved under-6-day bookings with policy/admin-goodwill copy and no self-serve move action.
+- Under-48-hour learner attempts return `RESERVED_MOVE_NOTICE_TOO_SHORT`.
+- Learner My Lessons now labels ordinary bookings `Reschedule lesson`, eligible reserved 48+ hour bookings `Move reserved lesson`, and reserved under-48-hour bookings with policy/admin-goodwill copy and no self-serve move action.
 - Left learner-credit balances, Stripe refunds, refund ledgers, payout rows, payment flows, Pay by Bank, Klarna/card recurring payments, and notifications unchanged.
 
 ### Stage 6: Paid-In-Full Reward
@@ -566,7 +566,7 @@ Last updated: 2026-06-08 after Stage 5 learner policy move.
 
 ### Next Recommended Slice
 
-Stage 5's core policy loop is now closed for admin under-6-day goodwill moves and learner 6+ day policy moves. Before touching Stage 6 payments, do a short review pass only if operator/instructor notification copy is required for reserved-slot moves.
+Stage 5's core policy loop is now closed for admin under-48-hour goodwill moves and learner 48+ hour policy moves. Before touching Stage 6 payments, do a short review pass only if operator/instructor notification copy is required for reserved-slot moves.
 
 ### Later Stage 5 Work
 

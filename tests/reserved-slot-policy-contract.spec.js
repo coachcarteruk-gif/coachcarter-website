@@ -20,10 +20,10 @@ test.describe('reserved weekly slot policy contract', () => {
 
     expect(doc).toContain("lesson_bookings.status = 'scheduled'");
     expect(doc).toContain("recurring_slot_block_items.status = 'booked'");
-    expect(doc).toContain('learner self-serve policy-move slice now enforces the 6-day rule through a reserved-slot-specific endpoint');
+    expect(doc).toContain('learner self-serve policy-move slice now enforces the 48-hour rule through a reserved-slot-specific endpoint');
     expect(doc).toContain("reserved_move_policy_mode = 'policy_visible_admin_override'");
     expect(doc).toContain('`POST /api/slots?action=reserved-policy-move`');
-    expect(doc).toContain('under-6-day learner attempts return `RESERVED_MOVE_NOTICE_TOO_SHORT`');
+    expect(doc).toContain('under-48-hour learner attempts return `RESERVED_MOVE_NOTICE_TOO_SHORT`');
     expect(doc).toContain('Stage 5 does not broaden automatic refunds');
     expect(doc).toContain('does not add new BCS refund execution');
   });
@@ -39,7 +39,7 @@ test.describe('reserved weekly slot policy contract', () => {
     expect(myBookings).toContain('rsb.id AS recurring_slot_block_id');
     expect(myBookings).toContain('rsbi.id AS recurring_slot_block_item_id');
     expect(myBookings).toContain('AS is_reserved_weekly_slot');
-    expect(myBookings).toContain('reserved_move_notice_days');
+    expect(myBookings).toContain('reserved_move_notice_hours');
     expect(myBookings).toContain('reserved_move_request_deadline');
     expect(myBookings).toContain('reserved_move_policy_open');
     expect(myBookings).toContain("'policy_visible_admin_override'");
@@ -131,7 +131,7 @@ test.describe('reserved weekly slot policy contract', () => {
     expect(js).toContain('reserved_move=');
     expect(bookJs).toContain("'reserved-policy-move'");
     expect(js).toContain('Move requests are open until');
-    expect(js).toContain('cancellation credit returns still follow the 48-hour rule');
+    expect(js).toContain('Move requests and cancellation credit returns use the 48-hour policy');
     expect(js).not.toContain('recurring-block-checkout');
     expect(js).not.toContain('execute-refund');
     expect(js).not.toContain('stripe.refunds.create');
@@ -146,8 +146,8 @@ test.describe('reserved weekly slot policy contract', () => {
       'async function handleMarkComplete(req, res) {'
     );
 
-    expect(doc).toContain('The 6-day rule belongs to the Reserved Weekly Slot product, not to a payment method.');
-    expect(doc).toContain('Ordinary Pay As You Go and other one-off self-serve checkout bookings keep the existing 48-hour cancellation rule only.');
+    expect(doc).toContain('The move rule belongs to the Reserved Weekly Slot product, not to a payment method.');
+    expect(doc).toContain('Ordinary Pay As You Go and other one-off self-serve checkout bookings keep the existing 48-hour cancellation/reschedule rule.');
     expect(doc).toContain('old item: `status = released`');
     expect(doc).toContain('new item: `status = booked`');
     expect(doc).toContain('`reserved_goodwill_admin_move`');

@@ -15,7 +15,7 @@ Reserved weekly slots are represented as ordinary confirmed lesson bookings plus
 
 This keeps the booking lifecycle at the existing three states only: `scheduled`, `chargeable`, and `refunded`.
 
-Stage 5 started with policy visibility and read-model flags. The learner self-serve policy-move slice now enforces the 6-day rule through a reserved-slot-specific endpoint.
+Stage 5 started with policy visibility and read-model flags. The learner self-serve policy-move slice now enforces the 48-hour rule through a reserved-slot-specific endpoint.
 
 The follow-up admin-goodwill move decision and backend action are captured in `docs/pricing-booking-stage-5-admin-goodwill-move-decision-record.md`.
 
@@ -25,7 +25,7 @@ The first safe implementation slice is:
 
 - expose reserved-slot metadata on `/api/slots?action=my-bookings`
 - show learner-facing policy visibility on My Lessons
-- document that 6-day movement is policy/admin handling in v1
+- document that reserved movement is policy/admin handling in v1
 - leave cancellation, reschedule, refund, payout, Stripe, BCS refund execution, and credit-ledger mutation paths unchanged
 
 This avoids accidentally weakening the load-bearing booking rule: instructors are paid for lessons on their calendar unless the learner gave 48h+ notice.
@@ -47,15 +47,15 @@ The linked booking remains a normal `lesson_bookings` row for availability, canc
 
 Starting policy:
 
-- 6 or more days before the reserved lesson: learner may request a move, subject to availability
-- under 6 days: the reserved lesson remains committed unless instructor/admin grants a goodwill move
+- 48 or more hours before the reserved lesson: learner may request a move, subject to availability
+- under 48 hours: the reserved lesson remains committed unless instructor/admin grants a goodwill move
 
 First implementation mode:
 
 - policy is visible through read-model fields and learner copy
 - learner self-serve policy moves use `POST /api/slots?action=reserved-policy-move`
-- the generic learner `reschedule` action refuses Reserved Weekly Slot occurrences so the 6-day rule cannot be bypassed
-- under-6-day learner attempts return `RESERVED_MOVE_NOTICE_TOO_SHORT`
+- the generic learner `reschedule` action refuses Reserved Weekly Slot occurrences so reserved moves stay on the reserved-slot-specific endpoint
+- under-48-hour learner attempts return `RESERVED_MOVE_NOTICE_TOO_SHORT`
 - no new booking status is introduced
 
 The read model returns:
@@ -63,7 +63,7 @@ The read model returns:
 - `is_reserved_weekly_slot`
 - `recurring_slot_block_id`
 - `recurring_slot_block_item_id`
-- `reserved_move_notice_days`
+- `reserved_move_notice_hours`
 - `reserved_move_request_deadline`
 - `reserved_move_policy_open`
 - `reserved_move_policy_mode = 'policy_visible_admin_override'`
@@ -84,7 +84,7 @@ The first Stage 5 slice did not implement:
 - Pay by Bank
 - Stripe, card, Apple Pay, or Klarna recurring block payment
 - partial credit
-- automatic 6-day move-rule enforcement
+- automatic move-rule enforcement
 - admin release or admin move override tooling
 - payout eligibility changes
 - automatic Stripe refunds
@@ -96,7 +96,7 @@ The first Stage 5 slice did not implement:
 
 The admin-goodwill backend slice answered the admin override design questions:
 
-- under-6-day reserved moves are admin-only goodwill moves
+- under-48-hour reserved moves are admin-only goodwill moves
 - the admin action is reserved-slot-specific, not a generic edit label
 - scope stays same school, learner, instructor, lesson type, and duration
 - the original block item is marked `released`
