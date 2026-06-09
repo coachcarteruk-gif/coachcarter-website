@@ -105,30 +105,32 @@ test.describe('learner booking modal instructor-aware credit balance', () => {
     expect(js).toContain("window.location.href = auth ? '/learner/lessons.html' : '/learner/login.html';");
   });
 
-  test('booking UI calls recurring block preview and credit-funded commit only', () => {
+  test('booking UI calls recurring block preview then routes to credit commit or bank checkout', () => {
     const js = read('public/learner/book.js');
     const html = read('public/learner/book.html');
 
     expect(js).toContain('/api/slots?action=recurring-block-preview');
     expect(js).toContain('/api/slots?action=recurring-block-commit');
+    expect(js).toContain('/api/slots?action=recurring-block-bank-checkout');
     expect(js).toContain('anchor_booking_id: recurringAnchorBookingId');
     expect(js).toContain('lessons: recurringLessonCount');
     expect(js).toContain("if (data.code === 'SLOTS_UNAVAILABLE')");
     expect(js).toContain("if (data.code === 'INSUFFICIENT_CREDIT')");
-    expect(js).toContain('The bank-payment hold option is coming later');
+    expect(js).toContain("if (data.code === 'LESSON_CREDIT_AVAILABLE')");
+    expect(js).toContain('Pay upfront by bank');
     expect(html).toContain('Confirm with Lesson Credit');
-    expect(js).not.toContain('recurring-block-checkout');
-    expect(js).not.toContain('recurring-block-payment');
-    expect(js).not.toContain('Pay by Bank');
+    expect(js).not.toContain('The bank-payment hold option is coming later');
     expect(js).not.toContain('Klarna');
   });
 
-  test('recurring block commit requires server commit flag and sufficient same-instructor credit', () => {
+  test('recurring block action requires server commit flag and chooses funding path from credit sufficiency', () => {
     const js = read('public/learner/book.js');
 
     expect(js).toContain('const hasEnoughCredit = !!credit.has_sufficient_credit;');
-    expect(js).toContain('const canCommit = !!(recurringPreview.can_commit && recurringPreview.credit && recurringPreview.credit.has_sufficient_credit && auth);');
-    expect(js).toContain("document.getElementById('btnConfirmRecurringBlock').disabled = !canCommit || recurringCommitBusy;");
+    expect(js).toContain('const canCreditCommit = !!(recurringPreview.can_commit && recurringPreview.credit && recurringPreview.credit.has_sufficient_credit && auth);');
+    expect(js).toContain('const canBankCheckout = !!(recurringPreview.can_commit && recurringPreview.credit && !recurringPreview.credit.has_sufficient_credit && auth);');
+    expect(js).toContain("recurringConfirmMode = canCreditCommit ? 'credit' : (canBankCheckout ? 'bank' : 'credit');");
+    expect(js).toContain("document.getElementById('btnConfirmRecurringBlock').disabled = !(canCreditCommit || canBankCheckout) || recurringCommitBusy;");
     expect(js).toContain('selectedInstructorBalanceMinutes = data.balance_minutes || 0;');
     expect(js).toContain('loadCreditBalance();');
   });
