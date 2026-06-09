@@ -31,7 +31,7 @@ The three things a solo ADI cannot easily replicate, no matter how much they pay
 - Pay-per-slot guest checkout (walk-in revenue, no account needed)
 
 ### Payments & money
-- Stripe-powered learner payments (card + Klarna)
+- Stripe-powered learner payments through hosted Checkout
 - Hours-based credit balance with bulk discount tiers (5–25%)
 - 48-hour auto-refund cancellation policy enforced server-side
 - **Automated weekly Friday payouts via Stripe Connect**

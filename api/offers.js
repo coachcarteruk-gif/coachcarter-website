@@ -21,6 +21,7 @@ const { buildCsrfCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { SCHEDULED, BLOCKING_STATUSES } = require('./_booking-status');
 const { allocate } = require('./_pence-allocator');
 const { lockBalanceAndMutate } = require('./_credit-grant');
+const { CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES } = require('./_stripe-payment-methods');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Series fan-out for offer-driven weekly repeats (May 2026)
@@ -665,6 +666,7 @@ async function handleAcceptOffer(req, res) {
         effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
       },
       customer_email: resolvedEmail,
+      excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
       billing_address_collection: 'required',
       allow_promotion_codes: true,
       success_url: isFlexible

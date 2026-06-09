@@ -4,6 +4,7 @@ const { reportError } = require('./_error-alert');
 const { decodeToken, requireAuth, SESSION_COOKIE_NAMES } = require('./_auth');
 const { calcBulkTotal, getBulkPricing, MAX_HOURS_PER_PURCHASE } = require('./_pricing-helpers');
 const { grantCredits } = require('./_credit-grant');
+const { CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES } = require('./_stripe-payment-methods');
 
 const STANDARD_LESSON_MINUTES = 90;
 const MIN_HOURS_PER_PURCHASE = 1;
@@ -385,6 +386,7 @@ async function handleCheckout(req, res) {
       ],
       metadata,
       ...(emailValid ? { customer_email: user.email } : {}),
+      excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
       billing_address_collection: 'required',
       allow_promotion_codes: true,
       success_url: `${origin}/learner/?hours_added=${hours}&session_id={CHECKOUT_SESSION_ID}`,

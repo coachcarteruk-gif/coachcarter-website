@@ -74,10 +74,10 @@ module.exports = async (req, res) => {
   // which meant a transient Neon outage or bug silently dropped a paid
   // checkout off the floor and Stripe never retried.
   try {
-    // Klarna and other delayed-payment methods deliver `completed` early
-    // with payment_status='unpaid', then fire `async_payment_succeeded`
-    // once the payment actually clears. Card payments only fire
-    // `completed` (paid). We route both events through the same dispatch.
+    // Some async payment methods deliver `completed` early with
+    // payment_status='unpaid', then fire `async_payment_succeeded` once the
+    // payment actually clears. Immediate methods usually fire `completed`
+    // already paid. We route both events through the same dispatch.
     if (event.type === 'checkout.session.completed' ||
         event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data.object;
@@ -111,8 +111,8 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Klarna failure / cancellation — log only. No DB writes happened on
-    // the earlier `completed` event because handlers gate on
+    // Async payment failure / cancellation — log only. No DB writes happened
+    // on an earlier unpaid `completed` event because handlers gate on
     // payment_status='paid'. No retry needed (Stripe won't re-charge).
     if (event.type === 'payment_intent.succeeded') {
       const paymentIntent = event.data.object;
@@ -169,9 +169,9 @@ module.exports = async (req, res) => {
   }
 };
 
-// Don't process unpaid sessions. Klarna fires `completed` with
-// payment_status='unpaid' before the payment clears; the follow-up
-// `async_payment_succeeded` event re-runs this handler with status='paid'.
+// Don't process unpaid sessions. Async payment methods can fire `completed`
+// before the payment clears; the follow-up `async_payment_succeeded` event
+// re-runs this handler with status='paid'.
 function isPaid(session) {
   if (session.payment_status === 'paid') return true;
   console.log(`⏭  Skipping ${session.id} — payment_status=${session.payment_status} (will re-run on async_payment_succeeded)`);
@@ -209,7 +209,7 @@ async function handleCreditPurchase(session) {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = await resolveSchoolId(sql, metadata, session.id);
 
-    // Determine payment method (card or klarna)
+    // Determine the Stripe-reported payment method for historical credit rows.
     const paymentMethod = session.payment_method_types?.[0] || 'card';
 
     // Calculate minutes: each credit = 90 minutes (standard lesson)

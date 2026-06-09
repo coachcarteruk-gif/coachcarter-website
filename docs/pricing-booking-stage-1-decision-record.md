@@ -4,6 +4,8 @@ Status: accepted for planning
 Date: 2026-06-05
 Scope: Stage 1 of `docs/pricing-booking-roadmap.md`
 
+Superseded note, 2026-06-09: later Stage 6 decisions removed Klarna from the future checkout model, deferred Paid-In-Full Reward from v1, and chose whole-block Pay by Bank only for bank-funded Reserved Weekly Slot blocks. Historical Klarna and Paid-In-Full Reward references below describe the Stage 1 planning position, not the current implementation direction.
+
 ## Context
 
 CoachCarter needs a clearer lesson purchasing model before any payment, booking, credit, refund, or payout code changes are made.

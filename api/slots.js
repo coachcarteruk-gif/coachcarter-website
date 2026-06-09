@@ -43,6 +43,7 @@ const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { calcDirectLessonPrice } = require('./_pricing-helpers');
 const { isOptInOnlyLessonTypeSlug, isLessonTypeOffered } = require('./_lesson-type-helpers');
+const { CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES } = require('./_stripe-payment-methods');
 const { resolveSchoolFromRequest } = require('./_tenant');
 const {
   markBookingCreditSourcesRefunded,
@@ -2765,6 +2766,7 @@ async function handleCheckoutSlot(req, res) {
         effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
       },
       ...(emailValid ? { customer_email: learner.email } : {}),
+      excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
       billing_address_collection: 'required',
       allow_promotion_codes: true,
       success_url: `${origin}/learner/book.html?paid=1`,
@@ -3058,6 +3060,7 @@ async function handleCheckoutSlotGuest(req, res) {
         effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
       },
       customer_email: cleanEmail,
+      excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
       billing_address_collection: 'required',
       allow_promotion_codes: true,
       success_url: `${origin}/learner/book.html?paid=1`,
