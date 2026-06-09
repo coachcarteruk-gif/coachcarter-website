@@ -592,18 +592,18 @@ Answered in `docs/pricing-booking-stage-4-recurring-block-decision-record.md`:
 
 ## Current Remaining Work
 
-Last updated: 2026-06-08 after Stage 5 48-hour merge and Stage 6 product review.
+Last updated: 2026-06-09 after Stage 6B learner bank checkout UI wiring.
 
 ### Next Recommended Slice
 
-Stage 5's core policy loop is now closed for admin under-48-hour goodwill moves and learner 48+ hour policy moves.
+Stage 5's core policy loop is closed for admin under-48-hour goodwill moves and learner 48+ hour policy moves.
 
-Next recommended slice: create the Stage 6 implementation decision record and Stripe/payment-method audit for Klarna removal plus Reserved Weekly Slot Pay by Bank. Do this before touching live payment creation code.
+Stage 6's bank-funded Reserved Weekly Slot path now has the backend hold, webhook conversion/release, learner return status, stale-hold cleanup, and learner checkout UI wiring. Klarna has been removed from Stripe payment-method configuration outside code.
 
-Stage 6 decision record now exists. Next implementation slice should be either:
+Stage 6 decision record now exists. Earlier implementation slices covered:
 
-- Stage 6A: remove Klarna from Stripe configuration/surfaces and clean stale Klarna-specific local copy/comments; or
-- Stage 6B: add the reserved-block bank checkout hold skeleton using the observed Pay by Bank success/failure events.
+- Stage 6A: Stripe configuration changed outside code so Klarna is no longer offered.
+- Stage 6B: reserved-block bank checkout, webhook conversion/release, learner return status, stale-hold cleanup, and learner checkout UI wiring.
 
 Stage 6B1 implementation foundation - 2026-06-09:
 
@@ -632,6 +632,13 @@ Stage 6B3 learner-facing bank status and stale-hold cleanup - 2026-06-09:
 - `/learner/book.html` now handles `?reserved_bank_checkout=1&block_id=...` and `?reserved_bank_cancelled=1&block_id=...`, sending logged-out learners through existing learner login redirect and showing compact confirmed/pending/failed/expired/released copy in the weekly-block modal.
 - This slice does not mutate `learner_credit_balances`, write BCS rows, create credit purchase rows, create bookings during cleanup, trigger Stripe refunds, broaden payout/refund semantics, or add notifications.
 
+Stage 6B4 learner bank checkout UI wiring - 2026-06-09:
+
+- The recurring block preview modal now starts `POST /api/slots?action=recurring-block-bank-checkout` when the selected weekly block is available but same-instructor Lesson Credit is insufficient.
+- The existing `Confirm with Lesson Credit` button remains for sufficient-credit blocks; insufficient-credit blocks switch the action to upfront bank checkout and rely on the server to revalidate availability, price, learner scope, school scope, and credit insufficiency before creating a hold.
+- The modal redirects to Stripe Checkout only after the API returns a Checkout URL. Slot holds, conversion, failure release, return status, and stale-hold cleanup remain server-side.
+- Klarna was removed from Stripe payment-method configuration by the operator on 2026-06-09; learner-facing booking copy should not present Klarna as available.
+
 ### Later Stage 5 Work
 
 Still deferred:
@@ -641,9 +648,8 @@ Still deferred:
 
 ### Stage 6 Remaining Work
 
-Bank-funded Reserved Weekly Slot checkout and webhook conversion are implemented. Remaining Stage 6 work:
+Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, and learner checkout UI wiring are implemented. Remaining Stage 6 work:
 
-- where Klarna can currently appear, including Stripe Dashboard/dynamic payment method settings
 - Stripe Pay by Bank production configuration, account-specific pricing, and refund behaviour
 - original-method refund behaviour
 - account-specific pricing

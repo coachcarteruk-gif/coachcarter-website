@@ -49,6 +49,7 @@ let recurringLessonCount = RECURRING_BLOCK_MIN_LESSONS;
 let recurringPreview = null;
 let recurringPreviewBusy = false;
 let recurringCommitBusy = false;
+let recurringConfirmMode = 'credit';
 let learnerProfile = { phone: '', pickup_address: '' };
 let hasFreeTrialSlot = false; // true if current school has a lesson_type with slug='trial'
 // Slot-first state: full list of selectable lesson types (excludes 'trial')
@@ -114,7 +115,7 @@ function init() {
   document.querySelectorAll('[data-recurring-lessons]').forEach(btn => {
     btn.addEventListener('click', () => setRecurringLessonCount(parseInt(btn.dataset.recurringLessons, 10)));
   });
-  document.getElementById('btnConfirmRecurringBlock').onclick = confirmRecurringBlockWithCredit;
+  document.getElementById('btnConfirmRecurringBlock').onclick = confirmRecurringBlock;
   const claimTrialLink = document.getElementById('claimTrialLink');
   if (claimTrialLink) claimTrialLink.onclick = handleClaimTrialClick;
   document.getElementById('btnSuccessDone').onclick = closeBookModal;
@@ -2040,6 +2041,7 @@ function openRecurringBlockModal(source) {
   document.getElementById('btnConfirmRecurringBlock').style.display = '';
   document.getElementById('recurringConfirmSpinner').style.display = 'none';
   document.getElementById('recurringConfirmLabel').textContent = 'Confirm with Lesson Credit';
+  recurringConfirmMode = 'credit';
   setRecurringLessonCount(recurringLessonCount || RECURRING_BLOCK_MIN_LESSONS, { skipLoad: true });
   updateRecurringAnchorCopy(null);
 
@@ -2114,7 +2116,9 @@ function renderRecurringBlockPreview() {
   const credit = recurringPreview.credit || {};
   const pricing = recurringPreview.pricing || {};
   const hasEnoughCredit = !!credit.has_sufficient_credit;
-  const canCommit = !!(recurringPreview.can_commit && recurringPreview.credit && recurringPreview.credit.has_sufficient_credit && auth);
+  const canCreditCommit = !!(recurringPreview.can_commit && recurringPreview.credit && recurringPreview.credit.has_sufficient_credit && auth);
+  const canBankCheckout = !!(recurringPreview.can_commit && recurringPreview.credit && !recurringPreview.credit.has_sufficient_credit && auth);
+  recurringConfirmMode = canCreditCommit ? 'credit' : (canBankCheckout ? 'bank' : 'credit');
   const requiredHours = formatHours(credit.required_minutes || 0);
   const balanceHours = formatHours(credit.balance_minutes || 0);
   const totalPrice = formatMoneyPence(pricing.requested_total_price_pence || pricing.total_price_pence || 0);
@@ -2142,7 +2146,7 @@ function renderRecurringBlockPreview() {
 
   const creditBox = hasEnoughCredit
     ? `<div class="recurring-status-box good">You have ${esc(balanceHours)} Lesson Credit with this instructor. This block needs ${esc(requiredHours)} (${esc(totalPrice)}). You can confirm it now.</div>`
-    : `<div class="recurring-status-box warn">You have ${esc(balanceHours)} Lesson Credit with this instructor. This block needs ${esc(requiredHours)} (${esc(totalPrice)}). The bank-payment hold option is coming later, so ask your instructor for help with this block for now.</div>`;
+    : `<div class="recurring-status-box warn">You have ${esc(balanceHours)} Lesson Credit with this instructor. This block needs ${esc(requiredHours)} (${esc(totalPrice)}). You can pay upfront by bank; these slots are held for 10 minutes while checkout starts.</div>`;
 
   previewEl.innerHTML = `
     ${availabilityBox}
@@ -2151,7 +2155,15 @@ function renderRecurringBlockPreview() {
     <div class="recurring-week-list">${weekRows}</div>
   `;
 
-  document.getElementById('btnConfirmRecurringBlock').disabled = !canCommit || recurringCommitBusy;
+  document.getElementById('recurringConfirmLabel').textContent = canBankCheckout ? 'Pay upfront by bank' : 'Confirm with Lesson Credit';
+  document.getElementById('btnConfirmRecurringBlock').disabled = !(canCreditCommit || canBankCheckout) || recurringCommitBusy;
+}
+
+async function confirmRecurringBlock() {
+  if (recurringConfirmMode === 'bank') {
+    return startRecurringBlockBankCheckout();
+  }
+  return confirmRecurringBlockWithCredit();
 }
 
 async function confirmRecurringBlockWithCredit() {
@@ -2217,6 +2229,65 @@ async function confirmRecurringBlockWithCredit() {
     spinner.style.display = 'none';
     label.textContent = 'Confirm with Lesson Credit';
     if (recurringPreview && !confirmed) renderRecurringBlockPreview();
+  }
+}
+
+async function startRecurringBlockBankCheckout() {
+  if (!recurringPreview || recurringCommitBusy) return;
+  const canCheckout = !!(recurringPreview.can_commit && recurringPreview.credit && !recurringPreview.credit.has_sufficient_credit && auth);
+  if (!canCheckout) return;
+
+  recurringCommitBusy = true;
+  const btn = document.getElementById('btnConfirmRecurringBlock');
+  const label = document.getElementById('recurringConfirmLabel');
+  const spinner = document.getElementById('recurringConfirmSpinner');
+  btn.disabled = true;
+  label.textContent = 'Starting checkout...';
+  spinner.style.display = 'block';
+
+  try {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=recurring-block-bank-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anchor_booking_id: recurringAnchorBookingId,
+        lessons: recurringLessonCount
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (data.code === 'SLOTS_UNAVAILABLE') {
+        showToast('Some weekly slots changed. Review the refreshed preview.', 'error');
+        if (data.preview) {
+          recurringPreview = data.preview;
+          updateRecurringAnchorCopy(data.preview);
+          renderRecurringBlockPreview();
+        } else {
+          await loadRecurringBlockPreview();
+        }
+        return;
+      }
+      if (data.code === 'LESSON_CREDIT_AVAILABLE') {
+        showToast('You now have enough same-instructor Lesson Credit for this block.', 'success');
+        if (data.preview) {
+          recurringPreview = data.preview;
+          updateRecurringAnchorCopy(data.preview);
+          renderRecurringBlockPreview();
+        } else {
+          await loadRecurringBlockPreview();
+        }
+        return;
+      }
+      throw new Error(data.message || data.error || 'Could not start bank checkout');
+    }
+    if (!data.url) throw new Error('Bank checkout did not return a payment link');
+    window.location.href = data.url;
+  } catch (err) {
+    showToast(err.message || 'Could not start bank checkout.', 'error');
+  } finally {
+    recurringCommitBusy = false;
+    spinner.style.display = 'none';
+    if (recurringPreview) renderRecurringBlockPreview();
   }
 }
 

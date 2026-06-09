@@ -94,7 +94,7 @@ test('live code and current reference copy do not present Klarna as available', 
   const project = read('PROJECT.md');
   expect(project).not.toContain('enabled via Stripe dashboard, not hardcoded');
   expect(project).not.toContain('card + Klarna');
-  expect(project).toContain('Klarna is being removed from Stripe configuration');
+  expect(project).toContain('Klarna has been removed from Stripe configuration');
 });
 
 test('retired credit payment creation stops before pricing, SQL, or Stripe work', () => {

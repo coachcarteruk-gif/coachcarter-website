@@ -89,6 +89,20 @@ test.describe('Stage 6B reserved recurring block bank checkout/webhook contract'
     expect(handler).not.toContain('allow_promotion_codes');
   });
 
+  test('learner booking UI starts reserved-block bank checkout when same-instructor credit is insufficient', () => {
+    const js = read('public/learner/book.js');
+
+    expect(js).toContain('const canBankCheckout = !!(recurringPreview.can_commit && recurringPreview.credit && !recurringPreview.credit.has_sufficient_credit && auth);');
+    expect(js).toContain("recurringConfirmMode = canCreditCommit ? 'credit' : (canBankCheckout ? 'bank' : 'credit');");
+    expect(js).toContain("document.getElementById('recurringConfirmLabel').textContent = canBankCheckout ? 'Pay upfront by bank' : 'Confirm with Lesson Credit';");
+    expect(js).toContain("if (recurringConfirmMode === 'bank')");
+    expect(js).toContain('async function startRecurringBlockBankCheckout()');
+    expect(js).toContain("/api/slots?action=recurring-block-bank-checkout");
+    expect(js).toContain('window.location.href = data.url;');
+    expect(js).not.toContain('The bank-payment hold option is coming later');
+    expect(js).not.toContain('Klarna');
+  });
+
   test('project docs record the new action and its non-goals', () => {
     const project = read('PROJECT.md');
 
