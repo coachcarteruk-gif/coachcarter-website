@@ -420,7 +420,7 @@
     }
     .btn-checkout:disabled::after { display: none; }
 
-    /* Payment methods — pulled up from loose Klarna footer */
+    /* Payment methods — retained only for the retired checkout layout */
     .payment-methods {
       display: flex; align-items: center; justify-content: center; gap: 10px;
       margin-top: 14px; margin-bottom: 32px;
@@ -438,9 +438,7 @@
     .pm-badge strong { color: var(--primary); font-weight: 700; }
     .pm-dot { color: var(--accent); }
 
-    /* Legacy single Klarna-note element — kept for backward-compat but blanked
-       so the JS doesn't need touching */
-    .klarna-note { display: none; }
+    .retired-checkout-note { display: none; }
 
     /* ── POLICY CARD — ledger style ── */
     .policy-card {
@@ -639,7 +637,7 @@
     #priceSummary,
     #btnCheckout,
     .payment-methods,
-    .klarna-note {
+    .retired-checkout-note {
       display: none !important;
     }
   </style>
@@ -744,8 +742,7 @@
     <span class="pm-badge">Pay-and-book remains available from the booking page</span>
   </div>
 
-  <!-- Klarna note (hidden — kept for JS compat) -->
-  <p class="klarna-note">
+  <p class="retired-checkout-note">
     Self-serve credit checkout is retired.
   </p>
 

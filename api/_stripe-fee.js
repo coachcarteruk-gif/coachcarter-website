@@ -6,8 +6,8 @@
 // instructor's contribution per booking.
 //
 // Reliability: the balance_transaction is normally available within seconds of
-// payment_intent.succeeded, but not guaranteed. Klarna and other delayed
-// payment methods may not have one at webhook time. On any failure we return
+// payment_intent.succeeded, but not guaranteed. Async payment methods may not
+// have one at webhook time. On any failure we return
 // null; the caller writes NULL into the column and the reconciliation cron
 // (4f.e, not yet shipped) will backfill later.
 

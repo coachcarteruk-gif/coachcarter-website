@@ -59,9 +59,42 @@ test('Checkout Sessions rely on Stripe dynamic payment methods', () => {
 
     expect(payloads.length, `${relativePath} should create at least one Checkout Session`).toBeGreaterThan(0);
     for (const payload of payloads) {
-      expect(payload, `${relativePath} should not pin Checkout to card/Klarna`).not.toContain('payment_method_types');
+      expect(payload, `${relativePath} should not pin Checkout to a manual method list`).not.toMatch(/(^|[^_])payment_method_types\s*:/);
+      expect(payload, `${relativePath} should exclude retired Klarna while keeping dynamic methods`).toContain('excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES');
     }
   }
+});
+
+test('Stripe Checkout excludes only Klarna through a shared helper', () => {
+  const helper = read('api/_stripe-payment-methods.js');
+
+  expect(helper).toContain("const CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES = Object.freeze(['klarna']);");
+  expect(helper).not.toContain('card');
+  expect(helper).not.toContain('pay_by_bank');
+
+  for (const relativePath of ['api/credits.js', 'api/offers.js', 'api/slots.js']) {
+    const source = read(relativePath);
+    expect(source).toContain("require('./_stripe-payment-methods')");
+    expect(source).not.toContain("excluded_payment_method_types: ['klarna']");
+  }
+});
+
+test('live code and current reference copy do not present Klarna as available', () => {
+  const noKlarnaFiles = [
+    'api/_stripe-fee.js',
+    'api/webhook.js',
+    'docs/franchise-benefits.md',
+    'public/learner/buy-credits.html',
+  ];
+
+  for (const relativePath of noKlarnaFiles) {
+    expect(read(relativePath), `${relativePath} should not contain stale Klarna copy`).not.toMatch(/klarna/i);
+  }
+
+  const project = read('PROJECT.md');
+  expect(project).not.toContain('enabled via Stripe dashboard, not hardcoded');
+  expect(project).not.toContain('card + Klarna');
+  expect(project).toContain('Klarna is being removed from Stripe configuration');
 });
 
 test('retired credit payment creation stops before pricing, SQL, or Stripe work', () => {
@@ -93,9 +126,9 @@ test('direct Pay As You Go checkout uses server-calculated amounts and no client
     expect(body).toContain('const pricePence');
     expect(body).toContain('unit_amount: pricePence');
     expect(body).toContain('amount_pence:    String(pricePence)');
-    expect(body).not.toContain('payment_method_types');
+    expect(body).not.toMatch(/(^|[^_])payment_method_types\s*:/);
     expect(body).not.toContain('payment_method_configurations');
-    expect(body).not.toContain('excluded_payment_method_types');
+    expect(body).toContain('excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES');
     expect(body).not.toContain('req.body.amount_pence');
     expect(body).not.toContain('req.body.price_pence');
     expect(body).not.toContain('req.body.payment_method');
