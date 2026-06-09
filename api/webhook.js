@@ -1,13 +1,15 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { sendWhatsApp } = require('./_whatsapp');
 const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
-const { SCHEDULED, blocksSlot, isTerminal } = require('./_booking-status');
+const { SCHEDULED, BLOCKING_STATUSES, blocksSlot, isTerminal } = require('./_booking-status');
 const { fetchSessionFeePence } = require('./_stripe-fee');
 const { grantCredits, lockBalanceAdjustLCB } = require('./_credit-grant');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
+const { withNeonTransaction } = require('./_db-transaction');
 
 
 // Resolve school_id from Stripe metadata with a tenant-safe fallback.
@@ -92,6 +94,9 @@ module.exports = async (req, res) => {
       } else if (paymentType === 'lesson_offer') {
         // ── Instructor-initiated offer: learner accepted + paid ────────
         await handleOfferBooking(session);
+      } else if (paymentType === 'recurring_block_bank_checkout') {
+        // Reserved Weekly Slot Pay by Bank: convert held block on success.
+        await handleRecurringBlockBankPaymentSuccess(session);
       } else {
         // Unknown payment_type. Pre-PR-J this fell into the legacy
         // handleCheckoutComplete + in-memory Map flow, which silently
@@ -120,6 +125,8 @@ module.exports = async (req, res) => {
 
       if (paymentType === 'credit_purchase') {
         await handleCreditPurchase(paymentIntentToCreditSession(paymentIntent));
+      } else if (paymentType === 'recurring_block_bank_checkout') {
+        await handleRecurringBlockBankPaymentSuccess(paymentIntentToRecurringBlockSession(paymentIntent));
       }
     }
 
@@ -133,6 +140,30 @@ module.exports = async (req, res) => {
       reportError('/api/webhook (async_payment_failed)', new Error(
         `Async payment failed for session ${session.id} (${session.metadata?.payment_type || 'unknown'})`
       ));
+      if (session.metadata?.payment_type === 'recurring_block_bank_checkout') {
+        await handleRecurringBlockBankPaymentRelease(session, 'payment_failed');
+      }
+    }
+
+    if (event.type === 'checkout.session.expired') {
+      const session = event.data.object;
+      if (session.metadata?.payment_type === 'recurring_block_bank_checkout') {
+        await handleRecurringBlockBankPaymentRelease(session, 'expired');
+      }
+    }
+
+    if (event.type === 'payment_intent.payment_failed') {
+      const paymentIntent = event.data.object;
+      if (paymentIntent.metadata?.payment_type === 'recurring_block_bank_checkout') {
+        await handleRecurringBlockBankPaymentRelease(paymentIntentToRecurringBlockSession(paymentIntent), 'payment_failed');
+      }
+    }
+
+    if (event.type === 'charge.failed') {
+      const charge = event.data.object;
+      if (charge.metadata?.payment_type === 'recurring_block_bank_checkout') {
+        await handleRecurringBlockBankPaymentRelease(chargeToRecurringBlockSession(charge), 'payment_failed');
+      }
     }
 
     // ── Stripe Connect: instructor onboarding complete ──
@@ -188,6 +219,60 @@ function paymentIntentToCreditSession(paymentIntent) {
     payment_intent: paymentIntent.id,
     metadata: paymentIntent.metadata || {},
     customer_email: paymentIntent.receipt_email || null,
+  };
+}
+
+function paymentIntentToRecurringBlockSession(paymentIntent) {
+  return {
+    id: paymentIntent.id,
+    object: 'payment_intent',
+    payment_status: paymentIntent.status === 'succeeded' ? 'paid' : paymentIntent.status,
+    payment_intent: paymentIntent.id,
+    metadata: paymentIntent.metadata || {},
+  };
+}
+
+function chargeToRecurringBlockSession(charge) {
+  return {
+    id: charge.id,
+    object: 'charge',
+    payment_status: charge.status === 'succeeded' ? 'paid' : charge.status,
+    payment_intent: typeof charge.payment_intent === 'string'
+      ? charge.payment_intent
+      : charge.payment_intent?.id || null,
+    metadata: charge.metadata || {},
+  };
+}
+
+function stripePaymentIntentId(session) {
+  if (!session) return null;
+  if (session.object === 'payment_intent') return session.id;
+  if (typeof session.payment_intent === 'string') return session.payment_intent;
+  return session.payment_intent?.id || null;
+}
+
+function splitPenceAcrossItems(totalPence, items) {
+  if (totalPence == null) return items.map(() => null);
+  const total = Math.max(0, parseInt(totalPence, 10) || 0);
+  const weights = items.map(item => Math.max(0, parseInt(item.price_pence, 10) || 0));
+  const weightTotal = weights.reduce((sum, value) => sum + value, 0) || items.length;
+  let assigned = 0;
+  return items.map((_, index) => {
+    if (index === items.length - 1) return total - assigned;
+    const weight = weightTotal === items.length ? 1 : weights[index];
+    const share = Math.floor((total * weight) / weightTotal);
+    assigned += share;
+    return share;
+  });
+}
+
+function recurringBlockMetadataPatch(session, extra = {}) {
+  return {
+    webhook: {
+      last_event_object: session.object || null,
+      last_event_id: session.id || null,
+    },
+    ...extra,
   };
 }
 
@@ -793,6 +878,383 @@ async function ensureOfferSeriesBcs(sql, {
       ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING
     `;
   }
+}
+
+async function handleRecurringBlockBankPaymentSuccess(session) {
+  if (!isPaid(session)) return;
+
+  const metadata = session.metadata || {};
+  const blockId = parseInt(metadata.recurring_slot_block_id, 10);
+  const schoolId = parseInt(metadata.school_id, 10);
+  if (!blockId || !schoolId) {
+    const err = new Error(`recurring_block_bank_checkout success missing block/school metadata for ${session.id}`);
+    console.error(err.message, metadata);
+    reportError('/api/webhook (recurring block bank metadata)', err);
+    return;
+  }
+
+  const paymentIntentId = stripePaymentIntentId(session);
+  const checkoutSessionId = session.object === 'checkout.session' ? session.id : null;
+  const { feePence: stripeFeePence, source: stripeFeeSource } = await fetchSessionFeePence({ payment_intent: paymentIntentId });
+
+  const result = await convertRecurringBlockBankHoldTransaction({
+    connectionString: process.env.POSTGRES_URL,
+    blockId,
+    schoolId,
+    checkoutSessionId,
+    paymentIntentId,
+    stripeFeePence,
+    stripeFeeSource,
+    metadataPatch: recurringBlockMetadataPatch(session, {
+      payment_status: session.payment_status || null,
+      payment_success_seen_at: new Date().toISOString(),
+    }),
+  });
+
+  if (result.code === 'SLOTS_UNAVAILABLE') {
+    const err = new Error(`Paid recurring block ${blockId} could not be converted because selected slots are unavailable`);
+    console.error(err.message, result.conflicts || []);
+    reportError('/api/webhook (recurring block bank conflict)', err);
+    return;
+  }
+
+  if (result.createdBookings?.length) {
+    await supersedeRecurringBlockBroadcasts({
+      schoolId,
+      instructorId: result.instructorId,
+      bookings: result.createdBookings,
+    });
+  }
+}
+
+async function handleRecurringBlockBankPaymentRelease(session, releaseStatus) {
+  const metadata = session.metadata || {};
+  const blockId = parseInt(metadata.recurring_slot_block_id, 10);
+  const schoolId = parseInt(metadata.school_id, 10);
+  if (!blockId || !schoolId) {
+    const err = new Error(`recurring_block_bank_checkout release missing block/school metadata for ${session.id}`);
+    console.error(err.message, metadata);
+    reportError('/api/webhook (recurring block bank release metadata)', err);
+    return;
+  }
+
+  await releaseRecurringBlockBankHoldTransaction({
+    connectionString: process.env.POSTGRES_URL,
+    blockId,
+    schoolId,
+    releaseStatus,
+    checkoutSessionId: session.object === 'checkout.session' ? session.id : null,
+    paymentIntentId: stripePaymentIntentId(session),
+    metadataPatch: recurringBlockMetadataPatch(session, {
+      release_reason: releaseStatus,
+      release_seen_at: new Date().toISOString(),
+    }),
+  });
+}
+
+async function convertRecurringBlockBankHoldTransaction({
+  connectionString,
+  blockId,
+  schoolId,
+  checkoutSessionId = null,
+  paymentIntentId = null,
+  stripeFeePence = null,
+  stripeFeeSource = null,
+  metadataPatch = {},
+}) {
+  return withNeonTransaction(connectionString, async client => {
+    const blockResult = await client.query(
+      `SELECT rsb.*,
+              anchor.pickup_address,
+              anchor.dropoff_address,
+              COALESCE(anchor.transmission_type, 'manual') AS transmission_type
+         FROM recurring_slot_blocks rsb
+         LEFT JOIN lesson_bookings anchor
+           ON anchor.id = rsb.anchor_booking_id
+          AND anchor.school_id = rsb.school_id
+        WHERE rsb.id = $1
+          AND rsb.school_id = $2
+        FOR UPDATE OF rsb`,
+      [blockId, schoolId]
+    );
+    const block = blockResult.rows[0];
+    if (!block) return { ok: false, code: 'BLOCK_NOT_FOUND' };
+    if (block.funding_method !== 'bank_payment') return { ok: false, code: 'NOT_BANK_PAYMENT' };
+
+    await client.query(
+      `UPDATE recurring_slot_blocks
+          SET stripe_checkout_session_id = COALESCE($3, stripe_checkout_session_id),
+              stripe_payment_intent_id = COALESCE($4, stripe_payment_intent_id),
+              metadata = metadata || $5::jsonb,
+              updated_at = NOW()
+        WHERE id = $1
+          AND school_id = $2`,
+      [blockId, schoolId, checkoutSessionId, paymentIntentId, JSON.stringify(metadataPatch || {})]
+    );
+
+    if (block.status === 'confirmed') {
+      return {
+        ok: true,
+        code: 'ALREADY_CONFIRMED',
+        instructorId: block.instructor_id,
+        createdBookings: [],
+      };
+    }
+    if (block.status !== 'pending_payment') {
+      return { ok: true, code: 'BLOCK_NOT_PENDING', status: block.status };
+    }
+
+    const itemsResult = await client.query(
+      `SELECT id, scheduled_date::text AS scheduled_date, start_time::text AS start_time,
+              end_time::text AS end_time, price_pence
+         FROM recurring_slot_block_items
+        WHERE block_id = $1
+          AND school_id = $2
+          AND status = 'held'
+        ORDER BY scheduled_date, start_time
+        FOR UPDATE`,
+      [blockId, schoolId]
+    );
+    const items = itemsResult.rows;
+    if (items.length !== Number(block.selected_lessons)) {
+      await releaseRecurringBlockBankHoldInTransaction(client, {
+        blockId,
+        schoolId,
+        releaseStatus: 'released',
+        metadataPatch: {
+          release_reason: 'held_item_count_mismatch_manual_review',
+          expected_items: Number(block.selected_lessons),
+          actual_items: items.length,
+        },
+      });
+      return { ok: false, code: 'HELD_ITEM_COUNT_MISMATCH' };
+    }
+
+    const dates = items.map(item => item.scheduled_date);
+    const bookingConflicts = await client.query(
+      `SELECT scheduled_date::text AS date, start_time::text
+         FROM lesson_bookings
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = ANY($3::date[])
+          AND status = ANY($4::text[])
+          AND start_time < $6::time
+          AND end_time > $5::time`,
+      [block.instructor_id, schoolId, dates, BLOCKING_STATUSES, block.start_time, block.end_time]
+    );
+    const reservationConflicts = await client.query(
+      `SELECT scheduled_date::text AS date, start_time::text
+         FROM slot_reservations
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = ANY($3::date[])
+          AND expires_at > NOW()
+          AND start_time < $5::time
+          AND end_time > $4::time`,
+      [block.instructor_id, schoolId, dates, block.start_time, block.end_time]
+    );
+    const offerConflicts = await client.query(
+      `SELECT scheduled_date::text AS date, start_time::text
+         FROM lesson_offers
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = ANY($3::date[])
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND start_time < $5::time
+          AND end_time > $4::time`,
+      [block.instructor_id, schoolId, dates, block.start_time, block.end_time]
+    );
+    const conflicts = [
+      ...bookingConflicts.rows.map(row => ({ date: String(row.date).slice(0, 10), start_time: row.start_time, reason: 'booking_conflict' })),
+      ...reservationConflicts.rows.map(row => ({ date: String(row.date).slice(0, 10), start_time: row.start_time, reason: 'reservation_conflict' })),
+      ...offerConflicts.rows.map(row => ({ date: String(row.date).slice(0, 10), start_time: row.start_time, reason: 'offer_conflict' })),
+    ];
+    if (conflicts.length > 0) {
+      await releaseRecurringBlockBankHoldInTransaction(client, {
+        blockId,
+        schoolId,
+        releaseStatus: 'released',
+        metadataPatch: {
+          release_reason: 'payment_success_slot_conflict_manual_review',
+          conflicts,
+        },
+      });
+      return { ok: false, code: 'SLOTS_UNAVAILABLE', conflicts };
+    }
+
+    const seriesId = crypto.randomUUID();
+    const feeShares = splitPenceAcrossItems(stripeFeePence, items);
+    const createdBookings = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const inserted = await client.query(
+        `INSERT INTO lesson_bookings
+           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+            pickup_address, dropoff_address, lesson_type_id, transmission_type,
+            minutes_deducted, series_id, school_id, payment_method, created_by,
+            stripe_fee_pence, stripe_fee_source, list_price_pence, list_price_source)
+         VALUES
+           ($1, $2, $3, $4, $5, $6,
+            $7, $8, $9, $10,
+            $11, $12, $13, 'bank_payment', 'recurring_block_bank_checkout',
+            $14, $15, $16, 'stripe_metadata')
+         RETURNING id, scheduled_date::text, start_time::text, end_time::text, status`,
+        [
+          block.learner_id,
+          block.instructor_id,
+          item.scheduled_date,
+          item.start_time,
+          item.end_time,
+          SCHEDULED,
+          block.pickup_address || null,
+          block.dropoff_address || null,
+          block.lesson_type_id || null,
+          block.transmission_type || 'manual',
+          block.duration_minutes,
+          seriesId,
+          schoolId,
+          feeShares[i],
+          feeShares[i] == null ? null : stripeFeeSource,
+          item.price_pence,
+        ]
+      );
+      const booking = inserted.rows[0];
+      createdBookings.push(booking);
+      await client.query(
+        `UPDATE recurring_slot_block_items
+            SET status = 'booked',
+                lesson_booking_id = $4,
+                updated_at = NOW()
+          WHERE id = $1
+            AND block_id = $2
+            AND school_id = $3
+            AND status = 'held'`,
+        [item.id, blockId, schoolId, booking.id]
+      );
+    }
+
+    await client.query(
+      `UPDATE recurring_slot_blocks
+          SET status = 'confirmed',
+              confirmed_at = NOW(),
+              expires_at = NULL,
+              stripe_checkout_session_id = COALESCE($3, stripe_checkout_session_id),
+              stripe_payment_intent_id = COALESCE($4, stripe_payment_intent_id),
+              metadata = metadata || $5::jsonb,
+              updated_at = NOW()
+        WHERE id = $1
+          AND school_id = $2
+          AND status = 'pending_payment'`,
+      [
+        blockId,
+        schoolId,
+        checkoutSessionId,
+        paymentIntentId,
+        JSON.stringify({
+          ...metadataPatch,
+          converted_booking_ids: createdBookings.map(booking => booking.id),
+          series_id: seriesId,
+          stripe_fee_pence: stripeFeePence,
+          stripe_fee_source: stripeFeeSource,
+        }),
+      ]
+    );
+
+    return {
+      ok: true,
+      code: 'CONFIRMED',
+      instructorId: block.instructor_id,
+      createdBookings,
+    };
+  });
+}
+
+async function releaseRecurringBlockBankHoldTransaction({
+  connectionString,
+  blockId,
+  schoolId,
+  releaseStatus,
+  checkoutSessionId = null,
+  paymentIntentId = null,
+  metadataPatch = {},
+}) {
+  return withNeonTransaction(connectionString, async client => {
+    const blockResult = await client.query(
+      `SELECT id, status, funding_method
+         FROM recurring_slot_blocks
+        WHERE id = $1
+          AND school_id = $2
+        FOR UPDATE`,
+      [blockId, schoolId]
+    );
+    const block = blockResult.rows[0];
+    if (!block) return { ok: false, code: 'BLOCK_NOT_FOUND' };
+    if (block.funding_method !== 'bank_payment') return { ok: false, code: 'NOT_BANK_PAYMENT' };
+    if (block.status !== 'pending_payment') return { ok: true, code: 'BLOCK_NOT_PENDING', status: block.status };
+
+    await client.query(
+      `UPDATE recurring_slot_blocks
+          SET stripe_checkout_session_id = COALESCE($3, stripe_checkout_session_id),
+              stripe_payment_intent_id = COALESCE($4, stripe_payment_intent_id),
+              updated_at = NOW()
+        WHERE id = $1
+          AND school_id = $2`,
+      [blockId, schoolId, checkoutSessionId, paymentIntentId]
+    );
+    await releaseRecurringBlockBankHoldInTransaction(client, {
+      blockId,
+      schoolId,
+      releaseStatus,
+      metadataPatch,
+    });
+    return { ok: true, code: releaseStatus.toUpperCase() };
+  });
+}
+
+async function releaseRecurringBlockBankHoldInTransaction(client, {
+  blockId,
+  schoolId,
+  releaseStatus,
+  metadataPatch = {},
+}) {
+  const status = releaseStatus === 'expired' ? 'expired'
+    : releaseStatus === 'payment_failed' ? 'payment_failed'
+    : 'released';
+  await client.query(
+    `UPDATE recurring_slot_block_items
+        SET status = 'released',
+            updated_at = NOW()
+      WHERE block_id = $1
+        AND school_id = $2
+        AND status = 'held'`,
+    [blockId, schoolId]
+  );
+  await client.query(
+    `UPDATE recurring_slot_blocks
+        SET status = $3,
+            released_at = NOW(),
+            metadata = metadata || $4::jsonb,
+            updated_at = NOW()
+      WHERE id = $1
+        AND school_id = $2
+        AND status = 'pending_payment'`,
+    [blockId, schoolId, status, JSON.stringify(metadataPatch || {})]
+  );
+}
+
+async function supersedeRecurringBlockBroadcasts({ schoolId, instructorId, bookings }) {
+  try {
+    const { supersedeBroadcastSiblings } = require('./_notify-availability');
+    await Promise.all((bookings || []).map(booking =>
+      supersedeBroadcastSiblings({
+        instructor_id: instructorId,
+        scheduled_date: String(booking.scheduled_date).slice(0, 10),
+        start_time: String(booking.start_time).slice(0, 5),
+        school_id: schoolId,
+      }).catch(err => console.warn('supersede on recurring bank block failed:', err.message))
+    ));
+  } catch (_) {}
 }
 
 // Generate .ics calendar file for slot bookings

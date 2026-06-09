@@ -2435,6 +2435,23 @@ async function handleRecurringBlockBankCheckout(req, res) {
     const firstDate = preview.selected_slots[0]?.date;
     const lastDate = preview.selected_slots[preview.selected_slots.length - 1]?.date;
 
+    const recurringBlockBankMetadata = {
+      payment_type: 'recurring_block_bank_checkout',
+      recurring_slot_block_id: String(hold.block.id),
+      learner_id: String(user.id),
+      instructor_id: String(preview.anchor.instructor_id),
+      anchor_booking_id: String(preview.anchor.booking_id),
+      lesson_type_id: String(preview.anchor.lesson_type_id || ''),
+      selected_lessons: String(preview.requested_lessons),
+      duration_minutes: String(preview.anchor.duration_minutes),
+      amount_pence: String(preview.pricing.requested_total_price_pence),
+      price_per_lesson_pence: String(preview.pricing.price_per_lesson_pence),
+      price_source: preview.pricing.price_source || '',
+      first_date: firstDate || '',
+      last_date: lastDate || '',
+      school_id: String(schoolId),
+    };
+
     createdSession = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{
@@ -2448,21 +2465,9 @@ async function handleRecurringBlockBankCheckout(req, res) {
         },
         quantity: 1
       }],
-      metadata: {
-        payment_type: 'recurring_block_bank_checkout',
-        recurring_slot_block_id: String(hold.block.id),
-        learner_id: String(user.id),
-        instructor_id: String(preview.anchor.instructor_id),
-        anchor_booking_id: String(preview.anchor.booking_id),
-        lesson_type_id: String(preview.anchor.lesson_type_id || ''),
-        selected_lessons: String(preview.requested_lessons),
-        duration_minutes: String(preview.anchor.duration_minutes),
-        amount_pence: String(preview.pricing.requested_total_price_pence),
-        price_per_lesson_pence: String(preview.pricing.price_per_lesson_pence),
-        price_source: preview.pricing.price_source || '',
-        first_date: firstDate || '',
-        last_date: lastDate || '',
-        school_id: String(schoolId),
+      metadata: recurringBlockBankMetadata,
+      payment_intent_data: {
+        metadata: recurringBlockBankMetadata,
       },
       ...(emailValid ? { customer_email: learner.email } : {}),
       ...bankPaymentOptions,
