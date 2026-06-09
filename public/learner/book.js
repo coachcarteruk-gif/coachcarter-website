@@ -72,6 +72,9 @@ function init() {
   prefilledName = params.get('name'); // ?name=Joe (shareable booking link from instructor)
   const rescheduleBookingId = params.get('reschedule'); // ?reschedule=BOOKING_ID
   const reservedMoveBookingId = params.get('reserved_move'); // ?reserved_move=BOOKING_ID
+  const reservedBankReturn = params.get('reserved_bank_checkout') === '1' || params.get('reserved_bank_cancelled') === '1';
+  const reservedBankCancelled = params.get('reserved_bank_cancelled') === '1';
+  const reservedBankBlockId = params.get('block_id');
   if (params.get('paid') === '1') {
     const paidMsg = auth
       ? 'Payment successful — your lesson is booked! Check your email for details.'
@@ -152,6 +155,11 @@ function init() {
   }
 
   if (!auth) {
+    if (reservedBankReturn) {
+      const redirect = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = '/learner/login.html?redirect=' + redirect;
+      return;
+    }
     // Spectator-mode banner: show guest hint, suppress the "No hours on your account" banner
     // (it reads as broken for someone who has no account at all).
     const guestBanner = document.getElementById('guestBanner');
@@ -174,6 +182,10 @@ function init() {
       if (preselectedInstructorSlug || preselectedInstructorId) await loadLessonTypes();
       initFeed();
       showPostcodePromptIfNeeded();
+
+      if (reservedBankReturn) {
+        await handleReservedBankReturn(reservedBankBlockId, { cancelled: reservedBankCancelled });
+      }
 
       // Activate reschedule / reserved move mode if the URL points at an existing booking.
       const moveBookingId = reservedMoveBookingId || rescheduleBookingId;
@@ -1851,6 +1863,121 @@ function handlePaidRecurringPrompt() {
   window.location.href = auth ? '/learner/lessons.html' : '/learner/login.html';
 }
 
+async function handleReservedBankReturn(blockId, opts = {}) {
+  if (!auth) return;
+  if (!/^\d+$/.test(String(blockId || ''))) {
+    showToast('Could not find that weekly block checkout.', 'error');
+    window.history.replaceState({}, '', '/learner/book.html');
+    return;
+  }
+
+  document.getElementById('bookModal').classList.remove('open');
+  document.getElementById('recurringBlockModal').classList.add('open');
+  document.getElementById('recurringBlockControls').style.display = 'none';
+  document.getElementById('recurringBlockPreview').style.display = 'none';
+  document.getElementById('recurringBlockConfirmed').style.display = 'none';
+  document.getElementById('recurringBlockActions').style.display = 'flex';
+  document.getElementById('btnConfirmRecurringBlock').style.display = 'none';
+  document.getElementById('recurringBlockLoading').textContent = 'Checking weekly block payment...';
+  document.getElementById('recurringBlockLoading').style.display = 'block';
+  document.getElementById('recurringBlockPattern').textContent = 'Reserved Weekly Slot payment';
+  document.getElementById('recurringBlockAnchorCopy').textContent = opts.cancelled
+    ? 'Checkout was cancelled. We are checking whether the bank payment changed the block status.'
+    : 'Checking the bank payment status for your weekly block.';
+
+  try {
+    const res = await ccAuth.fetchAuthed(`/api/slots?action=recurring-block-status&block_id=${encodeURIComponent(blockId)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Could not load weekly block status');
+    renderReservedBankStatus(data, opts);
+  } catch (err) {
+    document.getElementById('recurringBlockLoading').style.display = 'none';
+    document.getElementById('recurringBlockConfirmed').style.display = 'block';
+    document.getElementById('recurringBlockConfirmed').innerHTML = `
+      <div class="recurring-status-box warn">${esc(err.message || 'Could not load weekly block status.')}</div>
+    `;
+    showToast(err.message || 'Could not load weekly block status.', 'error');
+  } finally {
+    window.history.replaceState({}, '', '/learner/book.html');
+  }
+}
+
+function formatDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function renderReservedBankStatus(data, opts = {}) {
+  const block = data.block || {};
+  const items = data.items || [];
+  const status = block.status || 'released';
+  const dates = items.map(item => {
+    const bookingSuffix = item.booking && item.booking.id ? ` <span>Booking #${esc(item.booking.id)}</span>` : '';
+    return `<li>${esc(formatRecurringDate(item.date))} ${esc(item.start_time || '')}${bookingSuffix}</li>`;
+  }).join('');
+  const expiry = formatDateTime(block.expires_at);
+
+  let title = 'Weekly block status';
+  let copy = 'We could not confirm the latest status for this weekly block.';
+  let tone = 'warn';
+  let icon = '!';
+  if (status === 'confirmed') {
+    title = 'Weekly block booked.';
+    copy = 'Your bank payment is confirmed and these future lessons are booked.';
+    tone = 'good';
+    icon = '✓';
+  } else if (status === 'pending_payment') {
+    title = 'Payment still processing.';
+    copy = expiry
+      ? `Your selected weekly slots are held while the bank payment finishes. The hold expires at ${expiry}.`
+      : 'Your selected weekly slots are held while the bank payment finishes.';
+    if (opts.cancelled) copy = 'Checkout was cancelled, but the payment has not failed yet. If you authorised payment in your bank, this may still update shortly.';
+  } else if (status === 'payment_failed') {
+    title = 'Payment failed.';
+    copy = 'The bank payment did not complete, so the selected weekly slots have been released.';
+  } else if (status === 'expired') {
+    title = 'Checkout expired.';
+    copy = 'The checkout hold expired before payment confirmation, so the selected weekly slots have been released.';
+  } else if (status === 'released') {
+    title = 'Manual follow-up may be needed.';
+    copy = 'These slots are no longer held. If money has left your bank, we need to review it manually; this page does not trigger an automatic refund.';
+  }
+
+  document.getElementById('recurringBlockLoading').style.display = 'none';
+  document.getElementById('recurringBlockPattern').textContent = `${block.instructor_name || 'Reserved Weekly Slot'} - ${block.selected_lessons || items.length || ''} lessons`;
+  document.getElementById('recurringBlockAnchorCopy').textContent = block.lesson_type_name || 'Same instructor, same day, same time.';
+  const confirmed = document.getElementById('recurringBlockConfirmed');
+  confirmed.innerHTML = `
+    <div class="modal-success-icon">${esc(icon)}</div>
+    <h2>${esc(title)}</h2>
+    <p>${esc(copy)}</p>
+    ${dates ? `<ul class="recurring-confirmed-list">${dates}</ul>` : ''}
+    <div class="recurring-status-box ${tone}">Status: ${esc(status.replace(/_/g, ' '))}</div>
+    <button class="btn-done" type="button" id="recurringBankStatusDone">Done</button>
+  `;
+  confirmed.style.display = 'block';
+  document.getElementById('recurringBlockActions').style.display = 'none';
+  document.getElementById('recurringBankStatusDone').onclick = closeRecurringBlockModal;
+
+  if (status === 'confirmed') {
+    showToast('Weekly lesson block confirmed.', 'success');
+    refreshAfterBooking();
+  } else if (status === 'pending_payment') {
+    showToast('Payment is still processing.', '');
+  } else {
+    showToast(copy, status === 'released' ? '' : 'error');
+    refreshAfterBooking();
+  }
+}
+
 function closeRecurringBlockModal() {
   document.getElementById('recurringBlockModal').classList.remove('open');
 }
@@ -1910,6 +2037,7 @@ function openRecurringBlockModal(source) {
   document.getElementById('recurringBlockActions').style.display = 'flex';
   document.getElementById('recurringBlockControls').style.display = 'block';
   document.getElementById('btnConfirmRecurringBlock').disabled = true;
+  document.getElementById('btnConfirmRecurringBlock').style.display = '';
   document.getElementById('recurringConfirmSpinner').style.display = 'none';
   document.getElementById('recurringConfirmLabel').textContent = 'Confirm with Lesson Credit';
   setRecurringLessonCount(recurringLessonCount || RECURRING_BLOCK_MIN_LESSONS, { skipLoad: true });

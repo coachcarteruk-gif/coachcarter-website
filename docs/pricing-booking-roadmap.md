@@ -624,6 +624,14 @@ Stage 6B2 webhook conversion/release - 2026-06-09:
 - Payment failure and Checkout expiry release held items only while the block is still `pending_payment`; failure after success does not release confirmed bookings.
 - If a paid block cannot be converted because selected slots are no longer available, the hold is released with manual-review metadata and no automatic Stripe refund is attempted.
 
+Stage 6B3 learner-facing bank status and stale-hold cleanup - 2026-06-09:
+
+- Added `GET /api/slots?action=recurring-block-status&block_id=...` for learner-authenticated Reserved Weekly Slot bank checkout returns.
+- The endpoint scopes by authenticated `learner_id` and `school_id`, returns block status/funding method/selected lesson count/expiry/safe Stripe refs, and returns confirmed booking IDs/dates alongside item dates for confirmed blocks.
+- The endpoint opportunistically expires stale `pending_payment` bank blocks where `expires_at <= NOW()` and releases their held items idempotently before returning status.
+- `/learner/book.html` now handles `?reserved_bank_checkout=1&block_id=...` and `?reserved_bank_cancelled=1&block_id=...`, sending logged-out learners through existing learner login redirect and showing compact confirmed/pending/failed/expired/released copy in the weekly-block modal.
+- This slice does not mutate `learner_credit_balances`, write BCS rows, create credit purchase rows, create bookings during cleanup, trigger Stripe refunds, broaden payout/refund semantics, or add notifications.
+
 ### Later Stage 5 Work
 
 Still deferred:
