@@ -41,7 +41,7 @@ function checkoutSessionPayloads(source) {
 }
 
 test('Stage 3 payment-method audit tracks expected Stripe checkout surfaces', () => {
-  expect(checkoutSessionPayloads(read('api/slots.js')).length, 'direct booking should have auth + guest Checkout').toBe(2);
+  expect(checkoutSessionPayloads(read('api/slots.js')).length, 'slots should have auth, guest, and reserved-block bank Checkout').toBe(3);
   expect(checkoutSessionPayloads(read('api/offers.js')).length, 'lesson offers should have one Checkout surface').toBe(1);
   expect(checkoutSessionPayloads(read('api/credits.js')).length, 'retired credit checkout remains dormant for compatibility').toBe(1);
 });

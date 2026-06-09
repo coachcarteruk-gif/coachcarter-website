@@ -20,14 +20,16 @@ test.describe('recurring weekly block foundation contract', () => {
     expect(migration).not.toContain('ALTER TABLE lesson_offers ADD COLUMN IF NOT EXISTS recurring_slot_block_id');
   });
 
-  test('slots API exposes preview and credit commit without adding a Stripe or bank-payment path', () => {
+  test('slots API exposes preview, credit commit, and bank-payment hold paths without manual payment method lists', () => {
     const source = read('api/slots.js');
 
     expect(source).toContain("if (action === 'recurring-block-preview') return handleRecurringBlockPreview(req, res);");
     expect(source).toContain("if (action === 'recurring-block-commit') return handleRecurringBlockCommit(req, res);");
+    expect(source).toContain("if (action === 'recurring-block-bank-checkout') return handleRecurringBlockBankCheckout(req, res);");
     expect(source).toContain('buildRecurringBlockPreview(sql, {');
     expect(source).toContain('bookCreditFundedSlotsTransaction({');
     expect(source).toContain("'confirmed', 'lesson_credit'");
+    expect(source).toContain("'pending_payment', 'bank_payment'");
     expect(source).not.toContain('payment_method_types: [\'bacs_debit\']');
     expect(source).not.toContain("payment_method_types: ['bacs_debit']");
     expect(source).not.toContain("mode: 'setup'");
