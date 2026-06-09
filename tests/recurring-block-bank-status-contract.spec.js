@@ -119,5 +119,10 @@ test.describe('Stage 6B3 reserved recurring block bank status contract', () => {
     expect(project).toContain('does not mutate `learner_credit_balances`, write BCS rows, create credit purchase rows, or trigger Stripe refunds');
     expect(roadmap).toContain('Stage 6B3 learner-facing bank status and stale-hold cleanup');
     expect(roadmap).toContain('returns confirmed booking IDs/dates');
+    expect(roadmap).toContain('Stage 6B5 bank checkout smoke and expiry decision');
+    expect(roadmap).toContain('opportunistic stale-hold cleanup is enough for Reserved Weekly Slot bank checkout v1');
+    expect(roadmap).toContain("funding_method='bank_payment'");
+    expect(roadmap).toContain("status='pending_payment'");
+    expect(roadmap).toContain('expires_at <= NOW()');
   });
 });
