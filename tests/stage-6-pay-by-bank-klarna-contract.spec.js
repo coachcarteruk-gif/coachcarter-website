@@ -27,10 +27,26 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
 
     expect(roadmap).toContain('Answered in `docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md`:');
     expect(roadmap).toContain('Klarna should be removed completely from CoachCarter checkout surfaces.');
-    expect(roadmap).toContain('Stripe Pay by Bank is enabled on the Stripe account, but still needs a test-mode Checkout success/failure run before implementation.');
+    expect(roadmap).toContain('Stripe Pay by Bank test-mode Checkout success/failure probes passed on 2026-06-09.');
     expect(roadmap).toContain('Eligible 48h+ cancellation value for bank-paid reserved blocks should return as same-instructor Lesson Credit by default.');
-    expect(roadmap).toContain('Stripe Pay by Bank test-mode success/failure behaviour for the account');
+    expect(roadmap).toContain('Stripe Pay by Bank production configuration, account-specific pricing, and refund behaviour');
     expect(roadmap).not.toContain('whether eligible 48h+ cancellation value returns as Lesson Credit, cash refund workflow, or hybrid policy');
+  });
+
+  test('decision record pins observed Pay by Bank test-mode outcomes', () => {
+    const doc = read('docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md');
+
+    expect(doc).toContain('Pay by Bank was tested from this workspace on 2026-06-09');
+    expect(doc).toContain('Checkout Session status: `complete`');
+    expect(doc).toContain('Checkout Session payment status: `paid`');
+    expect(doc).toContain('PaymentIntent status: `succeeded`');
+    expect(doc).toContain('Checkout Session status: `open`');
+    expect(doc).toContain('Checkout Session payment status: `unpaid`');
+    expect(doc).toContain('PaymentIntent status: `requires_payment_method`');
+    expect(doc).toContain('checkout.session.completed');
+    expect(doc).toContain('checkout.session.async_payment_succeeded');
+    expect(doc).toContain('payment_intent.payment_failed');
+    expect(doc).toContain('charge.failed');
   });
 
   test('decision record does not approve broad money-flow changes', () => {

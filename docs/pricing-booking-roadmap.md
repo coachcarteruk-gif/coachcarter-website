@@ -571,7 +571,7 @@ These should be answered before the relevant implementation stage begins.
 Answered in `docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md`:
 
 - Klarna should be removed completely from CoachCarter checkout surfaces.
-- Stripe Pay by Bank is enabled on the Stripe account, but still needs a test-mode Checkout success/failure run before implementation.
+- Stripe Pay by Bank test-mode Checkout success/failure probes passed on 2026-06-09.
 - Pay by Bank belongs only to Reserved Weekly Slot blocks, not ordinary Pay As You Go.
 - Pay As You Go should keep immediate-confirmation payment methods only, with no pending-payment or provisional-hold state.
 - Reserved Weekly Slot bank payment is whole-block upfront only.
@@ -602,8 +602,8 @@ Next recommended slice: create the Stage 6 implementation decision record and St
 
 Stage 6 decision record now exists. Next implementation slice should be either:
 
-- Stage 6A: remove Klarna from Stripe configuration/surfaces and run the Pay by Bank test-mode Checkout probe; or
-- Stage 6B: add the reserved-block bank checkout hold skeleton after the Pay by Bank test-mode probe has passed.
+- Stage 6A: remove Klarna from Stripe configuration/surfaces and clean stale Klarna-specific local copy/comments; or
+- Stage 6B: add the reserved-block bank checkout hold skeleton using the observed Pay by Bank success/failure events.
 
 ### Later Stage 5 Work
 
@@ -619,7 +619,7 @@ Bank-funded Reserved Weekly Slot blocks remain unimplemented.
 Before implementation, verify and document:
 
 - where Klarna can currently appear, including Stripe Dashboard/dynamic payment method settings
-- Stripe Pay by Bank test-mode success/failure behaviour for the account
+- Stripe Pay by Bank production configuration, account-specific pricing, and refund behaviour
 - settlement timing and webhook event sequencing
 - original-method refund behaviour
 - account-specific pricing

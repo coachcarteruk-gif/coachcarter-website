@@ -37,7 +37,53 @@ Compatibility notes to verify against the live CoachCarter account before implem
 
 ## Local Test Status
 
-Pay by Bank was not tested from this workspace on 2026-06-09 because local `.env.local` contains a live-mode `STRIPE_SECRET_KEY`. No live Stripe API call was made.
+Pay by Bank was tested from this workspace on 2026-06-09 after local `.env.local` was switched to a test-mode `STRIPE_SECRET_KEY`.
+
+No live Stripe API call was made.
+
+The isolated probe created two GBP `mode='payment'` Checkout Sessions with one-time line items and `payment_method_types=['pay_by_bank']`. This was a manual test-mode probe only; the production CoachCarter Checkout creators still rely on dynamic payment methods until Stage 6 implementation chooses the product-scoped configuration mechanism.
+
+Success probe:
+
+- Checkout Session: `cs_test_a1IvzJAiS2pfmumW6PemFUL3AgiaW9cRJQ7x0obwNzdkhMlTZVZlpjXcZ5`
+- Checkout Session status: `complete`
+- Checkout Session payment status: `paid`
+- PaymentIntent: `pi_3TgJNCIqhTSdZedS06SwcQS0`
+- PaymentIntent status: `succeeded`
+- Payment method type: `pay_by_bank`
+- Charge status: `succeeded`
+
+Observed success events:
+
+- `payment_intent.created`
+- `payment_intent.requires_action`
+- `payment_intent.succeeded`
+- `charge.succeeded`
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+
+Failure probe:
+
+- Checkout Session: `cs_test_a1ToQ8MtaHDJFa0gExCPQoSTtR1DRcOgRmgCKH5zKbrDlovU1U8k5MT4lA`
+- Checkout Session status: `open`
+- Checkout Session payment status: `unpaid`
+- PaymentIntent: `pi_3TgJOQIqhTSdZedS2Wnms6pf`
+- PaymentIntent status: `requires_payment_method`
+- Payment method type: `pay_by_bank`
+- Charge status: `failed`
+
+Observed failure events:
+
+- `payment_intent.created`
+- `payment_intent.requires_action`
+- `payment_intent.payment_failed`
+- `charge.failed`
+
+Implementation implications:
+
+- Treat `checkout.session.completed` with `payment_status='paid'` and `checkout.session.async_payment_succeeded` as idempotent success signals for bank-funded reserved blocks.
+- Treat `payment_intent.payment_failed` / `charge.failed` as failure signals that should release held recurring-block items and mark the block failed when the event can be tied to a reserved block.
+- Keep the existing unpaid-session guard; rename its stale Klarna-specific comment to generic async-payment language during implementation.
 
 Safe local test requirement:
 
