@@ -376,6 +376,7 @@ module.exports = async (req, res) => {
   if (action === 'recurring-block-preview') return handleRecurringBlockPreview(req, res);
   if (action === 'recurring-block-commit') return handleRecurringBlockCommit(req, res);
   if (action === 'recurring-block-bank-checkout') return handleRecurringBlockBankCheckout(req, res);
+  if (action === 'recurring-block-status') return handleRecurringBlockStatus(req, res);
   if (action === 'book')         return handleBook(req, res);
   if (action === 'checkout-slot') return handleCheckoutSlot(req, res);
   if (action === 'checkout-slot-guest') return handleCheckoutSlotGuest(req, res);
@@ -2331,6 +2332,196 @@ async function releaseRecurringBlockBankHold(sql, { blockId, schoolId, status = 
        AND school_id = ${schoolId}
        AND status = 'pending_payment'
   `;
+}
+
+async function expireStaleRecurringBlockBankHoldForLearner({
+  connectionString,
+  blockId,
+  learnerId,
+  schoolId,
+}) {
+  return withNeonTransaction(connectionString, async client => {
+    const blockResult = await client.query(
+      `SELECT id, status, funding_method, expires_at, expires_at <= NOW() AS is_stale
+         FROM recurring_slot_blocks
+        WHERE id = $1
+          AND learner_id = $2
+          AND school_id = $3
+        FOR UPDATE`,
+      [blockId, learnerId, schoolId]
+    );
+    const block = blockResult.rows[0];
+    if (!block) return { ok: false, code: 'BLOCK_NOT_FOUND' };
+    if (block.funding_method !== 'bank_payment') return { ok: true, code: 'NOT_BANK_PAYMENT' };
+    if (block.status !== 'pending_payment') return { ok: true, code: 'BLOCK_NOT_PENDING', status: block.status };
+    if (!block.expires_at || !block.is_stale) return { ok: true, code: 'BLOCK_NOT_STALE' };
+
+    await client.query(
+      `UPDATE recurring_slot_block_items
+          SET status = 'released',
+              updated_at = NOW()
+        WHERE block_id = $1
+          AND school_id = $2
+          AND status = 'held'`,
+      [blockId, schoolId]
+    );
+    await client.query(
+      `UPDATE recurring_slot_blocks
+          SET status = 'expired',
+              released_at = NOW(),
+              metadata = metadata || $4::jsonb,
+              updated_at = NOW()
+        WHERE id = $1
+          AND learner_id = $2
+          AND school_id = $3
+          AND status = 'pending_payment'`,
+      [
+        blockId,
+        learnerId,
+        schoolId,
+        JSON.stringify({
+          release_reason: 'status_read_stale_pending_hold',
+          release_seen_at: new Date().toISOString(),
+        }),
+      ]
+    );
+    return { ok: true, code: 'EXPIRED' };
+  });
+}
+
+async function handleRecurringBlockStatus(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: true, code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' });
+
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: true, code: 'UNAUTHORISED', message: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+  const blockId = parseInt(req.query.block_id, 10);
+  if (!Number.isInteger(blockId) || blockId <= 0) {
+    return res.status(400).json({ error: true, code: 'INVALID_BLOCK_ID', message: 'block_id is required' });
+  }
+
+  const sql = neon(process.env.POSTGRES_URL);
+  try {
+    await expireStaleRecurringBlockBankHoldForLearner({
+      connectionString: process.env.POSTGRES_URL,
+      blockId,
+      learnerId: user.id,
+      schoolId,
+    });
+
+    const [block] = await sql`
+      SELECT rsb.id,
+             rsb.school_id,
+             rsb.learner_id,
+             rsb.instructor_id,
+             i.name AS instructor_name,
+             rsb.anchor_booking_id,
+             rsb.lesson_type_id,
+             lt.name AS lesson_type_name,
+             rsb.status,
+             rsb.funding_method,
+             rsb.selected_lessons,
+             rsb.duration_minutes,
+             rsb.start_time::text AS start_time,
+             rsb.end_time::text AS end_time,
+             rsb.price_per_lesson_pence,
+             rsb.total_price_pence,
+             rsb.price_source,
+             rsb.expires_at,
+             rsb.confirmed_at,
+             rsb.released_at,
+             rsb.stripe_payment_intent_id,
+             rsb.stripe_checkout_session_id,
+             rsb.created_at,
+             rsb.updated_at
+        FROM recurring_slot_blocks rsb
+        JOIN instructors i ON i.id = rsb.instructor_id
+                          AND i.school_id = rsb.school_id
+        LEFT JOIN lesson_types lt ON lt.id = rsb.lesson_type_id
+                                 AND lt.school_id = rsb.school_id
+       WHERE rsb.id = ${blockId}
+         AND rsb.learner_id = ${user.id}
+         AND rsb.school_id = ${schoolId}
+    `;
+    if (!block) {
+      return res.status(404).json({ error: true, code: 'BLOCK_NOT_FOUND', message: 'Reserved weekly slot block not found' });
+    }
+
+    const items = await sql`
+      SELECT rsbi.id,
+             rsbi.scheduled_date::text AS scheduled_date,
+             rsbi.start_time::text AS start_time,
+             rsbi.end_time::text AS end_time,
+             rsbi.status,
+             rsbi.price_pence,
+             rsbi.lesson_booking_id,
+             lb.status AS booking_status,
+             lb.scheduled_date::text AS booking_date,
+             lb.start_time::text AS booking_start_time,
+             lb.end_time::text AS booking_end_time
+        FROM recurring_slot_block_items rsbi
+        LEFT JOIN lesson_bookings lb
+          ON lb.id = rsbi.lesson_booking_id
+         AND lb.school_id = rsbi.school_id
+         AND lb.learner_id = ${user.id}
+       WHERE rsbi.block_id = ${blockId}
+         AND rsbi.school_id = ${schoolId}
+       ORDER BY rsbi.scheduled_date, rsbi.start_time
+    `;
+
+    const normalisedItems = items.map(item => ({
+      id: item.id,
+      date: String(item.scheduled_date).slice(0, 10),
+      start_time: String(item.start_time).slice(0, 5),
+      end_time: String(item.end_time).slice(0, 5),
+      status: item.status,
+      price_pence: item.price_pence,
+      lesson_booking_id: item.lesson_booking_id || null,
+      booking: item.lesson_booking_id ? {
+        id: item.lesson_booking_id,
+        status: item.booking_status,
+        date: String(item.booking_date || item.scheduled_date).slice(0, 10),
+        start_time: String(item.booking_start_time || item.start_time).slice(0, 5),
+        end_time: String(item.booking_end_time || item.end_time).slice(0, 5),
+      } : null,
+    }));
+
+    return res.json({
+      ok: true,
+      block: {
+        id: block.id,
+        status: block.status,
+        funding_method: block.funding_method,
+        selected_lessons: block.selected_lessons,
+        expires_at: block.expires_at,
+        confirmed_at: block.confirmed_at,
+        released_at: block.released_at,
+        instructor_id: block.instructor_id,
+        instructor_name: block.instructor_name,
+        anchor_booking_id: block.anchor_booking_id || null,
+        lesson_type_id: block.lesson_type_id || null,
+        lesson_type_name: block.lesson_type_name || null,
+        duration_minutes: block.duration_minutes,
+        start_time: String(block.start_time).slice(0, 5),
+        end_time: String(block.end_time).slice(0, 5),
+        price_per_lesson_pence: block.price_per_lesson_pence,
+        total_price_pence: block.total_price_pence,
+        price_source: block.price_source || null,
+        stripe: {
+          checkout_session_id: block.stripe_checkout_session_id || null,
+          payment_intent_id: block.stripe_payment_intent_id || null,
+        },
+      },
+      items: normalisedItems,
+      bookings: normalisedItems
+        .filter(item => item.booking)
+        .map(item => item.booking),
+    });
+  } catch (err) {
+    console.error('recurring-block-status error:', err);
+    reportError('/api/slots?action=recurring-block-status', err);
+    return res.status(500).json({ error: true, code: 'STATUS_FAILED', message: 'Failed to load reserved block status' });
+  }
 }
 
 async function handleRecurringBlockBankCheckout(req, res) {
