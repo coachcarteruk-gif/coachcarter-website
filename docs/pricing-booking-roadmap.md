@@ -605,6 +605,25 @@ Stage 6 decision record now exists. Next implementation slice should be either:
 - Stage 6A: remove Klarna from Stripe configuration/surfaces and clean stale Klarna-specific local copy/comments; or
 - Stage 6B: add the reserved-block bank checkout hold skeleton using the observed Pay by Bank success/failure events.
 
+Stage 6B1 implementation foundation - 2026-06-09:
+
+- Added `POST /api/slots?action=recurring-block-bank-checkout`.
+- Requires learner auth and same-school scope.
+- Rebuilds the recurring-block preview server-side and requires selected future slots to remain available.
+- Rejects bank checkout when same-instructor Lesson Credit is sufficient.
+- Creates a `pending_payment` recurring block and `held` block items with a 10-minute expiry.
+- Creates whole-block Stripe Checkout using `STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION`.
+- Stores Stripe refs on the block where available.
+- Left webhook conversion/release, notifications, eligible 48h+ bank-paid cancellation-to-credit policy, and expiry cron for later slices.
+
+Stage 6B2 webhook conversion/release - 2026-06-09:
+
+- `api/webhook.js` now recognises `metadata.payment_type = 'recurring_block_bank_checkout'`.
+- Paid Checkout/PaymentIntent success converts a `pending_payment` bank block into `confirmed`, converts held items into booked items, and creates `scheduled` `lesson_bookings`.
+- The conversion is idempotent for webhook retries and does not mutate `learner_credit_balances`, write BCS rows, or create credit purchase rows.
+- Payment failure and Checkout expiry release held items only while the block is still `pending_payment`; failure after success does not release confirmed bookings.
+- If a paid block cannot be converted because selected slots are no longer available, the hold is released with manual-review metadata and no automatic Stripe refund is attempted.
+
 ### Later Stage 5 Work
 
 Still deferred:
@@ -612,23 +631,18 @@ Still deferred:
 - instructor approval workflow for goodwill moves, if needed
 - notification copy for reserved-slot moves
 
-### Stage 6 Work Not Started
+### Stage 6 Remaining Work
 
-Bank-funded Reserved Weekly Slot blocks remain unimplemented.
-
-Before implementation, verify and document:
+Bank-funded Reserved Weekly Slot checkout and webhook conversion are implemented. Remaining Stage 6 work:
 
 - where Klarna can currently appear, including Stripe Dashboard/dynamic payment method settings
 - Stripe Pay by Bank production configuration, account-specific pricing, and refund behaviour
-- settlement timing and webhook event sequencing
 - original-method refund behaviour
 - account-specific pricing
-- the product-scoped payment-method configuration mechanism
-- the 10-minute checkout-hold lifecycle and release path
-- whether expiry/release needs a cron, scheduled job, or opportunistic cleanup
+- whether expiry/release needs a cron or whether webhook/opportunistic cleanup is enough
 - the learner-facing messages for expiry, payment failure, and lost availability
 
-Do not add Pay by Bank, payment holds, expiry cron, payment notifications, automatic Stripe refunds, or payout changes until those decisions are settled.
+Do not add expiry cron, payment notifications, automatic Stripe refunds, payout changes, or bank-paid cancellation-to-credit policy until those decisions are settled.
 
 Paid-In-Full Reward remains deferred from v1. Card, Apple Pay, Klarna, and partial-credit split payment remain excluded from Reserved Weekly Slot block payment v1.
 

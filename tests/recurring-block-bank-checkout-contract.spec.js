@@ -15,7 +15,7 @@ function functionBody(source, name) {
   return source.slice(start, next === -1 ? source.length : next);
 }
 
-test.describe('Stage 6B1 recurring block bank checkout hold contract', () => {
+test.describe('Stage 6B reserved recurring block bank checkout/webhook contract', () => {
   test('slots API exposes a learner-only reserved-block bank checkout action', () => {
     const source = read('api/slots.js');
     const handler = functionBody(source, 'handleRecurringBlockBankCheckout');
@@ -36,6 +36,8 @@ test.describe('Stage 6B1 recurring block bank checkout hold contract', () => {
     expect(handler).toContain("code: 'SLOTS_UNAVAILABLE'");
     expect(handler).toContain("code: 'LESSON_CREDIT_AVAILABLE'");
     expect(handler).toContain("payment_type: 'recurring_block_bank_checkout'");
+    expect(handler).toContain('payment_intent_data');
+    expect(handler).toContain('metadata: recurringBlockBankMetadata');
     expect(handler).toContain("funding_method: hold.block.funding_method");
     expect(handler).not.toContain('req.body.price');
     expect(handler).not.toContain('req.body.amount');
@@ -58,7 +60,7 @@ test.describe('Stage 6B1 recurring block bank checkout hold contract', () => {
     expect(transaction).not.toContain('lockBalanceAdjustLCB');
   });
 
-  test('unavailable slots fail all-or-nothing before payment conversion work exists', () => {
+  test('unavailable slots fail all-or-nothing before payment starts', () => {
     const source = read('api/slots.js');
     const transaction = functionBody(source, 'createRecurringBlockBankHoldTransaction');
     const handler = functionBody(source, 'handleRecurringBlockBankCheckout');
@@ -70,8 +72,7 @@ test.describe('Stage 6B1 recurring block bank checkout hold contract', () => {
     expect(transaction).toContain("code: 'SLOTS_UNAVAILABLE'");
     expect(transaction).toContain('abortRecurringBankHold({');
     expect(handler).toContain("message: 'One or more selected slots are no longer available. Please refresh the preview.'");
-    expect(handler).not.toContain('handleRecurringBlockBankPaymentSuccess');
-    expect(read('api/webhook.js')).not.toContain('recurring_block_bank_checkout');
+    expect(handler).not.toContain('INSERT INTO lesson_bookings');
   });
 
   test('Checkout uses product-scoped bank payment configuration without manual method lists', () => {
@@ -93,7 +94,68 @@ test.describe('Stage 6B1 recurring block bank checkout hold contract', () => {
 
     expect(project).toContain('STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION');
     expect(project).toContain('`recurring-block-bank-checkout` | POST | Learner');
-    expect(project).toContain('Does not create `lesson_bookings`, mutate `learner_credit_balances`, write BCS rows');
-    expect(project).toContain('webhook conversion, notifications, and expiry cron remain later slices');
+    expect(project).toContain('creates `lesson_bookings` only after Stripe reports successful payment');
+    expect(project).toContain('does not mutate `learner_credit_balances`, write BCS rows, or create credit purchase rows');
+    expect(project).toContain('notifications, eligible 48h+ bank-paid cancellation-to-credit policy, and expiry cron remain later slices');
+  });
+
+  test('webhook routes reserved-block bank success without changing Pay As You Go dispatch', () => {
+    const source = read('api/webhook.js');
+
+    expect(source).toContain("paymentType === 'slot_booking'");
+    expect(source).toContain('await handleSlotBooking(session);');
+    expect(source).toContain("paymentType === 'recurring_block_bank_checkout'");
+    expect(source).toContain('await handleRecurringBlockBankPaymentSuccess(session);');
+    expect(source).toContain('await handleRecurringBlockBankPaymentSuccess(paymentIntentToRecurringBlockSession(paymentIntent));');
+  });
+
+  test('success conversion confirms the block, books held items, and creates scheduled bookings', () => {
+    const source = read('api/webhook.js');
+    const conversion = functionBody(source, 'convertRecurringBlockBankHoldTransaction');
+
+    expect(conversion).toContain("block.status === 'confirmed'");
+    expect(conversion).toContain("code: 'ALREADY_CONFIRMED'");
+    expect(conversion).toContain('createdBookings: []');
+    expect(conversion).toContain("block.status !== 'pending_payment'");
+    expect(conversion).toContain('INSERT INTO lesson_bookings');
+    expect(conversion).toContain('SCHEDULED');
+    expect(conversion).toContain("'bank_payment', 'recurring_block_bank_checkout'");
+    expect(conversion).toContain("status = 'booked'");
+    expect(conversion).toContain('lesson_booking_id = $4');
+    expect(conversion).toContain("SET status = 'confirmed'");
+    expect(conversion).toContain('confirmed_at = NOW()');
+    expect(conversion).toContain('converted_booking_ids');
+    expect(conversion).toContain('stripe_payment_intent_id = COALESCE');
+    expect(conversion).not.toContain('learner_credit_balances');
+    expect(conversion).not.toContain('booking_credit_sources');
+    expect(conversion).not.toContain('credit_transactions');
+  });
+
+  test('success conversion releases to manual review state when slots became unavailable', () => {
+    const source = read('api/webhook.js');
+    const conversion = functionBody(source, 'convertRecurringBlockBankHoldTransaction');
+
+    expect(conversion).toContain('bookingConflicts');
+    expect(conversion).toContain('reservationConflicts');
+    expect(conversion).toContain('offerConflicts');
+    expect(conversion).toContain("release_reason: 'payment_success_slot_conflict_manual_review'");
+    expect(conversion).toContain("code: 'SLOTS_UNAVAILABLE'");
+    expect(conversion).not.toContain('stripe.refunds.create');
+  });
+
+  test('failure and expiry release only pending-payment blocks', () => {
+    const source = read('api/webhook.js');
+    const release = functionBody(source, 'releaseRecurringBlockBankHoldTransaction');
+    const releaseInner = functionBody(source, 'releaseRecurringBlockBankHoldInTransaction');
+
+    expect(source).toContain("event.type === 'checkout.session.expired'");
+    expect(source).toContain("event.type === 'payment_intent.payment_failed'");
+    expect(source).toContain("event.type === 'charge.failed'");
+    expect(release).toContain("block.status !== 'pending_payment'");
+    expect(releaseInner).toContain("status = 'released'");
+    expect(releaseInner).toContain('AND status = \'held\'');
+    expect(releaseInner).toContain("AND status = 'pending_payment'");
+    expect(releaseInner).toContain("releaseStatus === 'expired'");
+    expect(releaseInner).toContain("releaseStatus === 'payment_failed'");
   });
 });
