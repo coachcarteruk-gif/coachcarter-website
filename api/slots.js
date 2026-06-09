@@ -5680,6 +5680,7 @@ function formatDateDisplay(str) {
 
 module.exports._bookCreditFundedSlotsTransaction = bookCreditFundedSlotsTransaction;
 module.exports._createRecurringBlockBankHoldTransaction = createRecurringBlockBankHoldTransaction;
+module.exports._expireStaleRecurringBlockBankHoldForLearner = expireStaleRecurringBlockBankHoldForLearner;
 module.exports._buildRecurringBlockPreview = buildRecurringBlockPreview;
 module.exports._parseRecurringBlockLessons = parseRecurringBlockLessons;
 module.exports._CREDIT_BOOKING_SOURCE_TYPES = CREDIT_BOOKING_SOURCE_TYPES;

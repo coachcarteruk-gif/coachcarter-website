@@ -639,6 +639,13 @@ Stage 6B4 learner bank checkout UI wiring - 2026-06-09:
 - The modal redirects to Stripe Checkout only after the API returns a Checkout URL. Slot holds, conversion, failure release, return status, and stale-hold cleanup remain server-side.
 - Klarna was removed from Stripe payment-method configuration by the operator on 2026-06-09; learner-facing booking copy should not present Klarna as available.
 
+Stage 6B5 bank checkout smoke and expiry decision - 2026-06-09:
+
+- Smoke-verified the local/test-mode-safe database side of Reserved Weekly Slot bank checkout without live Stripe probes: pending `bank_payment` blocks are created with held item rows, no `lesson_bookings`/LCB/BCS/credit rows are created before payment success, and stale pending holds expire idempotently through the status-cleanup path.
+- Existing contract coverage confirms the learner UI path shows bank checkout when same-instructor Lesson Credit is insufficient, posts to `recurring-block-bank-checkout`, preserves separate Pay As You Go `?paid=1` return handling, and renders `pending_payment`, `confirmed`, `payment_failed`, `expired`, and `released` status copy.
+- Decision: opportunistic stale-hold cleanup is enough for Reserved Weekly Slot bank checkout v1. A separate expiry cron/admin cleanup is not needed now because holds are short-lived, availability ignores expired pending holds (`status='pending_payment'` and `expires_at > NOW()` only), new bank checkout attempts lazily release expired conflicts for the same selected slots, Stripe failure/expiry webhooks release when delivered, and the learner return/status read expires the specific stale hold idempotently.
+- Revisit a narrow expiry cron/admin cleanup only if production monitoring or support evidence shows abandoned holds accumulating enough to confuse operators. If added later, keep it scoped to `funding_method='bank_payment'`, `status='pending_payment'`, `expires_at <= NOW()`, parent `expired`, held items `released`, same-school only, idempotent, and with no booking, credit, refund, payout, or Stripe-refund mutation.
+
 ### Later Stage 5 Work
 
 Still deferred:
@@ -653,10 +660,11 @@ Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return st
 - Stripe Pay by Bank production configuration, account-specific pricing, and refund behaviour
 - original-method refund behaviour
 - account-specific pricing
-- whether expiry/release needs a cron or whether webhook/opportunistic cleanup is enough
 - the learner-facing messages for expiry, payment failure, and lost availability
 
-Do not add expiry cron, payment notifications, automatic Stripe refunds, payout changes, or bank-paid cancellation-to-credit policy until those decisions are settled.
+Expiry/release cron decision: v1 keeps opportunistic cleanup only. Add a scheduled/admin cleanup later only if real usage shows abandoned pending holds creating operational noise.
+
+Do not add payment notifications, automatic Stripe refunds, payout changes, or bank-paid cancellation-to-credit policy until those decisions are settled.
 
 Paid-In-Full Reward remains deferred from v1. Card, Apple Pay, Klarna, and partial-credit split payment remain excluded from Reserved Weekly Slot block payment v1.
 
