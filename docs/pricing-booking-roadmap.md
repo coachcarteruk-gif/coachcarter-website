@@ -566,8 +566,19 @@ These should be answered before the relevant implementation stage begins.
 
 1. What is the verified Stripe Pay by Bank settlement timing, refund behaviour, platform-account availability, and account-specific pricing?
 2. What exact mechanism should scope payment method availability by product once Reserved Weekly Slot Pay by Bank exists: Stripe Dashboard-only dynamic payment methods, Stripe `payment_method_configurations`, `excluded_payment_method_types`, or another configuration path?
-3. For bank-paid recurring blocks, should an eligible 48h+ cancellation return Lesson Credit by default, become an operator cash-refund workflow, or use a hybrid default-credit/admin-refund policy?
-4. What is the minimum v1 notification/copy set for bank-payment success, failure, and expiry?
+3. What is the minimum v1 notification/copy set for bank-payment success, failure, and expiry?
+
+Answered in `docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md`:
+
+- Klarna should be removed completely from CoachCarter checkout surfaces.
+- Stripe Pay by Bank is enabled on the Stripe account, but still needs a test-mode Checkout success/failure run before implementation.
+- Pay by Bank belongs only to Reserved Weekly Slot blocks, not ordinary Pay As You Go.
+- Pay As You Go should keep immediate-confirmation payment methods only, with no pending-payment or provisional-hold state.
+- Reserved Weekly Slot bank payment is whole-block upfront only.
+- Reserved Weekly Slot bank payment v1 excludes card, Apple Pay, Klarna, and partial Lesson Credit plus bank payment.
+- Paid-In-Full Reward discounting is deferred from v1.
+- Bank-payment checkout holds should start with a 10-minute window.
+- Eligible 48h+ cancellation value for bank-paid reserved blocks should return as same-instructor Lesson Credit by default.
 
 Answered in `docs/pricing-booking-stage-4-recurring-block-decision-record.md`:
 
@@ -589,6 +600,11 @@ Stage 5's core policy loop is now closed for admin under-48-hour goodwill moves 
 
 Next recommended slice: create the Stage 6 implementation decision record and Stripe/payment-method audit for Klarna removal plus Reserved Weekly Slot Pay by Bank. Do this before touching live payment creation code.
 
+Stage 6 decision record now exists. Next implementation slice should be either:
+
+- Stage 6A: remove Klarna from Stripe configuration/surfaces and run the Pay by Bank test-mode Checkout probe; or
+- Stage 6B: add the reserved-block bank checkout hold skeleton after the Pay by Bank test-mode probe has passed.
+
 ### Later Stage 5 Work
 
 Still deferred:
@@ -603,7 +619,7 @@ Bank-funded Reserved Weekly Slot blocks remain unimplemented.
 Before implementation, verify and document:
 
 - where Klarna can currently appear, including Stripe Dashboard/dynamic payment method settings
-- Stripe Pay by Bank availability for the account
+- Stripe Pay by Bank test-mode success/failure behaviour for the account
 - settlement timing and webhook event sequencing
 - original-method refund behaviour
 - account-specific pricing
@@ -611,9 +627,8 @@ Before implementation, verify and document:
 - the 10-minute checkout-hold lifecycle and release path
 - whether expiry/release needs a cron, scheduled job, or opportunistic cleanup
 - the learner-facing messages for expiry, payment failure, and lost availability
-- whether eligible 48h+ cancellation value returns as Lesson Credit, cash refund workflow, or hybrid policy
 
-Do not add Pay by Bank, payment holds, expiry cron, payment notifications, or refund-policy changes until those decisions are settled.
+Do not add Pay by Bank, payment holds, expiry cron, payment notifications, automatic Stripe refunds, or payout changes until those decisions are settled.
 
 Paid-In-Full Reward remains deferred from v1. Card, Apple Pay, Klarna, and partial-credit split payment remain excluded from Reserved Weekly Slot block payment v1.
 
