@@ -43,7 +43,10 @@ const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { calcDirectLessonPrice } = require('./_pricing-helpers');
 const { isOptInOnlyLessonTypeSlug, isLessonTypeOffered } = require('./_lesson-type-helpers');
-const { CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES } = require('./_stripe-payment-methods');
+const {
+  CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
+  getReservedBlockBankCheckoutPaymentOptions,
+} = require('./_stripe-payment-methods');
 const { resolveSchoolFromRequest } = require('./_tenant');
 const {
   markBookingCreditSourcesRefunded,
@@ -84,12 +87,24 @@ class ReservedPolicyMoveAbort extends Error {
   }
 }
 
+class RecurringBankHoldAbort extends Error {
+  constructor(result) {
+    super(result?.message || result?.code || 'RECURRING_BANK_HOLD_ABORT');
+    this.name = 'RecurringBankHoldAbort';
+    this.result = { ok: false, ...(result || {}) };
+  }
+}
+
 function abortReservedPolicyMove(statusCode, payload) {
   throw new ReservedPolicyMoveAbort(statusCode, payload);
 }
 
 function abortBookingTransaction(result) {
   throw new BookingTransactionAbort(result);
+}
+
+function abortRecurringBankHold(result) {
+  throw new RecurringBankHoldAbort(result);
 }
 
 // Look up a lesson type by ID/slug (or return the default 'standard' type)
@@ -360,6 +375,7 @@ module.exports = async (req, res) => {
   if (action === 'durations-for-slot') return handleDurationsForSlot(req, res);
   if (action === 'recurring-block-preview') return handleRecurringBlockPreview(req, res);
   if (action === 'recurring-block-commit') return handleRecurringBlockCommit(req, res);
+  if (action === 'recurring-block-bank-checkout') return handleRecurringBlockBankCheckout(req, res);
   if (action === 'book')         return handleBook(req, res);
   if (action === 'checkout-slot') return handleCheckoutSlot(req, res);
   if (action === 'checkout-slot-guest') return handleCheckoutSlotGuest(req, res);
@@ -715,25 +731,31 @@ async function handleAvailable(req, res) {
     try {
       recurringHolds = instructor_id
         ? await sql`
-            SELECT instructor_id,
-                   scheduled_date::text AS scheduled_date,
-                   start_time::text     AS start_time,
-                   end_time::text       AS end_time
-            FROM recurring_slot_block_items
-            WHERE scheduled_date BETWEEN ${from} AND ${to}
-              AND status = 'held'
-              AND instructor_id = ${instructor_id}
-              AND school_id = ${schoolId}
+            SELECT rsbi.instructor_id,
+                   rsbi.scheduled_date::text AS scheduled_date,
+                   rsbi.start_time::text     AS start_time,
+                   rsbi.end_time::text       AS end_time
+            FROM recurring_slot_block_items rsbi
+            JOIN recurring_slot_blocks rsb ON rsb.id = rsbi.block_id
+            WHERE rsbi.scheduled_date BETWEEN ${from} AND ${to}
+              AND rsbi.status = 'held'
+              AND rsb.status = 'pending_payment'
+              AND rsb.expires_at > NOW()
+              AND rsbi.instructor_id = ${instructor_id}
+              AND rsbi.school_id = ${schoolId}
           `
         : await sql`
-            SELECT instructor_id,
-                   scheduled_date::text AS scheduled_date,
-                   start_time::text     AS start_time,
-                   end_time::text       AS end_time
-            FROM recurring_slot_block_items
-            WHERE scheduled_date BETWEEN ${from} AND ${to}
-              AND status = 'held'
-              AND school_id = ${schoolId}
+            SELECT rsbi.instructor_id,
+                   rsbi.scheduled_date::text AS scheduled_date,
+                   rsbi.start_time::text     AS start_time,
+                   rsbi.end_time::text       AS end_time
+            FROM recurring_slot_block_items rsbi
+            JOIN recurring_slot_blocks rsb ON rsb.id = rsbi.block_id
+            WHERE rsbi.scheduled_date BETWEEN ${from} AND ${to}
+              AND rsbi.status = 'held'
+              AND rsb.status = 'pending_payment'
+              AND rsb.expires_at > NOW()
+              AND rsbi.school_id = ${schoolId}
           `;
     } catch (e) {
       // Table may not exist before the recurring block migration has run.
@@ -1219,12 +1241,15 @@ async function handleDurationsForSlot(req, res) {
     let recurringHolds = [];
     try {
       recurringHolds = await sql`
-        SELECT start_time::text AS start_time, end_time::text AS end_time
-        FROM recurring_slot_block_items
-        WHERE scheduled_date = ${date}
-          AND status = 'held'
-          AND instructor_id = ${instructorId}
-          AND school_id = ${schoolId}
+        SELECT rsbi.start_time::text AS start_time, rsbi.end_time::text AS end_time
+        FROM recurring_slot_block_items rsbi
+        JOIN recurring_slot_blocks rsb ON rsb.id = rsbi.block_id
+        WHERE rsbi.scheduled_date = ${date}
+          AND rsbi.status = 'held'
+          AND rsb.status = 'pending_payment'
+          AND rsb.expires_at > NOW()
+          AND rsbi.instructor_id = ${instructorId}
+          AND rsbi.school_id = ${schoolId}
       `;
     } catch (_) {}
     let externalEvents = [];
@@ -1443,13 +1468,16 @@ async function bookCreditFundedSlotsTransaction({
     const recurringItemsTable = await client.query(`SELECT to_regclass('public.recurring_slot_block_items') AS relation_name`);
     if (recurringItemsTable.rows[0]?.relation_name) {
       const recurringHoldConflicts = await client.query(
-        `SELECT scheduled_date::text AS date, start_time::text
-           FROM recurring_slot_block_items
-          WHERE instructor_id = $1
-            AND school_id = $2
-            AND scheduled_date = ANY($3::date[])
-            AND start_time = $4
-            AND status = 'held'`,
+        `SELECT rsbi.scheduled_date::text AS date, rsbi.start_time::text
+           FROM recurring_slot_block_items rsbi
+           JOIN recurring_slot_blocks rsb ON rsb.id = rsbi.block_id
+          WHERE rsbi.instructor_id = $1
+            AND rsbi.school_id = $2
+            AND rsbi.scheduled_date = ANY($3::date[])
+            AND rsbi.start_time = $4
+            AND rsbi.status = 'held'
+            AND rsb.status = 'pending_payment'
+            AND rsb.expires_at > NOW()`,
         [instructorId, schoolId, dateStrings, startTime]
       );
       recurringHoldConflictRows = recurringHoldConflicts.rows;
@@ -1785,14 +1813,17 @@ async function buildRecurringSlotConflictIndex(sql, {
 
   try {
     const holds = await sql`
-      SELECT scheduled_date::text AS date
-        FROM recurring_slot_block_items
-       WHERE instructor_id = ${instructorId}
-         AND school_id = ${schoolId}
-         AND scheduled_date = ANY(${dates})
-         AND status = 'held'
-         AND start_time < ${endTime}::time
-         AND end_time > ${startTime}::time
+      SELECT rsbi.scheduled_date::text AS date
+        FROM recurring_slot_block_items rsbi
+        JOIN recurring_slot_blocks rsb ON rsb.id = rsbi.block_id
+       WHERE rsbi.instructor_id = ${instructorId}
+         AND rsbi.school_id = ${schoolId}
+         AND rsbi.scheduled_date = ANY(${dates})
+         AND rsbi.status = 'held'
+         AND rsb.status = 'pending_payment'
+         AND rsb.expires_at > NOW()
+         AND rsbi.start_time < ${endTime}::time
+         AND rsbi.end_time > ${startTime}::time
     `;
     holds.forEach(row => add(row.date, 'pending_weekly_block'));
   } catch (_) {}
@@ -2085,6 +2116,397 @@ async function handleRecurringBlockCommit(req, res) {
     console.error('recurring-block-commit error:', err);
     reportError('/api/slots?action=recurring-block-commit', err);
     return res.status(500).json({ error: true, code: 'COMMIT_FAILED', message: 'Failed to confirm recurring block' });
+  }
+}
+
+async function createRecurringBlockBankHoldTransaction({
+  connectionString,
+  learnerId,
+  schoolId,
+  preview,
+  holdMinutes = RESERVATION_MINUTES,
+}) {
+  const selectedSlots = preview.selected_slots || [];
+  const dateStrings = selectedSlots.map(slot => slot.date);
+  const anchor = preview.anchor || {};
+  const instructorId = Number(anchor.instructor_id);
+  const startTime = anchor.start_time;
+  const endTime = anchor.end_time;
+
+  try {
+    return await withNeonTransaction(connectionString, async client => {
+    // Targeted lazy cleanup keeps expired checkout holds from blocking this
+    // exact future block before the later expiry job/webhook slice exists.
+    const expiredBlocks = await client.query(
+      `SELECT DISTINCT rsb.id
+         FROM recurring_slot_blocks rsb
+         JOIN recurring_slot_block_items rsbi ON rsbi.block_id = rsb.id
+        WHERE rsb.school_id = $1
+          AND rsb.status = 'pending_payment'
+          AND rsb.expires_at <= NOW()
+          AND rsbi.instructor_id = $2
+          AND rsbi.school_id = $1
+          AND rsbi.scheduled_date = ANY($3::date[])
+          AND rsbi.status = 'held'
+          AND rsbi.start_time < $5::time
+          AND rsbi.end_time > $4::time`,
+      [schoolId, instructorId, dateStrings, startTime, endTime]
+    );
+    const expiredBlockIds = expiredBlocks.rows.map(row => row.id);
+    if (expiredBlockIds.length > 0) {
+      await client.query(
+        `UPDATE recurring_slot_block_items
+            SET status = 'released',
+                updated_at = NOW()
+          WHERE block_id = ANY($1::int[])
+            AND status = 'held'`,
+        [expiredBlockIds]
+      );
+      await client.query(
+        `UPDATE recurring_slot_blocks
+            SET status = 'expired',
+                released_at = NOW(),
+                updated_at = NOW()
+          WHERE id = ANY($1::int[])
+            AND status = 'pending_payment'`,
+        [expiredBlockIds]
+      );
+    }
+
+    const bookingConflicts = await client.query(
+      `SELECT scheduled_date::text AS date
+         FROM lesson_bookings
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = ANY($3::date[])
+          AND status = ANY($4::text[])
+          AND start_time < $6::time
+          AND end_time > $5::time`,
+      [instructorId, schoolId, dateStrings, BLOCKING_STATUSES, startTime, endTime]
+    );
+
+    const reservationConflicts = await client.query(
+      `SELECT scheduled_date::text AS date
+         FROM slot_reservations
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = ANY($3::date[])
+          AND expires_at > NOW()
+          AND start_time < $5::time
+          AND end_time > $4::time`,
+      [instructorId, schoolId, dateStrings, startTime, endTime]
+    );
+
+    const offerConflicts = await client.query(
+      `SELECT scheduled_date::text AS date
+         FROM lesson_offers
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = ANY($3::date[])
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND start_time < $5::time
+          AND end_time > $4::time`,
+      [instructorId, schoolId, dateStrings, startTime, endTime]
+    );
+
+    const heldConflicts = await client.query(
+      `SELECT rsbi.scheduled_date::text AS date
+         FROM recurring_slot_block_items rsbi
+         JOIN recurring_slot_blocks rsb ON rsb.id = rsbi.block_id
+        WHERE rsbi.instructor_id = $1
+          AND rsbi.school_id = $2
+          AND rsbi.scheduled_date = ANY($3::date[])
+          AND rsbi.status = 'held'
+          AND rsb.status = 'pending_payment'
+          AND rsb.expires_at > NOW()
+          AND rsbi.start_time < $5::time
+          AND rsbi.end_time > $4::time`,
+      [instructorId, schoolId, dateStrings, startTime, endTime]
+    );
+
+    const takenDates = new Set([
+      ...bookingConflicts.rows.map(row => String(row.date).slice(0, 10)),
+      ...reservationConflicts.rows.map(row => String(row.date).slice(0, 10)),
+      ...offerConflicts.rows.map(row => String(row.date).slice(0, 10)),
+      ...heldConflicts.rows.map(row => String(row.date).slice(0, 10)),
+    ]);
+    if (takenDates.size > 0) {
+      return {
+        ok: false,
+        code: 'SLOTS_UNAVAILABLE',
+        conflicts: [...takenDates].map(date => ({ date, start_time: startTime, reason: 'already held or booked' })),
+      };
+    }
+
+    const block = await client.query(
+      `INSERT INTO recurring_slot_blocks
+         (school_id, learner_id, instructor_id, anchor_booking_id, lesson_type_id,
+          status, funding_method, selected_lessons, duration_minutes, start_time, end_time,
+          price_per_lesson_pence, total_price_pence, price_source, expires_at, metadata)
+       VALUES
+         ($1, $2, $3, $4, $5,
+          'pending_payment', 'bank_payment', $6, $7, $8, $9,
+          $10, $11, $12, NOW() + ($13::int * INTERVAL '1 minute'), $14::jsonb)
+       RETURNING id, status, funding_method, expires_at, total_price_pence`,
+      [
+        schoolId,
+        learnerId,
+        instructorId,
+        anchor.booking_id || null,
+        anchor.lesson_type_id || null,
+        preview.requested_lessons,
+        anchor.duration_minutes,
+        startTime,
+        endTime,
+        preview.pricing.price_per_lesson_pence,
+        preview.pricing.requested_total_price_pence,
+        preview.pricing.price_source || null,
+        holdMinutes,
+        JSON.stringify({
+          source: 'recurring_block_bank_checkout_hold',
+          lookahead_weeks: RECURRING_BLOCK_LOOKAHEAD_WEEKS,
+          hold_minutes: holdMinutes,
+          selected_slots: selectedSlots,
+        }),
+      ]
+    );
+
+    const blockRow = block.rows[0];
+    for (const slot of selectedSlots) {
+      try {
+        await client.query(
+          `INSERT INTO recurring_slot_block_items
+             (block_id, school_id, instructor_id, scheduled_date, start_time, end_time, status, price_pence)
+           VALUES
+             ($1, $2, $3, $4, $5, $6, 'held', $7)`,
+          [
+            blockRow.id,
+            schoolId,
+            instructorId,
+            slot.date,
+            slot.start_time,
+            slot.end_time,
+            preview.pricing.price_per_lesson_pence,
+          ]
+        );
+      } catch (err) {
+        if (err.code === '23505') {
+          abortRecurringBankHold({
+            ok: false,
+            code: 'SLOTS_UNAVAILABLE',
+            conflicts: [{ date: slot.date, start_time: slot.start_time, reason: 'already held' }],
+          });
+        }
+        throw err;
+      }
+    }
+
+    return { ok: true, block: blockRow };
+    });
+  } catch (err) {
+    if (err instanceof RecurringBankHoldAbort) {
+      return err.result;
+    }
+    throw err;
+  }
+}
+
+async function releaseRecurringBlockBankHold(sql, { blockId, schoolId, status = 'released' }) {
+  if (!blockId) return;
+  await sql`
+    UPDATE recurring_slot_block_items
+       SET status = 'released',
+           updated_at = NOW()
+     WHERE block_id = ${blockId}
+       AND school_id = ${schoolId}
+       AND status = 'held'
+  `;
+  await sql`
+    UPDATE recurring_slot_blocks
+       SET status = ${status},
+           released_at = NOW(),
+           updated_at = NOW()
+     WHERE id = ${blockId}
+       AND school_id = ${schoolId}
+       AND status = 'pending_payment'
+  `;
+}
+
+async function handleRecurringBlockBankCheckout(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: true, code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' });
+
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: true, code: 'UNAUTHORISED', message: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+  const { anchor_booking_id, lessons } = req.body || {};
+
+  let bankPaymentOptions;
+  try {
+    bankPaymentOptions = getReservedBlockBankCheckoutPaymentOptions();
+  } catch (err) {
+    if (err.code === 'PAY_BY_BANK_CONFIGURATION_MISSING') {
+      return res.status(503).json({
+        error: true,
+        code: err.code,
+        message: 'Reserved Weekly Slot bank checkout is not configured yet.',
+      });
+    }
+    throw err;
+  }
+
+  const sql = neon(process.env.POSTGRES_URL);
+  let hold = null;
+  let createdSession = null;
+
+  try {
+    const preview = await buildRecurringBlockPreview(sql, {
+      anchorBookingId: anchor_booking_id,
+      learnerId: user.id,
+      schoolId,
+      lessons,
+    });
+
+    if (!preview.ok && preview.code === 'INVALID_LESSONS') {
+      return res.status(400).json({ error: true, code: preview.code, message: preview.message });
+    }
+    if (!preview.ok && preview.code === 'ANCHOR_NOT_FOUND') {
+      return res.status(404).json({ error: true, code: preview.code, message: preview.message });
+    }
+    if (!preview.ok) {
+      return res.status(400).json({ error: true, code: preview.code || 'PREVIEW_FAILED', message: preview.message || 'Preview failed' });
+    }
+    if (!preview.can_commit) {
+      return res.status(409).json({
+        error: true,
+        code: 'SLOTS_UNAVAILABLE',
+        message: 'Not enough matching future weekly slots are available. Please review the refreshed preview.',
+        preview,
+      });
+    }
+    if (preview.credit.has_sufficient_credit) {
+      return res.status(409).json({
+        error: true,
+        code: 'LESSON_CREDIT_AVAILABLE',
+        message: 'Use Lesson Credit to confirm this weekly block.',
+        preview,
+      });
+    }
+    if (preview.pricing.requested_total_price_pence <= 0) {
+      return res.status(409).json({
+        error: true,
+        code: 'ZERO_PRICE_UNSUPPORTED',
+        message: 'Bank checkout requires a positive whole-block price.',
+      });
+    }
+
+    hold = await createRecurringBlockBankHoldTransaction({
+      connectionString: process.env.POSTGRES_URL,
+      learnerId: user.id,
+      schoolId,
+      preview,
+      holdMinutes: RESERVATION_MINUTES,
+    });
+
+    if (!hold.ok && hold.code === 'SLOTS_UNAVAILABLE') {
+      return res.status(409).json({
+        error: true,
+        code: 'SLOTS_UNAVAILABLE',
+        message: 'One or more selected slots are no longer available. Please refresh the preview.',
+        conflicts: hold.conflicts || [],
+      });
+    }
+    if (!hold.ok) {
+      throw new Error(`Recurring block bank hold failed: ${hold.code || 'UNKNOWN'}`);
+    }
+
+    const [learner] = await sql`
+      SELECT email
+        FROM learner_users
+       WHERE id = ${user.id}
+         AND school_id = ${schoolId}
+    `;
+    if (!learner) {
+      await releaseRecurringBlockBankHold(sql, { blockId: hold.block.id, schoolId });
+      return res.status(404).json({ error: true, code: 'LEARNER_NOT_FOUND', message: 'Learner not found' });
+    }
+    const emailValid = learner.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(learner.email).trim());
+    const origin = req.headers.origin || 'https://coachcarter.uk';
+    const firstDate = preview.selected_slots[0]?.date;
+    const lastDate = preview.selected_slots[preview.selected_slots.length - 1]?.date;
+
+    createdSession = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{
+        price_data: {
+          currency: 'gbp',
+          unit_amount: preview.pricing.requested_total_price_pence,
+          product_data: {
+            name: `Reserved Weekly Slot - ${preview.requested_lessons} lessons`,
+            description: `${preview.anchor.lesson_type_name || 'Driving lesson'} with ${preview.anchor.instructor_name}. Held for ${RESERVATION_MINUTES} minutes while bank checkout starts.`
+          }
+        },
+        quantity: 1
+      }],
+      metadata: {
+        payment_type: 'recurring_block_bank_checkout',
+        recurring_slot_block_id: String(hold.block.id),
+        learner_id: String(user.id),
+        instructor_id: String(preview.anchor.instructor_id),
+        anchor_booking_id: String(preview.anchor.booking_id),
+        lesson_type_id: String(preview.anchor.lesson_type_id || ''),
+        selected_lessons: String(preview.requested_lessons),
+        duration_minutes: String(preview.anchor.duration_minutes),
+        amount_pence: String(preview.pricing.requested_total_price_pence),
+        price_per_lesson_pence: String(preview.pricing.price_per_lesson_pence),
+        price_source: preview.pricing.price_source || '',
+        first_date: firstDate || '',
+        last_date: lastDate || '',
+        school_id: String(schoolId),
+      },
+      ...(emailValid ? { customer_email: learner.email } : {}),
+      ...bankPaymentOptions,
+      excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
+      billing_address_collection: 'required',
+      success_url: `${origin}/learner/book.html?reserved_bank_checkout=1&block_id=${hold.block.id}`,
+      cancel_url: `${origin}/learner/book.html?reserved_bank_cancelled=1&block_id=${hold.block.id}`
+    });
+
+    await sql`
+      UPDATE recurring_slot_blocks
+         SET stripe_checkout_session_id = ${createdSession.id},
+             stripe_payment_intent_id = ${createdSession.payment_intent || null},
+             metadata = metadata || ${JSON.stringify({ stripe_checkout_session_url_created: true })}::jsonb,
+             updated_at = NOW()
+       WHERE id = ${hold.block.id}
+         AND school_id = ${schoolId}
+         AND status = 'pending_payment'
+    `;
+
+    return res.status(201).json({
+      ok: true,
+      url: createdSession.url,
+      block_id: hold.block.id,
+      status: hold.block.status,
+      funding_method: hold.block.funding_method,
+      expires_at: hold.block.expires_at,
+      selected_lessons: preview.requested_lessons,
+      pricing: {
+        price_per_lesson_pence: preview.pricing.price_per_lesson_pence,
+        total_price_pence: preview.pricing.requested_total_price_pence,
+        price_source: preview.pricing.price_source,
+      },
+    });
+  } catch (err) {
+    if (createdSession?.id) {
+      try { await stripe.checkout.sessions.expire(createdSession.id); } catch (_) {}
+    }
+    if (hold?.ok && hold.block?.id) {
+      try { await releaseRecurringBlockBankHold(sql, { blockId: hold.block.id, schoolId }); } catch (_) {}
+    }
+    console.error('recurring-block-bank-checkout error:', err);
+    reportError('/api/slots?action=recurring-block-bank-checkout', err);
+    return res.status(500).json({ error: true, code: 'BANK_CHECKOUT_FAILED', message: 'Failed to start reserved block bank checkout' });
   }
 }
 
@@ -5061,6 +5483,7 @@ function formatDateDisplay(str) {
 }
 
 module.exports._bookCreditFundedSlotsTransaction = bookCreditFundedSlotsTransaction;
+module.exports._createRecurringBlockBankHoldTransaction = createRecurringBlockBankHoldTransaction;
 module.exports._buildRecurringBlockPreview = buildRecurringBlockPreview;
 module.exports._parseRecurringBlockLessons = parseRecurringBlockLessons;
 module.exports._CREDIT_BOOKING_SOURCE_TYPES = CREDIT_BOOKING_SOURCE_TYPES;
