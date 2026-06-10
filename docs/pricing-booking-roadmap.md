@@ -579,6 +579,7 @@ Answered in `docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md`
 - Paid-In-Full Reward discounting is deferred from v1.
 - Bank-payment checkout holds should start with a 10-minute window.
 - Eligible 48h+ cancellation value for bank-paid reserved blocks should return as same-instructor Lesson Credit by default.
+- Cash/original-payment-method refunds for bank-paid reserved blocks remain admin/operator exceptions, not learner self-serve or automatic Stripe refunds.
 
 Answered in `docs/pricing-booking-stage-4-recurring-block-decision-record.md`:
 
@@ -592,7 +593,7 @@ Answered in `docs/pricing-booking-stage-4-recurring-block-decision-record.md`:
 
 ## Current Remaining Work
 
-Last updated: 2026-06-09 after Stage 6B learner bank checkout UI wiring.
+Last updated: 2026-06-10 after Stage 6 bank-paid cancellation/refund policy clarification.
 
 ### Next Recommended Slice
 
@@ -653,6 +654,13 @@ Stage 6B6 learner bank checkout return/status copy polish - 2026-06-10:
 - The released/manual-review copy explicitly says the page does not trigger an automatic refund. No backend payment, credit, refund, payout, notification, or expiry-cleanup behaviour changed.
 - Pay As You Go `?paid=1` return handling remains separate and unchanged.
 
+Stage 6B7 bank-paid cancellation/refund policy clarification - 2026-06-10:
+
+- Confirmed the v1 policy for bank-paid Reserved Weekly Slot cancellation value: eligible 48h+ learner cancellations return same-instructor Lesson Credit by default through the existing cancellation/LCB path.
+- Cash or original-payment-method refunds remain admin/operator exceptions through the existing guarded refund workflows where applicable.
+- This clarification does not add learner self-serve cash refunds, automatic Stripe refunds, BCS refund execution, payout changes, platform-balance semantic changes, expiry cron/admin cleanup, notifications, or Pay As You Go changes.
+- Production facts still requiring real Stripe account confirmation are Pay by Bank production configuration, account-specific Pay by Bank pricing/fee treatment, and original-payment-method refund behaviour.
+
 ### Later Stage 5 Work
 
 Still deferred:
@@ -662,16 +670,16 @@ Still deferred:
 
 ### Stage 6 Remaining Work
 
-Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, learner checkout UI wiring, and learner return/status copy polish are implemented. Remaining Stage 6 work:
+Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, learner checkout UI wiring, learner return/status copy polish, and the bank-paid cancellation-to-credit policy decision are implemented or documented. Remaining Stage 6 work:
 
-- Stripe Pay by Bank production configuration, account-specific pricing, and refund behaviour
-- original-method refund behaviour
-- account-specific pricing
+- Stripe Pay by Bank production configuration
+- account-specific Pay by Bank pricing and fee treatment
+- original-payment-method refund behaviour for Pay by Bank payments, including partial refunds and timing
 - real-world monitoring of learner return/status states after launch
 
 Expiry/release cron decision: v1 keeps opportunistic cleanup only. Add a scheduled/admin cleanup later only if real usage shows abandoned pending holds creating operational noise.
 
-Do not add payment notifications, automatic Stripe refunds, payout changes, or bank-paid cancellation-to-credit policy until those decisions are settled.
+Do not add payment notifications, automatic Stripe refunds, payout changes, BCS refund execution, expiry cron/admin cleanup, or Pay As You Go changes in Stage 6 without a separate explicit implementation slice.
 
 Paid-In-Full Reward remains deferred from v1. Card, Apple Pay, Klarna, and partial-credit split payment remain excluded from Reserved Weekly Slot block payment v1.
 
