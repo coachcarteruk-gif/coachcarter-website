@@ -36,7 +36,7 @@ Compatibility notes to verify against the live CoachCarter account before implem
 - dispute support is not available
 - Stripe says Connect support is available, but CoachCarter should still test against its own account/platform setup
 - production Pay by Bank payment-method configuration is confirmed for the real CoachCarter Stripe account as of 2026-06-10
-- account-specific pricing and original-payment-method refund behaviour still need confirmation against the real CoachCarter Stripe account before being treated as production facts
+- original-payment-method refund behaviour still needs confirmation against the real CoachCarter Stripe account before being treated as a production fact
 
 ## Live Stripe Dashboard Confirmation
 
@@ -55,10 +55,10 @@ Confirmed in the CoachCarter live Stripe Dashboard on 2026-06-10:
 - The reserved product configuration ID is `pmc_1TggYZIqhTSdZedSRi8AgRVd`.
 - The `Reserved Weekly Slot` configuration has Pay by Bank enabled.
 - The `Reserved Weekly Slot` configuration has Cards, Apple Pay, Google Pay, PayPal, Klarna, and all other payment methods disabled.
+- Pay by Bank pricing is shown as 0.5% + 20p per successful charge, capped at GBP 5.00, with +1.5% for international transactions and +2% if currency conversion is required.
 
 Remaining Stripe production facts:
 
-- account-specific Pay by Bank pricing and fee treatment
 - whether Pay by Bank processing fees are non-refundable on the CoachCarter account
 - original-payment-method refund behaviour for Pay by Bank payments, including partial refund support, timing, refund window, and failure handling
 
@@ -205,7 +205,7 @@ Cash or original-payment-method refunds are exceptions for the admin/operator re
 
 Production facts still needing real Stripe account confirmation:
 
-- Account-specific Pay by Bank pricing and any non-refundable fee treatment.
+- Whether Pay by Bank processing fees are non-refundable on the CoachCarter account.
 - Original-payment-method refund behaviour for Pay by Bank payments, including partial refunds, timing, refund windows, failure handling, and whether any account-specific restrictions apply.
 
 ## Non-Goals

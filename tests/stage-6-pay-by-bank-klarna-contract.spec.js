@@ -41,7 +41,8 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(roadmap).toContain('Stage 6B8 production Stripe configuration audit');
     expect(roadmap).toContain('default Payment Method Configuration keeps Pay by Bank disabled and Klarna disabled');
     expect(roadmap).toContain('pmc_1TggYZIqhTSdZedSRi8AgRVd');
-    expect(roadmap).toContain('account-specific Pay by Bank pricing and fee treatment');
+    expect(roadmap).toContain('0.5% + 20p per successful charge, capped at GBP 5.00');
+    expect(roadmap).toContain('Remaining production facts still requiring confirmation are original-payment-method refund details and fee refundability');
     expect(roadmap).toContain('original-payment-method refund behaviour for Pay by Bank payments');
     expect(roadmap).not.toContain('whether eligible 48h+ cancellation value returns as Lesson Credit, cash refund workflow, or hybrid policy');
   });
@@ -75,7 +76,8 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(doc).toContain('Pay by Bank transaction amounts are GBP 0.50 to GBP 10,000.');
     expect(doc).toContain('The `Reserved Weekly Slot` configuration has Pay by Bank enabled.');
     expect(doc).toContain('Cards, Apple Pay, Google Pay, PayPal, Klarna, and all other payment methods disabled.');
-    expect(doc).toContain('account-specific Pay by Bank pricing and fee treatment');
+    expect(doc).toContain('Pay by Bank pricing is shown as 0.5% + 20p per successful charge, capped at GBP 5.00');
+    expect(doc).toContain('whether Pay by Bank processing fees are non-refundable on the CoachCarter account');
     expect(doc).toContain('partial refund support, timing, refund window, and failure handling');
   });
 
