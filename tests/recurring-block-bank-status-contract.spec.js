@@ -98,16 +98,22 @@ test.describe('Stage 6B3 reserved recurring block bank status contract', () => {
     const render = js.slice(js.indexOf('function renderReservedBankStatus'));
 
     expect(render).toContain("status === 'confirmed'");
-    expect(render).toContain('Your bank payment is confirmed');
+    expect(render).toContain('Your bank payment is confirmed and your Reserved Weekly Slot lessons are booked');
     expect(render).toContain("status === 'pending_payment'");
     expect(render).toContain('Payment still processing');
+    expect(render).toContain('you do not need to try again yet');
+    expect(render).toContain('it may still confirm shortly');
     expect(render).toContain("status === 'payment_failed'");
     expect(render).toContain('The bank payment did not complete');
+    expect(render).toContain('please choose the block again if you still want them');
     expect(render).toContain("status === 'expired'");
-    expect(render).toContain('checkout hold expired');
+    expect(render).toContain('The checkout window closed before payment was confirmed');
     expect(render).toContain("status === 'released'");
-    expect(render).toContain('manual');
+    expect(render).toContain('We need to check this manually');
+    expect(render).toContain('We could not finish booking this weekly block');
     expect(render).toContain('does not trigger an automatic refund');
+    expect(render).not.toContain('automatic Stripe refund');
+    expect(render).not.toContain('cash refund');
   });
 
   test('docs record status endpoint and stale pending-hold cleanup non-goals', () => {
