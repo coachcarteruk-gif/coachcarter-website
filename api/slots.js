@@ -5394,9 +5394,15 @@ async function handleMyBookings(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const nowISO = new Date().toISOString().slice(0, 10);
+    const [recurringTables] = await sql`
+      SELECT
+        to_regclass('public.recurring_slot_blocks') AS blocks_table,
+        to_regclass('public.recurring_slot_block_items') AS items_table
+    `;
+    const hasRecurringSlotReadModel = Boolean(recurringTables?.blocks_table && recurringTables?.items_table);
 
     // Upcoming: all confirmed future lessons (no limit)
-    const upcoming = await sql`
+    const upcoming = hasRecurringSlotReadModel ? await sql`
       SELECT
         lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
         lb.status, lb.cancelled_at, lb.credit_returned,
@@ -5447,10 +5453,35 @@ async function handleMyBookings(req, res) {
         AND lb.status = ${SCHEDULED}
         AND lb.scheduled_date >= ${nowISO}
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
+    ` : await sql`
+      SELECT
+        lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
+        lb.status, lb.cancelled_at, lb.credit_returned,
+        COALESCE(lb.reschedule_count, 0) AS reschedule_count,
+        lb.rescheduled_from, lb.pickup_address, lb.dropoff_address,
+        lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
+        NULL::integer AS recurring_slot_block_id,
+        NULL::integer AS recurring_slot_block_item_id,
+        false AS is_reserved_weekly_slot,
+        NULL::integer AS reserved_move_notice_hours,
+        NULL::text AS reserved_move_request_deadline,
+        NULL::boolean AS reserved_move_policy_open,
+        NULL::text AS reserved_move_policy_mode,
+        i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
+        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
+        COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
+      FROM lesson_bookings lb
+      JOIN instructors i ON i.id = lb.instructor_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      WHERE lb.learner_id = ${user.id}
+        AND COALESCE(lb.school_id, 1) = ${schoolId}
+        AND lb.status = ${SCHEDULED}
+        AND lb.scheduled_date >= ${nowISO}
+      ORDER BY lb.scheduled_date ASC, lb.start_time ASC
     `;
 
     // Past: paginated (completed, cancelled, or past confirmed)
-    const past = await sql`
+    const past = hasRecurringSlotReadModel ? await sql`
       SELECT
         lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
         lb.status, lb.cancelled_at, lb.credit_returned,
@@ -5496,6 +5527,32 @@ async function handleMyBookings(req, res) {
        AND rsb.learner_id = lb.learner_id
        AND rsb.instructor_id = lb.instructor_id
        AND rsb.status = 'confirmed'
+      WHERE lb.learner_id = ${user.id}
+        AND COALESCE(lb.school_id, 1) = ${schoolId}
+        AND NOT (lb.status = ${SCHEDULED} AND lb.scheduled_date >= ${nowISO})
+      ORDER BY lb.scheduled_date DESC, lb.start_time DESC
+      LIMIT ${pastLimit + 1}
+      OFFSET ${pastOffset}
+    ` : await sql`
+      SELECT
+        lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
+        lb.status, lb.cancelled_at, lb.credit_returned,
+        COALESCE(lb.reschedule_count, 0) AS reschedule_count,
+        lb.rescheduled_from, lb.pickup_address, lb.dropoff_address,
+        lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
+        NULL::integer AS recurring_slot_block_id,
+        NULL::integer AS recurring_slot_block_item_id,
+        false AS is_reserved_weekly_slot,
+        NULL::integer AS reserved_move_notice_hours,
+        NULL::text AS reserved_move_request_deadline,
+        NULL::boolean AS reserved_move_policy_open,
+        NULL::text AS reserved_move_policy_mode,
+        i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
+        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
+        COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
+      FROM lesson_bookings lb
+      JOIN instructors i ON i.id = lb.instructor_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
       WHERE lb.learner_id = ${user.id}
         AND COALESCE(lb.school_id, 1) = ${schoolId}
         AND NOT (lb.status = ${SCHEDULED} AND lb.scheduled_date >= ${nowISO})
