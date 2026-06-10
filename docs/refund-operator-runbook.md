@@ -60,6 +60,7 @@ This is an operational guide only. It does not authorise UI changes, API changes
    - `blocked: true`: do not execute.
    - `manual_review_required: true`: do not execute automatically.
    - Already-paid-out direct booking: stop for manual review; only use approved manual bank handling after Fraser signs off, not automatic Stripe refund.
+   - Original-method Stripe refund fails, cannot be funded from the Stripe balance, cannot return to the original payment method, or is otherwise blocked: stop automatic handling and move only to approved manual bank handling after Fraser signs off.
    - Out-of-model/manual case: stop until a reviewed process exists.
 
 5. Execute only when allowed:
@@ -105,9 +106,12 @@ These cases require manual review and may only proceed via approved manual bank 
 - The payment source is unclear.
 - Money has moved outside the current automatic refund model.
 - Stripe cannot be the original-method refund target.
+- A Stripe original-method refund attempt fails, cannot be funded from the Stripe balance, cannot return to the original method, or is otherwise blocked.
 - The current backend says the source is unsupported for execution.
 
 Manual bank refund recording in the refund ledger is available only through the approved admin path. Do not invent ledger rows or edit `refund_events` manually.
+
+Manual bank transfer is the last-resort operator path for an already-approved refund. It is not a learner self-serve option, and it does not broaden automatic Stripe refund execution. The operator completes the bank transfer outside Stripe, then records it through `POST /api/admin?action=record-manual-bank-refund` with the real bank reference, preserved evidence/reference, and concise operator notes.
 
 Before recording:
 

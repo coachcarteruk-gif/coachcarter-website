@@ -294,7 +294,7 @@ Instructor-created paid offers now freeze their final per-lesson price into `les
 
 - 48+ hours notice — lesson credit returned automatically to the learner's balance with the booking instructor
 - Under 48 hours — credit forfeited, learner informed at time of cancellation
-- Approved cash/card/bank-payment refunds are separate from cancellation credit returns. Customer copy should say: "Where a cash or original-payment-method refund is approved as an exception, it will be returned to the original payment method where possible. Stripe processing fees from the original transaction are not returned by Stripe and will be deducted from the refunded amount. Approved Stripe refunds normally take 5-10 days to appear on the customer's account." Solicitor review is still recommended before treating this as final legal copy.
+- Approved cash/card/bank-payment refunds are separate from cancellation credit returns. Customer copy should say: "Where a cash or original-payment-method refund is approved as an exception, it will be returned to the original payment method where possible. Stripe processing fees from the original transaction are not returned by Stripe and will be deducted from the refunded amount. Approved Stripe refunds normally take 5-10 days to appear on the customer's account." If a Stripe original-method refund fails, cannot be funded from the Stripe balance, cannot return to the original method, or is otherwise blocked, the approved refund is handled manually by bank transfer as the last resort and recorded through `POST /api/admin?action=record-manual-bank-refund` with evidence/reference and operator notes. Solicitor review is still recommended before treating customer-facing copy as final legal copy.
 
 ---
 
