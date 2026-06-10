@@ -44,6 +44,21 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(roadmap).not.toContain('whether eligible 48h+ cancellation value returns as Lesson Credit, cash refund workflow, or hybrid policy');
   });
 
+  test('production config contract pins the reserved bank env var to the reserved-block product only', () => {
+    const doc = read('docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md');
+    const project = read('PROJECT.md');
+
+    expect(doc).toContain('Reserved Weekly Slot bank checkout is the only path that calls `getReservedBlockBankCheckoutPaymentOptions()`');
+    expect(doc).toContain('reads `STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION`');
+    expect(doc).toContain('the referenced Stripe Payment Method Configuration must be Pay by Bank-only for this product');
+    expect(doc).toContain('Pay As You Go Checkout and offer Checkout must not use the reserved-block bank payment-method configuration');
+    expect(doc).toContain('card, Apple Pay, Klarna, and partial Lesson Credit plus bank payment remain excluded');
+    expect(doc).toContain('card/Apple Pay exclusion for the reserved bank product depends on the referenced Stripe Payment Method Configuration');
+
+    expect(project).toContain('used only by Reserved Weekly Slot Pay by Bank Checkout');
+    expect(project).toContain('Pay As You Go and offers must not use this env var');
+  });
+
   test('bank-paid cancellation policy returns Lesson Credit by default and leaves cash refunds operator-controlled', () => {
     const doc = read('docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md');
     const stripeConnect = read('docs/stripe-connect.md');

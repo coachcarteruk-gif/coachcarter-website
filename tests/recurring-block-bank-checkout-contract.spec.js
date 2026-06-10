@@ -79,6 +79,8 @@ test.describe('Stage 6B reserved recurring block bank checkout/webhook contract'
     const source = read('api/slots.js');
     const helper = read('api/_stripe-payment-methods.js');
     const handler = functionBody(source, 'handleRecurringBlockBankCheckout');
+    const paygAuth = functionBody(source, 'handleCheckoutSlot');
+    const paygGuest = functionBody(source, 'handleCheckoutSlotGuest');
 
     expect(helper).toContain("STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION");
     expect(helper).toContain('payment_method_configuration: configurationId');
@@ -87,6 +89,29 @@ test.describe('Stage 6B reserved recurring block bank checkout/webhook contract'
     expect(handler).toContain('excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES');
     expect(handler).not.toMatch(/(^|[^_])payment_method_types\s*:/);
     expect(handler).not.toContain('allow_promotion_codes');
+
+    expect(paygAuth).not.toContain('getReservedBlockBankCheckoutPaymentOptions');
+    expect(paygAuth).not.toContain('payment_method_configuration');
+    expect(paygGuest).not.toContain('getReservedBlockBankCheckoutPaymentOptions');
+    expect(paygGuest).not.toContain('payment_method_configuration');
+  });
+
+  test('reserved bank payment configuration is not used by Pay As You Go, offers, or retired credit checkout', () => {
+    const slots = read('api/slots.js');
+    const offers = read('api/offers.js');
+    const credits = read('api/credits.js');
+    const decisionRecord = read('docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md');
+    const project = read('PROJECT.md');
+
+    expect((slots.match(/getReservedBlockBankCheckoutPaymentOptions\(\)/g) || []).length).toBe(1);
+    expect(offers).not.toContain('getReservedBlockBankCheckoutPaymentOptions');
+    expect(offers).not.toContain('STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION');
+    expect(credits).not.toContain('getReservedBlockBankCheckoutPaymentOptions');
+    expect(credits).not.toContain('STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION');
+
+    expect(decisionRecord).toContain('Reserved Weekly Slot bank checkout is the only path that calls `getReservedBlockBankCheckoutPaymentOptions()`');
+    expect(decisionRecord).toContain('Pay As You Go Checkout and offer Checkout must not use the reserved-block bank payment-method configuration');
+    expect(project).toContain('This is the only Checkout path that may use the reserved-block bank payment-method configuration');
   });
 
   test('learner booking UI starts reserved-block bank checkout when same-instructor credit is insufficient', () => {
@@ -110,7 +135,11 @@ test.describe('Stage 6B reserved recurring block bank checkout/webhook contract'
     expect(project).toContain('`recurring-block-bank-checkout` | POST | Learner');
     expect(project).toContain('creates `lesson_bookings` only after Stripe reports successful payment');
     expect(project).toContain('does not mutate `learner_credit_balances`, write BCS rows, or create credit purchase rows');
-    expect(project).toContain('notifications, eligible 48h+ bank-paid cancellation-to-credit policy, and expiry cron remain later slices');
+    expect(project).toContain('The referenced Stripe configuration must exclude card, Apple Pay, Klarna, and any non-bank method.');
+    expect(project).toContain('does not support partial Lesson Credit plus bank payment');
+    expect(project).toContain('Confirmed bank-paid occurrences use the existing 48h+ cancellation path to return same-instructor Lesson Credit by default');
+    expect(project).toContain('cash/original-payment-method refunds remain admin/operator exceptions');
+    expect(project).toContain('Notifications and expiry cron remain out of v1 scope');
   });
 
   test('webhook routes reserved-block bank success without changing Pay As You Go dispatch', () => {

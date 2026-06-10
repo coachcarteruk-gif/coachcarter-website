@@ -102,12 +102,13 @@ Safe local test requirement:
 
 Do not test Pay by Bank with the live key, and do not add a test key to git.
 
-## Current Checkout Surface Audit
+## Current Checkout Surface Audit And Config Contract
 
-Live Checkout Session creators:
+Live Checkout Session creators after the Stage 6B implementation:
 
 - `api/slots.js?action=checkout-slot` for authenticated Pay As You Go single-slot checkout
 - `api/slots.js?action=checkout-slot-guest` for guest Pay As You Go single-slot checkout
+- `api/slots.js?action=recurring-block-bank-checkout` for Reserved Weekly Slot whole-block Pay by Bank checkout
 - `api/offers.js` for instructor-created lesson offers
 
 Dormant or compatibility payment surfaces:
@@ -118,10 +119,14 @@ Dormant or compatibility payment surfaces:
 
 Current code observations:
 
-- live Checkout creation currently omits `payment_method_types`
-- payment method visibility is therefore mainly controlled by Stripe dynamic payment methods / Dashboard settings unless Stage 6 adds product-scoped configuration
-- removing Klarna from production likely requires Stripe Dashboard/payment-method configuration changes, plus local stale copy/comment cleanup
-- the webhook guard that ignores unpaid Checkout completion events should stay, but its comment should become async-payment-method generic rather than Klarna-specific
+- live Checkout creation omits `payment_method_types`
+- Pay As You Go and offer Checkout Sessions stay on the shared dynamic-payment-method path with `excluded_payment_method_types` limited to Klarna
+- Reserved Weekly Slot bank checkout is the only path that calls `getReservedBlockBankCheckoutPaymentOptions()` and reads `STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION`
+- `STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION` is a product-scoped contract: the referenced Stripe Payment Method Configuration must be Pay by Bank-only for this product
+- Pay As You Go Checkout and offer Checkout must not use the reserved-block bank payment-method configuration
+- card, Apple Pay, Klarna, and partial Lesson Credit plus bank payment remain excluded from Reserved Weekly Slot bank checkout v1
+- the current code excludes Klarna locally, but card/Apple Pay exclusion for the reserved bank product depends on the referenced Stripe Payment Method Configuration being correctly configured in the real CoachCarter Stripe account
+- the webhook guard that ignores unpaid Checkout completion events should stay async-payment-method generic, not Klarna-specific
 
 ## Implementation Direction
 
