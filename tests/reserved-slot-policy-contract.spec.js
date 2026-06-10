@@ -43,6 +43,10 @@ test.describe('reserved weekly slot policy contract', () => {
     expect(myBookings).toContain('reserved_move_request_deadline');
     expect(myBookings).toContain('reserved_move_policy_open');
     expect(myBookings).toContain("'policy_visible_admin_override'");
+    expect(myBookings).toContain("to_regclass('public.recurring_slot_blocks')");
+    expect(myBookings).toContain("to_regclass('public.recurring_slot_block_items')");
+    expect(myBookings).toContain('hasRecurringSlotReadModel ? await sql`');
+    expect(myBookings).toContain('false AS is_reserved_weekly_slot');
 
     expect(myBookings).toContain('rsbi.lesson_booking_id = lb.id');
     expect(myBookings).toContain('rsbi.school_id = COALESCE(lb.school_id, 1)');
