@@ -42,8 +42,8 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(roadmap).toContain('default Payment Method Configuration keeps Pay by Bank disabled and Klarna disabled');
     expect(roadmap).toContain('pmc_1TggYZIqhTSdZedSRi8AgRVd');
     expect(roadmap).toContain('0.5% + 20p per successful charge, capped at GBP 5.00');
-    expect(roadmap).toContain('Remaining production facts still requiring confirmation are original-payment-method refund details and fee refundability');
-    expect(roadmap).toContain('original-payment-method refund behaviour for Pay by Bank payments');
+    expect(roadmap).toContain("Stripe's processing fees from the original transaction are not returned");
+    expect(roadmap).toContain('Remaining production fact still requiring confirmation is operational handling for failed or insufficient-balance Stripe refund attempts.');
     expect(roadmap).not.toContain('whether eligible 48h+ cancellation value returns as Lesson Credit, cash refund workflow, or hybrid policy');
   });
 
@@ -77,8 +77,23 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(doc).toContain('The `Reserved Weekly Slot` configuration has Pay by Bank enabled.');
     expect(doc).toContain('Cards, Apple Pay, Google Pay, PayPal, Klarna, and all other payment methods disabled.');
     expect(doc).toContain('Pay by Bank pricing is shown as 0.5% + 20p per successful charge, capped at GBP 5.00');
-    expect(doc).toContain('whether Pay by Bank processing fees are non-refundable on the CoachCarter account');
-    expect(doc).toContain('partial refund support, timing, refund window, and failure handling');
+    expect(doc).toContain("Stripe Dashboard says Stripe's processing fees from the original transaction are not returned.");
+    expect(doc).toContain('Stripe Dashboard says refunds normally take 5-10 days to appear on the customer\'s account.');
+    expect(doc).toContain('Stripe Dashboard says refunds go back to the original payment method only');
+    expect(doc).toContain('operational handling for failed or insufficient-balance Stripe refund attempts');
+  });
+
+  test('customer refund policy makes Stripe fee withholding explicit', () => {
+    const terms = read('public/terms.html');
+    const project = read('PROJECT.md');
+    const stripeConnect = read('docs/stripe-connect.md');
+
+    expect(terms).toContain('Stripe processing fees from the original transaction are not returned by Stripe and will be deducted from the refunded amount.');
+    expect(terms).toContain('Approved Stripe refunds normally take 5-10 days to appear on the customer\'s account');
+    expect(terms).toContain('can only be returned to the original payment method');
+    expect(project).toContain('Stripe processing fees from the original transaction are not returned by Stripe');
+    expect(stripeConnect).toContain('minus the original Stripe processing fee because Stripe does not return processing fees from the original transaction');
+    expect(stripeConnect).toContain('Approved card, wallet, and Pay by Bank refunds are net of the original non-refundable Stripe processing fee.');
   });
 
   test('bank-paid cancellation policy returns Lesson Credit by default and leaves cash refunds operator-controlled', () => {

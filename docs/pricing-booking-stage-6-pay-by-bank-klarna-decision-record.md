@@ -36,7 +36,7 @@ Compatibility notes to verify against the live CoachCarter account before implem
 - dispute support is not available
 - Stripe says Connect support is available, but CoachCarter should still test against its own account/platform setup
 - production Pay by Bank payment-method configuration is confirmed for the real CoachCarter Stripe account as of 2026-06-10
-- original-payment-method refund behaviour still needs confirmation against the real CoachCarter Stripe account before being treated as a production fact
+- original-payment-method refund behaviour is confirmed from the real CoachCarter Stripe Dashboard as of 2026-06-10
 
 ## Live Stripe Dashboard Confirmation
 
@@ -56,11 +56,15 @@ Confirmed in the CoachCarter live Stripe Dashboard on 2026-06-10:
 - The `Reserved Weekly Slot` configuration has Pay by Bank enabled.
 - The `Reserved Weekly Slot` configuration has Cards, Apple Pay, Google Pay, PayPal, Klarna, and all other payment methods disabled.
 - Pay by Bank pricing is shown as 0.5% + 20p per successful charge, capped at GBP 5.00, with +1.5% for international transactions and +2% if currency conversion is required.
+- Stripe Dashboard says partial refunds can return part of a payment to the customer.
+- Stripe Dashboard says refunds normally take 5-10 days to appear on the customer's account.
+- Stripe Dashboard says Stripe's processing fees from the original transaction are not returned.
+- Stripe Dashboard says up to 30 partial refunds can be created for each payment.
+- Stripe Dashboard says refunds go back to the original payment method only, not to a different card or bank account.
 
 Remaining Stripe production facts:
 
-- whether Pay by Bank processing fees are non-refundable on the CoachCarter account
-- original-payment-method refund behaviour for Pay by Bank payments, including partial refund support, timing, refund window, and failure handling
+- operational handling for failed or insufficient-balance Stripe refund attempts
 
 ## Local Test Status
 
@@ -203,10 +207,9 @@ This is the v1 product policy for bank-paid Reserved Weekly Slot cancellation va
 
 Cash or original-payment-method refunds are exceptions for the admin/operator refund workflow. They should use the existing refund-preview/execute/manual-bank-recording guardrails where applicable, including original-method return where possible and payment-provider fee treatment. This Stage 6 slice does not approve a learner self-serve cash refund, automatic Stripe refund on cancellation, BCS refund execution broadening, payout reversal, or platform-balance semantic change.
 
-Production facts still needing real Stripe account confirmation:
+Production fact still needing operator confirmation:
 
-- Whether Pay by Bank processing fees are non-refundable on the CoachCarter account.
-- Original-payment-method refund behaviour for Pay by Bank payments, including partial refunds, timing, refund windows, failure handling, and whether any account-specific restrictions apply.
+- Operational handling for failed or insufficient-balance Stripe refund attempts.
 
 ## Non-Goals
 

@@ -668,8 +668,9 @@ Stage 6B8 production Stripe configuration audit - 2026-06-10:
 - Confirmed the `Reserved Weekly Slot` configuration has Pay by Bank enabled and Cards, Apple Pay, Google Pay, PayPal, Klarna, and all other payment methods disabled.
 - Confirmed live Pay by Bank account properties shown in Dashboard: enabled, immediate confirmation, no recurring-payment support, refund support enabled, no dispute support, GBP 0.50-GBP 10,000 transaction amount range, and EUR/GBP presentment currencies.
 - Confirmed live Pay by Bank pricing shown in Dashboard: 0.5% + 20p per successful charge, capped at GBP 5.00, with +1.5% for international transactions and +2% if currency conversion is required.
+- Confirmed Stripe refund-policy details shown in Dashboard: partial refunds are supported, refunds normally take 5-10 days to appear on the customer's account, Stripe's processing fees from the original transaction are not returned, up to 30 partial refunds can be created for each payment, and refunds go back to the original payment method only.
 - This confirmation does not add live Stripe probes, backend payment changes, automatic Stripe refunds, BCS refund execution, payout changes, expiry cron/admin cleanup, notifications, or Pay As You Go changes.
-- Remaining production facts still requiring confirmation are original-payment-method refund details and fee refundability, including partial refunds, timing, refund windows, failure handling, non-refundable fee treatment, and any account-specific restrictions.
+- Remaining production fact still requiring confirmation is operational handling for failed or insufficient-balance Stripe refund attempts.
 
 ### Later Stage 5 Work
 
@@ -680,9 +681,9 @@ Still deferred:
 
 ### Stage 6 Remaining Work
 
-Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, learner checkout UI wiring, learner return/status copy polish, the bank-paid cancellation-to-credit policy decision, and the live Stripe payment-method/pricing audit are implemented or documented. Remaining Stage 6 work:
+Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, learner checkout UI wiring, learner return/status copy polish, the bank-paid cancellation-to-credit policy decision, and the live Stripe payment-method/pricing/refund-policy audit are implemented or documented. Remaining Stage 6 work:
 
-- original-payment-method refund behaviour for Pay by Bank payments, including partial refunds, timing, refund windows, failure handling, fee refundability, and account-specific restrictions
+- failed or insufficient-balance Stripe refund attempt handling
 - real-world monitoring of learner return/status states after launch
 
 Expiry/release cron decision: v1 keeps opportunistic cleanup only. Add a scheduled/admin cleanup later only if real usage shows abandoned pending holds creating operational noise.
