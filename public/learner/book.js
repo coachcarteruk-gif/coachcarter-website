@@ -1932,24 +1932,24 @@ function renderReservedBankStatus(data, opts = {}) {
   let icon = '!';
   if (status === 'confirmed') {
     title = 'Weekly block booked.';
-    copy = 'Your bank payment is confirmed and these future lessons are booked.';
+    copy = 'Your bank payment is confirmed and your Reserved Weekly Slot lessons are booked.';
     tone = 'good';
     icon = '✓';
   } else if (status === 'pending_payment') {
     title = 'Payment still processing.';
     copy = expiry
-      ? `Your selected weekly slots are held while the bank payment finishes. The hold expires at ${expiry}.`
-      : 'Your selected weekly slots are held while the bank payment finishes.';
-    if (opts.cancelled) copy = 'Checkout was cancelled, but the payment has not failed yet. If you authorised payment in your bank, this may still update shortly.';
+      ? `Your selected weekly slots are held while the bank payment finishes. The hold expires at ${expiry}; you do not need to try again yet.`
+      : 'Your selected weekly slots are held while the bank payment finishes; you do not need to try again yet.';
+    if (opts.cancelled) copy = 'Checkout was cancelled, but the bank payment has not failed yet. If you authorised the payment in your bank, it may still confirm shortly.';
   } else if (status === 'payment_failed') {
     title = 'Payment failed.';
-    copy = 'The bank payment did not complete, so the selected weekly slots have been released.';
+    copy = 'The bank payment did not complete. The selected weekly slots have been released, so please choose the block again if you still want them.';
   } else if (status === 'expired') {
     title = 'Checkout expired.';
-    copy = 'The checkout hold expired before payment confirmation, so the selected weekly slots have been released.';
+    copy = 'The checkout window closed before payment was confirmed. The selected weekly slots have been released, so please choose the block again if you still want them.';
   } else if (status === 'released') {
-    title = 'Manual follow-up may be needed.';
-    copy = 'These slots are no longer held. If money has left your bank, we need to review it manually; this page does not trigger an automatic refund.';
+    title = 'We need to check this manually.';
+    copy = 'We could not finish booking this weekly block. The selected slots are no longer held. If you authorised a bank payment, we will review it manually; this page does not trigger an automatic refund.';
   }
 
   document.getElementById('recurringBlockLoading').style.display = 'none';

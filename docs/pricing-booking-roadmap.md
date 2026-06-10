@@ -646,6 +646,13 @@ Stage 6B5 bank checkout smoke and expiry decision - 2026-06-09:
 - Decision: opportunistic stale-hold cleanup is enough for Reserved Weekly Slot bank checkout v1. A separate expiry cron/admin cleanup is not needed now because holds are short-lived, availability ignores expired pending holds (`status='pending_payment'` and `expires_at > NOW()` only), new bank checkout attempts lazily release expired conflicts for the same selected slots, Stripe failure/expiry webhooks release when delivered, and the learner return/status read expires the specific stale hold idempotently.
 - Revisit a narrow expiry cron/admin cleanup only if production monitoring or support evidence shows abandoned holds accumulating enough to confuse operators. If added later, keep it scoped to `funding_method='bank_payment'`, `status='pending_payment'`, `expires_at <= NOW()`, parent `expired`, held items `released`, same-school only, idempotent, and with no booking, credit, refund, payout, or Stripe-refund mutation.
 
+Stage 6B6 learner bank checkout return/status copy polish - 2026-06-10:
+
+- Polished `/learner/book.html` Reserved Weekly Slot bank checkout return copy for `pending_payment`, `confirmed`, `payment_failed`, `expired`, and `released` states.
+- The copy now tells learners when to wait, when to choose the block again, and when manual review may be needed if a bank payment was authorised but the block could not be booked.
+- The released/manual-review copy explicitly says the page does not trigger an automatic refund. No backend payment, credit, refund, payout, notification, or expiry-cleanup behaviour changed.
+- Pay As You Go `?paid=1` return handling remains separate and unchanged.
+
 ### Later Stage 5 Work
 
 Still deferred:
@@ -655,12 +662,12 @@ Still deferred:
 
 ### Stage 6 Remaining Work
 
-Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, and learner checkout UI wiring are implemented. Remaining Stage 6 work:
+Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, learner checkout UI wiring, and learner return/status copy polish are implemented. Remaining Stage 6 work:
 
 - Stripe Pay by Bank production configuration, account-specific pricing, and refund behaviour
 - original-method refund behaviour
 - account-specific pricing
-- the learner-facing messages for expiry, payment failure, and lost availability
+- real-world monitoring of learner return/status states after launch
 
 Expiry/release cron decision: v1 keeps opportunistic cleanup only. Add a scheduled/admin cleanup later only if real usage shows abandoned pending holds creating operational noise.
 
