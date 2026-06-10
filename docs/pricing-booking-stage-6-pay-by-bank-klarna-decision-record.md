@@ -19,6 +19,7 @@ Current product decisions:
 - Bank-payment checkout holds should start with a 10-minute window.
 - If an eligible 48h+ cancellation happens on a bank-paid reserved block, v1 returns value as same-instructor Lesson Credit by default.
 - Cash or original-payment-method refunds remain admin/operator exceptions, not learner self-serve or automatic Stripe refunds.
+- If a Stripe original-method refund fails, cannot be funded from the Stripe balance, cannot return to the original method, or is otherwise blocked, the approved refund is handled manually by bank transfer as the last resort and recorded through `POST /api/admin?action=record-manual-bank-refund` with evidence/reference and operator notes.
 
 ## Stripe Pay By Bank Facts To Verify
 
@@ -64,7 +65,7 @@ Confirmed in the CoachCarter live Stripe Dashboard on 2026-06-10:
 
 Remaining Stripe production facts:
 
-- operational handling for failed or insufficient-balance Stripe refund attempts
+- None before launch. The remaining work is real-world monitoring after launch.
 
 ## Local Test Status
 
@@ -205,11 +206,13 @@ Confirmed bank-funded Reserved Weekly Slot occurrences are normal `lesson_bookin
 
 This is the v1 product policy for bank-paid Reserved Weekly Slot cancellation value. The learner gets same-instructor Lesson Credit by default, so they can rebook with the same instructor without creating an automatic cash movement.
 
-Cash or original-payment-method refunds are exceptions for the admin/operator refund workflow. They should use the existing refund-preview/execute/manual-bank-recording guardrails where applicable, including original-method return where possible and payment-provider fee treatment. This Stage 6 slice does not approve a learner self-serve cash refund, automatic Stripe refund on cancellation, BCS refund execution broadening, payout reversal, or platform-balance semantic change.
+Cash or original-payment-method refunds are exceptions for the admin/operator refund workflow. They should use the existing refund-preview/execute/manual-bank-recording guardrails where applicable, including original-method return where possible and payment-provider fee treatment. The preferred cash path is an approved original-method Stripe refund when the preview/execution guardrails allow it. If Stripe refund execution fails, cannot be funded from the Stripe balance, cannot return to the original payment method, or is otherwise blocked, the operator completes the approved refund manually by bank transfer as the last resort and records it through `POST /api/admin?action=record-manual-bank-refund`.
 
-Production fact still needing operator confirmation:
+Manual bank recording must preserve the bank reference, supporting evidence/reference, and concise operator notes. It remains a ledger-only operator path after the bank transfer has been completed outside Stripe; it does not call Stripe, does not mutate booking status, does not edit payout rows, does not create credit-source adjustments, and does not mutate learner credit balances.
 
-- Operational handling for failed or insufficient-balance Stripe refund attempts.
+This Stage 6 slice does not approve a learner self-serve cash refund, automatic Stripe refund on cancellation, BCS refund execution broadening, payout reversal, or platform-balance semantic change.
+
+All Stripe production facts needed before launch are now documented. The remaining production work is real-world monitoring of learner return/status states and refund-operations outcomes after launch.
 
 ## Non-Goals
 

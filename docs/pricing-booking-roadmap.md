@@ -580,6 +580,7 @@ Answered in `docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md`
 - Bank-payment checkout holds should start with a 10-minute window.
 - Eligible 48h+ cancellation value for bank-paid reserved blocks should return as same-instructor Lesson Credit by default.
 - Cash/original-payment-method refunds for bank-paid reserved blocks remain admin/operator exceptions, not learner self-serve or automatic Stripe refunds.
+- If a Stripe original-method refund fails, cannot be funded from the Stripe balance, cannot return to the original method, or is otherwise blocked, the approved refund is handled manually by bank transfer as the last resort and recorded through `POST /api/admin?action=record-manual-bank-refund`.
 
 Answered in `docs/pricing-booking-stage-4-recurring-block-decision-record.md`:
 
@@ -670,7 +671,16 @@ Stage 6B8 production Stripe configuration audit - 2026-06-10:
 - Confirmed live Pay by Bank pricing shown in Dashboard: 0.5% + 20p per successful charge, capped at GBP 5.00, with +1.5% for international transactions and +2% if currency conversion is required.
 - Confirmed Stripe refund-policy details shown in Dashboard: partial refunds are supported, refunds normally take 5-10 days to appear on the customer's account, Stripe's processing fees from the original transaction are not returned, up to 30 partial refunds can be created for each payment, and refunds go back to the original payment method only.
 - This confirmation does not add live Stripe probes, backend payment changes, automatic Stripe refunds, BCS refund execution, payout changes, expiry cron/admin cleanup, notifications, or Pay As You Go changes.
-- Remaining production fact still requiring confirmation is operational handling for failed or insufficient-balance Stripe refund attempts.
+- Before the final refund-operations policy below, the last unresolved production fact was operational handling for failed or insufficient-balance Stripe refund attempts.
+
+Stage 6B9 final refund-operations policy - 2026-06-10:
+
+- Final operator policy: original-method Stripe refund is preferred where approved by preview/execute guardrails and possible.
+- If Stripe refund execution fails, cannot be funded from the Stripe balance, cannot return to the original method, or is otherwise blocked, the operator handles the approved refund manually by bank transfer as the last resort.
+- Manual bank transfer must be recorded through `POST /api/admin?action=record-manual-bank-refund` with the real bank reference, preserved evidence/reference, and concise operator notes.
+- Manual bank transfer remains an operator path only, not learner self-serve, and does not broaden automatic Stripe refund execution.
+- All Stripe production facts needed before launch are now documented. The only remaining Stage 6 production work is real-world monitoring after launch.
+- This confirmation does not add live Stripe probes, backend payment changes, automatic Stripe refunds, BCS refund execution, payout changes, expiry cron/admin cleanup, notifications, backend money mutations, or Pay As You Go changes.
 
 ### Later Stage 5 Work
 
@@ -681,10 +691,9 @@ Still deferred:
 
 ### Stage 6 Remaining Work
 
-Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, learner checkout UI wiring, learner return/status copy polish, the bank-paid cancellation-to-credit policy decision, and the live Stripe payment-method/pricing/refund-policy audit are implemented or documented. Remaining Stage 6 work:
+Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, learner checkout UI wiring, learner return/status copy polish, the bank-paid cancellation-to-credit policy decision, the live Stripe payment-method/pricing/refund-policy audit, and final Stripe refund failure/insufficient-balance operator policy are implemented or documented. Remaining Stage 6 work:
 
-- failed or insufficient-balance Stripe refund attempt handling
-- real-world monitoring of learner return/status states after launch
+- real-world monitoring of learner return/status states and refund-operations outcomes after launch
 
 Expiry/release cron decision: v1 keeps opportunistic cleanup only. Add a scheduled/admin cleanup later only if real usage shows abandoned pending holds creating operational noise.
 

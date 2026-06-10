@@ -30,7 +30,7 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(doc).toContain('Cash or original-payment-method refunds remain admin/operator exceptions');
   });
 
-  test('roadmap records resolved Stage 6 decisions and remaining verification work', () => {
+  test('roadmap records resolved Stage 6 decisions and remaining launch monitoring work', () => {
     const roadmap = read('docs/pricing-booking-roadmap.md');
 
     expect(roadmap).toContain('Answered in `docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md`:');
@@ -43,7 +43,11 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(roadmap).toContain('pmc_1TggYZIqhTSdZedSRi8AgRVd');
     expect(roadmap).toContain('0.5% + 20p per successful charge, capped at GBP 5.00');
     expect(roadmap).toContain("Stripe's processing fees from the original transaction are not returned");
-    expect(roadmap).toContain('Remaining production fact still requiring confirmation is operational handling for failed or insufficient-balance Stripe refund attempts.');
+    expect(roadmap).toContain('Stage 6B9 final refund-operations policy');
+    expect(roadmap).toContain('If Stripe refund execution fails, cannot be funded from the Stripe balance, cannot return to the original method, or is otherwise blocked');
+    expect(roadmap).toContain('All Stripe production facts needed before launch are now documented.');
+    expect(roadmap).toContain('real-world monitoring of learner return/status states and refund-operations outcomes after launch');
+    expect(roadmap).not.toContain('Remaining production fact still requiring confirmation');
     expect(roadmap).not.toContain('whether eligible 48h+ cancellation value returns as Lesson Credit, cash refund workflow, or hybrid policy');
   });
 
@@ -64,7 +68,7 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(project).toContain('Pay As You Go and offers must not use this env var');
   });
 
-  test('decision record captures confirmed and remaining live Stripe production facts', () => {
+  test('decision record captures confirmed live Stripe production facts and closes unknowns', () => {
     const doc = read('docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md');
 
     expect(doc).toContain('Confirmed in the CoachCarter live Stripe Dashboard on 2026-06-10');
@@ -80,7 +84,9 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(doc).toContain("Stripe Dashboard says Stripe's processing fees from the original transaction are not returned.");
     expect(doc).toContain('Stripe Dashboard says refunds normally take 5-10 days to appear on the customer\'s account.');
     expect(doc).toContain('Stripe Dashboard says refunds go back to the original payment method only');
-    expect(doc).toContain('operational handling for failed or insufficient-balance Stripe refund attempts');
+    expect(doc).toContain('Remaining Stripe production facts:');
+    expect(doc).toContain('None before launch. The remaining work is real-world monitoring after launch.');
+    expect(doc).not.toContain('operational handling for failed or insufficient-balance Stripe refund attempts');
   });
 
   test('customer refund policy makes Stripe fee withholding explicit', () => {
@@ -91,9 +97,31 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(terms).toContain('Stripe processing fees from the original transaction are not returned by Stripe and will be deducted from the refunded amount.');
     expect(terms).toContain('Approved Stripe refunds normally take 5-10 days to appear on the customer\'s account');
     expect(terms).toContain('can only be returned to the original payment method');
+    expect(terms).toContain('This is not a learner self-service refund option.');
     expect(project).toContain('Stripe processing fees from the original transaction are not returned by Stripe');
     expect(stripeConnect).toContain('minus the original Stripe processing fee because Stripe does not return processing fees from the original transaction');
     expect(stripeConnect).toContain('Approved card, wallet, and Pay by Bank refunds are net of the original non-refundable Stripe processing fee.');
+  });
+
+  test('refund runbook pins failed Stripe refund fallback to manual bank recording', () => {
+    const doc = read('docs/pricing-booking-stage-6-pay-by-bank-klarna-decision-record.md');
+    const roadmap = read('docs/pricing-booking-roadmap.md');
+    const runbook = read('docs/refund-operator-runbook.md');
+    const stripeConnect = read('docs/stripe-connect.md');
+    const project = read('PROJECT.md');
+
+    for (const text of [doc, roadmap, runbook, stripeConnect, project]) {
+      expect(text).toContain('cannot be funded from the Stripe balance');
+      expect(text).toContain('cannot return to the original method');
+      expect(text).toContain('POST /api/admin?action=record-manual-bank-refund');
+    }
+
+    expect(doc).toContain('preserve the bank reference, supporting evidence/reference, and concise operator notes');
+    expect(roadmap).toContain('real bank reference, preserved evidence/reference, and concise operator notes');
+    expect(runbook).toContain('Manual bank transfer is the last-resort operator path for an already-approved refund.');
+    expect(runbook).toContain('It is not a learner self-serve option');
+    expect(stripeConnect).toContain('ledger-only admin path with the bank reference, evidence/reference, and operator note');
+    expect(runbook).not.toContain('automatic Stripe refund on cancellation');
   });
 
   test('bank-paid cancellation policy returns Lesson Credit by default and leaves cash refunds operator-controlled', () => {
