@@ -35,7 +35,32 @@ Compatibility notes to verify against the live CoachCarter account before implem
 - refunds and partial refunds are supported
 - dispute support is not available
 - Stripe says Connect support is available, but CoachCarter should still test against its own account/platform setup
-- production Pay by Bank payment-method configuration, account-specific pricing, and original-payment-method refund behaviour still need confirmation against the real CoachCarter Stripe account before being treated as production facts
+- production Pay by Bank payment-method configuration is confirmed for the real CoachCarter Stripe account as of 2026-06-10
+- account-specific pricing and original-payment-method refund behaviour still need confirmation against the real CoachCarter Stripe account before being treated as production facts
+
+## Live Stripe Dashboard Confirmation
+
+Confirmed in the CoachCarter live Stripe Dashboard on 2026-06-10:
+
+- Pay by Bank is enabled on the account.
+- Pay by Bank payment confirmation is immediate.
+- Pay by Bank recurring payments are not supported.
+- Pay by Bank refund support is enabled.
+- Pay by Bank dispute support is not available.
+- Pay by Bank transaction amounts are GBP 0.50 to GBP 10,000.
+- Pay by Bank presentment currencies shown are EUR and GBP.
+- The default Payment Method Configuration keeps Pay by Bank disabled, so ordinary Pay As You Go Checkout should not inherit Pay by Bank from the default config.
+- The default Payment Method Configuration has Klarna disabled.
+- The reserved product configuration is named `Reserved Weekly Slot`.
+- The reserved product configuration ID is `pmc_1TggYZIqhTSdZedSRi8AgRVd`.
+- The `Reserved Weekly Slot` configuration has Pay by Bank enabled.
+- The `Reserved Weekly Slot` configuration has Cards, Apple Pay, Google Pay, PayPal, Klarna, and all other payment methods disabled.
+
+Remaining Stripe production facts:
+
+- account-specific Pay by Bank pricing and fee treatment
+- whether Pay by Bank processing fees are non-refundable on the CoachCarter account
+- original-payment-method refund behaviour for Pay by Bank payments, including partial refund support, timing, refund window, and failure handling
 
 ## Local Test Status
 
@@ -125,7 +150,7 @@ Current code observations:
 - `STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION` is a product-scoped contract: the referenced Stripe Payment Method Configuration must be Pay by Bank-only for this product
 - Pay As You Go Checkout and offer Checkout must not use the reserved-block bank payment-method configuration
 - card, Apple Pay, Klarna, and partial Lesson Credit plus bank payment remain excluded from Reserved Weekly Slot bank checkout v1
-- the current code excludes Klarna locally, but card/Apple Pay exclusion for the reserved bank product depends on the referenced Stripe Payment Method Configuration being correctly configured in the real CoachCarter Stripe account
+- the current code excludes Klarna locally, and card/Apple Pay/wallet exclusion for the reserved bank product is enforced by the confirmed live `Reserved Weekly Slot` Payment Method Configuration
 - the webhook guard that ignores unpaid Checkout completion events should stay async-payment-method generic, not Klarna-specific
 
 ## Implementation Direction
@@ -180,9 +205,8 @@ Cash or original-payment-method refunds are exceptions for the admin/operator re
 
 Production facts still needing real Stripe account confirmation:
 
-- Pay by Bank production configuration for the CoachCarter account and the chosen product-scoped payment-method configuration.
 - Account-specific Pay by Bank pricing and any non-refundable fee treatment.
-- Original-payment-method refund behaviour for Pay by Bank payments, including partial refunds, timing, and whether any account-specific restrictions apply.
+- Original-payment-method refund behaviour for Pay by Bank payments, including partial refunds, timing, refund windows, failure handling, and whether any account-specific restrictions apply.
 
 ## Non-Goals
 

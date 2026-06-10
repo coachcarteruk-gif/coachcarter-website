@@ -659,7 +659,16 @@ Stage 6B7 bank-paid cancellation/refund policy clarification - 2026-06-10:
 - Confirmed the v1 policy for bank-paid Reserved Weekly Slot cancellation value: eligible 48h+ learner cancellations return same-instructor Lesson Credit by default through the existing cancellation/LCB path.
 - Cash or original-payment-method refunds remain admin/operator exceptions through the existing guarded refund workflows where applicable.
 - This clarification does not add learner self-serve cash refunds, automatic Stripe refunds, BCS refund execution, payout changes, platform-balance semantic changes, expiry cron/admin cleanup, notifications, or Pay As You Go changes.
-- Production facts still requiring real Stripe account confirmation are Pay by Bank production configuration, account-specific Pay by Bank pricing/fee treatment, and original-payment-method refund behaviour.
+- At this point, production facts still requiring real Stripe account confirmation were Pay by Bank production configuration, account-specific Pay by Bank pricing/fee treatment, and original-payment-method refund behaviour.
+
+Stage 6B8 production Stripe configuration audit - 2026-06-10:
+
+- Confirmed in the live CoachCarter Stripe Dashboard that the default Payment Method Configuration keeps Pay by Bank disabled and Klarna disabled, so ordinary Pay As You Go Checkout should not inherit Pay by Bank or Klarna from the default config.
+- Confirmed the reserved product Payment Method Configuration is named `Reserved Weekly Slot` with ID `pmc_1TggYZIqhTSdZedSRi8AgRVd`.
+- Confirmed the `Reserved Weekly Slot` configuration has Pay by Bank enabled and Cards, Apple Pay, Google Pay, PayPal, Klarna, and all other payment methods disabled.
+- Confirmed live Pay by Bank account properties shown in Dashboard: enabled, immediate confirmation, no recurring-payment support, refund support enabled, no dispute support, GBP 0.50-GBP 10,000 transaction amount range, and EUR/GBP presentment currencies.
+- This confirmation does not add live Stripe probes, backend payment changes, automatic Stripe refunds, BCS refund execution, payout changes, expiry cron/admin cleanup, notifications, or Pay As You Go changes.
+- Remaining production facts still requiring confirmation are account-specific Pay by Bank pricing/fee treatment and original-payment-method refund details, including partial refunds, timing, refund windows, failure handling, and any account-specific restrictions.
 
 ### Later Stage 5 Work
 
@@ -670,11 +679,10 @@ Still deferred:
 
 ### Stage 6 Remaining Work
 
-Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, learner checkout UI wiring, learner return/status copy polish, and the bank-paid cancellation-to-credit policy decision are implemented or documented. Remaining Stage 6 work:
+Bank-funded Reserved Weekly Slot checkout, webhook conversion, learner return status, stale-hold cleanup, learner checkout UI wiring, learner return/status copy polish, the bank-paid cancellation-to-credit policy decision, and the live Stripe payment-method configuration audit are implemented or documented. Remaining Stage 6 work:
 
-- Stripe Pay by Bank production configuration
 - account-specific Pay by Bank pricing and fee treatment
-- original-payment-method refund behaviour for Pay by Bank payments, including partial refunds and timing
+- original-payment-method refund behaviour for Pay by Bank payments, including partial refunds, timing, refund windows, failure handling, and account-specific restrictions
 - real-world monitoring of learner return/status states after launch
 
 Expiry/release cron decision: v1 keeps opportunistic cleanup only. Add a scheduled/admin cleanup later only if real usage shows abandoned pending holds creating operational noise.
