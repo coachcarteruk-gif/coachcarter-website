@@ -17,7 +17,8 @@ Current product decisions:
 - Reserved Weekly Slot bank payment v1 excludes card, Apple Pay, Klarna, and partial Lesson Credit plus bank payment.
 - Paid-In-Full Reward discounting is deferred from v1.
 - Bank-payment checkout holds should start with a 10-minute window.
-- If an eligible 48h+ cancellation happens on a bank-paid reserved block, the simplest v1 policy is to return value as same-instructor Lesson Credit.
+- If an eligible 48h+ cancellation happens on a bank-paid reserved block, v1 returns value as same-instructor Lesson Credit by default.
+- Cash or original-payment-method refunds remain admin/operator exceptions, not learner self-serve or automatic Stripe refunds.
 
 ## Stripe Pay By Bank Facts To Verify
 
@@ -34,6 +35,7 @@ Compatibility notes to verify against the live CoachCarter account before implem
 - refunds and partial refunds are supported
 - dispute support is not available
 - Stripe says Connect support is available, but CoachCarter should still test against its own account/platform setup
+- production Pay by Bank payment-method configuration, account-specific pricing, and original-payment-method refund behaviour still need confirmation against the real CoachCarter Stripe account before being treated as production facts
 
 ## Local Test Status
 
@@ -159,6 +161,23 @@ Stage 6 should be split into small slices.
 - For eligible 48h+ cancellation of a bank-paid reserved occurrence, return Lesson Credit to the learner/instructor balance by default.
 - Keep cash refunds as an admin/operator exception workflow, not automatic learner self-serve in v1.
 - Do not broaden Stripe refund execution or refund ledgers without a separate explicit implementation slice.
+
+## Bank-Paid Cancellation And Refund Policy
+
+Confirmed bank-funded Reserved Weekly Slot occurrences are normal `lesson_bookings` rows with `payment_method='bank_payment'`, `created_by='recurring_block_bank_checkout'`, and `minutes_deducted` set to the lesson duration. The existing learner cancellation rule therefore applies:
+
+- 48 or more hours' notice marks the booking `refunded`, sets `credit_returned = TRUE`, and returns the lesson duration to `learner_credit_balances` for the same learner, instructor, and school.
+- Under 48 hours' notice leaves the booking payable through the existing `scheduled` -> `chargeable` lifecycle and sets `credit_forfeited = TRUE`.
+
+This is the v1 product policy for bank-paid Reserved Weekly Slot cancellation value. The learner gets same-instructor Lesson Credit by default, so they can rebook with the same instructor without creating an automatic cash movement.
+
+Cash or original-payment-method refunds are exceptions for the admin/operator refund workflow. They should use the existing refund-preview/execute/manual-bank-recording guardrails where applicable, including original-method return where possible and payment-provider fee treatment. This Stage 6 slice does not approve a learner self-serve cash refund, automatic Stripe refund on cancellation, BCS refund execution broadening, payout reversal, or platform-balance semantic change.
+
+Production facts still needing real Stripe account confirmation:
+
+- Pay by Bank production configuration for the CoachCarter account and the chosen product-scoped payment-method configuration.
+- Account-specific Pay by Bank pricing and any non-refundable fee treatment.
+- Original-payment-method refund behaviour for Pay by Bank payments, including partial refunds, timing, and whether any account-specific restrictions apply.
 
 ## Non-Goals
 
