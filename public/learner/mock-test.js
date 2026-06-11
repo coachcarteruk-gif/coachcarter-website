@@ -1113,17 +1113,68 @@ document.addEventListener('visibilitychange', function() {
 });
 
 /* ── Fault Map ── */
+function showMapFallback(message) {
+  var container = document.getElementById('map-container');
+  var panel = document.getElementById('fault-placement-panel');
+  var placed = document.getElementById('placed-faults-list');
+  if (!container) return;
+
+  container.innerHTML = '';
+  var fallback = document.createElement('div');
+  fallback.className = 'map-fallback';
+
+  var copy = document.createElement('div');
+  var title = document.createElement('strong');
+  title.textContent = 'Map unavailable';
+  var body = document.createElement('span');
+  body.textContent = message;
+  copy.appendChild(title);
+  copy.appendChild(body);
+  fallback.appendChild(copy);
+
+  if (selectedRoute && selectedRoute.mapsUrl) {
+    var link = document.createElement('a');
+    link.className = 'btn-secondary';
+    link.href = selectedRoute.mapsUrl;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'Open selected route in Google Maps';
+    fallback.appendChild(link);
+  }
+
+  container.appendChild(fallback);
+  if (panel) panel.style.display = 'none';
+  if (placed) placed.innerHTML = '<li style="color:var(--muted);">Fault pins need the map to load first.</li>';
+}
+
 function showFaultMap() {
   releaseWakeLock();
   showScreen('screen-map');
 
   if (faultMap) { faultMap.remove(); faultMap = null; }
+  routePolyline = null;
 
-  faultMap = L.map('map-container');
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19
-  }).addTo(faultMap);
+  var panel = document.getElementById('fault-placement-panel');
+  var container = document.getElementById('map-container');
+  if (panel) panel.style.display = '';
+  if (container) container.innerHTML = '';
+
+  if (typeof L === 'undefined') {
+    showMapFallback('The map library did not load. Check your connection, then try again.');
+    return;
+  }
+
+  try {
+    faultMap = L.map('map-container');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(faultMap);
+  } catch (err) {
+    console.warn('Fault map failed to initialise:', err);
+    showMapFallback('The map could not be started. Check your connection, then try again.');
+    return;
+  }
 
   if (gpsTrack.length > 0) {
     var latLngs = gpsTrack
@@ -1137,6 +1188,13 @@ function showFaultMap() {
     if (latLngs.length >= 2) {
       routePolyline = L.polyline(latLngs, { color: '#f58321', weight: 5, opacity: 0.8 }).addTo(faultMap);
       faultMap.fitBounds(routePolyline.getBounds(), { padding: [30, 30] });
+    } else if (latLngs.length === 1) {
+      faultMap.setView(latLngs[0], 16);
+      L.circleMarker(latLngs[0], {
+        radius: 8, fillColor: '#f58321', color: '#fff', weight: 2, fillOpacity: 0.9
+      }).addTo(faultMap);
+    } else if (selectedCentre) {
+      faultMap.setView([selectedCentre.centre.lat, selectedCentre.centre.lng], selectedCentre.zoom || 13);
     }
 
     faultMap.on('click', function(e) {
