@@ -972,6 +972,40 @@ async function submitReservedGoodwillMove() {
 // ══════════════════════════════════════════════════════════════════
 let allLearners = [];
 let currentLearnerTierFilter = 0;
+let currentLearnerCategoryFilter = 'all';
+
+const LEARNER_CATEGORY_META = {
+  regular: { label: 'Regular', badge: 'badge-green' },
+  sporadic: { label: 'Sporadic', badge: 'badge-amber' },
+  inactive: { label: 'Inactive', badge: 'badge-gray' },
+  passed: { label: 'Passed', badge: 'badge-blue' }
+};
+
+function learnerCategoryBadge(category) {
+  const meta = LEARNER_CATEGORY_META[category];
+  if (!meta) return '<span class="badge badge-gray">Uncategorised</span>';
+  return '<span class="badge ' + meta.badge + '">' + meta.label + '</span>';
+}
+
+function learnerCategoryLabel(category) {
+  return LEARNER_CATEGORY_META[category]?.label || 'Uncategorised';
+}
+
+function learnerRelationshipCategorySelect(link) {
+  const value = link.relationship_category || '';
+  return '<select data-action="update-learner-relationship-category" data-learner-id="' + _detailLearnerId + '" data-instructor-id="' + link.instructor_id + '" data-previous-value="' + esc(value) + '" style="min-width:130px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:#fff;font-size:0.82rem;">' +
+    '<option value=""' + (value === '' ? ' selected' : '') + '>Uncategorised</option>' +
+    '<option value="regular"' + (value === 'regular' ? ' selected' : '') + '>Regular</option>' +
+    '<option value="sporadic"' + (value === 'sporadic' ? ' selected' : '') + '>Sporadic</option>' +
+    '<option value="inactive"' + (value === 'inactive' ? ' selected' : '') + '>Inactive</option>' +
+    '<option value="passed"' + (value === 'passed' ? ' selected' : '') + '>Passed</option>' +
+  '</select>';
+}
+
+function formatAvailability(windows) {
+  if (!windows || windows.length === 0) return 'No weekly availability set';
+  return windows.map(w => DAYS[w.day_of_week] + ' ' + formatTime(w.start_time) + '-' + formatTime(w.end_time)).join(', ');
+}
 
 async function loadLearners() {
   try {
@@ -982,7 +1016,7 @@ async function loadLearners() {
     renderLearners();
   } catch (err) {
     document.getElementById('learners-body').innerHTML =
-      '<tr><td colspan="8" class="empty-state">Failed to load learners</td></tr>';
+      '<tr><td colspan="9" class="empty-state">Failed to load learners</td></tr>';
   }
 }
 
@@ -990,6 +1024,13 @@ function filterLearnerTier(btn, tier) {
   document.querySelectorAll('#learner-filters .filter-pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   currentLearnerTierFilter = tier;
+  renderLearners();
+}
+
+function filterLearnerCategory(btn, category) {
+  document.querySelectorAll('#learner-category-filters .filter-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  currentLearnerCategoryFilter = category || 'all';
   renderLearners();
 }
 
@@ -1001,6 +1042,11 @@ function renderLearners() {
   if (currentLearnerTierFilter) {
     filtered = filtered.filter(l => l.current_tier === currentLearnerTierFilter);
   }
+  if (currentLearnerCategoryFilter !== 'all') {
+    filtered = filtered.filter(l => currentLearnerCategoryFilter === 'uncategorised'
+      ? !l.learner_category
+      : l.learner_category === currentLearnerCategoryFilter);
+  }
   if (search) {
     filtered = filtered.filter(l =>
       (l.name || '').toLowerCase().includes(search) ||
@@ -1010,7 +1056,7 @@ function renderLearners() {
   }
 
   if (filtered.length === 0) {
-    body.innerHTML = '<tr><td colspan="8" class="empty-state">No learners found</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="empty-state">No learners found</td></tr>';
     return;
   }
 
@@ -1020,14 +1066,15 @@ function renderLearners() {
   body.innerHTML = filtered.map(l => {
     const tier = l.current_tier || 1;
     return '<tr style="cursor:pointer;" data-action="show-learner-detail" data-id="' + l.id + '">' +
-      '<td><strong>' + esc(l.name || 'Unnamed') + '</strong></td>' +
-      '<td>' + esc(l.email || '-') + '</td>' +
+      '<td><strong>' + esc(l.name || 'Unnamed') + '</strong><br><span style="font-size:0.78rem;color:var(--muted);">' + esc(l.email || '-') + '</span></td>' +
+      '<td>' + learnerCategoryBadge(l.learner_category) + '</td>' +
+      '<td>' + esc(l.primary_instructor_name || '-') + '</td>' +
       '<td>' + esc(l.phone || '-') + '</td>' +
-      '<td><span class="badge ' + (tierClasses[tier] || 'badge-gray') + '">' + (tierLabels[tier] || 'T' + tier) + '</span></td>' +
       '<td>' + fmtBalanceMins(l.balance_minutes || 0) + '</td>' +
+      '<td>' + fmtBalanceMins(l.delivered_minutes || 0) + '</td>' +
       '<td>' + (l.total_bookings || 0) + (l.upcoming_bookings ? ' <span style="color:var(--green);font-size:0.78rem;">(' + l.upcoming_bookings + ' upcoming)</span>' : '') + '</td>' +
+      '<td>' + (l.next_booking_date ? formatDate(l.next_booking_date) : '-') + '</td>' +
       '<td>' + (l.last_booking_date ? formatDate(l.last_booking_date) : '-') + '</td>' +
-      '<td>' + (l.created_at ? formatDate(l.created_at.slice(0, 10)) : '-') + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -1066,6 +1113,8 @@ async function showLearnerDetail(id) {
 
     // Stats cards
     html += '<div class="stats-grid" style="margin-bottom: 20px;">';
+    html += '<div class="stat-card"><div class="stat-value" style="font-size:1rem;">' + learnerCategoryBadge(learner?.learner_category) + '</div><div class="stat-label">Learner Type</div></div>';
+    html += '<div class="stat-card"><div class="stat-value" style="font-size:1.1rem;">' + esc(learner?.primary_instructor_name || 'None') + '</div><div class="stat-label">Assigned Instructor</div></div>';
     html += '<div class="stat-card"><div class="stat-value">' + (tierLabels[learner?.current_tier] || 'N/A') + '</div><div class="stat-label">Current Tier</div></div>';
     html += '<div class="stat-card" style="position:relative;">' +
       '<div class="stat-value">' + fmtBalanceMins(learner?.balance_minutes || 0) + '</div>' +
@@ -1075,9 +1124,32 @@ async function showLearnerDetail(id) {
         '<button class="btn btn-sm" data-action="open-adjust-credits" data-learner-id="' + id + '" data-balance="' + (learner?.balance_minutes || 0) + '">Adjust instructor balance</button>' +
       '</div>' +
       '</div>';
+    html += '<div class="stat-card"><div class="stat-value">' + fmtBalanceMins(learner?.delivered_minutes || 0) + '</div><div class="stat-label">Delivered Hours</div></div>';
+    html += '<div class="stat-card"><div class="stat-value" style="font-size:1.1rem;">' + (learner?.test_date ? formatDate(learner.test_date) : 'Not set') + '</div><div class="stat-label">Test Date</div></div>';
     html += '<div class="stat-card"><div class="stat-value">' + (data.progress?.total_sessions || 0) + '</div><div class="stat-label">Sessions Logged</div></div>';
     html += '<div class="stat-card"><div class="stat-value">' + Math.round((data.progress?.total_minutes || 0) / 60 * 10) / 10 + 'h</div><div class="stat-label">Total Hours</div></div>';
     html += '</div>';
+
+    html += '<div class="panel-card" style="margin-bottom:20px;">' +
+      '<div class="panel-card-header"><span class="panel-card-title">Availability</span></div>' +
+      '<div style="padding:16px 20px;font-size:0.9rem;color:var(--muted);">' + esc(formatAvailability(data.availability || [])) + '</div>' +
+      '</div>';
+
+    html += '<h3 style="font-family:var(--font-head);margin-bottom:12px;">Instructor Relationships</h3>';
+    if (!data.instructor_links || data.instructor_links.length === 0) {
+      html += '<div class="empty-state" style="margin-bottom:24px;">No instructor relationships yet</div>';
+    } else {
+      html += '<div class="table-wrap" style="margin-bottom:24px;"><table class="data-table"><thead><tr><th>Instructor</th><th>Relationship Type</th><th>Delivered</th><th>Upcoming</th><th>Last Booking</th><th>Test Date</th></tr></thead><tbody>';
+      html += data.instructor_links.map(link =>
+        '<tr><td>' + esc(link.instructor_name || '-') + '</td>' +
+        '<td>' + learnerRelationshipCategorySelect(link) + '</td>' +
+        '<td>' + fmtBalanceMins(link.delivered_minutes || 0) + '</td>' +
+        '<td>' + (link.upcoming_lessons || 0) + '</td>' +
+        '<td>' + (link.last_booking_date ? formatDate(link.last_booking_date) : '-') + '</td>' +
+        '<td>' + (link.relationship_test_date ? formatDate(link.relationship_test_date) : '-') + '</td></tr>'
+      ).join('');
+      html += '</tbody></table></div>';
+    }
 
     html += renderCreditReconciliationInspectionCard();
 
@@ -1154,7 +1226,27 @@ function closeLearnerDetail() {
 
 // ── Edit learner details ──
 
-function openEditLearner() {
+async function populateLearnerInstructorSelect(selectedId) {
+  const select = document.getElementById('learner-edit-primary-instructor');
+  select.innerHTML = '<option value="">No assigned instructor</option>';
+  try {
+    if (!instructorsCache || instructorsCache.length === 0) {
+      const res = await fetchAdmin('/api/admin?action=all-instructors', { headers: HEADERS });
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      instructorsCache = data.instructors || [];
+    }
+    select.innerHTML = '<option value="">No assigned instructor</option>' +
+      instructorsCache
+        .filter(i => i.active)
+        .map(i => '<option value="' + i.id + '"' + (Number(selectedId) === Number(i.id) ? ' selected' : '') + '>' + esc(i.name) + '</option>')
+        .join('');
+  } catch (err) {
+    select.innerHTML = '<option value="">Could not load instructors</option>';
+  }
+}
+
+async function openEditLearner() {
   if (!_detailLearnerId) return;
   const learner = allLearners.find(l => l.id === _detailLearnerId);
   if (!learner) return;
@@ -1163,6 +1255,9 @@ function openEditLearner() {
   document.getElementById('learner-edit-email').value = learner.email || '';
   document.getElementById('learner-edit-phone').value = learner.phone || '';
   document.getElementById('learner-edit-pickup').value = learner.pickup_address || '';
+  document.getElementById('learner-edit-category').value = learner.learner_category || '';
+  document.getElementById('learner-edit-test-date').value = learner.test_date || '';
+  await populateLearnerInstructorSelect(learner.primary_instructor_id || '');
   document.getElementById('modal-edit-learner').classList.add('open');
 }
 
@@ -1174,7 +1269,10 @@ async function saveEditLearner() {
     name: document.getElementById('learner-edit-name').value.trim(),
     email: document.getElementById('learner-edit-email').value.trim(),
     phone: document.getElementById('learner-edit-phone').value.trim(),
-    pickup_address: document.getElementById('learner-edit-pickup').value.trim()
+    pickup_address: document.getElementById('learner-edit-pickup').value.trim(),
+    learner_category: document.getElementById('learner-edit-category').value || null,
+    primary_instructor_id: document.getElementById('learner-edit-primary-instructor').value || null,
+    test_date: document.getElementById('learner-edit-test-date').value || null
   };
   if (!body.name && !body.email) return alert('Name or email is required');
   try {
@@ -1186,19 +1284,43 @@ async function saveEditLearner() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed');
     closeModal('modal-edit-learner');
-    // Update local cache and refresh views
-    const idx = allLearners.findIndex(l => l.id === id);
-    if (idx !== -1) {
-      Object.assign(allLearners[idx], data.learner);
-    }
+    await loadLearners();
     showLearnerDetail(id);
-    renderLearners();
   } catch (err) {
     alert('Failed to save: ' + err.message);
   }
 }
 
 // ── Credit adjustment ──
+async function updateLearnerRelationshipCategory(select) {
+  const learnerId = parseInt(select.dataset.learnerId, 10);
+  const instructorId = parseInt(select.dataset.instructorId, 10);
+  if (!learnerId || !instructorId) return;
+  const previous = select.dataset.previousValue || '';
+  select.disabled = true;
+  try {
+    const res = await fetchAdmin('/api/admin?action=update-learner-relationship', {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        learner_id: learnerId,
+        instructor_id: instructorId,
+        learner_category: select.value || null
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    select.dataset.previousValue = select.value || '';
+    toast('Relationship category saved', 'success');
+    showLearnerDetail(learnerId);
+  } catch (err) {
+    select.value = previous;
+    toast('Failed to save relationship category: ' + err.message, 'error');
+  } finally {
+    select.disabled = false;
+  }
+}
+
 let _adjustLearnerId = null;
 
 function fmtBalanceMins(mins) {
@@ -3635,6 +3757,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'send-connect-invite') sendConnectInvite(parseInt(t.dataset.id, 10));
   else if (a === 'filter-bookings') filterBookings(t, t.dataset.status);
   else if (a === 'filter-learner-tier') filterLearnerTier(t, parseInt(t.dataset.tier, 10));
+  else if (a === 'filter-learner-category') filterLearnerCategory(t, t.dataset.category);
   else if (a === 'close-modal') closeModal(t.dataset.modal);
   else if (a === 'bulk-action') bulkAction(t.dataset.op);
 });
@@ -3643,6 +3766,7 @@ document.addEventListener('change', function (e) {
   if (!t) return;
   if (t.dataset.action === 'toggle-select-all') toggleSelectAll(t.checked);
   else if (t.dataset.action === 'toggle-bulk-select') toggleBulkSelect(parseInt(t.dataset.id, 10), t.checked);
+  else if (t.dataset.action === 'update-learner-relationship-category') updateLearnerRelationshipCategory(t);
 });
 document.addEventListener('input', function (e) {
   if (e.target && (e.target.id === 'refund-source-id' || e.target.id === 'refund-reason')) {

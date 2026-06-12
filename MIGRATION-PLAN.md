@@ -578,7 +578,7 @@ The web version streams responses from Anthropic. In React Native:
 |--------|-----------|-------|
 | Dashboard/Calendar | Medium | Schedule view, upcoming lessons, completion marking |
 | Availability | Medium | Weekly time slot grid editor |
-| Learners | Medium | Learner list with notes, phone/WhatsApp links |
+| Learners | Medium | Admin learner list with global status categories/assigned instructor, plus instructor learner list with relationship notes, status categories, phone/WhatsApp links |
 | Profile | Low | Bio, photo upload (uses presigned URL), contact details. Should also include "Change password" form posting to `api/instructor-auth.js?action=change-password` (web has the API but not yet a UI for voluntary changes) |
 | Login | Low | Email + password via `api/instructor-auth.js`. Force-change-password screen if `must_change_password: true` is returned on login. No self-serve forgot-password — point users to contact admin. |
 

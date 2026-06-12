@@ -514,6 +514,8 @@ phone TEXT
 current_tier INTEGER DEFAULT 1
 credit_balance INTEGER DEFAULT 0   -- legacy, kept via dual-write
 balance_minutes INTEGER DEFAULT 0  -- hours-based balance (stored as minutes)
+learner_category TEXT              -- regular/sporadic/inactive/passed for admin segmentation
+primary_instructor_id INTEGER      -- optional assigned instructor FK
 calendar_token TEXT UNIQUE         -- for iCal feed polling
 pickup_address TEXT
 prefer_contact_before BOOLEAN DEFAULT FALSE
@@ -728,7 +730,7 @@ Two alarm triggers:
 
 `instructors.hourly_rate_pence` is the admin-editable per-instructor lesson rate override used after any learner/instructor custom rate and before the school default. `instructors.bulk_tiers_enabled` controls whether school-defined bulk discounts apply to future credit purchases for that instructor; when true, the instructor absorbs the discount. It does not discount direct pay-and-book single-slot payments.
 
-**`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). Used by direct booking checkout, lesson-types/duration pricing APIs, historical credit pricing, earnings view, and payout calculations. Direct pay-and-book pricing uses custom learner rate → instructor hourly rate → school `bulk_hourly_pence`; bulk discounts remain historical credit-package only.
+**`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, learner_category (`regular`, `sporadic`, `inactive`, `passed`, or NULL), custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). `learner_users.learner_category` is the global admin/broadcast-facing category; `instructor_learner_notes.learner_category` is the instructor relationship category. Used by direct booking checkout, lesson-types/duration pricing APIs, historical credit pricing, earnings view, and payout calculations. Direct pay-and-book pricing uses custom learner rate → instructor hourly rate → school `bulk_hourly_pence`; bulk discounts remain historical credit-package only.
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
 

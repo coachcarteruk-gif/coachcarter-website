@@ -585,19 +585,27 @@ body {
       <button class="filter-pill" data-action="filter-learner-tier" data-tier="2">Tier 2</button>
       <button class="filter-pill" data-action="filter-learner-tier" data-tier="3">Tier 3</button>
     </div>
+    <div class="filter-bar" id="learner-category-filters">
+      <button class="filter-pill active" data-action="filter-learner-category" data-category="all">All types</button>
+      <button class="filter-pill" data-action="filter-learner-category" data-category="regular">Regular</button>
+      <button class="filter-pill" data-action="filter-learner-category" data-category="sporadic">Sporadic</button>
+      <button class="filter-pill" data-action="filter-learner-category" data-category="inactive">Inactive</button>
+      <button class="filter-pill" data-action="filter-learner-category" data-category="passed">Passed</button>
+      <button class="filter-pill" data-action="filter-learner-category" data-category="uncategorised">Uncategorised</button>
+    </div>
 
     <div class="panel-card">
       <div class="table-wrap">
         <table class="data-table">
           <thead>
             <tr>
-              <th>Name</th><th>Email</th><th>Phone</th>
-              <th>Tier</th><th>Hours</th><th>Bookings</th>
-              <th>Last Booking</th><th>Signed Up</th>
+              <th>Learner</th><th>Type</th><th>Assigned</th><th>Phone</th>
+              <th>Balance</th><th>Delivered</th><th>Bookings</th>
+              <th>Next</th><th>Last</th>
             </tr>
           </thead>
           <tbody id="learners-body">
-            <tr><td colspan="8" class="empty-state">Loading...</td></tr>
+            <tr><td colspan="9" class="empty-state">Loading...</td></tr>
           </tbody>
         </table>
       </div>
@@ -1107,6 +1115,26 @@ body {
     <div class="form-group">
       <label>Pickup Address</label>
       <input type="text" id="learner-edit-pickup" placeholder="e.g. 12 High Street, AB1 2CD">
+    </div>
+    <div class="form-group">
+      <label>Learner Type</label>
+      <select id="learner-edit-category">
+        <option value="">Uncategorised</option>
+        <option value="regular">Regular</option>
+        <option value="sporadic">Sporadic</option>
+        <option value="inactive">Inactive</option>
+        <option value="passed">Passed</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Assigned Instructor</label>
+      <select id="learner-edit-primary-instructor">
+        <option value="">No assigned instructor</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Test Date</label>
+      <input type="date" id="learner-edit-test-date">
     </div>
     <div class="modal-actions">
       <button class="btn" data-action="close-modal" data-modal="modal-edit-learner">Cancel</button>

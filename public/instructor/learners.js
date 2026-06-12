@@ -4,7 +4,15 @@
 let instructor;
 let allLearners = [];
 let currentSort = 'recent';
+let currentCategoryFilter = 'all';
 let currentDetailLearnerId = null;
+
+const LEARNER_CATEGORY_META = {
+  regular: { label: 'Regular', className: 'category-regular' },
+  sporadic: { label: 'Sporadic', className: 'category-sporadic' },
+  inactive: { label: 'Inactive', className: 'category-inactive' },
+  passed: { label: 'Passed', className: 'category-passed' }
+};
 
 // ── Init ──
 function init() {
@@ -28,6 +36,14 @@ function setSort(mode) {
   currentSort = mode;
   document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('sort-' + mode).classList.add('active');
+  renderLearners();
+}
+
+function setCategoryFilter(mode) {
+  currentCategoryFilter = mode || 'all';
+  document.querySelectorAll('.category-filter-btn').forEach(b => b.classList.remove('active'));
+  const active = document.querySelector('[data-category-filter="' + currentCategoryFilter + '"]');
+  if (active) active.classList.add('active');
   renderLearners();
 }
 
@@ -69,6 +85,9 @@ function renderLearners() {
       (l.email || '').toLowerCase().includes(search) ||
       (l.phone || '').toLowerCase().includes(search)
     );
+  }
+  if (currentCategoryFilter !== 'all') {
+    filtered = filtered.filter(l => l.learner_category === currentCategoryFilter);
   }
 
   filtered = sortLearners(filtered);
@@ -114,6 +133,11 @@ function renderLearners() {
       rateBadge = '<span class="test-date-badge" style="background:var(--accent-lt);color:var(--accent)">£' + (l.custom_hourly_rate_pence / 100).toFixed(0) + '/hr</span>';
     }
 
+    const category = LEARNER_CATEGORY_META[l.learner_category] || null;
+    const categoryBadge = category
+      ? '<span class="learner-category-badge ' + category.className + '">' + category.label + '</span>'
+      : '';
+
     // Notes preview
     let notesPreview = '';
     if (l.instructor_notes) {
@@ -130,7 +154,7 @@ function renderLearners() {
     return `
       <div class="learner-card fade-in" style="cursor:pointer" data-action="open-learner" data-learner-id="${l.id}">
         <div class="learner-card-top">
-          <span class="learner-name">${esc(l.name || 'Unnamed')}${l.prefer_contact_before ? '<span class="contact-pref-badge">Contact first</span>' : ''}${testBadge}${rateBadge}</span>
+          <span class="learner-name">${esc(l.name || 'Unnamed')}${l.prefer_contact_before ? '<span class="contact-pref-badge">Contact first</span>' : ''}${categoryBadge}${testBadge}${rateBadge}</span>
           <span class="tier-badge tier-${tier}">${tierLabels[tier] || 'Tier ' + tier}</span>
         </div>
         <div class="learner-stats">
@@ -221,6 +245,16 @@ function renderDetail(data, notesData, mockData) {
           <textarea id="detail-notes-text" placeholder="e.g. Nervous driver, needs roundabout practice, prefers quiet routes…">${esc(notesData.notes || '')}</textarea>
         </div>
         <div class="detail-form-row">
+          <div class="detail-form-group">
+            <label for="detail-learner-category">Learner status</label>
+            <select id="detail-learner-category">
+              <option value="">Choose status</option>
+              <option value="regular"${notesData.learner_category === 'regular' ? ' selected' : ''}>Regular</option>
+              <option value="sporadic"${notesData.learner_category === 'sporadic' ? ' selected' : ''}>Sporadic</option>
+              <option value="inactive"${notesData.learner_category === 'inactive' ? ' selected' : ''}>Inactive</option>
+              <option value="passed"${notesData.learner_category === 'passed' ? ' selected' : ''}>Passed</option>
+            </select>
+          </div>
           <div class="detail-form-group">
             <label for="detail-test-date">Test date</label>
             <input type="date" id="detail-test-date" value="${notesData.test_date || ''}">
@@ -326,6 +360,7 @@ async function saveLearnerNotes() {
   const btn = document.getElementById('save-notes-btn');
   const notes = document.getElementById('detail-notes-text').value.trim();
   const testDate = document.getElementById('detail-test-date').value || null;
+  const learnerCategory = document.getElementById('detail-learner-category').value || null;
   const rateInput = document.getElementById('detail-hourly-rate').value;
   const customHourlyRatePence = rateInput !== '' ? Math.round(parseFloat(rateInput) * 100) : null;
 
@@ -335,7 +370,7 @@ async function saveLearnerNotes() {
     const res = await ccAuth.fetchAuthed('/api/instructor?action=update-learner-notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ learner_id: currentDetailLearnerId, notes: notes || null, test_date: testDate, custom_hourly_rate_pence: customHourlyRatePence })
+      body: JSON.stringify({ learner_id: currentDetailLearnerId, notes: notes || null, test_date: testDate, custom_hourly_rate_pence: customHourlyRatePence, learner_category: learnerCategory })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
@@ -346,6 +381,7 @@ async function saveLearnerNotes() {
       cached.instructor_notes = notes || null;
       cached.test_date = testDate;
       cached.custom_hourly_rate_pence = customHourlyRatePence;
+      cached.learner_category = learnerCategory;
     }
 
     showToast('Notes saved');
@@ -431,6 +467,9 @@ document.addEventListener('click', function (e) {
 (function wire() {
   document.querySelectorAll('[data-sort]').forEach(function (btn) {
     btn.addEventListener('click', function () { setSort(btn.dataset.sort); });
+  });
+  document.querySelectorAll('[data-category-filter]').forEach(function (btn) {
+    btn.addEventListener('click', function () { setCategoryFilter(btn.dataset.categoryFilter); });
   });
   var search = document.getElementById('learner-search');
   if (search) search.addEventListener('input', renderLearners);

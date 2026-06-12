@@ -165,6 +165,25 @@
       background: #ede9fe; color: #7c3aed; margin-left: 6px; vertical-align: middle;
     }
 
+    /* â”€â”€ Learner category â”€â”€ */
+    .category-filter-row { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+    .category-filter-btn {
+      padding: 6px 11px; border-radius: 7px; border: 1px solid var(--border);
+      background: var(--white); font-family: var(--font-body); font-size: 0.76rem;
+      font-weight: 700; color: var(--muted); cursor: pointer; transition: all 0.15s;
+    }
+    .category-filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .category-filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .learner-category-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 100px;
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      margin-left: 6px; vertical-align: middle;
+    }
+    .category-regular { background: var(--green-lt); color: var(--green); }
+    .category-sporadic { background: var(--amber-lt); color: var(--amber); }
+    .category-inactive { background: var(--surface); color: var(--muted); }
+    .category-passed { background: var(--blue-lt); color: var(--blue); }
+
     /* ── Learner notes preview ── */
     .learner-notes-preview { font-size: 0.78rem; color: var(--muted); font-style: italic; margin-top: 4px; }
 
@@ -197,7 +216,12 @@
       font-family: var(--font-body); font-size: 0.85rem; color: var(--primary);
       background: var(--surface); margin-top: 0;
     }
-    .detail-notes-form input[type="date"]:focus { border-color: var(--accent); outline: none; background: var(--white); }
+    .detail-notes-form select {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+      font-family: var(--font-body); font-size: 0.85rem; color: var(--primary);
+      background: var(--surface); margin-top: 0;
+    }
+    .detail-notes-form input[type="date"]:focus, .detail-notes-form select:focus { border-color: var(--accent); outline: none; background: var(--white); }
     .detail-form-row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; align-items: flex-end; }
     .detail-form-group { flex: 1; min-width: 140px; }
     .btn-save-notes {
@@ -226,6 +250,15 @@
       <button class="sort-btn active" id="sort-recent" data-sort="recent">Recent</button>
       <button class="sort-btn" id="sort-lessons" data-sort="lessons">Most lessons</button>
       <button class="sort-btn" id="sort-name" data-sort="name">A–Z</button>
+    </div>
+
+    <div class="category-filter-row">
+      <span class="sort-label">Status:</span>
+      <button class="category-filter-btn active" data-category-filter="all">All</button>
+      <button class="category-filter-btn" data-category-filter="regular">Regular</button>
+      <button class="category-filter-btn" data-category-filter="sporadic">Sporadic</button>
+      <button class="category-filter-btn" data-category-filter="inactive">Inactive</button>
+      <button class="category-filter-btn" data-category-filter="passed">Passed</button>
     </div>
 
     <input type="text" class="search-input" id="learner-search" placeholder="Search by name, email, or phone...">

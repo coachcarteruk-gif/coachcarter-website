@@ -61,6 +61,7 @@ const {
 const TOKEN_EXPIRY_MINUTES = 30;
 const JWT_EXPIRY           = '180d';
 const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
+const LEARNER_CATEGORIES = new Set(['regular', 'sporadic', 'inactive', 'passed']);
 
 class InstructorBookingTransactionAbort extends Error {
   constructor(result) {
@@ -131,6 +132,11 @@ function instructorCanTeachLessonTransmission(instructorTransmissionType, lesson
 function defaultLessonTransmissionForInstructor(instructorTransmissionType) {
   const instructorType = normaliseAvailabilityTransmissionType(instructorTransmissionType) || 'manual';
   return instructorType === 'automatic' ? 'automatic' : 'manual';
+}
+
+function normaliseLearnerCategory(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return LEARNER_CATEGORIES.has(text) ? text : null;
 }
 
 function setCors(res) {
@@ -2455,13 +2461,17 @@ async function handleMyLearners(req, res) {
         MIN(lb.scheduled_date)::text AS first_lesson_date,
         iln.notes AS instructor_notes,
         iln.test_date::text AS test_date,
-        iln.custom_hourly_rate_pence
+        iln.custom_hourly_rate_pence,
+        iln.learner_category
       FROM learner_users lu
       JOIN lesson_bookings lb ON lb.learner_id = lu.id
-      LEFT JOIN instructor_learner_notes iln ON iln.learner_id = lu.id AND iln.instructor_id = ${instructor.id}
+      LEFT JOIN instructor_learner_notes iln
+        ON iln.learner_id = lu.id
+       AND iln.instructor_id = ${instructor.id}
+       AND iln.school_id = ${schoolId}
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.school_id = ${schoolId}
-      GROUP BY lu.id, iln.notes, iln.test_date, iln.custom_hourly_rate_pence
+      GROUP BY lu.id, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category
       ORDER BY MAX(lb.scheduled_date) DESC
     `;
 
@@ -2653,13 +2663,18 @@ async function handleLearnerNotes(req, res) {
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
     const [row] = await sql`
-      SELECT notes, test_date::text, custom_hourly_rate_pence
+      SELECT notes, test_date::text, custom_hourly_rate_pence, learner_category
       FROM instructor_learner_notes
       WHERE instructor_id = ${instructor.id}
         AND learner_id = ${learner_id}
         AND school_id = ${schoolId}
     `;
-    return res.json({ notes: row?.notes || '', test_date: row?.test_date || null, custom_hourly_rate_pence: row?.custom_hourly_rate_pence || null });
+    return res.json({
+      notes: row?.notes || '',
+      test_date: row?.test_date || null,
+      custom_hourly_rate_pence: row?.custom_hourly_rate_pence || null,
+      learner_category: row?.learner_category || null
+    });
   } catch (err) {
     console.error('learner-notes error:', err);
     reportError('/api/instructor', err);
@@ -2677,11 +2692,15 @@ async function handleUpdateLearnerNotes(req, res) {
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { learner_id, notes, test_date, custom_hourly_rate_pence } = req.body;
+  const { learner_id, notes, test_date, custom_hourly_rate_pence, learner_category } = req.body;
   if (!learner_id) return res.status(400).json({ error: 'learner_id required' });
 
   const ratePence = custom_hourly_rate_pence != null && custom_hourly_rate_pence !== '' ? parseInt(custom_hourly_rate_pence) : null;
   if (ratePence != null && (isNaN(ratePence) || ratePence < 0)) return res.status(400).json({ error: 'Invalid hourly rate' });
+  const category = learner_category != null && learner_category !== '' ? normaliseLearnerCategory(learner_category) : null;
+  if (learner_category != null && learner_category !== '' && !category) {
+    return res.status(400).json({ error: 'Invalid learner category' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -2697,10 +2716,10 @@ async function handleUpdateLearnerNotes(req, res) {
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
     await sql`
-      INSERT INTO instructor_learner_notes (instructor_id, learner_id, notes, test_date, custom_hourly_rate_pence, school_id, updated_at)
-      VALUES (${instructor.id}, ${learner_id}, ${notes || null}, ${test_date || null}, ${ratePence}, ${schoolId}, NOW())
+      INSERT INTO instructor_learner_notes (instructor_id, learner_id, notes, test_date, custom_hourly_rate_pence, learner_category, school_id, updated_at)
+      VALUES (${instructor.id}, ${learner_id}, ${notes || null}, ${test_date || null}, ${ratePence}, ${category}, ${schoolId}, NOW())
       ON CONFLICT (instructor_id, learner_id)
-      DO UPDATE SET notes = ${notes || null}, test_date = ${test_date || null}, custom_hourly_rate_pence = ${ratePence}, updated_at = NOW()
+      DO UPDATE SET notes = ${notes || null}, test_date = ${test_date || null}, custom_hourly_rate_pence = ${ratePence}, learner_category = ${category}, updated_at = NOW()
     `;
     return res.json({ ok: true });
   } catch (err) {

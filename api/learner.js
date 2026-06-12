@@ -1078,7 +1078,8 @@ async function handleExportData(req, res) {
     }
 
     const [profile] = await sql`
-      SELECT name, email, phone, pickup_address, test_date, test_time, prefer_contact_before, terms_accepted_at, created_at, last_activity_at
+      SELECT name, email, phone, pickup_address, learner_category, primary_instructor_id,
+             test_date, test_time, prefer_contact_before, terms_accepted_at, created_at, last_activity_at
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
 
     const onboarding = await sql`
@@ -1157,12 +1158,12 @@ async function handleExportData(req, res) {
       ORDER BY mtf.mock_test_id, mtf.part, mtf.skill_key`;
 
     // instructor_learner_notes: notes instructors keep about this learner
-    // (test date, free-text notes). Article 15 access right to data held about
-    // the data subject. Includes the instructor name so the learner knows who
-    // wrote it.
+    // (test date, learner category, free-text notes). Article 15 access right
+    // to data held about the data subject. Includes the instructor name so the
+    // learner knows who wrote it.
     const instructorNotes = await sql`
       SELECT i.name AS instructor_name, iln.notes, iln.test_date::text,
-             iln.updated_at
+             iln.learner_category, iln.updated_at
       FROM instructor_learner_notes iln
       JOIN instructors i ON i.id = iln.instructor_id
       WHERE iln.learner_id = ${user.id}

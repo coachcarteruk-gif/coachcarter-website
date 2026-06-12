@@ -441,6 +441,22 @@ ON CONFLICT (slug) DO NOTHING;
 
 -- Hours-based balance (stored as minutes internally)
 ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS balance_minutes INTEGER DEFAULT 0;
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS learner_category TEXT;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_constraint
+     WHERE conname = 'chk_learner_users_learner_category'
+       AND conrelid = 'learner_users'::regclass
+  ) THEN
+    ALTER TABLE learner_users
+      ADD CONSTRAINT chk_learner_users_learner_category
+      CHECK (learner_category IS NULL OR learner_category IN ('regular', 'sporadic', 'inactive', 'passed'));
+  END IF;
+END $$;
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS primary_instructor_id INTEGER REFERENCES instructors(id);
+CREATE INDEX IF NOT EXISTS idx_learner_users_primary_instructor ON learner_users(primary_instructor_id);
 
 -- Migrate existing credit balances: 1 credit = 90 minutes
 DO $$ BEGIN
@@ -1021,6 +1037,20 @@ UPDATE instructor_learner_notes SET school_id = 1 WHERE school_id IS NULL;
 ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET NOT NULL;
 ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET DEFAULT 1;
 ALTER TABLE instructor_learner_notes ADD COLUMN IF NOT EXISTS custom_hourly_rate_pence INTEGER;
+ALTER TABLE instructor_learner_notes ADD COLUMN IF NOT EXISTS learner_category TEXT;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_constraint
+     WHERE conname = 'chk_instructor_learner_notes_learner_category'
+       AND conrelid = 'instructor_learner_notes'::regclass
+  ) THEN
+    ALTER TABLE instructor_learner_notes
+      ADD CONSTRAINT chk_instructor_learner_notes_learner_category
+      CHECK (learner_category IS NULL OR learner_category IN ('regular', 'sporadic', 'inactive', 'passed'));
+  END IF;
+END $$;
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
 
 -- One-off cleanup: delete re-imported Setmore duplicates.

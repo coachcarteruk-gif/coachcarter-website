@@ -87,6 +87,13 @@ const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booki
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
 const { withNeonTransaction } = require('./_db-transaction');
 
+const LEARNER_CATEGORIES = new Set(['regular', 'sporadic', 'inactive', 'passed']);
+
+function normaliseLearnerCategory(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return LEARNER_CATEGORIES.has(text) ? text : null;
+}
+
 function createStripeClient() {
   return require('stripe')(process.env.STRIPE_SECRET_KEY);
 }
@@ -221,6 +228,7 @@ module.exports = async (req, res) => {
   if (action === 'all-learners')      return handleAllLearners(req, res);
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
   if (action === 'update-learner')    return handleUpdateLearner(req, res);
+  if (action === 'update-learner-relationship') return handleUpdateLearnerRelationship(req, res);
   if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
   if (action === 'credit-goodwill')    return handleCreditGoodwillContract(req, res);
   if (action === 'credit-reconciliation') return handleCreditReconciliationContract(req, res);
@@ -1467,6 +1475,10 @@ async function handleAllLearners(req, res) {
         lu.id, lu.name, lu.email, lu.phone,
         lu.current_tier, lu.credit_balance, lu.balance_minutes,
         lu.pickup_address, lu.prefer_contact_before,
+        lu.learner_category,
+        lu.primary_instructor_id,
+        pi.name AS primary_instructor_name,
+        lu.test_date::text AS test_date,
         lu.created_at,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.learner_id = lu.id AND lb.school_id = ${schoolId}) AS total_bookings,
@@ -1475,9 +1487,19 @@ async function handleAllLearners(req, res) {
            AND lb.scheduled_date >= CURRENT_DATE AND lb.school_id = ${schoolId}) AS upcoming_bookings,
         (SELECT MAX(lb.scheduled_date)::text FROM lesson_bookings lb
          WHERE lb.learner_id = lu.id AND lb.school_id = ${schoolId}) AS last_booking_date,
+        (SELECT MIN(lb.scheduled_date)::text FROM lesson_bookings lb
+         WHERE lb.learner_id = lu.id AND lb.status = ${SCHEDULED}
+           AND lb.scheduled_date >= CURRENT_DATE AND lb.school_id = ${schoolId}) AS next_booking_date,
+        (SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60), 0)::int
+         FROM lesson_bookings lb
+         WHERE lb.learner_id = lu.id AND lb.status = ${CHARGEABLE}
+           AND lb.school_id = ${schoolId}) AS delivered_minutes,
         (SELECT COUNT(*)::int FROM driving_sessions ds
          WHERE ds.user_id = lu.id AND ds.school_id = ${schoolId}) AS total_sessions
       FROM learner_users lu
+      LEFT JOIN instructors pi
+        ON pi.id = lu.primary_instructor_id
+       AND pi.school_id = ${schoolId}
       WHERE lu.school_id = ${schoolId}
       ORDER BY lu.created_at DESC
     `;
@@ -1540,10 +1562,51 @@ async function handleLearnerDetail(req, res) {
       WHERE user_id = ${learnerId} AND school_id = ${schoolId}
     `;
 
+    const instructorLinks = await sql`
+      SELECT
+        i.id AS instructor_id,
+        i.name AS instructor_name,
+        iln.learner_category AS relationship_category,
+        iln.test_date::text AS relationship_test_date,
+        iln.notes AS relationship_notes,
+        COUNT(lb.id)::int AS total_bookings,
+        COUNT(lb.id) FILTER (WHERE lb.status = ${CHARGEABLE})::int AS delivered_lessons,
+        COALESCE(SUM(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)
+          FILTER (WHERE lb.status = ${CHARGEABLE}), 0)::int AS delivered_minutes,
+        COUNT(lb.id) FILTER (WHERE lb.status = ${SCHEDULED} AND lb.scheduled_date >= CURRENT_DATE)::int AS upcoming_lessons,
+        MAX(lb.scheduled_date)::text AS last_booking_date
+      FROM lesson_bookings lb
+      JOIN instructors i
+        ON i.id = lb.instructor_id
+       AND i.school_id = ${schoolId}
+      LEFT JOIN instructor_learner_notes iln
+        ON iln.instructor_id = i.id
+       AND iln.learner_id = ${learnerId}
+       AND iln.school_id = ${schoolId}
+      WHERE lb.learner_id = ${learnerId}
+        AND lb.school_id = ${schoolId}
+      GROUP BY i.id, i.name, iln.learner_category, iln.test_date, iln.notes
+      ORDER BY MAX(lb.scheduled_date) DESC NULLS LAST, i.name ASC
+    `;
+
+    const availability = await sql`
+      SELECT day_of_week,
+             start_time::text AS start_time,
+             end_time::text AS end_time,
+             active
+      FROM learner_availability
+      WHERE learner_id = ${learnerId}
+        AND school_id = ${schoolId}
+        AND active = true
+      ORDER BY day_of_week, start_time
+    `;
+
     return res.json({
       bookings,
       transactions,
-      progress: progress[0] || { total_sessions: 0, total_minutes: 0 }
+      progress: progress[0] || { total_sessions: 0, total_minutes: 0 },
+      instructor_links: instructorLinks,
+      availability
     });
   } catch (err) {
     console.error('admin learner-detail error:', err);
@@ -1553,7 +1616,7 @@ async function handleLearnerDetail(req, res) {
 }
 
 // ── POST /api/admin?action=update-learner ─────────────────────────────────────
-// Body: { id, name?, email?, phone?, pickup_address? }
+// Body: { id, name?, email?, phone?, pickup_address?, learner_category?, primary_instructor_id?, test_date? }
 // Updates editable learner fields. Audit-logs before/after values.
 async function handleUpdateLearner(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -1562,15 +1625,26 @@ async function handleUpdateLearner(req, res) {
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = getAdminSchoolId(admin, req);
 
-  const { id, name, email, phone, pickup_address } = req.body || {};
+  const { id, name, email, phone, pickup_address, learner_category, primary_instructor_id, test_date } = req.body || {};
   if (!id) return res.status(400).json({ error: 'Learner ID is required' });
+
+  const category = learner_category != null && learner_category !== '' ? normaliseLearnerCategory(learner_category) : null;
+  if (learner_category != null && learner_category !== '' && !category) {
+    return res.status(400).json({ error: 'Invalid learner category' });
+  }
+  const primaryInstructorId = primary_instructor_id != null && primary_instructor_id !== ''
+    ? parseInt(primary_instructor_id, 10)
+    : null;
+  if (primary_instructor_id != null && primary_instructor_id !== '' && (!primaryInstructorId || primaryInstructorId < 1)) {
+    return res.status(400).json({ error: 'Invalid assigned instructor' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
     // Fetch current values for audit before/after
     const [existing] = await sql`
-      SELECT id, name, email, phone, pickup_address
+      SELECT id, name, email, phone, pickup_address, learner_category, primary_instructor_id, test_date::text AS test_date
       FROM learner_users WHERE id = ${id} AND school_id = ${schoolId}
     `;
     if (!existing) return res.status(404).json({ error: 'Learner not found' });
@@ -1580,6 +1654,9 @@ async function handleUpdateLearner(req, res) {
     const newEmail   = email !== undefined ? email.trim().toLowerCase() : existing.email;
     const newPhone   = phone !== undefined ? phone.trim() || null : existing.phone;
     const newPickup  = pickup_address !== undefined ? pickup_address.trim() || null : existing.pickup_address;
+    const newCategory = learner_category !== undefined ? category : existing.learner_category;
+    const newPrimaryInstructorId = primary_instructor_id !== undefined ? primaryInstructorId : existing.primary_instructor_id;
+    const newTestDate = test_date !== undefined ? (test_date || null) : existing.test_date;
 
     // Check email uniqueness within school (if changed)
     if (newEmail !== existing.email) {
@@ -1597,14 +1674,27 @@ async function handleUpdateLearner(req, res) {
       if (phoneConflict.length > 0) return res.status(409).json({ error: 'That phone number is already used by another learner' });
     }
 
+    if (newPrimaryInstructorId) {
+      const [instructor] = await sql`
+        SELECT id FROM instructors
+        WHERE id = ${newPrimaryInstructorId}
+          AND school_id = ${schoolId}
+          AND active = TRUE
+      `;
+      if (!instructor) return res.status(400).json({ error: 'Assigned instructor must be an active instructor in this school' });
+    }
+
     const rows = await sql`
       UPDATE learner_users
       SET name           = ${newName},
           email          = ${newEmail},
           phone          = ${newPhone},
-          pickup_address = ${newPickup}
+          pickup_address = ${newPickup},
+          learner_category = ${newCategory},
+          primary_instructor_id = ${newPrimaryInstructorId},
+          test_date = ${newTestDate}
       WHERE id = ${id} AND school_id = ${schoolId}
-      RETURNING id, name, email, phone, pickup_address
+      RETURNING id, name, email, phone, pickup_address, learner_category, primary_instructor_id, test_date::text AS test_date
     `;
 
     const after = rows[0];
@@ -1612,8 +1702,24 @@ async function handleUpdateLearner(req, res) {
       adminId: admin.id, adminEmail: admin.email,
       action: 'update-learner', targetType: 'learner', targetId: id,
       details: {
-        before: { name: existing.name, email: existing.email, phone: existing.phone, pickup_address: existing.pickup_address },
-        after:  { name: after.name, email: after.email, phone: after.phone, pickup_address: after.pickup_address }
+        before: {
+          name: existing.name,
+          email: existing.email,
+          phone: existing.phone,
+          pickup_address: existing.pickup_address,
+          learner_category: existing.learner_category,
+          primary_instructor_id: existing.primary_instructor_id,
+          test_date: existing.test_date
+        },
+        after: {
+          name: after.name,
+          email: after.email,
+          phone: after.phone,
+          pickup_address: after.pickup_address,
+          learner_category: after.learner_category,
+          primary_instructor_id: after.primary_instructor_id,
+          test_date: after.test_date
+        }
       },
       schoolId, req
     });
@@ -1621,8 +1727,8 @@ async function handleUpdateLearner(req, res) {
     await logAudit(sql, {
       adminId: admin.id, adminEmail: admin.email,
       action: 'admin.update_learner',
-      targetType: 'learner', targetId: parseInt(learner_id, 10),
-      details: { fields_changed: Object.keys(req.body || {}).filter(k => k !== 'learner_id') },
+      targetType: 'learner', targetId: parseInt(id, 10),
+      details: { fields_changed: Object.keys(req.body || {}).filter(k => k !== 'id') },
       schoolId, req,
     });
 
@@ -1637,6 +1743,76 @@ async function handleUpdateLearner(req, res) {
 // ── POST /api/admin?action=adjust-credits ─────────────────────────────────────
 // Body: { learner_id, hours: float (e.g. 1.5), reason }
 // Positive = add, negative = remove. Updates balance_minutes (primary) + credit_balance (legacy).
+// Body: { learner_id, instructor_id, learner_category? }
+// Updates the per-instructor learner relationship category.
+async function handleUpdateLearnerRelationship(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const { learner_id, instructor_id, learner_category } = req.body || {};
+  const learnerId = parseInt(learner_id, 10);
+  const instructorId = parseInt(instructor_id, 10);
+  if (!learnerId || !instructorId) return res.status(400).json({ error: 'learner_id and instructor_id are required' });
+
+  const category = learner_category != null && learner_category !== '' ? normaliseLearnerCategory(learner_category) : null;
+  if (learner_category != null && learner_category !== '' && !category) {
+    return res.status(400).json({ error: 'Invalid learner category' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [scope] = await sql`
+      SELECT
+        EXISTS (SELECT 1 FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}) AS learner_ok,
+        EXISTS (SELECT 1 FROM instructors WHERE id = ${instructorId} AND school_id = ${schoolId}) AS instructor_ok
+    `;
+    if (!scope?.learner_ok || !scope?.instructor_ok) {
+      return res.status(404).json({ error: 'Learner or instructor not found' });
+    }
+
+    const [before] = await sql`
+      SELECT learner_category
+      FROM instructor_learner_notes
+      WHERE learner_id = ${learnerId}
+        AND instructor_id = ${instructorId}
+        AND school_id = ${schoolId}
+    `;
+
+    const [row] = await sql`
+      INSERT INTO instructor_learner_notes (instructor_id, learner_id, learner_category, school_id, updated_at)
+      VALUES (${instructorId}, ${learnerId}, ${category}, ${schoolId}, NOW())
+      ON CONFLICT (instructor_id, learner_id)
+      DO UPDATE SET learner_category = ${category}, school_id = ${schoolId}, updated_at = NOW()
+      RETURNING instructor_id, learner_id, learner_category
+    `;
+
+    await logAudit(sql, {
+      adminId: admin.id,
+      adminEmail: admin.email,
+      action: 'admin.update_learner_relationship',
+      targetType: 'learner',
+      targetId: learnerId,
+      details: {
+        instructor_id: instructorId,
+        before: before?.learner_category || null,
+        after: row.learner_category || null
+      },
+      schoolId,
+      req
+    });
+
+    return res.json({ ok: true, relationship: row });
+  } catch (err) {
+    console.error('admin update-learner-relationship error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to update learner relationship', details: 'Internal server error' });
+  }
+}
+
 async function handleAdjustCredits(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
