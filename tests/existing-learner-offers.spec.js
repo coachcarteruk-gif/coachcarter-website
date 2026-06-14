@@ -99,6 +99,9 @@ test.describe('existing learner lesson offers', () => {
     expect(body).toContain('if (offer.learner_id) {');
     expect(body).toContain('WHERE id = ${offer.learner_id}');
     expect(body).toContain('AND school_id = ${schoolId}');
+    expect(body).toContain('o.scheduled_date::text AS scheduled_date_text');
+    expect(body).toContain('const offerDateText = dateOnly(offer.scheduled_date_text || offer.scheduled_date)');
+    expect(body).toContain('scheduled_date:    offerDateText || \'\'');
     expect(body).toContain('learner_id:        boundLearner?.id ? String(boundLearner.id) : \'\'');
     expect(body).toContain('amount_pence:      String(pricePence)');
     expect(body).toContain('effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)');

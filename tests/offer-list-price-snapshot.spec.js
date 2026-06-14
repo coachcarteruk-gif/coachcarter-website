@@ -91,6 +91,21 @@ test.describe('bookOfferSeries — list_price snapshot wiring (Step 1b)', () => 
     expect(values[values.length - 1]).toBe('stripe_metadata');
   });
 
+  test('paid offer booking accepts ISO timestamp-shaped metadata dates', async () => {
+    const { sql, calls } = makeMockSql();
+    const result = await bookOfferSeries(sql, {
+      ...baseArgs,
+      firstDate: '2026-06-01T00:00:00.000Z',
+      listPricePerBookingPence: 8250,
+      listPriceSource: 'stripe_metadata',
+    });
+
+    expect(result.booked).toEqual([{ date: '2026-06-01', booking_id: 1 }]);
+    const ins = inserts(calls);
+    expect(ins.length).toBe(1);
+    expect(ins[0].values).toContain('2026-06-01');
+  });
+
   test('free single-lesson offer writes 0 + live_compute_insert', async () => {
     const { sql, calls } = makeMockSql();
     await bookOfferSeries(sql, {

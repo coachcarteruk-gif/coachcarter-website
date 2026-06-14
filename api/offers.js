@@ -23,6 +23,28 @@ const { allocate } = require('./_pence-allocator');
 const { lockBalanceAndMutate } = require('./_credit-grant');
 const { CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES } = require('./_stripe-payment-methods');
 
+function dateOnly(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Series fan-out for offer-driven weekly repeats (May 2026)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -50,9 +72,11 @@ async function bookOfferSeries(sql, {
 }) {
   const SERIES_LOOKAHEAD_WEEKS = 18;
   const seriesId = repeatWeeks > 1 ? crypto.randomUUID() : null;
+  const firstDateText = dateOnly(firstDate);
+  if (!firstDateText) throw new Error(`Invalid offer firstDate: ${firstDate}`);
 
   // Day-of-week (0=Sun..6=Sat) of the first slot — must match every week.
-  const firstDateObj = new Date(firstDate + 'T00:00:00Z');
+  const firstDateObj = new Date(firstDateText + 'T00:00:00Z');
   const dow = firstDateObj.getUTCDay();
 
   // Pull instructor's availability for this DoW (any window covering the slot).
@@ -86,7 +110,7 @@ async function bookOfferSeries(sql, {
     FROM instructor_blackout_dates
     WHERE instructor_id = ${instructorId}
       AND blackout_date <= ${lookaheadEndStr}
-      AND end_date >= ${firstDate}
+      AND end_date >= ${firstDateText}
   `;
   const isBlackedOut = (dateStr) => blackouts.some(b => dateStr >= b.start_date && dateStr <= b.end_date);
 
@@ -438,7 +462,8 @@ async function handleAcceptOffer(req, res) {
 
     // Fetch the offer with full details
     const [offer] = await sql`
-      SELECT o.*, lt.name AS lesson_type_name, lt.slug AS lesson_type_slug, lt.duration_minutes, lt.price_pence,
+      SELECT o.*, o.scheduled_date::text AS scheduled_date_text,
+             lt.name AS lesson_type_name, lt.slug AS lesson_type_slug, lt.duration_minutes, lt.price_pence,
              i.name AS instructor_name
       FROM lesson_offers o
       JOIN instructors i ON i.id = o.instructor_id
@@ -494,7 +519,8 @@ async function handleAcceptOffer(req, res) {
       pickup_address: (pickup_address || boundLearner?.pickup_address || '').trim()
     };
 
-    const isFlexible = !offer.scheduled_date && !offer.start_time;
+    const offerDateText = dateOnly(offer.scheduled_date_text || offer.scheduled_date);
+    const isFlexible = !offerDateText && !offer.start_time;
     const isTrialOffer = offer.lesson_type_slug === 'trial';
     const originalPricePence = offer.price_pence ?? 8250;
     if (isTrialOffer && isFlexible)
@@ -529,9 +555,8 @@ async function handleAcceptOffer(req, res) {
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
       : `${durationMins} mins`;
 
-    const isoOfferDate = offer.scheduled_date instanceof Date ? offer.scheduled_date.toISOString().slice(0, 10) : String(offer.scheduled_date || '').slice(0, 10);
-    const lessonDate = offer.scheduled_date
-      ? new Date(isoOfferDate + 'T00:00:00Z')
+    const lessonDate = offerDateText
+      ? new Date(offerDateText + 'T00:00:00Z')
           .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
       : null;
 
@@ -651,7 +676,7 @@ async function handleAcceptOffer(req, res) {
         learner_name:      learnerDetails.name,
         learner_phone:     learnerDetails.phone,
         pickup_address:    learnerDetails.pickup_address,
-        scheduled_date:    offer.scheduled_date || '',
+        scheduled_date:    offerDateText || '',
         start_time:        offer.start_time || '',
         end_time:          offer.end_time || '',
         lesson_type_id:    String(offer.lesson_type_id || ''),
@@ -716,7 +741,7 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   }
 
   // 2. Create booking(s) — single lesson or weekly series with skip-clash.
-  const isoDate0 = offer.scheduled_date instanceof Date ? offer.scheduled_date.toISOString().slice(0, 10) : String(offer.scheduled_date).slice(0, 10);
+  const isoDate0 = dateOnly(offer.scheduled_date_text || offer.scheduled_date);
   let seriesResult;
   try {
     seriesResult = await bookOfferSeries(sql, {
@@ -758,8 +783,7 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   const durationStr = durationMins >= 60
     ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
     : `${durationMins} mins`;
-  const isoDate = offer.scheduled_date instanceof Date ? offer.scheduled_date.toISOString().slice(0, 10) : String(offer.scheduled_date).slice(0, 10);
-  const lessonDate = new Date(isoDate + 'T00:00:00Z')
+  const lessonDate = new Date(isoDate0 + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
   try {
