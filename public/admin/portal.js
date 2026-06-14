@@ -248,7 +248,7 @@ function renderInstructors() {
         '</div>' +
         '<div style="display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap;">' +
           '<button class="btn btn-sm" data-action="edit-instructor" data-id="' + i.id + '">Edit</button>' +
-          (i.active && !isInstructorAdmin
+          (i.active
             ? '<button class="btn btn-sm" data-action="access-instructor-account" data-id="' + i.id + '" data-name="' + esc(i.name) + '">Access account</button>'
             : '') +
           '<button class="btn btn-sm" data-action="set-password" data-id="' + i.id + '" data-name="' + esc(i.name) + '" data-has-password="' + (i.has_password ? 1 : 0) + '">' + (i.has_password ? 'Reset password' : 'Set password') + '</button>' +
@@ -402,6 +402,14 @@ async function accessInstructorAccount(id, name, btn) {
   if (!id) return;
   if (!confirm('Access ' + (name || 'this instructor') + '\'s account for support? This will be audit logged.')) return;
 
+  let returnInstructorAdmin = null;
+  try {
+    const existingInstructorSession = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
+    if (existingInstructorSession?.instructor?.is_admin) {
+      returnInstructorAdmin = existingInstructorSession.instructor;
+    }
+  } catch (_) {}
+
   const originalText = btn ? btn.textContent : '';
   if (btn) {
     btn.disabled = true;
@@ -417,9 +425,11 @@ async function accessInstructorAccount(id, name, btn) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not access instructor account');
 
+    const impersonation = data.impersonation || { active: true };
+    if (returnInstructorAdmin) impersonation.return_instructor_admin = returnInstructorAdmin;
     localStorage.setItem('cc_instructor', JSON.stringify({
       instructor: data.instructor,
-      impersonation: data.impersonation || { active: true }
+      impersonation
     }));
     window.location.href = '/instructor/dashboard.html';
   } catch (err) {

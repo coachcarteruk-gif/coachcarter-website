@@ -80,8 +80,14 @@
   /** Log out: clear server cookies, clear localStorage blob, redirect to login. */
   function logout() {
     if (isImpersonating()) {
+      var auth = getAuth();
+      var returnInstructorAdmin = auth && auth.impersonation ? auth.impersonation.return_instructor_admin : null;
       var finishSupportExit = function () {
-        localStorage.removeItem(STORAGE_KEY);
+        if (returnInstructorAdmin) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ instructor: returnInstructorAdmin }));
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+        }
         window.location.href = '/admin/portal.html';
       };
       try {

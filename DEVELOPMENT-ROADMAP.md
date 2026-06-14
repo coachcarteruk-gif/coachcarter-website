@@ -4,7 +4,7 @@
 
 Admins can now open an active same-school instructor account for support without knowing, viewing, or resetting the instructor's password. The admin portal adds an "Access account" action on active instructors; the backend mints a short-lived `cc_instructor` support session with impersonation metadata, leaves `cc_admin` intact, and audit-logs `admin.instructor_access_start` / `admin.instructor_access_stop`.
 
-Instructor pages show a persistent "Viewing as admin" banner and change the support-session sign-out path to "Back to Admin", which clears only the instructor cookie and returns to the admin portal. V1 is full instructor-session access, guarded to real admin/superadmin sessions so instructor-admin cookies cannot be overwritten.
+Instructor pages show a persistent "Viewing as admin" banner and change the support-session sign-out path to "Back to Admin". Admin-user sessions keep `cc_admin` intact; instructor-admin sessions store return metadata in the short-lived support JWT and are restored when support access ends.
 
 **Files:** `api/admin.js`, `public/admin/portal.js`, `public/shared/instructor-auth.js`, `public/sidebar.js`, `tests/admin-instructor-access.spec.js`, `PROJECT.md`, `CLAUDE.md`, `DEVELOPMENT-ROADMAP.md`.
 

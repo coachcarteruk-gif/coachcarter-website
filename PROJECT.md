@@ -756,7 +756,7 @@ Two alarm triggers:
 
 Login at `/admin/login.html` with email + password. Session auth lives in the httpOnly `cc_admin` cookie; `localStorage.cc_admin` is display-only for portal/sidebar rendering.
 
-Admin support access can open an instructor portal session without password knowledge/reset via `POST /api/admin?action=access-instructor-account`. The resulting `cc_instructor` cookie is short-lived (2 hours), carries impersonation metadata, and is visibly marked in the instructor UI with a "Viewing as admin" banner. This is audit-only in v1; instructor actions taken inside the support session still run through the normal instructor endpoints.
+Admin support access can open an instructor portal session without password knowledge/reset via `POST /api/admin?action=access-instructor-account`. The resulting `cc_instructor` cookie is short-lived (2 hours), carries impersonation metadata, and is visibly marked in the instructor UI with a "Viewing as admin" banner. Admin-user sessions keep `cc_admin` intact; instructor-admin sessions are restored from return metadata when support access ends. This is audit-only in v1; instructor actions taken inside the support session still run through the normal instructor endpoints.
 
 ### API — `api/admin.js`
 
@@ -771,8 +771,8 @@ Admin support access can open an instructor portal session without password know
 | `add-instructor` | POST | JWT | Add a new instructor |
 | `update-instructor` | POST | JWT | Edit instructor details |
 | `toggle-instructor` | POST | JWT | Activate / deactivate instructor |
-| `access-instructor-account` | POST | Admin JWT | Starts admin support access for an active same-school instructor. Body: `{ instructor_id }`. Mints a 2-hour `cc_instructor` session with impersonation metadata, leaves `cc_admin` intact, and audit-logs `admin.instructor_access_start`. Does not reveal or mutate passwords. Instructor-admin sessions are rejected to avoid overwriting their only admin-capable cookie. |
-| `stop-instructor-access` | POST | Admin JWT | Ends admin support access by clearing only `cc_instructor`, refreshing CSRF, and returning the admin to the portal. Audit-logs `admin.instructor_access_stop` when the support session can be decoded. |
+| `access-instructor-account` | POST | Admin JWT | Starts admin support access for an active same-school instructor. Body: `{ instructor_id }`. Mints a 2-hour `cc_instructor` session with impersonation metadata and audit-logs `admin.instructor_access_start`. Does not reveal or mutate passwords. Admin-user sessions keep `cc_admin`; instructor-admin initiators get return metadata for restoration. |
+| `stop-instructor-access` | POST | Admin JWT or support JWT | Ends admin support access by clearing the support `cc_instructor`, refreshing CSRF, restoring an instructor-admin initiator when present, and returning the admin to the portal. Audit-logs `admin.instructor_access_stop` when the support session can be decoded. |
 | `toggle-payout-pause` | POST | JWT | Pause or resume an instructor's payouts |
 | `payout-overview` | GET | JWT | All instructors' connect status, upcoming estimates, recent payouts |
 | `process-payouts` | POST | JWT | Manual trigger for payout processing (same logic as cron) |

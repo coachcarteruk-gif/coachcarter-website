@@ -1546,9 +1546,6 @@ async function handleAccessInstructorAccount(req, res) {
 
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
-  if (admin.role === 'instructor') {
-    return res.status(403).json({ error: 'Admin account session required' });
-  }
 
   const instructorId = parseInt(req.body?.instructor_id, 10);
   if (!Number.isFinite(instructorId) || instructorId <= 0) {
@@ -1581,6 +1578,14 @@ async function handleAccessInstructorAccount(req, res) {
       impersonated_by_admin_id: admin.id || null,
       impersonated_by_admin_email: admin.email || null,
     };
+    if (admin.role === 'instructor') {
+      tokenPayload.return_instructor_admin = {
+        id: admin.id,
+        email: admin.email,
+        school_id: admin.school_id || schoolId,
+        isAdmin: true,
+      };
+    }
     if (instructor.is_admin) tokenPayload.isAdmin = true;
 
     const sessionToken = jwt.sign(tokenPayload, secret, { expiresIn: INSTRUCTOR_ACCESS_MAX_AGE_SEC });
@@ -1638,12 +1643,6 @@ async function handleAccessInstructorAccount(req, res) {
 async function handleStopInstructorAccess(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const admin = verifyAdminJWT(req);
-  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
-  if (admin.role === 'instructor') {
-    return res.status(403).json({ error: 'Admin account session required' });
-  }
-
   const cookies = parseCookies(req);
   let instructorPayload = null;
   try {
@@ -1658,16 +1657,45 @@ async function handleStopInstructorAccess(req, res) {
     instructorPayload = null;
   }
 
+  let admin = null;
+  if (cookies[SESSION_COOKIE_NAMES.admin] || !instructorPayload) {
+    admin = verifyAdminJWT(req);
+  }
+
+  if (!admin && !instructorPayload) return res.status(401).json({ error: 'Unauthorised' });
+
   appendSetCookie(res, buildSessionClearCookie(SESSION_COOKIE_NAMES.instructor));
   appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
 
-  const schoolId = getAdminSchoolId(admin, req);
+  const returnInstructorAdmin = instructorPayload?.return_instructor_admin;
+  if (returnInstructorAdmin && process.env.JWT_SECRET) {
+    const restoredToken = jwt.sign(
+      {
+        id: returnInstructorAdmin.id,
+        email: returnInstructorAdmin.email,
+        role: 'instructor',
+        school_id: returnInstructorAdmin.school_id,
+        isAdmin: true,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '180d' }
+    );
+    appendSetCookie(res, buildSessionCookie(
+      SESSION_COOKIE_NAMES.instructor,
+      restoredToken,
+      SESSION_MAX_AGE_SEC.instructor
+    ));
+  }
+
+  const operatorId = admin?.id || returnInstructorAdmin?.id || null;
+  const operatorEmail = admin?.email || returnInstructorAdmin?.email || null;
+  const schoolId = admin ? getAdminSchoolId(admin, req) : (instructorPayload?.school_id || returnInstructorAdmin?.school_id || 1);
   if (instructorPayload) {
     try {
       const sql = neon(process.env.POSTGRES_URL);
       await logAudit(sql, {
-        adminId: admin.id,
-        adminEmail: admin.email,
+        adminId: operatorId,
+        adminEmail: operatorEmail,
         action: 'admin.instructor_access_stop',
         targetType: 'instructor',
         targetId: instructorPayload.id,
