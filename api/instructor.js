@@ -404,9 +404,11 @@ async function handleSchedule(req, res) {
           ds.id AS session_log_id,
           ds.notes AS session_notes,
           lb.instructor_notes,
-          COALESCE(lb.transmission_type,
-            CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END
-          ) AS transmission_type,
+          CASE
+            WHEN COALESCE(i.transmission_type, 'manual') = 'both' THEN COALESCE(lb.transmission_type, 'manual')
+            WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic'
+            ELSE 'manual'
+          END AS transmission_type,
           lt.name AS lesson_type_name,
           lt.colour AS lesson_type_colour,
           COALESCE(lt.duration_minutes, 90) AS duration_minutes
@@ -539,9 +541,11 @@ async function handleScheduleRange(req, res) {
           lb.status,
           lb.notes,
           lb.instructor_notes,
-          COALESCE(lb.transmission_type,
-            CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END
-          ) AS transmission_type,
+          CASE
+            WHEN COALESCE(i.transmission_type, 'manual') = 'both' THEN COALESCE(lb.transmission_type, 'manual')
+            WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic'
+            ELSE 'manual'
+          END AS transmission_type,
           lb.lesson_type_id,
           lu.id    AS learner_id,
           lu.name  AS learner_name,
@@ -1663,9 +1667,11 @@ async function handleEditBooking(req, res) {
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
              lb.scheduled_date::text AS scheduled_date, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
              lb.lesson_type_id, lb.minutes_deducted, lb.setmore_key,
-             COALESCE(lb.transmission_type,
-               CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END
-             ) AS transmission_type,
+             CASE
+               WHEN COALESCE(i.transmission_type, 'manual') = 'both' THEN COALESCE(lb.transmission_type, 'manual')
+               WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic'
+               ELSE 'manual'
+             END AS transmission_type,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name,
              COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,

@@ -626,7 +626,13 @@ async function initFeed() {
         });
         if (altOk === false) { overflowCache = null; overflowFingerprint = null; renderFeed(); return; }
       }
-      overflowMode = true;
+      const selectedInstructorCache = filterSlotCacheByInstructor(overflowCache, instructorId);
+      if (getVisibleSlotsFromCache(selectedInstructorCache).length > 0) {
+        slotCache = selectedInstructorCache;
+      } else {
+        overflowCache = filterSlotCacheByInstructor(overflowCache, instructorId, { exclude: true });
+        overflowMode = true;
+      }
     }
     renderFeed();
     return;
@@ -737,6 +743,20 @@ function getVisibleSlotsFromCache(cache) {
   }
   allSlots.sort(sortSlots);
   return allSlots;
+}
+
+function filterSlotCacheByInstructor(cache, instructorId, opts) {
+  opts = opts || {};
+  const filtered = {};
+  const targetId = String(instructorId || '');
+  for (const ds in (cache || {})) {
+    const slots = (cache[ds] || []).filter(s => {
+      const sameInstructor = String(s.instructor_id || '') === targetId;
+      return opts.exclude ? !sameInstructor : sameInstructor;
+    });
+    if (slots.length > 0) filtered[ds] = slots;
+  }
+  return filtered;
 }
 
 function sortSlots(a, b) {

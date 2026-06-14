@@ -34,6 +34,14 @@ test.describe('lesson booking transmission', () => {
     expect(js).toContain('AS transmission_type');
   });
 
+  test('instructor read APIs clamp stale booking transmission to instructor capability', () => {
+    const js = read('api/instructor.js');
+
+    expect(js).toContain("WHEN COALESCE(i.transmission_type, 'manual') = 'both' THEN COALESCE(lb.transmission_type, 'manual')");
+    expect(js).toContain("WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic'");
+    expect(js).toContain("ELSE 'manual'");
+  });
+
   test('instructor calendar UI can select and show lesson transmission', () => {
     const html = read('public/instructor/index.html');
     const js = read('public/instructor/index.js');
