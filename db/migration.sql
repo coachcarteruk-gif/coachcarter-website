@@ -2643,3 +2643,63 @@ DROP TRIGGER IF EXISTS trg_schools_require_tenant_resolution ON schools;
 CREATE TRIGGER trg_schools_require_tenant_resolution
   BEFORE INSERT ON schools
   FOR EACH ROW EXECUTE FUNCTION assert_public_endpoints_tenant_resolved();
+
+-- Admin learner broadcasts (June 2026)
+-- Campaign-level and per-recipient ledger for simple, manually triggered
+-- school-scoped SMS broadcasts to global learner categories.
+CREATE TABLE IF NOT EXISTS learner_broadcasts (
+  id                  SERIAL PRIMARY KEY,
+  school_id           INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  label               TEXT NOT NULL,
+  message_body        TEXT NOT NULL,
+  selected_categories TEXT[] NOT NULL,
+  created_by          INTEGER REFERENCES admin_users(id),
+  status              TEXT NOT NULL DEFAULT 'sending' CHECK (
+    status IN ('sending', 'sent', 'partial_failed', 'failed')
+  ),
+  recipient_count     INTEGER NOT NULL DEFAULT 0 CHECK (recipient_count >= 0),
+  skipped_count       INTEGER NOT NULL DEFAULT 0 CHECK (skipped_count >= 0),
+  sent_count          INTEGER NOT NULL DEFAULT 0 CHECK (sent_count >= 0),
+  failed_count        INTEGER NOT NULL DEFAULT 0 CHECK (failed_count >= 0),
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  completed_at        TIMESTAMPTZ,
+  CONSTRAINT chk_learner_broadcast_categories CHECK (
+    cardinality(selected_categories) > 0
+    AND selected_categories <@ ARRAY['regular', 'sporadic', 'inactive', 'passed']::text[]
+  ),
+  CONSTRAINT uq_learner_broadcast_id_school UNIQUE (id, school_id)
+);
+CREATE INDEX IF NOT EXISTS idx_learner_broadcasts_school_created
+  ON learner_broadcasts(school_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_learner_broadcasts_created_by
+  ON learner_broadcasts(created_by, created_at DESC)
+  WHERE created_by IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS learner_broadcast_recipients (
+  id                SERIAL PRIMARY KEY,
+  school_id         INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  broadcast_id      INTEGER NOT NULL,
+  learner_id        INTEGER REFERENCES learner_users(id),
+  learner_name      TEXT,
+  learner_email     TEXT,
+  phone             TEXT,
+  learner_category  TEXT,
+  status            TEXT NOT NULL CHECK (status IN ('sent', 'failed', 'skipped')),
+  skip_reason       TEXT,
+  error_message     TEXT,
+  sent_at           TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT learner_broadcast_recipients_broadcast_school_fk
+    FOREIGN KEY (broadcast_id, school_id) REFERENCES learner_broadcasts(id, school_id),
+  CONSTRAINT chk_learner_broadcast_recipient_category CHECK (
+    learner_category IS NULL
+    OR learner_category IN ('regular', 'sporadic', 'inactive', 'passed')
+  )
+);
+CREATE INDEX IF NOT EXISTS idx_learner_broadcast_recipients_school
+  ON learner_broadcast_recipients(school_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_learner_broadcast_recipients_broadcast
+  ON learner_broadcast_recipients(broadcast_id, status, learner_name);
+CREATE INDEX IF NOT EXISTS idx_learner_broadcast_recipients_learner
+  ON learner_broadcast_recipients(learner_id, created_at DESC)
+  WHERE learner_id IS NOT NULL;

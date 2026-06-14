@@ -84,6 +84,7 @@ function showSection(name) {
   if (name === 'bookings')     loadBookings();
   if (name === 'videos')        loadVideos();
   if (name === 'learners')      loadLearners();
+  if (name === 'broadcasts')    loadBroadcastHistory();
   if (name === 'lesson-types')  loadLessonTypes();
   if (name === 'payouts')       loadPayouts();
   if (name === 'refund-preview') {
@@ -1225,6 +1226,183 @@ function closeLearnerDetail() {
 }
 
 // ── Edit learner details ──
+
+// BROADCASTS
+let latestBroadcastPreview = null;
+
+function selectedBroadcastCategories() {
+  return Array.from(document.querySelectorAll('.broadcast-category:checked')).map(function (el) {
+    return el.value;
+  });
+}
+
+function setBroadcastStatus(message, type) {
+  var el = document.getElementById('broadcast-status');
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.color = type === 'error' ? 'var(--red)' : (type === 'success' ? '#166534' : 'var(--muted)');
+}
+
+function markBroadcastDirty() {
+  latestBroadcastPreview = null;
+  var btn = document.getElementById('btn-send-broadcast');
+  var badge = document.getElementById('broadcast-preview-badge');
+  if (btn) btn.disabled = true;
+  if (badge) {
+    badge.textContent = 'Preview required';
+    badge.className = 'badge badge-gray';
+  }
+}
+
+function broadcastFormPayload() {
+  return {
+    label: document.getElementById('broadcast-label')?.value.trim() || '',
+    message_body: document.getElementById('broadcast-message')?.value.trim() || '',
+    categories: selectedBroadcastCategories()
+  };
+}
+
+function validateBroadcastForm(payload, requireLabelAndMessage) {
+  if (!payload.categories.length) return 'Select at least one learner type.';
+  if (requireLabelAndMessage && !payload.label) return 'Enter a campaign label.';
+  if (requireLabelAndMessage && !payload.message_body) return 'Enter the message to send.';
+  return '';
+}
+
+function broadcastStatusBadge(status) {
+  var cls = status === 'sent' ? 'badge-green'
+    : status === 'partial_failed' ? 'badge-amber'
+      : status === 'failed' ? 'badge-red'
+        : 'badge-gray';
+  return '<span class="badge ' + cls + '">' + esc(status || 'unknown').replace('_', ' ') + '</span>';
+}
+
+function renderBroadcastPreview(data) {
+  var body = document.getElementById('broadcast-preview-body');
+  var count = document.getElementById('broadcast-preview-count');
+  var recipients = data.recipients || [];
+  var skipped = data.skipped || [];
+  if (count) count.textContent = recipients.length + ' ready, ' + skipped.length + ' skipped';
+  if (!body) return;
+  if (!recipients.length && !skipped.length) {
+    body.innerHTML = '<tr><td colspan="4" class="empty-state">No learners matched those categories.</td></tr>';
+    return;
+  }
+  var rows = recipients.map(function (r) {
+    return '<tr>' +
+      '<td><strong>' + esc(r.name || 'Unnamed') + '</strong><br><span style="font-size:0.78rem;color:var(--muted);">' + esc(r.email || '-') + '</span></td>' +
+      '<td>' + learnerCategoryBadge(r.learner_category) + '</td>' +
+      '<td>' + esc(r.phone || '-') + '</td>' +
+      '<td><span class="badge badge-green">Ready</span></td>' +
+    '</tr>';
+  });
+  rows = rows.concat(skipped.map(function (r) {
+    return '<tr>' +
+      '<td><strong>' + esc(r.name || 'Unnamed') + '</strong><br><span style="font-size:0.78rem;color:var(--muted);">' + esc(r.email || '-') + '</span></td>' +
+      '<td>' + learnerCategoryBadge(r.learner_category) + '</td>' +
+      '<td>' + esc(r.phone || '-') + '</td>' +
+      '<td><span class="badge badge-gray">' + esc((r.skip_reason || 'skipped').replace('_', ' ')) + '</span></td>' +
+    '</tr>';
+  }));
+  body.innerHTML = rows.join('');
+}
+
+async function previewLearnerBroadcast() {
+  var payload = broadcastFormPayload();
+  var error = validateBroadcastForm(payload, false);
+  if (error) return setBroadcastStatus(error, 'error');
+
+  var btn = document.getElementById('btn-preview-broadcast');
+  var sendBtn = document.getElementById('btn-send-broadcast');
+  var badge = document.getElementById('broadcast-preview-badge');
+  if (btn) { btn.disabled = true; btn.textContent = 'Previewing...'; }
+  if (sendBtn) sendBtn.disabled = true;
+  setBroadcastStatus('', '');
+  try {
+    var res = await fetchAdmin('/api/admin?action=learner-broadcast-preview', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ categories: payload.categories })
+    });
+    var data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || 'Failed to preview recipients');
+    latestBroadcastPreview = { categories: payload.categories.slice(), recipientCount: (data.recipients || []).length };
+    renderBroadcastPreview(data);
+    if (badge) {
+      badge.textContent = 'Preview ready';
+      badge.className = 'badge badge-green';
+    }
+    if (sendBtn) sendBtn.disabled = latestBroadcastPreview.recipientCount === 0;
+    setBroadcastStatus(latestBroadcastPreview.recipientCount ? 'Preview ready.' : 'No usable recipients to send.', latestBroadcastPreview.recipientCount ? 'success' : 'error');
+  } catch (err) {
+    latestBroadcastPreview = null;
+    setBroadcastStatus(err.message || 'Failed to preview recipients.', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Preview recipients'; }
+  }
+}
+
+async function sendLearnerBroadcast() {
+  var payload = broadcastFormPayload();
+  var error = validateBroadcastForm(payload, true);
+  if (error) return setBroadcastStatus(error, 'error');
+  if (!latestBroadcastPreview) return setBroadcastStatus('Preview recipients before sending.', 'error');
+  if (!confirm('Send this broadcast to ' + latestBroadcastPreview.recipientCount + ' learner(s)?')) return;
+
+  var btn = document.getElementById('btn-send-broadcast');
+  var previewBtn = document.getElementById('btn-preview-broadcast');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  if (previewBtn) previewBtn.disabled = true;
+  setBroadcastStatus('Sending broadcast...', '');
+  try {
+    var res = await fetchAdmin('/api/admin?action=send-learner-broadcast', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || 'Failed to send broadcast');
+    toast('Broadcast sent', 'success');
+    setBroadcastStatus('Sent: ' + (data.broadcast?.sent_count || 0) + ', failed: ' + (data.broadcast?.failed_count || 0) + ', skipped: ' + (data.broadcast?.skipped_count || 0) + '.', 'success');
+    markBroadcastDirty();
+    loadBroadcastHistory();
+  } catch (err) {
+    setBroadcastStatus(err.message || 'Failed to send broadcast.', 'error');
+  } finally {
+    if (btn) btn.textContent = 'Send broadcast';
+    if (previewBtn) previewBtn.disabled = false;
+  }
+}
+
+async function loadBroadcastHistory() {
+  var body = document.getElementById('broadcast-history-body');
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="7" class="empty-state">Loading...</td></tr>';
+  try {
+    var res = await fetchAdmin('/api/admin?action=learner-broadcast-history&limit=20', { headers: HEADERS });
+    var data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || 'Failed to load history');
+    var broadcasts = data.broadcasts || [];
+    if (!broadcasts.length) {
+      body.innerHTML = '<tr><td colspan="7" class="empty-state">No broadcasts yet</td></tr>';
+      return;
+    }
+    body.innerHTML = broadcasts.map(function (b) {
+      var cats = (b.selected_categories || []).map(learnerCategoryLabel).join(', ');
+      return '<tr>' +
+        '<td><strong>' + esc(b.label || 'Untitled') + '</strong><br><span style="font-size:0.78rem;color:var(--muted);">' + esc((b.message_body || '').slice(0, 80)) + '</span></td>' +
+        '<td>' + esc(cats || '-') + '</td>' +
+        '<td>' + broadcastStatusBadge(b.status) + '</td>' +
+        '<td>' + (b.sent_count || 0) + ' / ' + (b.recipient_count || 0) + '</td>' +
+        '<td>' + (b.skipped_count || 0) + '</td>' +
+        '<td>' + (b.failed_count || 0) + '</td>' +
+        '<td>' + (b.created_at ? new Date(b.created_at).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '-') + '</td>' +
+      '</tr>';
+    }).join('');
+  } catch (err) {
+    body.innerHTML = '<tr><td colspan="7" class="empty-state">Failed to load broadcast history</td></tr>';
+  }
+}
 
 async function populateLearnerInstructorSelect(selectedId) {
   const select = document.getElementById('learner-edit-primary-instructor');
@@ -3767,6 +3945,7 @@ document.addEventListener('change', function (e) {
   if (t.dataset.action === 'toggle-select-all') toggleSelectAll(t.checked);
   else if (t.dataset.action === 'toggle-bulk-select') toggleBulkSelect(parseInt(t.dataset.id, 10), t.checked);
   else if (t.dataset.action === 'update-learner-relationship-category') updateLearnerRelationshipCategory(t);
+  else if (t.dataset.action === 'broadcast-dirty') markBroadcastDirty();
 });
 document.addEventListener('input', function (e) {
   if (e.target && (e.target.id === 'refund-source-id' || e.target.id === 'refund-reason')) {
@@ -3776,6 +3955,7 @@ document.addEventListener('input', function (e) {
   var t = e.target.closest('[data-action]');
   if (!t) return;
   if (t.dataset.action === 'render-learners') renderLearners();
+  else if (t.dataset.action === 'broadcast-dirty') markBroadcastDirty();
   else if (t.dataset.action === 'validate-refund-execute-confirmation') updateRefundExecuteButton();
   else if (t.dataset.action === 'validate-manual-bank-refund') updateManualBankRefundButton();
 });
@@ -3907,6 +4087,9 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-open-category-modal', openCategoryModal);
   bind('btn-open-add-video', openAddVideo);
   bind('btn-refresh-learners', loadLearners);
+  bind('btn-refresh-broadcasts', loadBroadcastHistory);
+  bind('btn-preview-broadcast', previewLearnerBroadcast);
+  bind('btn-send-broadcast', sendLearnerBroadcast);
   bind('btn-close-learner-detail', closeLearnerDetail);
   bind('btn-edit-learner', openEditLearner);
   bind('btn-save-learner', saveEditLearner);

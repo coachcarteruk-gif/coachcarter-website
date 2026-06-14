@@ -5,7 +5,7 @@ const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
 const { checkRateLimit } = require('./_rate-limit');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
-const { deleteLearnerCascade, refundLedgerTablesExist } = require('./_gdpr');
+const { deleteLearnerCascade, refundLedgerTablesExist, learnerBroadcastTablesExist } = require('./_gdpr');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 // Every handler in this file operates on learner-owned data (skill ratings,
@@ -1238,6 +1238,21 @@ async function handleExportData(req, res) {
            ORDER BY created_at DESC`
       : null;
 
+    const hasLearnerBroadcasts = await learnerBroadcastTablesExist(sql);
+    const broadcastsReceived = hasLearnerBroadcasts
+      ? await sql`
+          SELECT lb.label, lb.message_body, lb.selected_categories,
+                 lbr.phone, lbr.learner_category, lbr.status,
+                 lbr.skip_reason, lbr.error_message, lbr.sent_at, lbr.created_at
+            FROM learner_broadcast_recipients lbr
+            JOIN learner_broadcasts lb
+              ON lb.id = lbr.broadcast_id
+             AND lb.school_id = ${schoolId}
+           WHERE lbr.learner_id = ${user.id}
+             AND lbr.school_id = ${schoolId}
+           ORDER BY lbr.created_at DESC`
+      : null;
+
     // Offers sent to this learner (by learner_id once they signed up, or by
     // email before signup). Exclude the token itself — it's an active secret.
     const learnerEmail = profile?.email || null;
@@ -1274,7 +1289,8 @@ async function handleExportData(req, res) {
           'cookie_consents', 'deletion_requests',
           'lesson_confirmations', 'offers_received',
           'credit_balances', 'booking_credit_sources', 'credit_adjustments',
-          ...(hasRefundLedger ? ['refund_events'] : [])
+          ...(hasRefundLedger ? ['refund_events'] : []),
+          ...(hasLearnerBroadcasts ? ['broadcasts_received'] : [])
         ]
       },
       profile: profile || {},
@@ -1299,6 +1315,7 @@ async function handleExportData(req, res) {
       booking_credit_sources: bookingCreditSources,
       credit_adjustments: creditAdjustments,
       ...(hasRefundLedger ? { refund_events: refundEvents } : {}),
+      ...(hasLearnerBroadcasts ? { broadcasts_received: broadcastsReceived } : {}),
     };
 
     const dateStr = new Date().toISOString().slice(0, 10);

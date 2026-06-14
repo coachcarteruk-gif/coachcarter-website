@@ -55,6 +55,7 @@ const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { createTransporter, generateToken } = require('./_auth-helpers');
+const { sendWhatsApp } = require('./_whatsapp');
 const { lockBalanceAndMutate } = require('./_credit-grant');
 const {
   validateGoodwillRequest,
@@ -88,10 +89,83 @@ const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_tra
 const { withNeonTransaction } = require('./_db-transaction');
 
 const LEARNER_CATEGORIES = new Set(['regular', 'sporadic', 'inactive', 'passed']);
+const BROADCAST_MAX_RECIPIENTS = 200;
 
 function normaliseLearnerCategory(value) {
   const text = String(value || '').trim().toLowerCase();
   return LEARNER_CATEGORIES.has(text) ? text : null;
+}
+
+function normaliseBroadcastCategories(value) {
+  if (!Array.isArray(value)) {
+    return { ok: false, status: 400, code: 'INVALID_CATEGORIES', message: 'categories must be an array.' };
+  }
+  const categories = [];
+  for (const item of value) {
+    const category = normaliseLearnerCategory(item);
+    if (!category) {
+      return { ok: false, status: 400, code: 'INVALID_CATEGORY', message: 'Selected learner category is invalid.' };
+    }
+    if (!categories.includes(category)) categories.push(category);
+  }
+  if (categories.length === 0) {
+    return { ok: false, status: 400, code: 'NO_CATEGORIES', message: 'Select at least one learner category.' };
+  }
+  return { ok: true, categories };
+}
+
+function normaliseBroadcastPhone(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const compact = raw.replace(/[\s().-]/g, '');
+  if (!/^(?:\+|00)?\d{10,15}$/.test(compact)) return null;
+  if (compact.startsWith('+')) return compact;
+  if (compact.startsWith('00')) return `+${compact.slice(2)}`;
+  if (compact.startsWith('0')) return `+44${compact.slice(1)}`;
+  return `+${compact}`;
+}
+
+function summariseBroadcastError(result) {
+  if (!result || result.ok) return null;
+  return String(result.error || result.status || 'Send failed').slice(0, 500);
+}
+
+async function resolveLearnerBroadcastRecipients(sql, schoolId, categories) {
+  const learners = await sql`
+    SELECT id, name, email, phone, learner_category
+    FROM learner_users
+    WHERE school_id = ${schoolId}
+      AND learner_category = ANY(${categories}::text[])
+    ORDER BY learner_category ASC, name ASC NULLS LAST, email ASC NULLS LAST, id ASC
+  `;
+
+  const recipients = [];
+  const skipped = [];
+  for (const learner of learners) {
+    const phone = normaliseBroadcastPhone(learner.phone);
+    const row = {
+      learner_id: learner.id,
+      name: learner.name,
+      email: learner.email,
+      phone: phone || learner.phone || null,
+      learner_category: learner.learner_category,
+    };
+    if (!phone) {
+      skipped.push({ ...row, skip_reason: learner.phone ? 'invalid_phone' : 'missing_phone' });
+    } else {
+      recipients.push({ ...row, phone });
+    }
+  }
+
+  return {
+    recipients,
+    skipped,
+    counts: {
+      matched: learners.length,
+      recipients: recipients.length,
+      skipped: skipped.length,
+    },
+  };
 }
 
 function createStripeClient() {
@@ -229,6 +303,9 @@ module.exports = async (req, res) => {
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
   if (action === 'update-learner')    return handleUpdateLearner(req, res);
   if (action === 'update-learner-relationship') return handleUpdateLearnerRelationship(req, res);
+  if (action === 'learner-broadcast-preview') return handleLearnerBroadcastPreview(req, res);
+  if (action === 'send-learner-broadcast') return handleSendLearnerBroadcast(req, res);
+  if (action === 'learner-broadcast-history') return handleLearnerBroadcastHistory(req, res);
   if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
   if (action === 'credit-goodwill')    return handleCreditGoodwillContract(req, res);
   if (action === 'credit-reconciliation') return handleCreditReconciliationContract(req, res);
@@ -1813,6 +1890,261 @@ async function handleUpdateLearnerRelationship(req, res) {
   }
 }
 
+// GET/POST /api/admin?action=learner-broadcast-preview
+// Body/query: { categories: ['regular', ...] }
+// Returns the exact school-scoped recipient set that the send action will use.
+async function handleLearnerBroadcastPreview(req, res) {
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const rawCategories = req.method === 'GET'
+    ? String(req.query.categories || '').split(',').filter(Boolean)
+    : req.body?.categories;
+  const validated = normaliseBroadcastCategories(rawCategories);
+  if (!validated.ok) {
+    return res.status(validated.status).json({ error: true, code: validated.code, message: validated.message });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const preview = await resolveLearnerBroadcastRecipients(sql, schoolId, validated.categories);
+    return res.json({ ok: true, categories: validated.categories, ...preview });
+  } catch (err) {
+    console.error('admin learner-broadcast-preview error:', err);
+    reportError('/api/admin?action=learner-broadcast-preview', err);
+    return res.status(500).json({ error: true, code: 'BROADCAST_PREVIEW_FAILED', message: 'Failed to preview learner broadcast.' });
+  }
+}
+
+// POST /api/admin?action=send-learner-broadcast
+// Body: { label, message_body, categories[] }
+async function handleSendLearnerBroadcast(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const label = String(req.body?.label || '').trim();
+  const messageBody = String(req.body?.message_body || '').trim();
+  const validated = normaliseBroadcastCategories(req.body?.categories);
+
+  if (!validated.ok) {
+    return res.status(validated.status).json({ error: true, code: validated.code, message: validated.message });
+  }
+  if (!label) {
+    return res.status(400).json({ error: true, code: 'LABEL_REQUIRED', message: 'Broadcast label is required.' });
+  }
+  if (label.length > 120) {
+    return res.status(400).json({ error: true, code: 'LABEL_TOO_LONG', message: 'Broadcast label must be 120 characters or fewer.' });
+  }
+  if (!messageBody) {
+    return res.status(400).json({ error: true, code: 'MESSAGE_REQUIRED', message: 'Message body is required.' });
+  }
+  if (messageBody.length > 1000) {
+    return res.status(400).json({ error: true, code: 'MESSAGE_TOO_LONG', message: 'Message body must be 1000 characters or fewer.' });
+  }
+
+  const sql = neon(process.env.POSTGRES_URL);
+  let broadcastId = null;
+
+  try {
+    const resolved = await resolveLearnerBroadcastRecipients(sql, schoolId, validated.categories);
+    if (resolved.recipients.length === 0) {
+      return res.status(400).json({
+        error: true,
+        code: 'NO_USABLE_RECIPIENTS',
+        message: 'No selected learners have a usable phone number.',
+        categories: validated.categories,
+        skipped: resolved.skipped,
+        counts: resolved.counts,
+      });
+    }
+    if (resolved.recipients.length > BROADCAST_MAX_RECIPIENTS) {
+      return res.status(400).json({
+        error: true,
+        code: 'TOO_MANY_RECIPIENTS',
+        message: `This broadcast has ${resolved.recipients.length} recipients. The first version is capped at ${BROADCAST_MAX_RECIPIENTS}.`,
+        counts: resolved.counts,
+      });
+    }
+
+    const [broadcast] = await sql`
+      INSERT INTO learner_broadcasts (
+        school_id, label, message_body, selected_categories, created_by,
+        status, recipient_count, skipped_count
+      ) VALUES (
+        ${schoolId}, ${label}, ${messageBody}, ${validated.categories}, ${admin.id || null},
+        'sending', ${resolved.recipients.length}, ${resolved.skipped.length}
+      )
+      RETURNING id, label, message_body, selected_categories, status, created_at
+    `;
+    broadcastId = broadcast.id;
+
+    for (const learner of resolved.skipped) {
+      await sql`
+        INSERT INTO learner_broadcast_recipients (
+          school_id, broadcast_id, learner_id, learner_name, learner_email,
+          phone, learner_category, status, skip_reason
+        ) VALUES (
+          ${schoolId}, ${broadcastId}, ${learner.learner_id}, ${learner.name}, ${learner.email},
+          ${learner.phone}, ${learner.learner_category}, 'skipped', ${learner.skip_reason}
+        )
+      `;
+    }
+
+    const sentRows = [];
+    let sentCount = 0;
+    let failedCount = 0;
+    let skippedDuringSendCount = 0;
+
+    for (const learner of resolved.recipients) {
+      const result = await sendWhatsApp(learner.phone, messageBody, {
+        purpose: 'admin.learner_broadcast',
+        learnerId: learner.learner_id,
+        schoolId,
+      });
+      const status = result?.ok ? 'sent' : (result?.status === 'skipped' ? 'skipped' : 'failed');
+      if (status === 'sent') sentCount += 1;
+      else if (status === 'skipped') skippedDuringSendCount += 1;
+      else failedCount += 1;
+
+      const [row] = await sql`
+        INSERT INTO learner_broadcast_recipients (
+          school_id, broadcast_id, learner_id, learner_name, learner_email,
+          phone, learner_category, status, skip_reason, error_message, sent_at
+        ) VALUES (
+          ${schoolId}, ${broadcastId}, ${learner.learner_id}, ${learner.name}, ${learner.email},
+          ${learner.phone}, ${learner.learner_category}, ${status},
+          ${status === 'skipped' ? 'messaging_skipped' : null},
+          ${summariseBroadcastError(result)},
+          ${status === 'sent' ? new Date().toISOString() : null}
+        )
+        RETURNING learner_id, learner_name AS name, learner_email AS email, phone,
+                  learner_category, status, skip_reason, error_message
+      `;
+      sentRows.push(row);
+    }
+
+    const finalSkippedCount = resolved.skipped.length + skippedDuringSendCount;
+    const finalStatus = failedCount > 0 || skippedDuringSendCount > 0 ? 'partial_failed' : 'sent';
+    const [updated] = await sql`
+      UPDATE learner_broadcasts
+      SET status = ${finalStatus},
+          sent_count = ${sentCount},
+          failed_count = ${failedCount},
+          skipped_count = ${finalSkippedCount},
+          completed_at = NOW()
+      WHERE id = ${broadcastId}
+        AND school_id = ${schoolId}
+      RETURNING id, label, message_body, selected_categories, status,
+                recipient_count, skipped_count, sent_count, failed_count,
+                created_at, completed_at
+    `;
+
+    await logAudit(sql, {
+      adminId: admin.id,
+      adminEmail: admin.email,
+      action: 'admin.send_learner_broadcast',
+      targetType: 'learner_broadcast',
+      targetId: broadcastId,
+      details: {
+        label,
+        selected_categories: validated.categories,
+        recipient_count: resolved.recipients.length,
+        skipped_count: finalSkippedCount,
+        sent_count: sentCount,
+        failed_count: failedCount,
+      },
+      schoolId,
+      req,
+    });
+
+    return res.json({
+      ok: true,
+      broadcast: updated,
+      recipients: sentRows,
+      skipped: resolved.skipped,
+    });
+  } catch (err) {
+    console.error('admin send-learner-broadcast error:', err);
+    if (broadcastId) {
+      try {
+        await sql`
+          UPDATE learner_broadcasts
+          SET status = 'failed', completed_at = NOW()
+          WHERE id = ${broadcastId}
+            AND school_id = ${schoolId}
+        `;
+      } catch (updateErr) {
+        console.error('admin send-learner-broadcast status update error:', updateErr.message);
+      }
+    }
+    reportError('/api/admin?action=send-learner-broadcast', err);
+    return res.status(500).json({ error: true, code: 'BROADCAST_SEND_FAILED', message: 'Failed to send learner broadcast.' });
+  }
+}
+
+// GET /api/admin?action=learner-broadcast-history
+async function handleLearnerBroadcastHistory(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const broadcasts = await sql`
+      SELECT lb.id, lb.label, lb.message_body, lb.selected_categories, lb.status,
+             lb.recipient_count, lb.skipped_count, lb.sent_count, lb.failed_count,
+             lb.created_at, lb.completed_at, au.name AS created_by_name
+      FROM learner_broadcasts lb
+      LEFT JOIN admin_users au
+        ON au.id = lb.created_by
+       AND au.school_id = ${schoolId}
+      WHERE lb.school_id = ${schoolId}
+      ORDER BY lb.created_at DESC, lb.id DESC
+      LIMIT ${limit}
+    `;
+
+    const ids = broadcasts.map(row => row.id);
+    let recipientRows = [];
+    if (ids.length > 0) {
+      recipientRows = await sql`
+        SELECT broadcast_id, learner_id, learner_name AS name, learner_email AS email,
+               phone, learner_category, status, skip_reason, error_message, sent_at, created_at
+        FROM learner_broadcast_recipients
+        WHERE school_id = ${schoolId}
+          AND broadcast_id = ANY(${ids}::int[])
+        ORDER BY broadcast_id DESC, status ASC, learner_name ASC NULLS LAST, learner_id ASC
+      `;
+    }
+
+    const recipientsByBroadcast = new Map();
+    for (const row of recipientRows) {
+      if (!recipientsByBroadcast.has(row.broadcast_id)) recipientsByBroadcast.set(row.broadcast_id, []);
+      recipientsByBroadcast.get(row.broadcast_id).push(row);
+    }
+
+    return res.json({
+      ok: true,
+      broadcasts: broadcasts.map(row => ({
+        ...row,
+        recipients: recipientsByBroadcast.get(row.id) || [],
+      })),
+    });
+  } catch (err) {
+    console.error('admin learner-broadcast-history error:', err);
+    reportError('/api/admin?action=learner-broadcast-history', err);
+    return res.status(500).json({ error: true, code: 'BROADCAST_HISTORY_FAILED', message: 'Failed to load learner broadcast history.' });
+  }
+}
+
 async function handleAdjustCredits(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -3348,3 +3680,5 @@ async function handleNotificationLog(req, res) {
 
 module.exports._resolveAdjustCreditsTarget = resolveAdjustCreditsTarget;
 module.exports._buildScopedDurationCreditRefusal = buildScopedDurationCreditRefusal;
+module.exports._normaliseBroadcastCategories = normaliseBroadcastCategories;
+module.exports._normaliseBroadcastPhone = normaliseBroadcastPhone;

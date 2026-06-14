@@ -379,6 +379,9 @@ body {
     <a href="#" data-section="learners">
       <span class="nav-icon">&#x1f9d1;&#x200d;&#x1f393;</span> Learners
     </a>
+    <a href="#" data-section="broadcasts">
+      <span class="nav-icon">&#9993;</span> Broadcasts
+    </a>
     <a href="#" data-section="videos">
       <span class="nav-icon">&#x1f3ac;</span> Videos
     </a>
@@ -627,7 +630,90 @@ body {
     </div>
   </div>
 
-  <!-- ═══════════ LESSON TYPES SECTION ═══════════ -->
+  <!-- LEARNER BROADCASTS SECTION -->
+  <div class="section" id="section-broadcasts">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Learner Broadcasts</div>
+        <div class="page-subtitle">Send one-off text messages to selected learner types</div>
+      </div>
+      <button class="btn" id="btn-refresh-broadcasts">Refresh history</button>
+    </div>
+
+    <div class="panel-card" style="margin-bottom:24px;">
+      <div class="panel-card-header">
+        <span class="panel-card-title">New Broadcast</span>
+        <span class="badge badge-gray" id="broadcast-preview-badge">Preview required</span>
+      </div>
+      <div style="padding:20px;">
+        <div style="display:grid;grid-template-columns:minmax(220px,320px) minmax(0,1fr);gap:18px;align-items:start;">
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:6px;">Campaign label</label>
+            <input type="text" id="broadcast-label" maxlength="120" data-action="broadcast-dirty"
+                   placeholder="June pass offers"
+                   style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;">
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:6px;">Learner types</label>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <label class="filter-pill" style="margin:0;"><input type="checkbox" class="broadcast-category" value="regular" data-action="broadcast-dirty" style="margin-right:6px;">Regular</label>
+              <label class="filter-pill" style="margin:0;"><input type="checkbox" class="broadcast-category" value="sporadic" data-action="broadcast-dirty" style="margin-right:6px;">Sporadic</label>
+              <label class="filter-pill" style="margin:0;"><input type="checkbox" class="broadcast-category" value="inactive" data-action="broadcast-dirty" style="margin-right:6px;">Inactive</label>
+              <label class="filter-pill" style="margin:0;"><input type="checkbox" class="broadcast-category" value="passed" data-action="broadcast-dirty" style="margin-right:6px;">Passed</label>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <label style="font-size:0.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:6px;">Message</label>
+          <textarea id="broadcast-message" maxlength="1000" data-action="broadcast-dirty"
+                    placeholder="Write the exact text learners should receive."
+                    style="width:100%;min-height:120px;padding:12px;border:1px solid var(--border);border-radius:8px;font-family:var(--font-body);font-size:0.9rem;resize:vertical;"></textarea>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px;">
+          <button class="btn" id="btn-preview-broadcast">Preview recipients</button>
+          <button class="btn btn-primary" id="btn-send-broadcast" disabled>Send broadcast</button>
+          <span id="broadcast-status" style="font-size:0.85rem;color:var(--muted);"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-card" style="margin-bottom:24px;">
+      <div class="panel-card-header">
+        <span class="panel-card-title">Recipient Preview</span>
+        <span id="broadcast-preview-count" style="font-size:0.85rem;color:var(--muted);">No preview yet</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Learner</th><th>Type</th><th>Phone</th><th>Status</th></tr>
+          </thead>
+          <tbody id="broadcast-preview-body">
+            <tr><td colspan="4" class="empty-state">Choose learner types and preview before sending.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-card-header">
+        <span class="panel-card-title">Broadcast History</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Campaign</th><th>Types</th><th>Status</th><th>Sent</th><th>Skipped</th><th>Failed</th><th>Created</th></tr>
+          </thead>
+          <tbody id="broadcast-history-body">
+            <tr><td colspan="7" class="empty-state">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- LESSON TYPES SECTION -->
   <div class="section" id="section-lesson-types">
     <div class="page-header">
       <div>

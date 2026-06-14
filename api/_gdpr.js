@@ -62,6 +62,16 @@ async function refundLedgerTablesExist(sql) {
   return Boolean(row?.has_refund_events && row?.has_refund_event_lines);
 }
 
+async function learnerBroadcastTablesExist(sql) {
+  const [row] = await sql`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'learner_broadcast_recipients'
+    ) AS has_learner_broadcast_recipients
+  `;
+  return Boolean(row?.has_learner_broadcast_recipients);
+}
+
 async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   if (!sql || !learnerId) {
     throw new Error('deleteLearnerCascade: sql and learnerId required');
@@ -77,6 +87,7 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   }
 
   const hasRefundLedger = await refundLedgerTablesExist(sql);
+  const hasLearnerBroadcasts = await learnerBroadcastTablesExist(sql);
 
   const txn = [
     // 1. Anonymise financial records (7-year retention).
@@ -118,6 +129,16 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   if (hasRefundLedger) {
     txn.splice(2, 0, sql`UPDATE refund_events SET learner_id = NULL WHERE learner_id = ${learnerId}`);
   }
+  if (hasLearnerBroadcasts) {
+    txn.splice(2, 0, sql`
+      UPDATE learner_broadcast_recipients
+         SET learner_id = NULL,
+             learner_name = NULL,
+             learner_email = NULL,
+             phone = NULL
+       WHERE learner_id = ${learnerId}
+    `);
+  }
 
   // Magic-link tokens key on email, not learner_id. Append conditionally.
   if (email) {
@@ -134,4 +155,4 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   return { ok: true, learnerId, email };
 }
 
-module.exports = { deleteLearnerCascade, refundLedgerTablesExist };
+module.exports = { deleteLearnerCascade, refundLedgerTablesExist, learnerBroadcastTablesExist };

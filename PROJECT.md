@@ -788,11 +788,15 @@ Login at `/admin/login.html` with email + password. JWT stored in `localStorage`
 | `instructor-blackouts` | GET | JWT | Get future blackout dates for an instructor (`?instructor_id=X`) |
 | `set-instructor-blackouts` | POST | JWT | Replace all future blackout dates for an instructor. Body: `{ instructor_id, ranges }` |
 | `update-learner` | POST | JWT | Edit learner name/email/phone/pickup_address. Audit-logged with before/after values |
+| `learner-broadcast-preview` | POST | JWT | Preview the exact school-scoped recipients for selected global learner categories. Body: `{ categories: ['regular', ...] }`. Returns usable-phone recipients plus skipped learners. |
+| `send-learner-broadcast` | POST | JWT | Manual one-off learner SMS broadcast. Body: `{ label, message_body, categories }`. Re-resolves recipients by `school_id`, skips unusable phone numbers, sends through `sendWhatsApp()`, writes `learner_broadcasts` / `learner_broadcast_recipients`, and audit-logs `admin.send_learner_broadcast`. No scheduling/templates in v1. |
+| `learner-broadcast-history` | GET | JWT | Recent broadcast campaigns and per-recipient outcomes for the authenticated school. |
 | `referral-activity` | GET | JWT | Aggregated referral stats per school (referrer names, codes, counts, total rewards) |
 | `referral-config` | GET | JWT | Current referral config for the school (enabled, welcome bonus, reward minutes) |
 | `update-referral-config` | POST | JWT | Update referral config. Body: `{ referral_enabled, referral_welcome_bonus_minutes, referral_reward_minutes }`. Audit-logged |
 
 Refund operations runbook: [`docs/refund-operator-runbook.md`](docs/refund-operator-runbook.md).
+Learner broadcast details: [`docs/learner-broadcasts.md`](docs/learner-broadcasts.md).
 
 **`admin_users`** table: email, bcrypt password_hash, role (`admin` / `superadmin`).
 
@@ -953,6 +957,8 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 | `deletion_requests` | Tracks self-service deletion flow (pending → confirmed → completed) |
 | `referrals` | Learner referral codes (learner_id, school_id, code, unique per school) |
 | `referral_clicks` | One row per visit to `/r/CODE` — referral_code, school_id, ip_hash (sha256, first 16 chars), user_agent, referer, clicked_at. Pre-signup, so referee not yet known. Used for attribution debugging and abuse signal |
+| `learner_broadcasts` | Admin learner broadcast campaign ledger (label, body, selected categories, counts, status, school_id) |
+| `learner_broadcast_recipients` | Per-learner broadcast recipient ledger with sent/skipped/failed status and school_id |
 
 ### Key columns added to existing tables
 
