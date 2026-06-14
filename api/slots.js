@@ -5099,7 +5099,15 @@ async function handleReschedule(req, res) {
              COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
              lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
              COALESCE(lb.reschedule_count, 0) AS reschedule_count,
-             COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS type_duration_minutes,
+             COALESCE(
+               lt.duration_minutes,
+               CASE
+                 WHEN lb.end_time > lb.start_time
+                 THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+                 ELSE NULL
+               END,
+               ${DEFAULT_SLOT_MINUTES}
+             ) AS type_duration_minutes,
              lt.name AS lesson_type_name,
              EXISTS (
                SELECT 1
@@ -5433,7 +5441,15 @@ async function handleMyBookings(req, res) {
         END AS reserved_move_policy_mode,
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
         lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
-        COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
+        COALESCE(
+          lt.duration_minutes,
+          CASE
+            WHEN lb.end_time > lb.start_time
+            THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+            ELSE NULL
+          END,
+          ${DEFAULT_SLOT_MINUTES}
+        ) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
@@ -5469,7 +5485,15 @@ async function handleMyBookings(req, res) {
         NULL::text AS reserved_move_policy_mode,
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
         lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
-        COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
+        COALESCE(
+          lt.duration_minutes,
+          CASE
+            WHEN lb.end_time > lb.start_time
+            THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+            ELSE NULL
+          END,
+          ${DEFAULT_SLOT_MINUTES}
+        ) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
@@ -5512,7 +5536,15 @@ async function handleMyBookings(req, res) {
         END AS reserved_move_policy_mode,
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
         lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
-        COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
+        COALESCE(
+          lt.duration_minutes,
+          CASE
+            WHEN lb.end_time > lb.start_time
+            THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+            ELSE NULL
+          END,
+          ${DEFAULT_SLOT_MINUTES}
+        ) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
@@ -5549,7 +5581,15 @@ async function handleMyBookings(req, res) {
         NULL::text AS reserved_move_policy_mode,
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
         lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
-        COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
+        COALESCE(
+          lt.duration_minutes,
+          CASE
+            WHEN lb.end_time > lb.start_time
+            THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+            ELSE NULL
+          END,
+          ${DEFAULT_SLOT_MINUTES}
+        ) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
@@ -5613,7 +5653,15 @@ async function handleSeriesInfo(req, res) {
         i.name AS instructor_name,
         lt.name AS lesson_type_name,
         lt.colour AS lesson_type_colour,
-        COALESCE(lt.duration_minutes, ${DEFAULT_SLOT_MINUTES}) AS duration_minutes
+        COALESCE(
+          lt.duration_minutes,
+          CASE
+            WHEN lb.end_time > lb.start_time
+            THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+            ELSE NULL
+          END,
+          ${DEFAULT_SLOT_MINUTES}
+        ) AS duration_minutes
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id

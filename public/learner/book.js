@@ -201,6 +201,12 @@ function init() {
               const sel = document.getElementById('instructorFilter');
               if (sel.querySelector(`option[value="${booking.instructor_id}"]`)) {
                 sel.value = String(booking.instructor_id);
+                await loadLessonTypes();
+                chooseLessonTypeForExistingBooking(booking);
+                loadedRanges = []; slotCache = {}; selectedDate = null; clearSelectedSlot();
+                await initFeed();
+              } else {
+                chooseLessonTypeForExistingBooking(booking);
                 loadedRanges = []; slotCache = {}; selectedDate = null; clearSelectedSlot();
                 await initFeed();
               }
@@ -335,6 +341,26 @@ function choosePageLessonType() {
   slotFeedLessonTypeId = selectedLessonType.id;
 }
 
+function chooseLessonTypeForExistingBooking(booking) {
+  if (!booking || !availableLessonTypes.length) return false;
+  const bookingTypeId = booking.lesson_type_id == null ? '' : String(booking.lesson_type_id);
+  const bookingDuration = parseInt(booking.duration_minutes, 10) || 0;
+  let chosen = null;
+
+  if (bookingTypeId) {
+    chosen = availableLessonTypes.find(lt => String(lt.id || lt.lesson_type_id) === bookingTypeId);
+  }
+  if (!chosen && bookingDuration > 0) {
+    chosen = availableLessonTypes.find(lt => parseInt(lt.duration_minutes, 10) === bookingDuration);
+  }
+  if (!chosen) return false;
+
+  selectedLessonType = normaliseLessonType(chosen);
+  slotFeedDuration = selectedLessonType.duration_minutes;
+  slotFeedLessonTypeId = selectedLessonType.id;
+  return true;
+}
+
 function lessonLengthLabel(lt) {
   if (!lt) return 'Lesson';
   const mins = Number(lt.duration_minutes || 0);
@@ -356,18 +382,24 @@ function renderLessonLengthControls() {
     .map(lt => {
       const id = lt.id || lt.lesson_type_id;
       const selected = selectedLessonType && String(selectedLessonType.id) === String(id);
+      const locked = !!pendingReschedule && !selected;
       const label = lessonLengthLabel(lt);
       const fullLabel = `${lt.name || label}, ${formatHours(lt.duration_minutes)}`;
       return `<button class="lesson-length-option" type="button"
         data-action="select-lesson-type"
         data-lesson-type-id="${esc(id)}"
         aria-pressed="${selected ? 'true' : 'false'}"
+        ${locked ? 'disabled' : ''}
         aria-label="${esc(fullLabel)}">${esc(label)}</button>`;
     })
     .join('');
 }
 
 function selectLessonType(lessonTypeId) {
+  if (pendingReschedule) {
+    showToast('Rescheduled lessons keep their original duration.', '');
+    return;
+  }
   const next = availableLessonTypes.find(lt => String(lt.id || lt.lesson_type_id) === String(lessonTypeId));
   if (!next) return;
   selectedLessonType = normaliseLessonType(next);
@@ -2481,6 +2513,8 @@ function startRescheduleMode(bookingId, date, start, end, instructorName, instru
     .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
   document.getElementById('rescheduleBannerText').textContent = `${dateStr} at ${start} with ${instructorName}`;
   document.getElementById('rescheduleBanner').style.display = 'flex';
+  renderLessonLengthControls();
+  renderSelectedSlotSummary();
   showToast(isReservedMove ? 'Select an available replacement for your reserved lesson' : 'Select a new time slot below to reschedule your lesson', '');
 }
 window.startRescheduleMode = startRescheduleMode;
@@ -2488,6 +2522,7 @@ window.startRescheduleMode = startRescheduleMode;
 function cancelRescheduleMode() {
   pendingReschedule = null;
   document.getElementById('rescheduleBanner').style.display = 'none';
+  renderLessonLengthControls();
   renderSelectedSlotSummary();
 }
 window.cancelRescheduleMode = cancelRescheduleMode;
