@@ -1161,7 +1161,7 @@ async function showLearnerDetail(id) {
     // Stats cards
     html += '<div class="stats-grid" style="margin-bottom: 20px;">';
     html += '<div class="stat-card"><div class="stat-value" style="font-size:1rem;">' + learnerCategoryBadge(learner?.learner_category) + '</div><div class="stat-label">Learner Type</div></div>';
-    html += '<div class="stat-card"><div class="stat-value" style="font-size:1.1rem;">' + esc(learner?.primary_instructor_name || 'None') + '</div><div class="stat-label">Assigned Instructor</div></div>';
+    html += '<div class="stat-card"><div class="stat-value" style="font-size:1.1rem;">' + esc(learner?.primary_instructor_name || 'None') + '</div><div class="stat-label">Assigned Instructor</div><button class="btn btn-sm" data-action="open-edit-learner" style="margin-top:10px;">Edit assignment</button></div>';
     html += '<div class="stat-card"><div class="stat-value">' + (tierLabels[learner?.current_tier] || 'N/A') + '</div><div class="stat-label">Current Tier</div></div>';
     html += '<div class="stat-card" style="position:relative;">' +
       '<div class="stat-value">' + fmtBalanceMins(learner?.balance_minutes || 0) + '</div>' +
@@ -3963,6 +3963,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'prefill-refund-note') prefillRefundNoteFromReadiness(t.dataset.noteType);
   else if (a === 'mark-complete') markComplete(parseInt(t.dataset.id, 10));
   else if (a === 'show-learner-detail') showLearnerDetail(parseInt(t.dataset.id, 10));
+  else if (a === 'open-edit-learner') openEditLearner();
   else if (a === 'open-adjust-credits') openAdjustCredits(t.dataset.learnerId, parseInt(t.dataset.balance, 10));
   else if (a === 'open-goodwill-credit') openGoodwillCredit(t.dataset.learnerId);
   else if (a === 'confirm-delete-learner') confirmDeleteLearner(t.dataset.id, t.dataset.name);

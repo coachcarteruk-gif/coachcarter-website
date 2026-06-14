@@ -187,6 +187,9 @@ test.describe('existing learner lesson offers', () => {
     expect(body).toContain('AND lu.archived_at IS NULL');
     expect(body).toContain('EXISTS (');
     expect(body).toContain('AND lb.instructor_id = ${instructor.id}');
+    expect(body).toContain('FROM instructor_learner_notes iln');
+    expect(body).toContain('OR lu.primary_instructor_id = ${instructor.id}');
+    expect(body).toContain('OR lcb.id IS NOT NULL');
     expect(body).toContain(') AS is_your_learner');
     expect(body).toContain('ORDER BY lu.name ASC');
   });

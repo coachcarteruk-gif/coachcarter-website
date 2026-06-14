@@ -2460,6 +2460,7 @@ async function handleMyLearners(req, res) {
         lu.id, lu.name, lu.email, lu.phone,
         lu.current_tier, lu.pickup_address, lu.prefer_contact_before,
         lu.credit_balance, lu.balance_minutes,
+        COALESCE(lcb.balance_minutes, 0)::int AS instructor_balance_minutes,
         COUNT(lb.id)::int AS total_lessons,
         COUNT(lb.id) FILTER (WHERE lb.status = ${CHARGEABLE})::int AS completed_lessons,
         COUNT(lb.id) FILTER (WHERE lb.status = ${SCHEDULED} AND lb.scheduled_date >= CURRENT_DATE)::int AS upcoming_lessons,
@@ -2470,15 +2471,28 @@ async function handleMyLearners(req, res) {
         iln.custom_hourly_rate_pence,
         iln.learner_category
       FROM learner_users lu
-      JOIN lesson_bookings lb ON lb.learner_id = lu.id
+      LEFT JOIN lesson_bookings lb
+        ON lb.learner_id = lu.id
+       AND lb.instructor_id = ${instructor.id}
+       AND lb.school_id = ${schoolId}
       LEFT JOIN instructor_learner_notes iln
         ON iln.learner_id = lu.id
        AND iln.instructor_id = ${instructor.id}
        AND iln.school_id = ${schoolId}
-      WHERE lb.instructor_id = ${instructor.id}
-        AND lb.school_id = ${schoolId}
-      GROUP BY lu.id, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category
-      ORDER BY MAX(lb.scheduled_date) DESC
+      LEFT JOIN learner_credit_balances lcb
+        ON lcb.learner_id = lu.id
+       AND lcb.instructor_id = ${instructor.id}
+       AND lcb.school_id = ${schoolId}
+      WHERE lu.school_id = ${schoolId}
+        AND lu.archived_at IS NULL
+        AND (
+          lb.id IS NOT NULL
+          OR iln.id IS NOT NULL
+          OR lu.primary_instructor_id = ${instructor.id}
+          OR lcb.id IS NOT NULL
+        )
+      GROUP BY lu.id, lcb.balance_minutes, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category
+      ORDER BY MAX(lb.scheduled_date) DESC NULLS LAST, lu.name ASC
     `;
 
     // Bolt on availability windows for each learner so the list view can show
@@ -2538,11 +2552,21 @@ async function handleSchoolLearners(req, res) {
         lu.credit_balance,
         COALESCE(lcb.balance_minutes, 0)::int AS balance_minutes,
         lu.balance_minutes AS total_balance_minutes,
-        EXISTS (
+        (
+          EXISTS (
           SELECT 1 FROM lesson_bookings lb
           WHERE lb.learner_id = lu.id
             AND lb.instructor_id = ${instructor.id}
             AND lb.school_id = ${schoolId}
+          )
+          OR EXISTS (
+            SELECT 1 FROM instructor_learner_notes iln
+            WHERE iln.learner_id = lu.id
+              AND iln.instructor_id = ${instructor.id}
+              AND iln.school_id = ${schoolId}
+          )
+          OR lu.primary_instructor_id = ${instructor.id}
+          OR lcb.id IS NOT NULL
         ) AS is_your_learner
       FROM learner_users lu
       LEFT JOIN learner_credit_balances lcb

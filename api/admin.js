@@ -97,6 +97,18 @@ function normaliseLearnerCategory(value) {
   return LEARNER_CATEGORIES.has(text) ? text : null;
 }
 
+async function ensureInstructorLearnerLink(sql, { instructorId, learnerId, schoolId }) {
+  if (!instructorId || !learnerId || !schoolId) return null;
+  const [row] = await sql`
+    INSERT INTO instructor_learner_notes (instructor_id, learner_id, school_id, updated_at)
+    VALUES (${instructorId}, ${learnerId}, ${schoolId}, NOW())
+    ON CONFLICT (instructor_id, learner_id)
+    DO UPDATE SET school_id = ${schoolId}, updated_at = NOW()
+    RETURNING instructor_id, learner_id, learner_category
+  `;
+  return row || null;
+}
+
 function normaliseBroadcastCategories(value) {
   if (!Array.isArray(value)) {
     return { ok: false, status: 400, code: 'INVALID_CATEGORIES', message: 'categories must be an array.' };
@@ -1820,6 +1832,28 @@ async function handleLearnerDetail(req, res) {
     `;
 
     const instructorLinks = await sql`
+      WITH related_instructors AS (
+        SELECT primary_instructor_id AS instructor_id
+        FROM learner_users
+        WHERE id = ${learnerId}
+          AND school_id = ${schoolId}
+          AND primary_instructor_id IS NOT NULL
+        UNION
+        SELECT instructor_id
+        FROM lesson_bookings
+        WHERE learner_id = ${learnerId}
+          AND school_id = ${schoolId}
+        UNION
+        SELECT instructor_id
+        FROM instructor_learner_notes
+        WHERE learner_id = ${learnerId}
+          AND school_id = ${schoolId}
+        UNION
+        SELECT instructor_id
+        FROM learner_credit_balances
+        WHERE learner_id = ${learnerId}
+          AND school_id = ${schoolId}
+      )
       SELECT
         i.id AS instructor_id,
         i.name AS instructor_name,
@@ -1832,15 +1866,17 @@ async function handleLearnerDetail(req, res) {
           FILTER (WHERE lb.status = ${CHARGEABLE}), 0)::int AS delivered_minutes,
         COUNT(lb.id) FILTER (WHERE lb.status = ${SCHEDULED} AND lb.scheduled_date >= CURRENT_DATE)::int AS upcoming_lessons,
         MAX(lb.scheduled_date)::text AS last_booking_date
-      FROM lesson_bookings lb
+      FROM related_instructors ri
       JOIN instructors i
-        ON i.id = lb.instructor_id
+        ON i.id = ri.instructor_id
        AND i.school_id = ${schoolId}
       LEFT JOIN instructor_learner_notes iln
         ON iln.instructor_id = i.id
        AND iln.learner_id = ${learnerId}
        AND iln.school_id = ${schoolId}
-      WHERE lb.learner_id = ${learnerId}
+      LEFT JOIN lesson_bookings lb
+        ON lb.instructor_id = i.id
+       AND lb.learner_id = ${learnerId}
         AND lb.school_id = ${schoolId}
       GROUP BY i.id, i.name, iln.learner_category, iln.test_date, iln.notes
       ORDER BY MAX(lb.scheduled_date) DESC NULLS LAST, i.name ASC
@@ -1955,6 +1991,15 @@ async function handleUpdateLearner(req, res) {
     `;
 
     const after = rows[0];
+    let assignmentLink = null;
+    if (newPrimaryInstructorId) {
+      assignmentLink = await ensureInstructorLearnerLink(sql, {
+        instructorId: newPrimaryInstructorId,
+        learnerId: parseInt(id, 10),
+        schoolId,
+      });
+    }
+
     await logAudit(sql, {
       adminId: admin.id, adminEmail: admin.email,
       action: 'update-learner', targetType: 'learner', targetId: id,
@@ -1976,7 +2021,8 @@ async function handleUpdateLearner(req, res) {
           learner_category: after.learner_category,
           primary_instructor_id: after.primary_instructor_id,
           test_date: after.test_date
-        }
+        },
+        assignment_link_created: !!assignmentLink
       },
       schoolId, req
     });
@@ -1989,7 +2035,7 @@ async function handleUpdateLearner(req, res) {
       schoolId, req,
     });
 
-    return res.json({ ok: true, learner: after });
+    return res.json({ ok: true, learner: after, assignment_link: assignmentLink });
   } catch (err) {
     console.error('admin update-learner error:', err);
     reportError('/api/admin', err);

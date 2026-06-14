@@ -100,7 +100,7 @@ function renderLearners() {
       <div class="empty-state fade-in">
         <div class="empty-state-icon">&#x1F465;</div>
         <h2>${search ? 'No matching learners' : 'No learners yet'}</h2>
-        <p>${search ? 'Try a different search term.' : 'Learners who book lessons with you will appear here.'}</p>
+        <p>${search ? 'Try a different search term.' : 'Learners assigned to you or booked with you will appear here.'}</p>
       </div>`;
     return;
   }
