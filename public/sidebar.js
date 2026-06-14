@@ -46,6 +46,22 @@
     });
   }
 
+  function getStoredSession(storageKey) {
+    try { return JSON.parse(localStorage.getItem(storageKey) || 'null'); }
+    catch(e) { return null; }
+  }
+
+  function getSessionUser(session, role) {
+    if (!session) return null;
+    if (role === 'learner') return session.learner || session;
+    if (role === 'instructor') return session.instructor || session;
+    return session;
+  }
+
+  function isInstructorImpersonation(session) {
+    return !!(session && session.impersonation && session.impersonation.active);
+  }
+
   function isMarketingActive(href) {
     var hrefPath = href.split('?')[0].replace(/\/index\.html$/, '/').replace(/\.html$/, '');
     var current = path.replace(/\/index\.html$/, '/').replace(/\.html$/, '');
@@ -310,11 +326,9 @@
 
     // Check if user is logged in
     var storageKey = context === 'learner' ? 'cc_learner' : 'cc_instructor';
-    var isLoggedIn = false;
-    try {
-      var session = JSON.parse(localStorage.getItem(storageKey) || 'null');
-      isLoggedIn = !!session;
-    } catch(e) {}
+    var session = getStoredSession(storageKey);
+    var isLoggedIn = !!session;
+    var isSupportAccess = context === 'instructor' && isInstructorImpersonation(session);
 
     // Themed footer styles for the inline theme-select dropdown — defined here
     // so they pick up CSS-variable fallbacks consistently in both modes.
@@ -337,7 +351,7 @@
         themeBlock(currentTheme) +
         '<button class="cc-sb-logout" id="cc-sb-logout">' +
           '<span class="cc-sb-icon">' + icons.logOut + '</span>' +
-          '<span>Sign Out</span>' +
+          '<span>' + (isSupportAccess ? 'Back to Admin' : 'Sign Out') + '</span>' +
         '</button>' +
         '<button class="cc-sb-cookie-settings" id="cc-sb-cookie-settings">' +
           '<span>Cookie Settings</span>' +
@@ -543,6 +557,18 @@
     /* Main content background */
     'body.cc-has-sidebar { background: var(--bg, #f5f5f5); }',
 
+    /* Admin support access banner */
+    '.cc-impersonation-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px;',
+    '  position: sticky; top: 0; z-index: 996; padding: 10px 18px;',
+    '  background: #111827; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.12);',
+    '  font-family: "Lato", sans-serif; font-size: 0.86rem; box-sizing: border-box; }',
+    '.cc-impersonation-banner strong { font-family: "Bricolage Grotesque", sans-serif; font-size: 0.95rem; }',
+    '.cc-impersonation-banner span { color: rgba(255,255,255,0.78); }',
+    '.cc-impersonation-banner button { border: 1px solid rgba(255,255,255,0.26); border-radius: 6px;',
+    '  background: rgba(255,255,255,0.1); color: #fff; padding: 7px 10px; cursor: pointer;',
+    '  font: inherit; font-size: 0.78rem; font-weight: 700; white-space: nowrap; }',
+    '.cc-impersonation-banner button:hover { background: rgba(255,255,255,0.18); }',
+
     /* Desktop layout */
     '@media (min-width: 960px) {',
     '  body.cc-has-sidebar { margin-left: 240px; }',
@@ -553,6 +579,7 @@
     '  .cc-sb { transform: translateX(-100%); width: 280px; padding-top: env(safe-area-inset-top, 0px); }',
     '  .cc-sb.open { transform: translateX(0); }',
     '  .cc-sb-close { display: block; }',
+    '  .cc-impersonation-banner { flex-wrap: wrap; top: calc(56px + env(safe-area-inset-top, 0px)); }',
     /* Mobile header — always show on mobile */
     '  body.cc-has-sidebar .cc-mob-header { display: flex; padding-top: env(safe-area-inset-top, 0px); height: calc(56px + env(safe-area-inset-top, 0px)); }',
     '  body.cc-has-sidebar:not(.cc-has-bottom-bar) { padding-top: calc(56px + env(safe-area-inset-top, 0px)); }',
@@ -762,6 +789,23 @@
 
     document.body.insertAdjacentHTML('afterbegin', sidebarHTML);
 
+    if (context === 'instructor') {
+      var supportSession = getStoredSession('cc_instructor');
+      var supportInstructor = getSessionUser(supportSession, 'instructor') || {};
+      var supportMeta = supportSession && supportSession.impersonation ? supportSession.impersonation : {};
+      if (isInstructorImpersonation(supportSession)) {
+        var adminLabel = supportMeta.admin_email ? ' by ' + escapeHtml(supportMeta.admin_email) : '';
+        var instructorLabel = supportInstructor.name || supportInstructor.email || 'this instructor';
+        var banner =
+          '<div class="cc-impersonation-banner" id="cc-impersonation-banner">' +
+            '<div><strong>Viewing as admin</strong> <span>' + escapeHtml(instructorLabel) + adminLabel + '</span></div>' +
+            '<button type="button" id="cc-impersonation-exit">Back to Admin</button>' +
+          '</div>';
+        var mobHeaderForBanner = document.getElementById('cc-mob-header');
+        if (mobHeaderForBanner) mobHeaderForBanner.insertAdjacentHTML('afterend', banner);
+      }
+    }
+
     // ── Apply cached school branding to sidebar elements ──────────
     if (window.ccBranding) {
       var cached = window.ccBranding.loadCachedBranding();
@@ -878,12 +922,14 @@
 
     if (context === 'instructor') {
       try {
-        var instructor = JSON.parse(localStorage.getItem('cc_instructor') || '{}');
+        var instructorSession = getStoredSession('cc_instructor') || {};
+        var instructor = getSessionUser(instructorSession, 'instructor') || {};
+        var impersonatingInstructor = isInstructorImpersonation(instructorSession);
         var userEl2 = document.getElementById('cc-sb-user');
         if (userEl2 && instructor.name) userEl2.textContent = instructor.name;
 
         // Show admin link if instructor is admin
-        if (instructor.is_admin) {
+        if (instructor.is_admin && !impersonatingInstructor) {
           var nav = document.querySelector('.cc-sb-nav');
           if (nav) {
             nav.insertAdjacentHTML('beforeend',
@@ -894,6 +940,16 @@
           }
         }
       } catch(e) {}
+
+      var exitSupportBtn = document.getElementById('cc-impersonation-exit');
+      if (exitSupportBtn) exitSupportBtn.addEventListener('click', function() {
+        if (window.ccAuth && typeof window.ccAuth.logout === 'function') {
+          window.ccAuth.logout();
+          return;
+        }
+        localStorage.removeItem('cc_instructor');
+        window.location.href = '/admin/portal.html';
+      });
 
       var logoutBtn2 = document.getElementById('cc-sb-logout');
       if (logoutBtn2) logoutBtn2.addEventListener('click', function() {

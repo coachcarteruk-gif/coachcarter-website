@@ -39,6 +39,7 @@ All three roles use email + password sign-in. Magic-link login was retired entir
 5. **`*.password_hash` is nullable** — accounts created before May 2026 (or via SMS-only signup) have no password until they migrate. Login APIs must handle the null case gracefully (return invalid_credentials; route the UI into migration if applicable).
 6. **Verification tickets** (5-minute JWT, `audience: 'password-set'`) bridge learner `verify-email-code` → `set-password`. Don't issue a session JWT until the password is actually saved.
 7. **Admin-set instructor passwords** mark `instructors.must_change_password = TRUE`. The instructor login flow checks this on success and forces a change-password screen before the dashboard. Cleared on successful change.
+8. **Admin support access to instructor accounts uses impersonation, not passwords.** `api/admin.js?action=access-instructor-account` may mint a short-lived, audit-logged `cc_instructor` session for an active same-school instructor. Do not reveal, reuse, or reset an instructor password just so admin can access their portal.
 
 ## Multi-tenancy rules
 

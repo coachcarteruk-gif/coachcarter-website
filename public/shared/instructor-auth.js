@@ -18,6 +18,11 @@
     catch (e) { return null; }
   }
 
+  function isImpersonating(auth) {
+    auth = auth || getAuth();
+    return !!(auth && auth.impersonation && auth.impersonation.active);
+  }
+
   /** Read a cookie by name from document.cookie. Returns '' if absent. */
   function readCookie(name) {
     var match = ('; ' + (document.cookie || '')).match(
@@ -74,6 +79,21 @@
 
   /** Log out: clear server cookies, clear localStorage blob, redirect to login. */
   function logout() {
+    if (isImpersonating()) {
+      var finishSupportExit = function () {
+        localStorage.removeItem(STORAGE_KEY);
+        window.location.href = '/admin/portal.html';
+      };
+      try {
+        fetchAuthed('/api/admin?action=stop-instructor-access', { method: 'POST' })
+          .then(finishSupportExit)
+          .catch(finishSupportExit);
+      } catch (e) {
+        finishSupportExit();
+      }
+      return;
+    }
+
     try {
       fetchAuthed(LOGOUT_URL, { method: 'POST', keepalive: true }).catch(function () {});
     } catch (e) { /* ignore */ }
@@ -85,6 +105,7 @@
   // Expose globally
   window.ccAuth = {
     getAuth: getAuth,
+    isImpersonating: isImpersonating,
     getCsrfToken: getCsrfToken,
     fetchAuthed: fetchAuthed,
     requireAuth: requireAuth,

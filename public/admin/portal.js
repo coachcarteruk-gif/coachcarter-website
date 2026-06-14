@@ -248,6 +248,9 @@ function renderInstructors() {
         '</div>' +
         '<div style="display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap;">' +
           '<button class="btn btn-sm" data-action="edit-instructor" data-id="' + i.id + '">Edit</button>' +
+          (i.active && !isInstructorAdmin
+            ? '<button class="btn btn-sm" data-action="access-instructor-account" data-id="' + i.id + '" data-name="' + esc(i.name) + '">Access account</button>'
+            : '') +
           '<button class="btn btn-sm" data-action="set-password" data-id="' + i.id + '" data-name="' + esc(i.name) + '" data-has-password="' + (i.has_password ? 1 : 0) + '">' + (i.has_password ? 'Reset password' : 'Set password') + '</button>' +
           (i.active
             ? '<button class="btn btn-sm btn-danger" data-action="toggle-instructor" data-id="' + i.id + '" data-active="false">Deactivate</button>'
@@ -395,6 +398,39 @@ async function toggleInstructor(id, active) {
 // ── Set/reset instructor password ───────────────────────────────────────────
 // Opens a small modal asking the admin to type a temporary password for the
 // instructor. After save, the instructor is forced to change it on next sign-in.
+async function accessInstructorAccount(id, name, btn) {
+  if (!id) return;
+  if (!confirm('Access ' + (name || 'this instructor') + '\'s account for support? This will be audit logged.')) return;
+
+  const originalText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Opening...';
+  }
+
+  try {
+    const res = await fetchAdmin('/api/admin?action=access-instructor-account', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ instructor_id: id })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not access instructor account');
+
+    localStorage.setItem('cc_instructor', JSON.stringify({
+      instructor: data.instructor,
+      impersonation: data.impersonation || { active: true }
+    }));
+    window.location.href = '/instructor/dashboard.html';
+  } catch (err) {
+    toast(err.message || 'Could not access instructor account', 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText || 'Access account';
+    }
+  }
+}
+
 function openInstructorPasswordModal(instructorId, instructorName, hasPassword) {
   var existing = document.getElementById('instrPwModal');
   if (existing) existing.remove();
@@ -3901,6 +3937,7 @@ document.addEventListener('click', function (e) {
   var a = t.dataset.action;
   if (a === 'edit-instructor') openEditInstructor(parseInt(t.dataset.id, 10));
   else if (a === 'toggle-instructor') toggleInstructor(parseInt(t.dataset.id, 10), t.dataset.active === 'true');
+  else if (a === 'access-instructor-account') accessInstructorAccount(parseInt(t.dataset.id, 10), t.dataset.name, t);
   else if (a === 'set-password') openInstructorPasswordModal(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.hasPassword === '1');
   else if (a === 'remove-window') removeWindow(parseInt(t.dataset.idx, 10));
   else if (a === 'remove-blackout') removeBlackout(parseInt(t.dataset.idx, 10));

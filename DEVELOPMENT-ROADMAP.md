@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.107 - Admin Instructor Account Access (14 June 2026)
+
+Admins can now open an active same-school instructor account for support without knowing, viewing, or resetting the instructor's password. The admin portal adds an "Access account" action on active instructors; the backend mints a short-lived `cc_instructor` support session with impersonation metadata, leaves `cc_admin` intact, and audit-logs `admin.instructor_access_start` / `admin.instructor_access_stop`.
+
+Instructor pages show a persistent "Viewing as admin" banner and change the support-session sign-out path to "Back to Admin", which clears only the instructor cookie and returns to the admin portal. V1 is full instructor-session access, guarded to real admin/superadmin sessions so instructor-admin cookies cannot be overwritten.
+
+**Files:** `api/admin.js`, `public/admin/portal.js`, `public/shared/instructor-auth.js`, `public/sidebar.js`, `tests/admin-instructor-access.spec.js`, `PROJECT.md`, `CLAUDE.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.106 - Instructor One-Off Availability Slots (31 May 2026)
 
 Instructors can now add date-specific available windows from their calendar without changing their recurring weekly availability. The new `instructor_availability_overrides` table stores tenant-scoped one-off windows; `api/instructor.js` exposes list/create/delete actions and includes overrides in `schedule-range`; `api/slots.js` merges these windows into the learner slot feed and `durations-for-slot`, while keeping blackouts closed unless an instructor explicitly adds an override for that date.

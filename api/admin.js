@@ -53,7 +53,7 @@ const { sendPayoutSummary } = require('./_payout-email');
 const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin,
         SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
-const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
+const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie, parseCookies } = require('./_csrf');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { sendWhatsApp } = require('./_whatsapp');
 const { lockBalanceAndMutate } = require('./_credit-grant');
@@ -90,6 +90,7 @@ const { withNeonTransaction } = require('./_db-transaction');
 
 const LEARNER_CATEGORIES = new Set(['regular', 'sporadic', 'inactive', 'passed']);
 const BROADCAST_MAX_RECIPIENTS = 200;
+const INSTRUCTOR_ACCESS_MAX_AGE_SEC = 60 * 60 * 2;
 
 function normaliseLearnerCategory(value) {
   const text = String(value || '').trim().toLowerCase();
@@ -299,6 +300,8 @@ module.exports = async (req, res) => {
   if (action === 'create-instructor') return handleCreateInstructor(req, res);
   if (action === 'update-instructor') return handleUpdateInstructor(req, res);
   if (action === 'toggle-instructor') return handleToggleInstructor(req, res);
+  if (action === 'access-instructor-account') return handleAccessInstructorAccount(req, res);
+  if (action === 'stop-instructor-access')    return handleStopInstructorAccess(req, res);
   if (action === 'all-learners')      return handleAllLearners(req, res);
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
   if (action === 'update-learner')    return handleUpdateLearner(req, res);
@@ -1533,6 +1536,155 @@ async function handleToggleInstructor(req, res) {
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to update instructor', details: 'Internal server error' });
   }
+}
+
+// -- POST /api/admin?action=access-instructor-account -------------------------
+// Mint a short-lived instructor session for admin support access. This does not
+// reveal or mutate the instructor's password and leaves the admin session intact.
+async function handleAccessInstructorAccount(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  if (admin.role === 'instructor') {
+    return res.status(403).json({ error: 'Admin account session required' });
+  }
+
+  const instructorId = parseInt(req.body?.instructor_id, 10);
+  if (!Number.isFinite(instructorId) || instructorId <= 0) {
+    return res.status(400).json({ error: 'instructor_id is required' });
+  }
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return res.status(500).json({ error: 'JWT_SECRET not configured' });
+
+  const schoolId = getAdminSchoolId(admin, req);
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [instructor] = await sql`
+      SELECT id, name, email, photo_url, school_id, onboarding_complete,
+             COALESCE(is_admin, FALSE) AS is_admin,
+             active
+        FROM instructors
+       WHERE id = ${instructorId}
+         AND school_id = ${schoolId}`;
+
+    if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
+    if (!instructor.active) return res.status(409).json({ error: 'Instructor account is inactive' });
+
+    const tokenPayload = {
+      id: instructor.id,
+      email: instructor.email,
+      role: 'instructor',
+      school_id: instructor.school_id || schoolId,
+      impersonation: true,
+      impersonated_by_admin_id: admin.id || null,
+      impersonated_by_admin_email: admin.email || null,
+    };
+    if (instructor.is_admin) tokenPayload.isAdmin = true;
+
+    const sessionToken = jwt.sign(tokenPayload, secret, { expiresIn: INSTRUCTOR_ACCESS_MAX_AGE_SEC });
+    appendSetCookie(res, buildSessionCookie(
+      SESSION_COOKIE_NAMES.instructor,
+      sessionToken,
+      INSTRUCTOR_ACCESS_MAX_AGE_SEC
+    ));
+    appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+
+    await logAudit(sql, {
+      adminId: admin.id,
+      adminEmail: admin.email,
+      action: 'admin.instructor_access_start',
+      targetType: 'instructor',
+      targetId: instructor.id,
+      details: {
+        instructor_email: instructor.email,
+        instructor_name: instructor.name,
+        session_max_age_sec: INSTRUCTOR_ACCESS_MAX_AGE_SEC,
+      },
+      schoolId,
+      req,
+    });
+
+    return res.json({
+      success: true,
+      instructor: {
+        id: instructor.id,
+        name: instructor.name,
+        email: instructor.email,
+        photo_url: instructor.photo_url,
+        is_admin: !!instructor.is_admin,
+        school_id: instructor.school_id || schoolId,
+        onboarding_complete: !!instructor.onboarding_complete,
+      },
+      impersonation: {
+        active: true,
+        admin_id: admin.id || null,
+        admin_email: admin.email || null,
+        started_at: new Date().toISOString(),
+        max_age_sec: INSTRUCTOR_ACCESS_MAX_AGE_SEC,
+      },
+    });
+  } catch (err) {
+    console.error('admin access-instructor-account error:', err);
+    reportError('/api/admin?action=access-instructor-account', err);
+    return res.status(500).json({ error: 'Failed to access instructor account' });
+  }
+}
+
+// -- POST /api/admin?action=stop-instructor-access ----------------------------
+// Clears the support instructor session only. The admin cookie is deliberately
+// left alone so the operator returns to the admin portal still signed in.
+async function handleStopInstructorAccess(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  if (admin.role === 'instructor') {
+    return res.status(403).json({ error: 'Admin account session required' });
+  }
+
+  const cookies = parseCookies(req);
+  let instructorPayload = null;
+  try {
+    const token = cookies[SESSION_COOKIE_NAMES.instructor];
+    if (token && process.env.JWT_SECRET) {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      if (decoded && decoded.role === 'instructor' && decoded.impersonation === true) {
+        instructorPayload = decoded;
+      }
+    }
+  } catch {
+    instructorPayload = null;
+  }
+
+  appendSetCookie(res, buildSessionClearCookie(SESSION_COOKIE_NAMES.instructor));
+  appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+
+  const schoolId = getAdminSchoolId(admin, req);
+  if (instructorPayload) {
+    try {
+      const sql = neon(process.env.POSTGRES_URL);
+      await logAudit(sql, {
+        adminId: admin.id,
+        adminEmail: admin.email,
+        action: 'admin.instructor_access_stop',
+        targetType: 'instructor',
+        targetId: instructorPayload.id,
+        details: {
+          instructor_email: instructorPayload.email || null,
+          started_by_admin_id: instructorPayload.impersonated_by_admin_id || null,
+          started_by_admin_email: instructorPayload.impersonated_by_admin_email || null,
+        },
+        schoolId: instructorPayload.school_id || schoolId,
+        req,
+      });
+    } catch (auditErr) {
+      console.error('admin stop-instructor-access audit error:', auditErr.message);
+    }
+  }
+
+  return res.json({ success: true });
 }
 
 // ── GET /api/admin?action=all-learners ──────────────────────────────────────
