@@ -42,6 +42,7 @@ let preselectedInstructorSlug = null;
 let preselectedTypeId = null;
 let prefilledName = null; // from ?name= URL param (shareable booking link)
 let pendingReschedule = null; // { bookingId, date, start, end, instructorName, instructorId }
+let locationCheckTimer = null;
 let lastBookingId = null;
 let recurringAnchorBookingId = null;
 let recurringAnchorContext = null;
@@ -217,7 +218,9 @@ function init() {
                 booking.end_time.slice(0, 5),
                 booking.instructor_name,
                 booking.instructor_id,
-                !!reservedMoveBookingId
+                !!reservedMoveBookingId,
+                booking.pickup_address || '',
+                booking.dropoff_address || ''
               );
               // Clean the URL
               window.history.replaceState({}, '', '/learner/book.html');
@@ -575,6 +578,120 @@ function getLearnerPostcode() {
 }
 
 // ─── Feed controls ──────────────────────────────────────────────────────────
+function extractPostcodeForQuery(address) {
+  const match = String(address || '').match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i);
+  return match ? match[1].toUpperCase().replace(/\s+/g, '+') : null;
+}
+
+function resolveBookingPickupAddress(isGuest) {
+  if (isGuest) return (document.getElementById('mdGuestPickup')?.value || '').trim();
+  const mode = document.getElementById('mdPickupMode')?.value || 'home';
+  if (mode === 'custom') return (document.getElementById('mdPickupCustom')?.value || '').trim();
+  const profileInput = document.getElementById('mdProfilePickup');
+  return (learnerProfile.pickup_address || profileInput?.value || '').trim();
+}
+
+function resolveBookingDropoffAddress(isGuest) {
+  const mode = document.getElementById('mdDropoffMode')?.value || 'same';
+  if (mode === 'same') return null;
+  if (mode === 'home' && !isGuest) return (learnerProfile.pickup_address || '').trim() || null;
+  if (mode === 'custom') return (document.getElementById('mdDropoff')?.value || '').trim() || null;
+  return null;
+}
+
+function getActivePickupPostcode(isGuest) {
+  return extractPostcodeForQuery(resolveBookingPickupAddress(isGuest));
+}
+
+function syncBookingLocationControls(isGuest) {
+  const pickupRow = document.getElementById('bookingPickupRow');
+  const pickupMode = document.getElementById('mdPickupMode');
+  const pickupCustom = document.getElementById('mdPickupCustom');
+  const pickupPreview = document.getElementById('mdHomePickupPreview');
+  const dropoffMode = document.getElementById('mdDropoffMode');
+  const dropoffHomeOption = dropoffMode?.querySelector('option[value="home"]');
+  const dropoffInput = document.getElementById('mdDropoff');
+  const dropoffLabel = document.getElementById('mdDropoffCustomLabel');
+
+  if (pickupRow) pickupRow.style.display = isGuest ? 'none' : '';
+  if (pickupPreview) pickupPreview.textContent = !isGuest && learnerProfile.pickup_address ? learnerProfile.pickup_address : '';
+  if (pickupCustom) pickupCustom.style.display = (!isGuest && pickupMode?.value === 'custom') ? 'block' : 'none';
+  if (dropoffHomeOption) dropoffHomeOption.hidden = isGuest || !learnerProfile.pickup_address;
+  if (dropoffMode && dropoffHomeOption?.hidden && dropoffMode.value === 'home') dropoffMode.value = 'same';
+  const customDropoff = dropoffMode?.value === 'custom';
+  if (dropoffInput) dropoffInput.style.display = customDropoff ? 'block' : 'none';
+  if (dropoffLabel) dropoffLabel.style.display = customDropoff ? 'block' : 'none';
+}
+
+function scheduleLocationDurationCheck(isGuest) {
+  if (!pendingSlot || pendingReschedule) return;
+  clearTimeout(locationCheckTimer);
+  const hint = document.getElementById('mdLocationCheckHint');
+  if (hint) hint.style.display = 'block';
+  locationCheckTimer = setTimeout(() => {
+    loadDurationsForSlot(pendingSlot, isGuest, !isGuest && !isProfileComplete());
+  }, 450);
+}
+
+function validateBookingLocations(isGuest) {
+  const pickup = resolveBookingPickupAddress(isGuest);
+  if (!pickup) {
+    showToast('Please enter a pickup address.', 'error');
+    return null;
+  }
+  const dropoffMode = document.getElementById('mdDropoffMode')?.value || 'same';
+  const dropoff = resolveBookingDropoffAddress(isGuest);
+  if (dropoffMode === 'custom' && !dropoff) {
+    showToast('Please enter the drop-off address, or choose same as pickup.', 'error');
+    return null;
+  }
+  return { pickup_address: pickup, dropoff_address: dropoff };
+}
+
+function syncRescheduleLocationControls() {
+  if (!pendingReschedule) return;
+  const pickupMode = document.getElementById('rmPickupMode');
+  const pickupInput = document.getElementById('rmPickupCustom');
+  const pickupPreview = document.getElementById('rmPickupPreview');
+  const dropoffMode = document.getElementById('rmDropoffMode');
+  const dropoffInput = document.getElementById('rmDropoffCustom');
+  const homePickup = learnerProfile.pickup_address || '';
+
+  const currentPickupOption = pickupMode?.querySelector('option[value="current"]');
+  const homePickupOption = pickupMode?.querySelector('option[value="home"]');
+  const currentDropoffOption = dropoffMode?.querySelector('option[value="current"]');
+  const homeDropoffOption = dropoffMode?.querySelector('option[value="home"]');
+  if (currentPickupOption) currentPickupOption.hidden = !pendingReschedule.pickupAddress;
+  if (homePickupOption) homePickupOption.hidden = !homePickup;
+  if (currentDropoffOption) currentDropoffOption.hidden = !pendingReschedule.dropoffAddress;
+  if (homeDropoffOption) homeDropoffOption.hidden = !homePickup;
+  if (pickupMode && pickupMode.selectedOptions[0]?.hidden) pickupMode.value = homePickup ? 'home' : 'custom';
+  if (dropoffMode && dropoffMode.selectedOptions[0]?.hidden) dropoffMode.value = 'same';
+  if (pickupInput) pickupInput.style.display = pickupMode?.value === 'custom' ? 'block' : 'none';
+  if (dropoffInput) dropoffInput.style.display = dropoffMode?.value === 'custom' ? 'block' : 'none';
+  if (pickupPreview) {
+    const value = pickupMode?.value === 'home' ? homePickup
+      : pickupMode?.value === 'current' ? (pendingReschedule.pickupAddress || '')
+      : '';
+    pickupPreview.textContent = value;
+  }
+}
+
+function resolveReschedulePickupAddress() {
+  const mode = document.getElementById('rmPickupMode')?.value || 'current';
+  if (mode === 'home') return (learnerProfile.pickup_address || '').trim();
+  if (mode === 'custom') return (document.getElementById('rmPickupCustom')?.value || '').trim();
+  return (pendingReschedule?.pickupAddress || learnerProfile.pickup_address || '').trim();
+}
+
+function resolveRescheduleDropoffAddress() {
+  const mode = document.getElementById('rmDropoffMode')?.value || 'same';
+  if (mode === 'same') return null;
+  if (mode === 'home') return (learnerProfile.pickup_address || '').trim() || null;
+  if (mode === 'custom') return (document.getElementById('rmDropoffCustom')?.value || '').trim() || null;
+  return (pendingReschedule?.dropoffAddress || '').trim() || null;
+}
+
 async function onFilterChange() {
   loadedRanges = []; slotCache = {};
   selectedDate = null;
@@ -1196,7 +1313,14 @@ function openBookModal(el) {
   document.getElementById('mdTime').textContent = pendingSlot.start_time;
   document.getElementById('mdInstructor').textContent = pendingSlot.instructor_name;
   document.getElementById('mdTransmission').textContent = transmissionLabel(pendingSlot.transmission_type);
+  const pickupMode = document.getElementById('mdPickupMode');
+  if (pickupMode) pickupMode.value = 'home';
+  const pickupCustom = document.getElementById('mdPickupCustom');
+  if (pickupCustom) pickupCustom.value = '';
+  const dropoffMode = document.getElementById('mdDropoffMode');
+  if (dropoffMode) dropoffMode.value = 'same';
   document.getElementById('mdDropoff').value = '';
+  syncBookingLocationControls(isGuest);
 
   // Reset duration-picker UI to loading state.
   document.getElementById('mdDurationPicker').style.display = 'none';
@@ -1263,12 +1387,21 @@ function openBookModal(el) {
 // state when nothing's bookable.
 async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
   const select = document.getElementById('mdLessonTypeSelect');
+  document.getElementById('mdDurationPicker').style.display = 'none';
+  document.getElementById('mdSingleTypeRow').style.display = 'none';
+  document.getElementById('mdNoFitRow').style.display = 'none';
+  document.getElementById('mdLoadingRow').style.display = 'flex';
+  document.getElementById('modalCreditPath').style.display = 'none';
+  document.getElementById('modalPayPath').style.display = 'none';
+  document.getElementById('btnPayAndBook').disabled = true;
+  const creditBtn = document.getElementById('btnConfirmBook');
+  if (creditBtn) creditBtn.disabled = true;
   try {
     const selectedBalancePromise = isGuest ? Promise.resolve() : loadSelectedInstructorBalance(slot);
     let url = `/api/slots?action=durations-for-slot&instructor_id=${encodeURIComponent(slot.instructor_id)}&date=${encodeURIComponent(slot.date)}&start_time=${encodeURIComponent(slot.start_time)}`;
     if (slot.transmission_type) url += `&transmission_type=${encodeURIComponent(slot.transmission_type)}`;
     if (!isGuest && auth && auth.user && auth.user.id) url += `&learner_id=${encodeURIComponent(auth.user.id)}`;
-    const pc = getLearnerPostcode();
+    const pc = getActivePickupPostcode(isGuest);
     if (pc) url += `&pickup_postcode=${encodeURIComponent(pc)}`;
     const res = await fetch(url);
     const data = await res.json();
@@ -1282,6 +1415,8 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
     const fitting = durations.filter(d => d.fits);
 
     document.getElementById('mdLoadingRow').style.display = 'none';
+    const hint = document.getElementById('mdLocationCheckHint');
+    if (hint) hint.style.display = 'none';
 
     window.posthog && posthog.capture('durations_loaded', {
       instructor_id: slot.instructor_id,
@@ -1462,6 +1597,8 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
     };
   } catch (err) {
     console.error('durations-for-slot failed:', err);
+    const hint = document.getElementById('mdLocationCheckHint');
+    if (hint) hint.style.display = 'none';
     document.getElementById('mdLoadingRow').style.display = 'none';
     document.getElementById('mdNoFitText').textContent = 'Could not load lesson options. Please try another slot.';
     document.getElementById('mdNoFitRow').style.display = 'flex';
@@ -1503,6 +1640,7 @@ function closeBookModal() {
     had_duration_selected: !!selectedLessonType
   });
   clearSlotTimer();
+  clearTimeout(locationCheckTimer);
   document.getElementById('bookModal').classList.remove('open');
   document.getElementById('repeatToggle').checked = false;
   document.getElementById('repeatOptions').classList.remove('open');
@@ -1721,6 +1859,8 @@ async function confirmBookWithCredit() {
   if (!pendingSlot) return;
   // Save profile fields first if shown (phone/pickup for incomplete profiles)
   if (!(await saveProfileFieldsFromModal())) return;
+  const locations = validateBookingLocations(false);
+  if (!locations) return;
 
   const btn = document.getElementById('btnConfirmBook');
   const label = document.getElementById('bookBtnLabel');
@@ -1729,7 +1869,8 @@ async function confirmBookWithCredit() {
   btn.disabled = true; label.textContent = weeks > 1 ? `Booking ${weeks} lessons…` : 'Booking…'; spinner.style.display = 'block';
 
   try {
-    const bookBody = { ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined };
+    const bookBody = { ...pendingSlot, pickup_address: locations.pickup_address };
+    if (locations.dropoff_address) bookBody.dropoff_address = locations.dropoff_address;
     if (selectedLessonType && selectedLessonType.id) bookBody.lesson_type_id = selectedLessonType.id;
     if (weeks > 1) bookBody.repeat_weeks = weeks;
     const res = await ccAuth.fetchAuthed('/api/slots?action=book', {
@@ -1818,6 +1959,8 @@ async function confirmPayAndBook() {
 
     if (hasError) { showToast('Please fix the highlighted fields', 'error'); return; }
   }
+  const locations = validateBookingLocations(isGuest);
+  if (!locations) return;
 
   btn.disabled = true; label.textContent = 'Redirecting to payment…'; spinner.style.display = 'block';
   setLastLessonType(selectedLessonType);
@@ -1829,11 +1972,11 @@ async function confirmPayAndBook() {
       const payBody = {
         ...pendingSlot,
         lesson_type_id: selectedLessonType?.id,
-        dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined,
+        dropoff_address: locations.dropoff_address || undefined,
         guest_name:           document.getElementById('mdGuestName').value.trim(),
         guest_email:          document.getElementById('mdGuestEmail').value.trim(),
         guest_phone:          document.getElementById('mdGuestPhone').value.replace(/\s+/g, '').trim(),
-        guest_pickup_address: document.getElementById('mdGuestPickup').value.trim()
+        guest_pickup_address: locations.pickup_address
       };
       const res = await ccAuth.fetchAuthed('/api/slots?action=checkout-slot-guest', {
         method: 'POST',
@@ -1845,7 +1988,8 @@ async function confirmPayAndBook() {
       window.location.href = data.url;
     } else {
       // Authenticated checkout
-      const payBody = { ...pendingSlot, dropoff_address: document.getElementById('mdDropoff').value.trim() || undefined };
+      const payBody = { ...pendingSlot, pickup_address: locations.pickup_address };
+      if (locations.dropoff_address) payBody.dropoff_address = locations.dropoff_address;
       if (selectedLessonType && selectedLessonType.id) payBody.lesson_type_id = selectedLessonType.id;
       const res = await ccAuth.fetchAuthed('/api/slots?action=checkout-slot', {
         method: 'POST',
@@ -2527,8 +2671,18 @@ async function confirmCancel() {
 }
 
 // ─── Reschedule flow ────────────────────────────────────────────────────────
-function startRescheduleMode(bookingId, date, start, end, instructorName, instructorId, isReservedMove) {
-  pendingReschedule = { bookingId, date, start, end, instructorName, instructorId, isReservedMove: !!isReservedMove };
+function startRescheduleMode(bookingId, date, start, end, instructorName, instructorId, isReservedMove, pickupAddress, dropoffAddress) {
+  pendingReschedule = {
+    bookingId,
+    date,
+    start,
+    end,
+    instructorName,
+    instructorId,
+    isReservedMove: !!isReservedMove,
+    pickupAddress: pickupAddress || '',
+    dropoffAddress: dropoffAddress || ''
+  };
   const dateStr = new Date(date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
   document.getElementById('rescheduleBannerText').textContent = `${dateStr} at ${start} with ${instructorName}`;
@@ -2565,6 +2719,17 @@ function openRescheduleConfirm(newSlot) {
       ? 'No balance change. This moves one Reserved Weekly Slot occurrence and releases the old weekly slot.'
       : 'No balance change — your lesson is simply being moved to the new time.';
   }
+  const locationFields = document.getElementById('rescheduleLocationFields');
+  if (locationFields) locationFields.style.display = pendingReschedule.isReservedMove ? 'none' : 'block';
+  const pickupMode = document.getElementById('rmPickupMode');
+  if (pickupMode) pickupMode.value = pendingReschedule.pickupAddress ? 'current' : (learnerProfile.pickup_address ? 'home' : 'custom');
+  const pickupCustom = document.getElementById('rmPickupCustom');
+  if (pickupCustom) pickupCustom.value = '';
+  const dropoffMode = document.getElementById('rmDropoffMode');
+  if (dropoffMode) dropoffMode.value = pendingReschedule.dropoffAddress ? 'current' : 'same';
+  const dropoffCustom = document.getElementById('rmDropoffCustom');
+  if (dropoffCustom) dropoffCustom.value = '';
+  syncRescheduleLocationControls();
   document.getElementById('rescheduleBtnLabel').textContent = pendingReschedule.isReservedMove ? 'Move reserved lesson' : 'Move lesson';
   document.getElementById('rescheduleSpinner').style.display = 'none';
   document.getElementById('btnConfirmReschedule').disabled = false;
@@ -2586,14 +2751,26 @@ async function confirmReschedule(newSlot) {
 
   try {
     const action = isReservedMove ? 'reserved-policy-move' : 'reschedule';
+    const body = {
+      booking_id: pendingReschedule.bookingId,
+      new_date: newSlot.date,
+      new_start_time: newSlot.start_time
+    };
+    if (!isReservedMove) {
+      const pickupAddress = resolveReschedulePickupAddress();
+      const dropoffMode = document.getElementById('rmDropoffMode')?.value || 'same';
+      const dropoffAddress = resolveRescheduleDropoffAddress();
+      if (!pickupAddress) throw new Error('Please enter a pickup address.');
+      if (dropoffMode === 'custom' && !dropoffAddress) {
+        throw new Error('Please enter the drop-off address, or choose same as pickup.');
+      }
+      body.pickup_address = pickupAddress;
+      body.dropoff_address = dropoffAddress;
+    }
     const res = await ccAuth.fetchAuthed('/api/slots?action=' + action, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        booking_id: pendingReschedule.bookingId,
-        new_date: newSlot.date,
-        new_start_time: newSlot.start_time
-      })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || data.error);
@@ -2728,6 +2905,23 @@ document.addEventListener('click', function (e) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('input', function () { clearFieldError(el); });
   });
+  var guestPickup = document.getElementById('mdGuestPickup');
+  if (guestPickup) guestPickup.addEventListener('input', function () { scheduleLocationDurationCheck(true); });
+  var pickupMode = document.getElementById('mdPickupMode');
+  if (pickupMode) pickupMode.addEventListener('change', function () {
+    syncBookingLocationControls(false);
+    scheduleLocationDurationCheck(false);
+  });
+  var pickupCustom = document.getElementById('mdPickupCustom');
+  if (pickupCustom) pickupCustom.addEventListener('input', function () { scheduleLocationDurationCheck(false); });
+  var profilePickup = document.getElementById('mdProfilePickup');
+  if (profilePickup) profilePickup.addEventListener('input', function () { scheduleLocationDurationCheck(false); });
+  var dropoffMode = document.getElementById('mdDropoffMode');
+  if (dropoffMode) dropoffMode.addEventListener('change', function () { syncBookingLocationControls(!auth); });
+  var rmPickupMode = document.getElementById('rmPickupMode');
+  if (rmPickupMode) rmPickupMode.addEventListener('change', syncRescheduleLocationControls);
+  var rmDropoffMode = document.getElementById('rmDropoffMode');
+  if (rmDropoffMode) rmDropoffMode.addEventListener('change', syncRescheduleLocationControls);
   var guestTerms = document.getElementById('mdGuestTerms');
   if (guestTerms) guestTerms.addEventListener('change', function () { clearFieldError(guestTerms); });
   var repeatToggle = document.getElementById('repeatToggle');

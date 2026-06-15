@@ -222,6 +222,68 @@ function findAdjacentTravelSpacingConflict({ slotStart, slotEnd, pickupPostcode,
   return null;
 }
 
+async function checkPickupTravelSpacingConflict(sql, {
+  instructorId,
+  schoolId,
+  date,
+  startTime,
+  endTime,
+  pickupAddress,
+  excludeBookingId = null,
+}) {
+  const pickupPostcode = extractPostcode(pickupAddress);
+  if (!pickupPostcode) return null;
+
+  const bookings = await sql`
+    SELECT id, start_time::text AS start_time, end_time::text AS end_time, pickup_address
+    FROM lesson_bookings
+    WHERE instructor_id = ${instructorId}
+      AND school_id = ${schoolId}
+      AND scheduled_date = ${date}
+      AND status = ANY(${BLOCKING_STATUSES}::text[])
+      AND pickup_address IS NOT NULL
+      AND (${excludeBookingId}::int IS NULL OR id <> ${excludeBookingId}::int)
+    ORDER BY start_time
+  `;
+
+  const bookedSlots = bookings
+    .map(b => ({
+      id: b.id,
+      start: timeToMinutes(b.start_time),
+      end: timeToMinutes(b.end_time),
+      postcode: b.pickup_address ? extractPostcode(b.pickup_address) : null,
+    }))
+    .filter(b => b.postcode);
+
+  if (bookedSlots.length === 0) return null;
+
+  const postcodes = new Set([normalisePostcode(pickupPostcode)]);
+  for (const b of bookedSlots) postcodes.add(normalisePostcode(b.postcode));
+  const coordMap = await bulkGeocodeUK([...postcodes].filter(Boolean));
+
+  return findAdjacentTravelSpacingConflict({
+    slotStart: timeToMinutes(startTime),
+    slotEnd: timeToMinutes(endTime),
+    pickupPostcode,
+    bookedSlots,
+    coordMap,
+  });
+}
+
+async function rejectIfPickupTravelConflict(res, sql, options) {
+  try {
+    const conflict = await checkPickupTravelSpacingConflict(sql, options);
+    if (!conflict) return false;
+    return res.status(409).json({
+      error: 'That pickup location does not leave enough travel time from another lesson. Please choose your saved address or another slot.',
+      code: 'PICKUP_TRAVEL_CONFLICT',
+      conflict,
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
 function normaliseMaxBookingDaysAhead(value) {
   const days = parseInt(value, 10);
   if (!Number.isFinite(days) || days <= 0) return MAX_DAYS_AHEAD;
@@ -2844,6 +2906,19 @@ async function handleBook(req, res) {
       } catch { /* never block bookings due to travel check errors */ }
     }
 
+    if (bookingPickupAddr && !isDemoInstructor) {
+      for (const bd of bookingDates) {
+        if (await rejectIfPickupTravelConflict(res, sql, {
+          instructorId: instructor_id,
+          schoolId,
+          date: bd.date,
+          startTime: start_time,
+          endTime: end_time,
+          pickupAddress: bookingPickupAddr,
+        })) return;
+      }
+    }
+
     const totalMins = durationMins * weeks;
 
     // 3. For recurring bookings, check all slots are available before booking any
@@ -3222,7 +3297,7 @@ async function handleCheckoutSlot(req, res) {
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = user.school_id || 1;
 
-  const { instructor_id, date, start_time, end_time, lesson_type_id, transmission_type } = req.body;
+  const { instructor_id, date, start_time, end_time, lesson_type_id, pickup_address, dropoff_address, transmission_type } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'instructor_id, date, start_time, end_time required' });
   const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
@@ -3338,9 +3413,22 @@ async function handleCheckoutSlot(req, res) {
     }
 
     // Get learner email
-    const [learner] = await sql`SELECT email FROM learner_users WHERE id = ${user.id}`;
+    const [learner] = await sql`SELECT email, pickup_address FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
     if (!learner)
       return res.status(404).json({ error: 'Learner not found' });
+    const checkoutPickupAddress = (pickup_address && String(pickup_address).trim()) || learner.pickup_address || '';
+    const checkoutDropoffAddress = dropoff_address && String(dropoff_address).trim() ? String(dropoff_address).trim() : '';
+
+    if (checkoutPickupAddress) {
+      if (await rejectIfPickupTravelConflict(res, sql, {
+        instructorId: instructor_id,
+        schoolId,
+        date,
+        startTime: start_time,
+        endTime: end_time,
+        pickupAddress: checkoutPickupAddress,
+      })) return;
+    }
 
     // SMS-only learners can have no email. Only pre-fill Stripe's
     // customer_email when we have a valid value — otherwise Stripe collects
@@ -3375,6 +3463,8 @@ async function handleCheckoutSlot(req, res) {
         start_time,
         end_time,
         transmission_type: requestedTransmissionType || '',
+        pickup_address:  checkoutPickupAddress,
+        dropoff_address: checkoutDropoffAddress,
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
         amount_pence:    String(pricePence),
@@ -3442,12 +3532,12 @@ async function handleCheckoutSlot(req, res) {
 
 // ── POST /api/slots?action=checkout-slot-guest ────────────────────────────────
 // Guest checkout: no auth required. Creates learner account, reserves slot, returns Stripe URL.
-// Body: { instructor_id, date, start_time, end_time, lesson_type_id?, guest_name, guest_email, guest_phone, guest_pickup_address }
+// Body: { instructor_id, date, start_time, end_time, lesson_type_id?, guest_name, guest_email, guest_phone, guest_pickup_address, dropoff_address? }
 async function handleCheckoutSlotGuest(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { instructor_id, date, start_time, end_time, lesson_type_id,
-          guest_name, guest_email, guest_phone, guest_pickup_address, transmission_type } = req.body;
+          guest_name, guest_email, guest_phone, guest_pickup_address, dropoff_address, transmission_type } = req.body;
 
   // Validate required guest fields
   if (!guest_name || !guest_name.trim())
@@ -3465,6 +3555,7 @@ async function handleCheckoutSlotGuest(req, res) {
   const cleanPhone = guest_phone.replace(/\s+/g, '').trim();
   const cleanName  = guest_name.trim();
   const cleanAddr  = guest_pickup_address.trim();
+  const cleanDropoff = dropoff_address && String(dropoff_address).trim() ? String(dropoff_address).trim() : '';
   const schoolId   = parseInt(req.body.school_id, 10) || 1;
   const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
   if (transmission_type && !requestedTransmissionType) {
@@ -3587,6 +3678,14 @@ async function handleCheckoutSlotGuest(req, res) {
     if (!stillAvailable) {
       return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });
     }
+    if (await rejectIfPickupTravelConflict(res, sql, {
+      instructorId: instructor_id,
+      schoolId,
+      date,
+      startTime: start_time,
+      endTime: end_time,
+      pickupAddress: cleanAddr,
+    })) return;
 
     let learnerId;
     const [existingLearner] = await sql`
@@ -3670,6 +3769,8 @@ async function handleCheckoutSlotGuest(req, res) {
         start_time,
         end_time,
         transmission_type: requestedTransmissionType || '',
+        pickup_address:  cleanAddr,
+        dropoff_address: cleanDropoff,
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
         amount_pence:    String(pricePence),
@@ -5058,7 +5159,7 @@ async function handleReschedule(req, res) {
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = user.school_id || 1;
 
-  const { booking_id, new_date, new_start_time } = req.body;
+  const { booking_id, new_date, new_start_time, pickup_address, dropoff_address } = req.body;
   if (!booking_id || !new_date || !new_start_time)
     return res.status(400).json({ error: 'booking_id, new_date and new_start_time are required' });
 
@@ -5098,6 +5199,7 @@ async function handleReschedule(req, res) {
              i.phone AS instructor_phone,
              COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
              lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
+             lu.pickup_address AS learner_pickup_address,
              COALESCE(lb.reschedule_count, 0) AS reschedule_count,
              COALESCE(
                lt.duration_minutes,
@@ -5141,6 +5243,10 @@ async function handleReschedule(req, res) {
     const bookingDuration = parseInt(booking.type_duration_minutes) || DEFAULT_SLOT_MINUTES;
     const newEndMins   = newStartMins + bookingDuration;
     const new_end_time = minutesToTime(newEndMins);
+    const newPickupAddress = (pickup_address && String(pickup_address).trim()) || booking.pickup_address || booking.learner_pickup_address || null;
+    const newDropoffAddress = dropoff_address === null
+      ? null
+      : (dropoff_address && String(dropoff_address).trim() ? String(dropoff_address).trim() : (booking.dropoff_address || null));
     if (booking.status !== SCHEDULED)
       return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
 
@@ -5201,6 +5307,18 @@ async function handleReschedule(req, res) {
     if (existingReservation)
       return res.status(409).json({ error: 'Someone is currently booking that slot. Try another or wait a few minutes.' });
 
+    if (newPickupAddress) {
+      if (await rejectIfPickupTravelConflict(res, sql, {
+        instructorId: booking.instructor_id,
+        schoolId,
+        date: new_date,
+        startTime: new_start_time,
+        endTime: new_end_time,
+        pickupAddress: newPickupAddress,
+        excludeBookingId: booking_id,
+      })) return;
+    }
+
     // Atomically: mark old booking as refunded, create new one
     // 1. Mark old booking as refunded. credit_returned = TRUE prevents the
     // divergence cron from double-counting the deduction: the credit was
@@ -5238,7 +5356,7 @@ async function handleReschedule(req, res) {
         VALUES
           (${user.id}, ${booking.instructor_id}, ${new_date}, ${new_start_time}, ${new_end_time},
            ${SCHEDULED}, ${booking_id}, ${booking.reschedule_count + 1},
-           ${booking.pickup_address || null}, ${booking.dropoff_address || null},
+           ${newPickupAddress}, ${newDropoffAddress},
            ${booking.lesson_type_id || null}, ${booking.minutes_deducted != null ? booking.minutes_deducted : null},
            ${schoolId},
            ${booking.stripe_fee_pence != null ? booking.stripe_fee_pence : null},

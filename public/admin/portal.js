@@ -737,6 +737,7 @@ async function saveBlackouts() {
 let allBookings = [];
 let currentBookingFilter = '';
 let reservedGoodwillBookingId = null;
+let adminRetroLessonTypes = [];
 
 async function loadBookings() {
   try {
@@ -834,6 +835,176 @@ async function markComplete(bookingId) {
 }
 
 // ── Edit Booking (Admin) ────────────────────────────────────────────────────
+async function ensureAdminRetroData() {
+  if (!allLearners.length) {
+    const learnersRes = await fetchAdmin('/api/admin?action=all-learners', { headers: HEADERS });
+    if (!learnersRes.ok) throw new Error('Failed to load learners');
+    const learnersData = await learnersRes.json();
+    allLearners = learnersData.learners || [];
+  }
+
+  if (!instructorsCache.length) {
+    const instructorsRes = await fetchAdmin('/api/admin?action=all-instructors', { headers: HEADERS });
+    if (!instructorsRes.ok) throw new Error('Failed to load instructors');
+    const instructorsData = await instructorsRes.json();
+    instructorsCache = instructorsData.instructors || [];
+  }
+
+  if (!adminRetroLessonTypes.length) {
+    const typesRes = await fetchAdmin('/api/lesson-types?action=list', { headers: HEADERS });
+    if (!typesRes.ok) throw new Error('Failed to load lesson types');
+    const typesData = await typesRes.json();
+    adminRetroLessonTypes = typesData.lesson_types || [];
+  }
+}
+
+function setAdminRetroStatus(message, type) {
+  var el = document.getElementById('adminRetroStatus');
+  if (!el) return;
+  if (!message) {
+    el.style.display = 'none';
+    el.textContent = '';
+    return;
+  }
+  el.textContent = message;
+  el.style.display = 'block';
+  el.style.background = type === 'success' ? 'var(--green-bg)' : 'var(--red-bg)';
+  el.style.color = type === 'success' ? '#166534' : '#991b1b';
+}
+
+function populateAdminRetroLearnerAddress() {
+  var learnerId = parseInt(document.getElementById('adminRetroLearner').value, 10);
+  var learner = allLearners.find(function (l) { return l.id === learnerId; });
+  document.getElementById('adminRetroPickup').value = learner && learner.pickup_address ? learner.pickup_address : '';
+}
+
+function updateAdminRetroEnd() {
+  var startVal = document.getElementById('adminRetroTime').value;
+  var typeSelect = document.getElementById('adminRetroType');
+  var option = typeSelect.options[typeSelect.selectedIndex];
+  var duration = parseInt(option && option.dataset.duration) || 90;
+  var endEl = document.getElementById('adminRetroEndTime');
+  if (!startVal) {
+    endEl.textContent = '-';
+    return;
+  }
+  var parts = startVal.split(':').map(Number);
+  var endMins = parts[0] * 60 + parts[1] + duration;
+  if (endMins > 24 * 60) {
+    endEl.textContent = 'next day';
+    return;
+  }
+  endEl.textContent = String(Math.floor(endMins / 60)).padStart(2, '0') + ':' + String(endMins % 60).padStart(2, '0');
+}
+
+async function openAdminRetrospectiveLesson() {
+  var modal = document.getElementById('adminRetrospectiveLessonModal');
+  var saveBtn = document.getElementById('adminRetroSaveBtn');
+  if (!modal) return;
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Loading...';
+  setAdminRetroStatus('', '');
+  modal.style.display = 'flex';
+  try {
+    await ensureAdminRetroData();
+    var learnerSelect = document.getElementById('adminRetroLearner');
+    learnerSelect.innerHTML = allLearners
+      .map(function (learner) {
+        return '<option value="' + learner.id + '">' + esc(learner.name || ('Learner #' + learner.id)) + '</option>';
+      })
+      .join('');
+
+    var instructorSelect = document.getElementById('adminRetroInstructor');
+    instructorSelect.innerHTML = instructorsCache
+      .filter(function (instructor) { return instructor.active !== false; })
+      .map(function (instructor) {
+        return '<option value="' + instructor.id + '">' + esc(instructor.name || ('Instructor #' + instructor.id)) + '</option>';
+      })
+      .join('');
+
+    var typeSelect = document.getElementById('adminRetroType');
+    typeSelect.innerHTML = adminRetroLessonTypes
+      .map(function (lessonType) {
+        var mins = parseInt(lessonType.duration_minutes) || 90;
+        var label = mins >= 60 && mins % 60 === 0 ? (mins / 60) + 'hr' : mins + 'min';
+        return '<option value="' + lessonType.id + '" data-duration="' + mins + '">' + esc(lessonType.name) + ' (' + label + ')</option>';
+      })
+      .join('');
+
+    var now = new Date();
+    var today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    document.getElementById('adminRetroDate').max = today;
+    document.getElementById('adminRetroDate').value = today;
+    document.getElementById('adminRetroTime').value = '';
+    document.getElementById('adminRetroPayment').value = 'credit';
+    document.getElementById('adminRetroDropoff').value = '';
+    document.getElementById('adminRetroNotes').value = '';
+    populateAdminRetroLearnerAddress();
+    updateAdminRetroEnd();
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Add lesson';
+  } catch (err) {
+    setAdminRetroStatus(err.message || 'Failed to load lesson form', 'error');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Add lesson';
+  }
+}
+
+function closeAdminRetrospectiveLesson() {
+  document.getElementById('adminRetrospectiveLessonModal').style.display = 'none';
+  setAdminRetroStatus('', '');
+}
+
+async function submitAdminRetrospectiveLesson() {
+  var saveBtn = document.getElementById('adminRetroSaveBtn');
+  var learnerId = parseInt(document.getElementById('adminRetroLearner').value, 10);
+  var instructorId = parseInt(document.getElementById('adminRetroInstructor').value, 10);
+  var lessonTypeId = parseInt(document.getElementById('adminRetroType').value, 10);
+  var scheduledDate = document.getElementById('adminRetroDate').value;
+  var startTime = document.getElementById('adminRetroTime').value.slice(0, 5);
+  var paymentMethod = document.getElementById('adminRetroPayment').value;
+  if (!learnerId || !instructorId || !lessonTypeId || !scheduledDate || !startTime) {
+    setAdminRetroStatus('Choose a learner, instructor, date, time, and lesson type.', 'error');
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Adding...';
+  setAdminRetroStatus('', '');
+  try {
+    var res = await fetchAdmin('/api/admin?action=create-retrospective-booking', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        learner_id: learnerId,
+        instructor_id: instructorId,
+        lesson_type_id: lessonTypeId,
+        scheduled_date: scheduledDate,
+        start_time: startTime,
+        payment_method: paymentMethod,
+        pickup_address: document.getElementById('adminRetroPickup').value.trim(),
+        dropoff_address: document.getElementById('adminRetroDropoff').value.trim(),
+        notes: document.getElementById('adminRetroNotes').value.trim()
+      })
+    });
+    var data = await res.json();
+    if (!res.ok) {
+      var msg = data.message || data.error || 'Failed to add lesson';
+      if (res.status === 402) msg += ' Choose cash if the lesson was paid outside learner credit.';
+      throw new Error(msg);
+    }
+    closeAdminRetrospectiveLesson();
+    toast('Past lesson added', 'success');
+    loadBookings();
+    if (typeof loadLearners === 'function') loadLearners();
+  } catch (err) {
+    setAdminRetroStatus(err.message || 'Failed to add lesson', 'error');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Add lesson';
+  }
+}
+
 let adminEditBookingId = null;
 let adminEditLessonTypes = [];
 let adminEditOrigMinutes = 0;
@@ -4132,6 +4303,9 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-add-blackout', addBlackout);
   bind('btn-save-blackouts', saveBlackouts);
   bind('btn-refresh-bookings', loadBookings);
+  bind('btn-open-retro-lesson', openAdminRetrospectiveLesson);
+  bind('btn-close-admin-retro', closeAdminRetrospectiveLesson);
+  bind('adminRetroSaveBtn', submitAdminRetrospectiveLesson);
   bind('btn-open-category-modal', openCategoryModal);
   bind('btn-open-add-video', openAddVideo);
   bind('btn-refresh-learners', loadLearners);
@@ -4172,6 +4346,14 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-clear-bulk', clearBulkSelection);
   var adminModal = document.getElementById('adminEditBookingModal');
   if (adminModal) adminModal.addEventListener('click', function (e) { if (e.target === adminModal) closeAdminEditBooking(); });
+  var retroModal = document.getElementById('adminRetrospectiveLessonModal');
+  if (retroModal) retroModal.addEventListener('click', function (e) { if (e.target === retroModal) closeAdminRetrospectiveLesson(); });
+  var retroLearner = document.getElementById('adminRetroLearner');
+  if (retroLearner) retroLearner.addEventListener('change', populateAdminRetroLearnerAddress);
+  var retroTime = document.getElementById('adminRetroTime');
+  if (retroTime) retroTime.addEventListener('input', updateAdminRetroEnd);
+  var retroType = document.getElementById('adminRetroType');
+  if (retroType) retroType.addEventListener('change', updateAdminRetroEnd);
   var reservedGoodwillModal = document.getElementById('modal-reserved-goodwill-move');
   if (reservedGoodwillModal) reservedGoodwillModal.addEventListener('click', function (e) { if (e.target === reservedGoodwillModal) closeReservedGoodwillMove(); });
   var editTime = document.getElementById('adminEditTime');

@@ -522,7 +522,10 @@ body {
         <div class="page-title">Bookings</div>
         <div class="page-subtitle">View and manage all lesson bookings</div>
       </div>
-      <button class="btn" id="btn-refresh-bookings">Refresh</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btn-open-retro-lesson">+ Add past lesson</button>
+        <button class="btn" id="btn-refresh-bookings">Refresh</button>
+      </div>
     </div>
 
     <div class="filter-bar" id="booking-filters">
@@ -1269,6 +1272,42 @@ body {
   <button class="btn btn-sm" data-action="bulk-action" data-op="unpublish">Unpublish</button>
   <button class="btn btn-sm btn-danger" data-action="bulk-action" data-op="delete">Delete</button>
   <button class="btn btn-sm" id="btn-clear-bulk">Cancel</button>
+</div>
+
+<!-- Retrospective Lesson Modal -->
+<div class="modal-overlay" id="adminRetrospectiveLessonModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white,#fff);border-radius:12px;max-width:560px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.15);max-height:92vh;overflow:auto">
+    <h3 style="margin:0 0 16px;font-size:1.1rem">Add Past Lesson</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="grid-column:1 / -1"><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Learner</label>
+        <select id="adminRetroLearner" class="input" style="width:100%"></select></div>
+      <div style="grid-column:1 / -1"><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Instructor</label>
+        <select id="adminRetroInstructor" class="input" style="width:100%"></select></div>
+      <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Date</label>
+        <input type="date" id="adminRetroDate" class="input" style="width:100%"></div>
+      <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Start time</label>
+        <input type="time" id="adminRetroTime" class="input" style="width:100%" step="300"></div>
+      <div style="grid-column:1 / -1"><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Lesson type</label>
+        <select id="adminRetroType" class="input" style="width:100%"></select></div>
+      <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Payment</label>
+        <select id="adminRetroPayment" class="input" style="width:100%">
+          <option value="credit">Use learner credit</option>
+          <option value="cash">Cash</option>
+        </select></div>
+      <div style="font-size:0.85rem;color:var(--muted);align-self:end;padding-bottom:10px">End time: <strong id="adminRetroEndTime">-</strong></div>
+      <div style="grid-column:1 / -1"><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Pickup address</label>
+        <input type="text" id="adminRetroPickup" class="input" style="width:100%" placeholder="Defaults to learner home address"></div>
+      <div style="grid-column:1 / -1"><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Drop-off address</label>
+        <input type="text" id="adminRetroDropoff" class="input" style="width:100%" placeholder="Optional"></div>
+      <div style="grid-column:1 / -1"><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Notes</label>
+        <textarea id="adminRetroNotes" class="input" style="width:100%;min-height:76px;resize:vertical" placeholder="Optional internal note"></textarea></div>
+      <div id="adminRetroStatus" style="grid-column:1 / -1;display:none;padding:10px 12px;border-radius:8px;background:var(--red-bg);color:#991b1b;font-size:0.84rem;line-height:1.35"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">
+      <button class="btn" id="btn-close-admin-retro">Cancel</button>
+      <button class="btn btn-success" id="adminRetroSaveBtn">Add lesson</button>
+    </div>
+  </div>
 </div>
 
 <!-- Edit Booking Modal -->

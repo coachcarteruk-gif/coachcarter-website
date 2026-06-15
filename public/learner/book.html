@@ -1254,10 +1254,26 @@
         </div>
       </div>
 
-      <div style="margin:12px 0">
+      <div id="locationFields" style="margin:12px 0">
         <div class="modal-section-title">Lesson details</div>
-        <label for="mdDropoff" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off address (optional)</label>
-        <input type="text" id="mdDropoff" placeholder="e.g. School, work, test centre…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+        <div id="bookingPickupRow" style="margin-bottom:10px">
+          <label for="mdPickupMode" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup</label>
+          <select id="mdPickupMode" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;background:var(--white);color:var(--primary)">
+            <option value="home">Saved home address</option>
+            <option value="custom">Different pickup address</option>
+          </select>
+          <div id="mdHomePickupPreview" style="font-size:0.76rem;color:var(--muted);margin-top:5px"></div>
+          <input type="text" id="mdPickupCustom" placeholder="e.g. School, work, test centre..." style="display:none;width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+        </div>
+        <label for="mdDropoffMode" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off</label>
+        <select id="mdDropoffMode" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;background:var(--white);color:var(--primary)">
+          <option value="same">Same as pickup</option>
+          <option value="home">Saved home address</option>
+          <option value="custom">Different drop-off address</option>
+        </select>
+        <label id="mdDropoffCustomLabel" for="mdDropoff" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:none;margin:8px 0 4px">Different drop-off address</label>
+        <input type="text" id="mdDropoff" placeholder="e.g. School, work, test centre…" style="display:none;width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+        <div id="mdLocationCheckHint" style="display:none;font-size:0.76rem;color:var(--muted);margin-top:6px">Checking this pickup against nearby lessons...</div>
       </div>
       <!-- Repeat weekly toggle -->
       <div class="repeat-section" id="repeatSection">
@@ -1438,6 +1454,27 @@
       <div class="modal-detail-row"><span>Duration</span><span id="rmDuration">1.5 hours</span></div>
     </div>
     <p class="modal-credit-note">No balance change — your lesson is simply being moved to the new time.</p>
+    <div id="rescheduleLocationFields" style="margin:12px 0">
+      <div class="modal-section-title">Lesson details</div>
+      <div id="reschedulePickupRow" style="margin-bottom:10px">
+        <label for="rmPickupMode" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup</label>
+        <select id="rmPickupMode" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;background:var(--white);color:var(--primary)">
+          <option value="current">Current booking pickup</option>
+          <option value="home">Saved home address</option>
+          <option value="custom">Different pickup address</option>
+        </select>
+        <div id="rmPickupPreview" style="font-size:0.76rem;color:var(--muted);margin-top:5px"></div>
+        <input type="text" id="rmPickupCustom" placeholder="e.g. School, work, test centre..." style="display:none;width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+      </div>
+      <label for="rmDropoffMode" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off</label>
+      <select id="rmDropoffMode" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;background:var(--white);color:var(--primary)">
+        <option value="same">Same as pickup</option>
+        <option value="current">Current booking drop-off</option>
+        <option value="home">Saved home address</option>
+        <option value="custom">Different drop-off address</option>
+      </select>
+      <input type="text" id="rmDropoffCustom" placeholder="e.g. School, work, test centre..." style="display:none;width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+    </div>
     <div class="modal-actions">
       <button class="btn-modal-cancel" id="rescheduleModalCancelBtn">Cancel</button>
       <button class="btn-confirm" id="btnConfirmReschedule">

@@ -470,6 +470,8 @@ async function handleSlotBooking(session) {
   const scheduledDate = metadata.scheduled_date;
   const startTime     = metadata.start_time;
   const endTime       = metadata.end_time;
+  const pickupAddress = metadata.pickup_address || '';
+  const dropoffAddress = metadata.dropoff_address || '';
   const amountPence   = parseInt(metadata.amount_pence, 10);
   const lessonTypeId  = metadata.lesson_type_id ? parseInt(metadata.lesson_type_id, 10) : null;
   const durationMins  = parseInt(metadata.duration_minutes, 10) || 90;
@@ -623,11 +625,13 @@ async function handleSlotBooking(session) {
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            lesson_type_id, minutes_deducted, school_id,
+           pickup_address, dropoff_address,
            stripe_fee_pence, stripe_fee_source,
            list_price_pence, list_price_source)
         VALUES
           (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
            ${lessonTypeId}, ${durationMins}, ${schoolId},
+           ${pickupAddress || null}, ${dropoffAddress || null},
            ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null},
            ${amountPence}, 'stripe_metadata')
         RETURNING id, scheduled_date, start_time::text, end_time::text

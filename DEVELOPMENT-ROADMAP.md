@@ -1,5 +1,25 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.109 - Admin Retrospective Lesson Entry (15 June 2026)
+
+Admins can now add a lesson that has already happened from the Bookings page. The new modal selects learner, instructor, date, start time, lesson type, pickup/drop-off, notes, and whether the lesson should use learner credit or be recorded as cash.
+
+The backend creates these lessons as `chargeable`, rejects future/in-progress times, validates same-school learner/instructor/type scope, and checks instructor overlaps before insert. Credit-funded retrospective lessons use the same per-instructor LCB lock, FIFO `booking_credit_sources` attribution, list-price snapshot, and guarded balance decrement as normal credit bookings; cash entries do not consume learner credit.
+
+**Files:** `api/admin.js`, `public/admin/portal.html`, `public/admin/portal.js`, `docs/per-instructor-credits-audit.md`, `PROJECT.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
+## 2.108 - Learner Per-Booking Pickup And Drop-Off Locations (15 June 2026)
+
+Learners can now choose a per-booking pickup and drop-off location in the booking modal instead of always using the saved home pickup. The modal offers saved-home vs different pickup, plus a drop-off dropdown for same-as-pickup, saved home, or a different address. Guest pickup changes and authenticated custom pickup changes re-run the `durations-for-slot` travel fit check in the background before confirmation options are shown.
+
+The server now re-runs the adjacent-lesson travel-spacing gate for credit bookings, authenticated pay-and-book checkout, guest checkout, and ordinary learner reschedules using the selected pickup address. Stripe checkout metadata carries pickup/drop-off through to the webhook so paid bookings persist the selected per-booking locations on `lesson_bookings`. Reserved Weekly Slot policy moves continue to keep their tighter address-copying contract.
+
+**Files:** `api/slots.js`, `api/webhook.js`, `public/learner/book.html`, `public/learner/book.js`, `PROJECT.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.107 - Admin Instructor Account Access (14 June 2026)
 
 Admins can now open an active same-school instructor account for support without knowing, viewing, or resetting the instructor's password. The admin portal adds an "Access account" action on active instructors; the backend mints a short-lived `cc_instructor` support session with impersonation metadata, leaves `cc_admin` intact, and audit-logs `admin.instructor_access_start` / `admin.instructor_access_stop`.

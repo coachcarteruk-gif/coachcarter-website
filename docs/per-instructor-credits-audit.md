@@ -1,6 +1,6 @@
 # Per-Instructor Credits Audit
 
-Last updated: 2026-05-29
+Last updated: 2026-06-15
 
 This is the living implementation audit for the move from pooled learner credit
 (`learner_users.balance_minutes`) to per-instructor credit balances via
@@ -88,6 +88,7 @@ Classification:
 | Cancellations | `api/slots.js`, `api/instructor.js` cancel paths | Booking `instructor_id` + `lockBalanceAdjustLCB` | Mostly yes | Returns credit to original instructor row and marks BCS refunded. Not fully transactional with booking update. |
 | Reschedule | `api/slots.js`, `api/instructor.js` reschedule paths | Carries original booking/BCS | Yes | No new balance mutation; copies attribution. |
 | Edit booking duration | `api/admin.js`, `api/instructor.js` edit-booking paths | Booking instructor's school-scoped LCB row; mutation uses scoped helper | Mostly yes | Extra-duration precheck no longer reads pooled learner balance. Response text preserved. |
+| Admin retrospective lesson entry | `api/admin.js` `handleCreateRetrospectiveBooking`, `public/admin/portal.js` | Credit option locks the selected learner/instructor/school LCB row and draws FIFO CT sources into BCS; cash option writes no credit draw | Yes | Past-only admin insert creates `chargeable` lessons. Credit-funded entries write BCS, snapshot payable list price, and decrement per-instructor balance in one transaction; cash entries keep `minutes_deducted = 0`. |
 | Admin adjust credits | `api/admin.js` `handleAdjustCredits`, `public/admin/portal.js` | UI requires explicit instructor; server uses school-scoped LCB auto-resolve/explicit instructor | Mostly yes | Server guard is scoped: 0 rows grandfathers to instructor `1`, 1 row auto-resolves, 2+ rows returns `AMBIGUOUS_INSTRUCTOR`, explicit `instructor_id` reads that exact LCB row. Admin UI now chooses an instructor and posts `instructor_id`; response/audit still includes pooled totals for compatibility. |
 | Goodwill/reconciliation | `api/_admin-credit-goodwill.js`, `api/_admin-credit-reconciliation.js` | Explicit learner/instructor/school + shared helper | Yes | Strongest admin path; tests already pin scope and mutation shape. |
 | Refund executor | `api/_refund-executor.js` | Planner lines + `lockBalanceAdjustLCB` | Yes | Uses `learner_id`/`instructor_id` from trusted plan lines and `school_id` from the admin scope for the LCB decrement; tests pin that caller-supplied scope fields are ignored. BCS execution intentionally disabled. |
