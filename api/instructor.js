@@ -168,6 +168,9 @@ module.exports = async (req, res) => {
   if (action === 'availability-overrides') return handleAvailabilityOverrides(req, res);
   if (action === 'create-availability-override') return handleCreateAvailabilityOverride(req, res);
   if (action === 'delete-availability-override') return handleDeleteAvailabilityOverride(req, res);
+  if (action === 'busy-blocks') return handleBusyBlocks(req, res);
+  if (action === 'create-busy-block') return handleCreateBusyBlock(req, res);
+  if (action === 'delete-busy-block') return handleDeleteBusyBlock(req, res);
   if (action === 'profile')          return handleProfile(req, res);
   if (action === 'update-profile')   return handleUpdateProfile(req, res);
   if (action === 'blackout-dates')     return handleBlackoutDates(req, res);
@@ -675,7 +678,27 @@ async function handleScheduleRange(req, res) {
       // Table may not exist before the availability override migration has run.
     }
 
-    return res.json({ bookings, pending_offers: pendingOffers, availability_overrides: availabilityOverrides });
+    let busyBlocks = [];
+    try {
+      busyBlocks = await sql`
+        SELECT id,
+               block_date::text AS block_date,
+               start_time::text AS start_time,
+               end_time::text AS end_time,
+               note
+        FROM instructor_busy_blocks
+        WHERE instructor_id = ${instructor.id}
+          AND school_id = ${schoolId}
+          AND block_date >= ${from}::date
+          AND block_date <= ${to}::date
+        ORDER BY block_date ASC, start_time ASC
+        LIMIT 200
+      `;
+    } catch (e) {
+      // Table may not exist before the busy-block migration has run.
+    }
+
+    return res.json({ bookings, pending_offers: pendingOffers, availability_overrides: availabilityOverrides, busy_blocks: busyBlocks });
 
   } catch (err) {
     console.error('schedule-range err:', err.message);
@@ -959,6 +982,198 @@ async function handleDeleteAvailabilityOverride(req, res) {
 }
 
 // ── GET /api/instructor?action=profile ────────────────────────────────────────
+// Date-specific busy blocks, used for one-off commitments that should stop
+// learner bookings without changing recurring weekly availability.
+async function handleBusyBlocks(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: '"from" and "to" are required (YYYY-MM-DD)' });
+  if (!isValidIsoDate(from) || !isValidIsoDate(to)) {
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+  }
+  if (to < from) return res.status(400).json({ error: '"to" must be on or after "from"' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const blocks = await sql`
+      SELECT id, block_date::text AS block_date,
+             start_time::text AS start_time, end_time::text AS end_time,
+             note
+      FROM instructor_busy_blocks
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND block_date >= ${from}::date
+        AND block_date <= ${to}::date
+      ORDER BY block_date ASC, start_time ASC
+      LIMIT 500
+    `;
+
+    return res.json({ ok: true, blocks });
+  } catch (err) {
+    console.error('instructor busy-blocks error:', err);
+    reportError('/api/instructor?action=busy-blocks', err);
+    return res.status(500).json({ error: 'Failed to load busy blocks' });
+  }
+}
+
+async function handleCreateBusyBlock(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const { block_date, start_time, end_time, note } = req.body || {};
+  if (!isValidIsoDate(block_date)) {
+    return res.status(400).json({ error: 'block_date must be YYYY-MM-DD' });
+  }
+  if (!isValidTimeHHMM(start_time) || !isValidTimeHHMM(end_time)) {
+    return res.status(400).json({ error: 'Times must be HH:MM format' });
+  }
+  if (start_time >= end_time) return res.status(400).json({ error: 'start_time must be before end_time' });
+
+  const blockDate = new Date(`${block_date}T00:00:00Z`);
+  if (blockDate < startOfTodayUtc()) {
+    return res.status(400).json({ error: 'Cannot block time in the past' });
+  }
+  if (blockDate.getTime() === startOfTodayUtc().getTime()) {
+    const now = new Date();
+    const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    if (timeToMinutes(end_time) <= nowMinutes) {
+      return res.status(400).json({ error: 'Cannot block a time that has already ended' });
+    }
+  }
+
+  const cleanNote = typeof note === 'string' && note.trim() ? note.trim().slice(0, 250) : null;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [instructorRow] = await sql`
+      SELECT id
+      FROM instructors
+      WHERE id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND active = true
+    `;
+    if (!instructorRow) return res.status(404).json({ error: 'Instructor not found or inactive' });
+
+    const overlappingBusy = await sql`
+      SELECT id
+      FROM instructor_busy_blocks
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND block_date = ${block_date}::date
+        AND start_time < ${end_time}::time
+        AND end_time > ${start_time}::time
+      LIMIT 1
+    `;
+    if (overlappingBusy.length > 0) {
+      return res.status(409).json({ error: 'Busy block overlaps an existing busy block' });
+    }
+
+    const overlappingBookings = await sql`
+      SELECT id
+      FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND scheduled_date = ${block_date}::date
+        AND status = ANY(${BLOCKING_STATUSES}::text[])
+        AND start_time < ${end_time}::time
+        AND end_time > ${start_time}::time
+      LIMIT 1
+    `;
+    if (overlappingBookings.length > 0) {
+      return res.status(409).json({ error: 'Busy block overlaps an existing lesson' });
+    }
+
+    try {
+      const overlappingReservations = await sql`
+        SELECT id
+        FROM slot_reservations
+        WHERE instructor_id = ${instructor.id}
+          AND school_id = ${schoolId}
+          AND scheduled_date = ${block_date}::date
+          AND expires_at > NOW()
+          AND start_time < ${end_time}::time
+          AND end_time > ${start_time}::time
+        LIMIT 1
+      `;
+      if (overlappingReservations.length > 0) {
+        return res.status(409).json({ error: 'Busy block overlaps a slot currently being booked' });
+      }
+    } catch (_) {}
+
+    try {
+      const overlappingOffers = await sql`
+        SELECT id
+        FROM lesson_offers
+        WHERE instructor_id = ${instructor.id}
+          AND school_id = ${schoolId}
+          AND scheduled_date = ${block_date}::date
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND start_time < ${end_time}::time
+          AND end_time > ${start_time}::time
+        LIMIT 1
+      `;
+      if (overlappingOffers.length > 0) {
+        return res.status(409).json({ error: 'Busy block overlaps a pending lesson offer' });
+      }
+    } catch (_) {}
+
+    const [row] = await sql`
+      INSERT INTO instructor_busy_blocks (
+        instructor_id, school_id, block_date, start_time, end_time, note
+      ) VALUES (
+        ${instructor.id}, ${schoolId}, ${block_date}, ${start_time}, ${end_time}, ${cleanNote}
+      )
+      RETURNING id, block_date::text AS block_date,
+                start_time::text AS start_time, end_time::text AS end_time,
+                note
+    `;
+
+    return res.json({ ok: true, block: row });
+  } catch (err) {
+    console.error('instructor create-busy-block error:', err);
+    reportError('/api/instructor?action=create-busy-block', err);
+    return res.status(500).json({ error: 'Failed to block time' });
+  }
+}
+
+async function handleDeleteBusyBlock(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const id = parseInt(req.body?.id, 10);
+  if (!id) return res.status(400).json({ error: 'id is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const deleted = await sql`
+      DELETE FROM instructor_busy_blocks
+      WHERE id = ${id}
+        AND instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+      RETURNING id
+    `;
+    if (deleted.length === 0) return res.status(404).json({ error: 'Busy block not found' });
+    return res.json({ ok: true, deleted_id: id });
+  } catch (err) {
+    console.error('instructor delete-busy-block error:', err);
+    reportError('/api/instructor?action=delete-busy-block', err);
+    return res.status(500).json({ error: 'Failed to remove busy block' });
+  }
+}
+
 async function handleProfile(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -1778,6 +1993,20 @@ async function handleEditBooking(req, res) {
       });
     }
 
+    const [busyBlock] = await sql`
+      SELECT id
+      FROM instructor_busy_blocks
+      WHERE instructor_id = ${booking.instructor_id}
+        AND school_id = ${schoolId}
+        AND block_date = ${newDate}::date
+        AND start_time < ${newEndTime}::time
+        AND end_time > ${newStartTime}::time
+      LIMIT 1
+    `;
+    if (busyBlock) {
+      return res.status(409).json({ error: 'That time is blocked as busy. Remove the busy block or choose another time.' });
+    }
+
     // Credit/balance adjustment
     const oldMinutes = parseInt(booking.minutes_deducted) || 0;
     const newMinutes = newDuration;
@@ -1961,6 +2190,25 @@ async function createInstructorCreditBookingTransaction({
           ok: false,
           code: 'SLOT_UNAVAILABLE',
           message: 'That slot is already booked. Please choose another time.',
+        });
+      }
+
+      const busyBlockConflict = await client.query(
+        `SELECT id
+           FROM instructor_busy_blocks
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND block_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+          LIMIT 1`,
+        [instructorId, schoolId, scheduledDate, startTime, endTime]
+      );
+      if (busyBlockConflict.rowCount > 0) {
+        abortInstructorBookingTransaction({
+          ok: false,
+          code: 'SLOT_UNAVAILABLE',
+          message: 'That time is blocked as busy. Remove the busy block or choose another time.',
         });
       }
 
@@ -2204,6 +2452,22 @@ async function handleCreateBooking(req, res) {
     let booking;
     const bookingPickup = pickup_address || learner.pickup_address || null;
     const bookingDropoff = dropoff_address || null;
+
+    try {
+      const [busyBlock] = await sql`
+        SELECT id
+        FROM instructor_busy_blocks
+        WHERE instructor_id = ${instructor.id}
+          AND school_id = ${schoolId}
+          AND block_date = ${scheduled_date}::date
+          AND start_time < ${end_time}::time
+          AND end_time > ${start_time}::time
+        LIMIT 1
+      `;
+      if (busyBlock) {
+        return res.status(409).json({ error: 'That time is blocked as busy. Remove the busy block or choose another time.' });
+      }
+    } catch (_) {}
 
     if (payMethod === 'credit') {
       const booked = await createInstructorCreditBookingTransaction({

@@ -182,6 +182,7 @@
     }
     .month-booking-pill.completed { background: var(--green); }
     .month-availability-pill { background: #0f766e; color: white; }
+    .month-busy-pill { background: #7f1d1d; color: white; }
     .month-more {
       font-size: 0.68rem; color: var(--muted); font-weight: 600;
       padding: 1px 4px;
@@ -232,6 +233,8 @@
     }
     .tp-lesson.completed { opacity: 0.55; }
     .tp-lesson.cancelled { opacity: 0.35; border-left-color: var(--muted); }
+    .tp-busy { border-left-color: #7f1d1d; background: #fef2f2; }
+    .tp-busy .tp-lesson-name { color: #7f1d1d; }
     .tp-lesson-bar {
       width: 4px; flex-shrink: 0; border-radius: 2px;
       align-self: stretch; min-height: 28px;
@@ -310,6 +313,7 @@
     .daily-booking-time { font-weight: 700; font-size: 0.82rem; color: var(--primary); white-space: nowrap; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .daily-booking-card.completed .daily-booking-time { color: var(--muted); }
     .lesson-type-badge { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 100px; white-space: nowrap; }
+    .busy-badge { background: #fee2e2; color: #7f1d1d; border: 1px solid #fecaca; }
     .daily-booking-name { font-weight: 700; font-size: 0.875rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .contact-badge {
       font-size: 0.7rem; font-weight: 700;
@@ -461,6 +465,12 @@
       cursor: default;
       background: rgba(15, 118, 110, 0.08);
       border-left-color: #0f766e !important;
+      border-style: dashed;
+    }
+    .agenda-card-busy {
+      cursor: default;
+      background: #fef2f2;
+      border-left-color: #7f1d1d !important;
       border-style: dashed;
     }
     .availability-badge {
@@ -666,12 +676,14 @@
     </div>
     <button class="btn-add-lesson" id="btn-open-add-lesson">+ Add Lesson</button>
     <button class="btn-today" id="btn-open-avail">+ Slot</button>
+    <button class="btn-today" id="btn-open-busy">Block time</button>
     <span class="toolbar-secondary">
       <button class="btn-today" id="btn-open-offer" title="Send a lesson offer to one learner — or broadcast it to everyone free at this time">Offer</button>
     </span>
     <div class="toolbar-overflow-wrap">
       <button class="btn-today toolbar-overflow-btn" id="btn-toolbar-overflow" title="More options">&#x22EF;</button>
       <div class="toolbar-overflow-menu" id="toolbarOverflow">
+        <button class="toolbar-overflow-item" data-action="open-busy-modal">Block time</button>
         <button class="toolbar-overflow-item" data-toolbar-of="offer">Offer Lesson / Broadcast</button>
       </div>
     </div>
@@ -713,6 +725,34 @@
     <div class="modal-actions">
       <button class="btn-modal-cancel" id="btn-close-avail">Cancel</button>
       <button class="btn-modal-save" id="modalSaveBtn">Add slot</button>
+    </div>
+  </div>
+</div>
+
+<!-- Block Busy Time Modal -->
+<div class="modal-overlay" id="busyModal">
+  <div class="modal">
+    <div class="modal-title">Block Busy Time</div>
+    <div class="modal-sub" id="busySubtitle">—</div>
+    <div class="modal-field">
+      <label class="modal-label">Date</label>
+      <input type="date" class="modal-input" id="busyDate">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Time</label>
+      <div class="modal-time-row">
+        <input type="time" class="modal-input" id="busyStart" value="12:00">
+        <span class="modal-time-sep">to</span>
+        <input type="time" class="modal-input" id="busyEnd" value="13:00">
+      </div>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label" for="busyNote">Note</label>
+      <input type="text" class="modal-input" id="busyNote" maxlength="250" placeholder="e.g. dentist, car service, school run">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" id="btn-close-busy">Cancel</button>
+      <button class="btn-modal-save" id="busySaveBtn">Block time</button>
     </div>
   </div>
 </div>

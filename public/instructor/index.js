@@ -75,6 +75,7 @@ cursor.setHours(0,0,0,0);
 let bookingCache = {}; // dateStr -> [booking, ...]
 let pendingOfferCache = {}; // dateStr -> [pending offer, ...]
 let availabilityOverrideCache = {}; // dateStr -> [date-specific availability, ...]
+let busyBlockCache = {}; // dateStr -> [busy block, ...]
 let availCache   = []; // availability windows [{day_of_week, start_time, end_time}]
 let calendarStartHour = 7; // from instructor profile
 let instructorSlug = null; // from profile, used for shareable booking links
@@ -238,6 +239,7 @@ async function fetchNeededData() {
       delete bookingCache[dateStr(d)];
       delete pendingOfferCache[dateStr(d)];
       delete availabilityOverrideCache[dateStr(d)];
+      delete busyBlockCache[dateStr(d)];
     }
     for (const b of (data.bookings || [])) {
       if (!bookingCache[b.scheduled_date]) bookingCache[b.scheduled_date] = [];
@@ -251,6 +253,11 @@ async function fetchNeededData() {
       const ds = a.override_date;
       if (!availabilityOverrideCache[ds]) availabilityOverrideCache[ds] = [];
       availabilityOverrideCache[ds].push(a);
+    }
+    for (const b of (data.busy_blocks || [])) {
+      const ds = b.block_date;
+      if (!busyBlockCache[ds]) busyBlockCache[ds] = [];
+      busyBlockCache[ds].push(b);
     }
     loadedRanges.push({ from, to });
   } catch (err) {
@@ -347,9 +354,10 @@ function renderMonthly() {
     const allBookings = bookingCache[ds] || [];
     const bookings  = allBookings.filter(b => b.status !== 'refunded');
     const overrides = availabilityOverrideCache[ds] || [];
+    const busyBlocks = busyBlockCache[ds] || [];
     const inMonth   = day.getMonth() === cursor.getMonth();
     const isToday   = ds === dateStr(today);
-    const hasBook   = bookings.length > 0 || overrides.length > 0;
+    const hasBook   = bookings.length > 0 || overrides.length > 0 || busyBlocks.length > 0;
 
     let cls = 'month-cell clickable';
     if (!inMonth) cls += ' other-month';
@@ -373,7 +381,11 @@ function renderMonthly() {
     for (const a of visibleOverrides) {
       html += `<div class="month-booking-pill month-availability-pill">${a.start_time.slice(0,5)} free</div>`;
     }
-    const hiddenCount = bookings.length + overrides.length - visible.length - visibleOverrides.length;
+    const visibleBusy = busyBlocks.slice(0, Math.max(0, 2 - visible.length - visibleOverrides.length));
+    for (const b of visibleBusy) {
+      html += `<div class="month-booking-pill month-busy-pill">${b.start_time.slice(0,5)} busy</div>`;
+    }
+    const hiddenCount = bookings.length + overrides.length + busyBlocks.length - visible.length - visibleOverrides.length - visibleBusy.length;
     if (hiddenCount > 0) {
       html += `<div class="month-more">+${hiddenCount} more</div>`;
     }
@@ -398,6 +410,7 @@ function renderWeekly() {
     const allBk     = bookingCache[ds] || [];
     const bookings  = allBk.filter(b => b.status !== 'refunded');
     const overrides = availabilityOverrideCache[ds] || [];
+    const busyBlocks = busyBlockCache[ds] || [];
     const isToday   = ds === dateStr(today);
 
     html += `<div class="tp-day${isToday ? ' is-today' : ''}">`;
@@ -410,7 +423,7 @@ function renderWeekly() {
 
     // Lessons column (right)
     html += '<div class="tp-day-lessons">';
-    if (bookings.length === 0 && overrides.length === 0) {
+    if (bookings.length === 0 && overrides.length === 0 && busyBlocks.length === 0) {
       html += '<div class="tp-empty-day">No lessons</div>';
     } else {
       for (const b of bookings) {
@@ -442,6 +455,17 @@ function renderWeekly() {
             </div>
             ${availabilityTransmissionBadge(a)}
             <button class="offer-cancel-btn" data-action="delete-availability-override" data-id="${a.id}">Remove</button>
+          </div>`;
+      }
+      for (const b of busyBlocks) {
+        html += `
+          <div class="tp-lesson tp-busy" data-busy-id="${b.id}">
+            <div class="tp-lesson-info">
+              <div class="tp-lesson-name">Busy</div>
+              <div class="tp-lesson-time">${b.start_time.slice(0,5)} â†’ ${b.end_time.slice(0,5)}${b.note ? ` Â· ${esc(b.note)}` : ''}</div>
+            </div>
+            <span class="lesson-type-badge busy-badge">Busy</span>
+            <button class="offer-cancel-btn" data-action="delete-busy-block" data-id="${b.id}">Remove</button>
           </div>`;
       }
     }
@@ -547,6 +571,9 @@ function renderAgenda() {
     for (const a of (availabilityOverrideCache[ds] || [])) {
       allBookings.push({ ...a, scheduled_date: a.override_date, _kind: 'availability' });
     }
+    for (const b of (busyBlockCache[ds] || [])) {
+      allBookings.push({ ...b, scheduled_date: b.block_date, _kind: 'busy' });
+    }
     d = addDays(d, 1);
   }
 
@@ -581,9 +608,11 @@ function renderAgenda() {
     const dayLessonCount = groups[ds].filter(x => x._kind === 'booking').length;
     const dayOfferCount = groups[ds].filter(x => x._kind === 'offer').length;
     const dayAvailabilityCount = groups[ds].filter(x => x._kind === 'availability').length;
+    const dayBusyCount = groups[ds].filter(x => x._kind === 'busy').length;
     const countParts = [`${dayLessonCount} lesson${dayLessonCount !== 1 ? 's' : ''}`];
     if (dayOfferCount > 0) countParts.push(`${dayOfferCount} pending`);
     if (dayAvailabilityCount > 0) countParts.push(`${dayAvailabilityCount} free`);
+    if (dayBusyCount > 0) countParts.push(`${dayBusyCount} busy`);
     const countLabel = countParts.join(', ');
 
     html += `<div class="agenda-date-header${isToday ? ' today' : ''}">
@@ -641,6 +670,24 @@ function renderAgenda() {
             </div>
             <div class="agenda-card-right">
               <button class="offer-cancel-btn" data-action="delete-availability-override" data-id="${b.id}">Remove</button>
+            </div>
+          </div>`;
+        continue;
+      }
+
+      if (b._kind === 'busy') {
+        html += `
+          <div class="agenda-card agenda-card-busy" data-busy-id="${b.id}">
+            <div class="agenda-card-left">
+              <div class="agenda-time">${b.start_time.slice(0,5)} â€“ ${b.end_time.slice(0,5)}</div>
+              <span class="lesson-type-badge busy-badge">Busy</span>
+            </div>
+            <div class="agenda-card-mid">
+              <div class="agenda-learner">Blocked time</div>
+              <div class="agenda-address" style="color:var(--muted)">${b.note ? esc(b.note) : 'Learners cannot book this time.'}</div>
+            </div>
+            <div class="agenda-card-right">
+              <button class="offer-cancel-btn" data-action="delete-busy-block" data-id="${b.id}">Remove</button>
             </div>
           </div>`;
         continue;
@@ -801,6 +848,88 @@ async function deleteAvailabilityOverride(id, btnEl) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+let busyModalTargetDate = null;
+
+function openBusyModal(targetDateStr) {
+  busyModalTargetDate = targetDateStr ? new Date(targetDateStr + 'T00:00:00') : new Date(cursor);
+  busyModalTargetDate.setHours(0,0,0,0);
+  const dateLabel = `${busyModalTargetDate.getDate()} ${MON_FULL[busyModalTargetDate.getMonth()]} ${busyModalTargetDate.getFullYear()}`;
+  const dateInput = document.getElementById('busyDate');
+  if (dateInput) {
+    dateInput.min = dateStr(new Date());
+    dateInput.value = dateStr(busyModalTargetDate);
+  }
+  document.getElementById('busySubtitle').textContent = `For ${dateLabel} only`;
+  document.getElementById('busyStart').value = '12:00';
+  document.getElementById('busyEnd').value = '13:00';
+  document.getElementById('busyNote').value = '';
+  document.getElementById('busySaveBtn').textContent = 'Block time';
+  document.getElementById('busyModal').classList.add('open');
+}
+
+function closeBusyModal() {
+  document.getElementById('busyModal').classList.remove('open');
+}
+
+function handleBusyModalOverlayClick(e) {
+  if (e.target === document.getElementById('busyModal')) closeBusyModal();
+}
+
+async function saveBusyBlock() {
+  const selectedDate = document.getElementById('busyDate')?.value || dateStr(busyModalTargetDate);
+  const start = document.getElementById('busyStart').value;
+  const end = document.getElementById('busyEnd').value;
+  const note = document.getElementById('busyNote').value.trim();
+
+  if (!selectedDate) { showToast('Please choose a date', 'error'); return; }
+  if (!start || !end) { showToast('Please set both start and end times', 'error'); return; }
+  if (start >= end) { showToast('Start time must be before end time', 'error'); return; }
+
+  const btn = document.getElementById('busySaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  try {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=create-busy-block', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ block_date: selectedDate, start_time: start, end_time: end, note })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to block time');
+
+    closeBusyModal();
+    showToast('Busy time blocked', 'success');
+    loadedRanges = [];
+    renderCurrentView();
+  } catch (err) {
+    showToast(err.message || 'Failed to block time', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Block time';
+  }
+}
+
+async function deleteBusyBlock(id, btnEl) {
+  if (!id) return;
+  if (!confirm('Remove this busy block? Learners will be able to book this time again if it fits your availability.')) return;
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Removing...'; }
+
+  try {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=delete-busy-block', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to remove busy block');
+    loadedRanges = [];
+    showToast('Busy block removed', 'success');
+    renderCurrentView();
+  } catch (err) {
+    showToast(err.message || 'Failed to remove busy block', 'error');
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Remove'; }
+  }
+}
+
 function dateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2,'0');
@@ -2371,6 +2500,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'cursor-to-agenda') { cursor = new Date(t.dataset.day + 'T00:00:00'); setView('agenda'); }
   else if (a === 'open-booking-detail') openBookingDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-avail-modal') openAvailModal(t.dataset.day);
+  else if (a === 'open-busy-modal') openBusyModal(t.dataset.day);
   else if (a === 'toggle-feedback') {
     var target = document.getElementById(t.dataset.target);
     if (target) target.classList.toggle('open');
@@ -2392,6 +2522,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'offer-select-learner') selectOfferLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.detail);
   else if (a === 'cancel-pending-offer') cancelPendingOffer(parseInt(t.dataset.id, 10), t);
   else if (a === 'delete-availability-override') deleteAvailabilityOverride(parseInt(t.dataset.id, 10), t);
+  else if (a === 'delete-busy-block') deleteBusyBlock(parseInt(t.dataset.id, 10), t);
 });
 document.addEventListener('change', function (e) {
   var t = e.target.closest('[data-action]');
@@ -2427,12 +2558,17 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
   });
   bind('btn-open-add-lesson', openAddLessonModal);
   bind('btn-open-avail', function () { openAvailModal(); });
+  bind('btn-open-busy', function () { openBusyModal(); });
   bind('btn-open-offer', function () { openOfferModal(); });
   bind('btn-toolbar-overflow', toggleToolbarOverflow);
   var availModal = document.getElementById('availModal');
   if (availModal) availModal.addEventListener('click', handleModalOverlayClick);
   bind('btn-close-avail', closeAvailModal);
   bind('modalSaveBtn', saveNewAvailability);
+  var busyModal = document.getElementById('busyModal');
+  if (busyModal) busyModal.addEventListener('click', handleBusyModalOverlayClick);
+  bind('btn-close-busy', closeBusyModal);
+  bind('busySaveBtn', saveBusyBlock);
   var bookingModal = document.getElementById('bookingModal');
   if (bookingModal) bookingModal.addEventListener('click', handleBookingModalOverlayClick);
   bind('btn-close-booking-top', closeBookingModal);

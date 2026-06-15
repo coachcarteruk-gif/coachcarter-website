@@ -685,6 +685,26 @@ CREATE INDEX IF NOT EXISTS idx_ext_events_instructor_date
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ext_events_dedup
   ON instructor_external_events(instructor_id, uid_hash);
 
+-- Instructor-entered timed busy blocks. These are separate from synced
+-- external events so manual blocks are not overwritten by iCal refreshes.
+CREATE TABLE IF NOT EXISTS instructor_busy_blocks (
+  id              SERIAL PRIMARY KEY,
+  instructor_id   INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
+  school_id       INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  block_date      DATE NOT NULL,
+  start_time      TIME NOT NULL,
+  end_time        TIME NOT NULL,
+  note            TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (start_time < end_time)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_instructor_busy_block_slot
+  ON instructor_busy_blocks(instructor_id, school_id, block_date, start_time, end_time);
+
+CREATE INDEX IF NOT EXISTS idx_instructor_busy_blocks_lookup
+  ON instructor_busy_blocks(school_id, instructor_id, block_date);
+
 -- ── Lesson offers (instructor-initiated, pending learner acceptance + payment) ──
 CREATE TABLE IF NOT EXISTS lesson_offers (
   id              SERIAL PRIMARY KEY,

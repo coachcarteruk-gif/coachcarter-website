@@ -381,6 +381,20 @@ async function slotFitsActiveAvailability(sql, {
     return false;
   }
 
+  let busyBlocks = [];
+  try {
+    busyBlocks = await sql`
+      SELECT start_time::text AS start_time, end_time::text AS end_time
+      FROM instructor_busy_blocks
+      WHERE instructor_id = ${instructorId}
+        AND school_id = ${schoolId}
+        AND block_date = ${date}::date
+    `;
+  } catch (_) {}
+  if (busyBlocks.some(b => slotStart < timeToMinutes(b.end_time) && slotEnd > timeToMinutes(b.start_time))) {
+    return false;
+  }
+
   const weeklyWindows = blackoutRows.length > 0
     ? []
     : await sql`
@@ -900,6 +914,34 @@ async function handleAvailable(req, res) {
       // Table may not exist yet
     }
 
+    // 2e. Load instructor-entered busy blocks in the date range. Timed busy
+    // blocks behave like bookings for availability generation.
+    let busyBlocks = [];
+    try {
+      busyBlocks = instructor_id
+        ? await sql`
+            SELECT ibb.instructor_id, ibb.block_date::text AS block_date,
+                   ibb.start_time::text AS start_time, ibb.end_time::text AS end_time
+            FROM instructor_busy_blocks ibb
+            JOIN instructors i ON i.id = ibb.instructor_id
+            WHERE ibb.block_date BETWEEN ${from} AND ${to}
+              AND ibb.instructor_id = ${instructor_id}
+              AND ibb.school_id = ${schoolId}
+              AND i.school_id = ${schoolId}
+          `
+        : await sql`
+            SELECT ibb.instructor_id, ibb.block_date::text AS block_date,
+                   ibb.start_time::text AS start_time, ibb.end_time::text AS end_time
+            FROM instructor_busy_blocks ibb
+            JOIN instructors i ON i.id = ibb.instructor_id
+            WHERE ibb.block_date BETWEEN ${from} AND ${to}
+              AND ibb.school_id = ${schoolId}
+              AND i.school_id = ${schoolId}
+          `;
+    } catch (e) {
+      // Table may not exist yet.
+    }
+
     // Expand blackout ranges into individual "instructorId|date" entries for fast lookup
     const blackoutIndex = new Set();
     for (const b of blackouts) {
@@ -937,6 +979,11 @@ async function handleAvailable(req, res) {
         if (!bookedIndex[key]) bookedIndex[key] = [];
         bookedIndex[key].push({ start: timeToMinutes(e.start_time), end: timeToMinutes(e.end_time) });
       }
+    }
+    for (const b of busyBlocks) {
+      const key = `${b.instructor_id}|${b.block_date}`;
+      if (!bookedIndex[key]) bookedIndex[key] = [];
+      bookedIndex[key].push({ start: timeToMinutes(b.start_time), end: timeToMinutes(b.end_time), postcode: null });
     }
 
     // 3. Group windows by instructor
@@ -1326,6 +1373,17 @@ async function handleDurationsForSlot(req, res) {
       `;
     } catch (_) {}
 
+    let busyBlocks = [];
+    try {
+      busyBlocks = await sql`
+        SELECT start_time::text AS start_time, end_time::text AS end_time
+        FROM instructor_busy_blocks
+        WHERE block_date = ${date}::date
+          AND instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
+      `;
+    } catch (_) {}
+
     // If an all-day external event blocks this date, every duration is a clash.
     const allDayBlocked = blackoutBlocked || externalEvents.some(e => e.is_all_day);
 
@@ -1347,6 +1405,9 @@ async function handleDurationsForSlot(req, res) {
       if (!e.is_all_day && e.start_time && e.end_time) {
         blocks.push({ start: timeToMinutes(e.start_time), end: timeToMinutes(e.end_time), postcode: null });
       }
+    }
+    for (const b of busyBlocks) {
+      blocks.push({ start: timeToMinutes(b.start_time), end: timeToMinutes(b.end_time), postcode: null });
     }
 
     // Travel-time geocoding (only when a learner postcode is provided).
@@ -1546,11 +1607,27 @@ async function bookCreditFundedSlotsTransaction({
       recurringHoldConflictRows = recurringHoldConflicts.rows;
     }
 
+    let busyBlockConflictRows = [];
+    try {
+      const busyBlockConflicts = await client.query(
+        `SELECT block_date::text AS date, start_time::text
+           FROM instructor_busy_blocks
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND block_date = ANY($3::date[])
+            AND start_time < $5::time
+            AND end_time > $4::time`,
+        [instructorId, schoolId, dateStrings, startTime, endTime]
+      );
+      busyBlockConflictRows = busyBlockConflicts.rows;
+    } catch (_) {}
+
     const takenDates = new Set([
       ...bookingConflicts.rows.map(c => String(c.date).slice(0, 10)),
       ...reservations.rows.map(r => String(r.date).slice(0, 10)),
       ...offerConflicts.rows.map(o => String(o.date).slice(0, 10)),
       ...recurringHoldConflictRows.map(h => String(h.date).slice(0, 10)),
+      ...busyBlockConflictRows.map(b => String(b.date).slice(0, 10)),
     ]);
     if (takenDates.size > 0) {
       abortBookingTransaction({
@@ -1889,6 +1966,19 @@ async function buildRecurringSlotConflictIndex(sql, {
          AND rsbi.end_time > ${startTime}::time
     `;
     holds.forEach(row => add(row.date, 'pending_weekly_block'));
+  } catch (_) {}
+
+  try {
+    const busyBlocks = await sql`
+      SELECT block_date::text AS date
+        FROM instructor_busy_blocks
+       WHERE instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
+         AND block_date = ANY(${dates})
+         AND start_time < ${endTime}::time
+         AND end_time > ${startTime}::time
+    `;
+    busyBlocks.forEach(row => add(row.date, 'busy_block'));
   } catch (_) {}
 
   return conflicts;
@@ -2288,11 +2378,27 @@ async function createRecurringBlockBankHoldTransaction({
       [instructorId, schoolId, dateStrings, startTime, endTime]
     );
 
+    let busyBlockConflictRows = [];
+    try {
+      const busyBlockConflicts = await client.query(
+        `SELECT block_date::text AS date
+           FROM instructor_busy_blocks
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND block_date = ANY($3::date[])
+            AND start_time < $5::time
+            AND end_time > $4::time`,
+        [instructorId, schoolId, dateStrings, startTime, endTime]
+      );
+      busyBlockConflictRows = busyBlockConflicts.rows;
+    } catch (_) {}
+
     const takenDates = new Set([
       ...bookingConflicts.rows.map(row => String(row.date).slice(0, 10)),
       ...reservationConflicts.rows.map(row => String(row.date).slice(0, 10)),
       ...offerConflicts.rows.map(row => String(row.date).slice(0, 10)),
       ...heldConflicts.rows.map(row => String(row.date).slice(0, 10)),
+      ...busyBlockConflictRows.map(row => String(row.date).slice(0, 10)),
     ]);
     if (takenDates.size > 0) {
       return {
@@ -4720,6 +4826,25 @@ async function ensureReservedReplacementFitsAvailability(client, booking, {
     });
   }
 
+  let busyBlocks = { rows: [] };
+  try {
+    busyBlocks = await client.query(
+      `SELECT start_time::text AS start_time, end_time::text AS end_time
+         FROM instructor_busy_blocks
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND block_date = $3::date`,
+      [booking.instructor_id, schoolId, newDate]
+    );
+  } catch (_) {}
+  if (busyBlocks.rows.some(b => slotStart < timeToMinutes(b.end_time) && slotEnd > timeToMinutes(b.start_time))) {
+    abortReservedPolicyMove(409, {
+      error: true,
+      code: 'SLOT_BLOCKED_BY_BUSY_BLOCK',
+      message: 'That replacement slot is not available',
+    });
+  }
+
   const weeklyWindows = await client.query(
     `SELECT start_time::text AS start_time, end_time::text AS end_time
        FROM instructor_availability
@@ -5306,6 +5431,18 @@ async function handleReschedule(req, res) {
     `;
     if (existingReservation)
       return res.status(409).json({ error: 'Someone is currently booking that slot. Try another or wait a few minutes.' });
+
+    const stillAvailable = await slotFitsActiveAvailability(sql, {
+      instructorId: booking.instructor_id,
+      schoolId,
+      date: new_date,
+      startTime: new_start_time,
+      endTime: new_end_time,
+      transmissionType: booking.transmission_type,
+    });
+    if (!stillAvailable) {
+      return res.status(409).json({ error: 'That slot is no longer available. Please choose another.' });
+    }
 
     if (newPickupAddress) {
       if (await rejectIfPickupTravelConflict(res, sql, {
