@@ -850,16 +850,23 @@ async function deleteAvailabilityOverride(id, btnEl) {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 let busyModalTargetDate = null;
 
+function updateBusySubtitle() {
+  const selectedDate = document.getElementById('busyDate')?.value;
+  const subtitleDate = selectedDate ? new Date(selectedDate + 'T00:00:00') : busyModalTargetDate;
+  if (!subtitleDate || isNaN(subtitleDate.getTime())) return;
+  const dateLabel = `${subtitleDate.getDate()} ${MON_FULL[subtitleDate.getMonth()]} ${subtitleDate.getFullYear()}`;
+  document.getElementById('busySubtitle').textContent = `For ${dateLabel} only`;
+}
+
 function openBusyModal(targetDateStr) {
   busyModalTargetDate = targetDateStr ? new Date(targetDateStr + 'T00:00:00') : new Date(cursor);
   busyModalTargetDate.setHours(0,0,0,0);
-  const dateLabel = `${busyModalTargetDate.getDate()} ${MON_FULL[busyModalTargetDate.getMonth()]} ${busyModalTargetDate.getFullYear()}`;
   const dateInput = document.getElementById('busyDate');
   if (dateInput) {
     dateInput.min = dateStr(new Date());
     dateInput.value = dateStr(busyModalTargetDate);
   }
-  document.getElementById('busySubtitle').textContent = `For ${dateLabel} only`;
+  updateBusySubtitle();
   document.getElementById('busyStart').value = '12:00';
   document.getElementById('busyEnd').value = '13:00';
   document.getElementById('busyNote').value = '';
@@ -2569,6 +2576,7 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
   if (busyModal) busyModal.addEventListener('click', handleBusyModalOverlayClick);
   bind('btn-close-busy', closeBusyModal);
   bind('busySaveBtn', saveBusyBlock);
+  bind('busyDate', updateBusySubtitle, 'change');
   var bookingModal = document.getElementById('bookingModal');
   if (bookingModal) bookingModal.addEventListener('click', handleBookingModalOverlayClick);
   bind('btn-close-booking-top', closeBookingModal);

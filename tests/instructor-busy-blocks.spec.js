@@ -64,6 +64,8 @@ test.describe('instructor busy blocks', () => {
     expect(js).toContain("delete-busy-block");
     expect(js).toContain("data-action=\"delete-busy-block\"");
     expect(js).toContain("open-busy-modal");
+    expect(js).toContain("function updateBusySubtitle()");
+    expect(js).toContain("bind('busyDate', updateBusySubtitle, 'change')");
     expect(js).toContain("showToast('Busy time blocked'");
   });
 });
