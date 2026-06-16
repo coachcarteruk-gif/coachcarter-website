@@ -462,7 +462,7 @@ function renderWeekly() {
           <div class="tp-lesson tp-busy" data-busy-id="${b.id}">
             <div class="tp-lesson-info">
               <div class="tp-lesson-name">Busy</div>
-              <div class="tp-lesson-time">${b.start_time.slice(0,5)} â†’ ${b.end_time.slice(0,5)}${b.note ? ` Â· ${esc(b.note)}` : ''}</div>
+              <div class="tp-lesson-time">${b.start_time.slice(0,5)} -> ${b.end_time.slice(0,5)}${b.note ? ` - ${esc(b.note)}` : ''}</div>
             </div>
             <span class="lesson-type-badge busy-badge">Busy</span>
             <button class="offer-cancel-btn" data-action="delete-busy-block" data-id="${b.id}">Remove</button>
@@ -679,7 +679,7 @@ function renderAgenda() {
         html += `
           <div class="agenda-card agenda-card-busy" data-busy-id="${b.id}">
             <div class="agenda-card-left">
-              <div class="agenda-time">${b.start_time.slice(0,5)} â€“ ${b.end_time.slice(0,5)}</div>
+              <div class="agenda-time">${b.start_time.slice(0,5)} - ${b.end_time.slice(0,5)}</div>
               <span class="lesson-type-badge busy-badge">Busy</span>
             </div>
             <div class="agenda-card-mid">

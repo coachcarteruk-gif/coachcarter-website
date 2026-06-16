@@ -66,6 +66,8 @@ test.describe('instructor busy blocks', () => {
     expect(js).toContain("open-busy-modal");
     expect(js).toContain("function updateBusySubtitle()");
     expect(js).toContain("bind('busyDate', updateBusySubtitle, 'change')");
+    expect(js).toContain("${b.start_time.slice(0,5)} - ${b.end_time.slice(0,5)}");
+    expect(js).toContain("${b.start_time.slice(0,5)} -> ${b.end_time.slice(0,5)}");
     expect(js).toContain("showToast('Busy time blocked'");
   });
 });
