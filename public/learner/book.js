@@ -1022,10 +1022,34 @@ function renderBookingCalendar(cache, opts) {
   return `<div class="booking-calendar">${dateStrip}${timeGroups}</div>`;
 }
 
+function scrollSelectedDateIntoView() {
+  const selectedChip = document.querySelector('.date-chip[aria-current="date"]');
+  const scroller = selectedChip && selectedChip.closest('.date-strip-wrap');
+  if (!selectedChip || !scroller) return;
+
+  const scroll = () => {
+    const chipLeft = selectedChip.offsetLeft;
+    const chipRight = chipLeft + selectedChip.offsetWidth;
+    const viewLeft = scroller.scrollLeft;
+    const viewRight = viewLeft + scroller.clientWidth;
+    if (chipLeft >= viewLeft && chipRight <= viewRight) return;
+
+    const targetLeft = chipLeft - ((scroller.clientWidth - selectedChip.offsetWidth) / 2);
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    scroller.scrollTo({
+      left: Math.max(0, targetLeft),
+      behavior: reduceMotion ? 'auto' : 'smooth'
+    });
+  };
+
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(scroll);
+  else scroll();
+}
+
 function selectDate(dateStr) {
   selectedDate = dateStr;
   clearSelectedSlot();
-  renderFeed();
+  renderFeed({ scrollSelectedDate: true });
 }
 
 function slotDatasetFromButton(buttonEl) {
@@ -1145,7 +1169,8 @@ function buildSlotFeedHtml(allSlots) {
   return html;
 }
 
-function renderFeed() {
+function renderFeed(opts) {
+  opts = opts || {};
   // Overflow lead routing (plan item 1.2): chosen instructor has zero slots
   // across the full 4-week window. Render heading + subheading + alternatives.
   if (overflowMode) {
@@ -1179,6 +1204,7 @@ function renderFeed() {
       </div>`;
     document.getElementById('calContent').innerHTML = html;
     updateFeedFooter(altSlots.length);
+    if (opts.scrollSelectedDate) scrollSelectedDateIntoView();
     return;
   }
 
@@ -1198,6 +1224,7 @@ function renderFeed() {
   const showInstructor = !document.getElementById('instructorFilter').value;
   document.getElementById('calContent').innerHTML = renderBookingCalendar(slotCache, { showInstructor });
   updateFeedFooter(allSlots.length);
+  if (opts.scrollSelectedDate) scrollSelectedDateIntoView();
 }
 
 function updateFeedFooter(slotCount) {
