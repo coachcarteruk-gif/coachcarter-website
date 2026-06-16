@@ -207,12 +207,14 @@
       return;
     }
 
+    var days = Math.floor(diff / 86400000);
     var hours = Math.floor(diff / 3600000);
     var minutes = Math.floor((diff % 3600000) / 60000);
     var seconds = Math.floor((diff % 60000) / 1000);
 
-    var text = 'Expires in ';
-    if (hours > 0) text += hours + 'h ' + minutes + 'm';
+    var text = offerData.is_flexible ? 'Valid for ' : 'Expires in ';
+    if (days > 0) text += days + 'd ' + (hours % 24) + 'h';
+    else if (hours > 0) text += hours + 'h ' + minutes + 'm';
     else if (minutes > 0) text += minutes + 'm ' + seconds + 's';
     else text += seconds + 's';
 

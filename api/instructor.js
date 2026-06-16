@@ -3573,6 +3573,7 @@ async function handleCreateOffer(req, res) {
     const resolvedEmail = existingLearner?.email || (learner_email ? learner_email.toLowerCase() : null);
     const resolvedPhone = existingLearner?.phone || null;
     const offerName = existingLearner?.name || learner_name || null;
+    const offerExpiresAt = new Date(Date.now() + (isFlexible ? 7 : 1) * 24 * 60 * 60 * 1000).toISOString();
     const [offer] = await sql`
       INSERT INTO lesson_offers
         (token, instructor_id, learner_email, learner_name, learner_id, scheduled_date, start_time, end_time,
@@ -3580,7 +3581,7 @@ async function handleCreateOffer(req, res) {
       VALUES
         (${token}, ${instructor.id}, ${resolvedEmail}, ${offerName}, ${existingLearner?.id || null},
          ${scheduled_date || null}, ${start_time || null}, ${end_time},
-         ${lessonType.id}, ${discountPctClean}, ${offerPricing.pricePence}, ${maxRepeatWeeksClean}, 'pending', NOW() + INTERVAL '24 hours', ${schoolId})
+         ${lessonType.id}, ${discountPctClean}, ${offerPricing.pricePence}, ${maxRepeatWeeksClean}, 'pending', ${offerExpiresAt}, ${schoolId})
       RETURNING id, expires_at
     `;
 
@@ -3593,6 +3594,15 @@ async function handleCreateOffer(req, res) {
     const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
     const acceptUrl = `${baseUrl}/accept-offer.html?token=${token}`;
     const firstName = existingLearner ? (existingLearner.name || '').split(' ')[0] || 'there' : 'there';
+    const discountText = offerPricing.discountPct > 0 ? ` (${offerPricing.discountPct}% off)` : '';
+    const perLessonText = maxRepeatWeeksClean && maxRepeatWeeksClean > 1 ? ' per lesson' : '';
+    const priceDisplayText = `${priceStr}${perLessonText}${discountText}`;
+    const messageAcceptLine = isFlexible
+      ? `Choose a time here: ${acceptUrl}`
+      : `Accept within 24 hours: ${acceptUrl}`;
+    const emailExpiryText = isFlexible
+      ? 'This flexible offer is valid for 7 days.'
+      : 'This offer expires in 24 hours. If you don\'t accept by then, the slot will become available again.';
 
     // Build notification content — slot-pinned vs flexible
     let emailSubject, emailSlotRows, messageOfferSummary;
@@ -3602,7 +3612,7 @@ async function handleCreateOffer(req, res) {
       emailSlotRows = `
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">When</td><td style="padding:6px 0">Pick a time that suits you</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Duration</td><td style="padding:6px 0">${durationStr}</td></tr>
-        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceStr}</td></tr>`;
+        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceDisplayText}</td></tr>`;
     } else {
       const dateObj = new Date(scheduled_date + 'T00:00:00Z');
       const dateStr = dateObj.toLocaleDateString('en-GB', {
@@ -3617,7 +3627,7 @@ async function handleCreateOffer(req, res) {
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Date</td><td style="padding:6px 0">${dateStr}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Time</td><td style="padding:6px 0">${start_time} – ${end_time}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Duration</td><td style="padding:6px 0">${durationStr}</td></tr>
-        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceStr}${maxRepeatWeeksClean && maxRepeatWeeksClean > 1 ? ' per lesson' : ''}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td style="padding:6px 0">${priceDisplayText}</td></tr>
         ${repeatRow}`;
     }
 
@@ -3631,8 +3641,8 @@ async function handleCreateOffer(req, res) {
           resolvedPhone,
           `Hi ${firstName}, ${instrDetails.name} has sent you a driving lesson offer.\n\n` +
           `${messageOfferSummary}\n` +
-          `Price: ${priceStr}${maxRepeatWeeksClean && maxRepeatWeeksClean > 1 ? ' per lesson' : ''}\n\n` +
-          `Accept within 24 hours: ${acceptUrl}`,
+          `Price: ${priceDisplayText}\n\n` +
+          messageAcceptLine,
           {
             purpose: 'offer.created_learner',
             learnerId: existingLearner?.id,
@@ -3672,7 +3682,7 @@ async function handleCreateOffer(req, res) {
                 </a>
               </p>
               <p style="font-size:0.85rem;color:#797879">
-                This offer expires in 24 hours.${!isFlexible ? ' If you don\'t accept by then, the slot will become available again.' : ''}
+                ${emailExpiryText}
               </p>
             </div>
           `

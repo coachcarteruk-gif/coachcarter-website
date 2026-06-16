@@ -47,11 +47,25 @@ test.describe('existing learner lesson offers', () => {
     expect(body).toContain('const resolvedPhone = existingLearner?.phone || null');
     expect(body).toContain('if (resolvedPhone) {');
     expect(body).toContain('const messageResult = await sendWhatsApp(');
+    expect(body).toContain('const messageAcceptLine = isFlexible');
+    expect(body).toContain('Choose a time here: ${acceptUrl}');
     expect(body).toContain('Accept within 24 hours: ${acceptUrl}');
+    expect(body).toContain('Price: ${priceDisplayText}');
     expect(body).toContain("purpose: 'offer.created_learner'");
     expect(body).toContain('learnerId: existingLearner?.id');
     expect(body).toContain('message_available: !!resolvedPhone');
     expect(body).toContain('message_sent: messageSent');
+  });
+
+  test('create-offer gives flexible offers calmer expiry copy and keeps slot offers urgent', () => {
+    const body = functionBody(read('api/instructor.js'), 'handleCreateOffer');
+
+    expect(body).toContain('const offerExpiresAt = new Date(Date.now() + (isFlexible ? 7 : 1) * 24 * 60 * 60 * 1000).toISOString()');
+    expect(body).toContain('const emailExpiryText = isFlexible');
+    expect(body).toContain('This flexible offer is valid for 7 days.');
+    expect(body).toContain('This offer expires in 24 hours. If you don\\\'t accept by then, the slot will become available again.');
+    expect(body).toContain('${emailExpiryText}');
+    expect(body).toContain('const discountText = offerPricing.discountPct > 0 ? ` (${offerPricing.discountPct}% off)` : \'\'');
   });
 
   test('create-offer still returns the copyable accept link if SMS delivery fails', () => {
@@ -202,9 +216,18 @@ test.describe('existing learner lesson offers', () => {
     expect(sendOffer).toContain('const messageAvailable = data.message_available === true');
     expect(sendOffer).toContain('if (messageSent) deliveryParts.push(\'text message\')');
     expect(sendOffer).toContain('delivery did not complete.');
+    expect(sendOffer).toContain("const acceptWindowText = flexible ? 'They have 7 days to choose a time and accept.' : 'They have 24 hours to accept.'");
     expect(sendOffer).toContain('but ${failedText} delivery did not complete. Use Copy link below.');
     expect(sendOffer).toContain('the selected learner has ${missingParts.join(\' and \')}. Use Copy link below.');
     expect(sendOffer).toContain('Copy link is still available below.');
     expect(sendOffer).toContain('id="offerCopyBtn"');
+  });
+
+  test('accept-offer page labels flexible expiry as valid time, not urgent expiry', () => {
+    const js = read('public/accept-offer.js');
+    const updateExpiry = js.slice(js.indexOf('function updateExpiry()'), js.indexOf('\n  async function handleAccept()'));
+
+    expect(updateExpiry).toContain("var text = offerData.is_flexible ? 'Valid for ' : 'Expires in '");
+    expect(updateExpiry).toContain("if (days > 0) text += days + 'd ' + (hours % 24) + 'h'");
   });
 });

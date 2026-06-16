@@ -2428,7 +2428,8 @@ async function sendOffer() {
       const failedText = failedParts.length
         ? ` ${failedParts.length === 2 ? `${failedParts[0]} and ${failedParts[1]}` : failedParts[0]} delivery did not complete.`
         : '';
-      statusLine = `Offer sent to ${safeName} by ${deliveryText}${priceMsg}${flexMsg}! They have 24 hours to accept.${missingText}${failedText} Copy link is still available below.`;
+      const acceptWindowText = flexible ? 'They have 7 days to choose a time and accept.' : 'They have 24 hours to accept.';
+      statusLine = `Offer sent to ${safeName} by ${deliveryText}${priceMsg}${flexMsg}! ${acceptWindowText}${missingText}${failedText} Copy link is still available below.`;
     } else if (failedParts.length > 0) {
       const failedText = failedParts.length === 2 ? `${failedParts[0]} and ${failedParts[1]}` : failedParts[0];
       statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg}, but ${failedText} delivery did not complete. Use Copy link below.`;
