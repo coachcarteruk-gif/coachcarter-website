@@ -1018,6 +1018,29 @@ ALTER TABLE learner_users ALTER COLUMN school_id SET NOT NULL;
 ALTER TABLE learner_users ALTER COLUMN school_id SET DEFAULT 1;
 CREATE INDEX IF NOT EXISTS idx_learner_users_school ON learner_users(school_id);
 
+-- Learner issue reports and suggestions. Authenticated learner-owned data,
+-- surfaced to admins as a lightweight feedback queue.
+CREATE TABLE IF NOT EXISTS learner_feedback (
+  id          SERIAL PRIMARY KEY,
+  school_id   INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  learner_id  INTEGER NOT NULL REFERENCES learner_users(id) ON DELETE CASCADE,
+  type        TEXT NOT NULL DEFAULT 'suggestion',
+  title       TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  page_url    TEXT,
+  user_agent  TEXT,
+  status      TEXT NOT NULL DEFAULT 'open',
+  reviewed_at TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT learner_feedback_type_check CHECK (type IN ('issue', 'suggestion')),
+  CONSTRAINT learner_feedback_status_check CHECK (status IN ('open', 'reviewed', 'closed'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_learner_feedback_school_status
+  ON learner_feedback(school_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_learner_feedback_learner
+  ON learner_feedback(learner_id, created_at DESC);
+
 -- 2. instructors
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id);
 UPDATE instructors SET school_id = 1 WHERE school_id IS NULL;

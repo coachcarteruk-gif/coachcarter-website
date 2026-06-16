@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.110 - Learner Feedback Queue (16 June 2026)
+
+Learners now have a sidebar `Feedback` action that opens a compact form for issue reports or suggestions. Submissions are stored in the new tenant-scoped `learner_feedback` table; issue reports also send an immediate staff email alert using the existing SMTP notification path. The admin portal adds a Feedback section with type/status filters and reviewed/closed/reopen actions, all school-scoped and audit-logged.
+
+Feedback rows are included in learner GDPR export/deletion handling, and the React Native migration notes now call out the shared learner/admin feedback API contract.
+
+**Files:** `db/migration.sql`, `db/migrations/030_learner_feedback.sql`, `api/learner.js`, `api/admin.js`, `api/_gdpr.js`, `public/sidebar.js`, `public/admin/portal.html`, `public/admin/portal.js`, `PROJECT.md`, `MIGRATION-PLAN.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.109 - Admin Retrospective Lesson Entry (15 June 2026)
 
 Admins can now add a lesson that has already happened from the Bookings page. The new modal selects learner, instructor, date, start time, lesson type, pickup/drop-off, notes, and whether the lesson should use learner credit or be recorded as cash.

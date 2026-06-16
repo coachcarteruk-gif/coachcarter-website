@@ -337,6 +337,8 @@ module.exports = async (req, res) => {
   if (action === 'learner-broadcast-preview') return handleLearnerBroadcastPreview(req, res);
   if (action === 'send-learner-broadcast') return handleSendLearnerBroadcast(req, res);
   if (action === 'learner-broadcast-history') return handleLearnerBroadcastHistory(req, res);
+  if (action === 'learner-feedback') return handleLearnerFeedback(req, res);
+  if (action === 'update-learner-feedback') return handleUpdateLearnerFeedback(req, res);
   if (action === 'adjust-credits')    return handleAdjustCredits(req, res);
   if (action === 'credit-goodwill')    return handleCreditGoodwillContract(req, res);
   if (action === 'credit-reconciliation') return handleCreditReconciliationContract(req, res);
@@ -2923,6 +2925,106 @@ async function handleLearnerBroadcastHistory(req, res) {
     console.error('admin learner-broadcast-history error:', err);
     reportError('/api/admin?action=learner-broadcast-history', err);
     return res.status(500).json({ error: true, code: 'BROADCAST_HISTORY_FAILED', message: 'Failed to load learner broadcast history.' });
+  }
+}
+
+// GET /api/admin?action=learner-feedback
+async function handleLearnerFeedback(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+  const status = String(req.query.status || '').trim().toLowerCase();
+  const type = String(req.query.type || '').trim().toLowerCase();
+  const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 50, 100));
+
+  if (status && !['open', 'reviewed', 'closed'].includes(status)) {
+    return res.status(400).json({ error: true, code: 'INVALID_FEEDBACK_STATUS', message: 'Invalid feedback status.' });
+  }
+  if (type && !['issue', 'suggestion'].includes(type)) {
+    return res.status(400).json({ error: true, code: 'INVALID_FEEDBACK_TYPE', message: 'Invalid feedback type.' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const feedback = await sql`
+      SELECT lf.id, lf.type, lf.title, lf.message, lf.page_url, lf.status,
+             lf.reviewed_at, lf.created_at,
+             lu.id AS learner_id, lu.name AS learner_name, lu.email AS learner_email,
+             lu.phone AS learner_phone
+      FROM learner_feedback lf
+      JOIN learner_users lu
+        ON lu.id = lf.learner_id
+       AND lu.school_id = lf.school_id
+      WHERE lf.school_id = ${schoolId}
+        AND (${status || null}::text IS NULL OR lf.status = ${status})
+        AND (${type || null}::text IS NULL OR lf.type = ${type})
+      ORDER BY
+        CASE WHEN lf.status = 'open' THEN 0 ELSE 1 END,
+        lf.created_at DESC
+      LIMIT ${limit}`;
+
+    return res.json({ ok: true, feedback });
+  } catch (err) {
+    console.error('admin learner-feedback error:', err);
+    reportError('/api/admin?action=learner-feedback', err);
+    return res.status(500).json({ error: true, code: 'FEEDBACK_LIST_FAILED', message: 'Failed to load learner feedback.' });
+  }
+}
+
+// POST /api/admin?action=update-learner-feedback
+async function handleUpdateLearnerFeedback(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+  const id = parseInt(req.body?.id, 10);
+  const status = String(req.body?.status || '').trim().toLowerCase();
+
+  if (!id) return res.status(400).json({ error: true, code: 'FEEDBACK_ID_REQUIRED', message: 'Feedback id is required.' });
+  if (!['open', 'reviewed', 'closed'].includes(status)) {
+    return res.status(400).json({ error: true, code: 'INVALID_FEEDBACK_STATUS', message: 'Invalid feedback status.' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [existing] = await sql`
+      SELECT id, learner_id, type, title, status
+      FROM learner_feedback
+      WHERE id = ${id} AND school_id = ${schoolId}`;
+    if (!existing) return res.status(404).json({ error: true, code: 'FEEDBACK_NOT_FOUND', message: 'Feedback not found.' });
+
+    const [feedback] = await sql`
+      UPDATE learner_feedback
+      SET status = ${status},
+          reviewed_at = CASE WHEN ${status} = 'open' THEN NULL ELSE COALESCE(reviewed_at, NOW()) END
+      WHERE id = ${id} AND school_id = ${schoolId}
+      RETURNING id, type, title, status, reviewed_at`;
+
+    await logAudit(sql, {
+      adminId: admin.id,
+      adminEmail: admin.email,
+      action: 'learner_feedback.update_status',
+      targetType: 'learner_feedback',
+      targetId: id,
+      details: {
+        learner_id: existing.learner_id,
+        type: existing.type,
+        title: existing.title,
+        previous_status: existing.status,
+        status,
+      },
+      schoolId,
+      req,
+    });
+
+    return res.json({ ok: true, feedback });
+  } catch (err) {
+    console.error('admin update-learner-feedback error:', err);
+    reportError('/api/admin?action=update-learner-feedback', err);
+    return res.status(500).json({ error: true, code: 'FEEDBACK_UPDATE_FAILED', message: 'Failed to update learner feedback.' });
   }
 }
 

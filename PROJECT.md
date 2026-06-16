@@ -356,6 +356,7 @@ Kept for SMS code login, password-reset emails, and the migration code flow. Mag
 | `validate-referral` | GET | No | Public. Validates a referral code before signup. Params: `code`, `school_id`. Returns `{ ok, valid, referrer_first_name }`. Rate-limited (10/min per IP) |
 | `referral-code` | GET | Yes | Returns learner's referral code (auto-generates on first call). `share_url` is the short form `https://coachcarter.uk/r/CODE`. Returns `{ ok, enabled, code, share_url }` |
 | `referral-stats` | GET | Yes | Referral dashboard data: `{ ok, total_referred, total_reward_minutes, recent_referrals[] }`. Each `recent_referrals` entry includes `status` (`joined` / `booked` / `lessoned`) computed from the referee's bookings |
+| `submit-feedback` | POST | Yes | Stores a learner issue report or suggestion in `learner_feedback`. Body: `{ type: 'issue'|'suggestion', title, message, page_url? }`. Rate-limited per learner; issue reports also send a staff email alert. |
 | `my-availability` | GET | Yes | Returns learner's active weekly availability windows |
 | `set-availability` | POST | Yes | Replace all availability windows. Body: `{ windows: [{ day_of_week, start_time, end_time }] }` |
 | `accept-terms` | POST | Yes | Records T&C acceptance (`terms_accepted_at = NOW()`). Called from login flow gate. |
@@ -541,6 +542,8 @@ created_at TIMESTAMPTZ
 **`waitlist`** — *retired May 2026.* Replaced by `learner_availability` driving cancellation notifications. Table dropped via `db/migration.sql`.
 
 **`driving_sessions`** / **`skill_ratings`** — session logging tables. `driving_sessions` has optional `booking_id` (FK to `lesson_bookings`) to link sessions to completed bookings. Unique constraint ensures one log per booking. Skill ratings use Traffic Light system: `struggled` (red), `ok` (amber), `nailed` (green). `skill_ratings` also has `driving_faults`, `serious_faults`, and `dangerous_faults` columns for DL25 fault tracking.
+
+**`learner_feedback`** - authenticated learner issue reports and suggestions. Columns: `school_id`, `learner_id`, `type` (`issue`/`suggestion`), `title`, `message`, `page_url`, `user_agent`, `status` (`open`/`reviewed`/`closed`), `reviewed_at`, `created_at`. Learner submissions are exposed in GDPR export/deletion; admins view and triage them in the portal.
 
 **`credit_transactions`**
 ```sql
@@ -798,6 +801,8 @@ Admin support access can open an instructor portal session without password know
 | `learner-broadcast-preview` | POST | JWT | Preview the exact school-scoped recipients for selected global learner categories. Body: `{ categories: ['regular', ...] }`. Returns usable-phone recipients plus skipped learners. |
 | `send-learner-broadcast` | POST | JWT | Manual one-off learner SMS broadcast. Body: `{ label, message_body, categories }`. Re-resolves recipients by `school_id`, skips unusable phone numbers, sends through `sendWhatsApp()`, writes `learner_broadcasts` / `learner_broadcast_recipients`, and audit-logs `admin.send_learner_broadcast`. No scheduling/templates in v1. |
 | `learner-broadcast-history` | GET | JWT | Recent broadcast campaigns and per-recipient outcomes for the authenticated school. |
+| `learner-feedback` | GET | JWT | School-scoped learner feedback queue. Optional filters: `status=open|reviewed|closed`, `type=issue|suggestion`, `limit`. Returns learner contact fields plus feedback title/message/page/status. |
+| `update-learner-feedback` | POST | JWT | Updates a feedback row status. Body: `{ id, status: 'open'|'reviewed'|'closed' }`. Sets/clears `reviewed_at` and audit-logs `learner_feedback.update_status`. |
 | `referral-activity` | GET | JWT | Aggregated referral stats per school (referrer names, codes, counts, total rewards) |
 | `referral-config` | GET | JWT | Current referral config for the school (enabled, welcome bonus, reward minutes) |
 | `update-referral-config` | POST | JWT | Update referral config. Body: `{ referral_enabled, referral_welcome_bonus_minutes, referral_reward_minutes }`. Audit-logged |

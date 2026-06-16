@@ -40,12 +40,12 @@
 
 | File | Auth | Notes |
 |------|------|-------|
-| `learner.js` | learner | Sessions, progress, profile, mock-tests, quiz, competency, onboarding, weekly availability, GDPR export/deletion |
+| `learner.js` | learner | Sessions, progress, profile, mock-tests, quiz, competency, onboarding, weekly availability, feedback submission, GDPR export/deletion |
 | `learner-auth.js` | none → learner | Signup, login, forgot-password (code-based reset), email-code migration |
 | `instructor.js` | instructor | Schedule, weekly availability, one-off availability overrides, blackouts, learner history, notes, stats, cancel-booking, reschedule, create-booking, create-offer (with `max_repeat_weeks`), broadcast endpoints |
 | `instructor-auth.js` | none → instructor | Login, change-password (forced on first sign-in via `must_change_password`) |
 | `instructors.js` | public/instructor | Public instructor profile lookups (used by booking page) |
-| `admin.js` | admin | Dashboard, bookings, instructor CRUD, learner management, credit adjustment, set-instructor-password, forgot-password code flow |
+| `admin.js` | admin | Dashboard, bookings, instructor CRUD, learner management, learner feedback queue, credit adjustment, set-instructor-password, forgot-password code flow |
 | `slots.js` | mostly learner | available (12-wk cap), durations-for-slot, recurring-block-preview, recurring-block-commit (Lesson Credit only), book (+ `repeat_weeks` 1–8), checkout-slot, checkout-slot-guest, book-free-trial, cancel (+ cancel_series), reschedule, my-bookings, series-info |
 | `offers.js` | public (token) | get-offer, accept-offer (with `repeat_weeks`), expire-offers (cron). Exports `bookOfferSeries()` for the webhook |
 | `lesson-types.js` | mixed | CRUD for lesson types per school; instructor-scoped list filters opt-in-only lesson types such as paid `1hr` unless explicitly enabled |
@@ -121,7 +121,7 @@ Per-instructor credit portability note: [`docs/per-instructor-credits-audit.md`]
 **Notifications:** `sent_reminders`
 **Payments:** `credit_transactions`, `booking_credit_sources`, `credit_source_adjustments`, `refund_events`, `refund_event_lines`, `instructor_payouts`, `payout_line_items`, `guarantee_pricing`
 **Learning:** `driving_sessions`, `skill_ratings`, `learner_onboarding`, `quiz_results`, `mock_tests`, `mock_test_faults`, `focused_practice_sessions`
-**Community:** `enquiries`, `availability_submissions`
+**Community:** `enquiries`, `availability_submissions`, `learner_feedback`
 **Config:** `site_config`, `google_reviews`, `google_reviews_meta`
 **Notes:** `instructor_learner_notes`
 **Referrals:** `referrals`, `referral_clicks`

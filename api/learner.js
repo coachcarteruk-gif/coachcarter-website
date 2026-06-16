@@ -18,6 +18,15 @@ function verifyAuth(req) {
   return requireAuth(req, { roles: ['learner'] });
 }
 
+function escapeEmailHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 //
 // Every mutating request (non-GET) is logged with action, status, and
@@ -61,6 +70,7 @@ module.exports = async (req, res) => {
   if (action === 'validate-referral')      return handleValidateReferral(req, res);
   if (action === 'referral-code')         return handleReferralCode(req, res);
   if (action === 'referral-stats')        return handleReferralStats(req, res);
+  if (action === 'submit-feedback')       return handleSubmitFeedback(req, res);
   if (action === 'export-data')           return handleExportData(req, res);
   if (action === 'request-deletion')      return handleRequestDeletion(req, res);
   if (action === 'confirm-deletion')      return handleConfirmDeletion(req, res);
@@ -1056,6 +1066,100 @@ async function handleReferralStats(req, res) {
   }
 }
 
+async function handleSubmitFeedback(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const type = String(req.body?.type || '').trim().toLowerCase();
+    const title = String(req.body?.title || '').trim();
+    const message = String(req.body?.message || '').trim();
+    const pageUrl = String(req.body?.page_url || '').trim();
+
+    if (!['issue', 'suggestion'].includes(type)) {
+      return res.status(400).json({ error: 'Choose issue or suggestion.' });
+    }
+    if (!title || title.length > 120) {
+      return res.status(400).json({ error: 'Add a title up to 120 characters.' });
+    }
+    if (!message || message.length > 2000) {
+      return res.status(400).json({ error: 'Add details up to 2000 characters.' });
+    }
+
+    const rl = await checkRateLimit(sql, {
+      key: `learner_feedback:${user.id}`,
+      max: 5,
+      windowSeconds: 3600,
+    });
+    if (!rl.allowed) {
+      return res.status(429).json({ error: 'Too many feedback submissions. Please try again later.' });
+    }
+
+    const [learner] = await sql`
+      SELECT id, name, email, phone
+      FROM learner_users
+      WHERE id = ${user.id} AND school_id = ${schoolId}`;
+    if (!learner) return res.status(404).json({ error: 'Learner account not found.' });
+
+    const cleanPageUrl = pageUrl ? pageUrl.slice(0, 500) : null;
+    const userAgent = String(req.headers['user-agent'] || '').slice(0, 500) || null;
+    const [feedback] = await sql`
+      INSERT INTO learner_feedback (school_id, learner_id, type, title, message, page_url, user_agent)
+      VALUES (${schoolId}, ${user.id}, ${type}, ${title}, ${message}, ${cleanPageUrl}, ${userAgent})
+      RETURNING id, type, title, status, created_at`;
+
+    let alertSent = false;
+    if (type === 'issue') {
+      try {
+        const { createTransporter } = require('./_auth-helpers');
+        const mailer = createTransporter();
+        const toEmail = process.env.STAFF_EMAIL || 'fraser@coachcarter.uk';
+        const learnerLabel = learner.name || learner.email || learner.phone || `Learner #${learner.id}`;
+        await mailer.sendMail({
+          _log: {
+            purpose: 'learner.feedback_issue',
+            learnerId: learner.id,
+            schoolId,
+          },
+          from: 'CoachCarter <system@coachcarter.uk>',
+          to: toEmail,
+          subject: `Learner issue: ${title.slice(0, 80)}`,
+          text: [
+            `Issue #${feedback.id}: ${title}`,
+            `Learner: ${learnerLabel}`,
+            learner.email ? `Email: ${learner.email}` : null,
+            learner.phone ? `Phone: ${learner.phone}` : null,
+            cleanPageUrl ? `Page: ${cleanPageUrl}` : null,
+            '',
+            message
+          ].filter(Boolean).join('\n'),
+          html: `
+            <h2>Learner issue: ${escapeEmailHtml(title)}</h2>
+            <p><strong>Learner:</strong> ${escapeEmailHtml(learnerLabel)}</p>
+            ${learner.email ? `<p><strong>Email:</strong> ${escapeEmailHtml(learner.email)}</p>` : ''}
+            ${learner.phone ? `<p><strong>Phone:</strong> ${escapeEmailHtml(learner.phone)}</p>` : ''}
+            ${cleanPageUrl ? `<p><strong>Page:</strong> ${escapeEmailHtml(cleanPageUrl)}</p>` : ''}
+            <p><strong>Details:</strong></p>
+            <p style="white-space:pre-wrap">${escapeEmailHtml(message)}</p>
+          `
+        });
+        alertSent = true;
+      } catch (mailErr) {
+        console.warn('learner feedback issue email failed:', mailErr.message);
+      }
+    }
+
+    return res.json({ ok: true, feedback, alert_sent: alertSent });
+  } catch (err) {
+    console.error('submit-feedback error:', err);
+    reportError('/api/learner', err);
+    return res.status(500).json({ error: 'Failed to send feedback' });
+  }
+}
+
 async function handleExportData(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyAuth(req);
@@ -1276,6 +1380,12 @@ async function handleExportData(req, res) {
           WHERE lo.learner_id = ${user.id}
           ORDER BY lo.created_at DESC`;
 
+    const feedbackSubmitted = await sql`
+      SELECT type, title, message, page_url, status, reviewed_at, created_at
+      FROM learner_feedback
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY created_at DESC`;
+
     const exportData = {
       _metadata: {
         exported_at: new Date().toISOString(),
@@ -1288,6 +1398,7 @@ async function handleExportData(req, res) {
           'availability', 'instructor_notes_about_me',
           'cookie_consents', 'deletion_requests',
           'lesson_confirmations', 'offers_received',
+          'feedback_submitted',
           'credit_balances', 'booking_credit_sources', 'credit_adjustments',
           ...(hasRefundLedger ? ['refund_events'] : []),
           ...(hasLearnerBroadcasts ? ['broadcasts_received'] : [])
@@ -1311,6 +1422,7 @@ async function handleExportData(req, res) {
       deletion_requests: deletionRequests,
       lesson_confirmations: lessonConfirmations,
       offers_received: offersReceived,
+      feedback_submitted: feedbackSubmitted,
       credit_balances: creditBalances,
       booking_credit_sources: bookingCreditSources,
       credit_adjustments: creditAdjustments,

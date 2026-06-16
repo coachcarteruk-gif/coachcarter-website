@@ -31,6 +31,8 @@ const isInstructorAdmin = !adminData && instrData && instrData.instructor && ins
 if (!adminData && !isInstructorAdmin) window.location.href = '/admin/login.html';
 
 const HEADERS = { 'Content-Type': 'application/json' };
+var currentFeedbackStatus = '';
+var currentFeedbackType = '';
 
 // fetchAdmin: cookie-based wrapper. Use instead of fetch() for all
 // admin API calls. Imports from shared/admin-auth.js.
@@ -85,6 +87,7 @@ function showSection(name) {
   if (name === 'videos')        loadVideos();
   if (name === 'learners')      loadLearners();
   if (name === 'broadcasts')    loadBroadcastHistory();
+  if (name === 'feedback')      loadLearnerFeedback();
   if (name === 'lesson-types')  loadLessonTypes();
   if (name === 'payouts')       loadPayouts();
   if (name === 'refund-preview') {
@@ -1657,6 +1660,103 @@ async function loadBroadcastHistory() {
     }).join('');
   } catch (err) {
     body.innerHTML = '<tr><td colspan="7" class="empty-state">Failed to load broadcast history</td></tr>';
+  }
+}
+
+function feedbackTypeBadge(type) {
+  var cls = type === 'issue' ? 'badge-red' : 'badge-blue';
+  return '<span class="badge ' + cls + '">' + esc(type || 'feedback') + '</span>';
+}
+
+function feedbackStatusBadge(status) {
+  var cls = status === 'open' ? 'badge-amber'
+    : status === 'reviewed' ? 'badge-green'
+      : status === 'closed' ? 'badge-gray'
+        : 'badge-gray';
+  return '<span class="badge ' + cls + '">' + esc(status || 'unknown') + '</span>';
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  try {
+    return new Date(value).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
+  } catch (e) {
+    return String(value);
+  }
+}
+
+async function loadLearnerFeedback() {
+  var body = document.getElementById('feedback-body');
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="6" class="empty-state">Loading...</td></tr>';
+  var qs = new URLSearchParams({ limit: '100' });
+  if (currentFeedbackStatus) qs.set('status', currentFeedbackStatus);
+  if (currentFeedbackType) qs.set('type', currentFeedbackType);
+
+  try {
+    var res = await fetchAdmin('/api/admin?action=learner-feedback&' + qs.toString(), { headers: HEADERS });
+    var data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || 'Failed to load feedback');
+    var rows = data.feedback || [];
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="6" class="empty-state">No feedback found</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(function (f) {
+      var learner = f.learner_name || f.learner_email || f.learner_phone || ('Learner #' + f.learner_id);
+      var pageUrl = /^https?:\/\//i.test(String(f.page_url || '')) ? f.page_url : '';
+      var page = pageUrl ? '<br><a href="' + esc(pageUrl) + '" target="_blank" rel="noopener" style="font-size:0.78rem;color:var(--accent);">Open page</a>' : '';
+      var actions = '';
+      if (f.status !== 'reviewed') {
+        actions += '<button class="btn btn-sm" data-action="update-feedback-status" data-id="' + f.id + '" data-status="reviewed">Mark reviewed</button>';
+      }
+      if (f.status !== 'closed') {
+        actions += '<button class="btn btn-sm" data-action="update-feedback-status" data-id="' + f.id + '" data-status="closed">Close</button>';
+      }
+      if (f.status !== 'open') {
+        actions += '<button class="btn btn-sm" data-action="update-feedback-status" data-id="' + f.id + '" data-status="open">Reopen</button>';
+      }
+      return '<tr>' +
+        '<td>' + feedbackTypeBadge(f.type) + '</td>' +
+        '<td><strong>' + esc(f.title) + '</strong><br><span style="font-size:0.84rem;color:var(--muted);white-space:pre-wrap;">' + esc(f.message) + '</span>' + page + '</td>' +
+        '<td><strong>' + esc(learner) + '</strong><br><span style="font-size:0.78rem;color:var(--muted);">' + esc(f.learner_email || f.learner_phone || '') + '</span></td>' +
+        '<td>' + feedbackStatusBadge(f.status) + '</td>' +
+        '<td>' + formatDateTime(f.created_at) + '</td>' +
+        '<td><div style="display:flex;gap:6px;flex-wrap:wrap;">' + actions + '</div></td>' +
+      '</tr>';
+    }).join('');
+  } catch (err) {
+    body.innerHTML = '<tr><td colspan="6" class="empty-state">Failed to load feedback</td></tr>';
+  }
+}
+
+function filterFeedbackStatus(button, status) {
+  currentFeedbackStatus = status || '';
+  document.querySelectorAll('#feedback-status-filters .filter-pill').forEach(function (p) { p.classList.remove('active'); });
+  button.classList.add('active');
+  loadLearnerFeedback();
+}
+
+function filterFeedbackType(button, type) {
+  currentFeedbackType = type || '';
+  document.querySelectorAll('#feedback-type-filters .filter-pill').forEach(function (p) { p.classList.remove('active'); });
+  button.classList.add('active');
+  loadLearnerFeedback();
+}
+
+async function updateFeedbackStatus(id, status) {
+  try {
+    var res = await fetchAdmin('/api/admin?action=update-learner-feedback', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ id: id, status: status })
+    });
+    var data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || 'Failed to update feedback');
+    toast('Feedback updated', 'success');
+    loadLearnerFeedback();
+  } catch (err) {
+    toast(err.message || 'Failed to update feedback', 'error');
   }
 }
 
@@ -4194,6 +4294,9 @@ document.addEventListener('click', function (e) {
   else if (a === 'filter-bookings') filterBookings(t, t.dataset.status);
   else if (a === 'filter-learner-tier') filterLearnerTier(t, parseInt(t.dataset.tier, 10));
   else if (a === 'filter-learner-category') filterLearnerCategory(t, t.dataset.category);
+  else if (a === 'filter-feedback-status') filterFeedbackStatus(t, t.dataset.status);
+  else if (a === 'filter-feedback-type') filterFeedbackType(t, t.dataset.type);
+  else if (a === 'update-feedback-status') updateFeedbackStatus(parseInt(t.dataset.id, 10), t.dataset.status);
   else if (a === 'close-modal') closeModal(t.dataset.modal);
   else if (a === 'bulk-action') bulkAction(t.dataset.op);
 });
@@ -4351,6 +4454,7 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-refresh-broadcasts', loadBroadcastHistory);
   bind('btn-preview-broadcast', previewLearnerBroadcast);
   bind('btn-send-broadcast', sendLearnerBroadcast);
+  bind('btn-refresh-feedback', loadLearnerFeedback);
   bind('btn-close-learner-detail', closeLearnerDetail);
   bind('btn-edit-learner', openEditLearner);
   bind('btn-save-learner', saveEditLearner);

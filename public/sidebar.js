@@ -210,6 +210,7 @@
         { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
       ]},
       { icon: 'gift', label: 'Refer a friend', href: '/learner/refer.html', authOnly: true },
+      { icon: 'message', label: 'Feedback', href: '#feedback', action: 'feedback', authOnly: true },
       'divider',
       { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true }
     ],
@@ -311,7 +312,8 @@
           html += '</div>';
         } else {
           var active = isActive(item.href, item.activeOn) ? ' active' : '';
-          html += '<a href="' + item.href + '" class="cc-sb-link' + active + '">' +
+          var actionAttr = item.action ? ' data-cc-action="' + escapeHtml(item.action) + '"' : '';
+          html += '<a href="' + item.href + '" class="cc-sb-link' + active + '"' + actionAttr + '>' +
             '<span class="cc-sb-icon">' + icons[item.icon] + '</span>' +
             '<span>' + item.label + '</span></a>';
         }
@@ -532,6 +534,47 @@
     /* Overlay */
     '.cc-sb-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; }',
     '.cc-sb-overlay.open { display: block; }',
+
+    /* Learner feedback modal */
+    '.cc-feedback-overlay { display: none; position: fixed; inset: 0; z-index: 10020;',
+    '  background: rgba(15,23,42,0.48); align-items: center; justify-content: center;',
+    '  padding: 18px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }',
+    '.cc-feedback-overlay.open { display: flex; }',
+    '.cc-feedback-modal { width: min(520px, 100%); max-height: min(720px, 92dvh); overflow-y: auto;',
+    '  background: var(--white, #fff); color: var(--primary, #262626); border-radius: 14px;',
+    '  box-shadow: 0 24px 70px rgba(0,0,0,0.22); padding: 24px;',
+    '  border: 1px solid var(--border, #e5e5e5); font-family: "Lato", sans-serif; }',
+    '.cc-feedback-head { display: flex; align-items: start; justify-content: space-between; gap: 14px; margin-bottom: 18px; }',
+    '.cc-feedback-title { font-family: "Bricolage Grotesque", sans-serif; font-size: 1.18rem; font-weight: 800; margin: 0 0 4px; }',
+    '.cc-feedback-sub { color: var(--muted, #797879); font-size: 0.86rem; line-height: 1.45; }',
+    '.cc-feedback-close { border: 1px solid var(--border, #e5e5e5); background: var(--surface, #f7f7f7);',
+    '  color: var(--muted, #797879); width: 34px; height: 34px; border-radius: 8px;',
+    '  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: 0 0 auto; }',
+    '.cc-feedback-close:hover { color: var(--primary, #262626); border-color: var(--brand-primary, var(--accent, #f58321)); }',
+    '.cc-feedback-field { margin-bottom: 14px; }',
+    '.cc-feedback-label { display: block; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.09em;',
+    '  text-transform: uppercase; color: var(--muted, #797879); margin-bottom: 6px; }',
+    '.cc-feedback-input, .cc-feedback-textarea { width: 100%; border: 1px solid var(--border, #e5e5e5);',
+    '  background: var(--surface, #fafafa); border-radius: 8px; padding: 11px 12px;',
+    '  color: var(--primary, #262626); font: inherit; font-size: 0.92rem; outline: none; }',
+    '.cc-feedback-input:focus, .cc-feedback-textarea:focus { border-color: var(--brand-primary, var(--accent, #f58321)); background: var(--white, #fff); }',
+    '.cc-feedback-textarea { min-height: 132px; resize: vertical; line-height: 1.45; }',
+    '.cc-feedback-type { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }',
+    '.cc-feedback-type label { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border, #e5e5e5);',
+    '  border-radius: 8px; padding: 10px 12px; cursor: pointer; font-size: 0.9rem; font-weight: 700;',
+    '  background: var(--white, #fff); }',
+    '.cc-feedback-type input { accent-color: var(--brand-primary, var(--accent, #f58321)); }',
+    '.cc-feedback-actions { display: flex; justify-content: flex-end; gap: 10px; align-items: center; margin-top: 18px; flex-wrap: wrap; }',
+    '.cc-feedback-status { flex: 1; min-width: 180px; color: var(--muted, #797879); font-size: 0.84rem; }',
+    '.cc-feedback-status.error { color: var(--red, #ef4444); }',
+    '.cc-feedback-status.success { color: var(--green, #22c55e); }',
+    '.cc-feedback-btn { border: 1px solid var(--border, #e5e5e5); background: var(--white, #fff);',
+    '  color: var(--primary, #262626); border-radius: 8px; padding: 10px 14px; font: inherit;',
+    '  font-size: 0.88rem; font-weight: 800; cursor: pointer; }',
+    '.cc-feedback-btn:hover { border-color: var(--brand-primary, var(--accent, #f58321)); color: var(--brand-primary, var(--accent, #f58321)); }',
+    '.cc-feedback-btn.primary { background: var(--brand-primary, var(--accent, #f58321)); color: #fff; border-color: var(--brand-primary, var(--accent, #f58321)); }',
+    '.cc-feedback-btn.primary:hover { background: var(--accent-dk, #e07518); border-color: var(--accent-dk, #e07518); color: #fff; }',
+    '.cc-feedback-btn:disabled { opacity: 0.65; cursor: wait; }',
 
     /* Mobile header */
     '.cc-mob-header { display: none; position: fixed; top: 0; left: 0; right: 0;',
@@ -759,6 +802,50 @@
   ].join('\n');
   document.head.appendChild(css);
 
+  function buildFeedbackModalHTML() {
+    if (context !== 'learner') return '';
+    return '<div class="cc-feedback-overlay" id="cc-feedback-overlay" role="dialog" aria-modal="true" aria-labelledby="cc-feedback-title">' +
+      '<div class="cc-feedback-modal">' +
+        '<div class="cc-feedback-head">' +
+          '<div>' +
+            '<h2 class="cc-feedback-title" id="cc-feedback-title">Feedback</h2>' +
+            '<div class="cc-feedback-sub">Report a problem or send an idea for the learner portal.</div>' +
+          '</div>' +
+          '<button type="button" class="cc-feedback-close" id="cc-feedback-close" aria-label="Close feedback">' + icons.close + '</button>' +
+        '</div>' +
+        '<form id="cc-feedback-form">' +
+          '<div class="cc-feedback-field">' +
+            '<span class="cc-feedback-label">Type</span>' +
+            '<div class="cc-feedback-type">' +
+              '<label><input type="radio" name="cc-feedback-type" value="issue" checked> Issue</label>' +
+              '<label><input type="radio" name="cc-feedback-type" value="suggestion"> Suggestion</label>' +
+            '</div>' +
+          '</div>' +
+          '<div class="cc-feedback-field">' +
+            '<label class="cc-feedback-label" for="cc-feedback-summary">Title</label>' +
+            '<input class="cc-feedback-input" id="cc-feedback-summary" maxlength="120" autocomplete="off" required placeholder="Short summary">' +
+          '</div>' +
+          '<div class="cc-feedback-field">' +
+            '<label class="cc-feedback-label" for="cc-feedback-message">Details</label>' +
+            '<textarea class="cc-feedback-textarea" id="cc-feedback-message" maxlength="2000" required placeholder="What happened, or what would make this better?"></textarea>' +
+          '</div>' +
+          '<div class="cc-feedback-actions">' +
+            '<div class="cc-feedback-status" id="cc-feedback-status" aria-live="polite"></div>' +
+            '<button type="button" class="cc-feedback-btn" id="cc-feedback-cancel">Cancel</button>' +
+            '<button type="submit" class="cc-feedback-btn primary" id="cc-feedback-submit">Send</button>' +
+          '</div>' +
+        '</form>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function setFeedbackStatus(message, type) {
+    var status = document.getElementById('cc-feedback-status');
+    if (!status) return;
+    status.textContent = message || '';
+    status.className = 'cc-feedback-status' + (type ? ' ' + type : '');
+  }
+
   // ── Inject HTML on DOMContentLoaded ────────────────────────────
   function init() {
     document.body.classList.add('cc-has-sidebar');
@@ -788,6 +875,8 @@
       '</div>';
 
     document.body.insertAdjacentHTML('afterbegin', sidebarHTML);
+    var feedbackModalHTML = buildFeedbackModalHTML();
+    if (feedbackModalHTML) document.body.insertAdjacentHTML('beforeend', feedbackModalHTML);
 
     if (context === 'instructor') {
       var supportSession = getStoredSession('cc_instructor');
@@ -859,9 +948,100 @@
       document.body.style.overflow = '';
     }
 
+    function resetFeedbackForm() {
+      var form = document.getElementById('cc-feedback-form');
+      if (form) form.reset();
+      setFeedbackStatus('', '');
+      var submitBtn = document.getElementById('cc-feedback-submit');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send';
+      }
+    }
+
+    function openFeedbackModal() {
+      var modal = document.getElementById('cc-feedback-overlay');
+      if (!modal) return;
+      closeSidebar();
+      resetFeedbackForm();
+      modal.classList.add('open');
+      setTimeout(function () {
+        var input = document.getElementById('cc-feedback-summary');
+        if (input) input.focus();
+      }, 30);
+    }
+
+    function closeFeedbackModal() {
+      var modal = document.getElementById('cc-feedback-overlay');
+      if (modal) modal.classList.remove('open');
+    }
+
     if (hamburger) hamburger.addEventListener('click', openSidebar);
     overlay.addEventListener('click', closeSidebar);
     closeBtn.addEventListener('click', closeSidebar);
+
+    document.querySelectorAll('[data-cc-action="feedback"]').forEach(function(link) {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        openFeedbackModal();
+      });
+    });
+
+    var feedbackOverlay = document.getElementById('cc-feedback-overlay');
+    var feedbackClose = document.getElementById('cc-feedback-close');
+    var feedbackCancel = document.getElementById('cc-feedback-cancel');
+    var feedbackForm = document.getElementById('cc-feedback-form');
+    if (feedbackOverlay) {
+      feedbackOverlay.addEventListener('click', function(e) {
+        if (e.target === feedbackOverlay) closeFeedbackModal();
+      });
+    }
+    if (feedbackClose) feedbackClose.addEventListener('click', closeFeedbackModal);
+    if (feedbackCancel) feedbackCancel.addEventListener('click', closeFeedbackModal);
+    if (feedbackForm) {
+      feedbackForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var typeEl = document.querySelector('input[name="cc-feedback-type"]:checked');
+        var titleEl = document.getElementById('cc-feedback-summary');
+        var messageEl = document.getElementById('cc-feedback-message');
+        var submitBtn = document.getElementById('cc-feedback-submit');
+        var payload = {
+          type: typeEl ? typeEl.value : 'issue',
+          title: titleEl ? titleEl.value.trim() : '',
+          message: messageEl ? messageEl.value.trim() : '',
+          page_url: window.location.href
+        };
+        if (!payload.title || !payload.message) {
+          setFeedbackStatus('Add a title and details before sending.', 'error');
+          return;
+        }
+        if (!window.ccAuth || typeof window.ccAuth.fetchAuthed !== 'function') {
+          setFeedbackStatus('Sign in again before sending feedback.', 'error');
+          return;
+        }
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Sending...';
+        }
+        setFeedbackStatus('Sending...', '');
+        window.ccAuth.fetchAuthed('/api/learner?action=submit-feedback', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        }).then(function(res) {
+          return res.json().then(function(data) {
+            if (!res.ok || !data.ok) throw new Error(data.error || data.message || 'Could not send feedback.');
+            setFeedbackStatus('Thanks - sent.', 'success');
+            setTimeout(closeFeedbackModal, 850);
+          });
+        }).catch(function(err) {
+          setFeedbackStatus(err.message || 'Could not send feedback.', 'error');
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Send';
+          }
+        });
+      });
+    }
 
     // Theme select (previously inline onchange)
     var themeSelect = document.getElementById('cc-sb-theme-select');

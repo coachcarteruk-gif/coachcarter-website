@@ -103,6 +103,7 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
     sql`DELETE FROM focused_practice_sessions WHERE learner_id = ${learnerId}`,
     sql`DELETE FROM slot_reservations WHERE learner_id = ${learnerId}`,
     sql`DELETE FROM learner_onboarding WHERE learner_id = ${learnerId}`,
+    sql`DELETE FROM learner_feedback WHERE learner_id = ${learnerId}`,
     sql`DELETE FROM instructor_learner_notes WHERE learner_id = ${learnerId}`,
     sql`DELETE FROM learner_availability WHERE learner_id = ${learnerId}`,
     // Per-instructor credit balances (Step 2c). Hard-delete: the balance ledger
