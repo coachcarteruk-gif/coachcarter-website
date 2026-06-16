@@ -93,7 +93,10 @@ test.describe('admin retrospective lesson entry', () => {
 
     expect(handler).toContain('if (![SCHEDULED, CHARGEABLE].includes(booking.status))');
     expect(handler).toContain("code: 'RETROSPECTIVE_EDIT_MUST_STAY_PAST'");
-    expect(handler).toContain("code: 'COMPLETED_CREDIT_DURATION_LOCKED'");
+    expect(handler).not.toContain("code: 'COMPLETED_CREDIT_DURATION_LOCKED'");
+    expect(handler).toContain("ledgerType: 'edit_adjustment'");
+    expect(handler).toContain('const newListPricePence = oldMinutes > 0 && oldListPricePence != null');
+    expect(handler).toContain('list_price_pence = ${newListPricePence}');
     expect(handler).toContain('booking.status === SCHEDULED && timeChanged');
     expect(handler).toContain('AND lb.school_id = ${schoolId}');
     expect(handler).toContain('pickup_address = ${newPickupAddress}');
@@ -103,6 +106,9 @@ test.describe('admin retrospective lesson entry', () => {
     expect(js).toContain("if (b.status === 'chargeable')");
     expect(js).toContain('Edit lesson');
     expect(js).toContain("document.getElementById('adminEditPickup').value = b.pickup_address || '';");
+    expect(js).toContain('Learner credit will be reduced by ');
+    expect(js).toContain('minutes will be returned to learner credit.');
+    expect(js).toContain("var errorMessage = data.message || (typeof data.error === 'string' ? data.error : '') || 'Failed to edit';");
     expect(js).toContain("pickup_address: document.getElementById('adminEditPickup').value.trim()");
     expect(js).toContain("dropoff_address: document.getElementById('adminEditDropoff').value.trim()");
     expect(js).toContain("notes: document.getElementById('adminEditNotes').value.trim()");

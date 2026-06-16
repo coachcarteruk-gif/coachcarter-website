@@ -1160,7 +1160,7 @@ async function handleEditBooking(req, res) {
     const [booking] = await sql`
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id,
              lb.scheduled_date::text AS scheduled_date, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
-             lb.lesson_type_id, lb.minutes_deducted, lb.setmore_key, lb.pickup_address, lb.dropoff_address,
+             lb.lesson_type_id, lb.minutes_deducted, lb.list_price_pence, lb.setmore_key, lb.pickup_address, lb.dropoff_address,
              COALESCE(lb.instructor_notes, lb.notes) AS notes,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name,
@@ -1251,13 +1251,6 @@ async function handleEditBooking(req, res) {
     // lockBalanceAndMutate writes both atomically inside one CTE.
     const oldMinutes = parseInt(booking.minutes_deducted) || 0;
     const delta = newDuration - oldMinutes;
-    if (booking.status === CHARGEABLE && oldMinutes > 0 && delta !== 0) {
-      return res.status(400).json({
-        error: true,
-        code: 'COMPLETED_CREDIT_DURATION_LOCKED',
-        message: 'Completed credit-funded lessons cannot have their duration changed here. Use a credit adjustment if the duration was wrong.',
-      });
-    }
     if (delta !== 0 && oldMinutes > 0) {
       if (delta > 0) {
         const [scopedBalance] = await sql`
@@ -1287,11 +1280,16 @@ async function handleEditBooking(req, res) {
         });
       }
     }
+    const oldListPricePence = booking.list_price_pence == null ? null : parseInt(booking.list_price_pence, 10);
+    const newListPricePence = oldMinutes > 0 && oldListPricePence != null
+      ? Math.max(0, Math.round((oldListPricePence * newDuration) / oldMinutes))
+      : oldListPricePence;
 
     await sql`
       UPDATE lesson_bookings
       SET scheduled_date = ${newDate}, start_time = ${newStartTime}::time, end_time = ${newEndTime}::time,
           lesson_type_id = ${newLessonTypeId}, minutes_deducted = ${oldMinutes > 0 ? newDuration : 0},
+          list_price_pence = ${newListPricePence},
           pickup_address = ${newPickupAddress},
           dropoff_address = ${newDropoffAddress},
           instructor_notes = ${newNotes},
@@ -1308,6 +1306,8 @@ async function handleEditBooking(req, res) {
           date: booking.scheduled_date,
           start: oldStart,
           lesson_type_id: booking.lesson_type_id,
+          minutes_deducted: oldMinutes,
+          list_price_pence: oldListPricePence,
           pickup_address: booking.pickup_address,
           dropoff_address: booking.dropoff_address,
           notes: booking.notes,
@@ -1316,6 +1316,8 @@ async function handleEditBooking(req, res) {
           date: newDate,
           start: newStartTime,
           lesson_type_id: newLessonTypeId,
+          minutes_deducted: oldMinutes > 0 ? newDuration : 0,
+          list_price_pence: newListPricePence,
           pickup_address: newPickupAddress,
           dropoff_address: newDropoffAddress,
           notes: newNotes,

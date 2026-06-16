@@ -569,6 +569,8 @@ Per-instructor credit safety tracker: [`docs/per-instructor-credits-audit.md`](d
 
 **`booking_credit_sources`** — Step 5 financial attribution rows linking a booking to the credit transaction source(s) that funded it. Columns: `booking_id`, `credit_transaction_id`, `school_id`, `minutes_drawn`, `rate_pence_per_minute`, `contribution_pence`, `stripe_fee_pence`, `absorbed_by`, `refunded_at`, `created_at`. Tenant-scoped by explicit `school_id`; active rows are `refunded_at IS NULL`; unique `(booking_id, credit_transaction_id)` prevents retry double-inserts.
 
+Admin lesson edits can correct the duration of unpaid completed credit lessons. Those corrections write an `edit_adjustment` credit transaction against the learner/instructor balance and update the booking's `minutes_deducted`; existing `booking_credit_sources` rows stay as the original funding attribution ledger.
+
 **`recurring_slot_blocks`** — Stage 4 recurring weekly block header. Columns include `school_id`, `learner_id`, `instructor_id`, optional `anchor_booking_id`, `lesson_type_id`, `status` (`pending_payment`, `confirmed`, `payment_failed`, `expired`, `released`), `funding_method` (`lesson_credit`, `bank_payment`), selected lesson count, duration/start/end snapshot, price snapshot, payment references, expiry/confirmation/release timestamps, and JSONB metadata. The first writer is Lesson Credit only and creates `confirmed` rows.
 
 **`recurring_slot_block_items`** — Future slot rows for a recurring block. Columns include `block_id`, `school_id`, `instructor_id`, optional `lesson_booking_id`, date/time, `status` (`held`, `booked`, `released`), and price snapshot. `held` rows block availability without being normal bookings; `booked` rows link to real `lesson_bookings`.

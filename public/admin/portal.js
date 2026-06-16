@@ -1013,12 +1013,14 @@ async function submitAdminRetrospectiveLesson() {
 let adminEditBookingId = null;
 let adminEditLessonTypes = [];
 let adminEditOrigMinutes = 0;
+let adminEditBookingStatus = '';
 
 async function openAdminEditBooking(bookingId) {
   const b = allBookings.find(x => x.id === bookingId);
   if (!b) return;
   adminEditBookingId = bookingId;
   adminEditOrigMinutes = parseInt(b.minutes_deducted) || 0;
+  adminEditBookingStatus = b.status || '';
 
   document.getElementById('adminEditTitle').textContent = b.status === 'chargeable' ? 'Edit Lesson' : 'Edit Booking';
   document.getElementById('adminEditDate').value = b.scheduled_date;
@@ -1043,9 +1045,10 @@ async function openAdminEditBooking(bookingId) {
       '</option>';
   }).join('');
 
-  updateAdminEditEnd();
   document.getElementById('adminEditSaveBtn').disabled = false;
   document.getElementById('adminEditSaveBtn').textContent = 'Save changes';
+  document.getElementById('adminEditSaveBtn').title = '';
+  updateAdminEditEnd();
   document.getElementById('adminEditBookingModal').style.display = 'flex';
 }
 
@@ -1054,6 +1057,7 @@ function updateAdminEditEnd() {
   var sel = document.getElementById('adminEditType');
   var opt = sel.options[sel.selectedIndex];
   var duration = parseInt(opt && opt.dataset.duration) || 90;
+  var saveBtn = document.getElementById('adminEditSaveBtn');
 
   if (startVal) {
     var parts = startVal.split(':').map(Number);
@@ -1068,25 +1072,39 @@ function updateAdminEditEnd() {
   if (adminEditOrigMinutes > 0) {
     var delta = duration - adminEditOrigMinutes;
     if (delta > 0) {
-      infoEl.textContent = 'Learner will be charged ' + delta + ' extra minutes.';
+      infoEl.textContent = adminEditBookingStatus === 'chargeable'
+        ? 'Learner credit will be reduced by ' + delta + ' minutes.'
+        : 'Learner will be charged ' + delta + ' extra minutes.';
       infoEl.style.color = 'var(--red, #e00)';
       infoEl.style.display = 'block';
     } else if (delta < 0) {
-      infoEl.textContent = Math.abs(delta) + ' minutes refunded to learner.';
+      infoEl.textContent = adminEditBookingStatus === 'chargeable'
+        ? Math.abs(delta) + ' minutes will be returned to learner credit.'
+        : Math.abs(delta) + ' minutes refunded to learner.';
       infoEl.style.color = 'var(--green, #16a34a)';
       infoEl.style.display = 'block';
     } else { infoEl.style.display = 'none'; }
   } else { infoEl.style.display = 'none'; }
+
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.title = '';
+  }
 }
 
 function closeAdminEditBooking() {
   document.getElementById('adminEditBookingModal').style.display = 'none';
   adminEditBookingId = null;
+  adminEditBookingStatus = '';
 }
 
 async function confirmAdminEditBooking(forceOverride) {
   if (!adminEditBookingId) return;
   var btn = document.getElementById('adminEditSaveBtn');
+  if (btn.disabled) {
+    toast(btn.title || 'This change cannot be saved from this modal', 'error');
+    return;
+  }
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     var res = await fetchAdmin('/api/admin?action=edit-booking', {
@@ -1114,7 +1132,10 @@ async function confirmAdminEditBooking(forceOverride) {
       if (confirm(msg)) return confirmAdminEditBooking(true);
       return;
     }
-    if (!res.ok) throw new Error(data.error || data.message);
+    if (!res.ok) {
+      var errorMessage = data.message || (typeof data.error === 'string' ? data.error : '') || 'Failed to edit';
+      throw new Error(errorMessage);
+    }
     closeAdminEditBooking();
     toast('Booking updated', 'success');
     loadBookings();
