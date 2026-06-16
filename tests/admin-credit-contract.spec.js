@@ -151,6 +151,7 @@ test.describe('per-instructor credit safety slice', () => {
     const creditGrantSource = fs.readFileSync(path.join(repoRoot, 'api', '_credit-grant.js'), 'utf8').replace(/\r\n/g, '\n');
 
     expect(adminSource).toContain('FROM learner_credit_balances\n         WHERE learner_id = ${learner_id}\n           AND school_id = ${schoolId}');
+    expect(adminSource).toContain('SELECT SUM(lcb.balance_minutes)::int\n          FROM learner_credit_balances lcb\n          WHERE lcb.learner_id = lu.id\n            AND lcb.school_id = ${schoolId}');
     expect(adminSource).toContain('AND instructor_id = ${explicitInstructorId}\n           AND school_id = ${schoolId}');
     expect(adminSource).toContain('AND instructor_id = ${booking.instructor_id}\n             AND school_id = ${schoolId}');
     expect(instructorSource).toContain('AND instructor_id = ${booking.instructor_id}\n             AND school_id = ${schoolId}');

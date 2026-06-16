@@ -1139,6 +1139,8 @@ async function confirmAdminEditBooking(forceOverride) {
     closeAdminEditBooking();
     toast('Booking updated', 'success');
     loadBookings();
+    loadLearners();
+    if (_detailLearnerId) showLearnerDetail(_detailLearnerId);
   } catch (err) {
     toast(err.message || 'Failed to edit', 'error');
   } finally {
@@ -1340,7 +1342,7 @@ async function showLearnerDetail(id) {
   const content = document.getElementById('learner-detail-content');
   const nameEl = document.getElementById('learner-detail-name');
 
-  const learner = allLearners.find(l => l.id === id);
+  let learner = allLearners.find(l => l.id === id);
   nameEl.textContent = learner ? (learner.name || learner.email) : 'Learner Details';
   content.innerHTML = '<div class="empty-state">Loading...</div>';
   panel.style.display = 'block';
@@ -1350,6 +1352,7 @@ async function showLearnerDetail(id) {
     const res = await fetchAdmin('/api/admin?action=learner-detail&learner_id=' + id, { headers: HEADERS });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
+    learner = data.learner || learner;
 
     const tierLabels = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' };
     let html = '';
@@ -1427,10 +1430,11 @@ async function showLearnerDetail(id) {
     if (data.transactions.length === 0) {
       html += '<div class="empty-state">No transactions</div>';
     } else {
-      html += '<div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Type</th><th>Credits</th><th>Amount</th><th>Method</th></tr></thead><tbody>';
+      html += '<div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Type</th><th>Minutes</th><th>Credits</th><th>Amount</th><th>Method</th></tr></thead><tbody>';
       html += data.transactions.map(t =>
         '<tr><td>' + new Date(t.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + '</td>' +
         '<td><span class="badge ' + (t.type === 'purchase' ? 'badge-green' : 'badge-amber') + '">' + t.type.toUpperCase() + '</span></td>' +
+        '<td>' + (t.minutes || 0) + '</td>' +
         '<td>' + t.credits + '</td>' +
         '<td>' + (t.amount_pence ? '\u00a3' + (t.amount_pence / 100).toFixed(2) : '-') + '</td>' +
         '<td>' + esc(t.payment_method || '-') + '</td></tr>'

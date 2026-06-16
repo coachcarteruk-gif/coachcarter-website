@@ -2269,7 +2269,13 @@ async function handleAllLearners(req, res) {
     const learners = await sql`
       SELECT
         lu.id, lu.name, lu.email, lu.phone,
-        lu.current_tier, lu.credit_balance, lu.balance_minutes,
+        lu.current_tier, lu.credit_balance,
+        COALESCE((
+          SELECT SUM(lcb.balance_minutes)::int
+          FROM learner_credit_balances lcb
+          WHERE lcb.learner_id = lu.id
+            AND lcb.school_id = ${schoolId}
+        ), lu.balance_minutes, 0)::int AS balance_minutes,
         lu.pickup_address, lu.prefer_contact_before,
         lu.learner_category,
         lu.primary_instructor_id,
@@ -2323,9 +2329,30 @@ async function handleLearnerDetail(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Verify learner belongs to this school
-    const [learnerCheck] = await sql`SELECT id FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}`;
-    if (!learnerCheck) return res.status(404).json({ error: 'Learner not found' });
+    const [learner] = await sql`
+      SELECT
+        lu.id, lu.name, lu.email, lu.phone,
+        lu.current_tier, lu.credit_balance,
+        COALESCE((
+          SELECT SUM(lcb.balance_minutes)::int
+          FROM learner_credit_balances lcb
+          WHERE lcb.learner_id = lu.id
+            AND lcb.school_id = ${schoolId}
+        ), lu.balance_minutes, 0)::int AS balance_minutes,
+        lu.pickup_address, lu.prefer_contact_before,
+        lu.learner_category,
+        lu.primary_instructor_id,
+        pi.name AS primary_instructor_name,
+        lu.test_date::text AS test_date,
+        lu.created_at
+      FROM learner_users lu
+      LEFT JOIN instructors pi
+        ON pi.id = lu.primary_instructor_id
+       AND pi.school_id = ${schoolId}
+      WHERE lu.id = ${learnerId}
+        AND lu.school_id = ${schoolId}
+    `;
+    if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
     const bookings = await sql`
       SELECT
@@ -2344,7 +2371,7 @@ async function handleLearnerDetail(req, res) {
     `;
 
     const transactions = await sql`
-      SELECT id, type, credits, amount_pence, payment_method, created_at
+      SELECT id, type, credits, minutes, amount_pence, payment_method, created_at
       FROM credit_transactions
       WHERE learner_id = ${learnerId} AND school_id = ${schoolId}
       ORDER BY created_at DESC
@@ -2422,6 +2449,7 @@ async function handleLearnerDetail(req, res) {
     `;
 
     return res.json({
+      learner,
       bookings,
       transactions,
       progress: progress[0] || { total_sessions: 0, total_minutes: 0 },

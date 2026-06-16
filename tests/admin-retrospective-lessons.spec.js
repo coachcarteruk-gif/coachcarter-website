@@ -97,6 +97,8 @@ test.describe('admin retrospective lesson entry', () => {
     expect(handler).toContain("ledgerType: 'edit_adjustment'");
     expect(handler).toContain('const newListPricePence = oldMinutes > 0 && oldListPricePence != null');
     expect(handler).toContain('list_price_pence = ${newListPricePence}');
+    expect(api).toContain('SELECT id, type, credits, minutes, amount_pence, payment_method, created_at');
+    expect(api).toContain('return res.json({\n      learner,');
     expect(handler).toContain('booking.status === SCHEDULED && timeChanged');
     expect(handler).toContain('AND lb.school_id = ${schoolId}');
     expect(handler).toContain('pickup_address = ${newPickupAddress}');
@@ -109,6 +111,10 @@ test.describe('admin retrospective lesson entry', () => {
     expect(js).toContain('Learner credit will be reduced by ');
     expect(js).toContain('minutes will be returned to learner credit.');
     expect(js).toContain("var errorMessage = data.message || (typeof data.error === 'string' ? data.error : '') || 'Failed to edit';");
+    expect(js).toContain('loadLearners();');
+    expect(js).toContain('if (_detailLearnerId) showLearnerDetail(_detailLearnerId);');
+    expect(js).toContain('learner = data.learner || learner;');
+    expect(js).toContain('<th>Minutes</th>');
     expect(js).toContain("pickup_address: document.getElementById('adminEditPickup').value.trim()");
     expect(js).toContain("dropoff_address: document.getElementById('adminEditDropoff').value.trim()");
     expect(js).toContain("notes: document.getElementById('adminEditNotes').value.trim()");
