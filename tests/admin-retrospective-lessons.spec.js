@@ -84,4 +84,30 @@ test.describe('admin retrospective lesson entry', () => {
     expect(js).toContain('populateAdminRetroLearnerAddress');
     expect(js).toContain('updateAdminRetroEnd');
   });
+
+  test('admin can correct completed retrospective lesson details safely', () => {
+    const api = read('api/admin.js');
+    const handler = functionBody(api, 'handleEditBooking');
+    const html = read('public/admin/portal.html');
+    const js = read('public/admin/portal.js');
+
+    expect(handler).toContain('if (![SCHEDULED, CHARGEABLE].includes(booking.status))');
+    expect(handler).toContain("code: 'RETROSPECTIVE_EDIT_MUST_STAY_PAST'");
+    expect(handler).toContain("code: 'COMPLETED_CREDIT_DURATION_LOCKED'");
+    expect(handler).toContain('booking.status === SCHEDULED && timeChanged');
+    expect(handler).toContain('AND lb.school_id = ${schoolId}');
+    expect(handler).toContain('pickup_address = ${newPickupAddress}');
+    expect(handler).toContain('dropoff_address = ${newDropoffAddress}');
+    expect(handler).toContain('instructor_notes = ${newNotes}');
+
+    expect(js).toContain("if (b.status === 'chargeable')");
+    expect(js).toContain('Edit lesson');
+    expect(js).toContain("document.getElementById('adminEditPickup').value = b.pickup_address || '';");
+    expect(js).toContain("pickup_address: document.getElementById('adminEditPickup').value.trim()");
+    expect(js).toContain("dropoff_address: document.getElementById('adminEditDropoff').value.trim()");
+    expect(js).toContain("notes: document.getElementById('adminEditNotes').value.trim()");
+    expect(html).toContain('id="adminEditPickup"');
+    expect(html).toContain('id="adminEditDropoff"');
+    expect(html).toContain('id="adminEditNotes"');
+  });
 });

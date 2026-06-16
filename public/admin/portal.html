@@ -1312,8 +1312,8 @@ body {
 
 <!-- Edit Booking Modal -->
 <div class="modal-overlay" id="adminEditBookingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center;padding:16px">
-  <div style="background:var(--white,#fff);border-radius:12px;max-width:400px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.15)">
-    <h3 style="margin:0 0 16px;font-size:1.1rem">Edit Booking</h3>
+  <div style="background:var(--white,#fff);border-radius:12px;max-width:520px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.15);max-height:92vh;overflow:auto">
+    <h3 id="adminEditTitle" style="margin:0 0 16px;font-size:1.1rem">Edit Booking</h3>
     <div style="display:flex;flex-direction:column;gap:12px">
       <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Date</label>
         <input type="date" id="adminEditDate" class="input" style="width:100%"></div>
@@ -1323,6 +1323,12 @@ body {
         <select id="adminEditType" class="input" style="width:100%"></select></div>
       <div style="font-size:0.85rem;color:var(--muted)">End time: <strong id="adminEditEndTime">—</strong></div>
       <div id="adminEditBalanceInfo" style="font-size:0.82rem;display:none"></div>
+      <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Pickup address</label>
+        <input type="text" id="adminEditPickup" class="input" style="width:100%"></div>
+      <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Drop-off address</label>
+        <input type="text" id="adminEditDropoff" class="input" style="width:100%"></div>
+      <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Notes</label>
+        <textarea id="adminEditNotes" class="input" style="width:100%;min-height:72px;resize:vertical"></textarea></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">
       <button class="btn" id="btn-close-admin-edit">Cancel</button>

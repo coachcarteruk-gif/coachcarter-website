@@ -772,6 +772,11 @@ function reservedPolicyCopy(b) {
 }
 
 function bookingActionHtml(b) {
+  if (b.status === 'chargeable') {
+    return '<button class="btn btn-sm" data-action="edit-booking" data-id="' + b.id + '" title="Edit lesson details" style="margin-right:4px">Edit lesson</button>' +
+      '<button class="btn btn-sm" data-action="open-refund-preview" data-id="' + b.id + '">Refund preview</button>';
+  }
+
   if (b.status !== 'scheduled') {
     return '<button class="btn btn-sm" data-action="open-refund-preview" data-id="' + b.id + '">Refund preview</button>';
   }
@@ -1015,8 +1020,12 @@ async function openAdminEditBooking(bookingId) {
   adminEditBookingId = bookingId;
   adminEditOrigMinutes = parseInt(b.minutes_deducted) || 0;
 
+  document.getElementById('adminEditTitle').textContent = b.status === 'chargeable' ? 'Edit Lesson' : 'Edit Booking';
   document.getElementById('adminEditDate').value = b.scheduled_date;
   document.getElementById('adminEditTime').value = b.start_time.slice(0, 5);
+  document.getElementById('adminEditPickup').value = b.pickup_address || '';
+  document.getElementById('adminEditDropoff').value = b.dropoff_address || '';
+  document.getElementById('adminEditNotes').value = b.notes || '';
 
   // Load lesson types (include inactive for legacy corrections)
   try {
@@ -1050,7 +1059,9 @@ function updateAdminEditEnd() {
     var parts = startVal.split(':').map(Number);
     var endMins = parts[0] * 60 + parts[1] + duration;
     document.getElementById('adminEditEndTime').textContent =
-      String(Math.floor(endMins / 60)).padStart(2, '0') + ':' + String(endMins % 60).padStart(2, '0');
+      endMins > 24 * 60
+        ? 'next day'
+        : String(Math.floor(endMins / 60)).padStart(2, '0') + ':' + String(endMins % 60).padStart(2, '0');
   }
 
   var infoEl = document.getElementById('adminEditBalanceInfo');
@@ -1085,6 +1096,9 @@ async function confirmAdminEditBooking(forceOverride) {
         scheduled_date: document.getElementById('adminEditDate').value,
         start_time: document.getElementById('adminEditTime').value.slice(0, 5),
         lesson_type_id: parseInt(document.getElementById('adminEditType').value),
+        pickup_address: document.getElementById('adminEditPickup').value.trim(),
+        dropoff_address: document.getElementById('adminEditDropoff').value.trim(),
+        notes: document.getElementById('adminEditNotes').value.trim(),
         force: !!forceOverride
       })
     });

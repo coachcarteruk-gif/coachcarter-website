@@ -614,7 +614,11 @@ async function handleAllBookings(req, res) {
         lb.status,
         lb.cancelled_at,
         lb.credit_returned,
-        lb.notes,
+        COALESCE(lb.instructor_notes, lb.notes) AS notes,
+        lb.pickup_address,
+        lb.dropoff_address,
+        lb.payment_method,
+        COALESCE(lb.transmission_type, 'manual') AS transmission_type,
         lb.created_at,
         lb.lesson_type_id,
         lb.minutes_deducted,
@@ -1115,17 +1119,40 @@ async function handleCreateRetrospectiveBooking(req, res) {
 }
 
 // -- POST /api/admin?action=edit-booking -------------------------------------
-// Body: { booking_id, scheduled_date?, start_time?, lesson_type_id? }
+// Body: { booking_id, scheduled_date?, start_time?, lesson_type_id?, pickup_address?, dropoff_address?, notes? }
 async function handleEditBooking(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = getAdminSchoolId(admin, req);
 
-  const { booking_id, scheduled_date, start_time, lesson_type_id, force } = req.body;
-  if (!booking_id) return res.status(400).json({ error: 'booking_id is required' });
-  if (!scheduled_date && !start_time && !lesson_type_id)
+  const body = req.body || {};
+  const { booking_id, scheduled_date, start_time, lesson_type_id, pickup_address, dropoff_address, notes, force } = body;
+  const bookingId = parseInt(booking_id, 10);
+  const hasScheduledDate = Object.prototype.hasOwnProperty.call(body, 'scheduled_date');
+  const hasStartTime = Object.prototype.hasOwnProperty.call(body, 'start_time');
+  const hasLessonType = Object.prototype.hasOwnProperty.call(body, 'lesson_type_id');
+  const hasPickupAddress = Object.prototype.hasOwnProperty.call(body, 'pickup_address');
+  const hasDropoffAddress = Object.prototype.hasOwnProperty.call(body, 'dropoff_address');
+  const hasNotes = Object.prototype.hasOwnProperty.call(body, 'notes');
+  if (!Number.isInteger(bookingId) || bookingId <= 0) return res.status(400).json({ error: 'booking_id is required' });
+  if (!hasScheduledDate && !hasStartTime && !hasLessonType && !hasPickupAddress && !hasDropoffAddress && !hasNotes)
     return res.status(400).json({ error: 'At least one field to edit is required' });
+
+  const requestedDate = hasScheduledDate ? String(scheduled_date || '').trim() : null;
+  const requestedStartTime = hasStartTime ? normaliseAdminTimeHHMM(start_time) : null;
+  const requestedLessonTypeId = hasLessonType && lesson_type_id !== null && lesson_type_id !== ''
+    ? parseInt(lesson_type_id, 10)
+    : null;
+  if (hasScheduledDate && !isValidAdminIsoDate(requestedDate)) {
+    return res.status(400).json({ error: 'Date must be YYYY-MM-DD' });
+  }
+  if (hasStartTime && !requestedStartTime) {
+    return res.status(400).json({ error: 'Start time must be HH:MM' });
+  }
+  if (hasLessonType && (!Number.isInteger(requestedLessonTypeId) || requestedLessonTypeId <= 0)) {
+    return res.status(400).json({ error: 'Lesson type is required' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -1133,7 +1160,8 @@ async function handleEditBooking(req, res) {
     const [booking] = await sql`
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id,
              lb.scheduled_date::text AS scheduled_date, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
-             lb.lesson_type_id, lb.minutes_deducted, lb.setmore_key,
+             lb.lesson_type_id, lb.minutes_deducted, lb.setmore_key, lb.pickup_address, lb.dropoff_address,
+             COALESCE(lb.instructor_notes, lb.notes) AS notes,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name,
              COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
@@ -1142,33 +1170,53 @@ async function handleEditBooking(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       JOIN instructors i ON i.id = lb.instructor_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
-      WHERE lb.id = ${booking_id} AND lb.school_id = ${schoolId}
+      WHERE lb.id = ${bookingId} AND lb.school_id = ${schoolId}
     `;
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== SCHEDULED)
+    if (![SCHEDULED, CHARGEABLE].includes(booking.status))
       return res.status(400).json({ error: `Cannot edit a booking with status "${booking.status}"` });
 
-    // Block lesson type change if already paid out
-    if (lesson_type_id && lesson_type_id !== booking.lesson_type_id) {
-      const [paidOut] = await sql`SELECT id FROM payout_line_items WHERE booking_id = ${booking_id}`;
-      if (paidOut) return res.status(400).json({ error: 'Cannot change lesson type — booking already included in a payout' });
-    }
-
-    let newDate = scheduled_date || booking.scheduled_date;
-    let newStartTime = start_time || String(booking.start_time).slice(0, 5);
-    let newLessonTypeId = lesson_type_id || booking.lesson_type_id;
+    const oldStart = String(booking.start_time).slice(0, 5);
+    const oldEnd = String(booking.end_time).slice(0, 5);
+    let newDate = hasScheduledDate ? requestedDate : booking.scheduled_date;
+    let newStartTime = hasStartTime ? requestedStartTime : oldStart;
+    let newLessonTypeId = hasLessonType ? requestedLessonTypeId : booking.lesson_type_id;
     let newDuration = parseInt(booking.type_duration_minutes) || 90;
+    const newPickupAddress = hasPickupAddress ? String(pickup_address || '').trim() || null : booking.pickup_address || null;
+    const newDropoffAddress = hasDropoffAddress ? String(dropoff_address || '').trim() || null : booking.dropoff_address || null;
+    const newNotes = hasNotes ? String(notes || '').trim() || null : booking.notes || null;
+    const lessonTypeChanged = hasLessonType && newLessonTypeId !== booking.lesson_type_id;
 
-    if (lesson_type_id && lesson_type_id !== booking.lesson_type_id) {
-      const [newType] = await sql`SELECT duration_minutes FROM lesson_types WHERE id = ${lesson_type_id} AND school_id = ${schoolId}`;
+    if (lessonTypeChanged) {
+      const [newType] = await sql`SELECT duration_minutes FROM lesson_types WHERE id = ${newLessonTypeId} AND school_id = ${schoolId}`;
       if (!newType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
       newDuration = newType.duration_minutes;
     }
 
-    const startParts = newStartTime.split(':').map(Number);
-    const startMins = startParts[0] * 60 + startParts[1];
-    const endMins = startMins + newDuration;
-    const newEndTime = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+    const endMins = adminTimeToMinutes(newStartTime) + newDuration;
+    if (endMins > 24 * 60) {
+      return res.status(400).json({ error: 'Lesson must finish on the same day' });
+    }
+    const newEndTime = adminMinutesToTime(endMins);
+    const timeChanged = newDate !== booking.scheduled_date ||
+      newStartTime !== oldStart ||
+      newEndTime !== oldEnd;
+
+    const [paidOut] = await sql`SELECT id FROM payout_line_items WHERE booking_id = ${bookingId}`;
+    if (paidOut && (timeChanged || lessonTypeChanged)) {
+      return res.status(400).json({ error: 'Cannot change date, time, or lesson type after a booking has been included in a payout' });
+    }
+
+    if (booking.status === CHARGEABLE) {
+      const finishedAt = new Date(`${newDate}T${newEndTime}:00`);
+      if (Number.isNaN(finishedAt.getTime()) || finishedAt.getTime() > Date.now()) {
+        return res.status(400).json({
+          error: true,
+          code: 'RETROSPECTIVE_EDIT_MUST_STAY_PAST',
+          message: 'Completed lessons must still finish in the past.',
+        });
+      }
+    }
 
     // Overlap check with buffer — warn with details, allow force override
     const buffer = parseInt(booking.buffer_minutes) || 30;
@@ -1179,7 +1227,8 @@ async function handleEditBooking(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       WHERE lb.instructor_id = ${booking.instructor_id}
         AND lb.scheduled_date = ${newDate}
-        AND lb.id != ${booking_id}
+        AND lb.school_id = ${schoolId}
+        AND lb.id != ${bookingId}
         AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
         AND ${newStartTime}::time < (lb.end_time + (${buffer} || ' minutes')::interval)
         AND ${newEndTime}::time > lb.start_time
@@ -1202,6 +1251,13 @@ async function handleEditBooking(req, res) {
     // lockBalanceAndMutate writes both atomically inside one CTE.
     const oldMinutes = parseInt(booking.minutes_deducted) || 0;
     const delta = newDuration - oldMinutes;
+    if (booking.status === CHARGEABLE && oldMinutes > 0 && delta !== 0) {
+      return res.status(400).json({
+        error: true,
+        code: 'COMPLETED_CREDIT_DURATION_LOCKED',
+        message: 'Completed credit-funded lessons cannot have their duration changed here. Use a credit adjustment if the duration was wrong.',
+      });
+    }
     if (delta !== 0 && oldMinutes > 0) {
       if (delta > 0) {
         const [scopedBalance] = await sql`
@@ -1236,26 +1292,40 @@ async function handleEditBooking(req, res) {
       UPDATE lesson_bookings
       SET scheduled_date = ${newDate}, start_time = ${newStartTime}::time, end_time = ${newEndTime}::time,
           lesson_type_id = ${newLessonTypeId}, minutes_deducted = ${oldMinutes > 0 ? newDuration : 0},
+          pickup_address = ${newPickupAddress},
+          dropoff_address = ${newDropoffAddress},
+          instructor_notes = ${newNotes},
           edited_at = NOW()
-      WHERE id = ${booking_id}
+      WHERE id = ${bookingId}
+        AND school_id = ${schoolId}
     `;
 
     await logAudit(sql, {
       adminId: admin.id, adminEmail: admin.email, action: 'edit-booking',
-      targetType: 'booking', targetId: booking_id,
+      targetType: 'booking', targetId: bookingId,
       details: {
-        old: { date: booking.scheduled_date, start: String(booking.start_time).slice(0,5), lesson_type_id: booking.lesson_type_id },
-        new: { date: newDate, start: newStartTime, lesson_type_id: newLessonTypeId }
+        old: {
+          date: booking.scheduled_date,
+          start: oldStart,
+          lesson_type_id: booking.lesson_type_id,
+          pickup_address: booking.pickup_address,
+          dropoff_address: booking.dropoff_address,
+          notes: booking.notes,
+        },
+        new: {
+          date: newDate,
+          start: newStartTime,
+          lesson_type_id: newLessonTypeId,
+          pickup_address: newPickupAddress,
+          dropoff_address: newDropoffAddress,
+          notes: newNotes,
+        }
       },
       schoolId, req
     });
 
-    // Email learner if time changed
-    const timeChanged = newDate !== booking.scheduled_date ||
-      newStartTime !== String(booking.start_time).slice(0, 5) ||
-      newEndTime !== String(booking.end_time).slice(0, 5);
-
-    if (timeChanged && booking.learner_email) {
+    // Email learner if a future scheduled lesson moved. Past admin corrections stay internal.
+    if (booking.status === SCHEDULED && timeChanged && booking.learner_email) {
       try {
         const mailer = createTransporter();
         const isoOldDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
@@ -1298,16 +1368,32 @@ async function handleEditBooking(req, res) {
     await logAudit(sql, {
       adminId: admin.id, adminEmail: admin.email,
       action: 'admin.edit_booking',
-      targetType: 'booking', targetId: booking_id,
+      targetType: 'booking', targetId: bookingId,
       details: {
-        old: { scheduled_date: booking.scheduled_date, start_time: booking.start_time, end_time: booking.end_time, lesson_type_id: booking.lesson_type_id },
-        new: { scheduled_date: newDate, start_time: newStartTime, end_time: newEndTime, lesson_type_id: newLessonTypeId },
+        old: {
+          scheduled_date: booking.scheduled_date,
+          start_time: booking.start_time,
+          end_time: booking.end_time,
+          lesson_type_id: booking.lesson_type_id,
+          pickup_address: booking.pickup_address,
+          dropoff_address: booking.dropoff_address,
+          notes: booking.notes,
+        },
+        new: {
+          scheduled_date: newDate,
+          start_time: newStartTime,
+          end_time: newEndTime,
+          lesson_type_id: newLessonTypeId,
+          pickup_address: newPickupAddress,
+          dropoff_address: newDropoffAddress,
+          notes: newNotes,
+        },
         force: !!force,
       },
       schoolId, req,
     });
 
-    return res.json({ ok: true, booking_id });
+    return res.json({ ok: true, booking_id: bookingId });
   } catch (err) {
     console.error('admin edit-booking error:', err);
     reportError('/api/admin', err);
