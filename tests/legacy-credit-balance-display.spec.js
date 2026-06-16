@@ -10,8 +10,9 @@ test.describe('legacy credit_balance display deprecation', () => {
     const portalHtml = read('public/admin/portal.html');
     const portalJs = read('public/admin/portal.js');
 
-    expect(portalHtml).toContain('<th>Tier</th><th>Hours</th><th>Bookings</th>');
+    expect(portalHtml).toContain('<th>Balance</th><th>Delivered</th><th>Bookings</th>');
     expect(portalJs).toContain("fmtBalanceMins(l.balance_minutes || 0)");
+    expect(portalJs).toContain("fmtBalanceMins(l.delivered_minutes || 0)");
     expect(portalJs).not.toContain("'<td>' + (l.credit_balance || 0) + '</td>'");
   });
 
