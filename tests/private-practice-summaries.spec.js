@@ -17,10 +17,13 @@ test.describe('private practice summaries', () => {
     const source = read('api/learner.js');
     const body = functionBody(source, 'handleCompetency');
 
-    expect(body).toContain('const recentFocusedPractice = await sql`');
+    expect(body).toContain('let recentFocusedPractice = [];');
+    expect(body).toContain('recentFocusedPractice = await sql`');
     expect(body).toContain('SELECT fp.id, fp.focus_areas, fp.reflections, fp.completed_at, fp.created_at,');
     expect(body).toContain('JOIN driving_sessions ds ON ds.id = fp.session_id AND ds.school_id = fp.school_id');
     expect(body).toContain('WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}');
+    expect(body).toContain('if (!isMissingFocusedPracticeSchemaError(err)) throw err;');
+    expect(body).toContain('focused_practice_count: focusedPracticeCount');
     expect(body).toContain('recent_focused_practice: recentFocusedPractice');
   });
 

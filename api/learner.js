@@ -63,6 +63,14 @@ function sanitizeSupervisorNotesPayload(value) {
   return cleaned.parts || cleaned.summary ? cleaned : {};
 }
 
+function isMissingFocusedPracticeSchemaError(err) {
+  return err && (
+    err.code === '42P01' || // undefined_table
+    err.code === '42703' || // undefined_column
+    /focused_practice_sessions/i.test(err.message || '')
+  );
+}
+
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { requireAuth } = require('./_auth');
@@ -766,20 +774,30 @@ async function handleCompetency(req, res) {
       ORDER BY session_date DESC, created_at DESC
       LIMIT 20`;
 
-    // Focused practice session count
-    const fpStats = await sql`
-      SELECT COUNT(*)::int as total_sessions
-      FROM focused_practice_sessions
-      WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
+    let focusedPracticeCount = 0;
+    let recentFocusedPractice = [];
+    try {
+      // Focused practice is a recent, optional companion table. If production
+      // has not run the latest migration yet, keep the driving plan usable.
+      const fpStats = await sql`
+        SELECT COUNT(*)::int as total_sessions
+        FROM focused_practice_sessions
+        WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
 
-    const recentFocusedPractice = await sql`
-      SELECT fp.id, fp.focus_areas, fp.reflections, fp.completed_at, fp.created_at,
-             ds.session_date::text, ds.duration_minutes
-      FROM focused_practice_sessions fp
-      JOIN driving_sessions ds ON ds.id = fp.session_id AND ds.school_id = fp.school_id
-      WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}
-      ORDER BY COALESCE(fp.completed_at, fp.created_at) DESC
-      LIMIT 5`;
+      recentFocusedPractice = await sql`
+        SELECT fp.id, fp.focus_areas, fp.reflections, fp.completed_at, fp.created_at,
+               ds.session_date::text, ds.duration_minutes
+        FROM focused_practice_sessions fp
+        JOIN driving_sessions ds ON ds.id = fp.session_id AND ds.school_id = fp.school_id
+        WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}
+        ORDER BY COALESCE(fp.completed_at, fp.created_at) DESC
+        LIMIT 5`;
+
+      focusedPracticeCount = (fpStats[0] || {}).total_sessions || 0;
+    } catch (err) {
+      if (!isMissingFocusedPracticeSchemaError(err)) throw err;
+      console.warn('focused practice schema unavailable for competency response:', err.message);
+    }
 
     return res.json({
       lesson_ratings: lessonData,
@@ -791,7 +809,7 @@ async function handleCompetency(req, res) {
       recent_sub_faults: recentSubFaults,
       session_stats: stats[0] || { total_sessions: 0, total_minutes: 0 },
       recent_sessions: recentSessions,
-      focused_practice_count: (fpStats[0] || {}).total_sessions || 0,
+      focused_practice_count: focusedPracticeCount,
       recent_focused_practice: recentFocusedPractice
     });
   } catch (err) {
