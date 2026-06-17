@@ -16,7 +16,7 @@ var SUP_CATS = CC_COMPETENCY.SUPERVISOR_CATEGORIES;
 var PRACTICE_RATINGS = [
   { key: 'nailed', label: 'Went well' },
   { key: 'ok', label: 'Needs practice' },
-  { key: 'struggled', label: 'Tell instructor' }
+  { key: 'struggled', label: 'Ask instructor' }
 ];
 
 /* ── Helpers ── */
@@ -281,9 +281,9 @@ function goToReflection() {
     });
     html += '</div>';
     html += '<div class="reflect-note-grid">';
-    html += '<input class="reflect-note" data-action="set-reflection-note" data-note-field="what" data-cat="' + catKey + '" placeholder="What happened?" maxlength="160">';
-    html += '<input class="reflect-note" data-action="set-reflection-note" data-note-field="where" data-cat="' + catKey + '" placeholder="Where did it happen?" maxlength="120">';
-    html += '<textarea class="reflect-note reflect-note-wide" data-action="set-reflection-note" data-note-field="instructor" data-cat="' + catKey + '" placeholder="Anything the instructor should know?" maxlength="260"></textarea>';
+    html += '<input class="reflect-note" data-action="set-reflection-note" data-note-field="what" data-cat="' + catKey + '" placeholder="What happened? (optional)" maxlength="160">';
+    html += '<input class="reflect-note" data-action="set-reflection-note" data-note-field="where" data-cat="' + catKey + '" placeholder="Where? (optional)" maxlength="120">';
+    html += '<textarea class="reflect-note reflect-note-wide" data-action="set-reflection-note" data-note-field="instructor" data-cat="' + catKey + '" placeholder="What should your instructor know? (optional)" maxlength="260"></textarea>';
     html += '</div>';
     html += '</div>';
   });
@@ -361,7 +361,7 @@ async function saveReflection() {
 function showResultsScreen() {
   var durationMin = Math.ceil(timerSeconds / 60);
   document.getElementById('results-subtitle').textContent =
-    durationMin + ' minute' + (durationMin !== 1 ? 's' : '') + ' practice drive completed. Saved as a supervisor reflection.';
+    durationMin + ' minute' + (durationMin !== 1 ? 's' : '') + ' practice drive completed. Saved to your driving plan.';
 
   var cardsHtml = '';
   var needsWork = [];
@@ -397,7 +397,7 @@ function showResultsScreen() {
   var nextHtml = '<div class="result-next">';
   nextHtml += '<h3>What next?</h3>';
   if (tellInstructor.length > 0) {
-    nextHtml += '<p>Tell your instructor about <strong>' + escHtml(tellInstructor.join(', ')) + '</strong> next lesson so they can help with it.</p>';
+    nextHtml += '<p>Ask your instructor about <strong>' + escHtml(tellInstructor.join(', ')) + '</strong> next lesson so they can help with it.</p>';
   } else if (needsWork.length > 0) {
     nextHtml += '<p>Keep practising <strong>' + escHtml(needsWork.join(', ')) + '</strong> on another practice drive, or ask your instructor for tips next lesson.</p>';
   } else {

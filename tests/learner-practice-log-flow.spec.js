@@ -50,8 +50,7 @@ test.describe('learner practice and log-session flow copy', () => {
   test('successful save explains that the driving plan changed', () => {
     const html = read('public/learner/log-session.html');
 
-    expect(html).toContain('Saved as a drive-log learner reflection.');
-    expect(html).toContain('Your driving plan now uses these ratings to suggest what to practise next.');
+    expect(html).toContain('Saved. Your driving plan has been updated.');
     expect(html).toContain('href="/learner/progress.html"');
     expect(html).toContain('View my driving plan');
   });
@@ -68,7 +67,7 @@ test.describe('learner practice and log-session flow copy', () => {
     expect(html).toContain('View my driving plan');
 
     expect(source).toContain("var scoreText = score > 0 ? 'Suggested' : 'Pick';");
-    expect(source).toContain('practice drive completed. Saved as a supervisor reflection.');
+    expect(source).toContain('practice drive completed. Saved to your driving plan.');
     expect(source).toContain("apiCall('POST', 'focused-practice'");
     expect(source).not.toContain('take a mock test');
     expect(html).not.toContain('Targeted drill');
@@ -80,11 +79,11 @@ test.describe('learner practice and log-session flow copy', () => {
 
     expect(source).toContain("{ key: 'nailed', label: 'Went well' }");
     expect(source).toContain("{ key: 'ok', label: 'Needs practice' }");
-    expect(source).toContain("{ key: 'struggled', label: 'Tell instructor' }");
-    expect(source).toContain('What happened?');
-    expect(source).toContain('Where did it happen?');
-    expect(source).toContain('Anything the instructor should know?');
-    expect(source).toContain('Tell your instructor about');
+    expect(source).toContain("{ key: 'struggled', label: 'Ask instructor' }");
+    expect(source).toContain('What happened? (optional)');
+    expect(source).toContain('Where? (optional)');
+    expect(source).toContain('What should your instructor know? (optional)');
+    expect(source).toContain('Ask your instructor about');
     expect(source).toContain('buildPracticeNote(reflections[catKey])');
   });
 

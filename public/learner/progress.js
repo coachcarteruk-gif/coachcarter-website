@@ -7,7 +7,7 @@ let DATA = null;
 const PRACTICE_DRIVE_RATINGS = {
   nailed: 'Went well',
   ok: 'Needs practice',
-  struggled: 'Tell instructor'
+  struggled: 'Ask instructor'
 };
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -315,10 +315,13 @@ function skillsWithPracticeSignals() {
 }
 
 function latestReflectionCopy(skillKey) {
+  var CC = window.CC_COMPETENCY;
+  var skill = CC.getSkill(CC.mapLegacySkill(skillKey));
+  var skillLabel = skill ? skill.label : 'this skill';
   var lessons = lessonMap[skillKey] || [];
   if (lessons.length > 0) {
     var label = getRatingLabel(lessons[0].rating);
-    if (label) return 'Your latest reflection was "' + label + '".';
+    if (label) return 'Your latest note for ' + skillLabel + ' was "' + label + '".';
   }
 
   var quiz = quizMap[skillKey];
@@ -331,16 +334,16 @@ function latestReflectionCopy(skillKey) {
 
 function progressSourceLabel(sourceKey) {
   var labels = {
-    'lesson-log': 'Lesson log',
-    'learner-reflection': 'Learner reflection',
-    'practice-drive': 'Practice Drive',
-    'supervisor-reflection': 'Supervisor reflection',
-    'quiz-practice': 'Quiz practice',
-    'formal-mock': 'Formal mock',
-    'instructor-assessment': 'Instructor assessment',
-    'mixed-signal': 'Mixed signals'
+    'lesson-log': 'From your drive notes',
+    'learner-reflection': 'From your drive notes',
+    'practice-drive': 'From practice',
+    'supervisor-reflection': 'From practice notes',
+    'quiz-practice': 'From your quiz',
+    'formal-mock': 'From your mock test',
+    'instructor-assessment': 'From your instructor',
+    'mixed-signal': 'Based on recent activity'
   };
-  return labels[sourceKey] || 'Progress signal';
+  return labels[sourceKey] || 'Suggested next step';
 }
 
 function renderSignalSourceBadge(sourceKey) {
@@ -546,22 +549,22 @@ function renderWeeklySummary() {
     ? 'This week you practised ' + sessions.length + ' time' + (sessions.length === 1 ? '.' : 's.')
     : 'No saved practice this week yet.';
   var practiceCopy = sessions.length > 0
-    ? 'Counted from saved drive logs and Practice Drive sessions.'
+    ? 'Based on the drives and practice you saved.'
     : 'Log a drive or save a Practice Drive to give next week a clearer starting point.';
 
   var strongestValue = strongest
     ? 'Your strongest area looks like ' + strongest.skill.label + '.'
-    : 'Not enough saved evidence yet.';
+    : 'Not enough saved practice yet.';
   var strongestCopy = strongest
-    ? 'This is a gentle signal from the practice data available here.'
-    : 'One or two saved reflections will make this more useful.';
+    ? 'This is based on what you saved.'
+    : 'One or two saved drive notes will make this more useful.';
 
   var focusValue = focus
     ? 'Next week, focus on ' + focus.skill.label + '.'
     : 'Next week, choose one simple focus.';
   var focusCopy = focus
     ? 'Keep it practical: pick a short route or lesson moment where this skill comes up.'
-    : 'Start with a quick learner reflection or a Practice Drive focus area.';
+    : 'Start with a quick drive note or a Practice Drive focus area.';
 
   var askValue = ask
     ? 'Ask your instructor about ' + ask.skill.label + '.'
@@ -642,7 +645,7 @@ function renderRecentPractice() {
     var meta = [];
     if (item.dateLabel) meta.push(item.dateLabel);
     if (item.durationMinutes) meta.push(item.durationMinutes + ' min');
-    if (item.tellInstructorCount > 0) meta.push('Tell instructor ' + item.tellInstructorCount);
+    if (item.tellInstructorCount > 0) meta.push('Ask instructor ' + item.tellInstructorCount);
 
     html += '<div class="practice-summary-card' + (item.tellInstructorCount > 0 ? ' has-alert' : '') + '">';
     html += '<div class="practice-summary-top">';
@@ -1029,7 +1032,7 @@ function renderNextActions() {
       used[mappedKey] = true;
       actions.push({
         title: 'Revisit ' + skillObj.label,
-        copy: 'Your formal mock test records point to this as useful practice.',
+        copy: 'Your mock test showed this is worth practising.',
         source: 'formal-mock',
         href: '/learner/log-session.html',
         cta: 'Log practice on this skill'
@@ -1041,7 +1044,7 @@ function renderNextActions() {
     actions = [
       {
         title: 'Log your next drive',
-        copy: 'Add a quick reflection after practice so your plan can suggest sharper next steps.',
+        copy: 'Add a quick note after practice so your plan can suggest sharper next steps.',
         source: 'learner-reflection',
         href: '/learner/log-session.html',
         cta: 'Log a drive'
@@ -1099,9 +1102,9 @@ function renderGoingWell() {
     var reason = 'Recent practice is building here.';
     if (lessons.length > 0) {
       var ratingLabel = getRatingLabel(lessons[0].rating);
-      if (ratingLabel) reason = 'Latest reflection: ' + ratingLabel + '.';
+      if (ratingLabel) reason = 'Latest note: ' + ratingLabel + '.';
     } else if (quiz && quiz.attempts > 0) {
-      reason = 'Quiz practice is giving this skill useful attention.';
+      reason = 'Your quiz practice is helping here.';
     }
 
     html += '<div class="improve-card">';

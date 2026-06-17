@@ -363,6 +363,12 @@
       padding: 0 18px 20px;
       border-top: 1px solid var(--border);
     }
+    .mock-mark-helper {
+      margin: -4px 0 14px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
 
     /* ── RADAR CHART ── */
     .radar-section { margin-bottom: 36px; }
@@ -943,7 +949,7 @@
 
     <!-- Section 5: Optional skill detail -->
     <details class="advanced-breakdown" id="advanced-breakdown">
-      <summary>Full skill breakdown <span>For a deeper look at skills and formal mock-test detail</span></summary>
+      <summary>Detailed skill view <span>Open this if you want more detail</span></summary>
       <div class="advanced-breakdown-body">
         <div class="radar-section">
           <h2 class="section-title">Skill overview</h2>
@@ -951,7 +957,8 @@
             <canvas id="radar-canvas"></canvas>
           </div>
         </div>
-        <h2 class="section-title">Most recent formal mock test <span id="recent-mock-meta" class="section-title-meta"></span></h2>
+        <h2 class="section-title">Latest mock test detail <span id="recent-mock-meta" class="section-title-meta"></span></h2>
+        <p class="mock-mark-helper">These are mock-test marks: D is a small fault, S is serious, × is dangerous.</p>
         <div id="skill-breakdown"></div>
       </div>
     </details>

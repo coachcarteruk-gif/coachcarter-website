@@ -21,7 +21,10 @@ test.describe('learner progress driving plan flow copy', () => {
     expect(html).toContain('Start your driving plan');
     expect(html).toContain('Log a drive');
     expect(html).toContain('Recent activity');
-    expect(html).toContain('Full skill breakdown');
+    expect(html).toContain('Detailed skill view');
+    expect(html).toContain('Open this if you want more detail');
+    expect(html).toContain('Latest mock test detail');
+    expect(html).toContain('These are mock-test marks: D is a small fault, S is serious, × is dangerous.');
 
     expect(html).not.toContain('DL25 profile');
     expect(html).not.toContain('competency profile');
@@ -66,11 +69,11 @@ test.describe('learner progress driving plan flow copy', () => {
     expect(source).toContain('function summarizeFocusedPracticeSession(row)');
     expect(source).toContain('function renderRecentPractice()');
     expect(source).toContain('DATA.recent_focused_practice');
-    expect(source).toContain("struggled: 'Tell instructor'");
+    expect(source).toContain("struggled: 'Ask instructor'");
     expect(source).toContain('Practice Drive summary');
     expect(source).toContain("renderSignalSourceBadge('supervisor-reflection')");
     expect(source).toContain("area.tellInstructor ? ' tell' : ''");
-    expect(source).toContain("meta.push('Tell instructor ' + item.tellInstructorCount)");
+    expect(source).toContain("meta.push('Ask instructor ' + item.tellInstructorCount)");
     expect(source).toContain('renderRecentPractice();');
   });
 
@@ -106,8 +109,9 @@ test.describe('learner progress driving plan flow copy', () => {
     const body = functionBody(source, 'renderWeeklySummary');
 
     expect(body).toContain('No saved practice this week yet.');
-    expect(body).toContain('Not enough saved evidence yet.');
-    expect(body).toContain('This is a gentle signal from the practice data available here.');
+    expect(body).toContain('Not enough saved practice yet.');
+    expect(body).toContain('This is based on what you saved.');
+    expect(body).toContain('Based on the drives and practice you saved.');
     expect(body).toContain('Log a drive or save a Practice Drive');
     expect(body).not.toContain('saved progress');
   });
@@ -137,15 +141,26 @@ test.describe('learner progress driving plan flow copy', () => {
 
     expect(html).toContain('.source-badge');
     expect(source).toContain('function progressSourceLabel(sourceKey)');
-    expect(source).toContain('Learner reflection');
-    expect(source).toContain('Supervisor reflection');
-    expect(source).toContain('Formal mock');
-    expect(source).toContain('Instructor assessment');
+    expect(source).toContain('From your drive notes');
+    expect(source).toContain('From practice notes');
+    expect(source).toContain('From your mock test');
+    expect(source).toContain('From your instructor');
+    expect(source).toContain('Suggested next step');
     expect(source).toContain('function renderSignalSourceBadge(sourceKey)');
     expect(source).toContain('function latestReflectionSource(skillKey)');
     expect(source).toContain('source: latestReflectionSource(item.skill.key)');
     expect(source).toContain("source: 'formal-mock'");
     expect(source).toContain("renderSignalSourceBadge('formal-mock') + renderSignalSourceBadge('instructor-assessment')");
+  });
+
+  test('next action reflection copy names the skill being referenced', () => {
+    const source = read('public/learner/progress.js');
+    const body = functionBody(source, 'latestReflectionCopy');
+
+    expect(body).toContain("var skill = CC.getSkill(CC.mapLegacySkill(skillKey));");
+    expect(body).toContain("var skillLabel = skill ? skill.label : 'this skill';");
+    expect(body).toContain('Your latest note for ');
+    expect(body).not.toContain('Your latest reflection was "');
   });
 
   test('Practice Drive summary copy avoids formal assessment wording', () => {
