@@ -10,8 +10,8 @@
   <script src="/pwa.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>My Progress | Coach Carter</title>
-  <meta name="description" content="Track your driving competency across lessons, quizzes, and mock tests. See your readiness score and areas for improvement.">
+  <title>My Driving Plan | Coach Carter</title>
+  <meta name="description" content="See what to practise next, what is going well, and your recent driving activity.">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
 <script src="/competency-config.js"></script>
@@ -27,10 +27,9 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* ── MY PROGRESS — competency dossier ───
-       The most data-dense page in the learner hub. Mono labels, tabular
-       numerals, ledger-style stat panels and skill breakdowns. Radar chart
-       is JS-rendered — see progress.js patch at end of body. */
+    /* MY DRIVING PLAN
+       Learner-facing next steps first, with formal skill detail available
+       only when the learner chooses to open the full breakdown. */
 
     :root {
       --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
@@ -126,6 +125,97 @@
       margin-top: 3px;
     }
 
+    .practice-summary-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: -18px 0 32px;
+    }
+    .practice-summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .practice-summary-card.has-alert {
+      border-left: 3px solid var(--red);
+    }
+    .practice-summary-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .practice-summary-title {
+      font-family: var(--font-head);
+      font-size: 0.98rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+    }
+    .source-badge {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--bg);
+      margin-bottom: 8px;
+      margin-right: 6px;
+    }
+    .source-badge.source-lesson-log { color: var(--accent); border-color: var(--accent-mid); background: var(--accent-mid); }
+    .source-badge.source-practice-drive { color: var(--green); border-color: color-mix(in srgb, var(--green) 28%, var(--border)); background: color-mix(in srgb, var(--green) 10%, var(--bg)); }
+    .source-badge.source-quiz-practice { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 30%, var(--border)); background: color-mix(in srgb, var(--amber) 10%, var(--bg)); }
+    .source-badge.source-formal-mock { color: var(--red); border-color: color-mix(in srgb, var(--red) 28%, var(--border)); background: color-mix(in srgb, var(--red) 8%, var(--bg)); }
+    .source-badge.source-mixed-signal { color: var(--primary); }
+    .practice-summary-meta {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .practice-summary-areas {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .practice-summary-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+    .practice-summary-pill.tell {
+      border-color: var(--red);
+      color: var(--red);
+      background: color-mix(in srgb, var(--red) 10%, var(--bg));
+    }
+    .practice-summary-note {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
     /* ── SECTION HEADERS ── */
     .section-title {
       display: flex; align-items: center; gap: 10px;
@@ -146,6 +236,86 @@
       white-space: nowrap;
     }
     .section-title-meta:empty { display: none; }
+
+    /* ── PLAN ACTIONS ── */
+    .plan-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+    .plan-action-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 12px;
+      padding: 16px 18px;
+    }
+    .plan-action-title {
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+      margin-bottom: 6px;
+    }
+    .plan-action-copy {
+      font-size: 0.88rem;
+      line-height: 1.5;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .plan-action-link {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+    }
+    .plan-action-link:hover { text-decoration: underline; }
+    .plan-note {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.55;
+      margin: 0 0 14px;
+    }
+
+    /* ── ADVANCED BREAKDOWN ── */
+    .advanced-breakdown {
+      margin-bottom: 36px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .advanced-breakdown summary {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      cursor: pointer;
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+    }
+    .advanced-breakdown summary span {
+      font-family: var(--font-body);
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0;
+      text-align: right;
+    }
+    .advanced-breakdown-body {
+      padding: 0 18px 20px;
+      border-top: 1px solid var(--border);
+    }
 
     /* ── RADAR CHART ── */
     .radar-section { margin-bottom: 36px; }
@@ -459,7 +629,7 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* ── AREAS FOR IMPROVEMENT ── */
+    /* ── PRACTICE CARDS ── */
     .improve-section { margin-bottom: 36px; }
     .improve-card {
       background: var(--surface);
@@ -664,16 +834,16 @@
   <header class="doc-header">
     <div class="doc-header-left">
       <span class="doc-stamp">CC</span>
-      <span>Progress<span class="doc-meta-dot">·</span>Competency record</span>
+      <span>Driving plan<span class="doc-meta-dot">·</span>Practice notes</span>
     </div>
-    <span id="docHeaderRight">DL25 profile</span>
+    <span id="docHeaderRight">Learner view</span>
   </header>
 
   <!-- Loading state (skeleton) -->
   <div id="loading">
     <div class="page-header">
       <div class="page-eyebrow">Practice tracker</div>
-      <h1>My <em>progress</em>.</h1>
+      <h1>My <em>driving plan</em>.</h1>
       <p><span class="skeleton skeleton-text w-80" style="display:inline-block;height:1em">&nbsp;</span></p>
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px">
@@ -690,12 +860,12 @@
 
   <!-- Empty state -->
   <div id="empty-state" class="empty-state hidden">
-    <div class="empty-icon">📊</div>
-    <h2>Start tracking your progress</h2>
-    <p>Log your first session or take the Examiner Quiz to begin building your competency profile.</p>
+    <div class="empty-icon">+</div>
+    <h2>Start your driving plan</h2>
+    <p>Log a drive after your next practice session. Your plan will then suggest what to practise next.</p>
     <div class="empty-actions">
-      <a href="/learner/log-session.html" class="btn-primary">Log a session</a>
-      <a href="/learner/examiner-quiz.html" class="btn-secondary">Examiner Quiz</a>
+      <a href="/learner/log-session.html" class="btn-primary">Log a drive</a>
+      <a href="/learner/examiner-quiz.html" class="btn-secondary">Try the Examiner Quiz</a>
     </div>
   </div>
 
@@ -703,45 +873,53 @@
   <div id="main-content" class="hidden">
     <div class="page-header">
       <div class="page-eyebrow">Practice tracker</div>
-      <h1>My <em>progress</em>.</h1>
-      <p>Your full competency profile across lessons, quizzes, and mock tests.</p>
+      <h1>My <em>driving plan</em>.</h1>
+      <p>Use this to choose your next practice focus and spot what is already improving.</p>
     </div>
 
-    <!-- Section 1: Header Stats -->
+    <!-- Section 1: Learner next steps -->
+    <div class="improve-section" id="next-actions-section"></div>
+
+    <!-- Section 2: Recent activity -->
+    <h2 class="section-title">Recent activity</h2>
     <div class="stats-grid" id="stats-grid"></div>
+    <div id="recent-practice-section"></div>
 
-    <!-- Section 2: Radar Chart -->
-    <div class="radar-section">
-      <h2 class="section-title">Competency overview</h2>
-      <div class="radar-wrap">
-        <canvas id="radar-canvas"></canvas>
-      </div>
-    </div>
-
-    <!-- Section 3: Skill Breakdown -->
-    <h2 class="section-title">Most recent mock test <span id="recent-mock-meta" class="section-title-meta"></span></h2>
-    <div id="skill-breakdown"></div>
+    <!-- Section 3: What is going well -->
+    <div class="improve-section" id="going-well-section"></div>
 
     <!-- Section 4: Mock Test History -->
     <div class="mock-section" id="mock-section"></div>
 
-    <!-- Section 5: Areas for Improvement -->
-    <div class="improve-section" id="improve-section"></div>
+    <!-- Section 5: Optional skill detail -->
+    <details class="advanced-breakdown" id="advanced-breakdown">
+      <summary>Full skill breakdown <span>For a deeper look at skills and formal mock-test detail</span></summary>
+      <div class="advanced-breakdown-body">
+        <div class="radar-section">
+          <h2 class="section-title">Skill overview</h2>
+          <div class="radar-wrap">
+            <canvas id="radar-canvas"></canvas>
+          </div>
+        </div>
+        <h2 class="section-title">Most recent formal mock test <span id="recent-mock-meta" class="section-title-meta"></span></h2>
+        <div id="skill-breakdown"></div>
+      </div>
+    </details>
 
-    <!-- Section 6: Quick Actions -->
-    <h2 class="section-title">Quick actions</h2>
+    <!-- Section 6: More practice routes -->
+    <h2 class="section-title">More ways to practise</h2>
     <div class="actions-grid">
       <a href="/learner/log-session.html" class="action-card">
-        <span class="action-icon">📝</span>
-        <span class="action-label">Log a session</span>
+        <span class="action-icon">+</span>
+        <span class="action-label">Log a drive</span>
+      </a>
+      <a href="/learner/focused-practice.html" class="action-card">
+        <span class="action-icon">?</span>
+        <span class="action-label">Practice with a supervisor</span>
       </a>
       <a href="/learner/mock-test.html" class="action-card">
-        <span class="action-icon">🚗</span>
+        <span class="action-icon">M</span>
         <span class="action-label">Take a mock test</span>
-      </a>
-      <a href="/learner/examiner-quiz.html" class="action-card">
-        <span class="action-icon">🧠</span>
-        <span class="action-label">Examiner Quiz</span>
       </a>
     </div>
   </div>

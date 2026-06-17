@@ -345,11 +345,12 @@
 
     /* ── FAULT ROW ── */
     .fault-row {
-      display: flex; gap: 8px;
+      display: none; gap: 8px;
       margin-top: 12px; padding-top: 12px;
       border-top: 1px dashed var(--border);
       align-items: center;
     }
+    body.show-advanced-faults .fault-row { display: flex; }
     .fault-label {
       font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
       color: var(--muted);
@@ -395,6 +396,45 @@
       font-size: 0.92rem;
       line-height: 1.5;
     }
+
+    .advanced-panel {
+      margin-bottom: 16px;
+      padding: 14px 16px;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .advanced-panel[hidden] { display: none; }
+    .advanced-toggle {
+      width: 100%;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 0;
+      background: transparent;
+      border: 0;
+      color: var(--primary);
+      cursor: pointer;
+      text-align: left;
+      font-family: var(--font-head); font-size: 0.95rem; font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .advanced-toggle::after {
+      content: '+';
+      width: 24px; height: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .advanced-toggle[aria-expanded="true"]::after { content: '-'; }
+    .advanced-copy {
+      display: none;
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+    .advanced-copy.show { display: block; }
 
     /* ── SUMMARY ── */
     .summary-grid {
@@ -714,7 +754,7 @@
   <header class="doc-header">
     <div class="doc-header-left">
       <span class="doc-stamp">CC</span>
-      <span>Session log<span class="doc-meta-dot">·</span>Practice journal</span>
+      <span>Log a drive<span class="doc-meta-dot">·</span>Practice journal</span>
     </div>
     <span class="step-tag" id="step-tag">Details</span>
   </header>
@@ -736,7 +776,7 @@
     <div class="step-header">
       <div class="step-eyebrow">Step 1 — Details</div>
       <h2 class="step-title">Tell us about <em>this drive</em>.</h2>
-      <p class="step-sub">Quick basics before you rate how it went.</p>
+      <p class="step-sub">Quick basics first. Most people can finish this in under a minute.</p>
     </div>
 
     <div id="booking-prefill" style="display:none;"></div>
@@ -755,8 +795,8 @@
       <div class="form-group">
         <label>Session type</label>
         <div class="type-toggle">
-          <button class="type-btn selected" id="btn-instructor">With instructor</button>
-          <button class="type-btn" id="btn-private">Private practice</button>
+          <button class="type-btn" id="btn-instructor">With instructor</button>
+          <button class="type-btn selected" id="btn-private">Private practice</button>
         </div>
       </div>
     </div>
@@ -769,15 +809,22 @@
   <!-- ═══ STEP 2: Rate all skills ═══ -->
   <div class="step" id="step-2">
     <div class="step-header">
-      <div class="step-eyebrow">Step 2 — Rate</div>
-      <h2 class="step-title">Rate your <em>skills</em>.</h2>
-      <p class="step-sub">Tap an area to expand it, then rate each skill. Optional fault counters for instructor-led sessions.</p>
+      <div class="step-eyebrow">Step 2 — Reflect</div>
+      <h2 class="step-title">How did it <em>feel</em>?</h2>
+      <p class="step-sub">Tap an area you practised, then choose the traffic-light rating that best fits.</p>
     </div>
 
     <div class="rating-legend">
       <span><span class="tl-dot-sm dot-struggled"></span> Needs work</span>
       <span><span class="tl-dot-sm dot-ok"></span> Getting there</span>
       <span><span class="tl-dot-sm dot-nailed"></span> Confident</span>
+    </div>
+
+    <div class="advanced-panel" id="advanced-instructor-panel" hidden>
+      <button type="button" class="advanced-toggle" id="advanced-toggle" aria-expanded="false">
+        Advanced instructor notes
+      </button>
+      <p class="advanced-copy" id="advanced-copy">Only open this if an instructor asked you to record formal marks from the session.</p>
     </div>
 
     <div id="skills-container"></div>
@@ -793,14 +840,14 @@
     <div class="step-header">
       <div class="step-eyebrow">Step 3 — Notes</div>
       <h2 class="step-title">Anything <em>worth remembering</em>?</h2>
-      <p class="step-sub">Optional — jot down moments, weak spots, or things your instructor mentioned.</p>
+      <p class="step-sub">Optional - add anything you want your future self or instructor to remember.</p>
     </div>
 
     <div class="card">
       <textarea
         id="notes"
         class="notes-textarea"
-        placeholder="What stood out today? Any moments, areas, or things your instructor mentioned..."
+        placeholder="What stood out today? What felt better? What should you practise next?"
       ></textarea>
     </div>
 
@@ -825,9 +872,9 @@
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
       </div>
-      <div class="success-title">Session <em>logged</em>.</div>
-      <div class="success-sub">Progress updated</div>
-      <a href="/learner/log-session.html" class="btn-dashboard">Log another</a>
+      <div class="success-title">Drive <em>logged</em>.</div>
+      <div class="success-sub">Saved as a drive-log learner reflection. Your driving plan now uses these ratings to suggest what to practise next.</div>
+      <a href="/learner/progress.html" class="btn-dashboard">View my driving plan</a>
     </div>
   </div>
 </main>

@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instructor Franchise Calculator</title>
+  <style>
+    :root {
+      --bg: #f6f3ee;
+      --surface: #fffdf8;
+      --surface-strong: #f0e7d7;
+      --ink: #17201c;
+      --muted: #66716b;
+      --line: #ddd2c0;
+      --accent: #12664f;
+      --accent-strong: #0b4f3c;
+      --warning: #9b4d16;
+      --danger: #a72f27;
+      --good: #1e6b42;
+      --shadow: 0 18px 48px rgba(31, 25, 14, 0.1);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0 56px;
+    }
+
+    header {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      margin: 0;
+      color: var(--accent-strong);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 4.5rem);
+      line-height: 0.96;
+      letter-spacing: 0;
+    }
+
+    .intro {
+      max-width: 780px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.04rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(300px, 420px) 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel,
+    .metric,
+    .note,
+    .table-wrap {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .panel {
+      padding: 18px;
+    }
+
+    .panel h2,
+    .results h2 {
+      margin: 0 0 14px;
+      font-size: 1rem;
+      line-height: 1.2;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+    }
+
+    label {
+      color: #2d3732;
+      font-size: 0.9rem;
+      font-weight: 750;
+    }
+
+    .control {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 8px;
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #ffffff;
+      padding: 0 12px;
+    }
+
+    .suffix-only {
+      grid-template-columns: 1fr auto;
+    }
+
+    .prefix,
+    .suffix {
+      color: var(--muted);
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    input {
+      width: 100%;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      color: var(--ink);
+      background: transparent;
+      font: inherit;
+      font-weight: 760;
+      appearance: textfield;
+    }
+
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+      margin: 0;
+      appearance: none;
+    }
+
+    .control:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(18, 102, 79, 0.16);
+    }
+
+    .help {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .notes {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .note {
+      padding: 12px;
+      box-shadow: none;
+      background: var(--surface-strong);
+    }
+
+    .note strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 0.85rem;
+    }
+
+    .note p {
+      margin: 0;
+      color: #594f43;
+      font-size: 0.84rem;
+    }
+
+    .results {
+      display: grid;
+      gap: 18px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      min-height: 128px;
+      padding: 16px;
+      display: grid;
+      align-content: space-between;
+      gap: 14px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 750;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: clamp(1.5rem, 3vw, 2.4rem);
+      line-height: 1;
+      word-break: break-word;
+    }
+
+    .metric small {
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .metric.primary {
+      border-color: rgba(18, 102, 79, 0.36);
+      background: #e6f0eb;
+    }
+
+    .metric.warning {
+      border-color: rgba(155, 77, 22, 0.3);
+      background: #f7eadb;
+    }
+
+    .insight-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      box-shadow: none;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 680px;
+    }
+
+    th,
+    td {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th {
+      color: #4c5851;
+      background: #f2eadf;
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td:first-child {
+      color: #303a35;
+      font-weight: 780;
+    }
+
+    .delta {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 0.84rem;
+      font-weight: 800;
+    }
+
+    .delta.good {
+      color: var(--good);
+      background: rgba(30, 107, 66, 0.12);
+    }
+
+    .delta.bad {
+      color: var(--danger);
+      background: rgba(167, 47, 39, 0.12);
+    }
+
+    .summary {
+      display: grid;
+      gap: 10px;
+      padding: 16px;
+      border: 1px solid rgba(18, 102, 79, 0.28);
+      border-radius: var(--radius);
+      background: #edf5ef;
+    }
+
+    .summary p {
+      margin: 0;
+      color: #293831;
+    }
+
+    .summary strong {
+      color: var(--accent-strong);
+    }
+
+    .reset-row {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+
+    button {
+      min-height: 44px;
+      border: 1px solid var(--accent);
+      border-radius: 7px;
+      background: var(--accent);
+      color: #ffffff;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--accent-strong);
+    }
+
+    button:focus-visible {
+      outline: 3px solid rgba(18, 102, 79, 0.24);
+      outline-offset: 2px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 940px) {
+      main {
+        width: min(100% - 24px, 720px);
+        padding-top: 28px;
+      }
+
+      .layout,
+      .metrics,
+      .insight-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .metric {
+        min-height: 112px;
+      }
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .metric,
+      .panel,
+      .summary {
+        transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">CoachCarter planning tool</p>
+      <h1>Instructor franchise calculator</h1>
+      <p class="intro">
+        Model the weekly cost of providing a car, then compare a straight franchise fee against a franchise fee plus a percentage cut of lesson revenue.
+      </p>
+    </header>
+
+    <div class="layout">
+      <section class="panel" aria-labelledby="inputs-title">
+        <h2 id="inputs-title">Editable assumptions</h2>
+        <div class="form-grid">
+          <div class="field">
+            <label for="annualDepreciation">Annual car depreciation</label>
+            <div class="control">
+              <span class="prefix">&pound;</span>
+              <input id="annualDepreciation" type="number" inputmode="decimal" min="0" step="50" value="3000">
+              <span class="suffix">per year</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="monthlyComms">Phone, SMS, email cost</label>
+            <div class="control">
+              <span class="prefix">&pound;</span>
+              <input id="monthlyComms" type="number" inputmode="decimal" min="0" step="1" value="15">
+              <span class="suffix">per month</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="targetProfit">Target profit</label>
+            <div class="control">
+              <span class="prefix">&pound;</span>
+              <input id="targetProfit" type="number" inputmode="decimal" min="0" step="10" value="150">
+              <span class="suffix">per week</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="hoursPerWeek">Instructor hours delivered</label>
+            <div class="control suffix-only">
+              <input id="hoursPerWeek" type="number" inputmode="decimal" min="0" step="0.5" value="30">
+              <span class="suffix">hours/week</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="hourlyRate">Learner hourly rate</label>
+            <div class="control">
+              <span class="prefix">&pound;</span>
+              <input id="hourlyRate" type="number" inputmode="decimal" min="0" step="1" value="55">
+              <span class="suffix">per hour</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="franchiseFee">Proposed franchise fee</label>
+            <div class="control">
+              <span class="prefix">&pound;</span>
+              <input id="franchiseFee" type="number" inputmode="decimal" min="0" step="5" value="200">
+              <span class="suffix">per week</span>
+            </div>
+            <p class="help">This is the fixed weekly amount the instructor pays you.</p>
+          </div>
+
+          <div class="field">
+            <label for="lessonCut">Proposed lesson revenue cut</label>
+            <div class="control suffix-only">
+              <input id="lessonCut" type="number" inputmode="decimal" min="0" step="0.5" value="10">
+              <span class="suffix">%</span>
+            </div>
+            <p class="help">Calculated from total learner revenue: hours multiplied by hourly rate.</p>
+          </div>
+        </div>
+
+        <div class="notes" aria-label="Initial investment notes">
+          <div class="note">
+            <strong>Initial investment note</strong>
+            <p>Dual controls: &pound;600. Signage: &pound;600. These are visible planning notes only and are not included in weekly calculations.</p>
+          </div>
+        </div>
+
+        <div class="reset-row">
+          <button type="button" id="resetDefaults">Reset defaults</button>
+        </div>
+      </section>
+
+      <section class="results" aria-labelledby="results-title" aria-live="polite">
+        <h2 id="results-title" class="sr-only">Calculator results</h2>
+
+        <div class="metrics">
+          <article class="metric">
+            <span>Weekly cost to you</span>
+            <strong id="weeklyCost">&pound;0</strong>
+            <small id="weeklyCostDetail">Depreciation plus phone, SMS and email.</small>
+          </article>
+
+          <article class="metric">
+            <span>Weekly learner revenue</span>
+            <strong id="lessonRevenue">&pound;0</strong>
+            <small id="lessonRevenueDetail">Before franchise fee or percentage cut.</small>
+          </article>
+
+          <article class="metric primary">
+            <span>Minimum franchise fee with no cut</span>
+            <strong id="requiredFranchiseOnly">&pound;0</strong>
+            <small>Cost plus target weekly profit.</small>
+          </article>
+        </div>
+
+        <div class="summary" id="plainEnglishSummary">
+          <p>Enter the assumptions on the left to see the model update.</p>
+        </div>
+
+        <div class="insight-grid">
+          <article class="metric">
+            <span>Fee needed with chosen cut</span>
+            <strong id="requiredFeeWithCut">&pound;0</strong>
+            <small id="requiredFeeWithCutNote">Uses your proposed percentage cut.</small>
+          </article>
+
+          <article class="metric">
+            <span>Cut needed with chosen fee</span>
+            <strong id="requiredCutWithFee">0%</strong>
+            <small id="requiredCutWithFeeNote">Uses your proposed franchise fee.</small>
+          </article>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>Revenue to you</th>
+                <th>Profit to you</th>
+                <th>Target position</th>
+                <th>Instructor keeps</th>
+                <th>Annual profit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Franchise only</td>
+                <td id="franchiseOnlyRevenue">&pound;0</td>
+                <td id="franchiseOnlyProfit">&pound;0</td>
+                <td id="franchiseOnlyDelta"></td>
+                <td id="franchiseOnlyInstructor">&pound;0</td>
+                <td id="franchiseOnlyAnnual">&pound;0</td>
+              </tr>
+              <tr>
+                <td>Franchise + percentage cut</td>
+                <td id="comboRevenue">&pound;0</td>
+                <td id="comboProfit">&pound;0</td>
+                <td id="comboDelta"></td>
+                <td id="comboInstructor">&pound;0</td>
+                <td id="comboAnnual">&pound;0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const defaults = {
+      annualDepreciation: 3000,
+      monthlyComms: 15,
+      targetProfit: 150,
+      hoursPerWeek: 30,
+      hourlyRate: 55,
+      franchiseFee: 200,
+      lessonCut: 10
+    };
+
+    const ids = Object.keys(defaults);
+    const elements = ids.reduce((all, id) => {
+      all[id] = document.getElementById(id);
+      return all;
+    }, {});
+
+    const outputIds = [
+      "weeklyCost",
+      "weeklyCostDetail",
+      "lessonRevenue",
+      "lessonRevenueDetail",
+      "requiredFranchiseOnly",
+      "plainEnglishSummary",
+      "requiredFeeWithCut",
+      "requiredFeeWithCutNote",
+      "requiredCutWithFee",
+      "requiredCutWithFeeNote",
+      "franchiseOnlyRevenue",
+      "franchiseOnlyProfit",
+      "franchiseOnlyDelta",
+      "franchiseOnlyInstructor",
+      "franchiseOnlyAnnual",
+      "comboRevenue",
+      "comboProfit",
+      "comboDelta",
+      "comboInstructor",
+      "comboAnnual"
+    ];
+
+    const outputs = outputIds.reduce((all, id) => {
+      all[id] = document.getElementById(id);
+      return all;
+    }, {});
+
+    const currency = new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: "GBP",
+      maximumFractionDigits: 0
+    });
+
+    const preciseCurrency = new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: "GBP",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+    const percent = new Intl.NumberFormat("en-GB", {
+      maximumFractionDigits: 1
+    });
+
+    function readNumber(id) {
+      const value = Number.parseFloat(elements[id].value);
+      return Number.isFinite(value) && value >= 0 ? value : 0;
+    }
+
+    function money(value, precise = false) {
+      return (precise ? preciseCurrency : currency).format(value);
+    }
+
+    function setDelta(node, value) {
+      const met = value >= 0;
+      node.className = "";
+      const label = met
+        ? `${money(value)} above target`
+        : `${money(Math.abs(value))} short`;
+      node.innerHTML = `<span class="delta ${met ? "good" : "bad"}">${label}</span>`;
+    }
+
+    function calculate() {
+      const annualDepreciation = readNumber("annualDepreciation");
+      const monthlyComms = readNumber("monthlyComms");
+      const targetProfit = readNumber("targetProfit");
+      const hoursPerWeek = readNumber("hoursPerWeek");
+      const hourlyRate = readNumber("hourlyRate");
+      const franchiseFee = readNumber("franchiseFee");
+      const lessonCut = readNumber("lessonCut");
+
+      const weeklyDepreciation = annualDepreciation / 52;
+      const weeklyComms = monthlyComms * 12 / 52;
+      const weeklyCost = weeklyDepreciation + weeklyComms;
+      const lessonRevenue = hoursPerWeek * hourlyRate;
+      const requiredFranchiseOnly = weeklyCost + targetProfit;
+
+      const cutRevenue = lessonRevenue * (lessonCut / 100);
+      const comboRevenue = franchiseFee + cutRevenue;
+      const comboProfit = comboRevenue - weeklyCost;
+      const franchiseOnlyProfit = franchiseFee - weeklyCost;
+
+      const requiredFeeWithCutRaw = requiredFranchiseOnly - cutRevenue;
+      const requiredFeeWithCut = Math.max(0, requiredFeeWithCutRaw);
+      const cutNeededRaw = lessonRevenue > 0
+        ? ((requiredFranchiseOnly - franchiseFee) / lessonRevenue) * 100
+        : 0;
+      const requiredCutWithFee = Math.max(0, cutNeededRaw);
+
+      const franchiseOnlyInstructor = lessonRevenue - franchiseFee;
+      const comboInstructor = lessonRevenue - cutRevenue - franchiseFee;
+
+      outputs.weeklyCost.textContent = money(weeklyCost, true);
+      outputs.weeklyCostDetail.textContent = `${money(weeklyDepreciation, true)} depreciation + ${money(weeklyComms, true)} comms.`;
+      outputs.lessonRevenue.textContent = money(lessonRevenue);
+      outputs.lessonRevenueDetail.textContent = `${hoursPerWeek.toLocaleString("en-GB")} hours at ${money(hourlyRate)} per hour.`;
+      outputs.requiredFranchiseOnly.textContent = money(requiredFranchiseOnly, true);
+
+      outputs.requiredFeeWithCut.textContent = money(requiredFeeWithCut, true);
+      outputs.requiredFeeWithCutNote.textContent = requiredFeeWithCutRaw <= 0
+        ? "The percentage cut already covers the weekly cost and profit target."
+        : `After a ${percent.format(lessonCut)}% cut worth ${money(cutRevenue)}, this fee is still needed.`;
+
+      outputs.requiredCutWithFee.textContent = `${percent.format(requiredCutWithFee)}%`;
+      outputs.requiredCutWithFeeNote.textContent = cutNeededRaw <= 0
+        ? "The proposed franchise fee already covers the weekly cost and profit target."
+        : `At the current hourly rate and hours, this is the cut needed to hit target.`;
+
+      outputs.franchiseOnlyRevenue.textContent = money(franchiseFee);
+      outputs.franchiseOnlyProfit.textContent = money(franchiseOnlyProfit, true);
+      setDelta(outputs.franchiseOnlyDelta, franchiseOnlyProfit - targetProfit);
+      outputs.franchiseOnlyInstructor.textContent = money(franchiseOnlyInstructor, true);
+      outputs.franchiseOnlyAnnual.textContent = money(franchiseOnlyProfit * 52);
+
+      outputs.comboRevenue.textContent = money(comboRevenue);
+      outputs.comboProfit.textContent = money(comboProfit, true);
+      setDelta(outputs.comboDelta, comboProfit - targetProfit);
+      outputs.comboInstructor.textContent = money(comboInstructor, true);
+      outputs.comboAnnual.textContent = money(comboProfit * 52);
+
+      const targetMet = comboProfit >= targetProfit;
+      const summary = targetMet
+        ? `With a ${money(franchiseFee)} weekly fee and a ${percent.format(lessonCut)}% lesson cut, you make ${money(comboProfit, true)} profit per week, which is ${money(comboProfit - targetProfit, true)} above your target. The instructor keeps ${money(comboInstructor, true)} from ${money(lessonRevenue)} of weekly lesson revenue.`
+        : `With a ${money(franchiseFee)} weekly fee and a ${percent.format(lessonCut)}% lesson cut, you make ${money(comboProfit, true)} profit per week, which is ${money(targetProfit - comboProfit, true)} short of your target. You would need either a ${money(requiredFeeWithCut, true)} franchise fee at this cut, or a ${percent.format(requiredCutWithFee)}% cut at this fee.`;
+
+      outputs.plainEnglishSummary.innerHTML = `<p>${summary}</p>`;
+
+      const instructorNegative = comboInstructor < 0 || franchiseOnlyInstructor < 0;
+      document.querySelectorAll(".metric.warning").forEach((node) => node.classList.remove("warning"));
+      if (instructorNegative) {
+        outputs.plainEnglishSummary.innerHTML += "<p><strong>Check the instructor figure:</strong> one scenario leaves the instructor below zero after your fee and cut.</p>";
+      }
+    }
+
+    ids.forEach((id) => {
+      elements[id].addEventListener("input", calculate);
+    });
+
+    document.getElementById("resetDefaults").addEventListener("click", () => {
+      ids.forEach((id) => {
+        elements[id].value = defaults[id];
+      });
+      calculate();
+    });
+
+    calculate();
+  </script>
+</body>
+</html>

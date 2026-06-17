@@ -13,7 +13,11 @@ var wakeLock = null;
 var reflections = {}; // { catKey: { rating, note, dl25Skills } }
 
 var SUP_CATS = CC_COMPETENCY.SUPERVISOR_CATEGORIES;
-var RATINGS = CC_COMPETENCY.RATINGS;
+var PRACTICE_RATINGS = [
+  { key: 'nailed', label: 'Went well' },
+  { key: 'ok', label: 'Needs practice' },
+  { key: 'struggled', label: 'Tell instructor' }
+];
 
 /* ── Helpers ── */
 function showScreen(id) {
@@ -37,6 +41,23 @@ function apiCall(method, action, body) {
   };
   if (body) opts.body = JSON.stringify(body);
   return ccAuth.fetchAuthed('/api/learner?action=' + action, opts);
+}
+
+function escHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildPracticeNote(parts) {
+  var noteParts = [];
+  if (parts.what) noteParts.push('What happened: ' + parts.what);
+  if (parts.where) noteParts.push('Where: ' + parts.where);
+  if (parts.instructor) noteParts.push('For instructor: ' + parts.instructor);
+  return noteParts.join('\n');
 }
 
 /* ── Init ── */
@@ -68,7 +89,7 @@ function buildSkillScores() {
   var qa = competencyData.quiz_accuracy || [];
   var mf = competencyData.mock_faults || [];
 
-  // Build per-skill readiness
+  // Build per-skill suggestions from existing learner signals.
   var SKILLS = CC_COMPETENCY.SKILLS;
   for (var i = 0; i < SKILLS.length; i++) {
     var sk = SKILLS[i];
@@ -129,9 +150,9 @@ function renderSetup() {
 }
 
 function renderAreaPick(cat, score, isSelected) {
-  var scoreColor = score >= 70 ? '#166534' : score >= 40 ? '#b45309' : '#dc2626';
-  var scoreBg = score >= 70 ? '#dcfce7' : score >= 40 ? '#fffbeb' : 'var(--red-lt)';
-  var scoreText = score > 0 ? score + '%' : 'New';
+  var scoreColor = score > 0 ? 'var(--accent)' : 'var(--muted)';
+  var scoreBg = 'transparent';
+  var scoreText = score > 0 ? 'Suggested' : 'Pick';
   return '<div class="area-pick' + (isSelected ? ' selected' : '') + '" data-action="toggle-area" data-cat="' + cat.key + '">' +
     '<span class="area-pick-icon">' + cat.icon + '</span>' +
     '<div class="area-pick-text">' +
@@ -247,7 +268,7 @@ function goToReflection() {
   selectedAreas.forEach(function(catKey) {
     var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
     if (!cat) return;
-    reflections[catKey] = { rating: null, note: '', dl25Skills: cat.dl25Skills };
+    reflections[catKey] = { rating: null, what: '', where: '', instructor: '', note: '', dl25Skills: cat.dl25Skills };
 
     html += '<div class="reflect-area" data-cat="' + catKey + '">';
     html += '<div class="reflect-area-header">';
@@ -255,11 +276,15 @@ function goToReflection() {
     html += '<span class="reflect-area-q">' + cat.reflectionQ + '</span>';
     html += '</div>';
     html += '<div class="reflect-btns">';
-    RATINGS.forEach(function(r) {
+    PRACTICE_RATINGS.forEach(function(r) {
       html += '<button class="reflect-btn" data-action="set-reflection" data-cat="' + catKey + '" data-rating="' + r.key + '">' + r.label + '</button>';
     });
     html += '</div>';
-    html += '<textarea class="reflect-note" data-action="set-reflection-note" data-cat="' + catKey + '" placeholder="Optional notes..."></textarea>';
+    html += '<div class="reflect-note-grid">';
+    html += '<input class="reflect-note" data-action="set-reflection-note" data-note-field="what" data-cat="' + catKey + '" placeholder="What happened?" maxlength="160">';
+    html += '<input class="reflect-note" data-action="set-reflection-note" data-note-field="where" data-cat="' + catKey + '" placeholder="Where did it happen?" maxlength="120">';
+    html += '<textarea class="reflect-note reflect-note-wide" data-action="set-reflection-note" data-note-field="instructor" data-cat="' + catKey + '" placeholder="Anything the instructor should know?" maxlength="260"></textarea>';
+    html += '</div>';
     html += '</div>';
   });
 
@@ -280,8 +305,11 @@ function setReflection(catKey, rating) {
   checkReflectionComplete();
 }
 
-function setReflectionNote(catKey, note) {
-  if (reflections[catKey]) reflections[catKey].note = note;
+function setReflectionNote(catKey, field, value) {
+  if (!reflections[catKey]) return;
+  if (field !== 'what' && field !== 'where' && field !== 'instructor') return;
+  reflections[catKey][field] = value.trim();
+  reflections[catKey].note = buildPracticeNote(reflections[catKey]);
 }
 
 function checkReflectionComplete() {
@@ -300,7 +328,7 @@ async function saveReflection() {
 
   releaseWakeLock();
 
-  // Build API payload — reflections keyed by DL25 skill_key
+  // Build API payload keyed by the skill_key expected by the existing endpoint.
   var apiReflections = {};
   for (var catKey in reflections) {
     var r = reflections[catKey];
@@ -333,32 +361,34 @@ async function saveReflection() {
 function showResultsScreen() {
   var durationMin = Math.ceil(timerSeconds / 60);
   document.getElementById('results-subtitle').textContent =
-    durationMin + ' minute' + (durationMin !== 1 ? 's' : '') + ' of focused practice completed.';
+    durationMin + ' minute' + (durationMin !== 1 ? 's' : '') + ' practice drive completed. Saved as a supervisor reflection.';
 
   var cardsHtml = '';
   var needsWork = [];
+  var tellInstructor = [];
 
   selectedAreas.forEach(function(catKey) {
     var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
     var r = reflections[catKey];
     if (!cat || !r) return;
 
-    var ratingObj = RATINGS.find(function(rt) { return rt.key === r.rating; });
+    var ratingObj = PRACTICE_RATINGS.find(function(rt) { return rt.key === r.rating; });
     var ratingLabel = ratingObj ? ratingObj.label : r.rating;
     var badgeClass = r.rating;
 
     cardsHtml += '<div class="result-area-card">';
     cardsHtml += '<div class="result-area-header">';
     cardsHtml += '<span style="font-size:1.1rem;">' + cat.icon + '</span>';
-    cardsHtml += '<span class="result-area-name">' + cat.label + '</span>';
-    cardsHtml += '<span class="result-area-badge ' + badgeClass + '">' + ratingLabel + '</span>';
+    cardsHtml += '<span class="result-area-name">' + escHtml(cat.label) + '</span>';
+    cardsHtml += '<span class="result-area-badge ' + badgeClass + '">' + escHtml(ratingLabel) + '</span>';
     cardsHtml += '</div>';
     if (r.note) {
-      cardsHtml += '<div class="result-area-note">"' + r.note + '"</div>';
+      cardsHtml += '<div class="result-area-note">' + escHtml(r.note).replace(/\n/g, '<br>') + '</div>';
     }
     cardsHtml += '</div>';
 
-    if (r.rating === 'struggled') needsWork.push(cat.label);
+    if (r.rating === 'ok') needsWork.push(cat.label);
+    if (r.rating === 'struggled') tellInstructor.push(cat.label);
   });
 
   document.getElementById('result-cards').innerHTML = cardsHtml;
@@ -366,10 +396,12 @@ function showResultsScreen() {
   // Next steps suggestion
   var nextHtml = '<div class="result-next">';
   nextHtml += '<h3>What next?</h3>';
-  if (needsWork.length > 0) {
-    nextHtml += '<p>Keep practising <strong>' + needsWork.join(', ') + '</strong> \u2014 try another focused session on ' + (needsWork.length === 1 ? 'this area' : 'these areas') + ', or take a mock test to see how you\'d do overall.</p>';
+  if (tellInstructor.length > 0) {
+    nextHtml += '<p>Tell your instructor about <strong>' + escHtml(tellInstructor.join(', ')) + '</strong> next lesson so they can help with it.</p>';
+  } else if (needsWork.length > 0) {
+    nextHtml += '<p>Keep practising <strong>' + escHtml(needsWork.join(', ')) + '</strong> on another practice drive, or ask your instructor for tips next lesson.</p>';
   } else {
-    nextHtml += '<p>Great session! Consider trying a mock test to see how you perform across all areas, or pick some new areas to focus on.</p>';
+    nextHtml += '<p>Great drive. Pick a new focus area next time, or open your driving plan to see what else is worth practising.</p>';
   }
   nextHtml += '</div>';
   document.getElementById('result-next').innerHTML = nextHtml;
@@ -387,7 +419,7 @@ document.addEventListener('click', function (e) {
 });
 document.addEventListener('input', function (e) {
   var target = e.target.closest('[data-action="set-reflection-note"]');
-  if (target) setReflectionNote(target.dataset.cat, target.value);
+  if (target) setReflectionNote(target.dataset.cat, target.dataset.noteField, target.value);
 });
 // ── Static handlers previously inline in HTML ──
 (function wire() {

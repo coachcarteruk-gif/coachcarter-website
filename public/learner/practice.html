@@ -23,10 +23,7 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* ── PRACTICE HUB — DL25 dossier vocabulary ───
-       Establishes the tab's visual language. Each tool gets a mono code
-       (LOG / MOCK / FCS / TRK) and a coloured icon outline so they're
-       distinguishable at a glance. */
+    /* Practice hub: learner-friendly routes for between-lesson work. */
 
     :root {
       --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
@@ -151,8 +148,7 @@
 
     .hub-card-body { min-width: 0; }
 
-    /* Mono code badge above the title */
-    .hub-card-code {
+    .hub-card-kicker {
       display: inline-flex; align-items: center;
       padding: 2px 6px;
       font-family: var(--font-mono); font-size: 0.58rem; font-weight: 700;
@@ -194,18 +190,18 @@
     <header class="doc-header">
       <div class="doc-header-left">
         <span class="doc-stamp">CC</span>
-        <span>Practice hub<span class="doc-meta-dot">·</span>Between-lesson tools</span>
+        <span>Practice hub<span class="doc-meta-dot">·</span>Between lessons</span>
       </div>
-      <span>4 tools</span>
+      <span>4 ways</span>
     </header>
 
     <section class="hub-header">
       <div class="hub-eyebrow">Build your skills</div>
       <h1 class="hub-title"><em>Practice</em>.</h1>
-      <p class="hub-subtitle">Tools for your time between lessons. Log private drives, run a full mock test, focus on weak areas, or check your overall readiness.</p>
+      <p class="hub-subtitle">Simple ways to capture what happened between lessons, choose what to practise next, and keep your instructor in the loop.</p>
     </section>
 
-    <div class="section-label">Choose a tool</div>
+    <div class="section-label">What would you like to do?</div>
 
     <div class="hub-grid">
       <a href="/learner/log-session.html" class="hub-card log">
@@ -213,20 +209,9 @@
           <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
         </div>
         <div class="hub-card-body">
-          <span class="hub-card-code">LOG</span>
-          <h2 class="hub-card-title">Log a session</h2>
-          <p class="hub-card-desc">Record private drives or lessons. Rate skills and track hours behind the wheel.</p>
-        </div>
-      </a>
-
-      <a href="/learner/mock-test.html" class="hub-card mock">
-        <div class="hub-icon">
-          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </div>
-        <div class="hub-card-body">
-          <span class="hub-card-code">MOCK</span>
-          <h2 class="hub-card-title">Mock test</h2>
-          <p class="hub-card-desc">Run a full DVSA-style practical test. Mark faults round-by-round and see if you'd pass.</p>
+          <span class="hub-card-kicker">Quick reflection</span>
+          <h2 class="hub-card-title">Log a drive</h2>
+          <p class="hub-card-desc">Add the date, time, and a few traffic-light ratings after a drive or lesson.</p>
         </div>
       </a>
 
@@ -235,9 +220,20 @@
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
         </div>
         <div class="hub-card-body">
-          <span class="hub-card-code">FCS</span>
-          <h2 class="hub-card-title">Focused practice</h2>
-          <p class="hub-card-desc">Pick up to 3 weak areas before a drive, then reflect on each one after.</p>
+          <span class="hub-card-kicker">Private practice</span>
+          <h2 class="hub-card-title">Practice with a supervisor</h2>
+          <p class="hub-card-desc">Pick a few focus areas before a drive, then save what went well and what needs help.</p>
+        </div>
+      </a>
+
+      <a href="/learner/mock-test.html" class="hub-card mock">
+        <div class="hub-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="hub-card-body">
+          <span class="hub-card-kicker">Formal assessment</span>
+          <h2 class="hub-card-title">Take a mock test</h2>
+          <p class="hub-card-desc">Use this when you want a proper test-style run with formal results at the end.</p>
         </div>
       </a>
 
@@ -246,9 +242,9 @@
           <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         </div>
         <div class="hub-card-body">
-          <span class="hub-card-code">TRK</span>
-          <h2 class="hub-card-title">My progress</h2>
-          <p class="hub-card-desc">Competency scores, readiness for test, and what to work on next.</p>
+          <span class="hub-card-kicker">Next steps</span>
+          <h2 class="hub-card-title">View my driving plan</h2>
+          <p class="hub-card-desc">See what is going well, what to practise next, and your recent activity.</p>
         </div>
       </a>
     </div>

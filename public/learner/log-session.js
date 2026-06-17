@@ -21,7 +21,8 @@ const SKILLS = CC.SKILLS;
 
 const TOTAL_STEPS = 3;
 let currentStep = 1;
-let currentType = 'instructor';
+let currentType = 'private';
+let advancedMarksOpen = false;
 let AUTH;
 let bookingId = null;
 let bookingData = null;
@@ -59,8 +60,8 @@ function buildSkillCards() {
                   <span class="tl-label">Confident</span>
                 </button>
               </div>
-              <div class="fault-row">
-                <span class="fault-label">Faults (optional)</span>
+              <div class="fault-row" aria-hidden="true">
+                <span class="fault-label">Formal marks</span>
                 <div class="fault-counter fc-driving" data-action="inc-fault" data-skill="${s.key}" data-fault="driving">
                   <span class="fc-type">D</span><span class="fc-badge" id="fc-${s.key}-driving">·</span>
                 </div>
@@ -68,7 +69,7 @@ function buildSkillCards() {
                   <span class="fc-type">S</span><span class="fc-badge" id="fc-${s.key}-serious">·</span>
                 </div>
                 <div class="fault-counter fc-dangerous" data-action="inc-fault" data-skill="${s.key}" data-fault="dangerous">
-                  <span class="fc-type">✕</span><span class="fc-badge" id="fc-${s.key}-dangerous">·</span>
+                  <span class="fc-type">!</span><span class="fc-badge" id="fc-${s.key}-dangerous">·</span>
                 </div>
               </div>
             </div>
@@ -96,6 +97,7 @@ function toggleArea(areaId) {
 }
 
 function incFault(skillKey, type, el) {
+  if (!shouldUseFormalMarks()) return;
   if (!faults[skillKey]) faults[skillKey] = { driving: 0, serious: 0, dangerous: 0 };
   faults[skillKey][type]++;
   const badge = document.getElementById('fc-' + skillKey + '-' + type);
@@ -181,6 +183,9 @@ async function loadBookingDetails(id) {
 
     // Hide manual date/type fields since we have booking data
     currentType = 'instructor';
+    advancedMarksOpen = false;
+    updateTypeButtons();
+    updateAdvancedControls();
 
   } catch {
     fallbackManual();
@@ -218,8 +223,39 @@ function updateProgress() {
 // ── Session type ──
 function setType(type) {
   currentType = type;
-  document.getElementById('btn-instructor').className = 'type-btn' + (type === 'instructor' ? ' selected' : '');
-  document.getElementById('btn-private').className = 'type-btn' + (type === 'private' ? ' selected' : '');
+  if (type !== 'instructor') advancedMarksOpen = false;
+  updateTypeButtons();
+  updateAdvancedControls();
+}
+
+function updateTypeButtons() {
+  document.getElementById('btn-instructor').className = 'type-btn' + (currentType === 'instructor' ? ' selected' : '');
+  document.getElementById('btn-private').className = 'type-btn' + (currentType === 'private' ? ' selected' : '');
+}
+
+function setAdvancedMarksOpen(open) {
+  advancedMarksOpen = currentType === 'instructor' && !!open;
+  updateAdvancedControls();
+}
+
+function updateAdvancedControls() {
+  const panel = document.getElementById('advanced-instructor-panel');
+  const toggle = document.getElementById('advanced-toggle');
+  const copy = document.getElementById('advanced-copy');
+  const showPanel = currentType === 'instructor';
+
+  if (panel) panel.hidden = !showPanel;
+  if (toggle) toggle.setAttribute('aria-expanded', advancedMarksOpen ? 'true' : 'false');
+  if (copy) copy.classList.toggle('show', advancedMarksOpen);
+
+  document.body.classList.toggle('show-advanced-faults', showPanel && advancedMarksOpen);
+  document.querySelectorAll('.fault-row').forEach(row => {
+    row.setAttribute('aria-hidden', showPanel && advancedMarksOpen ? 'false' : 'true');
+  });
+}
+
+function shouldUseFormalMarks() {
+  return currentType === 'instructor' && advancedMarksOpen;
 }
 
 // ── Rate a skill ──
@@ -263,7 +299,9 @@ function buildSummary() {
 
   // Count total faults
   let totalD = 0, totalS = 0, totalX = 0;
-  Object.values(faults).forEach(f => { totalD += f.driving; totalS += f.serious; totalX += f.dangerous; });
+  if (shouldUseFormalMarks()) {
+    Object.values(faults).forEach(f => { totalD += f.driving; totalS += f.serious; totalX += f.dangerous; });
+  }
   const hasFaults = totalD + totalS + totalX > 0;
 
   document.getElementById('summary-meta').innerHTML = `
@@ -271,16 +309,16 @@ function buildSummary() {
     <div class="summary-pill"><div class="val">${duration ? duration + ' min' : '—'}</div><div class="lbl">Duration</div></div>
     <div class="summary-pill"><div class="val">${currentType === 'instructor' ? 'Instructor' : 'Private'}</div><div class="lbl">Type</div></div>
     <div class="summary-pill"><div class="val">${Object.keys(ratings).length}</div><div class="lbl">Skills rated</div></div>
-    ${hasFaults ? `<div class="summary-pill"><div class="val" style="color:var(--red)">${totalD}D · ${totalS}S · ${totalX}✕</div><div class="lbl">Faults logged</div></div>` : ''}
+    ${hasFaults ? `<div class="summary-pill"><div class="val" style="color:var(--red)">${totalD}D · ${totalS}S · ${totalX}!</div><div class="lbl">Formal marks</div></div>` : ''}
   `;
 
   // Only show rated skills in summary
   const ratedSkills = SKILLS.filter(s => ratings[s.key]);
   document.getElementById('summary-skills').innerHTML = ratedSkills.map(s => {
     const r = ratings[s.key];
-    const f = faults[s.key];
+    const f = shouldUseFormalMarks() ? faults[s.key] : null;
     const faultStr = f && (f.driving + f.serious + f.dangerous > 0)
-      ? `<span style="font-size:0.72rem;color:var(--red);margin-left:8px;">${f.driving}D ${f.serious}S ${f.dangerous}✕</span>`
+      ? `<span style="font-size:0.72rem;color:var(--red);margin-left:8px;">${f.driving}D ${f.serious}S ${f.dangerous}!</span>`
       : '';
     return `<div class="summary-skill-row">
       <span class="summary-skill-name">${s.label}${faultStr}</span>
@@ -298,7 +336,7 @@ async function saveSession() {
   if (!date) { showError('Session date is missing'); return; }
 
   const ratingsList = Object.entries(ratings).map(([skill_key, rating]) => {
-    const f = faults[skill_key] || { driving: 0, serious: 0, dangerous: 0 };
+    const f = shouldUseFormalMarks() ? (faults[skill_key] || { driving: 0, serious: 0, dangerous: 0 }) : { driving: 0, serious: 0, dangerous: 0 };
     return {
       tier: 0, skill_key, rating, note: null,
       driving_faults: f.driving || 0,
@@ -440,6 +478,8 @@ document.addEventListener('contextmenu', function (e) {
   if (instrBtn) instrBtn.addEventListener('click', function () { setType('instructor'); });
   var privBtn = document.getElementById('btn-private');
   if (privBtn) privBtn.addEventListener('click', function () { setType('private'); });
+  var advancedToggle = document.getElementById('advanced-toggle');
+  if (advancedToggle) advancedToggle.addEventListener('click', function () { setAdvancedMarksOpen(!advancedMarksOpen); });
   document.querySelectorAll('[data-goto]').forEach(function (btn) {
     btn.addEventListener('click', function () { goTo(parseInt(btn.dataset.goto, 10)); });
   });

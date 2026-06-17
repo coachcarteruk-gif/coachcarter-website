@@ -13,6 +13,7 @@ let partTimes = [0]; // elapsed seconds per part (grows dynamically)
 let partFaults = [{}]; // per-part: { skill_key: { driving, serious, dangerous } } (instructor) or { catKey: rating } (supervisor)
 let supervisorRatings = [{}]; // per-part: { catKey: 'good'|'needs_work'|'concern' }
 let supervisorNotes = [{}];  // per-part: { catKey: { hints: [indices], note: string } }
+let mockTestCompleteSaved = false;
 let longPressTimer = null;
 
 // Route selection
@@ -83,6 +84,38 @@ function apiCall(method, action, body) {
   return ccAuth.fetchAuthed('/api/learner?action=' + action, opts);
 }
 
+function setSaveStatus(id, message) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (!message) {
+    el.textContent = '';
+    el.classList.add('hidden');
+    return;
+  }
+  el.textContent = message;
+  el.classList.remove('hidden');
+}
+
+function getBeginButton(trigger) {
+  if (trigger && trigger.currentTarget) return trigger.currentTarget;
+  if (trigger && trigger.nodeType === 1) return trigger;
+  var routeScreen = document.getElementById('screen-route');
+  var routeActions = document.getElementById('route-actions');
+  var routeBtn = document.getElementById('btn-begin-route');
+  if (routeScreen && routeBtn && routeActions &&
+      !routeScreen.classList.contains('hidden') &&
+      !routeActions.classList.contains('hidden')) return routeBtn;
+  return document.getElementById('btn-begin');
+}
+
+function updateResultSaveNote() {
+  var note = document.getElementById('result-save-note');
+  if (!note) return;
+  note.textContent = mockTestCompleteSaved
+    ? 'Your weak areas have been added to your progress tracker automatically.'
+    : 'This result has not been saved to your progress tracker. Check your connection and try saving again.';
+}
+
 /* ── Screen 0: Mode Selection ── */
 function selectMode(mode) {
   testMode = mode;
@@ -93,7 +126,7 @@ function selectMode(mode) {
     warningBox.innerHTML = '<strong>&#9888;&#65039; IMPORTANT</strong>' +
       'Mobile phones must not be used while driving. The supervising driver should observe during the drive, then pull over to record ratings.';
     document.querySelector('.start-desc').textContent =
-      'Drive in 10-minute sections. After each section, pull over and your supervising driver will rate how you did across 7 key areas. Simple, clear, and no exam jargon.';
+      'This is still a formal mock test. Drive in 10-minute sections, pull over between sections, and let your supervising driver record clear assessment notes.';
   } else {
     warningBox.innerHTML = '<strong>&#9888;&#65039; IMPORTANT</strong>' +
       'Mobile phones must not be used by the driver or supervising driver during this test. Pull over safely at each 10-minute interval to record faults.';
@@ -104,10 +137,12 @@ function selectMode(mode) {
 }
 
 /* ── Screen 1: Begin ── */
-async function beginMockTest() {
-  var btn = document.getElementById('btn-begin');
+async function beginMockTest(trigger) {
+  var btn = getBeginButton(trigger);
   btn.disabled = true;
   btn.textContent = 'Starting...';
+  setSaveStatus('mock-start-status', '');
+  mockTestCompleteSaved = false;
 
   try {
     var payload = { mode: testMode };
@@ -117,8 +152,12 @@ async function beginMockTest() {
     var data = await res.json();
     mockTestId = data.mock_test_id;
   } catch (e) {
-    console.warn('Failed to create mock test via API, continuing offline:', e);
-    mockTestId = 'local_' + Date.now();
+    console.warn('Failed to create mock test via API:', e);
+    mockTestId = null;
+    setSaveStatus('mock-start-status', 'We could not create this mock test, so nothing has been saved yet. Check your connection and try again.');
+    btn.disabled = false;
+    btn.textContent = 'Try again';
+    return;
   }
 
   if (typeof posthog !== 'undefined') {
@@ -130,6 +169,8 @@ async function beginMockTest() {
   partFaults = [{}];
   supervisorRatings = [{}];
   supervisorNotes = [{}];
+  btn.disabled = false;
+  btn.textContent = 'Begin mock test';
   showPartScreen();
 }
 
@@ -141,6 +182,12 @@ function showPartScreen() {
 
   document.getElementById('part-label').textContent = 'ROUND ' + (currentPart + 1);
   document.getElementById('part-desc').textContent = partDef.description;
+  var partInstruction = document.getElementById('part-instruction');
+  if (partInstruction) {
+    partInstruction.textContent = testMode === 'supervisor'
+      ? 'Drive for approximately 10 minutes. Your supervising driver should observe the formal mock, then you should pull over to record ratings.'
+      : 'Drive for approximately 10 minutes. Your instructor or supervising driver should observe and note any faults. Tap "Pull over" when you are ready to record faults.';
+  }
   document.getElementById('timer-display').textContent = '00:00';
   document.getElementById('timer-label').textContent = 'Tap "Start Driving" to begin';
 
@@ -212,8 +259,8 @@ function showFaultScreen() {
   document.getElementById('fault-time').textContent = formatTime(partTimes[currentPart]) + ' driven';
 
   if (testMode === 'supervisor') {
-    document.getElementById('fault-title').textContent = 'Rate Performance \u2014 Round ' + (currentPart + 1);
-    document.querySelector('.fault-subtitle').textContent = 'Rate each area based on what you observed. Tap a category to expand it.';
+    document.getElementById('fault-title').textContent = 'Record assessment notes \u2014 Round ' + (currentPart + 1);
+    document.querySelector('.fault-subtitle').textContent = 'Rate each area from this formal mock. Tap a category to expand it.';
     // Initialize supervisor ratings for this part if empty
     if (!supervisorRatings[currentPart] || Object.keys(supervisorRatings[currentPart]).length === 0) {
       supervisorRatings[currentPart] = {};
@@ -338,6 +385,73 @@ function toggleArea(btn) {
 /* ── Supervisor Fault Recording ── */
 var SUP_CATS = CC_COMPETENCY.SUPERVISOR_CATEGORIES;
 var SUP_RATINGS = CC_COMPETENCY.SUPERVISOR_RATINGS;
+
+function buildSupervisorNotesPayload() {
+  var ratingPriority = { concern: 0, needs_work: 1, good: 2 };
+  var summary = { categories: {} };
+  var parts = [];
+
+  for (var p = 0; p < supervisorNotes.length || p < supervisorRatings.length; p++) {
+    var ratings = supervisorRatings[p] || {};
+    var notes = supervisorNotes[p] || {};
+    var categories = {};
+    var keys = {};
+
+    Object.keys(ratings).forEach(function(key) { keys[key] = true; });
+    Object.keys(notes).forEach(function(key) { keys[key] = true; });
+
+    Object.keys(keys).forEach(function(catKey) {
+      var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
+      if (!cat) return;
+
+      var catNotes = notes[catKey] || { hints: [], note: '' };
+      var hintIndices = Array.isArray(catNotes.hints) ? catNotes.hints.filter(function(idx) {
+        return Number.isInteger(idx) && idx >= 0 && idx < cat.faultHints.length;
+      }) : [];
+      var selectedHints = hintIndices.map(function(idx) { return cat.faultHints[idx]; }).filter(Boolean);
+      var note = (catNotes.note || '').trim();
+      var rating = ratings[catKey] || null;
+
+      if (!rating && selectedHints.length === 0 && !note) return;
+
+      categories[catKey] = {
+        label: cat.label,
+        rating: rating,
+        hint_indices: hintIndices,
+        selected_hints: selectedHints,
+        note: note
+      };
+
+      if (!summary.categories[catKey]) {
+        summary.categories[catKey] = {
+          label: cat.label,
+          rating: rating,
+          hint_indices: [],
+          selected_hints: [],
+          note: ''
+        };
+      }
+
+      var summaryCat = summary.categories[catKey];
+      if (rating && (!summaryCat.rating || ratingPriority[rating] < ratingPriority[summaryCat.rating])) {
+        summaryCat.rating = rating;
+      }
+      hintIndices.forEach(function(idx) {
+        if (summaryCat.hint_indices.indexOf(idx) === -1) summaryCat.hint_indices.push(idx);
+      });
+      selectedHints.forEach(function(hint) {
+        if (summaryCat.selected_hints.indexOf(hint) === -1) summaryCat.selected_hints.push(hint);
+      });
+      if (note && !summaryCat.note) summaryCat.note = note;
+    });
+
+    if (Object.keys(categories).length > 0) {
+      parts.push({ part: p + 1, categories: categories });
+    }
+  }
+
+  return { version: 1, parts: parts, summary: summary };
+}
 
 function renderSupervisorFaults(keepOpenKey) {
   var container = document.getElementById('fault-areas');
@@ -583,6 +697,14 @@ async function saveFaults() {
   var btn = document.getElementById('btn-save-faults');
   btn.disabled = true;
   btn.textContent = 'Saving...';
+  setSaveStatus('mock-fault-save-status', '');
+
+  if (!mockTestId) {
+    setSaveStatus('mock-fault-save-status', 'This mock test has not been created online yet. Go back and start again so progress can be saved.');
+    btn.disabled = false;
+    btn.textContent = 'Try saving again';
+    return;
+  }
 
   var faultArray = [];
 
@@ -622,13 +744,18 @@ async function saveFaults() {
 
   // POST faults
   try {
-    await apiCall('POST', 'mock-test-faults', {
+    var res = await apiCall('POST', 'mock-test-faults', {
       mock_test_id: mockTestId,
       part: currentPart + 1,
       faults: faultArray
     });
+    if (!res.ok) throw new Error('API error ' + res.status);
   } catch (e) {
     console.warn('Failed to save faults:', e);
+    setSaveStatus('mock-fault-save-status', 'We could not save this round, so these ratings are not in your progress tracker yet. Check your connection and try again.');
+    btn.disabled = false;
+    btn.textContent = 'Try saving again';
+    return;
   }
 
   if (typeof posthog !== 'undefined') {
@@ -666,20 +793,46 @@ function continueToNextPart() {
 }
 
 async function endMockTest() {
-  // Hide choice
-  document.getElementById('post-save-choice').classList.add('hidden');
+  var choiceDiv = document.getElementById('post-save-choice');
+  var endBtn = document.getElementById('btn-end-mock');
+  setSaveStatus('mock-fault-save-status', '');
+  if (endBtn) {
+    endBtn.disabled = true;
+    endBtn.textContent = 'Saving results...';
+  }
 
   try {
-    await apiCall('POST', 'mock-tests', { mock_test_id: mockTestId, complete: true });
+    var completePayload = { mock_test_id: mockTestId, complete: true };
+    if (testMode === 'supervisor') {
+      completePayload.supervisor_notes = buildSupervisorNotesPayload();
+    }
+    var res = await apiCall('POST', 'mock-tests', completePayload);
+    if (!res.ok) throw new Error('API error ' + res.status);
+    mockTestCompleteSaved = true;
   } catch (e) {
     console.warn('Failed to complete mock test:', e);
+    mockTestCompleteSaved = false;
+    setSaveStatus('mock-fault-save-status', 'We saved the round, but could not finish the mock test. Your results are not fully saved yet. Check your connection and tap "End mock test" again.');
+    if (choiceDiv) choiceDiv.classList.remove('hidden');
+    if (endBtn) {
+      endBtn.disabled = false;
+      endBtn.textContent = 'End mock test & view results';
+    }
+    return;
   }
+
+  // Hide choice
+  if (choiceDiv) choiceDiv.classList.add('hidden');
 
   // Reset save button for next time
   var btn = document.getElementById('btn-save-faults');
   btn.classList.remove('hidden');
   btn.disabled = false;
   btn.textContent = 'Save Faults';
+  if (endBtn) {
+    endBtn.disabled = false;
+    endBtn.textContent = 'End mock test & view results';
+  }
 
   showResults();
 }
@@ -699,6 +852,7 @@ function showResults() {
     document.getElementById('btn-show-map').classList.remove('hidden');
   }
 
+  updateResultSaveNote();
   showScreen('screen-results');
 }
 
@@ -747,8 +901,7 @@ function showSupervisorResults() {
     subMessage = concern + ' area' + (concern !== 1 ? 's' : '') + ' of concern and ' + needsWork + ' needing work. Don\u2019t worry \u2014 this is what practice is for!';
   }
 
-  // Hide the pass/fail criteria text
-  document.querySelector('.result-criteria').textContent = '';
+  document.querySelector('.result-criteria').textContent = 'Formal mock / supervisor assessment. These ratings are separate from ordinary Practice Drive reflections.';
 
   // Build summary instead of fault totals
   var totalsHtml = '<div class="sup-result-summary">';
@@ -900,7 +1053,7 @@ function showInstructorResults() {
   badge.style.background = '';
 
   // Criteria
-  document.querySelector('.result-criteria').textContent = 'Pass requires: 0 serious/dangerous faults and no more than 15 driving faults';
+  document.querySelector('.result-criteria').textContent = 'Formal mock / instructor assessment. Pass requires: 0 serious/dangerous faults and no more than 15 driving faults';
 
   // Totals
   var totalsHtml = '';
@@ -1051,7 +1204,7 @@ function selectRoute(routeId) {
 
 function skipRouteSelection() {
   selectedRoute = null;
-  beginMockTest();
+  beginMockTest(document.getElementById('btn-skip-route'));
 }
 
 /* ── GPS Tracking ── */

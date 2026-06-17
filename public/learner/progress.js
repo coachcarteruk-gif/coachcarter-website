@@ -4,11 +4,17 @@
 let AUTH;
 let DATA = null;
 
+const PRACTICE_DRIVE_RATINGS = {
+  nailed: 'Went well',
+  ok: 'Needs practice',
+  struggled: 'Tell instructor'
+};
+
 // Computed maps: skillKey -> aggregated data
 let lessonMap = {};   // skillKey -> [{score, date}] sorted newest first
 let quizMap = {};     // skillKey -> {attempts, correct}
-let mockFaultMap = {}; // skillKey -> {driving, serious, dangerous} — all-time totals
-let skillScores = {}; // skillKey -> readiness 0-100
+let mockFaultMap = {}; // skillKey -> {driving, serious, dangerous} from formal mock tests
+let skillScores = {}; // skillKey -> internal practice signal, 0-100
 let recentMockMeta = null; // { id, completed_at, result } | null
 let recentSkillFaultMap = {}; // skillKey -> {driving, serious, dangerous} from most recent mock
 let subFaultMap = {}; // skillKey -> { subKey -> {driving, serious, dangerous} } from most recent mock
@@ -130,7 +136,7 @@ function processData() {
     }
   }
 
-  // Calculate readiness scores for every skill
+  // Calculate internal practice signals for every skill
   skillScores = {};
   for (var s = 0; s < CC.SKILLS.length; s++) {
     var sk = CC.SKILLS[s];
@@ -138,7 +144,7 @@ function processData() {
     var quiz = quizMap[sk.key];
     var quizResults = [];
     if (quiz && quiz.attempts > 0) {
-      // Expand into individual results for the readiness function
+      // Expand into individual results for the shared scoring function
       for (var qr = 0; qr < quiz.attempts; qr++) {
         quizResults.push({ correct: qr < quiz.correct });
       }
@@ -162,11 +168,12 @@ function hasAnyData() {
   var ss = DATA.session_stats || {};
   var ms = DATA.mock_summary || {};
   return (ss.total_sessions > 0) ||
+         ((DATA.focused_practice_count || 0) > 0) ||
          (DATA.quiz_accuracy && DATA.quiz_accuracy.length > 0) ||
          (ms.total_tests > 0);
 }
 
-// ── Compute average readiness score for an area ──
+// ── Compute average practice signal for an area ──
 function areaAvg(areaId) {
   var CC = window.CC_COMPETENCY;
   var skills = CC.getSkillsByArea(areaId);
@@ -176,7 +183,7 @@ function areaAvg(areaId) {
   return Math.round(sum / skills.length);
 }
 
-// ── Overall readiness: average of all skill scores ──
+// ── Overall practice signal: average of all skill scores ──
 function overallReadiness() {
   var CC = window.CC_COMPETENCY;
   var sum = 0;
@@ -191,6 +198,170 @@ function scoreColour(score) {
   return 'var(--red)';
 }
 
+function getRatingLabel(ratingKey) {
+  var CC = window.CC_COMPETENCY;
+  for (var r = 0; r < CC.RATINGS.length; r++) {
+    if (CC.RATINGS[r].key === ratingKey) return CC.RATINGS[r].label;
+  }
+  return '';
+}
+
+function escHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function parseJsonValue(value, fallback) {
+  if (value == null) return fallback;
+  if (typeof value === 'string') {
+    try { return JSON.parse(value); } catch (e) { return fallback; }
+  }
+  return value;
+}
+
+function practiceRatingLabel(ratingKey) {
+  return PRACTICE_DRIVE_RATINGS[ratingKey] || ratingKey || 'Saved';
+}
+
+function formatPracticeDate(value) {
+  if (!value) return '';
+  var d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function summarizeFocusedPracticeSession(row) {
+  var CC = window.CC_COMPETENCY;
+  var focusAreas = parseJsonValue(row.focus_areas, []);
+  var reflections = parseJsonValue(row.reflections, {}) || {};
+  var areas = [];
+  var tellInstructorCount = 0;
+  var note = '';
+
+  if (!Array.isArray(focusAreas)) focusAreas = [];
+
+  for (var i = 0; i < focusAreas.length; i++) {
+    var cat = CC.getSupervisorCategory(focusAreas[i]);
+    if (!cat) continue;
+    var skillReflections = [];
+    for (var s = 0; s < cat.dl25Skills.length; s++) {
+      var ref = reflections[cat.dl25Skills[s]];
+      if (ref && typeof ref === 'object') skillReflections.push(ref);
+    }
+
+    var ratingKey = null;
+    if (skillReflections.some(function(ref) { return ref.rating === 'struggled'; })) ratingKey = 'struggled';
+    else if (skillReflections.some(function(ref) { return ref.rating === 'ok'; })) ratingKey = 'ok';
+    else if (skillReflections.some(function(ref) { return ref.rating === 'nailed'; })) ratingKey = 'nailed';
+
+    var areaNote = '';
+    for (var n = 0; n < skillReflections.length; n++) {
+      if (skillReflections[n].note) { areaNote = skillReflections[n].note; break; }
+    }
+    if (areaNote && (!note || ratingKey === 'struggled')) note = areaNote;
+    if (ratingKey === 'struggled') tellInstructorCount++;
+
+    areas.push({
+      label: cat.label,
+      ratingKey: ratingKey,
+      ratingLabel: practiceRatingLabel(ratingKey),
+      tellInstructor: ratingKey === 'struggled'
+    });
+  }
+
+  if (areas.length === 0) {
+    Object.keys(reflections).slice(0, 3).forEach(function(skillKey) {
+      var ref = reflections[skillKey] || {};
+      var skill = CC.getSkill(CC.mapLegacySkill(skillKey));
+      if (!skill) return;
+      if (ref.note && !note) note = ref.note;
+      if (ref.rating === 'struggled') tellInstructorCount++;
+      areas.push({
+        label: skill.label,
+        ratingKey: ref.rating,
+        ratingLabel: practiceRatingLabel(ref.rating),
+        tellInstructor: ref.rating === 'struggled'
+      });
+    });
+  }
+
+  return {
+    id: row.id,
+    dateLabel: formatPracticeDate(row.completed_at || row.created_at || row.session_date),
+    durationMinutes: row.duration_minutes || 0,
+    areas: areas,
+    note: note,
+    tellInstructorCount: tellInstructorCount
+  };
+}
+
+function skillsWithPracticeSignals() {
+  var CC = window.CC_COMPETENCY;
+  var items = [];
+  for (var i = 0; i < CC.SKILLS.length; i++) {
+    var sk = CC.SKILLS[i];
+    var hasLesson = lessonMap[sk.key] && lessonMap[sk.key].length > 0;
+    var hasQuiz = quizMap[sk.key] && quizMap[sk.key].attempts > 0;
+    if (hasLesson || hasQuiz) {
+      items.push({ skill: sk, score: skillScores[sk.key] || 0 });
+    }
+  }
+  return items;
+}
+
+function latestReflectionCopy(skillKey) {
+  var lessons = lessonMap[skillKey] || [];
+  if (lessons.length > 0) {
+    var label = getRatingLabel(lessons[0].rating);
+    if (label) return 'Your latest reflection was "' + label + '".';
+  }
+
+  var quiz = quizMap[skillKey];
+  if (quiz && quiz.attempts > 0) {
+    return 'Your quiz practice suggests this is worth another look.';
+  }
+
+  return 'This is a useful focus for your next practice drive.';
+}
+
+function progressSourceLabel(sourceKey) {
+  var labels = {
+    'lesson-log': 'Lesson log',
+    'learner-reflection': 'Learner reflection',
+    'practice-drive': 'Practice Drive',
+    'supervisor-reflection': 'Supervisor reflection',
+    'quiz-practice': 'Quiz practice',
+    'formal-mock': 'Formal mock',
+    'instructor-assessment': 'Instructor assessment',
+    'mixed-signal': 'Mixed signals'
+  };
+  return labels[sourceKey] || 'Progress signal';
+}
+
+function renderSignalSourceBadge(sourceKey) {
+  return '<span class="source-badge source-' + escHtml(sourceKey) + '">' +
+    escHtml(progressSourceLabel(sourceKey)) +
+    '</span>';
+}
+
+function latestReflectionSource(skillKey) {
+  var lessons = lessonMap[skillKey] || [];
+  if (lessons.length > 0) return 'learner-reflection';
+
+  var quiz = quizMap[skillKey];
+  if (quiz && quiz.attempts > 0) return 'quiz-practice';
+
+  return 'lesson-log';
+}
+
+function totalMockMarks(row) {
+  return (row.total_driving || 0) + (row.total_serious || 0) + (row.total_dangerous || 0);
+}
+
 // ── Main render ──
 function render() {
   document.getElementById('loading').classList.add('hidden');
@@ -201,37 +372,82 @@ function render() {
   }
 
   document.getElementById('main-content').classList.remove('hidden');
+  renderNextActions();
   renderStats();
-  renderRadar();
-  renderSkillBreakdown();
+  renderRecentPractice();
+  renderGoingWell();
   renderMockHistory();
-  renderImprovement();
+  renderSkillBreakdown();
+  var advanced = document.getElementById('advanced-breakdown');
+  if (advanced && advanced.open) renderRadar();
 
   if (typeof posthog !== 'undefined') {
     posthog.capture('progress_page_viewed', { overall_readiness: overallReadiness() });
   }
 }
 
-// ── Section 1: Stats ──
+// ── Section 2: Recent activity stats ──
 function renderStats() {
+  var CC = window.CC_COMPETENCY;
   var ss = DATA.session_stats || {};
   var ms = DATA.mock_summary || {};
   var hours = ss.total_minutes ? (ss.total_minutes / 60).toFixed(1) : '0';
-  var mockText = (ms.passes || 0) + ' / ' + (ms.total_tests || 0);
-  var readiness = overallReadiness();
+  var skillCount = skillsWithPracticeSignals().length;
+  var skillText = skillCount + ' / ' + CC.SKILLS.length;
 
   document.getElementById('stats-grid').innerHTML =
-    '<div class="stat-card"><div class="stat-value">' + (ss.total_sessions || 0) + '</div><div class="stat-label">Sessions</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + hours + '</div><div class="stat-label">Hours</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + mockText + '</div><div class="stat-label">Mock Tests Passed</div></div>' +
-    '<div class="stat-card"><div class="stat-value accent">' + readiness + '%</div><div class="stat-label">Practice level</div></div>';
+    '<div class="stat-card"><div class="stat-value">' + (ss.total_sessions || 0) + '</div><div class="stat-label">Drives logged</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + hours + '</div><div class="stat-label">Hours practised</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (ms.total_tests || 0) + '</div><div class="stat-label">Mock tests</div></div>' +
+    '<div class="stat-card"><div class="stat-value accent">' + skillText + '</div><div class="stat-label">Skills practised</div></div>';
 }
 
 // ── Section 2: Radar Chart ──
+function renderRecentPractice() {
+  var container = document.getElementById('recent-practice-section');
+  if (!container) return;
+  var rows = Array.isArray(DATA.recent_focused_practice) ? DATA.recent_focused_practice : [];
+  if (rows.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  var summaries = rows.slice(0, 3).map(summarizeFocusedPracticeSession);
+  var html = '<div class="practice-summary-list">';
+  summaries.forEach(function(item) {
+    var meta = [];
+    if (item.dateLabel) meta.push(item.dateLabel);
+    if (item.durationMinutes) meta.push(item.durationMinutes + ' min');
+    if (item.tellInstructorCount > 0) meta.push('Tell instructor ' + item.tellInstructorCount);
+
+    html += '<div class="practice-summary-card' + (item.tellInstructorCount > 0 ? ' has-alert' : '') + '">';
+    html += '<div class="practice-summary-top">';
+    html += '<div><div class="practice-summary-title">Practice Drive summary</div>' +
+      renderSignalSourceBadge('supervisor-reflection') + '</div>';
+    html += '<div class="practice-summary-meta">' + escHtml(meta.join(' / ')) + '</div>';
+    html += '</div>';
+    html += '<div class="practice-summary-areas">';
+    item.areas.forEach(function(area) {
+      html += '<span class="practice-summary-pill' + (area.tellInstructor ? ' tell' : '') + '">' +
+        escHtml(area.label + ': ' + area.ratingLabel) +
+        '</span>';
+    });
+    html += '</div>';
+    if (item.note) {
+      html += '<div class="practice-summary-note">' + escHtml(item.note).slice(0, 260).replace(/\n/g, '<br>') + '</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
 function renderRadar() {
   var CC = window.CC_COMPETENCY;
   var canvas = document.getElementById('radar-canvas');
+  if (!canvas) return;
   var wrap = canvas.parentElement;
+  if (!wrap || wrap.clientWidth <= 32) return;
   var size = Math.min(wrap.clientWidth - 32, 440);
   canvas.width = size;
   canvas.height = size;
@@ -377,10 +593,8 @@ function renderRadar() {
 
 // ── Section 3: Most Recent Mock Test ──
 //
-// This section is scoped to a single mock test — the most recent one. Each
-// area card shows what that mock recorded for that area: total fault count
-// in the header, per-sub-skill breakdown when opened. Lesson / quiz data
-// don't appear here — those belong to the blended Practice level above.
+// This optional section is scoped to a single formal mock test: the most
+// recent one. Lesson and quiz data stay in the learner-facing plan above.
 //
 // When no mock test has been completed yet, we show a single empty-state
 // prompt with a link to the mock-test page.
@@ -394,9 +608,9 @@ function renderSkillBreakdown() {
     if (metaEl) metaEl.textContent = '';
     container.innerHTML =
       '<div class="mock-empty">' +
-        '<p class="mock-empty-msg">You haven’t completed a mock test yet.</p>' +
-        '<p class="mock-empty-sub">Run one to see a skill-by-skill breakdown of where you’d pick up faults on test day.</p>' +
-        '<a href="/learner/mock-test.html" class="btn-primary">Run a mock test</a>' +
+        '<p class="mock-empty-msg">You have not completed a formal mock test yet.</p>' +
+        '<p class="mock-empty-sub">Take one when you want test-style detail alongside your practice plan.</p>' +
+        '<a href="/learner/mock-test.html" class="btn-primary">Take a mock test</a>' +
       '</div>';
     return;
   }
@@ -508,7 +722,7 @@ function toggleArea(headerEl) {
   toggle.classList.toggle('open');
 }
 
-// ── Section 4: Mock Test History ──
+// ── Section 4: Mock Test Results ──
 function renderMockHistory() {
   var CC = window.CC_COMPETENCY;
   var ms = DATA.mock_summary || {};
@@ -516,36 +730,34 @@ function renderMockHistory() {
 
   if (!ms.total_tests || ms.total_tests === 0) {
     container.innerHTML =
-      '<h2 class="section-title">Mock Tests</h2>' +
+      '<h2 class="section-title">Mock test results</h2>' +
       '<div class="mock-card" style="text-align:center;">' +
-      '<p style="color:var(--muted);margin-bottom:16px;">You haven\'t taken a mock test yet.</p>' +
-      '<a href="/learner/mock-test.html" class="btn-primary">Take a Mock Test</a>' +
+      '<p style="color:var(--muted);margin-bottom:16px;">When you take a formal mock test, the result will appear here.</p>' +
+      '<a href="/learner/mock-test.html" class="btn-primary">Take a mock test</a>' +
       '</div>';
     return;
   }
 
-  var passRate = Math.round(((ms.passes || 0) / ms.total_tests) * 100);
-  var html = '<h2 class="section-title">Mock Tests</h2>';
+  var html = '<h2 class="section-title">Mock test results</h2>';
   html += '<div class="mock-card">';
-  html += '<div class="mock-pass-rate">' + (ms.passes || 0) + '/' + ms.total_tests + ' passed <span style="color:var(--muted);font-size:0.85rem;font-weight:400;">(' + passRate + '%)</span></div>';
+  html += renderSignalSourceBadge('formal-mock') + renderSignalSourceBadge('instructor-assessment');
+  html += '<div class="mock-pass-rate">' + (ms.passes || 0) + ' of ' + ms.total_tests + ' passed</div>';
 
-  // Top 3 most-faulted skills
+  // Top 3 formal mock-test areas to revisit
   if (DATA.mock_faults && DATA.mock_faults.length > 0) {
     var sorted = DATA.mock_faults.slice().sort(function(a, b) {
-      var ta = (a.total_driving || 0) + (a.total_serious || 0) + (a.total_dangerous || 0);
-      var tb = (b.total_driving || 0) + (b.total_serious || 0) + (b.total_dangerous || 0);
-      return tb - ta;
+      return totalMockMarks(b) - totalMockMarks(a);
     });
     var top3 = sorted.slice(0, 3);
-    html += '<p style="font-size:0.85rem;color:var(--muted);margin-bottom:10px;font-weight:600;">Most-faulted skills</p>';
+    html += '<p style="font-size:0.85rem;color:var(--muted);margin-bottom:10px;font-weight:600;">Most useful areas to revisit</p>';
     html += '<ul class="mock-faults-list">';
     for (var i = 0; i < top3.length; i++) {
       var f = top3[i];
-      var total = (f.total_driving || 0) + (f.total_serious || 0) + (f.total_dangerous || 0);
+      var total = totalMockMarks(f);
       if (total === 0) continue;
-      var skillObj = CC.getSkill(f.skill_key);
+      var skillObj = CC.getSkill(CC.mapLegacySkill(f.skill_key));
       var name = skillObj ? skillObj.label : f.skill_key;
-      html += '<li><span class="mock-fault-name">' + name + '</span><span class="mock-fault-count">' + total + ' fault' + (total !== 1 ? 's' : '') + '</span></li>';
+      html += '<li><span class="mock-fault-name">' + name + '</span><span class="mock-fault-count">' + total + ' test mark' + (total !== 1 ? 's' : '') + '</span></li>';
     }
     html += '</ul>';
   }
@@ -555,75 +767,125 @@ function renderMockHistory() {
   container.innerHTML = html;
 }
 
-// ── Section 5: Areas for Improvement ──
-function renderImprovement() {
+// ── Section 1: Practise next ──
+function renderNextActions() {
   var CC = window.CC_COMPETENCY;
-  var container = document.getElementById('improve-section');
+  var container = document.getElementById('next-actions-section');
+  var actions = [];
+  var used = {};
 
-  // Find skills with some data, sorted by lowest readiness
-  var withData = [];
-  for (var i = 0; i < CC.SKILLS.length; i++) {
-    var sk = CC.SKILLS[i];
-    var hasLesson = lessonMap[sk.key] && lessonMap[sk.key].length > 0;
-    var hasQuiz = quizMap[sk.key] && quizMap[sk.key].attempts > 0;
-    if (hasLesson || hasQuiz) {
-      withData.push({ skill: sk, score: skillScores[sk.key] || 0 });
+  var withData = skillsWithPracticeSignals();
+  withData.sort(function(a, b) { return a.score - b.score; });
+
+  for (var i = 0; i < withData.length && actions.length < 2; i++) {
+    var item = withData[i];
+    used[item.skill.key] = true;
+    actions.push({
+      title: 'Practise ' + item.skill.label,
+      copy: latestReflectionCopy(item.skill.key),
+      source: latestReflectionSource(item.skill.key),
+      href: '/learner/log-session.html',
+      cta: 'Log a drive with this focus'
+    });
+  }
+
+  if (DATA.mock_faults && actions.length < 3) {
+    var mockRows = DATA.mock_faults.slice().sort(function(a, b) {
+      return totalMockMarks(b) - totalMockMarks(a);
+    });
+
+    for (var m = 0; m < mockRows.length && actions.length < 3; m++) {
+      var row = mockRows[m];
+      var total = totalMockMarks(row);
+      if (total === 0) continue;
+      var mappedKey = CC.mapLegacySkill(row.skill_key);
+      if (!mappedKey || used[mappedKey]) continue;
+      var skillObj = CC.getSkill(mappedKey);
+      if (!skillObj) continue;
+      used[mappedKey] = true;
+      actions.push({
+        title: 'Revisit ' + skillObj.label,
+        copy: 'Your formal mock test records point to this as useful practice.',
+        source: 'formal-mock',
+        href: '/learner/log-session.html',
+        cta: 'Log practice on this skill'
+      });
     }
   }
+
+  if (actions.length === 0) {
+    actions = [
+      {
+        title: 'Log your next drive',
+        copy: 'Add a quick reflection after practice so your plan can suggest sharper next steps.',
+        source: 'learner-reflection',
+        href: '/learner/log-session.html',
+        cta: 'Log a drive'
+      },
+      {
+        title: 'Try the Examiner Quiz',
+        copy: 'Use a short quiz to spot rules or routines worth asking about in your next lesson.',
+        source: 'quiz-practice',
+        href: '/learner/examiner-quiz.html',
+        cta: 'Start quiz'
+      },
+      {
+        title: 'Take a formal mock test',
+        copy: 'When you are ready, a mock test can show what test-day practice should focus on.',
+        source: 'formal-mock',
+        href: '/learner/mock-test.html',
+        cta: 'Take a mock test'
+      }
+    ];
+  }
+
+  var html = '<h2 class="section-title">Practise next</h2>';
+  html += '<div class="plan-actions">';
+  for (var a = 0; a < actions.length && a < 3; a++) {
+    html += '<div class="plan-action-card">';
+    html += renderSignalSourceBadge(actions[a].source || 'mixed-signal');
+    html += '<div class="plan-action-title">' + actions[a].title + '</div>';
+    html += '<div class="plan-action-copy">' + actions[a].copy + '</div>';
+    html += '<a class="plan-action-link" href="' + actions[a].href + '">' + actions[a].cta + ' &rarr;</a>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+// ── Section 3: Going well ──
+function renderGoingWell() {
+  var container = document.getElementById('going-well-section');
+  var withData = skillsWithPracticeSignals();
 
   if (withData.length === 0) {
     container.innerHTML = '';
     return;
   }
 
-  withData.sort(function(a, b) { return a.score - b.score; });
-  var weak = withData.slice(0, 3);
+  withData.sort(function(a, b) { return b.score - a.score; });
+  var strong = withData.slice(0, 3);
 
-  var html = '<h2 class="section-title">Areas for Improvement</h2>';
-
-  for (var w = 0; w < weak.length; w++) {
-    var item = weak[w];
-    var sk = item.skill;
-    var score = item.score;
-    var reasons = [];
+  var html = '<h2 class="section-title">Going well</h2>';
+  for (var w = 0; w < strong.length; w++) {
+    var sk = strong[w].skill;
     var lessons = lessonMap[sk.key] || [];
     var quiz = quizMap[sk.key];
-
+    var reason = 'Recent practice is building here.';
     if (lessons.length > 0) {
-      var latestRating = lessons[0].rating;
-      var ratingLabel = '';
-      for (var r = 0; r < CC.RATINGS.length; r++) {
-        if (CC.RATINGS[r].key === latestRating) { ratingLabel = CC.RATINGS[r].label; break; }
-      }
-      reasons.push('Last rated: ' + ratingLabel);
-    }
-    if (quiz && quiz.attempts > 0) {
-      var qPct = Math.round((quiz.correct / quiz.attempts) * 100);
-      reasons.push('Quiz accuracy: ' + qPct + '%');
-    }
-
-    var suggestion = '';
-    if (!quiz || quiz.attempts === 0) {
-      suggestion = '<a href="/learner/examiner-quiz.html">Try the Examiner Quiz</a> to practice this skill';
-    } else if (lessons.length === 0) {
-      suggestion = 'Focus on this in your <a href="/learner/log-session.html">next lesson</a>';
-    } else {
-      suggestion = 'Keep practising &mdash; try the <a href="/learner/examiner-quiz.html">Examiner Quiz</a> or focus in your <a href="/learner/log-session.html">next lesson</a>';
+      var ratingLabel = getRatingLabel(lessons[0].rating);
+      if (ratingLabel) reason = 'Latest reflection: ' + ratingLabel + '.';
+    } else if (quiz && quiz.attempts > 0) {
+      reason = 'Quiz practice is giving this skill useful attention.';
     }
 
     html += '<div class="improve-card">';
     html += '<div class="improve-header">';
     html += '<span class="improve-skill">' + sk.label + '</span>';
-    html += '<span class="improve-score" style="background:' + scoreColour(score) + '">' + score + '%</span>';
+    html += renderSignalSourceBadge(latestReflectionSource(sk.key));
     html += '</div>';
-    if (reasons.length > 0) {
-      html += '<ul class="improve-reasons">';
-      for (var ri = 0; ri < reasons.length; ri++) {
-        html += '<li>' + reasons[ri] + '</li>';
-      }
-      html += '</ul>';
-    }
-    html += '<div class="improve-suggestion">' + suggestion + '</div>';
+    html += '<div class="improve-suggestion">' + reason + '</div>';
     html += '</div>';
   }
 
@@ -635,9 +897,17 @@ var resizeTimer;
 window.addEventListener('resize', function() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(function() {
-    if (DATA && hasAnyData()) renderRadar();
+    var advanced = document.getElementById('advanced-breakdown');
+    if (DATA && hasAnyData() && advanced && advanced.open) renderRadar();
   }, 200);
 });
+
+var advancedBreakdown = document.getElementById('advanced-breakdown');
+if (advancedBreakdown) {
+  advancedBreakdown.addEventListener('toggle', function () {
+    if (advancedBreakdown.open && DATA && hasAnyData()) renderRadar();
+  });
+}
 
 // ── CSP-friendly event delegation for dynamically rendered handlers ──
 document.addEventListener('click', function (e) {

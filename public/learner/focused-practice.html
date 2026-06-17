@@ -10,8 +10,8 @@
   <script src="/pwa.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Focused Practice | Coach Carter</title>
-  <meta name="description" content="Pick your top areas to improve and practice with targeted reflection. Track your progress over time.">
+  <title>Practice Drive | Coach Carter</title>
+  <meta name="description" content="Pick a simple focus for a private practice drive, then save what went well and what to mention to your instructor.">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
 <script src="/competency-config.js"></script>
@@ -29,10 +29,10 @@
   <style>
     /* ── FOCUSED PRACTICE — 4-screen drive flow ───
        Setup → Drive → Reflect → Results. All four screens share the
-       same DL25 dossier vocabulary as the rest of the Practice tab.
+       learner-friendly vocabulary for private practice.
        JS-rendered classes preserved: area-pick / -icon / -text / -name /
        -desc / -score / -check, focus-guide, focus-pill, reflect-area /
-       -header / -icon / -q / -btns, reflect-btn / .sel-*, reflect-note,
+       -header / -icon / -q / -btns, reflect-btn / .sel-*, reflect-note-grid / reflect-note,
        result-area-card / -header / -name / -badge / .struggled / .ok /
        .nailed / -note, result-next. */
 
@@ -418,6 +418,11 @@
       color: var(--green);
     }
 
+    .reflect-note-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
     .reflect-note {
       width: 100%;
       padding: 12px 14px;
@@ -431,8 +436,12 @@
       outline: none;
       transition: border-color 0.2s;
     }
+    .reflect-note-wide { grid-column: 1 / -1; }
     .reflect-note:focus { border-color: var(--accent); }
     .reflect-note::placeholder { color: var(--muted); opacity: 0.7; }
+    @media (max-width: 560px) {
+      .reflect-note-grid { grid-template-columns: 1fr; }
+    }
 
     /* ── RESULTS SCREEN ── */
     .results-screen { padding: 8px 0 8px; }
@@ -536,7 +545,7 @@
   <header class="doc-header">
     <div class="doc-header-left">
       <span class="doc-stamp">CC</span>
-      <span>Focused practice<span class="doc-meta-dot">·</span>Targeted drill</span>
+      <span>Practice drive<span class="doc-meta-dot">·</span>Private practice</span>
     </div>
     <span class="step-tag" id="step-tag">Setup</span>
   </header>
@@ -545,13 +554,13 @@
   <section id="screen-setup" class="screen">
     <div class="setup-screen">
       <div class="setup-hero">
-        <div class="setup-eyebrow">Pick your focus</div>
-        <h1><em>Focused</em> practice.</h1>
-        <p class="setup-subtitle">Pick up to 3 areas to focus on during your drive. We'll suggest your weakest areas, or you can choose your own.</p>
+        <div class="setup-eyebrow">Practice with a supervisor</div>
+        <h1><em>Practice</em> drive.</h1>
+        <p class="setup-subtitle">Pick 1 to 3 simple focus areas before you set off. After the drive, save what went well and anything your instructor should know.</p>
       </div>
 
       <div id="suggested-section">
-        <div class="suggested-label">Suggested for you</div>
+        <div class="suggested-label">Good areas to try</div>
         <div id="suggested-areas" class="area-pick-list"></div>
       </div>
 
@@ -562,7 +571,7 @@
 
       <div id="focus-guides"></div>
 
-      <button class="btn-primary" id="btn-start-practice" disabled>Start practice session</button>
+      <button class="btn-primary" id="btn-start-practice" disabled>Start practice drive</button>
     </div>
   </section>
 
@@ -570,14 +579,14 @@
   <section id="screen-drive" class="screen hidden">
     <div class="drive-screen">
       <div class="drive-eyebrow">Drive in progress</div>
-      <h2 class="drive-title">Driving…</h2>
+      <h2 class="drive-title">Practice drive</h2>
       <div class="focus-pills" id="focus-pills"></div>
 
       <div class="timer-display" id="timer-display">00:00</div>
-      <div class="timer-label" id="timer-label">Focus on your selected areas</div>
+      <div class="timer-label" id="timer-label">Keep these focus areas in mind</div>
 
       <div class="btn-group">
-        <button class="btn-primary" id="btn-reflect">I've pulled over — reflect</button>
+        <button class="btn-primary" id="btn-reflect">We've pulled over &mdash; reflect</button>
         <button class="btn-secondary" id="btn-end-early">End early</button>
       </div>
     </div>
@@ -587,7 +596,7 @@
   <section id="screen-reflect" class="screen hidden">
     <div class="reflect-screen">
       <h2>Reflect on your <em>drive</em>.</h2>
-      <p class="reflect-subtitle">Rate how each focus area went and add any notes.</p>
+      <p class="reflect-subtitle">Choose how each focus area felt and add anything useful for the next lesson.</p>
       <div id="reflect-areas"></div>
       <button class="btn-primary" id="btn-save-reflect" disabled style="margin-top:16px">Save &amp; view results</button>
     </div>
@@ -597,16 +606,16 @@
   <section id="screen-results" class="screen hidden">
     <div class="results-screen">
       <div class="results-stamp">
-        <span><span class="results-stamp-tag">Practice</span></span>
+        <span><span class="results-stamp-tag">Practice Drive</span></span>
         <span id="results-stamp-date"></span>
       </div>
-      <h2>Practice <em>complete</em>.</h2>
+      <h2>Practice drive <em>saved</em>.</h2>
       <p class="results-subtitle" id="results-subtitle"></p>
       <div id="result-cards"></div>
       <div id="result-next"></div>
       <div class="results-actions">
-        <button class="btn-primary" id="btn-start-another">Start another session</button>
-        <a href="/learner/progress.html" class="btn-secondary">View my progress</a>
+        <button class="btn-primary" id="btn-start-another">Start another practice drive</button>
+        <a href="/learner/progress.html" class="btn-secondary">View my driving plan</a>
         <a href="/learner/" class="btn-secondary">Back to dashboard</a>
       </div>
     </div>

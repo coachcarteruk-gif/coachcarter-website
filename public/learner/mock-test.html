@@ -775,6 +775,18 @@
       margin: 0;
     }
 
+    .mock-save-status {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--red) 45%, var(--border));
+      background: color-mix(in srgb, var(--red) 9%, var(--bg));
+      color: var(--red);
+      font-family: var(--font-body);
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+
     /* ── RESULTS SCREEN ── */
     .results-screen { padding: 8px 0; }
     .results-stamp {
@@ -1063,15 +1075,15 @@
   <!-- ── SCREEN 0: MODE SELECTION ── -->
   <section id="screen-mode" class="screen">
     <div class="mode-screen">
-      <div class="mode-eyebrow">Who's marking?</div>
+      <div class="mode-eyebrow">Formal mock setup</div>
       <h1>Mock <em>driving test</em>.</h1>
-      <p class="mode-subtitle">Run a full DVSA-style practical test. Pick who's marking faults so we show the right tools.</p>
+      <p class="mode-subtitle">Use this for a full test-style assessment. For ordinary private practice, start a Practice Drive from the practice hub.</p>
       <div class="mode-cards">
         <button class="mode-card" data-mode="supervisor">
           <span class="mode-card-icon">👥</span>
           <span class="mode-card-body">
-            <span class="mode-card-title">Practising with a supervisor</span>
-            <span class="mode-card-desc">Simplified marking for parents or supervising drivers. 7 easy-to-understand categories with guidance on what to look for.</span>
+            <span class="mode-card-title">Supervisor marking a formal mock</span>
+            <span class="mode-card-desc">Simplified assessment tools for a parent or supervising driver running a test-style drive.</span>
           </span>
         </button>
         <button class="mode-card" data-mode="instructor">
@@ -1119,6 +1131,7 @@
         <button class="btn-primary" id="btn-begin-route">Begin mock test</button>
       </div>
       <button class="btn-skip" id="btn-skip-route">Skip — I know my route</button>
+      <div id="mock-start-status" class="mock-save-status hidden"></div>
     </div>
   </section>
 
@@ -1128,7 +1141,7 @@
       <div class="part-label" id="part-label"></div>
       <p class="part-desc" id="part-desc"></p>
 
-      <div class="part-instruction">
+      <div class="part-instruction" id="part-instruction">
         Drive for approximately 10 minutes. Your supervising driver should observe and note any faults. Tap "Pull over" when you're ready to record faults.
       </div>
 
@@ -1156,6 +1169,7 @@
       <div class="fault-total-bar" id="fault-total-bar">
         <div class="fault-total-pills" id="fault-total-pills"></div>
         <button class="btn-primary" id="btn-save-faults">Save faults</button>
+        <div id="mock-fault-save-status" class="mock-save-status hidden"></div>
       </div>
 
       <div id="post-save-choice" class="hidden post-save-choice">
@@ -1188,13 +1202,13 @@
         <div id="part-breakdown-rows"></div>
       </div>
 
-      <div class="result-note">
+      <div class="result-note" id="result-save-note">
         Your weak areas have been added to your progress tracker automatically.
       </div>
 
       <div class="results-actions">
         <button class="btn-primary hidden" id="btn-show-map">📍 Place faults on map</button>
-        <a href="/learner/progress.html" class="btn-secondary">View my progress</a>
+        <a href="/learner/progress.html" class="btn-secondary">View my driving plan</a>
         <button class="btn-secondary" id="btn-try-again">Try again</button>
         <a href="/learner/" class="btn-secondary">Back to dashboard</a>
       </div>

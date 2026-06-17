@@ -335,7 +335,8 @@ CREATE TABLE IF NOT EXISTS mock_tests (
   total_driving_faults   INTEGER DEFAULT 0,
   total_serious_faults   INTEGER DEFAULT 0,
   total_dangerous_faults INTEGER DEFAULT 0,
-  notes                  TEXT
+  notes                  TEXT,
+  supervisor_notes       JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE TABLE IF NOT EXISTS mock_test_faults (
@@ -1420,6 +1421,7 @@ ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ
 ALTER TABLE mock_tests ADD COLUMN IF NOT EXISTS mode TEXT;
 ALTER TABLE mock_tests ADD COLUMN IF NOT EXISTS route_id TEXT;
 ALTER TABLE mock_tests ADD COLUMN IF NOT EXISTS instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL;
+ALTER TABLE mock_tests ADD COLUMN IF NOT EXISTS supervisor_notes JSONB NOT NULL DEFAULT '{}'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_mock_tests_instructor ON mock_tests(instructor_id) WHERE instructor_id IS NOT NULL;
 
 -- Supervisor rating on fault records (D/S/X stay 0 in supervisor mode)

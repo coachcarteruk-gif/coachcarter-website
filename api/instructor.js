@@ -1572,9 +1572,10 @@ async function handleLearnerHistory(req, res) {
              lb.status, lb.instructor_notes,
              ds.id AS session_log_id, ds.notes AS session_notes
       FROM lesson_bookings lb
-      LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
+      LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id AND ds.school_id = ${schoolId}
       WHERE lb.instructor_id = ${instructor.id}
         AND lb.learner_id = ${learnerId}
+        AND lb.school_id = ${schoolId}
         AND lb.status IN (${SCHEDULED}, ${CHARGEABLE}, ${REFUNDED})
       ORDER BY lb.scheduled_date DESC, lb.start_time DESC
       LIMIT 100
@@ -1586,7 +1587,7 @@ async function handleLearnerHistory(req, res) {
     if (loggedIds.length > 0) {
       const allRatings = await sql`
         SELECT session_id, skill_key, rating FROM skill_ratings
-        WHERE session_id = ANY(${loggedIds}) ORDER BY id`;
+        WHERE session_id = ANY(${loggedIds}) AND school_id = ${schoolId} ORDER BY id`;
       for (const r of allRatings) {
         if (!ratingsMap[r.session_id]) ratingsMap[r.session_id] = [];
         ratingsMap[r.session_id].push({ skill_key: r.skill_key, rating: r.rating });
@@ -1596,9 +1597,18 @@ async function handleLearnerHistory(req, res) {
       if (b.session_log_id) b.learner_ratings = ratingsMap[b.session_log_id] || [];
     }
 
+    const privatePractice = await sql`
+      SELECT fp.id, fp.focus_areas, fp.reflections, fp.completed_at, fp.created_at,
+             ds.session_date::text, ds.duration_minutes
+      FROM focused_practice_sessions fp
+      JOIN driving_sessions ds ON ds.id = fp.session_id AND ds.school_id = fp.school_id
+      WHERE fp.learner_id = ${learnerId} AND fp.school_id = ${schoolId}
+      ORDER BY COALESCE(fp.completed_at, fp.created_at) DESC
+      LIMIT 5`;
+
     const totalLessons = bookings.filter(b => b.status === CHARGEABLE).length;
 
-    return res.json({ learner, bookings, totalLessons });
+    return res.json({ learner, bookings, totalLessons, private_practice: privatePractice });
   } catch (err) {
     console.error('instructor learner-history error:', err);
     reportError('/api/instructor', err);
@@ -2907,6 +2917,7 @@ async function handleLearnerMockTests(req, res) {
       SELECT mt.id, mt.started_at, mt.completed_at, mt.result, mt.mode,
         mt.total_driving_faults, mt.total_serious_faults, mt.total_dangerous_faults,
         mt.notes,
+        mt.supervisor_notes,
         COALESCE(json_agg(
           json_build_object(
             'part', f.part, 'skill_key', f.skill_key,
@@ -2917,7 +2928,7 @@ async function handleLearnerMockTests(req, res) {
           ) ORDER BY f.part, f.skill_key
         ) FILTER (WHERE f.id IS NOT NULL), '[]') AS faults
       FROM mock_tests mt
-      LEFT JOIN mock_test_faults f ON f.mock_test_id = mt.id
+      LEFT JOIN mock_test_faults f ON f.mock_test_id = mt.id AND f.school_id = ${schoolId}
       WHERE mt.learner_id = ${learner_id}
         AND mt.school_id = ${schoolId}
         AND mt.completed_at IS NOT NULL

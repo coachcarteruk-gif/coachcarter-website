@@ -1,4 +1,68 @@
 const { neon } = require('@neondatabase/serverless');
+const SUPERVISOR_NOTE_RATINGS = new Set(['good', 'needs_work', 'concern']);
+
+function cleanSupervisorText(value, maxLength) {
+  if (typeof value !== 'string') return null;
+  const cleaned = value.trim().replace(/\s+/g, ' ');
+  return cleaned ? cleaned.slice(0, maxLength) : null;
+}
+
+function sanitizeSupervisorCategoryNotes(categories) {
+  if (!categories || typeof categories !== 'object' || Array.isArray(categories)) return {};
+  const cleaned = {};
+  for (const [rawKey, rawValue] of Object.entries(categories).slice(0, 20)) {
+    if (!/^[a-z0-9_-]{1,64}$/i.test(rawKey)) continue;
+    if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) continue;
+
+    const rating = SUPERVISOR_NOTE_RATINGS.has(rawValue.rating) ? rawValue.rating : null;
+    const label = cleanSupervisorText(rawValue.label, 80);
+    const note = cleanSupervisorText(rawValue.note, 500);
+    const hintSource = Array.isArray(rawValue.selected_hints) ? rawValue.selected_hints : [];
+    const selectedHints = hintSource
+      .map((hint) => cleanSupervisorText(hint, 160))
+      .filter(Boolean)
+      .slice(0, 20);
+    const indexSource = Array.isArray(rawValue.hint_indices) ? rawValue.hint_indices
+      : Array.isArray(rawValue.hints) ? rawValue.hints
+        : [];
+    const hintIndices = [...new Set(indexSource
+      .map((idx) => Number.parseInt(idx, 10))
+      .filter((idx) => Number.isInteger(idx) && idx >= 0 && idx <= 50))]
+      .slice(0, 20);
+
+    if (!rating && !label && !note && selectedHints.length === 0 && hintIndices.length === 0) continue;
+    cleaned[rawKey] = {
+      ...(label ? { label } : {}),
+      ...(rating ? { rating } : {}),
+      ...(hintIndices.length ? { hint_indices: hintIndices } : {}),
+      ...(selectedHints.length ? { selected_hints: selectedHints } : {}),
+      ...(note ? { note } : {})
+    };
+  }
+  return cleaned;
+}
+
+function sanitizeSupervisorNotesPayload(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  const parts = Array.isArray(value.parts) ? value.parts.slice(0, 10).map((part, idx) => {
+    if (!part || typeof part !== 'object' || Array.isArray(part)) return null;
+    const partNumber = Number.parseInt(part.part, 10);
+    const categories = sanitizeSupervisorCategoryNotes(part.categories);
+    if (Object.keys(categories).length === 0) return null;
+    return {
+      part: Number.isInteger(partNumber) && partNumber >= 1 && partNumber <= 10 ? partNumber : idx + 1,
+      categories
+    };
+  }).filter(Boolean) : [];
+
+  const summaryCategories = sanitizeSupervisorCategoryNotes(value.summary?.categories);
+  const cleaned = { version: 1 };
+  if (parts.length) cleaned.parts = parts;
+  if (Object.keys(summaryCategories).length) cleaned.summary = { categories: summaryCategories };
+  return cleaned.parts || cleaned.summary ? cleaned : {};
+}
+
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { requireAuth } = require('./_auth');
@@ -115,7 +179,7 @@ async function handleSessions(req, res) {
             ORDER BY r.id
           ) FILTER (WHERE r.id IS NOT NULL), '[]') as ratings
         FROM driving_sessions s
-        LEFT JOIN skill_ratings r ON r.session_id = s.id
+        LEFT JOIN skill_ratings r ON r.session_id = s.id AND r.school_id = ${schoolId}
         WHERE s.user_id = ${user.id} AND s.school_id = ${schoolId}
         GROUP BY s.id ORDER BY s.session_date DESC, s.created_at DESC LIMIT 20`;
       return res.json({ sessions });
@@ -138,7 +202,8 @@ async function handleSessions(req, res) {
         if (!booking) return res.status(400).json({ error: 'Invalid or incomplete booking' });
 
         const [existing] = await sql`
-          SELECT id FROM driving_sessions WHERE booking_id = ${booking_id}`;
+          SELECT id FROM driving_sessions
+          WHERE booking_id = ${booking_id} AND school_id = ${schoolId}`;
         if (existing) return res.status(400).json({ error: 'This booking has already been logged' });
       }
 
@@ -150,9 +215,9 @@ async function handleSessions(req, res) {
 
       if (ratings?.length > 0) {
         for (const r of ratings) {
-          await sql`INSERT INTO skill_ratings (session_id, user_id, tier, skill_key, rating, note, driving_faults, serious_faults, dangerous_faults)
+          await sql`INSERT INTO skill_ratings (session_id, user_id, tier, skill_key, rating, note, driving_faults, serious_faults, dangerous_faults, school_id)
             VALUES (${sessionId}, ${user.id}, ${r.tier}, ${r.skill_key}, ${r.rating}, ${r.note || null},
-                    ${r.driving_faults || 0}, ${r.serious_faults || 0}, ${r.dangerous_faults || 0})`;
+                    ${r.driving_faults || 0}, ${r.serious_faults || 0}, ${r.dangerous_faults || 0}, ${schoolId})`;
         }
       }
       return res.json({ success: true, session_id: sessionId });
@@ -175,7 +240,7 @@ async function handleProgress(req, res) {
   try {
     const latestRatings = await sql`
       SELECT DISTINCT ON (skill_key, tier) skill_key, tier, rating, created_at
-      FROM skill_ratings WHERE user_id = ${user.id}
+      FROM skill_ratings WHERE user_id = ${user.id} AND school_id = ${schoolId}
       ORDER BY skill_key, tier, created_at DESC`;
 
     const stats = await sql`
@@ -185,7 +250,10 @@ async function handleProgress(req, res) {
         COUNT(*) FILTER (WHERE session_type = 'private')::int as private_sessions
       FROM driving_sessions WHERE user_id = ${user.id} AND school_id = ${schoolId}`;
 
-    const userRow = await sql`SELECT current_tier, name, phone, pickup_address, prefer_contact_before FROM learner_users WHERE id = ${user.id}`;
+    const userRow = await sql`
+      SELECT current_tier, name, phone, pickup_address, prefer_contact_before
+      FROM learner_users
+      WHERE id = ${user.id} AND school_id = ${schoolId}`;
     return res.json({
       latest_ratings: latestRatings,
       stats: stats[0],
@@ -282,7 +350,7 @@ async function handleUnloggedBookings(req, res) {
              i.name AS instructor_name, i.id AS instructor_id
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
-      LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id
+      LEFT JOIN driving_sessions ds ON ds.booking_id = lb.id AND ds.school_id = ${schoolId}
       WHERE lb.learner_id = ${user.id}
         AND lb.status = ${CHARGEABLE}
         AND ds.id IS NULL
@@ -352,7 +420,7 @@ async function handleMockTests(req, res) {
             ) ORDER BY f.part, f.skill_key
           ) FILTER (WHERE f.id IS NOT NULL), '[]') AS faults
         FROM mock_tests mt
-        LEFT JOIN mock_test_faults f ON f.mock_test_id = mt.id
+        LEFT JOIN mock_test_faults f ON f.mock_test_id = mt.id AND f.school_id = ${schoolId}
         WHERE mt.learner_id = ${user.id} AND mt.school_id = ${schoolId}
         GROUP BY mt.id
         ORDER BY mt.started_at DESC
@@ -367,23 +435,26 @@ async function handleMockTests(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { mock_test_id, complete, notes, mode, route_id, instructor_id } = req.body;
+      const { mock_test_id, complete, notes, mode, route_id, instructor_id, supervisor_notes } = req.body;
 
       // Complete an existing mock test
       if (complete && mock_test_id) {
         // Check mode to determine result logic
         const [testRow] = await sql`
-          SELECT mode FROM mock_tests WHERE id = ${mock_test_id} AND learner_id = ${user.id}`;
+          SELECT mode FROM mock_tests
+          WHERE id = ${mock_test_id} AND learner_id = ${user.id} AND school_id = ${schoolId}`;
         if (!testRow) return res.status(404).json({ error: 'Mock test not found' });
 
         if (testRow.mode === 'supervisor') {
+          const supervisorNotesJson = JSON.stringify(sanitizeSupervisorNotesPayload(supervisor_notes));
           // Supervisor mode: no pass/fail, just mark complete
           await sql`
             UPDATE mock_tests SET
               completed_at = NOW(),
               result = NULL,
-              notes = ${notes || null}
-            WHERE id = ${mock_test_id} AND learner_id = ${user.id}`;
+              notes = ${notes || null},
+              supervisor_notes = ${supervisorNotesJson}::jsonb
+            WHERE id = ${mock_test_id} AND learner_id = ${user.id} AND school_id = ${schoolId}`;
           return res.json({ success: true, mock_test_id, result: null });
         }
 
@@ -393,7 +464,8 @@ async function handleMockTests(req, res) {
             COALESCE(SUM(driving_faults), 0)::int AS total_d,
             COALESCE(SUM(serious_faults), 0)::int AS total_s,
             COALESCE(SUM(dangerous_faults), 0)::int AS total_x
-          FROM mock_test_faults WHERE mock_test_id = ${mock_test_id}`;
+          FROM mock_test_faults
+          WHERE mock_test_id = ${mock_test_id} AND school_id = ${schoolId}`;
 
         const result = (totals.total_s > 0 || totals.total_x > 0 || totals.total_d > 15)
           ? 'fail' : 'pass';
@@ -406,7 +478,7 @@ async function handleMockTests(req, res) {
             total_serious_faults = ${totals.total_s},
             total_dangerous_faults = ${totals.total_x},
             notes = ${notes || null}
-          WHERE id = ${mock_test_id} AND learner_id = ${user.id}`;
+          WHERE id = ${mock_test_id} AND learner_id = ${user.id} AND school_id = ${schoolId}`;
 
         return res.json({ success: true, mock_test_id, result, totals });
       }
@@ -445,11 +517,13 @@ async function handleMockTestFaults(req, res) {
 
     // Verify ownership
     const [test] = await sql`
-      SELECT id FROM mock_tests WHERE id = ${mock_test_id} AND learner_id = ${user.id}`;
+      SELECT id FROM mock_tests
+      WHERE id = ${mock_test_id} AND learner_id = ${user.id} AND school_id = ${schoolId}`;
     if (!test) return res.status(404).json({ error: 'Mock test not found' });
 
     // Clear any existing faults for this part (allow re-recording)
-    await sql`DELETE FROM mock_test_faults WHERE mock_test_id = ${mock_test_id} AND part = ${part}`;
+    await sql`DELETE FROM mock_test_faults
+      WHERE mock_test_id = ${mock_test_id} AND part = ${part} AND school_id = ${schoolId}`;
 
     // Insert new faults
     if (faults?.length > 0) {
@@ -485,7 +559,7 @@ async function handleFocusedPractice(req, res) {
       const sessions = await sql`
         SELECT fp.*, ds.session_date, ds.duration_minutes
         FROM focused_practice_sessions fp
-        JOIN driving_sessions ds ON ds.id = fp.session_id
+        JOIN driving_sessions ds ON ds.id = fp.session_id AND ds.school_id = fp.school_id
         WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}
         ORDER BY fp.created_at DESC
         LIMIT 20`;
@@ -528,7 +602,7 @@ async function handleFocusedPractice(req, res) {
       }
 
       // Update last_activity_at
-      await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`;
+      await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id} AND school_id = ${schoolId}`;
 
       return res.json({ success: true, session_id: session.id, practice_id: fp.id });
     } catch (err) {
@@ -641,7 +715,7 @@ async function handleCompetency(req, res) {
         SUM(f.serious_faults)::int AS total_serious,
         SUM(f.dangerous_faults)::int AS total_dangerous
       FROM mock_test_faults f
-      JOIN mock_tests mt ON mt.id = f.mock_test_id
+      JOIN mock_tests mt ON mt.id = f.mock_test_id AND mt.school_id = f.school_id
       WHERE mt.learner_id = ${user.id} AND mt.school_id = ${schoolId}
       GROUP BY f.skill_key`;
 
@@ -649,7 +723,7 @@ async function handleCompetency(req, res) {
     // The progress page's skill breakdown is now scoped to this one mock test,
     // so we need the date/result for the heading and the full fault breakdown.
     const recentMockMeta = await sql`
-      SELECT id, completed_at, result
+      SELECT id, completed_at, result, mode, supervisor_notes
       FROM mock_tests
       WHERE learner_id = ${user.id} AND school_id = ${schoolId}
         AND completed_at IS NOT NULL
@@ -664,7 +738,7 @@ async function handleCompetency(req, res) {
         SUM(f.serious_faults)::int AS serious,
         SUM(f.dangerous_faults)::int AS dangerous
       FROM mock_test_faults f
-      WHERE f.mock_test_id = ${recentMockId} AND f.sub_key IS NULL
+      WHERE f.mock_test_id = ${recentMockId} AND f.school_id = ${schoolId} AND f.sub_key IS NULL
       GROUP BY f.skill_key` : [];
 
     // Per-sub-skill faults from the most recent mock (sub_key IS NOT NULL)
@@ -674,7 +748,7 @@ async function handleCompetency(req, res) {
         SUM(f.serious_faults)::int AS serious,
         SUM(f.dangerous_faults)::int AS dangerous
       FROM mock_test_faults f
-      WHERE f.mock_test_id = ${recentMockId} AND f.sub_key IS NOT NULL
+      WHERE f.mock_test_id = ${recentMockId} AND f.school_id = ${schoolId} AND f.sub_key IS NOT NULL
       GROUP BY f.skill_key, f.sub_key` : [];
 
     // Session stats
@@ -689,6 +763,15 @@ async function handleCompetency(req, res) {
       FROM focused_practice_sessions
       WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
 
+    const recentFocusedPractice = await sql`
+      SELECT fp.id, fp.focus_areas, fp.reflections, fp.completed_at, fp.created_at,
+             ds.session_date::text, ds.duration_minutes
+      FROM focused_practice_sessions fp
+      JOIN driving_sessions ds ON ds.id = fp.session_id AND ds.school_id = fp.school_id
+      WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}
+      ORDER BY COALESCE(fp.completed_at, fp.created_at) DESC
+      LIMIT 5`;
+
     return res.json({
       lesson_ratings: lessonData,
       quiz_accuracy: quizData,
@@ -698,7 +781,8 @@ async function handleCompetency(req, res) {
       recent_skill_faults: recentSkillFaults,
       recent_sub_faults: recentSubFaults,
       session_stats: stats[0] || { total_sessions: 0, total_minutes: 0 },
-      focused_practice_count: (fpStats[0] || {}).total_sessions || 0
+      focused_practice_count: (fpStats[0] || {}).total_sessions || 0,
+      recent_focused_practice: recentFocusedPractice
     });
   } catch (err) {
     console.error('competency error:', err);
@@ -718,7 +802,9 @@ async function handleOnboarding(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const [row] = await sql`SELECT * FROM learner_onboarding WHERE learner_id = ${user.id}`;
+      const [row] = await sql`
+        SELECT * FROM learner_onboarding
+        WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
       return res.json({ onboarding: row || null });
     } catch (err) {
       console.error('onboarding GET error:', err);
@@ -735,10 +821,10 @@ async function handleOnboarding(req, res) {
       // Upsert onboarding record
       await sql`
         INSERT INTO learner_onboarding (learner_id, prior_hours_pro, prior_hours_private,
-          previous_tests, transmission, test_booked, test_date, main_concerns, completed_at)
+          previous_tests, transmission, test_booked, test_date, main_concerns, completed_at, school_id)
         VALUES (${user.id}, ${prior_hours_pro || 0}, ${prior_hours_private || 0},
           ${previous_tests || 0}, ${transmission || 'manual'},
-          ${test_booked || false}, ${test_date || null}, ${main_concerns || null}, NOW())
+          ${test_booked || false}, ${test_date || null}, ${main_concerns || null}, NOW(), ${schoolId})
         ON CONFLICT (learner_id) DO UPDATE SET
           prior_hours_pro = ${prior_hours_pro || 0},
           prior_hours_private = ${prior_hours_private || 0},
@@ -747,30 +833,33 @@ async function handleOnboarding(req, res) {
           test_booked = ${test_booked || false},
           test_date = ${test_date || null},
           main_concerns = ${main_concerns || null},
-          completed_at = NOW()`;
+          completed_at = NOW(),
+          school_id = ${schoolId}`;
 
       // Save initial self-assessment as a special "onboarding" session
       if (initial_ratings?.length > 0) {
         // Check if an onboarding session already exists
         const [existing] = await sql`
-          SELECT id FROM driving_sessions WHERE user_id = ${user.id} AND session_type = 'onboarding'`;
+          SELECT id FROM driving_sessions
+          WHERE user_id = ${user.id} AND session_type = 'onboarding' AND school_id = ${schoolId}`;
 
         let sessionId;
         if (existing) {
           sessionId = existing.id;
           // Clear old ratings for this session
-          await sql`DELETE FROM skill_ratings WHERE session_id = ${sessionId}`;
+          await sql`DELETE FROM skill_ratings
+            WHERE session_id = ${sessionId} AND school_id = ${schoolId}`;
         } else {
           const [newSession] = await sql`
-            INSERT INTO driving_sessions (user_id, session_date, duration_minutes, session_type, notes)
-            VALUES (${user.id}, CURRENT_DATE, 0, 'onboarding', 'Initial self-assessment during onboarding')
+            INSERT INTO driving_sessions (user_id, session_date, duration_minutes, session_type, notes, school_id)
+            VALUES (${user.id}, CURRENT_DATE, 0, 'onboarding', 'Initial self-assessment during onboarding', ${schoolId})
             RETURNING id`;
           sessionId = newSession.id;
         }
 
         for (const r of initial_ratings) {
-          await sql`INSERT INTO skill_ratings (session_id, user_id, tier, skill_key, rating)
-            VALUES (${sessionId}, ${user.id}, 0, ${r.skill_key}, ${r.rating})`;
+          await sql`INSERT INTO skill_ratings (session_id, user_id, tier, skill_key, rating, school_id)
+            VALUES (${sessionId}, ${user.id}, 0, ${r.skill_key}, ${r.rating}, ${schoolId})`;
         }
       }
 
@@ -794,12 +883,19 @@ async function handleProfileCompleteness(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    const [onboarding] = await sql`SELECT id FROM learner_onboarding WHERE learner_id = ${user.id}`;
+    const schoolId = user.school_id || 1;
+
+    const [onboarding] = await sql`
+      SELECT id FROM learner_onboarding WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
     const [assessment] = await sql`
-      SELECT ds.id FROM driving_sessions ds WHERE ds.user_id = ${user.id} AND ds.session_type = 'onboarding'`;
+      SELECT ds.id FROM driving_sessions ds
+      WHERE ds.user_id = ${user.id} AND ds.session_type = 'onboarding' AND ds.school_id = ${schoolId}`;
     const [session] = await sql`
-      SELECT id FROM driving_sessions WHERE user_id = ${user.id} AND session_type != 'onboarding' LIMIT 1`;
-    const [quiz] = await sql`SELECT id FROM quiz_results WHERE learner_id = ${user.id} LIMIT 1`;
+      SELECT id FROM driving_sessions
+      WHERE user_id = ${user.id} AND session_type != 'onboarding' AND school_id = ${schoolId}
+      LIMIT 1`;
+    const [quiz] = await sql`
+      SELECT id FROM quiz_results WHERE learner_id = ${user.id} AND school_id = ${schoolId} LIMIT 1`;
 
     const steps = {
       account_created: true,
@@ -1188,7 +1284,7 @@ async function handleExportData(req, res) {
 
     const onboarding = await sql`
       SELECT prior_hours_pro, prior_hours_private, previous_tests, transmission, test_date, main_concerns, created_at
-      FROM learner_onboarding WHERE learner_id = ${user.id}`;
+      FROM learner_onboarding WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
 
     const bookings = await sql`
       SELECT lb.scheduled_date, lb.start_time, lb.end_time, lb.pickup_address, lb.status, lb.created_at,
@@ -1220,7 +1316,7 @@ async function handleExportData(req, res) {
       ORDER BY answered_at DESC`;
 
     const mockTests = await sql`
-      SELECT id, started_at, completed_at, total_driving_faults, total_serious_faults, total_dangerous_faults, result, mode, notes
+      SELECT id, started_at, completed_at, total_driving_faults, total_serious_faults, total_dangerous_faults, result, mode, notes, supervisor_notes
       FROM mock_tests WHERE learner_id = ${user.id} AND school_id = ${schoolId}
       ORDER BY started_at DESC`;
 
@@ -1228,7 +1324,7 @@ async function handleExportData(req, res) {
       SELECT fp.id, fp.focus_areas, fp.suggested_areas, fp.reflections, fp.completed_at, fp.created_at,
              ds.session_date, ds.duration_minutes
       FROM focused_practice_sessions fp
-      JOIN driving_sessions ds ON ds.id = fp.session_id
+      JOIN driving_sessions ds ON ds.id = fp.session_id AND ds.school_id = fp.school_id
       WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}
       ORDER BY fp.created_at DESC`;
 
@@ -1257,7 +1353,7 @@ async function handleExportData(req, res) {
       SELECT mtf.mock_test_id, mtf.part, mtf.skill_key, mtf.sub_key,
              mtf.driving_faults, mtf.serious_faults, mtf.dangerous_faults
       FROM mock_test_faults mtf
-      JOIN mock_tests mt ON mt.id = mtf.mock_test_id
+      JOIN mock_tests mt ON mt.id = mtf.mock_test_id AND mt.school_id = mtf.school_id
       WHERE mt.learner_id = ${user.id} AND mt.school_id = ${schoolId}
       ORDER BY mtf.mock_test_id, mtf.part, mtf.skill_key`;
 

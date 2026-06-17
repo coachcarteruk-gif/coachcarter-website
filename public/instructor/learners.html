@@ -126,6 +126,19 @@
     .skill-nailed { background: var(--green-lt); color: var(--green); }
     .skill-ok { background: var(--amber-lt); color: var(--amber); }
     .skill-struggled { background: var(--red-lt); color: var(--red); }
+    .signal-source-badge {
+      display: inline-flex; align-items: center; width: fit-content;
+      padding: 2px 7px; border-radius: 5px; border: 1px solid var(--border);
+      font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--muted); background: var(--white); margin-right: 5px; margin-bottom: 5px;
+    }
+    .signal-source-badge.source-lesson-log { color: var(--accent); background: var(--accent-lt); border-color: var(--accent-lt); }
+    .signal-source-badge.source-learner-reflection { color: var(--accent); background: var(--accent-lt); border-color: var(--accent-lt); }
+    .signal-source-badge.source-practice-drive { color: var(--green); background: var(--green-lt); border-color: var(--green-lt); }
+    .signal-source-badge.source-supervisor-reflection { color: var(--green); background: var(--green-lt); border-color: var(--green-lt); }
+    .signal-source-badge.source-formal-mock { color: var(--blue); background: var(--blue-lt); border-color: var(--blue-lt); }
+    .signal-source-badge.source-instructor-assessment { color: var(--red); background: var(--red-lt); border-color: var(--red-lt); }
+    .signal-source-badge.source-mixed-signals { color: var(--primary); }
 
     /* ── Empty State ── */
     .empty-state { text-align: center; padding: 48px 20px; }
@@ -276,6 +289,7 @@
 <div class="toast" id="toast"></div>
 
 
+<script src="/competency-config.js"></script>
 <script src="/instructor/learners.js"></script>
 <script src="/sidebar.js"></script>
 </body>
