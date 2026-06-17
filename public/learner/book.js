@@ -1013,13 +1013,31 @@ function renderBookingCalendar(cache, opts) {
   ensureSelectedDate(cache);
   const slotsForDate = ((cache && cache[selectedDate]) || []).slice().sort(sortSlots);
   const dateStrip = renderDateStrip(cache);
+  const selectedParts = dateDisplayParts(selectedDate);
+  const slotCount = slotsForDate.length;
+  const selectedDateHeading = `<div class="selected-date-heading" data-selected-date-heading>
+    <strong>${esc(selectedParts.full)}</strong>
+    <span>${slotCount} time${slotCount === 1 ? '' : 's'} available</span>
+  </div>`;
   const timeGroups = renderTimeGroups(slotsForDate, opts);
   const live = document.getElementById('bookingLiveRegion');
   if (live && selectedDate) {
-    const parts = dateDisplayParts(selectedDate);
-    live.textContent = `Showing ${slotsForDate.length} time${slotsForDate.length === 1 ? '' : 's'} for ${parts.full}`;
+    live.textContent = `Showing ${slotCount} time${slotCount === 1 ? '' : 's'} for ${selectedParts.full}`;
   }
-  return `<div class="booking-calendar">${dateStrip}${timeGroups}</div>`;
+  return `<div class="booking-calendar">${dateStrip}${selectedDateHeading}${timeGroups}</div>`;
+}
+
+function currentDateStripScrollLeft() {
+  const scroller = document.querySelector('.date-strip-wrap');
+  return scroller ? scroller.scrollLeft : null;
+}
+
+function restoreDateStripScrollLeft(scrollLeft) {
+  if (typeof scrollLeft !== 'number') return false;
+  const scroller = document.querySelector('.date-strip-wrap');
+  if (!scroller) return false;
+  scroller.scrollLeft = Math.max(0, scrollLeft);
+  return true;
 }
 
 function scrollSelectedDateIntoView() {
@@ -1047,9 +1065,10 @@ function scrollSelectedDateIntoView() {
 }
 
 function selectDate(dateStr) {
+  const dateStripScrollLeft = currentDateStripScrollLeft();
   selectedDate = dateStr;
   clearSelectedSlot();
-  renderFeed({ scrollSelectedDate: true });
+  renderFeed({ scrollSelectedDate: true, dateStripScrollLeft });
 }
 
 function slotDatasetFromButton(buttonEl) {
@@ -1204,6 +1223,7 @@ function renderFeed(opts) {
       </div>`;
     document.getElementById('calContent').innerHTML = html;
     updateFeedFooter(altSlots.length);
+    restoreDateStripScrollLeft(opts.dateStripScrollLeft);
     if (opts.scrollSelectedDate) scrollSelectedDateIntoView();
     return;
   }
@@ -1224,6 +1244,7 @@ function renderFeed(opts) {
   const showInstructor = !document.getElementById('instructorFilter').value;
   document.getElementById('calContent').innerHTML = renderBookingCalendar(slotCache, { showInstructor });
   updateFeedFooter(allSlots.length);
+  restoreDateStripScrollLeft(opts.dateStripScrollLeft);
   if (opts.scrollSelectedDate) scrollSelectedDateIntoView();
 }
 
