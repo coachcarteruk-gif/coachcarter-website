@@ -74,6 +74,63 @@ test.describe('learner progress driving plan flow copy', () => {
     expect(source).toContain('renderRecentPractice();');
   });
 
+  test('weekly summary appears near the top and is computed from existing reads', () => {
+    const html = read('public/learner/progress.html');
+    const source = read('public/learner/progress.js');
+    const api = read('api/learner.js');
+
+    expect(html).toContain('id="weekly-summary-section"');
+    expect(html.indexOf('id="next-actions-section"')).toBeLessThan(html.indexOf('id="weekly-summary-section"'));
+    expect(html.indexOf('id="weekly-summary-section"')).toBeLessThan(html.indexOf('Recent activity'));
+
+    expect(source).toContain('function renderWeeklySummary()');
+    expect(source).toContain('renderWeeklySummary();');
+    expect(source.indexOf('renderNextActions();')).toBeLessThan(source.indexOf('renderWeeklySummary();'));
+    expect(source.indexOf('renderWeeklySummary();')).toBeLessThan(source.indexOf('renderStats();'));
+    expect(source).toContain('DATA.recent_sessions');
+    expect(source).toContain('buildWeeklySkillSignals()');
+    expect(source).toContain("DATA.recent_focused_practice");
+    expect(source).toContain('quizMap');
+    expect(source).toContain('recentSkillFaultMap');
+    expect(source).not.toContain("ccAuth.fetchAuthed('/api/learner?action=weekly");
+
+    expect(api).toContain('const recentSessions = await sql`');
+    expect(api).toContain('SELECT id, session_date::text, duration_minutes, session_type, created_at');
+    expect(api).toContain('WHERE user_id = ${user.id} AND school_id = ${schoolId}');
+    expect(api).toContain("AND session_type != 'onboarding'");
+    expect(api).toContain('recent_sessions: recentSessions');
+  });
+
+  test('weekly summary stays honest in low-data states', () => {
+    const source = read('public/learner/progress.js');
+    const body = functionBody(source, 'renderWeeklySummary');
+
+    expect(body).toContain('No saved practice this week yet.');
+    expect(body).toContain('Not enough saved evidence yet.');
+    expect(body).toContain('This is a gentle signal from the practice data available here.');
+    expect(body).toContain('Log a drive or save a Practice Drive');
+    expect(body).not.toContain('saved progress');
+  });
+
+  test('weekly summary keeps signal source labels separate and avoids formal mark wording', () => {
+    const source = read('public/learner/progress.js');
+    const body = functionBody(source, 'renderWeeklySummary');
+    const itemBody = functionBody(source, 'renderWeeklyCardItem');
+
+    expect(body).toContain("['learner-reflection', 'quiz-practice']");
+    expect(body).toContain("['practice-drive']");
+    expect(body).toContain("['instructor-assessment']");
+    expect(source).toContain("source: 'practice-drive'");
+    expect(source).toContain("source: 'quiz-practice'");
+    expect(source).toContain("source: 'formal-mock'");
+    expect(source).toContain("source: 'instructor-assessment'");
+    expect(itemBody).toContain('renderSignalSourceBadge');
+
+    ['fault', 'serious', 'dangerous', 'pass', 'fail'].forEach((term) => {
+      expect(body.toLowerCase()).not.toContain(term);
+    });
+  });
+
   test('progress cards label informal reflections separately from formal mock assessment', () => {
     const html = read('public/learner/progress.html');
     const source = read('public/learner/progress.js');

@@ -216,6 +216,53 @@
       line-height: 1.45;
     }
 
+    .weekly-summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin: -8px 0 32px;
+    }
+    .weekly-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    @media (max-width: 560px) { .weekly-summary-grid { grid-template-columns: 1fr; } }
+    .weekly-summary-item {
+      min-width: 0;
+    }
+    .weekly-summary-label {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      font-weight: 800;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .weekly-summary-value {
+      font-family: var(--font-head);
+      font-size: 0.98rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+      line-height: 1.25;
+      margin-bottom: 4px;
+    }
+    .weekly-summary-copy {
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+      margin-bottom: 7px;
+    }
+    .weekly-summary-sources {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
     /* ── SECTION HEADERS ── */
     .section-title {
       display: flex; align-items: center; gap: 10px;
@@ -879,6 +926,9 @@
 
     <!-- Section 1: Learner next steps -->
     <div class="improve-section" id="next-actions-section"></div>
+
+    <!-- Section 1b: Read-only weekly summary -->
+    <div id="weekly-summary-section"></div>
 
     <!-- Section 2: Recent activity -->
     <h2 class="section-title">Recent activity</h2>

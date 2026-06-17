@@ -9,6 +9,7 @@ const PRACTICE_DRIVE_RATINGS = {
   ok: 'Needs practice',
   struggled: 'Tell instructor'
 };
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Computed maps: skillKey -> aggregated data
 let lessonMap = {};   // skillKey -> [{score, date}] sorted newest first
@@ -358,6 +359,228 @@ function latestReflectionSource(skillKey) {
   return 'lesson-log';
 }
 
+function parseDate(value) {
+  if (!value) return null;
+  var d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function isWithinLastWeek(value) {
+  var d = parseDate(value);
+  return !!d && (Date.now() - d.getTime()) <= WEEK_MS && (Date.now() - d.getTime()) >= 0;
+}
+
+function sessionDateValue(row) {
+  return row && (row.session_date || row.completed_at || row.created_at);
+}
+
+function recentSessionsThisWeek() {
+  var rows = Array.isArray(DATA.recent_sessions) ? DATA.recent_sessions : [];
+  return rows.filter(function(row) {
+    return row && row.session_type !== 'onboarding' && isWithinLastWeek(sessionDateValue(row));
+  });
+}
+
+function addWeeklySignal(map, skillKey, parts) {
+  var CC = window.CC_COMPETENCY;
+  var mappedKey = CC.mapLegacySkill(skillKey);
+  if (!mappedKey) return;
+  var skill = CC.getSkill(mappedKey);
+  if (!skill) return;
+
+  if (!map[mappedKey]) {
+    map[mappedKey] = {
+      skill: skill,
+      positive: 0,
+      attention: 0,
+      ask: 0,
+      recent: false,
+      sources: {}
+    };
+  }
+
+  var item = map[mappedKey];
+  item.positive += parts.positive || 0;
+  item.attention += parts.attention || 0;
+  item.ask += parts.ask || 0;
+  item.recent = item.recent || !!parts.recent;
+  if (parts.source) item.sources[parts.source] = true;
+}
+
+function buildWeeklySkillSignals() {
+  var signalMap = {};
+  var lkeys = Object.keys(lessonMap);
+  for (var li = 0; li < lkeys.length; li++) {
+    var lessonRows = lessonMap[lkeys[li]] || [];
+    for (var lr = 0; lr < lessonRows.length; lr++) {
+      var lesson = lessonRows[lr];
+      if (!isWithinLastWeek(lesson.date)) continue;
+      addWeeklySignal(signalMap, lkeys[li], {
+        positive: lesson.rating === 'nailed' ? 3 : lesson.rating === 'ok' ? 1 : 0,
+        attention: lesson.rating === 'struggled' ? 3 : lesson.rating === 'ok' ? 1 : 0,
+        source: 'learner-reflection',
+        recent: true
+      });
+    }
+  }
+
+  var practiceRows = Array.isArray(DATA.recent_focused_practice) ? DATA.recent_focused_practice : [];
+  for (var p = 0; p < practiceRows.length; p++) {
+    var row = practiceRows[p];
+    if (!isWithinLastWeek(row.completed_at || row.created_at || row.session_date)) continue;
+    var reflections = parseJsonValue(row.reflections, {}) || {};
+    Object.keys(reflections).forEach(function(skillKey) {
+      var ref = reflections[skillKey] || {};
+      addWeeklySignal(signalMap, skillKey, {
+        positive: ref.rating === 'nailed' ? 3 : ref.rating === 'ok' ? 1 : 0,
+        attention: ref.rating === 'struggled' ? 3 : ref.rating === 'ok' ? 1 : 0,
+        ask: ref.rating === 'struggled' ? 3 : 0,
+        source: 'practice-drive',
+        recent: true
+      });
+    });
+  }
+
+  Object.keys(quizMap).forEach(function(skillKey) {
+    var quiz = quizMap[skillKey];
+    if (!quiz || quiz.attempts < 3) return;
+    var accuracy = quiz.correct / quiz.attempts;
+    addWeeklySignal(signalMap, skillKey, {
+      positive: accuracy >= 0.8 ? 1 : 0,
+      attention: accuracy < 0.65 ? 1 : 0,
+      source: 'quiz-practice',
+      recent: false
+    });
+  });
+
+  if (recentMockMeta) {
+    var mockRecent = isWithinLastWeek(recentMockMeta.completed_at);
+    Object.keys(recentSkillFaultMap).forEach(function(skillKey) {
+      var row = recentSkillFaultMap[skillKey] || {};
+      var total = (row.driving || 0) + (row.serious || 0) + (row.dangerous || 0);
+      if (total <= 0) return;
+      addWeeklySignal(signalMap, skillKey, {
+        attention: Math.min(4, total),
+        ask: (row.serious || row.dangerous) ? 2 : 0,
+        source: 'formal-mock',
+        recent: mockRecent
+      });
+      if (recentMockMeta.mode === 'instructor') {
+        addWeeklySignal(signalMap, skillKey, {
+          source: 'instructor-assessment',
+          recent: mockRecent
+        });
+      }
+    });
+  }
+
+  return Object.keys(signalMap).map(function(key) { return signalMap[key]; });
+}
+
+function sourceKeys(item, fallback) {
+  var keys = item && item.sources ? Object.keys(item.sources) : [];
+  return keys.length ? keys : [fallback || 'mixed-signal'];
+}
+
+function pickWeeklyStrongest(signals) {
+  var candidates = signals.filter(function(item) { return item.positive > 0; });
+  candidates.sort(function(a, b) {
+    if (b.recent !== a.recent) return b.recent ? 1 : -1;
+    return b.positive - a.positive || (skillScores[b.skill.key] || 0) - (skillScores[a.skill.key] || 0);
+  });
+  return candidates[0] || null;
+}
+
+function pickWeeklyFocus(signals) {
+  var candidates = signals.filter(function(item) { return item.attention > 0; });
+  candidates.sort(function(a, b) {
+    if (b.recent !== a.recent) return b.recent ? 1 : -1;
+    return b.attention - a.attention || (skillScores[a.skill.key] || 0) - (skillScores[b.skill.key] || 0);
+  });
+  if (candidates[0]) return candidates[0];
+
+  var withData = skillsWithPracticeSignals();
+  withData.sort(function(a, b) { return a.score - b.score; });
+  return withData[0] ? { skill: withData[0].skill, sources: { 'mixed-signal': true }, recent: false } : null;
+}
+
+function pickWeeklyInstructorAsk(signals, focus) {
+  var candidates = signals.filter(function(item) { return item.ask > 0; });
+  candidates.sort(function(a, b) {
+    if (b.recent !== a.recent) return b.recent ? 1 : -1;
+    return b.ask - a.ask || b.attention - a.attention;
+  });
+  return candidates[0] || focus || null;
+}
+
+function renderWeeklyCardItem(label, value, copy, sources) {
+  var badges = (sources || ['mixed-signal']).map(renderSignalSourceBadge).join('');
+  return '<div class="weekly-summary-item">' +
+    '<div class="weekly-summary-label">' + escHtml(label) + '</div>' +
+    '<div class="weekly-summary-value">' + escHtml(value) + '</div>' +
+    '<div class="weekly-summary-copy">' + escHtml(copy) + '</div>' +
+    '<div class="weekly-summary-sources">' + badges + '</div>' +
+  '</div>';
+}
+
+function renderWeeklySummary() {
+  var container = document.getElementById('weekly-summary-section');
+  if (!container) return;
+
+  var sessions = recentSessionsThisWeek();
+  var signals = buildWeeklySkillSignals();
+  var strongest = pickWeeklyStrongest(signals);
+  var focus = pickWeeklyFocus(signals);
+  var ask = pickWeeklyInstructorAsk(signals, focus);
+
+  var sessionSources = {};
+  sessions.forEach(function(row) {
+    if (row.session_type === 'focused_practice') sessionSources['practice-drive'] = true;
+    else sessionSources['learner-reflection'] = true;
+  });
+  var sessionSourceKeys = Object.keys(sessionSources);
+  if (sessionSourceKeys.length === 0) sessionSourceKeys = ['learner-reflection'];
+
+  var practiceValue = sessions.length > 0
+    ? 'This week you practised ' + sessions.length + ' time' + (sessions.length === 1 ? '.' : 's.')
+    : 'No saved practice this week yet.';
+  var practiceCopy = sessions.length > 0
+    ? 'Counted from saved drive logs and Practice Drive sessions.'
+    : 'Log a drive or save a Practice Drive to give next week a clearer starting point.';
+
+  var strongestValue = strongest
+    ? 'Your strongest area looks like ' + strongest.skill.label + '.'
+    : 'Not enough saved evidence yet.';
+  var strongestCopy = strongest
+    ? 'This is a gentle signal from the practice data available here.'
+    : 'One or two saved reflections will make this more useful.';
+
+  var focusValue = focus
+    ? 'Next week, focus on ' + focus.skill.label + '.'
+    : 'Next week, choose one simple focus.';
+  var focusCopy = focus
+    ? 'Keep it practical: pick a short route or lesson moment where this skill comes up.'
+    : 'Start with a quick learner reflection or a Practice Drive focus area.';
+
+  var askValue = ask
+    ? 'Ask your instructor about ' + ask.skill.label + '.'
+    : 'Ask your instructor what would help most next.';
+  var askCopy = ask
+    ? 'Bring this up as a coaching question, especially if it came from Practice Drive notes.'
+    : 'They can help turn the next practice session into a focused plan.';
+
+  var html = '<h2 class="section-title">Weekly progress summary</h2>';
+  html += '<div class="weekly-summary-card"><div class="weekly-summary-grid">';
+  html += renderWeeklyCardItem('Practice this week', practiceValue, practiceCopy, sessionSourceKeys);
+  html += renderWeeklyCardItem('Strongest area', strongestValue, strongestCopy, strongest ? sourceKeys(strongest) : ['learner-reflection', 'quiz-practice']);
+  html += renderWeeklyCardItem('Next week', focusValue, focusCopy, focus ? sourceKeys(focus) : ['practice-drive']);
+  html += renderWeeklyCardItem('Ask about', askValue, askCopy, ask ? sourceKeys(ask) : ['instructor-assessment']);
+  html += '</div></div>';
+
+  container.innerHTML = html;
+}
+
 function totalMockMarks(row) {
   return (row.total_driving || 0) + (row.total_serious || 0) + (row.total_dangerous || 0);
 }
@@ -373,6 +596,7 @@ function render() {
 
   document.getElementById('main-content').classList.remove('hidden');
   renderNextActions();
+  renderWeeklySummary();
   renderStats();
   renderRecentPractice();
   renderGoingWell();

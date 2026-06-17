@@ -757,6 +757,15 @@ async function handleCompetency(req, res) {
         COALESCE(SUM(duration_minutes), 0)::int as total_minutes
       FROM driving_sessions WHERE user_id = ${user.id} AND school_id = ${schoolId}`;
 
+    // Recent saved drives, used by the learner-facing weekly summary.
+    const recentSessions = await sql`
+      SELECT id, session_date::text, duration_minutes, session_type, created_at
+      FROM driving_sessions
+      WHERE user_id = ${user.id} AND school_id = ${schoolId}
+        AND session_type != 'onboarding'
+      ORDER BY session_date DESC, created_at DESC
+      LIMIT 20`;
+
     // Focused practice session count
     const fpStats = await sql`
       SELECT COUNT(*)::int as total_sessions
@@ -781,6 +790,7 @@ async function handleCompetency(req, res) {
       recent_skill_faults: recentSkillFaults,
       recent_sub_faults: recentSubFaults,
       session_stats: stats[0] || { total_sessions: 0, total_minutes: 0 },
+      recent_sessions: recentSessions,
       focused_practice_count: (fpStats[0] || {}).total_sessions || 0,
       recent_focused_practice: recentFocusedPractice
     });
